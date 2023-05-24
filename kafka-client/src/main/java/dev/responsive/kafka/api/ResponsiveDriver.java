@@ -18,25 +18,19 @@ package dev.responsive.kafka.api;
 
 import static dev.responsive.kafka.config.ResponsiveDriverConfig.CLIENT_ID_CONFIG;
 import static dev.responsive.kafka.config.ResponsiveDriverConfig.CLIENT_SECRET_CONFIG;
-import static dev.responsive.kafka.config.ResponsiveDriverConfig.CONNECTION_BUNDLE_CONFIG;
 import static dev.responsive.kafka.config.ResponsiveDriverConfig.STORAGE_DATACENTER_CONFIG;
 import static dev.responsive.kafka.config.ResponsiveDriverConfig.STORAGE_HOSTNAME_CONFIG;
 import static dev.responsive.kafka.config.ResponsiveDriverConfig.STORAGE_PORT_CONFIG;
 import static dev.responsive.kafka.config.ResponsiveDriverConfig.TENANT_ID_CONFIG;
 
 import com.datastax.oss.driver.api.core.CqlSession;
-import com.datastax.oss.driver.api.core.CqlSessionBuilder;
-import com.datastax.oss.driver.api.core.config.DefaultDriverOption;
-import com.datastax.oss.driver.api.core.config.DriverConfigLoader;
 import com.datastax.oss.driver.shaded.guava.common.annotations.VisibleForTesting;
 import dev.responsive.db.CassandraClient;
-import dev.responsive.db.ResponsiveRetryPolicy;
 import dev.responsive.kafka.config.ResponsiveDriverConfig;
 import dev.responsive.utils.SessionUtil;
 import java.io.Closeable;
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.nio.file.Paths;
 import java.util.Map;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;

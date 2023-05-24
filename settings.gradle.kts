@@ -16,5 +16,54 @@
 
 rootProject.name = "responsive-pub"
 
-includeBuild("clients")
+include("kafka-client")
 
+dependencyResolutionManagement {
+
+    repositories {
+        mavenCentral()
+
+        maven {
+            name = "s3-snapshots"
+            url = uri("s3://maven-repo.responsive.dev/snapshots")
+            authentication { create<AwsImAuthentication>("awsIm") }
+        }
+
+        maven {
+            name = "s3-releases"
+            url = uri("s3://maven-repo.responsive.dev/releases")
+            authentication { create<AwsImAuthentication>("awsIm") }
+        }
+    }
+
+    versionCatalogs {
+        create("libs") {
+            version("kafka", "3.4.0")
+            version("scylla", "4.15.0.0")
+
+            library("kafka-streams", "org.apache.kafka", "kafka-streams").versionRef("kafka")
+
+            library("scylla-driver-core", "com.scylladb", "java-driver-core").versionRef("scylla")
+            library("scylla-query-builder", "com.scylladb", "java-driver-query-builder").versionRef("scylla")
+            library("scylla-mapper-runtime", "com.scylladb", "java-driver-mapper-runtime").versionRef("scylla")
+
+            bundle("scylla", listOf("scylla-driver-core", "scylla-query-builder", "scylla-mapper-runtime"))
+        }
+
+        create("testlibs") {
+            version("testcontainers", "1.17.6")
+
+            library("junit", "junit:junit:4.11")
+            library("hamcrest", "org.hamcrest:hamcrest:2.2")
+            library("mockito", "org.mockito:mockito-core:5.2.0")
+
+            library("kafka-streams-test-utils", "org.apache.kafka:kafka-streams-test-utils:3.4.0")
+
+            library("testcontainers", "org.testcontainers", "testcontainers").versionRef("testcontainers")
+            library("testcontainers-cassandra", "org.testcontainers", "cassandra").versionRef("testcontainers")
+            library("testcontainers-kafka", "org.testcontainers", "kafka").versionRef("testcontainers")
+
+            bundle("base", listOf("junit", "hamcrest", "mockito"))
+        }
+    }
+}

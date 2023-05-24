@@ -1,3 +1,5 @@
+import java.util.regex.Matcher
+
 /*
  * Copyright 2023 Responsive Computing, Inc.
  *
@@ -14,6 +16,25 @@
  * limitations under the License.
  */
 
-tasks.register("build") {
-    dependsOn(gradle.includedBuild("clients").task(":kafka-client:build"))
+plugins {
+    id("net.researchgate.release") version "3.0.2"
+}
+
+release {
+    tagTemplate.set("v${ version.toString().dropLast("-SNAPSHOT".length) }")
+    failOnPublishNeeded.set(false)
+    failOnUpdateNeeded.set(false)
+
+    val versionRegex = "(?<major>\\d+).(?<minor>\\d+).(?<patch>\\d+)(?<ext>[^\\d]*$)"
+    versionPatterns = mapOf(versionRegex to KotlinClosure2<Matcher, Project, String>({
+        m, p -> String.format(
+            "%s.%s.0%s",
+            m.group("major"),
+            Integer.parseInt(m.group("minor")) + 1,
+            m.group("ext"))
+    }))
+
+    with(git) {
+        requireBranch.set("main")
+    }
 }

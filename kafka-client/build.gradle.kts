@@ -19,9 +19,6 @@ plugins {
     `maven-publish`
 }
 
-group = "dev.responsive"
-version = "0.1-SNAPSHOT"
-
 publishing {
     publications {
         create<MavenPublication>("maven") {
@@ -44,8 +41,6 @@ publishing {
 }
 
 dependencies {
-    implementation(project(":common"))
-
     implementation(libs.kafka.streams)
     implementation(libs.bundles.scylla)
 
