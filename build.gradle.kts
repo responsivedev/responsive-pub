@@ -14,3 +14,6 @@
  * limitations under the License.
  */
 
+tasks.register("build") {
+    dependsOn(gradle.includedBuild("clients").task(":kafka-client:build"))
+}

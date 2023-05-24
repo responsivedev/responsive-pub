@@ -19,6 +19,23 @@ rootProject.name = "clients"
 include("common", "kafka-client")
 
 dependencyResolutionManagement {
+
+    repositories {
+        mavenCentral()
+
+        maven {
+            name = "s3-snapshots"
+            url = uri("s3://maven-repo.responsive.dev/snapshots")
+            authentication { create<AwsImAuthentication>("awsIm") }
+        }
+
+        maven {
+            name = "s3-releases"
+            url = uri("s3://maven-repo.responsive.dev/releases")
+            authentication { create<AwsImAuthentication>("awsIm") }
+        }
+    }
+
     versionCatalogs {
         create("libs") {
             version("kafka", "3.4.0")
