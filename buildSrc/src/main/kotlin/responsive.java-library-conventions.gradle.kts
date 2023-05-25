@@ -17,6 +17,7 @@
 plugins {
     `java-library`
     `maven-publish`
+    `signing`
 
     id("responsive.java-common-conventions")
     id("pl.allegro.tech.build.axion-release")
@@ -37,23 +38,51 @@ allprojects {
             "incrementPrerelease",
             mapOf("initialPreReleaseIfNotOnPrerelease" to "1"))
 
-        snapshotCreator({ _, _ -> "-dirty" })
+        snapshotCreator({ _, _ -> "-SNAPSHOT" })
         ignoreUncommittedChanges.set(false)
     }
 
+    group = "dev.responsive"
     version = scmVersion.version
+
+    java {
+        withJavadocJar()
+        withSourcesJar()
+    }
 
     publishing {
         publications {
-            create<MavenPublication>("maven") {
-                groupId = "dev.responsive"
+            create<MavenPublication>("mavenJava") {
                 artifactId = project.name
-                version = version.toString()
-
-                artifact("souresJar")
-                artifact("javadocJar")
-
                 from(components["java"])
+
+                pom {
+                    name.set(project.name)
+                    description.set("artifact for " + project.name)
+                    url.set("https://responsive.dev")
+
+                    licenses {
+                        license {
+                            name.set("The Apache License, Version 2.0")
+                            url.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
+                        }
+                    }
+
+                    developers {
+                        developer {
+                            name.set("Responsive Tools Team")
+                            email.set("tools@responsive.dev")
+                            organization.set("Responsive Computing, Inc")
+                            organizationUrl.set("https://www.responsive.dev")
+                        }
+                    }
+
+                    scm {
+                        connection.set("scm:git:git://github.com/responsivedev/responsive-pub.git")
+                        developerConnection.set("scm:git:ssh://github.com:responsivedev/responsive-pub.git")
+                        url.set("http://github.com/responsivedev/responsive-pub/tree/main")
+                    }
+                }
             }
         }
 
@@ -61,9 +90,28 @@ allprojects {
             maven {
                 val releasesUrl = "s3://maven-repo.responsive.dev/releases"
                 val snapshotsUrl = "s3://maven-repo.responsive.dev/snapshots"
-                url = uri(if (version.toString().endsWith("dirty")) snapshotsUrl else releasesUrl)
+                url = uri(if (version.toString().endsWith("SNAPSHOT")) snapshotsUrl else releasesUrl)
                 authentication { create<AwsImAuthentication>("awsIm") }
             }
+
+            maven {
+                name = "ossrh"
+                val releasesUrl = "https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/"
+                val snapshotsUrl = "https://s01.oss.sonatype.org/content/repositories/snapshots/"
+                url = uri(if (version.toString().endsWith("SNAPSHOT")) snapshotsUrl else releasesUrl)
+                credentials {
+                    username = System.getenv("OSSRH_USER") ?: return@credentials
+                    password = System.getenv("OSSRH_PASSWORD") ?: return@credentials
+                }
+            }
+        }
+
+        signing {
+            val key = System.getenv("SIGNING_KEY") ?: return@signing
+            val password = System.getenv("SIGNING_PASSWORD") ?: return@signing
+            useInMemoryPgpKeys(key, password)
+
+            sign(publishing.publications["mavenJava"])
         }
     }
 }
