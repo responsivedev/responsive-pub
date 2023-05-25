@@ -31,7 +31,7 @@ jobs:
       - name: Execute Gradle build
         run: ./gradlew build publish
         env:
-          OSSRH_USERNAME: ${{ secrets.OSSRH_USERNAME }}
+          OSSRH_USER: ${{ secrets.OSSRH_USER }}
           OSSRH_PASSWORD: ${{ secrets.OSSRH_PASSWORD }}
           SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
           SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
