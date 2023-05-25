@@ -16,7 +16,6 @@
 
 plugins {
     `java`
-    `checkstyle`
 }
 
 repositories {
