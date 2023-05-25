@@ -15,29 +15,7 @@
  */
 
 plugins {
-    `java-library`
-    `maven-publish`
-}
-
-publishing {
-    publications {
-        create<MavenPublication>("maven") {
-            groupId = "dev.responsive"
-            artifactId = "kafka-client"
-            version = project.version.toString()
-
-            from(components["java"])
-        }
-    }
-
-    repositories {
-        maven {
-            val releasesUrl = "s3://maven-repo.responsive.dev/releases"
-            val snapshotsUrl = "s3://maven-repo.responsive.dev/snapshots"
-            url = uri(if (version.toString().endsWith("SNAPSHOT")) snapshotsUrl else releasesUrl)
-            authentication { create<AwsImAuthentication>("awsIm") }
-        }
-    }
+    id("responsive.java-library-conventions")
 }
 
 dependencies {

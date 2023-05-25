@@ -13,3 +13,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+plugins {
+    `java`
+}
+
+repositories {
+    mavenCentral()
+
+    maven {
+        name = "s3-snapshots"
+        url = uri("s3://maven-repo.responsive.dev/snapshots")
+        authentication { create<AwsImAuthentication>("awsIm") }
+    }
+
+    maven {
+        name = "s3-releases"
+        url = uri("s3://maven-repo.responsive.dev/releases")
+        authentication { create<AwsImAuthentication>("awsIm") }
+    }
+}
