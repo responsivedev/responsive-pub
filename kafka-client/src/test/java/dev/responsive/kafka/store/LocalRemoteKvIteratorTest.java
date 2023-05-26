@@ -16,6 +16,8 @@
 
 package dev.responsive.kafka.store;
 
+import static org.hamcrest.MatcherAssert.assertThat;
+
 import dev.responsive.model.Result;
 import java.util.ArrayList;
 import java.util.List;
@@ -23,8 +25,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.hamcrest.Matchers;
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 public class LocalRemoteKvIteratorTest {
 
@@ -51,8 +52,8 @@ public class LocalRemoteKvIteratorTest {
         .forEachRemaining(kv -> flushed.add(kv.key));
 
     // Then:
-    Assert.assertThat(flushed, Matchers.hasSize(3));
-    Assert.assertThat(flushed, Matchers.hasItems(k1, k2, k3));
+    assertThat(flushed, Matchers.hasSize(3));
+    assertThat(flushed, Matchers.hasItems(k1, k2, k3));
   }
 
   @Test
@@ -79,8 +80,8 @@ public class LocalRemoteKvIteratorTest {
         .forEachRemaining(kv -> flushed.add(kv.value));
 
     // Then:
-    Assert.assertThat(flushed, Matchers.hasSize(2));
-    Assert.assertThat(flushed, Matchers.hasItems(valLocal, valLocal));
+    assertThat(flushed, Matchers.hasSize(2));
+    assertThat(flushed, Matchers.hasItems(valLocal, valLocal));
   }
 
   @Test
@@ -106,8 +107,8 @@ public class LocalRemoteKvIteratorTest {
         .forEachRemaining(kv -> flushed.add(kv.key));
 
     // Then:
-    Assert.assertThat(flushed, Matchers.hasSize(1));
-    Assert.assertThat(flushed, Matchers.hasItems(k2));
+    assertThat(flushed, Matchers.hasSize(1));
+    assertThat(flushed, Matchers.hasItems(k2));
   }
 
   @Test
@@ -133,8 +134,8 @@ public class LocalRemoteKvIteratorTest {
         .forEachRemaining(kv -> flushed.add(kv.key));
 
     // Then:
-    Assert.assertThat(flushed, Matchers.hasSize(1));
-    Assert.assertThat(flushed, Matchers.hasItems(k2));
+    assertThat(flushed, Matchers.hasSize(1));
+    assertThat(flushed, Matchers.hasItems(k2));
   }
 
   @Test
@@ -157,8 +158,8 @@ public class LocalRemoteKvIteratorTest {
         .forEachRemaining(kv -> flushed.add(kv.key));
 
     // Then:
-    Assert.assertThat(flushed, Matchers.hasSize(2));
-    Assert.assertThat(flushed, Matchers.hasItems(k1, k3));
+    assertThat(flushed, Matchers.hasSize(2));
+    assertThat(flushed, Matchers.hasItems(k1, k3));
   }
 
   @Test
@@ -181,8 +182,8 @@ public class LocalRemoteKvIteratorTest {
         .forEachRemaining(kv -> flushed.add(kv.key));
 
     // Then:
-    Assert.assertThat(flushed, Matchers.hasSize(3));
-    Assert.assertThat(flushed, Matchers.hasItems(k1, k2, k3));
+    assertThat(flushed, Matchers.hasSize(3));
+    assertThat(flushed, Matchers.hasItems(k1, k2, k3));
   }
 
   private static class TestKvIterator<T> implements KeyValueIterator<Bytes, T> {

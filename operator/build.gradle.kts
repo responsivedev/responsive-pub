@@ -15,14 +15,22 @@
  */
 
 plugins {
-    id("responsive.java-library-conventions")
+    id("responsive.java-application-conventions")
+}
+
+application {
+    mainClass.set("dev.responsive.k8s.operator.OperatorMain")
 }
 
 dependencies {
-    implementation(libs.kafka.streams)
-    implementation(libs.bundles.scylla)
+    implementation(project(":controller-api"))
+
+    implementation(libs.crd.generator.atp)
+    implementation(libs.jackson)
+    implementation(libs.javaoperatorsdk)
+
+    annotationProcessor(libs.javaoperatorsdk)
+    annotationProcessor(libs.crd.generator.atp)
 
     testImplementation(testlibs.bundles.base)
-    testImplementation(testlibs.bundles.testcontainers)
-    testImplementation(testlibs.kafka.streams.test.utils)
 }

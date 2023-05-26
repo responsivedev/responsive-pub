@@ -33,6 +33,7 @@ import static org.apache.kafka.streams.StreamsConfig.NUM_STREAM_THREADS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.PROCESSING_GUARANTEE_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
 import static org.apache.kafka.streams.StreamsConfig.producerPrefix;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.lessThan;
@@ -92,43 +93,45 @@ import org.apache.kafka.streams.processor.internals.namedtopology.KafkaStreamsNa
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.ExpectedException;
-import org.junit.rules.TestName;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.CassandraContainer;
 import org.testcontainers.containers.KafkaContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 
+@Testcontainers
 public class ResponsiveStoreEosIntegrationTest {
 
-  private static final Logger LOG = LoggerFactory.getLogger(ResponsiveStoreEosIntegrationTest.class);
+  private static final Logger LOG
+      = LoggerFactory.getLogger(ResponsiveStoreEosIntegrationTest.class);
 
   private static final int MAX_POLL_MS = 5000;
   private static final String INPUT_TOPIC = "input";
   private static final String OUTPUT_TOPIC = "output";
   private static final String STORE_NAME = "store";
 
-  @Rule public CassandraContainer<?> cassandra = new CassandraContainer<>(TestConstants.CASSANDRA)
+  @Container
+  public CassandraContainer<?> cassandra = new CassandraContainer<>(TestConstants.CASSANDRA)
       .withInitScript("CassandraDockerInit.cql");
-  @Rule public KafkaContainer kafka = new KafkaContainer(TestConstants.KAFKA)
+  @Container
+  public KafkaContainer kafka = new KafkaContainer(TestConstants.KAFKA)
       .withEnv("KAFKA_GROUP_MIN_SESSION_TIMEOUT_MS", "1000")
       .withEnv("KAFKA_GROUP_MAX_SESSION_TIMEOUT_MS", "60000");
 
-  @Rule public TestName name = new TestName();
-  @Rule public ExpectedException exception = ExpectedException.none();
-
+  private String name;
   private Admin admin;
   private CqlSession session;
   private CassandraClient client;
   private ScheduledExecutorService executor;
 
-  @Before
-  public void before() {
+  @BeforeEach
+  public void before(final TestInfo info) {
+    name = info.getTestMethod().orElseThrow().getName();
     session = CqlSession.builder()
         .addContactPoint(cassandra.getContactPoint())
         .withLocalDatacenter(cassandra.getLocalDatacenter())
@@ -146,7 +149,7 @@ public class ResponsiveStoreEosIntegrationTest {
     );
   }
 
-  @After
+  @AfterEach
   public void after() {
     session.close();
     executor.shutdown();
@@ -223,10 +226,10 @@ public class ResponsiveStoreEosIntegrationTest {
       for (final KeyValue<Long, Long> kv : readC) {
         max[kv.key.intValue()] = Math.max(kv.value, max[kv.key.intValue()]);
 
-        Assert.assertThat(prev[kv.key.intValue()], lessThan(kv.value));
+        assertThat(prev[kv.key.intValue()], lessThan(kv.value));
         prev[kv.key.intValue()] = kv.value;
       }
-      Assert.assertThat(max, equalTo(new long[]{190, 190}));
+      assertThat(max, equalTo(new long[]{190, 190}));
 
       // for the uncommitted values, we are asserting that the failure
       // which happened at offset 10-15 caused duplicate uncommitted writes
@@ -235,7 +238,7 @@ public class ResponsiveStoreEosIntegrationTest {
           .stream()
           .collect(Collectors.toMap(kv -> kv, kv -> 1, Integer::sum));
       for (final long val : new long[]{55, 66, 78, 91, 105}) {
-        Assert.assertThat(dupes.get(new KeyValue<>(0L, val)), is(2));
+        assertThat(dupes.get(new KeyValue<>(0L, val)), is(2));
       }
     }
   }
@@ -249,7 +252,7 @@ public class ResponsiveStoreEosIntegrationTest {
     properties.put(KEY_DESERIALIZER_CLASS_CONFIG, LongDeserializer.class);
     properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, LongDeserializer.class);
 
-    properties.put(APPLICATION_ID_CONFIG, name.getMethodName());
+    properties.put(APPLICATION_ID_CONFIG, name);
     properties.put(DEFAULT_KEY_SERDE_CLASS_CONFIG, LongSerde.class.getName());
     properties.put(DEFAULT_VALUE_SERDE_CLASS_CONFIG, LongSerde.class.getName());
     properties.put(PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_V2);

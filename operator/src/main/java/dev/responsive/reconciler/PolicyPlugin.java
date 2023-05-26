@@ -1,5 +1,3 @@
-import gradle.kotlin.dsl.accessors._d9de297972d0a4752442781be40b0b07.java
-
 /*
  * Copyright 2023 Responsive Computing, Inc.
  *
@@ -16,31 +14,25 @@ import gradle.kotlin.dsl.accessors._d9de297972d0a4752442781be40b0b07.java
  * limitations under the License.
  */
 
-plugins {
-    `java`
-    `checkstyle`
-}
+package dev.responsive.reconciler;
 
-dependencies {
-    checkstyle("com.puppycrawl.tools:checkstyle:10.11.0")
-}
+import dev.responsive.k8s.crd.ResponsivePolicy;
+import io.javaoperatorsdk.operator.api.reconciler.Context;
+import io.javaoperatorsdk.operator.api.reconciler.EventSourceContext;
+import io.javaoperatorsdk.operator.processing.event.source.EventSource;
+import java.util.Map;
 
-java {
-    toolchain {
-        languageVersion.set(JavaLanguageVersion.of(11))
-    }
-}
+public interface PolicyPlugin {
 
-checkstyle {
-    version = "10.11.0"
-    maxWarnings = 0
-}
+  Map<String, EventSource> prepareEventSources(
+      EventSourceContext<ResponsivePolicy> ctx,
+      ResponsiveContext responsiveCtx
+  );
 
-repositories {
-    mavenCentral()
-}
+  void reconcile(
+      ResponsivePolicy resource,
+      Context<ResponsivePolicy> ctx,
+      ResponsiveContext responsiveCtx
+  );
 
-tasks.test {
-    // Use the built-in JUnit support of Gradle.
-    useJUnitPlatform()
 }

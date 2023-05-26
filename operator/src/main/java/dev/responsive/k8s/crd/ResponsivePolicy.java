@@ -14,15 +14,20 @@
  * limitations under the License.
  */
 
-plugins {
-    id("responsive.java-library-conventions")
-}
+package dev.responsive.k8s.crd;
 
-dependencies {
-    implementation(libs.kafka.streams)
-    implementation(libs.bundles.scylla)
+import io.fabric8.kubernetes.api.model.Namespaced;
+import io.fabric8.kubernetes.client.CustomResource;
+import io.fabric8.kubernetes.model.annotation.Group;
+import io.fabric8.kubernetes.model.annotation.Plural;
+import io.fabric8.kubernetes.model.annotation.Singular;
+import io.fabric8.kubernetes.model.annotation.Version;
 
-    testImplementation(testlibs.bundles.base)
-    testImplementation(testlibs.bundles.testcontainers)
-    testImplementation(testlibs.kafka.streams.test.utils)
+@Group("application.responsive.dev")
+@Version("v1")
+@Plural("responsivepolicies")
+@Singular("responsivepolicy")
+public class ResponsivePolicy
+    extends CustomResource<ResponsivePolicySpec, ResponsivePolicyStatus>
+    implements Namespaced {
 }

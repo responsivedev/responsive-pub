@@ -24,26 +24,28 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.hamcrest.MatcherAssert;
 import org.hamcrest.Matchers;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TestName;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
 import org.testcontainers.containers.CassandraContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
+@Testcontainers
 public class CassandraClientIntegrationTest {
 
-  @Rule public CassandraContainer<?> cassandra = new CassandraContainer<>(
+  @Container
+  public CassandraContainer<?> cassandra = new CassandraContainer<>(
       DockerImageName.parse("cassandra:4.1.0")
   ).withInitScript("CassandraDockerInit.cql");
-  @Rule public TestName name = new TestName();
 
   private CqlSession session;
   private CassandraClient client;
+  private String name;
 
-  @Before
-  public void before() {
+  @BeforeEach
+  public void before(TestInfo info) {
     session = CqlSession.builder()
         .addContactPoint(cassandra.getContactPoint())
         .withLocalDatacenter(cassandra.getLocalDatacenter())
@@ -51,14 +53,15 @@ public class CassandraClientIntegrationTest {
         .build();
     client = new CassandraClient(session);
 
-    client.createDataTable(name.getMethodName());
-    client.prepareStatements(name.getMethodName());
+    name = info.getTestMethod().orElseThrow().getName();
+    client.createDataTable(name);
+    client.prepareStatements(name);
   }
 
   @Test
   public void shouldReturnAllKeysInLexicalOrder() {
     // Given:
-    final String table = name.getMethodName();
+    final String table = name;
     final List<BoundStatement> inserts = List.of(
         client.insertData(table, 0, Bytes.wrap(new byte[]{0x0, 0x1}), new byte[]{0x1}),
         client.insertData(table, 0, Bytes.wrap(new byte[]{0x1, 0x0}), new byte[]{0x1}),
@@ -78,7 +81,7 @@ public class CassandraClientIntegrationTest {
     Bytes old = all.next().key;
     while (all.hasNext()) {
       final Bytes next = all.next().key;
-      Assert.assertThat(next.compareTo(old), Matchers.greaterThan(0));
+      MatcherAssert.assertThat(next.compareTo(old), Matchers.greaterThan(0));
       old = next;
     }
   }
@@ -86,7 +89,7 @@ public class CassandraClientIntegrationTest {
   @Test
   public void shouldReturnRangeKeysInLexicalOrder() {
     // Given:
-    final String table = name.getMethodName();
+    final String table = name;
     final List<BoundStatement> inserts = List.of(
         client.insertData(table, 0, Bytes.wrap(new byte[]{0x0, 0x1}), new byte[]{0x1}),
         client.insertData(table, 0, Bytes.wrap(new byte[]{0x1, 0x0}), new byte[]{0x1}),

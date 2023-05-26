@@ -15,14 +15,6 @@
  */
 
 plugins {
-    id("responsive.java-library-conventions")
-}
-
-dependencies {
-    implementation(libs.kafka.streams)
-    implementation(libs.bundles.scylla)
-
-    testImplementation(testlibs.bundles.base)
-    testImplementation(testlibs.bundles.testcontainers)
-    testImplementation(testlibs.kafka.streams.test.utils)
+    id("responsive.java-common-conventions")
+    `application`
 }

@@ -17,37 +17,65 @@
 rootProject.name = "responsive-pub"
 
 include("kafka-client")
+include("controller-api")
+include("operator")
 
 dependencyResolutionManagement {
 
     versionCatalogs {
         create("libs") {
+            version("jackson", "2.14.2")
             version("kafka", "3.4.0")
             version("scylla", "4.15.0.0")
+            version("javaoperatorsdk", "4.3.0")
+            version("grpc", "1.52.1")
+            version("protobuf-java", "3.22.3")
+
+            library("jackson", "com.fasterxml.jackson.datatype", "jackson-datatype-jdk8").versionRef("jackson")
 
             library("kafka-streams", "org.apache.kafka", "kafka-streams").versionRef("kafka")
 
             library("scylla-driver-core", "com.scylladb", "java-driver-core").versionRef("scylla")
             library("scylla-query-builder", "com.scylladb", "java-driver-query-builder").versionRef("scylla")
             library("scylla-mapper-runtime", "com.scylladb", "java-driver-mapper-runtime").versionRef("scylla")
-
             bundle("scylla", listOf("scylla-driver-core", "scylla-query-builder", "scylla-mapper-runtime"))
+
+            library("javaoperatorsdk", "io.javaoperatorsdk", "operator-framework").versionRef("javaoperatorsdk")
+
+            library("grpc-netty", "io.grpc", "grpc-netty").versionRef("grpc")
+            library("grpc-protobuf", "io.grpc", "grpc-protobuf").versionRef("grpc")
+            library("grpc-stub", "io.grpc", "grpc-stub").versionRef("grpc")
+            // Workaround for @javax.annotation.Generated
+            // see: https://github.com/grpc/grpc-java/issues/3633
+            library("javax-annotation-api", "javax.annotation", "javax.annotation-api").version("1.3.1")
+            bundle("grpc", listOf("grpc-netty", "grpc-protobuf", "grpc-stub", "javax-annotation-api"))
+
+            library("protobuf-java-util", "com.google.protobuf", "protobuf-java-util").versionRef("protobuf-java")
+            library("crd-generator-atp", "io.fabric8", "crd-generator-apt").version("6.5.1")
         }
 
         create("testlibs") {
             version("testcontainers", "1.17.6")
 
-            library("junit", "junit:junit:4.11")
+            library("junit", "org.junit.jupiter:junit-jupiter:5.9.1")
             library("hamcrest", "org.hamcrest:hamcrest:2.2")
             library("mockito", "org.mockito:mockito-core:5.2.0")
+            library("mockito-jupiter", "org.mockito:mockito-junit-jupiter:5.3.1")
+
+            // include these as test dependencies so we don't force downstream
+            // users to use our logging libraries
+            library("slf4j", "org.slf4j:slf4j-log4j12:1.7.5")
+            library("log4j-core", "org.apache.logging.log4j:log4j-core:2.17.1")
 
             library("kafka-streams-test-utils", "org.apache.kafka:kafka-streams-test-utils:3.4.0")
 
             library("testcontainers", "org.testcontainers", "testcontainers").versionRef("testcontainers")
+            library("testcontainers-junit", "org.testcontainers", "junit-jupiter").versionRef("testcontainers")
             library("testcontainers-cassandra", "org.testcontainers", "cassandra").versionRef("testcontainers")
             library("testcontainers-kafka", "org.testcontainers", "kafka").versionRef("testcontainers")
+            bundle("testcontainers", listOf("testcontainers", "testcontainers-junit", "testcontainers-cassandra", "testcontainers-kafka"))
 
-            bundle("base", listOf("junit", "hamcrest", "mockito"))
+            bundle("base", listOf("junit", "slf4j", "log4j-core", "hamcrest", "mockito", "mockito-jupiter"))
         }
     }
 }

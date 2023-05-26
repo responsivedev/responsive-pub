@@ -14,15 +14,8 @@
  * limitations under the License.
  */
 
-plugins {
-    id("responsive.java-library-conventions")
-}
+package dev.responsive.k8s.crd;
 
-dependencies {
-    implementation(libs.kafka.streams)
-    implementation(libs.bundles.scylla)
+public class ResponsivePolicyStatus {
 
-    testImplementation(testlibs.bundles.base)
-    testImplementation(testlibs.bundles.testcontainers)
-    testImplementation(testlibs.kafka.streams.test.utils)
 }

@@ -1,0 +1,3 @@
+[submodule "controller-api/src/main/external-protos/opentelemetry-proto"]
+	path = controller-api/src/main/external-protos/opentelemetry-proto
+	url = git@github.com:open-telemetry/opentelemetry-proto.git
