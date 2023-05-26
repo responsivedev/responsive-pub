@@ -1,0 +1,79 @@
+syntax = "proto3";
+
+package responsive.controller.v1.controller.proto;
+
+// TODO(rohan): clean up the submodule now that we are getting via maven central
+import "opentelemetry/proto/metrics/v1/metrics.proto";
+
+// TODO(rohan): consider versioning these APIs
+
+service Controller {
+  rpc PostMetrics(PostMetricsRequest) returns (SimpleResponse) {}
+  rpc UpsertPolicy(UpsertPolicyRequest) returns (SimpleResponse) {}
+  rpc CurrentState(CurrentStateRequest) returns (SimpleResponse) {}
+  rpc GetTargetState(EmptyRequest) returns (GetTargetStateResponse) {}
+}
+
+message PostMetricsRequest {
+  string application_id = 1;
+  opentelemetry.proto.metrics.v1.MetricsData metrics = 2;
+}
+
+// TODO(rohan): we need to encode some ordering info (generation/version for policy, timestmap for current state)
+message UpsertPolicyRequest {
+  string application_id = 1;
+  int64 timestamp_ms = 2;
+  ApplicationPolicy policy = 3;
+}
+
+message CurrentStateRequest {
+  string application_id = 1;
+  int64 timestamp_ms = 2;
+  ApplicationState state = 3;
+}
+
+message EmptyRequest {
+  string application_id = 1;
+}
+
+message SimpleResponse {
+  string error = 1;
+}
+
+message GetTargetStateResponse {
+  string error = 1;
+  ApplicationState state = 2;
+}
+
+// TODO(rohan): how to support different types of applications?
+// TODO(rohan): move these to a common proto file. this file is just the grpc api
+message ApplicationState {
+  DemoApplicationState demo_state = 1;
+}
+
+message DemoApplicationState {
+  int32 replicas = 1;
+}
+
+// from the protobuf best practices: All enum values declared under a
+// container message are in the same C++ namespace, so prefix the unspecified
+// value with the enum’s name to avoid compilation errors.
+//
+// it seems like generally good practice to prefix all enums with their
+// enum name
+enum PolicyStatus {
+  POLICY_STATUS_UNSPECIFIED = 0;
+  POLICY_STATUS_MANAGED = 1;
+  POLICY_STATUS_DISABLED = 2;
+}
+
+// TODO(rohan): move this to a a common location where we specify the policy
+//              also, see if we can combine with the CRD somehow
+message ApplicationPolicy {
+  PolicyStatus status = 1;
+  DemoPolicy demo_policy = 2;
+}
+
+message DemoPolicy {
+  int32 maxReplicas = 1;
+}

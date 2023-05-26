@@ -14,25 +14,21 @@
  * limitations under the License.
  */
 
-plugins {
-    `java`
-    `checkstyle`
-}
+package dev.responsive.k8s.operator;
 
-dependencies {
-    checkstyle("com.puppycrawl.tools:checkstyle:10.11.0")
-}
+import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
+import dev.responsive.controller.grpc.ControllerGrpcClient;
+import dev.responsive.reconciler.ResponsivePolicyReconciler;
+import io.fabric8.kubernetes.client.utils.Serialization;
+import io.javaoperatorsdk.operator.Operator;
 
-checkstyle {
-    version = "10.11.0"
-    maxWarnings = 0
-}
+public class OperatorMain {
 
-repositories {
-    mavenCentral()
-}
+  public static void main(String[] args) {
+    final Operator operator = new Operator();
+    Serialization.jsonMapper().registerModule(new Jdk8Module());
+    operator.register(new ResponsivePolicyReconciler(new ControllerGrpcClient(args[0])));
+    operator.start();
+  }
 
-tasks.test {
-    // Use the built-in JUnit support of Gradle.
-    useJUnitPlatform()
 }

@@ -15,24 +15,6 @@
  */
 
 plugins {
-    `java`
-    `checkstyle`
-}
-
-dependencies {
-    checkstyle("com.puppycrawl.tools:checkstyle:10.11.0")
-}
-
-checkstyle {
-    version = "10.11.0"
-    maxWarnings = 0
-}
-
-repositories {
-    mavenCentral()
-}
-
-tasks.test {
-    // Use the built-in JUnit support of Gradle.
-    useJUnitPlatform()
+    id("responsive.java-common-conventions")
+    `application`
 }

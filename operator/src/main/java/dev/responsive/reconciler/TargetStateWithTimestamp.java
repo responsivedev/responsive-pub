@@ -14,25 +14,24 @@
  * limitations under the License.
  */
 
-plugins {
-    `java`
-    `checkstyle`
-}
+package dev.responsive.reconciler;
 
-dependencies {
-    checkstyle("com.puppycrawl.tools:checkstyle:10.11.0")
-}
+import java.time.Instant;
+import java.util.Objects;
+import responsive.controller.v1.controller.proto.ControllerOuterClass;
 
-checkstyle {
-    version = "10.11.0"
-    maxWarnings = 0
-}
+record TargetStateWithTimestamp(
+    Instant timestamp,
+    ControllerOuterClass.ApplicationState targetState
+) {
 
-repositories {
-    mavenCentral()
-}
+  TargetStateWithTimestamp {
+    Objects.requireNonNull(timestamp);
+    Objects.requireNonNull(targetState);
+  }
 
-tasks.test {
-    // Use the built-in JUnit support of Gradle.
-    useJUnitPlatform()
+  TargetStateWithTimestamp(final ControllerOuterClass.ApplicationState targetState) {
+    this(Instant.now(), targetState);
+  }
+
 }

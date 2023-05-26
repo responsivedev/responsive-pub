@@ -15,24 +15,22 @@
  */
 
 plugins {
-    `java`
-    `checkstyle`
+    id("responsive.java-application-conventions")
+}
+
+application {
+    mainClass.set("dev.responsive.k8s.operator.OperatorMain")
 }
 
 dependencies {
-    checkstyle("com.puppycrawl.tools:checkstyle:10.11.0")
-}
+    implementation(project(":controller-api"))
 
-checkstyle {
-    version = "10.11.0"
-    maxWarnings = 0
-}
+    implementation(libs.crd.generator.atp)
+    implementation(libs.jackson)
+    implementation(libs.javaoperatorsdk)
 
-repositories {
-    mavenCentral()
-}
+    annotationProcessor(libs.javaoperatorsdk)
+    annotationProcessor(libs.crd.generator.atp)
 
-tasks.test {
-    // Use the built-in JUnit support of Gradle.
-    useJUnitPlatform()
+    testImplementation(testlibs.bundles.base)
 }

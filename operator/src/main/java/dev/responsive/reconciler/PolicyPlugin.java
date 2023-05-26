@@ -14,25 +14,25 @@
  * limitations under the License.
  */
 
-plugins {
-    `java`
-    `checkstyle`
-}
+package dev.responsive.reconciler;
 
-dependencies {
-    checkstyle("com.puppycrawl.tools:checkstyle:10.11.0")
-}
+import dev.responsive.k8s.crd.ResponsivePolicy;
+import io.javaoperatorsdk.operator.api.reconciler.Context;
+import io.javaoperatorsdk.operator.api.reconciler.EventSourceContext;
+import io.javaoperatorsdk.operator.processing.event.source.EventSource;
+import java.util.Map;
 
-checkstyle {
-    version = "10.11.0"
-    maxWarnings = 0
-}
+public interface PolicyPlugin {
 
-repositories {
-    mavenCentral()
-}
+  Map<String, EventSource> prepareEventSources(
+      EventSourceContext<ResponsivePolicy> ctx,
+      ResponsiveContext responsiveCtx
+  );
 
-tasks.test {
-    // Use the built-in JUnit support of Gradle.
-    useJUnitPlatform()
+  void reconcile(
+      ResponsivePolicy resource,
+      Context<ResponsivePolicy> ctx,
+      ResponsiveContext responsiveCtx
+  );
+
 }

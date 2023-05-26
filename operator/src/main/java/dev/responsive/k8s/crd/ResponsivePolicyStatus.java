@@ -14,25 +14,8 @@
  * limitations under the License.
  */
 
-plugins {
-    `java`
-    `checkstyle`
-}
+package dev.responsive.k8s.crd;
 
-dependencies {
-    checkstyle("com.puppycrawl.tools:checkstyle:10.11.0")
-}
+public class ResponsivePolicyStatus {
 
-checkstyle {
-    version = "10.11.0"
-    maxWarnings = 0
-}
-
-repositories {
-    mavenCentral()
-}
-
-tasks.test {
-    // Use the built-in JUnit support of Gradle.
-    useJUnitPlatform()
 }

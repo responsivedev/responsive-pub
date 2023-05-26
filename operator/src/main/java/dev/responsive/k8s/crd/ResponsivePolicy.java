@@ -14,25 +14,20 @@
  * limitations under the License.
  */
 
-plugins {
-    `java`
-    `checkstyle`
-}
+package dev.responsive.k8s.crd;
 
-dependencies {
-    checkstyle("com.puppycrawl.tools:checkstyle:10.11.0")
-}
+import io.fabric8.kubernetes.api.model.Namespaced;
+import io.fabric8.kubernetes.client.CustomResource;
+import io.fabric8.kubernetes.model.annotation.Group;
+import io.fabric8.kubernetes.model.annotation.Plural;
+import io.fabric8.kubernetes.model.annotation.Singular;
+import io.fabric8.kubernetes.model.annotation.Version;
 
-checkstyle {
-    version = "10.11.0"
-    maxWarnings = 0
-}
-
-repositories {
-    mavenCentral()
-}
-
-tasks.test {
-    // Use the built-in JUnit support of Gradle.
-    useJUnitPlatform()
+@Group("application.responsive.dev")
+@Version("v1")
+@Plural("responsivepolicies")
+@Singular("responsivepolicy")
+public class ResponsivePolicy
+    extends CustomResource<ResponsivePolicySpec, ResponsivePolicyStatus>
+    implements Namespaced {
 }

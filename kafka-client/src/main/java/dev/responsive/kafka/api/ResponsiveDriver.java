@@ -67,12 +67,12 @@ public class ResponsiveDriver implements Closeable {
   public static ResponsiveDriver connect(final Map<String, Object> props) {
     final ResponsiveDriverConfig configs = new ResponsiveDriverConfig(props);
 
-      final InetSocketAddress address = InetSocketAddress.createUnresolved(
-          configs.getString(STORAGE_HOSTNAME_CONFIG),
-          configs.getInt(STORAGE_PORT_CONFIG)
-      );
-      final String datacenter = configs.getString(STORAGE_DATACENTER_CONFIG);
+    final InetSocketAddress address = InetSocketAddress.createUnresolved(
+        configs.getString(STORAGE_HOSTNAME_CONFIG),
+        configs.getInt(STORAGE_PORT_CONFIG)
+    );
 
+    final String datacenter = configs.getString(STORAGE_DATACENTER_CONFIG);
     final String clientId = configs.getString(CLIENT_ID_CONFIG);
     final Password clientSecret = configs.getPassword(CLIENT_SECRET_CONFIG);
     final String tenant = configs.getString(TENANT_ID_CONFIG);

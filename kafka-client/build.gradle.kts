@@ -23,8 +23,6 @@ dependencies {
     implementation(libs.bundles.scylla)
 
     testImplementation(testlibs.bundles.base)
+    testImplementation(testlibs.bundles.testcontainers)
     testImplementation(testlibs.kafka.streams.test.utils)
-    testImplementation(testlibs.testcontainers)
-    testImplementation(testlibs.testcontainers.cassandra)
-    testImplementation(testlibs.testcontainers.kafka)
 }

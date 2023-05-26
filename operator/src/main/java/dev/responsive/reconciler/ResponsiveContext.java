@@ -14,25 +14,25 @@
  * limitations under the License.
  */
 
-plugins {
-    `java`
-    `checkstyle`
-}
+package dev.responsive.reconciler;
 
-dependencies {
-    checkstyle("com.puppycrawl.tools:checkstyle:10.11.0")
-}
+import dev.responsive.controller.ControllerClient;
+import dev.responsive.k8s.crd.ResponsivePolicy;
+import io.javaoperatorsdk.operator.processing.event.source.timer.TimerEventSource;
+import java.util.Objects;
 
-checkstyle {
-    version = "10.11.0"
-    maxWarnings = 0
-}
+record ResponsiveContext(
+    TimerEventSource<ResponsivePolicy> scheduler,
+    ControllerClient controllerClient
+) {
 
-repositories {
-    mavenCentral()
-}
+  ResponsiveContext {
+    Objects.requireNonNull(scheduler);
+    Objects.requireNonNull(controllerClient);
+  }
 
-tasks.test {
-    // Use the built-in JUnit support of Gradle.
-    useJUnitPlatform()
+  ResponsiveContext(final ControllerClient controllerClient) {
+    this(new TimerEventSource<>(), controllerClient);
+  }
+
 }

@@ -31,6 +31,7 @@ import static org.apache.kafka.streams.StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_C
 import static org.apache.kafka.streams.StreamsConfig.NUM_STREAM_THREADS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
+import static org.hamcrest.MatcherAssert.assertThat;
 
 import com.datastax.oss.driver.api.core.CqlSession;
 import dev.responsive.TestConstants;
@@ -69,17 +70,18 @@ import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.hamcrest.Matchers;
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TestName;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.CassandraContainer;
 import org.testcontainers.containers.KafkaContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 
+@Testcontainers
 public class ResponsiveWindowIntegrationTest {
 
   private static final Logger LOG = LoggerFactory.getLogger(ResponsiveStoreEosIntegrationTest.class);
@@ -93,17 +95,19 @@ public class ResponsiveWindowIntegrationTest {
   private CassandraClient client;
   private ScheduledExecutorService executor;
 
-  @Rule
+  @Container
   public CassandraContainer<?> cassandra = new CassandraContainer<>(TestConstants.CASSANDRA)
       .withInitScript("CassandraDockerInit.cql");
-  @Rule public KafkaContainer kafka = new KafkaContainer(TestConstants.KAFKA)
+  @Container
+  public KafkaContainer kafka = new KafkaContainer(TestConstants.KAFKA)
       .withEnv("KAFKA_GROUP_MIN_SESSION_TIMEOUT_MS", "1000")
       .withEnv("KAFKA_GROUP_MAX_SESSION_TIMEOUT_MS", "60000");
 
-  @Rule public TestName name = new TestName();
+  private String name;
 
-  @Before
-  public void before() {
+  @BeforeEach
+  public void before(final TestInfo info) {
+    name = info.getTestMethod().orElseThrow().getName();
     session = CqlSession.builder()
         .addContactPoint(cassandra.getContactPoint())
         .withLocalDatacenter(cassandra.getLocalDatacenter())
@@ -122,7 +126,7 @@ public class ResponsiveWindowIntegrationTest {
     );
   }
 
-  @After
+  @AfterEach
   public void after() {
     session.close();
     executor.shutdown();
@@ -149,7 +153,7 @@ public class ResponsiveWindowIntegrationTest {
             Materialized.as(
                 new ResponsiveWindowedStoreSupplier(
                     client,
-                    name.getMethodName(),
+                    name,
                     executor,
                     admin,
                     6_000,
@@ -221,16 +225,16 @@ public class ResponsiveWindowIntegrationTest {
     }
 
     // Then:
-    Assert.assertThat(collect.size(), Matchers.is(6));
+    assertThat(collect.size(), Matchers.is(6));
 
-    Assert.assertThat(collect, Matchers.hasEntry(windowed(0, baseTs, 5000), 10L));
-    Assert.assertThat(collect, Matchers.hasEntry(windowed(1, baseTs, 5000), 10L));
+    assertThat(collect, Matchers.hasEntry(windowed(0, baseTs, 5000), 10L));
+    assertThat(collect, Matchers.hasEntry(windowed(1, baseTs, 5000), 10L));
 
-    Assert.assertThat(collect, Matchers.hasEntry(windowed(0, baseTs + 10_000, 5000), 35L));
-    Assert.assertThat(collect, Matchers.hasEntry(windowed(1, baseTs + 10_000, 5000), 35L));
+    assertThat(collect, Matchers.hasEntry(windowed(0, baseTs + 10_000, 5000), 35L));
+    assertThat(collect, Matchers.hasEntry(windowed(1, baseTs + 10_000, 5000), 35L));
 
-    Assert.assertThat(collect, Matchers.hasEntry(windowed(0, baseTs + 15_000, 5000), 1000L));
-    Assert.assertThat(collect, Matchers.hasEntry(windowed(1, baseTs + 15_000, 5000), 1000L));
+    assertThat(collect, Matchers.hasEntry(windowed(0, baseTs + 15_000, 5000), 1000L));
+    assertThat(collect, Matchers.hasEntry(windowed(1, baseTs + 15_000, 5000), 1000L));
   }
 
   @Test
@@ -254,9 +258,9 @@ public class ResponsiveWindowIntegrationTest {
             JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofMillis(500)),
             StreamJoined.with(
                 new ResponsiveWindowedStoreSupplier(
-                    client, "input" + name.getMethodName(), executor, admin, 1000, 1000, true),
+                    client, "input" + name, executor, admin, 1000, 1000, true),
                 new ResponsiveWindowedStoreSupplier(
-                    client, "other" + name.getMethodName(), executor, admin, 1000, 1000, true)
+                    client, "other" + name, executor, admin, 1000, 1000, true)
             ))
         .peek((k, v) -> {
           collect.computeIfAbsent(k, old -> new ArrayBlockingQueue<>(10)).add(v);
@@ -312,10 +316,10 @@ public class ResponsiveWindowIntegrationTest {
     }
 
     // Then:
-    Assert.assertThat(collect.size(), Matchers.is(2));
+    assertThat(collect.size(), Matchers.is(2));
 
     final Queue<Long> k0 = collect.get(0L);
-    Assert.assertThat(k0, Matchers.containsInAnyOrder(
+    assertThat(k0, Matchers.containsInAnyOrder(
         0L,
         1L,
         2L,
@@ -363,7 +367,7 @@ public class ResponsiveWindowIntegrationTest {
     properties.put(KEY_DESERIALIZER_CLASS_CONFIG, LongDeserializer.class);
     properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, LongDeserializer.class);
 
-    properties.put(APPLICATION_ID_CONFIG, name.getMethodName());
+    properties.put(APPLICATION_ID_CONFIG, name);
     properties.put(DEFAULT_KEY_SERDE_CLASS_CONFIG, LongSerde.class.getName());
     properties.put(DEFAULT_VALUE_SERDE_CLASS_CONFIG, LongSerde.class.getName());
     properties.put(NUM_STREAM_THREADS_CONFIG, 1);
