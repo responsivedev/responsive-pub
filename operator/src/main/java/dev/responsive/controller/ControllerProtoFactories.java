@@ -54,15 +54,16 @@ public final class ControllerProtoFactories {
   private static ApplicationPolicy policyFromK8sResource(final ResponsivePolicySpec policySpec) {
     final var builder = ApplicationPolicy.newBuilder();
     switch (policySpec.policyType()) {
-      case DEMO -> {
+      case DEMO:
         assert policySpec.demoPolicy().isPresent();
         final var demoPolicy = policySpec.demoPolicy().get();
         builder.setDemoPolicy(DemoPolicy.newBuilder()
             .setMaxReplicas(demoPolicy.maxReplicas())
             .build()
         );
-      }
-      default -> throw new IllegalStateException("Unexpected value: " + policySpec.policyType());
+        break;
+      default:
+        throw new IllegalStateException("Unexpected value: " + policySpec.policyType());
     }
     return builder.build();
   }

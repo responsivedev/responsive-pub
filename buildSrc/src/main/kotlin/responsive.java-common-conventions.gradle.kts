@@ -1,3 +1,5 @@
+import gradle.kotlin.dsl.accessors._d9de297972d0a4752442781be40b0b07.java
+
 /*
  * Copyright 2023 Responsive Computing, Inc.
  *
@@ -21,6 +23,12 @@ plugins {
 
 dependencies {
     checkstyle("com.puppycrawl.tools:checkstyle:10.11.0")
+}
+
+java {
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(11))
+    }
 }
 
 checkstyle {

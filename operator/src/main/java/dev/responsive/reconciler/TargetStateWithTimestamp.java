@@ -19,19 +19,27 @@ package dev.responsive.reconciler;
 import java.time.Instant;
 import java.util.Objects;
 import responsive.controller.v1.controller.proto.ControllerOuterClass;
+import responsive.controller.v1.controller.proto.ControllerOuterClass.ApplicationState;
 
-record TargetStateWithTimestamp(
-    Instant timestamp,
-    ControllerOuterClass.ApplicationState targetState
-) {
+class TargetStateWithTimestamp {
 
-  TargetStateWithTimestamp {
-    Objects.requireNonNull(timestamp);
-    Objects.requireNonNull(targetState);
-  }
+  private final Instant timestamp;
+  private final ControllerOuterClass.ApplicationState targetState;
 
   TargetStateWithTimestamp(final ControllerOuterClass.ApplicationState targetState) {
     this(Instant.now(), targetState);
   }
 
+  public TargetStateWithTimestamp(final Instant timestamp, final ApplicationState targetState) {
+    this.timestamp = Objects.requireNonNull(timestamp);
+    this.targetState = Objects.requireNonNull(targetState);
+  }
+
+  public Instant timestamp() {
+    return timestamp;
+  }
+
+  public ApplicationState targetState() {
+    return targetState;
+  }
 }

@@ -21,12 +21,12 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.Objects;
 import java.util.Optional;
 
-public record ResponsivePolicySpec(
-    String applicationNamespace,
-    String applicationName,
-    ResponsivePolicySpec.PolicyType policyType,
-    Optional<DemoPolicy> demoPolicy
-) {
+public class ResponsivePolicySpec {
+
+  private final String applicationNamespace;
+  private final String applicationName;
+  private final ResponsivePolicySpec.PolicyType policyType;
+  private final Optional<DemoPolicy> demoPolicy;
 
   public enum PolicyType {
     DEMO
@@ -45,13 +45,35 @@ public record ResponsivePolicySpec(
     this.demoPolicy = Objects.requireNonNull(demoPolicy);
   }
 
-  public record DemoPolicy(int maxReplicas) {
+  public String applicationNamespace() {
+    return applicationNamespace;
+  }
+
+  public String applicationName() {
+    return applicationName;
+  }
+
+  public PolicyType policyType() {
+    return policyType;
+  }
+
+  public Optional<DemoPolicy> demoPolicy() {
+    return demoPolicy;
+  }
+
+  public static class DemoPolicy {
+
+    private final int maxReplicas;
 
     @JsonCreator
     public DemoPolicy(
         @JsonProperty("maxReplicas") final int maxReplicas
     ) {
       this.maxReplicas = maxReplicas;
+    }
+
+    public int maxReplicas() {
+      return maxReplicas;
     }
   }
 }
