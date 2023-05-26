@@ -16,20 +16,21 @@
 
 package dev.responsive.controller;
 
+import static dev.responsive.controller.ControllerProtoFactories.currentStateRequest;
+import static dev.responsive.controller.ControllerProtoFactories.emptyRequest;
+import static dev.responsive.controller.ControllerProtoFactories.upsertPolicyRequest;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.is;
+
 import dev.responsive.k8s.crd.ResponsivePolicy;
 import dev.responsive.k8s.crd.ResponsivePolicySpec;
-import java.util.Optional;
-
 import io.fabric8.kubernetes.api.model.ObjectMeta;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import responsive.controller.v1.controller.proto.ControllerOuterClass;
 import responsive.controller.v1.controller.proto.ControllerOuterClass.ApplicationState;
 import responsive.controller.v1.controller.proto.ControllerOuterClass.DemoPolicy;
-
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.*;
-import static dev.responsive.controller.ControllerProtoFactories.*;
 
 public class ControllerProtoFactoriesTest {
 

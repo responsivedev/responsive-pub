@@ -48,7 +48,7 @@ class ResponsivePolicyReconcilerTest {
   @Mock
   private Context<ResponsivePolicy> ctx;
   @Mock
-  private EventSourceContext<ResponsivePolicy> eCtx;
+  private EventSourceContext<ResponsivePolicy> eventCtx;
   @Mock
   private ControllerConfiguration<ResponsivePolicy> controllerConfig;
   @Mock
@@ -63,16 +63,17 @@ class ResponsivePolicyReconcilerTest {
   private EventSource pluginEventSoruce2;
 
   private ResponsivePolicyReconciler reconciler;
-  private ResponsiveContext rCtx;
+  private ResponsiveContext responsiveCtx;
   private final ResponsivePolicy policy = new ResponsivePolicy();
 
   @BeforeEach
   public void setup() {
-    rCtx = new ResponsiveContext(controllerClient);
-    lenient().when(eCtx.getControllerConfiguration()).thenReturn(controllerConfig);
-    lenient().when(controllerConfig.getEffectiveNamespaces()).thenReturn(ImmutableSet.of("responsive"));
-    lenient().when(eCtx.getClient()).thenReturn(client);
-    lenient().when(plugin.prepareEventSources(eCtx, rCtx)).thenReturn(
+    responsiveCtx = new ResponsiveContext(controllerClient);
+    lenient().when(eventCtx.getControllerConfiguration()).thenReturn(controllerConfig);
+    lenient().when(controllerConfig.getEffectiveNamespaces())
+        .thenReturn(ImmutableSet.of("responsive"));
+    lenient().when(eventCtx.getClient()).thenReturn(client);
+    lenient().when(plugin.prepareEventSources(eventCtx, responsiveCtx)).thenReturn(
         ImmutableMap.of(
             "pes1", pluginEventSource1,
             "pes2", pluginEventSoruce2
@@ -88,7 +89,7 @@ class ResponsivePolicyReconcilerTest {
         Optional.of(new ResponsivePolicySpec.DemoPolicy(123))
     ));
     reconciler = new ResponsivePolicyReconciler(
-        rCtx,
+        responsiveCtx,
         ImmutableMap.of(ResponsivePolicySpec.PolicyType.DEMO, plugin)
     );
   }
@@ -96,7 +97,7 @@ class ResponsivePolicyReconcilerTest {
   @Test
   public void shouldIncludeControllerPollingEventSource() {
     // when:
-    final var sources = reconciler.prepareEventSources(eCtx);
+    final var sources = reconciler.prepareEventSources(eventCtx);
 
     // then:
     assertThat(sources.values(), hasItem(instanceOf(PerResourcePollingEventSource.class)));
@@ -105,7 +106,7 @@ class ResponsivePolicyReconcilerTest {
   @Test
   public void shouldIncludePluginEventSources() {
     // when:
-    final var sources = reconciler.prepareEventSources(eCtx);
+    final var sources = reconciler.prepareEventSources(eventCtx);
     assertThat(sources, hasEntry("pes1", pluginEventSource1));
     assertThat(sources, hasEntry("pes2", pluginEventSoruce2));
   }
@@ -125,6 +126,6 @@ class ResponsivePolicyReconcilerTest {
     reconciler.reconcile(policy, ctx);
 
     // then:
-    verify(plugin).reconcile(policy, ctx, rCtx);
+    verify(plugin).reconcile(policy, ctx, responsiveCtx);
   }
 }

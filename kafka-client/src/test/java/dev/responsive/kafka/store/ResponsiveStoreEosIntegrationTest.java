@@ -107,7 +107,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @Testcontainers
 public class ResponsiveStoreEosIntegrationTest {
 
-  private static final Logger LOG = LoggerFactory.getLogger(ResponsiveStoreEosIntegrationTest.class);
+  private static final Logger LOG
+      = LoggerFactory.getLogger(ResponsiveStoreEosIntegrationTest.class);
 
   private static final int MAX_POLL_MS = 5000;
   private static final String INPUT_TOPIC = "input";

@@ -16,6 +16,15 @@
 
 package dev.responsive.reconciler;
 
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.is;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import dev.responsive.controller.ControllerClient;
@@ -38,6 +47,10 @@ import io.javaoperatorsdk.operator.api.reconciler.EventSourceContext;
 import io.javaoperatorsdk.operator.processing.event.ResourceID;
 import io.javaoperatorsdk.operator.processing.event.source.EventSource;
 import io.javaoperatorsdk.operator.processing.event.source.informer.InformerEventSource;
+import java.util.Collections;
+import java.util.Map;
+import java.util.Optional;
+import java.util.function.UnaryOperator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -46,15 +59,6 @@ import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import responsive.controller.v1.controller.proto.ControllerOuterClass;
-
-import java.util.Collections;
-import java.util.Map;
-import java.util.Optional;
-import java.util.function.UnaryOperator;
-
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.*;
-import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class DemoPolicyPluginTest {
@@ -69,9 +73,15 @@ class DemoPolicyPluginTest {
   @Mock
   private AppsAPIGroupDSL appsClient;
   @Mock
-  private MixedOperation<Deployment, DeploymentList, RollableScalableResource<Deployment>> deploymentsClient;
+  private MixedOperation<
+      Deployment,
+      DeploymentList,
+      RollableScalableResource<Deployment>> deploymentsClient;
   @Mock
-  private NonNamespaceOperation<Deployment, DeploymentList, RollableScalableResource<Deployment>> nsDeploymentsClient;
+  private NonNamespaceOperation<
+      Deployment,
+      DeploymentList,
+      RollableScalableResource<Deployment>> nsDeploymentsClient;
   @Mock
   private RollableScalableResource<Deployment> rsDeployment;
   @Captor
@@ -84,12 +94,13 @@ class DemoPolicyPluginTest {
   private final DemoPolicyPlugin plugin = new DemoPolicyPlugin();
   private final Deployment deployment = new Deployment();
   private final ResponsivePolicy policy = new ResponsivePolicy();
-  private final ControllerOuterClass.ApplicationState targetState = ControllerOuterClass.ApplicationState.newBuilder()
+  private final ControllerOuterClass.ApplicationState targetState
+      = ControllerOuterClass.ApplicationState.newBuilder()
       .setDemoState(ControllerOuterClass.DemoApplicationState.newBuilder()
           .setReplicas(5)
           .build())
       .build();
-  private ResponsiveContext rCtx;
+  private ResponsiveContext responsiveCtx;
 
   @BeforeEach
   public void setup() {
@@ -117,10 +128,11 @@ class DemoPolicyPluginTest {
         )
     );
 
-    rCtx = new ResponsiveContext(controllerClient);
+    responsiveCtx = new ResponsiveContext(controllerClient);
 
     lenient().when(esCtx.getControllerConfiguration()).thenReturn(controllerConfig);
-    lenient().when(controllerConfig.getEffectiveNamespaces()).thenReturn(ImmutableSet.of("responsive"));
+    lenient().when(controllerConfig.getEffectiveNamespaces())
+        .thenReturn(ImmutableSet.of("responsive"));
     lenient().when(esCtx.getClient()).thenReturn(client);
 
     lenient().when(ctx.getClient()).thenReturn(client);
@@ -135,7 +147,7 @@ class DemoPolicyPluginTest {
   @Test
   public void shouldAddDeploymentEventSource() {
     // when:
-    final var sources = plugin.prepareEventSources(esCtx, rCtx);
+    final var sources = plugin.prepareEventSources(esCtx, responsiveCtx);
 
     // then:
     final Optional<InformerEventSource<Deployment, ResponsivePolicy>> src
@@ -146,7 +158,7 @@ class DemoPolicyPluginTest {
   @Test
   public void shouldSetSecondaryMapperForDeploymentEventSource() {
     // when:
-    final var sources = plugin.prepareEventSources(esCtx, rCtx);
+    final var sources = plugin.prepareEventSources(esCtx, responsiveCtx);
 
     // then:
     final Optional<InformerEventSource<Deployment, ResponsivePolicy>> src
@@ -160,7 +172,7 @@ class DemoPolicyPluginTest {
   @Test
   public void shouldSetPrimaryToSecondaryMapperForDeploymentEventSource() {
     // when:
-    final var sources = plugin.prepareEventSources(esCtx, rCtx);
+    final var sources = plugin.prepareEventSources(esCtx, responsiveCtx);
 
     // then:
     final Optional<InformerEventSource<Deployment, ResponsivePolicy>> src
@@ -179,7 +191,7 @@ class DemoPolicyPluginTest {
     setupDeploymentToBeReturned(deployment);
 
     // when:
-    plugin.reconcile(policy, ctx, rCtx);
+    plugin.reconcile(policy, ctx, responsiveCtx);
 
     // then:
     verify(rsDeployment).edit(deploymentEdit.capture());
@@ -188,14 +200,18 @@ class DemoPolicyPluginTest {
         "baz", "biz", "v1", 3, Collections.emptyMap()
     );
     edit.apply(blank);
-    assertThat(blank.getMetadata().getLabels().get(ResponsivePolicyReconciler.NAMESPACE_LABEL), is("foo"));
-    assertThat(blank.getMetadata().getLabels().get(ResponsivePolicyReconciler.NAME_LABEL), is("bar"));
+    assertThat(
+        blank.getMetadata().getLabels().get(ResponsivePolicyReconciler.NAMESPACE_LABEL),
+        is("foo"));
+    assertThat(
+        blank.getMetadata().getLabels().get(ResponsivePolicyReconciler.NAME_LABEL),
+        is("bar"));
   }
 
   @Test
   public void shouldReportCurrentState() {
     // when:
-    plugin.reconcile(policy, ctx, rCtx);
+    plugin.reconcile(policy, ctx, responsiveCtx);
 
     // then:
     verify(controllerClient).currentState(currentStateRequestCaptor.capture());
@@ -218,7 +234,7 @@ class DemoPolicyPluginTest {
   @Test
   public void shouldPatchDeploymentIfReplicasChanged() {
     // when:
-    plugin.reconcile(policy, ctx, rCtx);
+    plugin.reconcile(policy, ctx, responsiveCtx);
 
     // then:
     verify(rsDeployment).edit(deploymentEdit.capture());
@@ -234,21 +250,20 @@ class DemoPolicyPluginTest {
     deployment.getSpec().setReplicas(5);
 
     // when:
-    plugin.reconcile(policy, ctx, rCtx);
+    plugin.reconcile(policy, ctx, responsiveCtx);
 
     // then:
     verifyNoInteractions(rsDeployment);
   }
 
   @SuppressWarnings("unchecked")
-  private <R extends HasMetadata> Optional<InformerEventSource<R, ResponsivePolicy>> maybePullSource(
-      final Map<String, EventSource> sources,
-      final Class<R> clazz
-  ) {
+  private <R extends HasMetadata> Optional<InformerEventSource<R, ResponsivePolicy>>
+      maybePullSource(final Map<String, EventSource> sources, final Class<R> clazz) {
     for (final EventSource source : sources.values()) {
-      if (source instanceof InformerEventSource<?,?>) {
-        if (((InformerEventSource<?, ?>) source).getConfiguration().getResourceClass().equals(clazz)) {
-          return Optional.of((InformerEventSource<R, ResponsivePolicy>)source);
+      if (source instanceof InformerEventSource<?, ?>) {
+        if (((InformerEventSource<?, ?>) source).getConfiguration().getResourceClass()
+            .equals(clazz)) {
+          return Optional.of((InformerEventSource<R, ResponsivePolicy>) source);
         }
       }
     }

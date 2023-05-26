@@ -84,8 +84,6 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @Testcontainers
 public class ResponsiveWindowIntegrationTest {
 
-  private static final Logger LOG = LoggerFactory.getLogger(ResponsiveStoreEosIntegrationTest.class);
-
   private static final String INPUT_TOPIC = "input";
   private static final String OTHER_TOPIC = "other";
   private static final String OUTPUT_TOPIC = "output";
