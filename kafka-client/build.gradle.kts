@@ -19,7 +19,8 @@ plugins {
 }
 
 dependencies {
-    implementation(libs.kafka.streams)
+    api(libs.kafka.streams)
+
     implementation(libs.bundles.scylla)
 
     testImplementation(testlibs.bundles.base)
