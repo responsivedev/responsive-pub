@@ -1,5 +1,8 @@
-name: Pull Request Action
-on: pull_request
+name: Build & Test
+on:
+  pull_request:
+  push:
+    branches: main
 jobs:
   build:
     permissions:
@@ -27,8 +30,11 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/gradle-build-action@v2
-
-      - name: Build with Gradle
-        uses: gradle/gradle-build-action@67421db6bd0bf253fb4bd25b31ebb98943c375e1
         with:
           arguments: build
+
+      - name: Release
+        uses: gradle/gradle-build-action@v2
+        if: github.ref == 'refs/heads/main'
+        with:
+          arguments: release
