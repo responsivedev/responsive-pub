@@ -1,0 +1,1 @@
+java -Dorg.apache.logging.log4j.level=INFO -cp "/usr/share/java/responsive-operator/*" responsive.platform.operator.main.Main ${CONTROLLER_EP}
