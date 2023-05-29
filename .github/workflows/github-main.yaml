@@ -1,10 +1,12 @@
-name: Publish Artifacts
-on: workflow_dispatch
+name: Build & Test
+on:
+  push:
+    branches: main
 jobs:
   build:
     permissions:
       id-token: write # This is required for requesting the JWT
-      contents: read  # This is required for actions/checkout
+      contents: write # This is required for actions/checkout (read) and publishing tags (write)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -21,16 +23,17 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
-          role-to-assume: arn:aws:iam::292505934682:role/github-respoinsive-pub-main
-          role-session-name: github-publish-artifacts
+          role-to-assume: arn:aws:iam::292505934682:role/github-responsivedev-org
+          role-session-name: github-pr-builder
           aws-region: us-west-2
 
-      - name: Build & Publish
+      - name: Setup Gradle
         uses: gradle/gradle-build-action@v2
         with:
-          arguments: build publish
-        env:
-          OSSRH_USER: ${{ secrets.OSSRH_USER }}
-          OSSRH_PASSWORD: ${{ secrets.OSSRH_PASSWORD }}
-          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
-          SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
+          arguments: build
+
+      - name: Release
+        uses: gradle/gradle-build-action@v2
+        if: github.ref == 'refs/heads/main'
+        with:
+          arguments: release
