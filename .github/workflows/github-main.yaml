@@ -1,4 +1,4 @@
-name: Build & Test
+name: CI/CD Main
 on:
   push:
     branches: main
@@ -34,6 +34,10 @@ jobs:
 
       - name: Release
         uses: gradle/gradle-build-action@v2
-        if: github.ref == 'refs/heads/main'
         with:
           arguments: release
+
+      - name: Publish
+        uses: gradle/gradle-build-action@v2
+        with:
+          arguments: publishMavenJavaPublicationToS3Repository # publish only to S3

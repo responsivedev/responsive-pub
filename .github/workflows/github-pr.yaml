@@ -1,4 +1,4 @@
-name: Build & Test
+name: PR Build
 on:
   pull_request:
     branches: ["main"]
@@ -27,13 +27,7 @@ jobs:
           role-session-name: github-pr-builder
           aws-region: us-west-2
 
-      - name: Setup Gradle
+      - name: Build & Test
         uses: gradle/gradle-build-action@v2
         with:
           arguments: build
-
-      - name: Dryrun Release
-        uses: gradle/gradle-build-action@v2
-        if: github.ref == 'refs/heads/main'
-        with:
-          arguments: release -Prelease.dryRun

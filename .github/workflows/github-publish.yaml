@@ -1,5 +1,11 @@
 name: Publish Artifacts
-on: workflow_dispatch
+on:
+  workflow_dispatch:
+    inputs:
+      name:
+        module:
+          required: true
+          description: which module to publish (e.g. operator)
 jobs:
   build:
     permissions:
@@ -25,10 +31,20 @@ jobs:
           role-session-name: github-publish-artifacts
           aws-region: us-west-2
 
-      - name: Build & Publish
+      - name: Build & Test
         uses: gradle/gradle-build-action@v2
         with:
-          arguments: build publish
+          arguments: build
+
+      - name: Release
+        uses: gradle/gradle-build-action@v2
+        with:
+          arguments: :${{ inputs.module }}:release -Prelease.versionIncrementer=incrementMinor
+
+      - name: Publish
+        uses: gradle/gradle-build-action@v2
+        with:
+          arguments: publish # publish to both S3 and Sonatype OSSRH
         env:
           OSSRH_USER: ${{ secrets.OSSRH_USER }}
           OSSRH_PASSWORD: ${{ secrets.OSSRH_PASSWORD }}
