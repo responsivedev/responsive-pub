@@ -1,3 +1,5 @@
+import com.adarshr.gradle.testlogger.theme.ThemeType
+
 /*
  * Copyright 2023 Responsive Computing, Inc.
  *
@@ -21,6 +23,8 @@ plugins {
     `signing`
 
     id("pl.allegro.tech.build.axion-release")
+    id("com.adarshr.test-logger")
+
 }
 
 dependencies {
@@ -45,6 +49,10 @@ repositories {
 tasks.test {
     // Use the built-in JUnit support of Gradle.
     useJUnitPlatform()
+}
+
+testlogger {
+    theme = ThemeType.MOCHA
 }
 
 allprojects {
