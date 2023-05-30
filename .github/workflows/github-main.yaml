@@ -52,5 +52,5 @@ jobs:
       - name: Publish Images
         uses: gradle/gradle-build-action@v2
         with:
-          arguments: pushDocker pushHelm -PdockerRegistry=${{ steps.login-ecr-public.outputs.registry }} -PhelmRegistry=${{ steps.login-ecr-public.outputs.registry }}
+          arguments: pushDocker pushHelm -PdockerRegistry=${{ steps.login-ecr-public.outputs.registry }}/j8q9y0n6 -PhelmRegistry=${{ steps.login-ecr-public.outputs.registry }}
         if: github.ref == 'refs/heads/main'

@@ -59,6 +59,6 @@ jobs:
       - name: Publish Images 
         uses: gradle/gradle-build-action@v2
         with:
-          arguments: pushDocker pushHelm -PdockerRegistry=$ECR_REGISTRY -PhelmRegistry=$ECR_REGISTRY
+          arguments: pushDocker pushHelm -PdockerRegistry=${{ steps.login-ecr-public.outputs.registry }}/j8q9y0n6 -PhelmRegistry=${{ steps.login-ecr-public.outputs.registry }}
         env:
           ECR_REGISTRY: ${{ steps.login-ecr-public.outputs.registry }}
