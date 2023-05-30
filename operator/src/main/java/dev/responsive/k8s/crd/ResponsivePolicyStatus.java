@@ -17,5 +17,4 @@
 package dev.responsive.k8s.crd;
 
 public class ResponsivePolicyStatus {
-
 }

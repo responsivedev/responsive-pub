@@ -14,15 +14,13 @@
  * limitations under the License.
  */
 
-package dev.responsive.reconciler;
+package dev.responsive.k8s.operator.reconciler;
 
 import java.time.Instant;
 import java.util.Objects;
 import responsive.controller.v1.controller.proto.ControllerOuterClass;
-import responsive.controller.v1.controller.proto.ControllerOuterClass.ApplicationState;
 
 class TargetStateWithTimestamp {
-
   private final Instant timestamp;
   private final ControllerOuterClass.ApplicationState targetState;
 
@@ -30,16 +28,43 @@ class TargetStateWithTimestamp {
     this(Instant.now(), targetState);
   }
 
-  public TargetStateWithTimestamp(final Instant timestamp, final ApplicationState targetState) {
+  TargetStateWithTimestamp(final Instant timestamp,
+                           final ControllerOuterClass.ApplicationState targetState) {
     this.timestamp = Objects.requireNonNull(timestamp);
     this.targetState = Objects.requireNonNull(targetState);
   }
 
-  public Instant timestamp() {
+  public Instant getTimestamp() {
     return timestamp;
   }
 
-  public ApplicationState targetState() {
+  public ControllerOuterClass.ApplicationState getTargetState() {
     return targetState;
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    final TargetStateWithTimestamp that = (TargetStateWithTimestamp) o;
+    return Objects.equals(timestamp, that.timestamp)
+        && Objects.equals(targetState, that.targetState);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(timestamp, targetState);
+  }
+
+  @Override
+  public String toString() {
+    return "TargetStateWithTimestamp{"
+        + "timestamp=" + timestamp
+        + ", targetState=" + targetState
+        + '}';
   }
 }

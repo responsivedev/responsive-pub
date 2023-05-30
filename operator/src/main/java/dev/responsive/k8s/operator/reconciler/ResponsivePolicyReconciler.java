@@ -14,14 +14,12 @@
  * limitations under the License.
  */
 
-package dev.responsive.reconciler;
-
-import static dev.responsive.controller.ControllerProtoFactories.emptyRequest;
-import static dev.responsive.controller.ControllerProtoFactories.upsertPolicyRequest;
+package dev.responsive.k8s.operator.reconciler;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import dev.responsive.controller.ControllerClient;
+import dev.responsive.controller.client.ControllerClient;
+import dev.responsive.k8s.controller.ControllerProtoFactories;
 import dev.responsive.k8s.crd.ResponsivePolicy;
 import dev.responsive.k8s.crd.ResponsivePolicySpec;
 import io.javaoperatorsdk.operator.api.reconciler.Context;
@@ -61,7 +59,7 @@ public class ResponsivePolicyReconciler implements
   }
 
   ResponsivePolicyReconciler(final ResponsiveContext responsiveCtx,
-      final Map<ResponsivePolicySpec.PolicyType, PolicyPlugin> plugins) {
+                             final Map<ResponsivePolicySpec.PolicyType, PolicyPlugin> plugins) {
     this.responsiveCtx = Objects.requireNonNull(responsiveCtx);
     this.plugins = Objects.requireNonNull(plugins);
   }
@@ -79,7 +77,8 @@ public class ResponsivePolicyReconciler implements
                 //              call the plugin:
                 //    1. controller restarts and forgets about policy
                 //    2. this call always throws, so we never upsert the policy again
-                responsiveCtx.controllerClient().getTargetState(emptyRequest(policy))));
+                responsiveCtx.getControllerClient()
+                    .getTargetState(ControllerProtoFactories.emptyRequest(policy))));
           } catch (final Throwable t) {
             LOGGER.error("Error fetching target state", t);
             return Collections.emptySet();
@@ -104,12 +103,11 @@ public class ResponsivePolicyReconciler implements
   }
 
   @Override
-  public UpdateControl<ResponsivePolicy> reconcile(
-      final ResponsivePolicy resource,
-      final Context<ResponsivePolicy> ctx
-  ) {
+  public UpdateControl<ResponsivePolicy> reconcile(final ResponsivePolicy resource,
+                                                   final Context<ResponsivePolicy> ctx) {
     LOGGER.info("Received event for {}", resource.getFullResourceName());
-    responsiveCtx.controllerClient().upsertPolicy(upsertPolicyRequest(resource));
+    responsiveCtx.getControllerClient()
+        .upsertPolicy(ControllerProtoFactories.upsertPolicyRequest(resource));
     plugins.get(resource.getSpec().policyType()).reconcile(resource, ctx, responsiveCtx);
     return UpdateControl.patchStatus(resource);
   }

@@ -17,18 +17,16 @@
 package dev.responsive.k8s.operator;
 
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
-import dev.responsive.controller.grpc.ControllerGrpcClient;
-import dev.responsive.reconciler.ResponsivePolicyReconciler;
+import dev.responsive.controller.client.grpc.ControllerGrpcClient;
+import dev.responsive.k8s.operator.reconciler.ResponsivePolicyReconciler;
 import io.fabric8.kubernetes.client.utils.Serialization;
 import io.javaoperatorsdk.operator.Operator;
 
 public class OperatorMain {
-
   public static void main(String[] args) {
     final Operator operator = new Operator();
     Serialization.jsonMapper().registerModule(new Jdk8Module());
     operator.register(new ResponsivePolicyReconciler(new ControllerGrpcClient(args[0])));
     operator.start();
   }
-
 }

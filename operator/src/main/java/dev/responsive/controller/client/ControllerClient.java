@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package dev.responsive.controller;
+package dev.responsive.controller.client;
 
 import responsive.controller.v1.controller.proto.ControllerOuterClass.ApplicationState;
 import responsive.controller.v1.controller.proto.ControllerOuterClass.CurrentStateRequest;

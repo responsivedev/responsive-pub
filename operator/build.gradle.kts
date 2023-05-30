@@ -34,3 +34,62 @@ dependencies {
 
     testImplementation(testlibs.bundles.base)
 }
+
+// TODO(rohan): figure out how to put these somewhere common
+//              and move the defs to properties at top level
+
+val dockerImage = "responsive-operator:" + version
+val dockerRepoBase = "292505934682.dkr.ecr.us-west-2.amazonaws.com/responsiveinc/"
+
+tasks {
+    register("copyJars", Copy::class) {
+        dependsOn("clean")
+        dependsOn("build")
+        into("$buildDir/docker/libs")
+        from(configurations.runtimeClasspath)
+        from("$buildDir/libs")
+        duplicatesStrategy = DuplicatesStrategy.INCLUDE
+    }
+
+    register("copyDockerDir", Copy::class) {
+        dependsOn("clean")
+        into("$buildDir/docker")
+        from("$projectDir/docker")
+        include("**/*")
+    }
+
+    register("buildDocker", Exec::class) {
+        dependsOn("pushCRD")
+        dependsOn("copyJars")
+        dependsOn("copyDockerDir")
+        workingDir("$buildDir")
+        commandLine("docker", "build", "--platform",  "linux/amd64", "-t", "$dockerImage", "docker")
+    }
+
+    register("tagDocker", Exec::class) {
+        dependsOn("buildDocker")
+        commandLine("docker", "tag", "$dockerImage", "$dockerRepoBase$dockerImage")
+    }
+
+    register("pushCRD", Exec::class) {
+        commandLine("aws", "s3", "cp", "$buildDir/classes/java/main/META-INF/fabric8/responsivepolicies.application.responsive.dev-v1.yml", "s3://crds.responsive.dev/responsive-operator/revisions/$version/crd.yml")
+    }
+
+    register("pushDocker", Exec::class) {
+        dependsOn("tagDocker")
+        commandLine("docker", "push", "$dockerRepoBase$dockerImage")
+    }
+
+    register("loadDockerKind", Exec::class) {
+        dependsOn("buildDocker")
+        commandLine("kind", "load", "docker-image", "$dockerImage")
+    }
+
+    register("packageHelm", Exec::class) {
+        doFirst {
+            mkdir("$buildDir/helm")
+        }
+        workingDir("$buildDir/helm")
+        commandLine("helm", "package", "--app-version", version, "--version", version, "$projectDir/src/main/helm/")
+    }
+}
