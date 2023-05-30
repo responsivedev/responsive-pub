@@ -2,10 +2,9 @@ name: Publish Artifacts
 on:
   workflow_dispatch:
     inputs:
-      name:
-        module:
-          required: true
-          description: which module to publish (e.g. operator)
+      module:
+        required: true
+        description: which module to publish (e.g. operator)
 jobs:
   build:
     permissions:
