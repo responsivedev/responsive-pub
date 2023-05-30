@@ -112,6 +112,7 @@ allprojects {
 
         repositories {
             maven {
+                name = "s3"
                 val releasesUrl = "s3://maven-repo.responsive.dev/releases"
                 val snapshotsUrl = "s3://maven-repo.responsive.dev/snapshots"
                 url = uri(if (version.toString().endsWith("SNAPSHOT")) snapshotsUrl else releasesUrl)
