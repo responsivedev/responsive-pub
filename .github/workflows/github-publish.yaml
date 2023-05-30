@@ -3,9 +3,9 @@ on:
   workflow_dispatch:
     inputs:
       name:
-        versionIncrement:
-          default: incrementMinor
-          description: which version to increment on release (e.g. incrementMajor)
+        module:
+          required: true
+          description: which module to publish (e.g. operator)
 jobs:
   build:
     permissions:
@@ -39,7 +39,7 @@ jobs:
       - name: Release
         uses: gradle/gradle-build-action@v2
         with:
-          arguments: release -Prelease.incrementer=${{ inputs.versionIncrement }}
+          arguments: :${{ inputs.module }}:release -Prelease.versionIncrementer=incrementMinor
 
       - name: Publish
         uses: gradle/gradle-build-action@v2
