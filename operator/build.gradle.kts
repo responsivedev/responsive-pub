@@ -39,11 +39,18 @@ dependencies {
 //              and move the defs to properties at top level
 
 val dockerImage = "responsive-operator:" + version
-val dockerRepoBase = "292505934682.dkr.ecr.us-west-2.amazonaws.com/responsiveinc/"
+var dockerRepoBase = "292505934682.dkr.ecr.us-west-2.amazonaws.com/responsiveinc/"
+if (project.hasProperty("dockerRegistry")) {
+    val dockerRegistry = project.property("dockerRegistry") as String
+    dockerRepoBase = dockerRegistry + "/responsiveinc/"
+}
+var helmRegistry = "public.ecr.aws/j8q9y0n6"
+if (project.hasProperty("helmRegistry")) {
+    helmRegistry = project.property("helmRegistry") as String
+}
 
 tasks {
     register("copyJars", Copy::class) {
-        dependsOn("clean")
         dependsOn("build")
         into("$buildDir/docker/libs")
         from(configurations.runtimeClasspath)
@@ -52,7 +59,6 @@ tasks {
     }
 
     register("copyDockerDir", Copy::class) {
-        dependsOn("clean")
         into("$buildDir/docker")
         from("$projectDir/docker")
         include("**/*")
@@ -91,5 +97,11 @@ tasks {
         }
         workingDir("$buildDir/helm")
         commandLine("helm", "package", "--app-version", version, "--version", version, "$projectDir/src/main/helm/")
+    }
+
+    register("pushHelm", Exec::class) {
+        dependsOn("packageHelm")
+        workingDir("$buildDir/helm")
+        commandLine("helm", "push", "responsive-operator-chart-$version.tgz", "oci://$helmRegistry")
     }
 }
