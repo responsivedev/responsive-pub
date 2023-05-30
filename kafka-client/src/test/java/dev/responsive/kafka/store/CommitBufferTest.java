@@ -25,8 +25,8 @@ import static org.mockito.Mockito.when;
 
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
-import dev.responsive.TestConstants;
 import dev.responsive.db.CassandraClient;
+import dev.responsive.utils.ContainerExtension;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -52,12 +52,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.testcontainers.containers.CassandraContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
-@ExtendWith(MockitoExtension.class)
+@ExtendWith({MockitoExtension.class, ContainerExtension.class})
 @MockitoSettings(strictness = Strictness.LENIENT)
-@Testcontainers
 public class CommitBufferTest {
 
   private static final Bytes KEY = Bytes.wrap(new byte[]{1});
@@ -67,17 +64,13 @@ public class CommitBufferTest {
   private CassandraClient client;
   private TopicPartition changelogTp;
 
-  @Container
-  public CassandraContainer<?> cassandra = new CassandraContainer<>(TestConstants.CASSANDRA)
-      .withInitScript("CassandraDockerInit.cql");
-
   private String name;
   @Mock private RecordCollector.Supplier supplier;
   @Mock private RecordCollector collector;
   @Mock private Admin admin;
 
   @BeforeEach
-  public void before(final TestInfo info) {
+  public void before(final TestInfo info, final CassandraContainer<?> cassandra) {
     name = info.getTestMethod().orElseThrow().getName();
     session = CqlSession.builder()
         .addContactPoint(cassandra.getContactPoint())

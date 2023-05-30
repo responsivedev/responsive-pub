@@ -39,9 +39,9 @@ import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.lessThan;
 
 import com.datastax.oss.driver.api.core.CqlSession;
-import dev.responsive.TestConstants;
 import dev.responsive.db.CassandraClient;
 import dev.responsive.kafka.api.ResponsiveDriver;
+import dev.responsive.utils.ContainerExtension;
 import dev.responsive.utils.RemoteMonitor;
 import java.lang.reflect.Field;
 import java.time.Duration;
@@ -97,14 +97,13 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.CassandraContainer;
 import org.testcontainers.containers.KafkaContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
-@Testcontainers
+@ExtendWith(ContainerExtension.class)
 public class ResponsiveStoreEosIntegrationTest {
 
   private static final Logger LOG
@@ -115,22 +114,19 @@ public class ResponsiveStoreEosIntegrationTest {
   private static final String OUTPUT_TOPIC = "output";
   private static final String STORE_NAME = "store";
 
-  @Container
-  public CassandraContainer<?> cassandra = new CassandraContainer<>(TestConstants.CASSANDRA)
-      .withInitScript("CassandraDockerInit.cql");
-  @Container
-  public KafkaContainer kafka = new KafkaContainer(TestConstants.KAFKA)
-      .withEnv("KAFKA_GROUP_MIN_SESSION_TIMEOUT_MS", "1000")
-      .withEnv("KAFKA_GROUP_MAX_SESSION_TIMEOUT_MS", "60000");
-
   private String name;
+  private String bootstrapServers;
   private Admin admin;
   private CqlSession session;
   private CassandraClient client;
   private ScheduledExecutorService executor;
 
   @BeforeEach
-  public void before(final TestInfo info) {
+  public void before(
+      final TestInfo info,
+      final CassandraContainer<?> cassandra,
+      final KafkaContainer kafka
+  ) {
     name = info.getTestMethod().orElseThrow().getName();
     session = CqlSession.builder()
         .addContactPoint(cassandra.getContactPoint())
@@ -139,7 +135,8 @@ public class ResponsiveStoreEosIntegrationTest {
         .build();
     client = new CassandraClient(session);
     executor = new ScheduledThreadPoolExecutor(2);
-    admin = Admin.create(Map.of(BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers()));
+    bootstrapServers = kafka.getBootstrapServers();
+    admin = Admin.create(Map.of(BOOTSTRAP_SERVERS_CONFIG, bootstrapServers));
 
     admin.createTopics(
         List.of(
@@ -246,7 +243,7 @@ public class ResponsiveStoreEosIntegrationTest {
   private Map<String, Object> getMutableProperties() {
     final Map<String, Object> properties = new HashMap<>();
 
-    properties.put(BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers());
+    properties.put(BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
     properties.put(KEY_SERIALIZER_CLASS_CONFIG, LongSerializer.class);
     properties.put(VALUE_SERIALIZER_CLASS_CONFIG, LongSerializer.class);
     properties.put(KEY_DESERIALIZER_CLASS_CONFIG, LongDeserializer.class);

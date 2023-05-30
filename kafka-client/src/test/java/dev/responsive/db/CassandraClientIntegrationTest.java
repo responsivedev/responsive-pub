@@ -18,6 +18,7 @@ package dev.responsive.db;
 
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
+import dev.responsive.utils.ContainerExtension;
 import java.util.ArrayList;
 import java.util.List;
 import org.apache.kafka.common.utils.Bytes;
@@ -27,25 +28,18 @@ import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.testcontainers.containers.CassandraContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.DockerImageName;
 
-@Testcontainers
+@ExtendWith(ContainerExtension.class)
 public class CassandraClientIntegrationTest {
-
-  @Container
-  public CassandraContainer<?> cassandra = new CassandraContainer<>(
-      DockerImageName.parse("cassandra:4.1.0")
-  ).withInitScript("CassandraDockerInit.cql");
 
   private CqlSession session;
   private CassandraClient client;
   private String name;
 
   @BeforeEach
-  public void before(TestInfo info) {
+  public void before(final TestInfo info, final CassandraContainer<?> cassandra) {
     session = CqlSession.builder()
         .addContactPoint(cassandra.getContactPoint())
         .withLocalDatacenter(cassandra.getLocalDatacenter())
