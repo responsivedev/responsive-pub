@@ -27,6 +27,12 @@ jobs:
           role-session-name: github-pr-builder
           aws-region: us-west-2
 
+      - name: Login to Amazon ECR
+        id: login-ecr-public
+        uses: aws-actions/amazon-ecr-login@v1
+        with:
+          registry-type: public
+
       - name: Setup Gradle
         uses: gradle/gradle-build-action@v2
         with:
@@ -41,3 +47,12 @@ jobs:
         uses: gradle/gradle-build-action@v2
         with:
           arguments: publishMavenJavaPublicationToS3Repository # publish only to S3
+        if: github.ref == 'refs/heads/main'
+        
+      - name: Publish Images
+        uses: gradle/gradle-build-action@v2
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr-public.outputs.registry }}
+        with:
+          arguments: pushDocker pushHelm -PdockerRegistry=$ECR_REGISTRY -PhelmRegistry=$ECR_REGISTR
+        if: github.ref == 'refs/heads/main'
