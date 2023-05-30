@@ -68,8 +68,8 @@ class ControllerGrpcClientTest {
   public void shouldSendUpsertPolicyRequest() {
     // given:
     final var req = ControllerOuterClass.UpsertPolicyRequest.newBuilder().build();
-    when(stub.upsertPolicy(any()))
-        .thenReturn(ControllerOuterClass.SimpleResponse.newBuilder().build());
+    when(stub.upsertPolicy(any())).thenReturn(
+        ControllerOuterClass.SimpleResponse.newBuilder().build());
 
     // when:
     client.upsertPolicy(req);
@@ -95,8 +95,8 @@ class ControllerGrpcClientTest {
   public void shouldSendCurrentStatusRequest() {
     // given:
     final var req = ControllerOuterClass.CurrentStateRequest.newBuilder().build();
-    when(stub.currentState(any()))
-        .thenReturn(ControllerOuterClass.SimpleResponse.newBuilder().build());
+    when(stub.currentState(any())).thenReturn(
+        ControllerOuterClass.SimpleResponse.newBuilder().build());
 
     // when:
     client.currentState(req);
@@ -109,10 +109,10 @@ class ControllerGrpcClientTest {
   public void shouldHandleCurrentStatusRequestError() {
     // given:
     final var req = ControllerOuterClass.CurrentStateRequest.newBuilder().build();
-    when(stub.currentState(any()))
-        .thenReturn(ControllerOuterClass.SimpleResponse.newBuilder()
+    when(stub.currentState(any())).thenReturn(ControllerOuterClass.SimpleResponse.newBuilder()
         .setError("oops")
-        .build());
+        .build()
+    );
 
     // when/then:
     assertThrows(RuntimeException.class, () -> client.currentState(req));
@@ -123,10 +123,11 @@ class ControllerGrpcClientTest {
     // given:
     final var req = ControllerOuterClass.EmptyRequest.newBuilder().build();
     final var state = ControllerOuterClass.ApplicationState.newBuilder().build();
-    when(stub.getTargetState(any()))
-        .thenReturn(ControllerOuterClass.GetTargetStateResponse.newBuilder()
-        .setState(state)
-        .build());
+    when(stub.getTargetState(any())).thenReturn(
+        ControllerOuterClass.GetTargetStateResponse.newBuilder()
+            .setState(state)
+            .build()
+    );
 
     // when:
     final var returnedState = client.getTargetState(req);
@@ -140,10 +141,11 @@ class ControllerGrpcClientTest {
   public void shouldHandleTargetStatusRequestError() {
     // given:
     final var req = ControllerOuterClass.EmptyRequest.newBuilder().build();
-    when(stub.getTargetState(any()))
-        .thenReturn(ControllerOuterClass.GetTargetStateResponse.newBuilder()
-        .setError("oops")
-        .build());
+    when(stub.getTargetState(any())).thenReturn(
+        ControllerOuterClass.GetTargetStateResponse.newBuilder()
+            .setError("oops")
+            .build()
+    );
 
     // when:
     assertThrows(RuntimeException.class, () -> client.getTargetState(req));

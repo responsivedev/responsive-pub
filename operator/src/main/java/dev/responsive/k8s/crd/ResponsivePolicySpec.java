@@ -20,11 +20,12 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.Objects;
 import java.util.Optional;
+import responsive.controller.v1.controller.proto.ControllerOuterClass.PolicyStatus;
 
 public class ResponsivePolicySpec {
-
   private final String applicationNamespace;
   private final String applicationName;
+  private final PolicyStatus status;
   private final ResponsivePolicySpec.PolicyType policyType;
   private final Optional<DemoPolicy> demoPolicy;
 
@@ -36,11 +37,13 @@ public class ResponsivePolicySpec {
   public ResponsivePolicySpec(
       @JsonProperty("applicationNamespace") final String applicationNamespace,
       @JsonProperty("applicationName") final String applicationName,
+      @JsonProperty("status") final PolicyStatus status,
       @JsonProperty("policyType") final PolicyType policyType,
       @JsonProperty("demoPolicy") final Optional<DemoPolicy> demoPolicy
   ) {
     this.applicationNamespace = Objects.requireNonNull(applicationNamespace);
     this.applicationName = Objects.requireNonNull(applicationName);
+    this.status = Objects.requireNonNull(status);
     this.policyType = policyType;
     this.demoPolicy = Objects.requireNonNull(demoPolicy);
   }
@@ -51,6 +54,10 @@ public class ResponsivePolicySpec {
 
   public String applicationName() {
     return applicationName;
+  }
+
+  public PolicyStatus status() {
+    return status;
   }
 
   public PolicyType policyType() {

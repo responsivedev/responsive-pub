@@ -16,8 +16,8 @@
 
 package dev.responsive.reconciler;
 
-import static dev.responsive.controller.ControllerProtoFactories.currentStateRequest;
-
+import com.google.common.collect.ImmutableSet;
+import dev.responsive.controller.ControllerProtoFactories;
 import dev.responsive.k8s.crd.ResponsivePolicy;
 import io.fabric8.kubernetes.api.model.HasMetadata;
 import io.fabric8.kubernetes.api.model.apps.Deployment;
@@ -28,6 +28,7 @@ import io.javaoperatorsdk.operator.api.reconciler.EventSourceInitializer;
 import io.javaoperatorsdk.operator.processing.event.ResourceID;
 import io.javaoperatorsdk.operator.processing.event.source.EventSource;
 import io.javaoperatorsdk.operator.processing.event.source.informer.InformerEventSource;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -36,7 +37,6 @@ import org.slf4j.LoggerFactory;
 import responsive.controller.v1.controller.proto.ControllerOuterClass;
 
 public class DemoPolicyPlugin implements PolicyPlugin {
-
   private static final Logger LOGGER = LoggerFactory.getLogger(DemoPolicyPlugin.class);
 
   @Override
@@ -56,6 +56,7 @@ public class DemoPolicyPlugin implements PolicyPlugin {
     return EventSourceInitializer.nameEventSources(deploymentEvents);
   }
 
+
   @Override
   public void reconcile(
       final ResponsivePolicy policy,
@@ -68,15 +69,15 @@ public class DemoPolicyPlugin implements PolicyPlugin {
 
     LOGGER.info("Found deployment {} for app {}/{}", deployment, appNamespace, appName);
 
-    responsiveCtx.controllerClient().currentState(
-        currentStateRequest(policy, currentStateFromDeployment(deployment))
+    responsiveCtx.getControllerClient().currentState(
+        ControllerProtoFactories.currentStateRequest(policy, currentStateFromDeployment(deployment))
     );
 
     final var maybeTargetState = ctx.getSecondaryResource(TargetStateWithTimestamp.class);
     if (maybeTargetState.isPresent()) {
       final var targetState = maybeTargetState.get();
       LOGGER.info("Got update to target state {} {}", appName, targetState);
-      final var targetReplicas = targetState.targetState().getDemoState().getReplicas();
+      final var targetReplicas = targetState.getTargetState().getDemoState().getReplicas();
       if (targetReplicas != deployment.getSpec().getReplicas()) {
         final var appClient = ctx.getClient().apps();
         // TODO(rohan): I don't think this is patching the way I expect. Review the patch APIs
@@ -102,8 +103,8 @@ public class DemoPolicyPlugin implements PolicyPlugin {
       final Deployment deployment = ctx.getSecondaryResource(Deployment.class).get();
       final Map<String, String> labels = deployment.getMetadata().getLabels();
       assert labels.containsKey(ResponsivePolicyReconciler.NAME_LABEL);
-      assert labels.get(ResponsivePolicyReconciler.NAME_LABEL)
-          .equals(policy.getMetadata().getName());
+      assert
+          labels.get(ResponsivePolicyReconciler.NAME_LABEL).equals(policy.getMetadata().getName());
       assert labels.containsKey(ResponsivePolicyReconciler.NAMESPACE_LABEL);
       assert labels.get(ResponsivePolicyReconciler.NAMESPACE_LABEL)
           .equals(policy.getMetadata().getNamespace());
@@ -177,9 +178,9 @@ public class DemoPolicyPlugin implements PolicyPlugin {
     if (!hasMetadata.getMetadata().getLabels().containsKey(ResponsivePolicyReconciler.NAME_LABEL)
         || !hasMetadata.getMetadata().getLabels()
         .containsKey(ResponsivePolicyReconciler.NAMESPACE_LABEL)) {
-      return Set.of();
+      return Collections.emptySet();
     }
-    return Set.of(
+    return ImmutableSet.of(
         new ResourceID(
             hasMetadata.getMetadata().getLabels().get(ResponsivePolicyReconciler.NAME_LABEL),
             hasMetadata.getMetadata().getLabels().get(ResponsivePolicyReconciler.NAMESPACE_LABEL)
@@ -188,9 +189,8 @@ public class DemoPolicyPlugin implements PolicyPlugin {
   }
 
   private static Set<ResourceID> toDeploymentMapper(final ResponsivePolicy policy) {
-    return Set.of(
+    return ImmutableSet.of(
         new ResourceID(policy.getSpec().applicationName(), policy.getSpec().applicationNamespace())
     );
   }
-
 }

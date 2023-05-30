@@ -21,13 +21,10 @@ import dev.responsive.k8s.crd.ResponsivePolicySpec;
 import responsive.controller.v1.controller.proto.ControllerOuterClass;
 import responsive.controller.v1.controller.proto.ControllerOuterClass.ApplicationPolicy;
 import responsive.controller.v1.controller.proto.ControllerOuterClass.ApplicationState;
-import responsive.controller.v1.controller.proto.ControllerOuterClass.DemoPolicy;
 
 public final class ControllerProtoFactories {
-
   public static ControllerOuterClass.UpsertPolicyRequest upsertPolicyRequest(
-      final ResponsivePolicy policy
-  ) {
+      final ResponsivePolicy policy) {
     return ControllerOuterClass.UpsertPolicyRequest.newBuilder()
         .setPolicy(ControllerProtoFactories.policyFromK8sResource(policy.getSpec()))
         // TODO(rohan): dont just use a namespaced (w/ /) name
@@ -57,19 +54,19 @@ public final class ControllerProtoFactories {
       case DEMO:
         assert policySpec.demoPolicy().isPresent();
         final var demoPolicy = policySpec.demoPolicy().get();
-        builder.setDemoPolicy(DemoPolicy.newBuilder()
+        builder.setDemoPolicy(ControllerOuterClass.DemoPolicy.newBuilder()
             .setMaxReplicas(demoPolicy.maxReplicas())
             .build()
         );
         break;
       default:
-        throw new IllegalStateException("Unexpected value: " + policySpec.policyType());
+        throw new IllegalStateException("Unexpected type: " + policySpec.policyType());
     }
+    builder.setStatus(policySpec.status());
     return builder.build();
   }
 
   private static String getNamespacedName(final ResponsivePolicy policy) {
     return policy.getMetadata().getNamespace() + "/" + policy.getMetadata().getName();
   }
-
 }

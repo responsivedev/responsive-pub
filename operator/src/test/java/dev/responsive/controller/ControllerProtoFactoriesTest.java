@@ -16,9 +16,6 @@
 
 package dev.responsive.controller;
 
-import static dev.responsive.controller.ControllerProtoFactories.currentStateRequest;
-import static dev.responsive.controller.ControllerProtoFactories.emptyRequest;
-import static dev.responsive.controller.ControllerProtoFactories.upsertPolicyRequest;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 
@@ -31,9 +28,9 @@ import org.junit.jupiter.api.Test;
 import responsive.controller.v1.controller.proto.ControllerOuterClass;
 import responsive.controller.v1.controller.proto.ControllerOuterClass.ApplicationState;
 import responsive.controller.v1.controller.proto.ControllerOuterClass.DemoPolicy;
+import responsive.controller.v1.controller.proto.ControllerOuterClass.PolicyStatus;
 
-public class ControllerProtoFactoriesTest {
-
+class ControllerProtoFactoriesTest {
   private final ResponsivePolicy demoPolicy = new ResponsivePolicy();
   private ApplicationState demoApplicationState;
 
@@ -42,6 +39,7 @@ public class ControllerProtoFactoriesTest {
     final var spec = new ResponsivePolicySpec(
         "gouda",
         "cheddar",
+        PolicyStatus.POLICY_STATUS_MANAGED,
         ResponsivePolicySpec.PolicyType.DEMO,
         Optional.of(new ResponsivePolicySpec.DemoPolicy(123))
     );
@@ -58,11 +56,12 @@ public class ControllerProtoFactoriesTest {
   @Test
   public void shouldCreateUpsertPolicyRequestForDemoPolicy() {
     // when:
-    final var request = upsertPolicyRequest(demoPolicy);
+    final var request = ControllerProtoFactories.upsertPolicyRequest(demoPolicy);
 
     // then:
     assertThat(request.getApplicationId(), is("orange/banana"));
     assertThat(request.getPolicy().hasDemoPolicy(), is(true));
+    assertThat(request.getPolicy().getStatus(), is(PolicyStatus.POLICY_STATUS_MANAGED));
     final DemoPolicy demoPolicy = request.getPolicy().getDemoPolicy();
     assertThat(demoPolicy.getMaxReplicas(), is(123));
   }
@@ -70,7 +69,8 @@ public class ControllerProtoFactoriesTest {
   @Test
   public void shouldCreateCurrentStateRequestForDeployment() {
     // when:
-    final var request = currentStateRequest(demoPolicy, demoApplicationState);
+    final var request =
+        ControllerProtoFactories.currentStateRequest(demoPolicy, demoApplicationState);
 
     // Then:
     assertThat(request.getApplicationId(), is("orange/banana"));
@@ -80,9 +80,8 @@ public class ControllerProtoFactoriesTest {
 
   @Test
   public void shouldCreateEmptyRequest() {
-    final var request = emptyRequest(demoPolicy);
+    final var request = ControllerProtoFactories.emptyRequest(demoPolicy);
 
     assertThat(request.getApplicationId(), is("orange/banana"));
   }
-
 }

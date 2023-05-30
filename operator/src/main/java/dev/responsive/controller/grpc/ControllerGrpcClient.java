@@ -27,7 +27,6 @@ import responsive.controller.v1.controller.proto.ControllerGrpc;
 import responsive.controller.v1.controller.proto.ControllerOuterClass;
 
 public class ControllerGrpcClient implements ControllerClient {
-
   private final ManagedChannel channel;
   private final ControllerGrpc.ControllerBlockingStub stub;
 
@@ -72,9 +71,8 @@ public class ControllerGrpcClient implements ControllerClient {
   }
 
   interface GrpcFactories {
-
     default ManagedChannel createChannel(final String target,
-        final ChannelCredentials credentials) {
+                                         final ChannelCredentials credentials) {
       return Grpc.newChannelBuilder(target, credentials).build();
     }
 
@@ -82,5 +80,4 @@ public class ControllerGrpcClient implements ControllerClient {
       return ControllerGrpc.newBlockingStub(channel);
     }
   }
-
 }

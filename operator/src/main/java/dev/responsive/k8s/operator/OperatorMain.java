@@ -23,12 +23,10 @@ import io.fabric8.kubernetes.client.utils.Serialization;
 import io.javaoperatorsdk.operator.Operator;
 
 public class OperatorMain {
-
   public static void main(String[] args) {
     final Operator operator = new Operator();
     Serialization.jsonMapper().registerModule(new Jdk8Module());
     operator.register(new ResponsivePolicyReconciler(new ControllerGrpcClient(args[0])));
     operator.start();
   }
-
 }

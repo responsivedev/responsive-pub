@@ -51,6 +51,7 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.UnaryOperator;
+import org.hamcrest.MatcherAssert;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -59,6 +60,7 @@ import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import responsive.controller.v1.controller.proto.ControllerOuterClass;
+import responsive.controller.v1.controller.proto.ControllerOuterClass.PolicyStatus;
 
 @ExtendWith(MockitoExtension.class)
 class DemoPolicyPluginTest {
@@ -73,15 +75,11 @@ class DemoPolicyPluginTest {
   @Mock
   private AppsAPIGroupDSL appsClient;
   @Mock
-  private MixedOperation<
-      Deployment,
-      DeploymentList,
-      RollableScalableResource<Deployment>> deploymentsClient;
+  private MixedOperation<Deployment, DeploymentList, RollableScalableResource<Deployment>>
+      deploymentsClient;
   @Mock
-  private NonNamespaceOperation<
-      Deployment,
-      DeploymentList,
-      RollableScalableResource<Deployment>> nsDeploymentsClient;
+  private NonNamespaceOperation<Deployment, DeploymentList, RollableScalableResource<Deployment>>
+      nsDeploymentsClient;
   @Mock
   private RollableScalableResource<Deployment> rsDeployment;
   @Captor
@@ -94,12 +92,12 @@ class DemoPolicyPluginTest {
   private final DemoPolicyPlugin plugin = new DemoPolicyPlugin();
   private final Deployment deployment = new Deployment();
   private final ResponsivePolicy policy = new ResponsivePolicy();
-  private final ControllerOuterClass.ApplicationState targetState
-      = ControllerOuterClass.ApplicationState.newBuilder()
-      .setDemoState(ControllerOuterClass.DemoApplicationState.newBuilder()
-          .setReplicas(5)
-          .build())
-      .build();
+  private final ControllerOuterClass.ApplicationState targetState =
+      ControllerOuterClass.ApplicationState.newBuilder()
+          .setDemoState(ControllerOuterClass.DemoApplicationState.newBuilder()
+              .setReplicas(5)
+              .build())
+          .build();
   private ResponsiveContext responsiveCtx;
 
   @BeforeEach
@@ -123,6 +121,7 @@ class DemoPolicyPluginTest {
         new ResponsivePolicySpec(
             "biz",
             "baz",
+            PolicyStatus.POLICY_STATUS_MANAGED,
             ResponsivePolicySpec.PolicyType.DEMO,
             Optional.of(new ResponsivePolicySpec.DemoPolicy(123))
         )
@@ -151,7 +150,7 @@ class DemoPolicyPluginTest {
 
     // then:
     final Optional<InformerEventSource<Deployment, ResponsivePolicy>> src
-        = maybePullSource(sources, Deployment.class);
+        = maybePullSrc(sources, Deployment.class);
     assertThat(src.isPresent(), is(true));
   }
 
@@ -162,7 +161,7 @@ class DemoPolicyPluginTest {
 
     // then:
     final Optional<InformerEventSource<Deployment, ResponsivePolicy>> src
-        = maybePullSource(sources, Deployment.class);
+        = maybePullSrc(sources, Deployment.class);
     assert src.isPresent();
     final var s2pMapper = src.get().getConfiguration().getSecondaryToPrimaryMapper();
     final var ids = s2pMapper.toPrimaryResourceIDs(deployment);
@@ -176,7 +175,7 @@ class DemoPolicyPluginTest {
 
     // then:
     final Optional<InformerEventSource<Deployment, ResponsivePolicy>> src
-        = maybePullSource(sources, Deployment.class);
+        = maybePullSrc(sources, Deployment.class);
     assert src.isPresent();
     final var s2pMapper = src.get().getConfiguration().getPrimaryToSecondaryMapper();
     final var ids = s2pMapper.toSecondaryResourceIDs(policy);
@@ -200,11 +199,9 @@ class DemoPolicyPluginTest {
         "baz", "biz", "v1", 3, Collections.emptyMap()
     );
     edit.apply(blank);
-    assertThat(
-        blank.getMetadata().getLabels().get(ResponsivePolicyReconciler.NAMESPACE_LABEL),
+    assertThat(blank.getMetadata().getLabels().get(ResponsivePolicyReconciler.NAMESPACE_LABEL),
         is("foo"));
-    assertThat(
-        blank.getMetadata().getLabels().get(ResponsivePolicyReconciler.NAME_LABEL),
+    assertThat(blank.getMetadata().getLabels().get(ResponsivePolicyReconciler.NAME_LABEL),
         is("bar"));
   }
 
@@ -216,7 +213,7 @@ class DemoPolicyPluginTest {
     // then:
     verify(controllerClient).currentState(currentStateRequestCaptor.capture());
     final var currentStateRequest = currentStateRequestCaptor.getValue();
-    assertThat(
+    MatcherAssert.assertThat(
         currentStateRequest,
         equalTo(ControllerProtoFactories.currentStateRequest(
                 policy,
@@ -257,8 +254,10 @@ class DemoPolicyPluginTest {
   }
 
   @SuppressWarnings("unchecked")
-  private <R extends HasMetadata> Optional<InformerEventSource<R, ResponsivePolicy>>
-      maybePullSource(final Map<String, EventSource> sources, final Class<R> clazz) {
+  private <R extends HasMetadata> Optional<InformerEventSource<R, ResponsivePolicy>> maybePullSrc(
+      final Map<String, EventSource> sources,
+      final Class<R> clazz
+  ) {
     for (final EventSource source : sources.values()) {
       if (source instanceof InformerEventSource<?, ?>) {
         if (((InformerEventSource<?, ?>) source).getConfiguration().getResourceClass()

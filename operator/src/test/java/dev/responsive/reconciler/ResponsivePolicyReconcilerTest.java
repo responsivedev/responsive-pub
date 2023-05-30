@@ -42,6 +42,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import responsive.controller.v1.controller.proto.ControllerOuterClass.PolicyStatus;
 
 @ExtendWith(MockitoExtension.class)
 class ResponsivePolicyReconcilerTest {
@@ -85,6 +86,7 @@ class ResponsivePolicyReconcilerTest {
     policy.setSpec(new ResponsivePolicySpec(
         "ping",
         "pong",
+        PolicyStatus.POLICY_STATUS_MANAGED,
         ResponsivePolicySpec.PolicyType.DEMO,
         Optional.of(new ResponsivePolicySpec.DemoPolicy(123))
     ));

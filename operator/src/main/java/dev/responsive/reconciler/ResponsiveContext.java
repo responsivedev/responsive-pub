@@ -21,16 +21,18 @@ import dev.responsive.k8s.crd.ResponsivePolicy;
 import io.javaoperatorsdk.operator.processing.event.source.timer.TimerEventSource;
 import java.util.Objects;
 
-class ResponsiveContext {
-
-  private final TimerEventSource<ResponsivePolicy> scheduler;
-  private final ControllerClient controllerClient;
+/**
+ * POJO encapsulating all the operator context to share w/ plugins
+ */
+final class ResponsiveContext {
+  final TimerEventSource<ResponsivePolicy> scheduler;
+  final ControllerClient controllerClient;
 
   ResponsiveContext(final ControllerClient controllerClient) {
     this(new TimerEventSource<>(), controllerClient);
   }
 
-  public ResponsiveContext(
+  ResponsiveContext(
       final TimerEventSource<ResponsivePolicy> scheduler,
       final ControllerClient controllerClient
   ) {
@@ -38,11 +40,11 @@ class ResponsiveContext {
     this.controllerClient = Objects.requireNonNull(controllerClient);
   }
 
-  public TimerEventSource<ResponsivePolicy> scheduler() {
+  public TimerEventSource<ResponsivePolicy> getScheduler() {
     return scheduler;
   }
 
-  public ControllerClient controllerClient() {
+  public ControllerClient getControllerClient() {
     return controllerClient;
   }
 }
