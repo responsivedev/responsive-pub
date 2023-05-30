@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package dev.responsive.controller;
+package dev.responsive.k8s.controller;
 
 import dev.responsive.k8s.crd.ResponsivePolicy;
 import dev.responsive.k8s.crd.ResponsivePolicySpec;

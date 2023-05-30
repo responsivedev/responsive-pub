@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-package dev.responsive.controller.grpc;
+package dev.responsive.controller.client.grpc;
 
 import com.google.common.annotations.VisibleForTesting;
-import dev.responsive.controller.ControllerClient;
+import dev.responsive.controller.client.ControllerClient;
 import io.grpc.ChannelCredentials;
 import io.grpc.Grpc;
 import io.grpc.InsecureChannelCredentials;

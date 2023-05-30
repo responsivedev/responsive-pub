@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-package dev.responsive.reconciler;
+package dev.responsive.k8s.operator.reconciler;
 
-import dev.responsive.controller.ControllerClient;
+import dev.responsive.controller.client.ControllerClient;
 import dev.responsive.k8s.crd.ResponsivePolicy;
 import io.javaoperatorsdk.operator.processing.event.source.timer.TimerEventSource;
 import java.util.Objects;

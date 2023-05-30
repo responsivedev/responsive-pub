@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-package dev.responsive.reconciler;
+package dev.responsive.k8s.operator.reconciler;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import dev.responsive.controller.ControllerClient;
-import dev.responsive.controller.ControllerProtoFactories;
+import dev.responsive.controller.client.ControllerClient;
+import dev.responsive.k8s.controller.ControllerProtoFactories;
 import dev.responsive.k8s.crd.ResponsivePolicy;
 import dev.responsive.k8s.crd.ResponsivePolicySpec;
 import io.javaoperatorsdk.operator.api.reconciler.Context;

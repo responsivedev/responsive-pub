@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package dev.responsive.reconciler;
+package dev.responsive.k8s.operator.reconciler;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.hasEntry;
@@ -25,8 +25,8 @@ import static org.mockito.Mockito.verify;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import dev.responsive.controller.ControllerClient;
-import dev.responsive.controller.ControllerProtoFactories;
+import dev.responsive.controller.client.ControllerClient;
+import dev.responsive.k8s.controller.ControllerProtoFactories;
 import dev.responsive.k8s.crd.ResponsivePolicy;
 import dev.responsive.k8s.crd.ResponsivePolicySpec;
 import io.fabric8.kubernetes.api.model.ObjectMeta;
@@ -57,19 +57,19 @@ class ResponsivePolicyReconcilerTest {
   @Mock
   private ControllerClient controllerClient;
   @Mock
-  private PolicyPlugin plugin;
+  private dev.responsive.k8s.operator.reconciler.PolicyPlugin plugin;
   @Mock
   private EventSource pluginEventSource1;
   @Mock
   private EventSource pluginEventSoruce2;
 
-  private ResponsivePolicyReconciler reconciler;
-  private ResponsiveContext responsiveCtx;
+  private dev.responsive.k8s.operator.reconciler.ResponsivePolicyReconciler reconciler;
+  private dev.responsive.k8s.operator.reconciler.ResponsiveContext responsiveCtx;
   private final ResponsivePolicy policy = new ResponsivePolicy();
 
   @BeforeEach
   public void setup() {
-    responsiveCtx = new ResponsiveContext(controllerClient);
+    responsiveCtx = new dev.responsive.k8s.operator.reconciler.ResponsiveContext(controllerClient);
     lenient().when(eventCtx.getControllerConfiguration()).thenReturn(controllerConfig);
     lenient().when(controllerConfig.getEffectiveNamespaces())
         .thenReturn(ImmutableSet.of("responsive"));
@@ -90,7 +90,7 @@ class ResponsivePolicyReconcilerTest {
         ResponsivePolicySpec.PolicyType.DEMO,
         Optional.of(new ResponsivePolicySpec.DemoPolicy(123))
     ));
-    reconciler = new ResponsivePolicyReconciler(
+    reconciler = new dev.responsive.k8s.operator.reconciler.ResponsivePolicyReconciler(
         responsiveCtx,
         ImmutableMap.of(ResponsivePolicySpec.PolicyType.DEMO, plugin)
     );

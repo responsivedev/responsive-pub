@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package dev.responsive.reconciler;
+package dev.responsive.k8s.operator.reconciler;
 
 import java.time.Instant;
 import java.util.Objects;

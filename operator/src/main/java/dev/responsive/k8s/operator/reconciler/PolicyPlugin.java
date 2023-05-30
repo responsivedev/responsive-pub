@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package dev.responsive.reconciler;
+package dev.responsive.k8s.operator.reconciler;
 
 import dev.responsive.k8s.crd.ResponsivePolicy;
 import io.javaoperatorsdk.operator.api.reconciler.Context;

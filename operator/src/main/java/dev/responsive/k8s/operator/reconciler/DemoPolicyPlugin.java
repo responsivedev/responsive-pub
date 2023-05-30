@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-package dev.responsive.reconciler;
+package dev.responsive.k8s.operator.reconciler;
 
 import com.google.common.collect.ImmutableSet;
-import dev.responsive.controller.ControllerProtoFactories;
+import dev.responsive.k8s.controller.ControllerProtoFactories;
 import dev.responsive.k8s.crd.ResponsivePolicy;
 import io.fabric8.kubernetes.api.model.HasMetadata;
 import io.fabric8.kubernetes.api.model.apps.Deployment;

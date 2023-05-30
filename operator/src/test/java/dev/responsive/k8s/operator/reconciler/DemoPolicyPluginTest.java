@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package dev.responsive.reconciler;
+package dev.responsive.k8s.operator.reconciler;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.contains;
@@ -27,8 +27,8 @@ import static org.mockito.Mockito.when;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import dev.responsive.controller.ControllerClient;
-import dev.responsive.controller.ControllerProtoFactories;
+import dev.responsive.controller.client.ControllerClient;
+import dev.responsive.k8s.controller.ControllerProtoFactories;
 import dev.responsive.k8s.crd.ResponsivePolicy;
 import dev.responsive.k8s.crd.ResponsivePolicySpec;
 import io.fabric8.kubernetes.api.model.HasMetadata;
@@ -89,7 +89,8 @@ class DemoPolicyPluginTest {
   @Mock
   private ControllerClient controllerClient;
 
-  private final DemoPolicyPlugin plugin = new DemoPolicyPlugin();
+  private final dev.responsive.k8s.operator.reconciler.DemoPolicyPlugin
+      plugin = new dev.responsive.k8s.operator.reconciler.DemoPolicyPlugin();
   private final Deployment deployment = new Deployment();
   private final ResponsivePolicy policy = new ResponsivePolicy();
   private final ControllerOuterClass.ApplicationState targetState =
@@ -98,7 +99,7 @@ class DemoPolicyPluginTest {
               .setReplicas(5)
               .build())
           .build();
-  private ResponsiveContext responsiveCtx;
+  private dev.responsive.k8s.operator.reconciler.ResponsiveContext responsiveCtx;
 
   @BeforeEach
   public void setup() {
@@ -109,8 +110,8 @@ class DemoPolicyPluginTest {
         "v1",
         3,
         ImmutableMap.of(
-            ResponsivePolicyReconciler.NAME_LABEL, "bar",
-            ResponsivePolicyReconciler.NAMESPACE_LABEL, "foo"
+            dev.responsive.k8s.operator.reconciler.ResponsivePolicyReconciler.NAME_LABEL, "bar",
+            dev.responsive.k8s.operator.reconciler.ResponsivePolicyReconciler.NAMESPACE_LABEL, "foo"
         )
     );
 
@@ -127,7 +128,7 @@ class DemoPolicyPluginTest {
         )
     );
 
-    responsiveCtx = new ResponsiveContext(controllerClient);
+    responsiveCtx = new dev.responsive.k8s.operator.reconciler.ResponsiveContext(controllerClient);
 
     lenient().when(esCtx.getControllerConfiguration()).thenReturn(controllerConfig);
     lenient().when(controllerConfig.getEffectiveNamespaces())
@@ -139,7 +140,8 @@ class DemoPolicyPluginTest {
     lenient().when(appsClient.deployments()).thenReturn(deploymentsClient);
     setupDeploymentToBeReturned(deployment);
     lenient().when(ctx.getSecondaryResource(Deployment.class)).thenReturn(Optional.of(deployment));
-    lenient().when(ctx.getSecondaryResource(TargetStateWithTimestamp.class))
+    lenient().when(ctx.getSecondaryResource(
+            dev.responsive.k8s.operator.reconciler.TargetStateWithTimestamp.class))
         .thenReturn(Optional.of(new TargetStateWithTimestamp(targetState)));
   }
 
@@ -199,9 +201,11 @@ class DemoPolicyPluginTest {
         "baz", "biz", "v1", 3, Collections.emptyMap()
     );
     edit.apply(blank);
-    assertThat(blank.getMetadata().getLabels().get(ResponsivePolicyReconciler.NAMESPACE_LABEL),
+    assertThat(blank.getMetadata().getLabels().get(
+            dev.responsive.k8s.operator.reconciler.ResponsivePolicyReconciler.NAMESPACE_LABEL),
         is("foo"));
-    assertThat(blank.getMetadata().getLabels().get(ResponsivePolicyReconciler.NAME_LABEL),
+    assertThat(blank.getMetadata().getLabels().get(
+            dev.responsive.k8s.operator.reconciler.ResponsivePolicyReconciler.NAME_LABEL),
         is("bar"));
   }
 

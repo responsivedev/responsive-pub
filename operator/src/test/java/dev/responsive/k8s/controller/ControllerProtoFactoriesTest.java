@@ -14,11 +14,12 @@
  * limitations under the License.
  */
 
-package dev.responsive.controller;
+package dev.responsive.k8s.controller;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 
+import dev.responsive.k8s.controller.ControllerProtoFactories;
 import dev.responsive.k8s.crd.ResponsivePolicy;
 import dev.responsive.k8s.crd.ResponsivePolicySpec;
 import io.fabric8.kubernetes.api.model.ObjectMeta;
@@ -69,8 +70,8 @@ class ControllerProtoFactoriesTest {
   @Test
   public void shouldCreateCurrentStateRequestForDeployment() {
     // when:
-    final var request =
-        ControllerProtoFactories.currentStateRequest(demoPolicy, demoApplicationState);
+    final var request
+        = ControllerProtoFactories.currentStateRequest(demoPolicy, demoApplicationState);
 
     // Then:
     assertThat(request.getApplicationId(), is("orange/banana"));
