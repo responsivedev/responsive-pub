@@ -78,7 +78,7 @@ tasks {
     }
 
     register("pushCRD", Exec::class) {
-        commandLine("aws", "s3", "cp", "$buildDir/classes/java/main/META-INF/fabric8/responsivepolicies.application.responsive.dev-v1.yml", "s3://crds.responsive.dev/responsive-operator/revisions/$version/crd.yml")
+        commandLine("aws", "s3", "cp", "$buildDir/classes/java/main/META-INF/fabric8/responsivepolicies.application.responsive.dev-v1.yml", "s3://crd.responsive.dev/responsive-operator/revisions/$version/crd.yml")
     }
 
     register("pushDocker", Exec::class) {
