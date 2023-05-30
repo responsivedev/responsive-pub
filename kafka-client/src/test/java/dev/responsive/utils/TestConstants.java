@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package dev.responsive;
+package dev.responsive.utils;
 
 import org.testcontainers.utility.DockerImageName;
 

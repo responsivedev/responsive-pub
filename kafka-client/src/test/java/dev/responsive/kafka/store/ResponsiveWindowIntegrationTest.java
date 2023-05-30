@@ -34,9 +34,9 @@ import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
 import static org.hamcrest.MatcherAssert.assertThat;
 
 import com.datastax.oss.driver.api.core.CqlSession;
-import dev.responsive.TestConstants;
 import dev.responsive.db.CassandraClient;
 import dev.responsive.kafka.api.ResponsiveWindowedStoreSupplier;
+import dev.responsive.utils.ContainerExtension;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
@@ -74,14 +74,11 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.testcontainers.containers.CassandraContainer;
 import org.testcontainers.containers.KafkaContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
-@Testcontainers
+@ExtendWith(ContainerExtension.class)
 public class ResponsiveWindowIntegrationTest {
 
   private static final String INPUT_TOPIC = "input";
@@ -93,18 +90,15 @@ public class ResponsiveWindowIntegrationTest {
   private CassandraClient client;
   private ScheduledExecutorService executor;
 
-  @Container
-  public CassandraContainer<?> cassandra = new CassandraContainer<>(TestConstants.CASSANDRA)
-      .withInitScript("CassandraDockerInit.cql");
-  @Container
-  public KafkaContainer kafka = new KafkaContainer(TestConstants.KAFKA)
-      .withEnv("KAFKA_GROUP_MIN_SESSION_TIMEOUT_MS", "1000")
-      .withEnv("KAFKA_GROUP_MAX_SESSION_TIMEOUT_MS", "60000");
-
   private String name;
+  private String bootstrapServers;
 
   @BeforeEach
-  public void before(final TestInfo info) {
+  public void before(
+      final TestInfo info,
+      final CassandraContainer<?> cassandra,
+      final KafkaContainer kafka
+  ) {
     name = info.getTestMethod().orElseThrow().getName();
     session = CqlSession.builder()
         .addContactPoint(cassandra.getContactPoint())
@@ -113,6 +107,7 @@ public class ResponsiveWindowIntegrationTest {
         .build();
     client = new CassandraClient(session);
     executor = new ScheduledThreadPoolExecutor(2);
+    bootstrapServers = kafka.getBootstrapServers();
     admin = Admin.create(Map.of(BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers()));
 
     admin.createTopics(
@@ -359,7 +354,7 @@ public class ResponsiveWindowIntegrationTest {
   private Map<String, Object> getMutableProperties() {
     final Map<String, Object> properties = new HashMap<>();
 
-    properties.put(BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers());
+    properties.put(BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
     properties.put(KEY_SERIALIZER_CLASS_CONFIG, LongSerializer.class);
     properties.put(VALUE_SERIALIZER_CLASS_CONFIG, LongSerializer.class);
     properties.put(KEY_DESERIALIZER_CLASS_CONFIG, LongDeserializer.class);
