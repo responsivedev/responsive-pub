@@ -24,8 +24,8 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v2
         with:
           role-to-assume: arn:aws:iam::292505934682:role/github-responsivedev-org
-          role-session-name: github-pr-builder
-          aws-region: us-west-2
+          role-session-name: github-publish-artifacts
+          aws-region: us-east-1
 
       - name: Login to Amazon ECR
         id: login-ecr-public
