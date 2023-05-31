@@ -49,7 +49,7 @@ jobs:
       - name: Publish
         uses: gradle/gradle-build-action@v2
         with:
-          arguments: publish # publish to both S3 and Sonatype OSSRH
+          arguments: :${{ inputs.module }}:publish # publish to both S3 and Sonatype OSSRH
         env:
           OSSRH_USER: ${{ secrets.OSSRH_USER }}
           OSSRH_PASSWORD: ${{ secrets.OSSRH_PASSWORD }}
@@ -58,6 +58,7 @@ jobs:
 
       - name: Publish Images 
         uses: gradle/gradle-build-action@v2
+        if: ${{ inputs.module == 'operator' }}
         with:
           arguments: pushDocker pushHelm -PdockerRegistry=${{ steps.login-ecr-public.outputs.registry }}/j8q9y0n6 -PhelmRegistry=${{ steps.login-ecr-public.outputs.registry }}/j8q9y0n6
         env:
