@@ -102,6 +102,6 @@ tasks {
     register("pushHelm", Exec::class) {
         dependsOn("packageHelm")
         workingDir("$buildDir/helm")
-        commandLine("helm", "push", "responsive-operator-chart-$version.tgz", "oci://$helmRegistry")
+        commandLine("helm", "push", "responsive-operator-chart-$version.tgz", "oci://$helmRegistry/responsiveinc/charts")
     }
 }
