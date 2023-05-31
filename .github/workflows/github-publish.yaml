@@ -44,7 +44,9 @@ jobs:
       - name: Release
         uses: gradle/gradle-build-action@v2
         with:
-          arguments: :${{ inputs.module }}:release -Prelease.versionIncrementer=incrementMinor
+          arguments:
+            - :${{ inputs.module }}:markNextVersion -Prelease.incrementer=incrementMinor
+            - :${{ inputs.module }}:release
 
       - name: Publish
         uses: gradle/gradle-build-action@v2
