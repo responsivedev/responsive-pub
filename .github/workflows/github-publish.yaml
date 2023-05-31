@@ -4,7 +4,11 @@ on:
     inputs:
       module:
         required: true
-        description: which module to publish (e.g. operator)
+        description: which module to publish
+      increment:
+        required: false
+        default: incrementMinor
+        description: version increment (default minor)
 jobs:
   build:
     permissions:
@@ -41,12 +45,15 @@ jobs:
         with:
           arguments: build
 
+      - name: Increment Version
+        uses: gradle/gradle-build-action@v2
+        with:
+          arguments: :${{ inputs.module }}:markNextVersion -Prelease.incrementer=${{ inputs.increment }}
+
       - name: Release
         uses: gradle/gradle-build-action@v2
         with:
-          arguments:
-            - :${{ inputs.module }}:markNextVersion -Prelease.incrementer=incrementMinor
-            - :${{ inputs.module }}:release
+          arguments: :${{ inputs.module }}:release
 
       - name: Publish
         uses: gradle/gradle-build-action@v2
