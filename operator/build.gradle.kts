@@ -16,6 +16,8 @@
 
 plugins {
     id("responsive.java-application-conventions")
+    id("responsive.docker")
+    id("responsive.helm")
 }
 
 application {
@@ -35,73 +37,10 @@ dependencies {
     testImplementation(testlibs.bundles.base)
 }
 
-// TODO(rohan): figure out how to put these somewhere common
-//              and move the defs to properties at top level
-
-val dockerImage = "responsive-operator:" + version
-var dockerRepoBase = "292505934682.dkr.ecr.us-west-2.amazonaws.com/responsiveinc/"
-if (project.hasProperty("dockerRegistry")) {
-    val dockerRegistry = project.property("dockerRegistry") as String
-    dockerRepoBase = dockerRegistry + "/responsiveinc/"
-}
-var helmRegistry = "public.ecr.aws/j8q9y0n6"
-if (project.hasProperty("helmRegistry")) {
-    helmRegistry = project.property("helmRegistry") as String
-}
+responsive_docker.dockerImage.set("responsive-operator:$version")
 
 tasks {
-    register("copyJars", Copy::class) {
-        dependsOn("build")
-        into("$buildDir/docker/libs")
-        from(configurations.runtimeClasspath)
-        from("$buildDir/libs")
-        duplicatesStrategy = DuplicatesStrategy.INCLUDE
-    }
-
-    register("copyDockerDir", Copy::class) {
-        into("$buildDir/docker")
-        from("$projectDir/docker")
-        include("**/*")
-    }
-
-    register("buildDocker", Exec::class) {
-        dependsOn("pushCRD")
-        dependsOn("copyJars")
-        dependsOn("copyDockerDir")
-        workingDir("$buildDir")
-        commandLine("docker", "build", "--platform",  "linux/amd64", "-t", "$dockerImage", "docker")
-    }
-
-    register("tagDocker", Exec::class) {
-        dependsOn("buildDocker")
-        commandLine("docker", "tag", "$dockerImage", "$dockerRepoBase$dockerImage")
-    }
-
     register("pushCRD", Exec::class) {
         commandLine("aws", "s3", "cp", "$buildDir/classes/java/main/META-INF/fabric8/responsivepolicies.application.responsive.dev-v1.yml", "s3://crd.responsive.dev/responsive-operator/revisions/$version/crd.yml")
-    }
-
-    register("pushDocker", Exec::class) {
-        dependsOn("tagDocker")
-        commandLine("docker", "push", "$dockerRepoBase$dockerImage")
-    }
-
-    register("loadDockerKind", Exec::class) {
-        dependsOn("buildDocker")
-        commandLine("kind", "load", "docker-image", "$dockerImage")
-    }
-
-    register("packageHelm", Exec::class) {
-        doFirst {
-            mkdir("$buildDir/helm")
-        }
-        workingDir("$buildDir/helm")
-        commandLine("helm", "package", "--app-version", version, "--version", version, "$projectDir/src/main/helm/")
-    }
-
-    register("pushHelm", Exec::class) {
-        dependsOn("packageHelm")
-        workingDir("$buildDir/helm")
-        commandLine("helm", "push", "responsive-operator-$version.tgz", "oci://$helmRegistry/responsiveinc/charts")
     }
 }
