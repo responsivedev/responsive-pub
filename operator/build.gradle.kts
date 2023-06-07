@@ -31,10 +31,17 @@ dependencies {
     implementation(libs.jackson)
     implementation(libs.javaoperatorsdk)
 
+    implementation("commons-cli:commons-cli:1.5.0")
+    implementation("org.apache.commons:commons-configuration2:2.8.0")
+    implementation("commons-beanutils:commons-beanutils:1.9.4")
+
     annotationProcessor(libs.javaoperatorsdk)
     annotationProcessor(libs.crd.generator.atp)
 
     testImplementation(testlibs.bundles.base)
+    testImplementation("io.grpc:grpc-testing:1.53.0")
+    testImplementation("io.grpc:grpc-examples:0.15.0")
+
 }
 
 responsive_docker.dockerImage.set("responsive-operator:$version")

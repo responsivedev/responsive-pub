@@ -19,44 +19,59 @@ package dev.responsive.controller.client.grpc;
 import com.google.common.annotations.VisibleForTesting;
 import dev.responsive.controller.client.ControllerClient;
 import io.grpc.ChannelCredentials;
+import io.grpc.ClientInterceptor;
 import io.grpc.Grpc;
 import io.grpc.InsecureChannelCredentials;
 import io.grpc.ManagedChannel;
+import io.grpc.Metadata;
+import io.grpc.stub.MetadataUtils;
 import java.util.concurrent.TimeUnit;
 import responsive.controller.v1.controller.proto.ControllerGrpc;
 import responsive.controller.v1.controller.proto.ControllerOuterClass;
+import responsive.platform.auth.ApiKeyHeaders;
 
 public class ControllerGrpcClient implements ControllerClient {
   private final ManagedChannel channel;
   private final ControllerGrpc.ControllerBlockingStub stub;
 
-  public ControllerGrpcClient(final String target) {
-    this(target, new GrpcFactories() {
-    });
+  public ControllerGrpcClient(final String target, final String apiKey, final String secret) {
+    this(target, apiKey, secret, new GrpcFactories() {});
   }
 
   @VisibleForTesting
-  ControllerGrpcClient(final String target, final GrpcFactories grpcFactories) {
-    channel = grpcFactories.createChannel(target, InsecureChannelCredentials.create());
+  ControllerGrpcClient(final String target, final String apiKey, final String secret,
+                       final GrpcFactories grpcFactories) {
+
+    final Metadata metadata = new Metadata();
+    metadata.put(Metadata.Key.of(
+        ApiKeyHeaders.API_KEY_METADATA_KEY, Metadata.ASCII_STRING_MARSHALLER), apiKey);
+    metadata.put(Metadata.Key.of(
+        ApiKeyHeaders.SECRET_METADATA_KEY, Metadata.ASCII_STRING_MARSHALLER), secret);
+
+    channel = grpcFactories.createChannel(target, InsecureChannelCredentials.create(),
+            MetadataUtils.newAttachHeadersInterceptor(metadata));
     stub = grpcFactories.createBlockingStub(channel);
   }
 
   @Override
   public void upsertPolicy(final ControllerOuterClass.UpsertPolicyRequest request) {
-    final var rsp = stub.withDeadlineAfter(5, TimeUnit.SECONDS).upsertPolicy(request);
+    final var rsp = stub.withDeadlineAfter(5, TimeUnit.SECONDS)
+        .upsertPolicy(request);
     throwOnError(rsp);
   }
 
   @Override
   public void currentState(final ControllerOuterClass.CurrentStateRequest request) {
-    final var rsp = stub.withDeadlineAfter(5, TimeUnit.SECONDS).currentState(request);
+    final var rsp = stub.withDeadlineAfter(5, TimeUnit.SECONDS)
+        .currentState(request);
     throwOnError(rsp);
   }
 
   @Override
   public ControllerOuterClass.ApplicationState getTargetState(
       final ControllerOuterClass.EmptyRequest request) {
-    final var rsp = stub.withDeadlineAfter(5, TimeUnit.SECONDS).getTargetState(request);
+    final var rsp = stub.withDeadlineAfter(5, TimeUnit.SECONDS)
+        .getTargetState(request);
     if (!rsp.getError().equals("")) {
       throw new RuntimeException(rsp.getError());
     }
@@ -71,9 +86,12 @@ public class ControllerGrpcClient implements ControllerClient {
   }
 
   interface GrpcFactories {
-    default ManagedChannel createChannel(final String target,
-                                         final ChannelCredentials credentials) {
-      return Grpc.newChannelBuilder(target, credentials).build();
+    default ManagedChannel createChannel(final String target, final ChannelCredentials credentials,
+                                         ClientInterceptor addHeadersInterceptor) {
+
+      return Grpc.newChannelBuilder(target, credentials)
+              .intercept(addHeadersInterceptor)
+              .build();
     }
 
     default ControllerGrpc.ControllerBlockingStub createBlockingStub(final ManagedChannel channel) {
