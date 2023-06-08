@@ -1,1 +1,1 @@
-java -Dorg.apache.logging.log4j.level=INFO -cp "/usr/share/java/responsive-operator/*" dev.responsive.k8s.operator.OperatorMain ${CONTROLLER_EP}
+java -Dorg.apache.logging.log4j.level=INFO -cp "/usr/share/java/responsive-operator/*" dev.responsive.k8s.operator.OperatorMain --controller-url ${CONTROLLER_EP} --config-file "/dummy"

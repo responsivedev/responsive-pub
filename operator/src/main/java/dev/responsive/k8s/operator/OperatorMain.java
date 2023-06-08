@@ -68,8 +68,8 @@ public class OperatorMain {
       System.exit(1);
     }
 
-    final String apiKey = config.getString(API_KEY_CONFIG);
-    final String secret = config.getString(SECRET_CONFIG);
+    final String apiKey = config.getString(API_KEY_CONFIG, "");
+    final String secret = config.getString(SECRET_CONFIG, "");
 
     final Operator operator = new Operator();
     Serialization.jsonMapper().registerModule(new Jdk8Module());
@@ -90,7 +90,7 @@ public class OperatorMain {
 
   private static Options getOptions() {
     Options options = new Options();
-    Option serverOption = Option.builder("server-url")
+    Option serverOption = Option.builder("controller-url")
             .hasArg(true)
             .required(true)
             .desc("The URL for the controller server")
