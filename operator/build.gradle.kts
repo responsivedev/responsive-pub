@@ -31,9 +31,7 @@ dependencies {
     implementation(libs.jackson)
     implementation(libs.javaoperatorsdk)
 
-    implementation("commons-cli:commons-cli:1.5.0")
-    implementation("org.apache.commons:commons-configuration2:2.8.0")
-    implementation("commons-beanutils:commons-beanutils:1.9.4")
+    implementation(libs.bundles.commons)
 
     annotationProcessor(libs.javaoperatorsdk)
     annotationProcessor(libs.crd.generator.atp)
