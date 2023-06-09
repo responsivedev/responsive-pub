@@ -26,7 +26,6 @@ import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.DefaultParser;
 import org.apache.commons.cli.HelpFormatter;
-import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.apache.commons.configuration2.Configuration;
@@ -42,7 +41,7 @@ public class OperatorMain {
 
   public static void main(String[] args) {
 
-    final Options options = getOptions();
+    final Options options = OperatorOptions.OPTIONS;
     final CommandLineParser parser = new DefaultParser();
     final HelpFormatter formatter = new HelpFormatter();
 
@@ -57,8 +56,8 @@ public class OperatorMain {
       return;
     }
 
-    final String target = cmd.getOptionValue("server-url");
-    final String configFileLocation = cmd.getOptionValue("config-file");
+    final String target = cmd.getOptionValue(OperatorOptions.CONTROLLER_URL);
+    final String configFileLocation = cmd.getOptionValue(OperatorOptions.CONFIG_FILE);
     final Configuration config = getConfigurations(configFileLocation);
 
     if (!(config.containsKey(API_KEY_CONFIG) && config.containsKey(SECRET_CONFIG))) {
@@ -86,29 +85,5 @@ public class OperatorMain {
       LOGGER.error("Error loading configuration properties: {}", e.getMessage());
     }
     return new PropertiesConfiguration();
-  }
-
-  private static Options getOptions() {
-    Options options = new Options();
-    Option serverOption = Option.builder("controllerUrl")
-            .hasArg(true)
-            .required(true)
-            .desc("The URL for the controller server")
-            .numberOfArgs(1)
-            .build();
-
-    options.addOption(serverOption);
-
-    Option configFile = Option.builder("configFile")
-            .hasArg(true)
-            .required(true)
-            .desc("The path to the config file")
-            .numberOfArgs(1)
-            .build();
-
-    options.addOption(configFile);
-
-    return options;
-
   }
 }
