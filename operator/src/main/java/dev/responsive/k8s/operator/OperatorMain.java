@@ -90,7 +90,7 @@ public class OperatorMain {
 
   private static Options getOptions() {
     Options options = new Options();
-    Option serverOption = Option.builder("controller-url")
+    Option serverOption = Option.builder("controllerUrl")
             .hasArg(true)
             .required(true)
             .desc("The URL for the controller server")
@@ -99,7 +99,7 @@ public class OperatorMain {
 
     options.addOption(serverOption);
 
-    Option configFile = Option.builder("config-file")
+    Option configFile = Option.builder("configFile")
             .hasArg(true)
             .required(true)
             .desc("The path to the config file")
