@@ -32,6 +32,7 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.Map;
+import java.util.Properties;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import org.apache.kafka.clients.admin.Admin;
@@ -65,6 +66,16 @@ public class ResponsiveDriver implements Closeable {
    * @return a new {@code ResponsiveDriver} and opens connections to remote Responsive servers
    */
   public static ResponsiveDriver connect(final Map<String, Object> props) {
+    final Properties properties = new Properties();
+    properties.putAll(props);
+    return connect(properties);
+  }
+
+  /**
+   * @param props the properties to pass in
+   * @return a new {@code ResponsiveDriver} and opens connections to remote Responsive servers
+   */
+  public static ResponsiveDriver connect(final Properties props) {
     final ResponsiveDriverConfig configs = new ResponsiveDriverConfig(props);
 
     final InetSocketAddress address = InetSocketAddress.createUnresolved(
