@@ -1,1 +1,8 @@
-java -Dorg.apache.logging.log4j.level=INFO -cp "/usr/share/java/responsive-operator/*" dev.responsive.k8s.operator.OperatorMain --controllerUrl ${CONTROLLER_EP} --configFile "/dummy"
+if test -f /etc/secrets/ctl-api-key; then
+  echo "responsive.platform.api.key: $(cat /etc/secrets/ctl-api-key)" >> /etc/responsive-operator/app.properties
+fi
+if test -f /etc/secrets/ctl-api-secret; then
+  echo "responsive.platform.api.secret: $(cat /etc/secrets/ctl-api-secret)" >> /etc/responsive-operator/app.properties
+fi
+
+java -Dorg.apache.logging.log4j.level=INFO -cp "/usr/share/java/responsive-operator/*" dev.responsive.k8s.operator.OperatorMain -controllerUrl ${CONTROLLER_EP} -configFile "/etc/responsive-operator/app.properties"
