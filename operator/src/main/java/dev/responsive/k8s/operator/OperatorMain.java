@@ -22,15 +22,19 @@ import dev.responsive.k8s.operator.reconciler.ResponsivePolicyReconciler;
 import io.fabric8.kubernetes.client.utils.Serialization;
 import io.javaoperatorsdk.operator.Operator;
 import java.io.File;
+import java.io.FileReader;
+import java.io.Reader;
+import java.io.StringReader;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.Base64;
+import java.util.Properties;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.DefaultParser;
 import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
-import org.apache.commons.configuration2.Configuration;
-import org.apache.commons.configuration2.PropertiesConfiguration;
-import org.apache.commons.configuration2.builder.fluent.Configurations;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -57,8 +61,8 @@ public class OperatorMain {
     }
 
     final String target = cmd.getOptionValue(OperatorOptions.CONTROLLER_URL);
-    final String configFileLocation = cmd.getOptionValue(OperatorOptions.CONFIG_FILE);
-    final Configuration config = getConfigurations(configFileLocation);
+    final String configFileLocation = cmd.getOptionValue(OperatorOptions.SECRETS_FILE);
+    final Properties config = PropertiesLoader.load(configFileLocation);
 
     if (!(config.containsKey(API_KEY_CONFIG) && config.containsKey(SECRET_CONFIG))) {
       LOGGER.error("Couldn't find API Key or secret properties in config file {}. "
@@ -67,23 +71,13 @@ public class OperatorMain {
       System.exit(1);
     }
 
-    final String apiKey = config.getString(API_KEY_CONFIG, "");
-    final String secret = config.getString(SECRET_CONFIG, "");
+    final String apiKey = config.getProperty(API_KEY_CONFIG, "");
+    final String secret = config.getProperty(SECRET_CONFIG, "");
 
     final Operator operator = new Operator();
     Serialization.jsonMapper().registerModule(new Jdk8Module());
     operator.register(new ResponsivePolicyReconciler(new ControllerGrpcClient(target,
             apiKey, secret)));
     operator.start();
-  }
-
-  private static Configuration getConfigurations(String fileName) {
-    Configurations configurations = new Configurations();
-    try {
-      return configurations.properties(new File(fileName));
-    } catch (Exception e) {
-      LOGGER.error("Error loading configuration properties: {}", e.getMessage());
-    }
-    return new PropertiesConfiguration();
   }
 }

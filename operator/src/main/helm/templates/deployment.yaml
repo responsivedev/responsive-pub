@@ -36,11 +36,11 @@ spec:
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
-            - name: secrets
-              mountPath: /etc/secrets
+            - name: cfg
+              mountPath: /etc/responsive-operator/
               readOnly: true
       volumes:
-        - name: secrets
+        - name: cfg
           secret:
             secretName: {{ .Values.controllerSecret }}
             optional: true
