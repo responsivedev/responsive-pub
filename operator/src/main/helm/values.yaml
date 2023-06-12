@@ -26,6 +26,8 @@ serviceAccount:
 
 controllerEndpoint: dns:///controller:4242
 
+controllerSecret: ctl-secret
+
 podAnnotations: {}
 
 resources: {}
