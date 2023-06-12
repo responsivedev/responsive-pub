@@ -61,6 +61,13 @@ dependencyResolutionManagement {
             library("commons-configuration2", "org.apache.commons:commons-configuration2:2.8.0")
             library("commons-beanutils", "commons-beanutils:commons-beanutils:1.9.4")
             bundle("commons", listOf("commons-cli", "commons-configuration2", "commons-beanutils"))
+
+            // do not include these in jars that are distributed - these
+            // should only be used when the distributed artifact is deployable (e.g.
+            // a docker image)
+            library("slf4j", "org.slf4j:slf4j-log4j12:1.7.5")
+            library("log4j-core", "org.apache.logging.log4j:log4j-core:2.17.1")
+            bundle("logging", listOf("slf4j", "log4j-core"))
         }
 
         create("testlibs") {

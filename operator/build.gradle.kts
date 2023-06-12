@@ -32,6 +32,7 @@ dependencies {
     implementation(libs.javaoperatorsdk)
 
     implementation(libs.bundles.commons)
+    implementation(libs.bundles.logging)
 
     annotationProcessor(libs.javaoperatorsdk)
     annotationProcessor(libs.crd.generator.atp)
