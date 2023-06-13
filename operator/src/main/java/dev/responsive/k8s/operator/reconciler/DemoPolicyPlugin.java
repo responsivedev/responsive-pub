@@ -190,7 +190,9 @@ public class DemoPolicyPlugin implements PolicyPlugin {
 
   private static Set<ResourceID> toDeploymentMapper(final ResponsivePolicy policy) {
     return ImmutableSet.of(
-        new ResourceID(policy.getSpec().getApplicationName(), policy.getSpec().getApplicationNamespace())
+        new ResourceID(
+            policy.getSpec().getApplicationName(),
+            policy.getSpec().getApplicationNamespace())
     );
   }
 }
