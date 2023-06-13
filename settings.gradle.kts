@@ -58,9 +58,8 @@ dependencyResolutionManagement {
             library("crd-generator-atp", "io.fabric8", "crd-generator-apt").version("6.5.1")
 
             library("commons-cli", "commons-cli:commons-cli:1.5.0")
-            library("commons-configuration2", "org.apache.commons:commons-configuration2:2.8.0")
             library("commons-beanutils", "commons-beanutils:commons-beanutils:1.9.4")
-            bundle("commons", listOf("commons-cli", "commons-configuration2", "commons-beanutils"))
+            bundle("commons", listOf("commons-cli", "commons-beanutils"))
 
             // do not include these in jars that are distributed - these
             // should only be used when the distributed artifact is deployable (e.g.

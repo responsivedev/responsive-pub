@@ -30,15 +30,15 @@ public final class OperatorOptions {
       .numberOfArgs(1)
       .build();
 
-  public static final Option CONFIG_FILE = Option.builder("configFile")
+  public static final Option SECRETS_FILE = Option.builder("secretsFile")
       .hasArg(true)
       .required(true)
-      .desc("The path to the config file")
+      .desc("The path to the secrets file")
       .numberOfArgs(1)
       .build();
 
   public static final Options OPTIONS = new Options()
       .addOption(CONTROLLER_URL)
-      .addOption(CONFIG_FILE);
+      .addOption(SECRETS_FILE);
 
 }
