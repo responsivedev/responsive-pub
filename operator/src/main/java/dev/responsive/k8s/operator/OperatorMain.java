@@ -21,13 +21,8 @@ import dev.responsive.controller.client.grpc.ControllerGrpcClient;
 import dev.responsive.k8s.operator.reconciler.ResponsivePolicyReconciler;
 import io.fabric8.kubernetes.client.utils.Serialization;
 import io.javaoperatorsdk.operator.Operator;
-import java.io.File;
 import java.io.FileReader;
 import java.io.Reader;
-import java.io.StringReader;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.util.Base64;
 import java.util.Properties;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
@@ -61,12 +56,12 @@ public class OperatorMain {
     }
 
     final String target = cmd.getOptionValue(OperatorOptions.CONTROLLER_URL);
-    final String configFileLocation = cmd.getOptionValue(OperatorOptions.SECRETS_FILE);
-    final Properties config = PropertiesLoader.load(configFileLocation);
+    final String secretFilePath = cmd.getOptionValue(OperatorOptions.SECRETS_FILE);
+    final Properties config = load(secretFilePath);
 
     if (!(config.containsKey(API_KEY_CONFIG) && config.containsKey(SECRET_CONFIG))) {
       LOGGER.error("Couldn't find API Key or secret properties in config file {}. "
-              + "We expect both {} and {} properties to be present", configFileLocation,
+              + "We expect both {} and {} properties to be present", secretFilePath,
               API_KEY_CONFIG, SECRET_CONFIG);
       System.exit(1);
     }
@@ -79,5 +74,16 @@ public class OperatorMain {
     operator.register(new ResponsivePolicyReconciler(new ControllerGrpcClient(target,
             apiKey, secret)));
     operator.start();
+  }
+
+  private static Properties load(final String fileName) {
+    final Properties properties = new Properties();
+    try {
+      final Reader reader = new FileReader(fileName);
+      properties.load(reader);
+    } catch (Exception e) {
+      LOGGER.error("Error loading configuration properties.", e);
+    }
+    return properties;
   }
 }

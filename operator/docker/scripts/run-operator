@@ -1,1 +1,1 @@
-java -Dorg.apache.logging.log4j.level=INFO -cp "/usr/share/java/responsive-operator/*" dev.responsive.k8s.operator.OperatorMain -controllerUrl ${CONTROLLER_EP} -secretsFile "/etc/responsive-operator/secrets.properties.b64"
+java -Dorg.apache.logging.log4j.level=INFO -cp "/usr/share/java/responsive-operator/*" dev.responsive.k8s.operator.OperatorMain -controllerUrl ${CONTROLLER_EP} -secretsFile "/etc/responsive-operator/secrets.properties"
