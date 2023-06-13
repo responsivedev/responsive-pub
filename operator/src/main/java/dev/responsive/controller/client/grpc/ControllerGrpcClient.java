@@ -21,9 +21,9 @@ import dev.responsive.controller.client.ControllerClient;
 import io.grpc.ChannelCredentials;
 import io.grpc.ClientInterceptor;
 import io.grpc.Grpc;
-import io.grpc.InsecureChannelCredentials;
 import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
+import io.grpc.TlsChannelCredentials;
 import io.grpc.stub.MetadataUtils;
 import java.util.concurrent.TimeUnit;
 import responsive.controller.v1.controller.proto.ControllerGrpc;
@@ -48,7 +48,7 @@ public class ControllerGrpcClient implements ControllerClient {
     metadata.put(Metadata.Key.of(
         ApiKeyHeaders.SECRET_METADATA_KEY, Metadata.ASCII_STRING_MARSHALLER), secret);
 
-    channel = grpcFactories.createChannel(target, InsecureChannelCredentials.create(),
+    channel = grpcFactories.createChannel(target, TlsChannelCredentials.create(),
             MetadataUtils.newAttachHeadersInterceptor(metadata));
     stub = grpcFactories.createBlockingStub(channel);
   }
