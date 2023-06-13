@@ -48,23 +48,23 @@ public class ResponsivePolicySpec {
     this.demoPolicy = Objects.requireNonNull(demoPolicy);
   }
 
-  public String applicationNamespace() {
+  public String getApplicationNamespace() {
     return applicationNamespace;
   }
 
-  public String applicationName() {
+  public String getApplicationName() {
     return applicationName;
   }
 
-  public PolicyStatus status() {
+  public PolicyStatus getStatus() {
     return status;
   }
 
-  public PolicyType policyType() {
+  public PolicyType getPolicyType() {
     return policyType;
   }
 
-  public Optional<DemoPolicy> demoPolicy() {
+  public Optional<DemoPolicy> getDemoPolicy() {
     return demoPolicy;
   }
 
@@ -79,7 +79,7 @@ public class ResponsivePolicySpec {
       this.maxReplicas = maxReplicas;
     }
 
-    public int maxReplicas() {
+    public int getMaxReplicas() {
       return maxReplicas;
     }
   }
