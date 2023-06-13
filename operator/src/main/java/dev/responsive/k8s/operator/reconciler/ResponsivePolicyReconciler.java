@@ -108,7 +108,7 @@ public class ResponsivePolicyReconciler implements
     LOGGER.info("Received event for {}", resource.getFullResourceName());
     responsiveCtx.getControllerClient()
         .upsertPolicy(ControllerProtoFactories.upsertPolicyRequest(resource));
-    plugins.get(resource.getSpec().policyType()).reconcile(resource, ctx, responsiveCtx);
+    plugins.get(resource.getSpec().getPolicyType()).reconcile(resource, ctx, responsiveCtx);
     return UpdateControl.patchStatus(resource);
   }
 }

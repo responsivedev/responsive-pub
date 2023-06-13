@@ -63,8 +63,8 @@ public class DemoPolicyPlugin implements PolicyPlugin {
       final Context<ResponsivePolicy> ctx,
       final ResponsiveContext responsiveCtx
   ) {
-    final var appNamespace = policy.getSpec().applicationNamespace();
-    final var appName = policy.getSpec().applicationName();
+    final var appNamespace = policy.getSpec().getApplicationNamespace();
+    final var appName = policy.getSpec().getApplicationName();
     final var deployment = getAndMaybeLabelCurrentDeployment(policy, ctx);
 
     LOGGER.info("Found deployment {} for app {}/{}", deployment, appNamespace, appName);
@@ -114,8 +114,8 @@ public class DemoPolicyPlugin implements PolicyPlugin {
       // with the required label. Label the deployment here.
       // TODO(rohan): double-check this understanding
       final Deployment deployment;
-      final String appNs = policy.getSpec().applicationNamespace();
-      final String app = policy.getSpec().applicationName();
+      final String appNs = policy.getSpec().getApplicationNamespace();
+      final String app = policy.getSpec().getApplicationName();
       final var appClient = ctx.getClient().apps();
       deployment = appClient.deployments()
           .inNamespace(appNs)
@@ -190,7 +190,9 @@ public class DemoPolicyPlugin implements PolicyPlugin {
 
   private static Set<ResourceID> toDeploymentMapper(final ResponsivePolicy policy) {
     return ImmutableSet.of(
-        new ResourceID(policy.getSpec().applicationName(), policy.getSpec().applicationNamespace())
+        new ResourceID(
+            policy.getSpec().getApplicationName(),
+            policy.getSpec().getApplicationNamespace())
     );
   }
 }
