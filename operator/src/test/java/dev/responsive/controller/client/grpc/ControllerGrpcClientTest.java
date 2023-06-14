@@ -32,7 +32,6 @@ import static org.mockito.Mockito.when;
 
 import io.grpc.ClientInterceptor;
 import io.grpc.ClientInterceptors;
-import io.grpc.InsecureChannelCredentials;
 import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.ServerCall;
@@ -40,6 +39,7 @@ import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
 import io.grpc.ServerInterceptors;
 import io.grpc.StatusRuntimeException;
+import io.grpc.TlsChannelCredentials;
 import io.grpc.examples.helloworld.GreeterGrpc;
 import io.grpc.examples.helloworld.HelloReply;
 import io.grpc.examples.helloworld.HelloRequest;
@@ -104,7 +104,7 @@ class ControllerGrpcClientTest {
 
   @Test
   public void shouldConnectCorrectly() {
-    verify(grpcFactories).createChannel(eq(TARGET), any(InsecureChannelCredentials.class),
+    verify(grpcFactories).createChannel(eq(TARGET), any(TlsChannelCredentials.class),
         any(ClientInterceptor.class));
     verify(grpcFactories).createBlockingStub(channel);
   }
