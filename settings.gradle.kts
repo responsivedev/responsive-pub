@@ -23,6 +23,7 @@ plugins {
 include("kafka-client")
 include("controller-api")
 include("operator")
+include("tools")
 
 dependencyResolutionManagement {
 
