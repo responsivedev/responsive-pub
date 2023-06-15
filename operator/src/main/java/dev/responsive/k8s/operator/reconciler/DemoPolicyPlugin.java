@@ -89,7 +89,13 @@ public class DemoPolicyPlugin implements PolicyPlugin {
     }
     final var targetReplicas = targetState.getTargetState().get().getDemoState().getReplicas();
     if (targetReplicas != deployment.getSpec().getReplicas()) {
-      LOGGER.info("Scaling from {} to {}", deployment.getSpec().getReplicas(), targetReplicas);
+      LOGGER.info(
+          "Scaling {}/{} from {} to {}",
+          appNamespace,
+          appName,
+          deployment.getSpec().getReplicas(),
+          targetReplicas
+      );
       final var appClient = ctx.getClient().apps();
       // TODO(rohan): I don't think this is patching the way I expect. Review the patch APIs
       //              make sure its safe to assume the patch was applied if this succeeds
