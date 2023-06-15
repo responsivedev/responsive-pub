@@ -257,6 +257,19 @@ class DemoPolicyPluginTest {
     verifyNoInteractions(rsDeployment);
   }
 
+  @Test
+  public void shouldNotPatchDeploymentIfNoTargetStateSpecified() {
+    // given:
+    when(ctx.getSecondaryResource(TargetStateWithTimestamp.class))
+        .thenReturn(Optional.of(new TargetStateWithTimestamp()));
+
+    // when:
+    plugin.reconcile(policy, ctx, responsiveCtx);
+
+    // then:
+    verifyNoInteractions(rsDeployment);
+  }
+
   @SuppressWarnings("unchecked")
   private <R extends HasMetadata> Optional<InformerEventSource<R, ResponsivePolicy>> maybePullSrc(
       final Map<String, EventSource> sources,
