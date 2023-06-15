@@ -20,8 +20,13 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.hasEntry;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.instanceOf;
+import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.not;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -35,6 +40,7 @@ import io.javaoperatorsdk.operator.api.config.ControllerConfiguration;
 import io.javaoperatorsdk.operator.api.reconciler.Context;
 import io.javaoperatorsdk.operator.api.reconciler.EventSourceContext;
 import io.javaoperatorsdk.operator.processing.event.source.EventSource;
+import io.javaoperatorsdk.operator.processing.event.source.IndexerResourceCache;
 import io.javaoperatorsdk.operator.processing.event.source.polling.PerResourcePollingEventSource;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -48,6 +54,8 @@ import responsive.controller.v1.controller.proto.ControllerOuterClass.PolicyStat
 class ResponsivePolicyReconcilerTest {
   @Mock
   private Context<ResponsivePolicy> ctx;
+  @Mock
+  private IndexerResourceCache<ResponsivePolicy> cache;
   @Mock
   private EventSourceContext<ResponsivePolicy> eventCtx;
   @Mock
@@ -74,6 +82,7 @@ class ResponsivePolicyReconcilerTest {
     lenient().when(controllerConfig.getEffectiveNamespaces())
         .thenReturn(ImmutableSet.of("responsive"));
     lenient().when(eventCtx.getClient()).thenReturn(client);
+    lenient().when(eventCtx.getPrimaryCache()).thenReturn(cache);
     lenient().when(plugin.prepareEventSources(eventCtx, responsiveCtx)).thenReturn(
         ImmutableMap.of(
             "pes1", pluginEventSource1,
@@ -103,6 +112,28 @@ class ResponsivePolicyReconcilerTest {
 
     // then:
     assertThat(sources.values(), hasItem(instanceOf(PerResourcePollingEventSource.class)));
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  public void shouldReturnEmptyTargetStateIfControllerPollFails() {
+    // given:
+    final var sources = reconciler.prepareEventSources(eventCtx);
+    final var maybeSource = sources.values().stream()
+        .filter(s -> s instanceof PerResourcePollingEventSource)
+        .findFirst();
+    assertThat(maybeSource, not(Optional.empty()));
+    final var source = (PerResourcePollingEventSource) maybeSource.get();
+    final var resource = mock(ResponsivePolicy.class);
+    when(resource.getMetadata()).thenReturn(new ObjectMeta());
+    when(controllerClient.getTargetState(any())).thenThrow(new RuntimeException("oops"));
+
+    // when:
+    final var ret = (Optional<TargetStateWithTimestamp>) source.getSecondaryResource(resource);
+
+    // then:
+    assertThat(ret.isPresent(), is(true));
+    assertThat(ret.get().getTargetState().isPresent(), is(false));
   }
 
   @Test

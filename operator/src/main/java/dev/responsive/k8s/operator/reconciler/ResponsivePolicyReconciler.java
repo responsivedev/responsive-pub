@@ -73,15 +73,13 @@ public class ResponsivePolicyReconciler implements
                 // TODO(rohan): this is a hack to force an event at each poll interval.
                 // we should either: 1. make the controller robust to not rely on polling
                 //                   2. poll in some less hacky way (while still using events)
-                // TODO(rohan): there is a bug here where this repeatedly throws and we never
-                //              call the plugin:
-                //    1. controller restarts and forgets about policy
-                //    2. this call always throws, so we never upsert the policy again
                 responsiveCtx.getControllerClient()
                     .getTargetState(ControllerProtoFactories.emptyRequest(policy))));
           } catch (final Throwable t) {
             LOGGER.error("Error fetching target state", t);
-            return Collections.emptySet();
+            // We return an empty target state to force reconciliation to run, since right now the
+            // controller is stateless and relies on periodic updates after it restarts
+            return ImmutableSet.of(new TargetStateWithTimestamp());
           }
         },
         ctx.getPrimaryCache(),

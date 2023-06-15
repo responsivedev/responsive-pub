@@ -74,25 +74,35 @@ public class DemoPolicyPlugin implements PolicyPlugin {
     );
 
     final var maybeTargetState = ctx.getSecondaryResource(TargetStateWithTimestamp.class);
-    if (maybeTargetState.isPresent()) {
-      final var targetState = maybeTargetState.get();
-      LOGGER.info("Got update to target state {} {}", appName, targetState);
-      final var targetReplicas = targetState.getTargetState().getDemoState().getReplicas();
-      if (targetReplicas != deployment.getSpec().getReplicas()) {
-        final var appClient = ctx.getClient().apps();
-        // TODO(rohan): I don't think this is patching the way I expect. Review the patch APIs
-        //              make sure its safe to assume the patch was applied if this succeeds
-        appClient.deployments()
-            .inNamespace(appNamespace)
-            .withName(appName)
-            .edit(d -> {
-              if (d.getMetadata().getResourceVersion()
-                  .equals(deployment.getMetadata().getResourceVersion())) {
-                d.getSpec().setReplicas(targetReplicas);
-              }
-              return d;
-            });
-      }
+    if (maybeTargetState.isEmpty()) {
+      LOGGER.warn("No target state present in ctx. This should not happen");
+      return;
+    }
+
+    final var targetState = maybeTargetState.get();
+    LOGGER.info("target state {} {}", appName, targetState);
+
+    if (targetState.getTargetState().isEmpty()) {
+      LOGGER.info(
+          "we were not able to get a target state from controller, so don't try to reconcile one");
+      return;
+    }
+    final var targetReplicas = targetState.getTargetState().get().getDemoState().getReplicas();
+    if (targetReplicas != deployment.getSpec().getReplicas()) {
+      LOGGER.info("Scaling from {} to {}", deployment.getSpec().getReplicas(), targetReplicas);
+      final var appClient = ctx.getClient().apps();
+      // TODO(rohan): I don't think this is patching the way I expect. Review the patch APIs
+      //              make sure its safe to assume the patch was applied if this succeeds
+      appClient.deployments()
+          .inNamespace(appNamespace)
+          .withName(appName)
+          .edit(d -> {
+            if (d.getMetadata().getResourceVersion()
+                .equals(deployment.getMetadata().getResourceVersion())) {
+              d.getSpec().setReplicas(targetReplicas);
+            }
+            return d;
+          });
     }
   }
 

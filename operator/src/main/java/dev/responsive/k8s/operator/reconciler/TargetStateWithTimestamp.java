@@ -18,18 +18,23 @@ package dev.responsive.k8s.operator.reconciler;
 
 import java.time.Instant;
 import java.util.Objects;
+import java.util.Optional;
 import responsive.controller.v1.controller.proto.ControllerOuterClass;
 
 class TargetStateWithTimestamp {
   private final Instant timestamp;
-  private final ControllerOuterClass.ApplicationState targetState;
+  private final Optional<ControllerOuterClass.ApplicationState> targetState;
 
   TargetStateWithTimestamp(final ControllerOuterClass.ApplicationState targetState) {
-    this(Instant.now(), targetState);
+    this(Instant.now(), Optional.of(targetState));
+  }
+
+  TargetStateWithTimestamp() {
+    this(Instant.now(), Optional.empty());
   }
 
   TargetStateWithTimestamp(final Instant timestamp,
-                           final ControllerOuterClass.ApplicationState targetState) {
+                           final Optional<ControllerOuterClass.ApplicationState> targetState) {
     this.timestamp = Objects.requireNonNull(timestamp);
     this.targetState = Objects.requireNonNull(targetState);
   }
@@ -38,7 +43,7 @@ class TargetStateWithTimestamp {
     return timestamp;
   }
 
-  public ControllerOuterClass.ApplicationState getTargetState() {
+  public Optional<ControllerOuterClass.ApplicationState> getTargetState() {
     return targetState;
   }
 
