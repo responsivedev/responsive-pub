@@ -126,6 +126,13 @@ class ResponsivePolicyReconcilerTest {
     final var source = (PerResourcePollingEventSource) maybeSource.get();
     final var resource = mock(ResponsivePolicy.class);
     when(resource.getMetadata()).thenReturn(new ObjectMeta());
+    when(resource.getSpec()).thenReturn(new ResponsivePolicySpec(
+        "ping",
+        "pong",
+        PolicyStatus.POLICY_STATUS_MANAGED,
+        ResponsivePolicySpec.PolicyType.DEMO,
+        Optional.of(new ResponsivePolicySpec.DemoPolicy(123))
+    ));
     when(controllerClient.getTargetState(any())).thenThrow(new RuntimeException("oops"));
 
     // when:
