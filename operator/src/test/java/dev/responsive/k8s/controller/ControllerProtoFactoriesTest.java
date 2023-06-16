@@ -60,7 +60,7 @@ class ControllerProtoFactoriesTest {
     final var request = ControllerProtoFactories.upsertPolicyRequest(demoPolicy);
 
     // then:
-    assertThat(request.getApplicationId(), is("orange/banana"));
+    assertThat(request.getApplicationId(), is("gouda/cheddar"));
     assertThat(request.getPolicy().hasDemoPolicy(), is(true));
     assertThat(request.getPolicy().getStatus(), is(PolicyStatus.POLICY_STATUS_MANAGED));
     final DemoPolicy demoPolicy = request.getPolicy().getDemoPolicy();
@@ -74,7 +74,7 @@ class ControllerProtoFactoriesTest {
         = ControllerProtoFactories.currentStateRequest(demoPolicy, demoApplicationState);
 
     // Then:
-    assertThat(request.getApplicationId(), is("orange/banana"));
+    assertThat(request.getApplicationId(), is("gouda/cheddar"));
     assertThat(request.getState().hasDemoState(), is(true));
     assertThat(request.getState().getDemoState().getReplicas(), is(3));
   }
@@ -83,6 +83,6 @@ class ControllerProtoFactoriesTest {
   public void shouldCreateEmptyRequest() {
     final var request = ControllerProtoFactories.emptyRequest(demoPolicy);
 
-    assertThat(request.getApplicationId(), is("orange/banana"));
+    assertThat(request.getApplicationId(), is("gouda/cheddar"));
   }
 }

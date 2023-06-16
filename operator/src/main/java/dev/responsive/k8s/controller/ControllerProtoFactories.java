@@ -28,7 +28,7 @@ public final class ControllerProtoFactories {
     return ControllerOuterClass.UpsertPolicyRequest.newBuilder()
         .setPolicy(ControllerProtoFactories.policyFromK8sResource(policy.getSpec()))
         // TODO(rohan): dont just use a namespaced (w/ /) name
-        .setApplicationId(getNamespacedName(policy))
+        .setApplicationId(getFullApplicationName(policy))
         .build();
   }
 
@@ -37,14 +37,14 @@ public final class ControllerProtoFactories {
       final ApplicationState state
   ) {
     return ControllerOuterClass.CurrentStateRequest.newBuilder()
-        .setApplicationId(getNamespacedName(policy))
+        .setApplicationId(getFullApplicationName(policy))
         .setState(state)
         .build();
   }
 
   public static ControllerOuterClass.EmptyRequest emptyRequest(final ResponsivePolicy policy) {
     return ControllerOuterClass.EmptyRequest.newBuilder()
-        .setApplicationId(getNamespacedName(policy))
+        .setApplicationId(getFullApplicationName(policy))
         .build();
   }
 
@@ -66,7 +66,7 @@ public final class ControllerProtoFactories {
     return builder.build();
   }
 
-  private static String getNamespacedName(final ResponsivePolicy policy) {
-    return policy.getMetadata().getNamespace() + "/" + policy.getMetadata().getName();
+  private static String getFullApplicationName(final ResponsivePolicy policy) {
+    return policy.getSpec().getApplicationNamespace() + "/" + policy.getSpec().getApplicationName();
   }
 }
