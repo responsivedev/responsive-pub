@@ -164,3 +164,13 @@ allprojects {
         }
     }
 }
+
+tasks.withType<JavaCompile> {
+    options.compilerArgs.addAll(listOf("-Xlint:all", "-Werror"))
+}
+
+tasks.withType<Javadoc> {
+    options {
+        (this as CoreJavadocOptions).addStringOption("Xdoclint:none", "-quiet")
+    }
+}

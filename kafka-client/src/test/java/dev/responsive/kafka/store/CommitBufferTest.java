@@ -207,6 +207,7 @@ public class CommitBufferTest {
   }
 
   @Test
+  @SuppressWarnings({"rawtypes", "unchecked"})
   public void shouldIgnoreFlushFailuresOnRestore() {
     // Given:
     final String tableName = name;
