@@ -58,6 +58,8 @@ public class ResponsiveStore implements KeyValueStore<Bytes, byte[]> {
 
   private boolean open;
   private CommitBuffer<Bytes> buffer;
+
+  @SuppressWarnings("rawtypes")
   private InternalProcessorContext context;
   private Supplier recordCollector;
   private int partition;
@@ -82,6 +84,7 @@ public class ResponsiveStore implements KeyValueStore<Bytes, byte[]> {
   }
 
   @Override
+  @SuppressWarnings("deprecation")
   public void init(final ProcessorContext context, final StateStore root) {
     if (context instanceof StateStoreContext) {
       init((StateStoreContext) context, root);

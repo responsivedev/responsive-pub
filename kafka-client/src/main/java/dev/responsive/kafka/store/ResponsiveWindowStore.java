@@ -66,6 +66,8 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
   private final long retentionPeriod;
 
   private boolean open;
+
+  @SuppressWarnings("rawtypes")
   private InternalProcessorContext context;
   private Supplier recordCollector;
   private int partition;
@@ -118,6 +120,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
   }
 
   @Override
+  @SuppressWarnings("deprecation")
   public void init(final ProcessorContext context, final StateStore root) {
     if (context instanceof StateStoreContext) {
       init((StateStoreContext) context, root);

@@ -50,3 +50,7 @@ tasks {
         commandLine("aws", "s3", "cp", "$buildDir/classes/java/main/META-INF/fabric8/responsivepolicies.application.responsive.dev-v1.yml", "s3://crd.responsive.dev/responsive-operator/revisions/$version/crd.yml")
     }
 }
+
+tasks.withType<JavaCompile> {
+    options.compilerArgs.remove("-Werror")
+}
