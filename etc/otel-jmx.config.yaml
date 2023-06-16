@@ -1,0 +1,73 @@
+---
+rules:
+  # kafka client metrics
+
+ - bean: kafka.consumer:type=consumer-fetch-manager-metrics,partition=*,topic=*,client-id=*
+   metricAttribute:
+     partition: param(partition)
+     topic: param(topic)
+     clientid: param(client-id)
+   mapping:
+     records-lag:
+       metric: kafka.streams.records.lag
+       type: gauge
+       desc: the current lag of the partition
+       unit: '{messages}'
+ - bean: kafka.consumer:type=consumer-fetch-manager-metrics,client-id=*
+   metricAttribute:
+     clientid: param(client-id)
+   mapping:
+     records-lag-max:
+       metric: kafka.streams.records.lag.max
+       type: gauge
+       desc: the current lag of the partition
+       unit: '{messages}'
+ - bean: kafka.streams:type=stream-thread-metrics,thread-id=*
+   metricAttribute:
+     thread: param(thread-id)
+   mapping:
+     process-total:
+       metric: kafka.streams.thread.process.total
+       type: gauge
+       desc: total records processed
+       unit: '{records}'
+ - bean: kafka.streams:type=stream-topic-metrics,thread-id=*,task-id=*,processor-node-id=*,topic=*
+   metricAttribute:
+     thread: param(thread-id)
+     task: param(task-id)
+     processor: param(processor-node-id)
+     topic: param(topic)
+   mapping:
+     records-consumed-total:
+       metric: kafka.streams.topic.consumed.total
+       type: gauge
+       desc: total records consumed
+       unit: '{records}'
+ - bean: kafka.streams:type=stream-task-metrics,thread-id=*,task-id=*
+   metricAttribute:
+     thread: param(thread-id)
+     task: param(task-id)
+   mapping:
+     process-total:
+       metric: kafka.streams.task.process.total
+       type: gauge
+       desc: total records processed
+       unit: '{records}'
+ - bean: kafka.streams:type=stream-thread-metrics,thread-id=*
+   metricAttribute:
+     thread: param(thread-id)
+   mapping:
+     blocked-time-ns-total:
+       metric: kafka.streams.thread.blocked.time.total.ns
+       type: gauge
+       desc: total time the stream thread was blocked
+       unit: '{nanoseconds}'
+ - bean: kafka.streams:type=stream-thread-metrics,thread-id=*
+   metricAttribute:
+     thread: param(thread-id)
+   mapping:
+     thread-start-time:
+       metric: kafka.streams.thread.start.time
+       type: gauge
+       desc: the time the kafka streams thread was started
+       unit: '{milliseconds}'
