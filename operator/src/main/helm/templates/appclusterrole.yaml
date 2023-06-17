@@ -1,18 +1,16 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole 
 metadata:
-  name: {{ printf "%s-role" (include "responsive-operator.fullname" .)  }}
+  name: {{ printf "%s-app-role" (include "responsive-operator.fullname" .)  }}
   labels:
     {{- include "responsive-operator.role.labels" . | nindent 4 }}
 rules:
 - apiGroups:
   - apps
-  - application.responsive.dev
   resources:
   - deployments
   - statefulsets
   - replicasets
-  - responsivepolicies
   verbs:
   - get
   - list

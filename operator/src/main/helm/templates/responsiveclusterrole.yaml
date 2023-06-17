@@ -1,0 +1,11 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole 
+metadata:
+  name: {{ printf "%s-responsive-role" (include "responsive-operator.fullname" .)  }}
+  labels:
+    {{- include "responsive-operator.role.labels" . | nindent 4 }}
+rules:
+- apiGroups:
+  - application.responsive.dev
+  resources: ["*"]
+  verbs: ["*"]
