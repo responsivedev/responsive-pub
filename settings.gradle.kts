@@ -24,6 +24,8 @@ include("kafka-client")
 include("controller-api")
 include("operator")
 
+include("responsive-test-utils")
+
 dependencyResolutionManagement {
 
     versionCatalogs {

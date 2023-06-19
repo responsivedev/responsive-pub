@@ -51,7 +51,7 @@ import org.apache.kafka.streams.state.WindowStore;
  * The driver can be reused to create new state stores, even across
  * different Kafka Streams applications.
  */
-public class ResponsiveDriver implements Closeable {
+public class ResponsiveDriver implements StreamsStoreDriver, Closeable {
 
   private static final Map<String, String> CHANGELOG_CONFIG = Map.of(
       TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE);
@@ -106,22 +106,17 @@ public class ResponsiveDriver implements Closeable {
   }
 
   /**
-   * @param name the state store name
-   * @return a key value store supplier with the given name that uses Responsive's
-   *         storage for its backend
+   * {@inheritDoc}
    */
+  @Override
   public KeyValueBytesStoreSupplier kv(final String name) {
     return new ResponsiveKeyValueBytesStoreSupplier(client, name, executor, admin);
   }
 
   /**
-   * @param name the state store name
-   * @param retentionMs the retention for each entry
-   * @param windowSize the window size
-   * @param retainDuplicates whether to retain duplicates
-   * @return a windowed key value store supplier with the given name that
-   *         uses Responsive's storage for its backend
+   * {@inheritDoc}
    */
+  @Override
   public WindowBytesStoreSupplier windowed(
       final String name,
       final long retentionMs,
@@ -140,8 +135,9 @@ public class ResponsiveDriver implements Closeable {
   }
 
   /**
-   * @see #kv(String)
+   * {@inheritDoc}
    */
+  @Override
   public <K, V> Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized(
       final String name
   ) {
@@ -150,8 +146,9 @@ public class ResponsiveDriver implements Closeable {
   }
 
   /**
-   * @see #windowed(String, long, long, boolean)
+   * {@inheritDoc}
    */
+  @Override
   public <K, V> Materialized<K, V, WindowStore<Bytes, byte[]>> materialized(
       final String name,
       final long retentionMs,
