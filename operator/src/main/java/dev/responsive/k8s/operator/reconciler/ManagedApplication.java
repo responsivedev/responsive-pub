@@ -18,10 +18,16 @@ public class ManagedApplication {
 
   public ManagedApplication(HasMetadata application, Class<?> appClass,
                             ResponsivePolicy policy) {
+    this (application, appClass, policy.getSpec().getApplicationName(),
+        policy.getSpec().getApplicationNamespace());
+  }
+
+  public ManagedApplication(HasMetadata application, Class<?> appClass,
+                            String appName, String namespace) {
     this.application = application;
     this.appClass = appClass;
-    this.appName = policy.getSpec().getApplicationName();
-    this.namespace = policy.getSpec().getApplicationNamespace();
+    this.appName = appName;
+    this.namespace = namespace;
   }
 
   public int getReplicas() {
@@ -139,7 +145,7 @@ public class ManagedApplication {
         .withName(appName)
         .get();
     maybeAddResponsiveLabel(statefulSet, policy, ctx);
-    return new ManagedApplication(statefulSet, StatefulSet.class, policy);
+    return new ManagedApplication(statefulSet, StatefulSet.class, appName, namespace);
 
   }
 
