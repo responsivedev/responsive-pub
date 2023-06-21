@@ -21,6 +21,7 @@ plugins {
 }
 
 include("kafka-client")
+include("kafka-instrumentation")
 include("controller-api")
 include("operator")
 
@@ -36,9 +37,11 @@ dependencyResolutionManagement {
             version("javaoperatorsdk", "4.3.0")
             version("grpc", "1.52.1")
             version("protobuf-java", "3.22.3")
+            version("slf4j", "1.7.5")
 
             library("jackson", "com.fasterxml.jackson.datatype", "jackson-datatype-jdk8").versionRef("jackson")
 
+            library("kafka-clients", "org.apache.kafka", "kafka-clients").versionRef("kafka")
             library("kafka-streams", "org.apache.kafka", "kafka-streams").versionRef("kafka")
 
             library("scylla-driver-core", "com.scylladb", "java-driver-core").versionRef("scylla")
@@ -63,10 +66,12 @@ dependencyResolutionManagement {
             library("commons-beanutils", "commons-beanutils:commons-beanutils:1.9.4")
             bundle("commons", listOf("commons-cli", "commons-beanutils"))
 
+            library("slf4j-api", "org.slf4j", "slf4j-api").versionRef("slf4j")
+
             // do not include these in jars that are distributed - these
             // should only be used when the distributed artifact is deployable (e.g.
             // a docker image)
-            library("slf4j", "org.slf4j:slf4j-log4j12:1.7.5")
+            library("slf4j", "org.slf4j", "slf4j-log4j12").versionRef("slf4j")
             library("log4j-core", "org.apache.logging.log4j:log4j-core:2.17.1")
             bundle("logging", listOf("slf4j", "log4j-core"))
         }
