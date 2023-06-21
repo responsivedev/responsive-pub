@@ -14,9 +14,14 @@ public class ManagedApplication {
 
   private final HasMetadata application;
   private final Class appClass;
-  public ManagedApplication(HasMetadata application, Class appClass) {
+  private final String appName;
+  private final String namespace;
+  public ManagedApplication(HasMetadata application, Class appClass,
+                            ResponsivePolicy policy) {
     this.application = application;
     this.appClass = appClass;
+    this.appName = policy.getSpec().getApplicationName();
+    this.namespace = policy.getSpec().getApplicationName();
   }
 
   public int getReplicas() {
@@ -31,6 +36,41 @@ public class ManagedApplication {
             appClass.toString()));
   }
 
+  public void setReplicas(final Integer targetReplicas, final Context<ResponsivePolicy> context) {
+    final var appClient = context.getClient().apps();
+    if (isDeployment(appClient, namespace, appName)) {
+      appClient.deployments()
+          .inNamespace(namespace)
+          .withName(appName)
+          .edit(d -> {
+            if (d.getMetadata().getResourceVersion()
+                .equals(getResourceVersion())) {
+              d.getSpec().setReplicas(targetReplicas);
+            }
+            return d;
+          });
+
+      return;
+    }
+
+    if (isStatefulSet(appClient, namespace, appName)) {
+      appClient.statefulSets()
+          .inNamespace(namespace)
+          .withName(appName)
+          .edit(d -> {
+            if (d.getMetadata().getResourceVersion()
+                .equals(getResourceVersion())) {
+              d.getSpec().setReplicas(targetReplicas);
+            }
+            return d;
+          });
+      return;
+    }
+
+    throw new RuntimeException(
+        String.format("Expecting app to be either a Deployment or StatefulSet. It was %s",
+            appClass.toString()));
+  }
 
   public String getResourceVersion() {
     if (appClass == Deployment.class) {
@@ -63,7 +103,8 @@ public class ManagedApplication {
 
     if (!(isDeployment(appClient, namespace, appName)
         || isStatefulSet(appClient, namespace, appName))) {
-      throw new RuntimeException(String.format("No deployment %s/%s found", namespace, appName));
+      throw new RuntimeException(String.format("No deployment or StatefulSet %s/%s found",
+          namespace, appName));
     }
 
     if (isDeployment(appClient, namespace, appName)) {
@@ -71,20 +112,21 @@ public class ManagedApplication {
           .inNamespace(namespace)
           .withName(appName)
           .get();
-      return new ManagedApplication(deployment, Deployment.class);
+      maybeAddResponsiveLabel(deployment, policy, ctx);
+      return new ManagedApplication(deployment, Deployment.class, policy);
     }
 
     final StatefulSet statefulSet = appClient.statefulSets()
         .inNamespace(namespace)
         .withName(appName)
         .get();
-
-    return new ManagedApplication(statefulSet, StatefulSet.class);
+    maybeAddResponsiveLabel(statefulSet, policy, ctx);
+    return new ManagedApplication(statefulSet, StatefulSet.class, policy);
 
   }
 
-  private void maybeAddResponsiveLabel(
-      final HasMetadata deployment,
+  private static void maybeAddResponsiveLabel(
+      final Deployment deployment,
       final ResponsivePolicy policy,
       final Context<ResponsivePolicy> ctx) {
     final boolean hasNameLabel
@@ -104,6 +146,40 @@ public class ManagedApplication {
           .edit(d -> {
             if (d.getMetadata().getResourceVersion()
                 .equals(deployment.getMetadata().getResourceVersion())) {
+              final HashMap<String, String> newLabels = new HashMap<>(d.getMetadata().getLabels());
+              newLabels.put(
+                  ResponsivePolicyReconciler.NAMESPACE_LABEL,
+                  policy.getMetadata().getNamespace()
+              );
+              newLabels.put(ResponsivePolicyReconciler.NAME_LABEL, policy.getMetadata().getName());
+              d.getMetadata().setLabels(newLabels);
+            }
+            return d;
+          });
+    }
+  }
+
+  private static void maybeAddResponsiveLabel(
+      final StatefulSet statefulSet,
+      final ResponsivePolicy policy,
+      final Context<ResponsivePolicy> ctx) {
+    final boolean hasNameLabel
+        = statefulSet.getMetadata().getLabels().containsKey(ResponsivePolicyReconciler.NAME_LABEL);
+    final boolean hasNamespaceLabel
+        = statefulSet.getMetadata().getLabels()
+        .containsKey(ResponsivePolicyReconciler.NAMESPACE_LABEL);
+    if (!hasNameLabel || !hasNamespaceLabel) {
+      final var appClient = ctx.getClient().apps();
+      // TODO(rohan): I don't think this is patching the way I expect. Review the patch APIs
+      //  things to check: do we need to check the version or does that happen automatically?
+      //  things to check: this should only be updating the labels and thats it (e.g. truly a patch)
+      //
+      appClient.statefulSets()
+          .inNamespace(statefulSet.getMetadata().getNamespace())
+          .withName(statefulSet.getMetadata().getName())
+          .edit(d -> {
+            if (d.getMetadata().getResourceVersion()
+                .equals(statefulSet.getMetadata().getResourceVersion())) {
               final HashMap<String, String> newLabels = new HashMap<>(d.getMetadata().getLabels());
               newLabels.put(
                   ResponsivePolicyReconciler.NAMESPACE_LABEL,

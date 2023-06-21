@@ -109,19 +109,10 @@ public class DemoPolicyPlugin implements PolicyPlugin {
           managedApp.getReplicas(),
           targetReplicas
       );
-      final var appClient = ctx.getClient().apps();
+
       // TODO(rohan): I don't think this is patching the way I expect. Review the patch APIs
       //              make sure its safe to assume the patch was applied if this succeeds
-      appClient.deployments()
-          .inNamespace(appNamespace)
-          .withName(appName)
-          .edit(d -> {
-            if (d.getMetadata().getResourceVersion()
-                .equals(managedApp.getResourceVersion())) {
-              d.getSpec().setReplicas(targetReplicas);
-            }
-            return d;
-          });
+      managedApp.setReplicas(targetReplicas, ctx);
     }
   }
 
@@ -131,11 +122,11 @@ public class DemoPolicyPlugin implements PolicyPlugin {
     if (ctx.getSecondaryResource(Deployment.class).isPresent()) {
       final Deployment deployment = ctx.getSecondaryResource(Deployment.class).get();
       ManagedApplication.validateLabels(deployment, policy);
-      return new ManagedApplication(deployment, Deployment.class);
+      return new ManagedApplication(deployment, Deployment.class, policy);
     } else if (ctx.getSecondaryResource(StatefulSet.class).isPresent()) {
       final StatefulSet statefulSet = ctx.getSecondaryResource(StatefulSet.class).get();
       ManagedApplication.validateLabels(statefulSet, policy);
-      return new ManagedApplication(statefulSet, StatefulSet.class);
+      return new ManagedApplication(statefulSet, StatefulSet.class, policy);
     } else {
       // The framework has no associated deployment or StatefulSet yet, which means there is no
       // deployment or StatefulSet with the required label. Label the app here.
