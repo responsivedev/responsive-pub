@@ -62,7 +62,7 @@ public class ManagedApplication {
     final var appName = policy.getSpec().getApplicationName();
 
     if (!(isDeployment(appClient, namespace, appName)
-        || !isStatefulSet(appClient, namespace, appName))) {
+        || isStatefulSet(appClient, namespace, appName))) {
       throw new RuntimeException(String.format("No deployment %s/%s found", namespace, appName));
     }
 
