@@ -21,6 +21,7 @@ import dev.responsive.k8s.controller.ControllerProtoFactories;
 import dev.responsive.k8s.crd.ResponsivePolicy;
 import io.fabric8.kubernetes.api.model.HasMetadata;
 import io.fabric8.kubernetes.api.model.apps.Deployment;
+import io.fabric8.kubernetes.api.model.apps.StatefulSet;
 import io.javaoperatorsdk.operator.api.config.informer.InformerConfiguration;
 import io.javaoperatorsdk.operator.api.reconciler.Context;
 import io.javaoperatorsdk.operator.api.reconciler.EventSourceContext;
@@ -29,9 +30,9 @@ import io.javaoperatorsdk.operator.processing.event.ResourceID;
 import io.javaoperatorsdk.operator.processing.event.source.EventSource;
 import io.javaoperatorsdk.operator.processing.event.source.informer.InformerEventSource;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import responsive.controller.v1.controller.proto.ControllerOuterClass;
@@ -45,6 +46,7 @@ public class DemoPolicyPlugin implements PolicyPlugin {
       final ResponsiveContext responsiveCtx
   ) {
     // TODO(rohan): switch this over to monitoring a statefulset instead
+
     final var deploymentEvents = new InformerEventSource<>(
         InformerConfiguration.from(Deployment.class, ctx)
             .withLabelSelector(ResponsivePolicyReconciler.NAME_LABEL)
@@ -53,7 +55,17 @@ public class DemoPolicyPlugin implements PolicyPlugin {
             .build(),
         ctx
     );
-    return EventSourceInitializer.nameEventSources(deploymentEvents);
+
+    final var statefulSetEvents = new InformerEventSource<>(
+        InformerConfiguration.from(StatefulSet.class, ctx)
+            .withLabelSelector(ResponsivePolicyReconciler.NAME_LABEL)
+            .withSecondaryToPrimaryMapper(DemoPolicyPlugin::toPrimaryMapper)
+            .withPrimaryToSecondaryMapper(DemoPolicyPlugin::toDeploymentMapper)
+            .build(),
+        ctx
+    );
+
+    return EventSourceInitializer.nameEventSources(deploymentEvents, statefulSetEvents);
   }
 
 
@@ -65,15 +77,16 @@ public class DemoPolicyPlugin implements PolicyPlugin {
   ) {
     final var appNamespace = policy.getSpec().getApplicationNamespace();
     final var appName = policy.getSpec().getApplicationName();
-    final var deployment = getAndMaybeLabelCurrentDeployment(policy, ctx);
+    final var managedApp = getAndMaybeLabelCurrentApplication(policy, ctx);
 
-    LOGGER.info("Found deployment {} for app {}/{}", deployment, appNamespace, appName);
+    LOGGER.info("Found deployment {} for app {}/{}", managedApp, appNamespace, appName);
 
     responsiveCtx.getControllerClient().currentState(
-        ControllerProtoFactories.currentStateRequest(policy, currentStateFromDeployment(deployment))
+        ControllerProtoFactories.currentStateRequest(policy, currentStateFromDeployment(managedApp))
     );
 
-    final var maybeTargetState = ctx.getSecondaryResource(TargetStateWithTimestamp.class);
+    final var maybeTargetState =
+        ctx.getSecondaryResource(TargetStateWithTimestamp.class);
     if (maybeTargetState.isEmpty()) {
       LOGGER.warn("No target state present in ctx. This should not happen");
       return;
@@ -88,12 +101,12 @@ public class DemoPolicyPlugin implements PolicyPlugin {
       return;
     }
     final var targetReplicas = targetState.getTargetState().get().getDemoState().getReplicas();
-    if (targetReplicas != deployment.getSpec().getReplicas()) {
+    if (targetReplicas != managedApp.getReplicas()) {
       LOGGER.info(
           "Scaling {}/{} from {} to {}",
           appNamespace,
           appName,
-          deployment.getSpec().getReplicas(),
+          managedApp.getReplicas(),
           targetReplicas
       );
       final var appClient = ctx.getClient().apps();
@@ -104,7 +117,7 @@ public class DemoPolicyPlugin implements PolicyPlugin {
           .withName(appName)
           .edit(d -> {
             if (d.getMetadata().getResourceVersion()
-                .equals(deployment.getMetadata().getResourceVersion())) {
+                .equals(managedApp.getResourceVersion())) {
               d.getSpec().setReplicas(targetReplicas);
             }
             return d;
@@ -112,81 +125,35 @@ public class DemoPolicyPlugin implements PolicyPlugin {
     }
   }
 
-  private Deployment getAndMaybeLabelCurrentDeployment(
+  private ManagedApplication getAndMaybeLabelCurrentApplication(
       final ResponsivePolicy policy,
       final Context<ResponsivePolicy> ctx) {
     if (ctx.getSecondaryResource(Deployment.class).isPresent()) {
       final Deployment deployment = ctx.getSecondaryResource(Deployment.class).get();
-      final Map<String, String> labels = deployment.getMetadata().getLabels();
-      assert labels.containsKey(ResponsivePolicyReconciler.NAME_LABEL);
-      assert
-          labels.get(ResponsivePolicyReconciler.NAME_LABEL).equals(policy.getMetadata().getName());
-      assert labels.containsKey(ResponsivePolicyReconciler.NAMESPACE_LABEL);
-      assert labels.get(ResponsivePolicyReconciler.NAMESPACE_LABEL)
-          .equals(policy.getMetadata().getNamespace());
-      return deployment;
+      ManagedApplication.validateLabels(deployment, policy);
+      return new ManagedApplication(deployment, Deployment.class);
+    } else if (ctx.getSecondaryResource(StatefulSet.class).isPresent()) {
+      final StatefulSet statefulSet = ctx.getSecondaryResource(StatefulSet.class).get();
+      ManagedApplication.validateLabels(statefulSet, policy);
+      return new ManagedApplication(statefulSet, StatefulSet.class);
     } else {
-      // The framework has no associated deployment yet, which means there is no deployment
-      // with the required label. Label the deployment here.
+      // The framework has no associated deployment or StatefulSet yet, which means there is no
+      // deployment or StatefulSet with the required label. Label the app here.
       // TODO(rohan): double-check this understanding
-      final Deployment deployment;
-      final String appNs = policy.getSpec().getApplicationNamespace();
-      final String app = policy.getSpec().getApplicationName();
-      final var appClient = ctx.getClient().apps();
-      deployment = appClient.deployments()
-          .inNamespace(appNs)
-          .withName(app)
-          .get();
-      if (deployment == null) {
-        throw new RuntimeException(String.format("No deployment %s/%s found", appNs, app));
-      }
-      maybeAddResponsiveLabel(deployment, policy, ctx);
-      return deployment;
+      return ManagedApplication.buildFromContext(ctx, policy);
     }
   }
 
-  private void maybeAddResponsiveLabel(
-      final Deployment deployment,
-      final ResponsivePolicy policy,
-      final Context<ResponsivePolicy> ctx) {
-    final boolean hasNameLabel
-        = deployment.getMetadata().getLabels().containsKey(ResponsivePolicyReconciler.NAME_LABEL);
-    final boolean hasNamespaceLabel
-        = deployment.getMetadata().getLabels()
-        .containsKey(ResponsivePolicyReconciler.NAMESPACE_LABEL);
-    if (!hasNameLabel || !hasNamespaceLabel) {
-      final var appClient = ctx.getClient().apps();
-      // TODO(rohan): I don't think this is patching the way I expect. Review the patch APIs
-      //  things to check: do we need to check the version or does that happen automatically?
-      //  things to check: this should only be updating the labels and thats it (e.g. truly a patch)
-      //
-      appClient.deployments()
-          .inNamespace(deployment.getMetadata().getNamespace())
-          .withName(deployment.getMetadata().getName())
-          .edit(d -> {
-            if (d.getMetadata().getResourceVersion()
-                .equals(deployment.getMetadata().getResourceVersion())) {
-              final HashMap<String, String> newLabels = new HashMap<>(d.getMetadata().getLabels());
-              newLabels.put(
-                  ResponsivePolicyReconciler.NAMESPACE_LABEL,
-                  policy.getMetadata().getNamespace()
-              );
-              newLabels.put(ResponsivePolicyReconciler.NAME_LABEL, policy.getMetadata().getName());
-              d.getMetadata().setLabels(newLabels);
-            }
-            return d;
-          });
-    }
-  }
+
 
   private static ControllerOuterClass.ApplicationState currentStateFromDeployment(
-      final Deployment deployment) {
+      final ManagedApplication application) {
     // TODO(rohan): need to include some indicator of whether or not deployment is stable
     //              (e.g. provisioned replicas are fully up or not)
     return ControllerOuterClass.ApplicationState.newBuilder()
         .setDemoState(
             ControllerOuterClass.DemoApplicationState.newBuilder()
-                .setReplicas(deployment.getSpec().getReplicas()))
+                .setReplicas(application.getReplicas()))
         .build();
   }
 
