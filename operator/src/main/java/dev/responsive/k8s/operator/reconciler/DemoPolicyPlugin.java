@@ -32,7 +32,6 @@ import io.javaoperatorsdk.operator.processing.event.source.informer.InformerEven
 import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import responsive.controller.v1.controller.proto.ControllerOuterClass;
@@ -51,7 +50,7 @@ public class DemoPolicyPlugin implements PolicyPlugin {
         InformerConfiguration.from(Deployment.class, ctx)
             .withLabelSelector(ResponsivePolicyReconciler.NAME_LABEL)
             .withSecondaryToPrimaryMapper(DemoPolicyPlugin::toPrimaryMapper)
-            .withPrimaryToSecondaryMapper(DemoPolicyPlugin::toDeploymentMapper)
+            .withPrimaryToSecondaryMapper(DemoPolicyPlugin::toApplicationMapper)
             .build(),
         ctx
     );
@@ -60,7 +59,7 @@ public class DemoPolicyPlugin implements PolicyPlugin {
         InformerConfiguration.from(StatefulSet.class, ctx)
             .withLabelSelector(ResponsivePolicyReconciler.NAME_LABEL)
             .withSecondaryToPrimaryMapper(DemoPolicyPlugin::toPrimaryMapper)
-            .withPrimaryToSecondaryMapper(DemoPolicyPlugin::toDeploymentMapper)
+            .withPrimaryToSecondaryMapper(DemoPolicyPlugin::toApplicationMapper)
             .build(),
         ctx
     );
@@ -77,12 +76,13 @@ public class DemoPolicyPlugin implements PolicyPlugin {
   ) {
     final var appNamespace = policy.getSpec().getApplicationNamespace();
     final var appName = policy.getSpec().getApplicationName();
-    final var managedApp = getAndMaybeLabelCurrentApplication(policy, ctx);
+    final var managedApp = ManagedApplication.build(ctx, policy);
 
     LOGGER.info("Found deployment {} for app {}/{}", managedApp, appNamespace, appName);
 
     responsiveCtx.getControllerClient().currentState(
-        ControllerProtoFactories.currentStateRequest(policy, currentStateFromDeployment(managedApp))
+        ControllerProtoFactories.currentStateRequest(policy,
+            currentStateFromApplication(managedApp))
     );
 
     final var maybeTargetState =
@@ -116,28 +116,7 @@ public class DemoPolicyPlugin implements PolicyPlugin {
     }
   }
 
-  private ManagedApplication getAndMaybeLabelCurrentApplication(
-      final ResponsivePolicy policy,
-      final Context<ResponsivePolicy> ctx) {
-    if (ctx.getSecondaryResource(Deployment.class).isPresent()) {
-      final Deployment deployment = ctx.getSecondaryResource(Deployment.class).get();
-      ManagedApplication.validateLabels(deployment, policy);
-      return new ManagedApplication(deployment, Deployment.class, policy);
-    } else if (ctx.getSecondaryResource(StatefulSet.class).isPresent()) {
-      final StatefulSet statefulSet = ctx.getSecondaryResource(StatefulSet.class).get();
-      ManagedApplication.validateLabels(statefulSet, policy);
-      return new ManagedApplication(statefulSet, StatefulSet.class, policy);
-    } else {
-      // The framework has no associated deployment or StatefulSet yet, which means there is no
-      // deployment or StatefulSet with the required label. Label the app here.
-      // TODO(rohan): double-check this understanding
-      return ManagedApplication.buildFromContext(ctx, policy);
-    }
-  }
-
-
-
-  private static ControllerOuterClass.ApplicationState currentStateFromDeployment(
+  private static ControllerOuterClass.ApplicationState currentStateFromApplication(
       final ManagedApplication application) {
     // TODO(rohan): need to include some indicator of whether or not deployment is stable
     //              (e.g. provisioned replicas are fully up or not)
@@ -162,7 +141,7 @@ public class DemoPolicyPlugin implements PolicyPlugin {
     );
   }
 
-  private static Set<ResourceID> toDeploymentMapper(final ResponsivePolicy policy) {
+  private static Set<ResourceID> toApplicationMapper(final ResponsivePolicy policy) {
     return ImmutableSet.of(
         new ResourceID(
             policy.getSpec().getApplicationName(),

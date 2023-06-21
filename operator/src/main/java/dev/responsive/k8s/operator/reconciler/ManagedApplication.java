@@ -6,22 +6,22 @@ import io.fabric8.kubernetes.api.model.apps.Deployment;
 import io.fabric8.kubernetes.api.model.apps.StatefulSet;
 import io.fabric8.kubernetes.client.dsl.AppsAPIGroupDSL;
 import io.javaoperatorsdk.operator.api.reconciler.Context;
-
 import java.util.HashMap;
 import java.util.Map;
 
 public class ManagedApplication {
 
   private final HasMetadata application;
-  private final Class appClass;
+  private final Class<?> appClass;
   private final String appName;
   private final String namespace;
-  public ManagedApplication(HasMetadata application, Class appClass,
+
+  public ManagedApplication(HasMetadata application, Class<?> appClass,
                             ResponsivePolicy policy) {
     this.application = application;
     this.appClass = appClass;
     this.appName = policy.getSpec().getApplicationName();
-    this.namespace = policy.getSpec().getApplicationName();
+    this.namespace = policy.getSpec().getApplicationNamespace();
   }
 
   public int getReplicas() {
@@ -38,7 +38,7 @@ public class ManagedApplication {
 
   public void setReplicas(final Integer targetReplicas, final Context<ResponsivePolicy> context) {
     final var appClient = context.getClient().apps();
-    if (isDeployment(appClient, namespace, appName)) {
+    if (appClass == Deployment.class) {
       appClient.deployments()
           .inNamespace(namespace)
           .withName(appName)
@@ -53,7 +53,7 @@ public class ManagedApplication {
       return;
     }
 
-    if (isStatefulSet(appClient, namespace, appName)) {
+    if (appClass == StatefulSet.class) {
       appClient.statefulSets()
           .inNamespace(namespace)
           .withName(appName)
@@ -84,7 +84,25 @@ public class ManagedApplication {
             appClass.toString()));
   }
 
-  public static void validateLabels(HasMetadata app, ResponsivePolicy policy) {
+  public static ManagedApplication build(Context<ResponsivePolicy> ctx,
+                                         ResponsivePolicy policy) {
+    if (ctx.getSecondaryResource(Deployment.class).isPresent()) {
+      final Deployment deployment = ctx.getSecondaryResource(Deployment.class).get();
+      validateLabels(deployment, policy);
+      return new ManagedApplication(deployment, Deployment.class, policy);
+    } else if (ctx.getSecondaryResource(StatefulSet.class).isPresent()) {
+      final StatefulSet statefulSet = ctx.getSecondaryResource(StatefulSet.class).get();
+      validateLabels(statefulSet, policy);
+      return new ManagedApplication(statefulSet, StatefulSet.class, policy);
+    } else {
+      // The framework has no associated deployment or StatefulSet yet, which means there is no
+      // deployment or StatefulSet with the required label. Label the app here.
+      // TODO(rohan): double-check this understanding
+      return buildFromContext(ctx, policy);
+    }
+  }
+
+  private static void validateLabels(HasMetadata app, ResponsivePolicy policy) {
     final Map<String, String> labels = app.getMetadata().getLabels();
     assert labels.containsKey(ResponsivePolicyReconciler.NAME_LABEL);
     assert
@@ -94,7 +112,7 @@ public class ManagedApplication {
         .equals(policy.getMetadata().getNamespace());
   }
 
-  public static ManagedApplication buildFromContext(Context<ResponsivePolicy> ctx,
+  private static ManagedApplication buildFromContext(Context<ResponsivePolicy> ctx,
                                                     ResponsivePolicy policy) {
 
     final var appClient =  ctx.getClient().apps();

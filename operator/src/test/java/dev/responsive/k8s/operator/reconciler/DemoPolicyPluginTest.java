@@ -48,6 +48,7 @@ import io.javaoperatorsdk.operator.processing.event.ResourceID;
 import io.javaoperatorsdk.operator.processing.event.source.EventSource;
 import io.javaoperatorsdk.operator.processing.event.source.informer.InformerEventSource;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.UnaryOperator;
@@ -292,6 +293,10 @@ class DemoPolicyPluginTest {
     lenient().when(nsDeploymentsClient.withName(deployment.getMetadata().getName()))
         .thenReturn(rsDeployment);
     lenient().when(rsDeployment.get()).thenReturn(deployment);
+
+    final DeploymentList list = new DeploymentList();
+    list.setItems(List.of(deployment));
+    lenient().when(nsDeploymentsClient.list()).thenReturn(list);
   }
 
   private Deployment createDeployment(
