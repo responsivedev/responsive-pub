@@ -78,7 +78,7 @@ public class DemoPolicyPlugin implements PolicyPlugin {
     final var appName = policy.getSpec().getApplicationName();
     final var managedApp = ManagedApplication.build(ctx, policy);
 
-    LOGGER.info("Found deployment {} for app {}/{}", managedApp, appNamespace, appName);
+    LOGGER.info("Found type {} for app {}/{}", managedApp.appType(), appNamespace, appName);
 
     responsiveCtx.getControllerClient().currentState(
         ControllerProtoFactories.currentStateRequest(policy,

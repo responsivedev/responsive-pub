@@ -8,9 +8,12 @@ import io.fabric8.kubernetes.client.dsl.AppsAPIGroupDSL;
 import io.javaoperatorsdk.operator.api.reconciler.Context;
 import java.util.HashMap;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class ManagedApplication {
 
+  private static final Logger LOGGER = LoggerFactory.getLogger(ManagedApplication.class);
   private final HasMetadata application;
   private final Class<?> appClass;
   private final String appName;
@@ -76,6 +79,16 @@ public class ManagedApplication {
     throw new RuntimeException(
         String.format("Expecting app to be either a Deployment or StatefulSet. It was %s",
             appClass.toString()));
+  }
+
+  public String appType() {
+    if (appClass == Deployment.class) {
+      return "Deployment";
+    } else if (appClass == StatefulSet.class) {
+      return "StatefulSet";
+    }
+
+    return "UKNOWN";
   }
 
   public String getResourceVersion() {
@@ -178,6 +191,12 @@ public class ManagedApplication {
               newLabels.put(ResponsivePolicyReconciler.NAME_LABEL, policy.getMetadata().getName());
               d.getMetadata().setLabels(newLabels);
             }
+            LOGGER.info("Added labels '{}:{}' and '{}:{}' to deployment {}",
+                ResponsivePolicyReconciler.NAME_LABEL,
+                policy.getMetadata().getName(),
+                ResponsivePolicyReconciler.NAMESPACE_LABEL,
+                policy.getMetadata().getNamespace(),
+                deployment.getMetadata().getName());
             return d;
           });
     }
@@ -212,6 +231,12 @@ public class ManagedApplication {
               newLabels.put(ResponsivePolicyReconciler.NAME_LABEL, policy.getMetadata().getName());
               d.getMetadata().setLabels(newLabels);
             }
+            LOGGER.info("Added labels '{}:{}' and '{}:{}' to statefulset {}",
+                ResponsivePolicyReconciler.NAME_LABEL,
+                policy.getMetadata().getName(),
+                ResponsivePolicyReconciler.NAMESPACE_LABEL,
+                policy.getMetadata().getNamespace(),
+                statefulSet.getMetadata().getName());
             return d;
           });
     }
