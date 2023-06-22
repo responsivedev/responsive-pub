@@ -67,7 +67,7 @@ import org.apache.kafka.common.TopicPartition;
  *   handles restore. Specifically, it will loop partition-by-partition and update
  *   the store for those partitions. The issue with this is that if we use {@code subscribe}
  *   in place of {@code assign} we may get events from partitions that were not
- *   specified in the {@code assign} call. These records will be dropped.</li>
+ *   specified in the {@code assign} call. These records would otherwise be dropped.</li>
  *
  *   <li>It commits before every call to {@link #poll(Duration)} because
  *   otherwise the Streams implementation for global stores will never commit. We
@@ -82,7 +82,7 @@ import org.apache.kafka.common.TopicPartition;
 public class ResponsiveGlobalConsumer implements Consumer<byte[], byte[]> {
 
   private final Consumer<byte[], byte[]> delegate;
-  private final Integer defaultApiTimeoutMs;
+  private final int defaultApiTimeoutMs;
   private final Admin admin;
 
   public ResponsiveGlobalConsumer(
@@ -187,8 +187,10 @@ public class ResponsiveGlobalConsumer implements Consumer<byte[], byte[]> {
   }
 
   @Override
-  public void commitAsync(final Map<TopicPartition, OffsetAndMetadata> offsets,
-      final OffsetCommitCallback callback) {
+  public void commitAsync(
+      final Map<TopicPartition, OffsetAndMetadata> offsets,
+      final OffsetCommitCallback callback
+  ) {
     delegate.commitAsync(offsets, callback);
   }
 

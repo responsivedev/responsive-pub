@@ -213,10 +213,10 @@ public class ResponsiveDriver implements StreamsStoreDriver, Closeable {
 
   @Override
   public Consumer<byte[], byte[]> getGlobalConsumer(final Map<String, Object> config) {
-    config.put(
-        ConsumerConfig.GROUP_ID_CONFIG,
-        this.config.getString(StreamsConfig.APPLICATION_ID_CONFIG) + "-global");
+    final String groupId = this.config.getString(StreamsConfig.APPLICATION_ID_CONFIG) + "-global";
+    config.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
     config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+    config.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
 
     return new ResponsiveGlobalConsumer(
         config,

@@ -21,7 +21,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 
 import dev.responsive.kafka.api.ResponsiveGlobalConsumer;
-import dev.responsive.utils.ContainerExtension;
+import dev.responsive.utils.TestConstants;
 import java.io.File;
 import java.util.HashMap;
 import java.util.List;
@@ -54,22 +54,27 @@ import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.internals.StreamThread.StateListener;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.testcontainers.containers.KafkaContainer;
 
-@ExtendWith(ContainerExtension.class)
 public class GlobalStreamThreadIntegrationTest {
+
+  public static KafkaContainer kafka = new KafkaContainer(TestConstants.KAFKA)
+      .withEnv("KAFKA_GROUP_MIN_SESSION_TIMEOUT_MS", "1000")
+      .withEnv("KAFKA_GROUP_MAX_SESSION_TIMEOUT_MS", "60000")
+      .withReuse(false);
 
   private static final String GLOBAL_TOPIC_SUFFIX = "global-topic";
   private static final int MAX_POLL = 3;
@@ -80,20 +85,32 @@ public class GlobalStreamThreadIntegrationTest {
   private Admin admin;
   private KafkaProducer<byte[], byte[]> producer;
 
-  @TempDir
   private File tempDirA;
-  @TempDir
   private File tempDirB;
   private Map<String, Object> config;
+
+  @BeforeAll
+  public static void beforeAll() {
+    kafka.start();
+  }
+
+  @AfterAll
+  public static void afterAll() {
+    kafka.stop();
+  }
 
   @BeforeEach
   public void before(
       final TestInfo info,
-      final KafkaContainer kafka
+      @TempDir final File tempDirA,
+      @TempDir final File tempDirB
   ) throws Exception {
     name = info.getTestMethod().orElseThrow().getName();
     bootstrapServers = kafka.getBootstrapServers();
     admin = Admin.create(Map.of(BOOTSTRAP_SERVERS_CONFIG, bootstrapServers));
+
+    this.tempDirA = tempDirA;
+    this.tempDirB = tempDirB;
 
     globalTopic = name + "-" + GLOBAL_TOPIC_SUFFIX;
     admin.createTopics(
@@ -134,8 +151,7 @@ public class GlobalStreamThreadIntegrationTest {
   }
 
   @Test
-  public void shouldRestoreWithSharedPartitionsAcrossApps()
-      throws InterruptedException, TimeoutException {
+  public void shouldRestoreWithSharedPartitionsAcrossApps() throws Exception {
     // Given:
     // start by producing a few events to the global table to test restore
     // use a numRecords that's not a multiple of MAX_POLL because there's
@@ -166,6 +182,16 @@ public class GlobalStreamThreadIntegrationTest {
     final GlobalStreamThread streamThreadA = getThread(storeSupplier, restoreListener, tempDirA);
     final GlobalStreamThread streamThreadB = getThread(storeSupplier, restoreListener, tempDirB);
 
+    final CountDownLatch isRunning = new CountDownLatch(2);
+    final StateListener listener = (thread, newState, oldState) -> {
+      if (newState == GlobalStreamThread.State.RUNNING) {
+        isRunning.countDown();
+      }
+    };
+
+    streamThreadA.setStateListener(listener);
+    streamThreadB.setStateListener(listener);
+
     // we need to use an Executor here because start is overridden in GlobalStreamThread
     // to be a blocking operation! how sad :( - the exec will just kick off each thread
     // the threads themselves will be closed at the end of this test independently of
@@ -182,6 +208,7 @@ public class GlobalStreamThreadIntegrationTest {
     // Then:
     assertThat(storeSupplier.store.approximateNumEntries(), is((long) numRecords));
 
+    isRunning.await(); // make sure we don't get false PENDING_SHUTDOWN transition
     exec.shutdown();
     streamThreadA.shutdown();
     streamThreadB.shutdown();
@@ -282,7 +309,7 @@ public class GlobalStreamThreadIntegrationTest {
     final String baseDirectoryName = tempDir.getAbsolutePath();
     final Map<String, Object> properties = new HashMap<>();
     properties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-    properties.put(StreamsConfig.APPLICATION_ID_CONFIG, "testAppId");
+    properties.put(StreamsConfig.APPLICATION_ID_CONFIG, name + "testAppId");
     properties.put(StreamsConfig.STATE_DIR_CONFIG, baseDirectoryName);
     properties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, ByteArraySerde.class.getName());
     properties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, ByteArraySerde.class.getName());
