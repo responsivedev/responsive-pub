@@ -21,7 +21,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 
 import dev.responsive.kafka.api.ResponsiveGlobalConsumer;
-import dev.responsive.utils.TestConstants;
+import dev.responsive.utils.ContainerExtension;
 import java.io.File;
 import java.util.HashMap;
 import java.util.List;
@@ -60,21 +60,16 @@ import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.testcontainers.containers.KafkaContainer;
 
+@ExtendWith(ContainerExtension.class)
 public class GlobalStreamThreadIntegrationTest {
-
-  public static KafkaContainer kafka = new KafkaContainer(TestConstants.KAFKA)
-      .withEnv("KAFKA_GROUP_MIN_SESSION_TIMEOUT_MS", "1000")
-      .withEnv("KAFKA_GROUP_MAX_SESSION_TIMEOUT_MS", "60000")
-      .withReuse(false);
 
   private static final String GLOBAL_TOPIC_SUFFIX = "global-topic";
   private static final int MAX_POLL = 3;
@@ -89,19 +84,10 @@ public class GlobalStreamThreadIntegrationTest {
   private File tempDirB;
   private Map<String, Object> config;
 
-  @BeforeAll
-  public static void beforeAll() {
-    kafka.start();
-  }
-
-  @AfterAll
-  public static void afterAll() {
-    kafka.stop();
-  }
-
   @BeforeEach
   public void before(
       final TestInfo info,
+      final KafkaContainer kafka,
       @TempDir final File tempDirA,
       @TempDir final File tempDirB
   ) throws Exception {
