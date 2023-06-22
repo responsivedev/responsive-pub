@@ -17,6 +17,7 @@
 package dev.responsive.kafka.api;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -27,7 +28,7 @@ import org.apache.kafka.streams.state.WindowStore;
  * An interface that allows for easily wrapping different Kafka Streams
  * state store implementations and swapping them at ease.
  */
-public interface StreamsStoreDriver {
+public interface StreamsStoreDriver extends KafkaClientSupplier {
 
   /**
    * @param name the state store name
@@ -52,6 +53,16 @@ public interface StreamsStoreDriver {
   );
 
   /**
+   * Creates a materialization for a global store, which handles update and
+   * read semantics differently from normal stores.
+   *
+   * @param name the state store name
+   * @return a key value store supplier with the given name that uses Responsive's
+   *         storage for its backend
+   */
+  KeyValueBytesStoreSupplier globalKv(final String name);
+
+  /**
    * @see #kv(String)
    */
   <K, V> Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized(
@@ -66,6 +77,13 @@ public interface StreamsStoreDriver {
       final long retentionMs,
       final long windowSize,
       final boolean retainDuplicates
+  );
+
+  /**
+   * @see #globalKv(String)
+   */
+  <K, V> Materialized<K, V, KeyValueStore<Bytes, byte[]>> globalMaterialized(
+      final String name
   );
 
 }
