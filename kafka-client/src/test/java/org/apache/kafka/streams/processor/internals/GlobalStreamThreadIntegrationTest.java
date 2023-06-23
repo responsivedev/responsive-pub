@@ -27,6 +27,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Random;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -152,13 +153,14 @@ public class GlobalStreamThreadIntegrationTest {
           new byte[]{'v', (byte) i})
       );
     }
+    producer.flush();
 
     // we use this latch to make sure that both consumers have successfully
     // polled a single batch (and therefore subscribe has them evenly shared)
     // before continuing to future batches - this will ensure interleaving
     // instead of one consumer going through the entire backlog
     final CountDownLatch restoredBatch = new CountDownLatch(2);
-    final CountDownLatch finishedRestore = new CountDownLatch(2);
+    final CountDownLatch finishedRestore = new CountDownLatch(4);
     final StateRestoreListener restoreListener = new LatchRestoreListener(
         restoredBatch,
         finishedRestore);
@@ -225,6 +227,7 @@ public class GlobalStreamThreadIntegrationTest {
           new byte[]{'v', (byte) i})
       );
     }
+    producer.flush();
 
     // start the stream thread
     ExecutorService exec = Executors.newFixedThreadPool(2);
@@ -243,6 +246,7 @@ public class GlobalStreamThreadIntegrationTest {
           new byte[]{'v', (byte) i})
       );
     }
+    producer.flush();
 
     // Then:
     long end = System.currentTimeMillis() + 30_000;
@@ -309,6 +313,7 @@ public class GlobalStreamThreadIntegrationTest {
     );
 
     final StreamsConfig config = new StreamsConfig(properties);
+    final int i = new Random().nextInt(100000);
     return new GlobalStreamThread(
         builder.rewriteTopology(config).buildGlobalStateTopology(),
         config,
@@ -317,7 +322,7 @@ public class GlobalStreamThreadIntegrationTest {
         0,
         new StreamsMetricsImpl(new Metrics(), name + "-client", StreamsConfig.METRICS_LATEST, time),
         time,
-        name + "-global-thread",
+        name + "-global-thread" + i,
         restoreListener,
         ignored -> { }
     );
