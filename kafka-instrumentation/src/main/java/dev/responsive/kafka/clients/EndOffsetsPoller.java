@@ -127,13 +127,20 @@ public class EndOffsetsPoller {
 
   private void initPoller() {
     LOGGER.info("init end offsets poller");
-    assert poller == null;
+    if (poller != null) {
+      throw new IllegalStateException("poller already initialized");
+    }
     poller = new Poller(factories.createAdminClient(configs), executor, this::getThreadMetrics);
   }
 
   private void stopPoller() {
     LOGGER.info("stopping end offsets poller");
-    poller.stop();
+    try {
+      poller.stop();
+    } catch (final RuntimeException e) {
+      LOGGER.warn("poller stop returned an unexpected error. It will be ignored, and the poller "
+          + "task + admin client might be leaked.", e);
+    }
     poller = null;
   }
 
@@ -218,14 +225,14 @@ public class EndOffsetsPoller {
     }
 
     private void update(final Map<TopicPartition, ListOffsetsResultInfo> endOffsets) {
-      for (final var tp : endOffsets.keySet()) {
-        this.endOffsets.computeIfPresent(tp, (k, v) -> {
+      for (final var entry : endOffsets.entrySet()) {
+        this.endOffsets.computeIfPresent(entry.getKey(), (k, v) -> {
           logger.info("update end offset of {}/{} to {}",
-              tp.topic(),
-              tp.partition(),
-              endOffsets.get(tp)
+              k.topic(),
+              k.partition(),
+              entry.getValue().offset()
           );
-          return endOffsets.get(tp).offset();
+          return entry.getValue().offset();
         });
       }
     }
