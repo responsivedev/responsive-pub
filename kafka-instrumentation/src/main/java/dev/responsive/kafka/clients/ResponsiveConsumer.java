@@ -45,26 +45,38 @@ public class ResponsiveConsumer<K, V> implements Consumer<K, V> {
   private final List<Listener> listeners;
   private final Logger logger;
 
-  private class RebalanceListener implements ConsumerRebalanceListener {
-    final Optional<ConsumerRebalanceListener> wrappedRebalanceListener;
+  private static class RebalanceListener implements ConsumerRebalanceListener {
+    private final Optional<ConsumerRebalanceListener> wrappedRebalanceListener;
+    private final List<Listener> listeners;
+    private final Logger logger;
 
-    public RebalanceListener() {
-      this(Optional.empty());
+    public RebalanceListener(final List<Listener> listeners, final Logger logger) {
+      this(Optional.empty(), listeners, logger);
     }
 
-    public RebalanceListener(final ConsumerRebalanceListener wrappedRebalanceListener) {
-      this(Optional.of(wrappedRebalanceListener));
+    public RebalanceListener(
+        final ConsumerRebalanceListener wrappedRebalanceListener,
+        final List<Listener> listeners,
+        final Logger logger
+    ) {
+      this(Optional.of(wrappedRebalanceListener), listeners, logger);
     }
 
-    private RebalanceListener(final Optional<ConsumerRebalanceListener> wrappedRebalanceListener) {
+    private RebalanceListener(
+        final Optional<ConsumerRebalanceListener> wrappedRebalanceListener,
+        final List<Listener> listeners,
+        final Logger logger
+    ) {
       this.wrappedRebalanceListener = wrappedRebalanceListener;
+      this.listeners = listeners;
+      this.logger = logger;
     }
 
     @Override
     public void onPartitionsLost(final Collection<TopicPartition> partitions) {
       wrappedRebalanceListener.ifPresent(l -> l.onPartitionsLost(partitions));
       for (final var l : listeners) {
-        ignoreException(() -> l.onPartitionsLost(partitions));
+        ignoreException(logger, () -> l.onPartitionsLost(partitions));
       }
     }
 
@@ -72,7 +84,7 @@ public class ResponsiveConsumer<K, V> implements Consumer<K, V> {
     public void onPartitionsRevoked(final Collection<TopicPartition> partitions) {
       wrappedRebalanceListener.ifPresent(l -> l.onPartitionsRevoked(partitions));
       for (final var l : listeners) {
-        ignoreException(() -> l.onPartitionsRevoked(partitions));
+        ignoreException(logger, () -> l.onPartitionsRevoked(partitions));
       }
     }
 
@@ -80,7 +92,7 @@ public class ResponsiveConsumer<K, V> implements Consumer<K, V> {
     public void onPartitionsAssigned(final Collection<TopicPartition> partitions) {
       wrappedRebalanceListener.ifPresent(l -> l.onPartitionsAssigned(partitions));
       for (final var l : listeners) {
-        ignoreException(() -> l.onPartitionsAssigned(partitions));
+        ignoreException(logger, () -> l.onPartitionsAssigned(partitions));
       }
     }
   }
@@ -113,17 +125,17 @@ public class ResponsiveConsumer<K, V> implements Consumer<K, V> {
 
   @Override
   public void subscribe(final Collection<String> topics) {
-    wrapped.subscribe(topics, new RebalanceListener());
+    wrapped.subscribe(topics, new RebalanceListener(listeners, logger));
   }
 
   @Override
   public void subscribe(final Collection<String> topics, final ConsumerRebalanceListener callback) {
-    wrapped.subscribe(topics, new RebalanceListener(callback));
+    wrapped.subscribe(topics, new RebalanceListener(callback, listeners, logger));
   }
 
   @Override
   public void subscribe(final Pattern pattern, final ConsumerRebalanceListener callback) {
-    wrapped.subscribe(pattern, new RebalanceListener(callback));
+    wrapped.subscribe(pattern, new RebalanceListener(callback, listeners, logger));
   }
 
   @Override
@@ -354,6 +366,10 @@ public class ResponsiveConsumer<K, V> implements Consumer<K, V> {
   }
 
   private void ignoreException(final Runnable r) {
+    ignoreException(logger, r);
+  }
+
+  private static void ignoreException(final Logger logger, final Runnable r) {
     try {
       r.run();
     } catch (final Throwable t) {
