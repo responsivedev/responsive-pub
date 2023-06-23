@@ -35,12 +35,17 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 
-public abstract class DelegatingConsumer<K, V> implements Consumer<K,V> {
+public abstract class DelegatingConsumer<K, V> implements Consumer<K, V> {
 
   protected final Consumer<K, V> delegate;
 
   public DelegatingConsumer(final Consumer<K, V> delegate) {
     this.delegate = delegate;
+  }
+
+  @Override
+  public void assign(final Collection<TopicPartition> partitions) {
+    delegate.assign(partitions);
   }
 
   @Override
@@ -61,11 +66,6 @@ public abstract class DelegatingConsumer<K, V> implements Consumer<K,V> {
   @Override
   public void subscribe(final Collection<String> topics, final ConsumerRebalanceListener callback) {
     delegate.subscribe(topics, callback);
-  }
-
-  @Override
-  public void assign(final Collection<TopicPartition> partitions) {
-    delegate.assign(partitions);
   }
 
   @Override
