@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package dev.responsive.kafka.api;
+package dev.responsive.kafka.consumer;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -22,27 +22,17 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.OptionalLong;
-import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
-import org.apache.kafka.clients.consumer.OffsetCommitCallback;
-import org.apache.kafka.common.Metric;
-import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 
 /**
@@ -79,9 +69,8 @@ import org.apache.kafka.common.TopicPartition;
  * support remote {@link org.apache.kafka.streams.kstream.GlobalKTable}s without
  * forking Kafka Streams.</p>
  */
-public class ResponsiveGlobalConsumer implements Consumer<byte[], byte[]> {
+public class ResponsiveGlobalConsumer extends DelegatingConsumer<byte[], byte[]> {
 
-  private final Consumer<byte[], byte[]> delegate;
   private final int defaultApiTimeoutMs;
   private final Admin admin;
 
@@ -90,46 +79,10 @@ public class ResponsiveGlobalConsumer implements Consumer<byte[], byte[]> {
       final Consumer<byte[], byte[]> delegate,
       final Admin admin
   ) {
+    super(delegate);
     final ConsumerConfig consumerConfig = new ConsumerConfig(config);
-
-    this.delegate = delegate;
     this.defaultApiTimeoutMs = consumerConfig.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
     this.admin = admin;
-  }
-
-  @Override
-  public Set<TopicPartition> assignment() {
-    return delegate.assignment();
-  }
-
-  @Override
-  public Set<String> subscription() {
-    return delegate.subscription();
-  }
-
-  @Override
-  public void subscribe(final Collection<String> topics, final ConsumerRebalanceListener listener) {
-    delegate.subscribe(topics, listener);
-  }
-
-  @Override
-  public void subscribe(final Collection<String> topics) {
-    delegate.subscribe(topics);
-  }
-
-  @Override
-  public void subscribe(final Pattern pattern, final ConsumerRebalanceListener listener) {
-    delegate.subscribe(pattern, listener);
-  }
-
-  @Override
-  public void subscribe(final Pattern pattern) {
-    delegate.subscribe(pattern);
-  }
-
-  @Override
-  public void unsubscribe() {
-    delegate.unsubscribe();
   }
 
   @Override
@@ -153,45 +106,6 @@ public class ResponsiveGlobalConsumer implements Consumer<byte[], byte[]> {
     commitSync();
     final ConsumerRecords<byte[], byte[]> poll = delegate.poll(timeout);
     return SingletonConsumerRecords.of(poll);
-  }
-
-  @Override
-  public void commitSync() {
-    delegate.commitSync();
-  }
-
-  @Override
-  public void commitSync(final Duration timeout) {
-    delegate.commitSync(timeout);
-  }
-
-  @Override
-  public void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets) {
-    delegate.commitSync(offsets);
-  }
-
-  @Override
-  public void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets,
-      final Duration timeout) {
-    delegate.commitSync(offsets, timeout);
-  }
-
-  @Override
-  public void commitAsync() {
-    delegate.commitAsync();
-  }
-
-  @Override
-  public void commitAsync(final OffsetCommitCallback callback) {
-    delegate.commitAsync(callback);
-  }
-
-  @Override
-  public void commitAsync(
-      final Map<TopicPartition, OffsetAndMetadata> offsets,
-      final OffsetCommitCallback callback
-  ) {
-    delegate.commitAsync(offsets, callback);
   }
 
   @Override
@@ -238,138 +152,6 @@ public class ResponsiveGlobalConsumer implements Consumer<byte[], byte[]> {
     } catch (final TimeoutException e) {
       throw new org.apache.kafka.common.errors.TimeoutException(e);
     }
-  }
-
-  @Override
-  @Deprecated
-  public OffsetAndMetadata committed(final TopicPartition partition) {
-    return delegate.committed(partition);
-  }
-
-  @Override
-  @Deprecated
-  public OffsetAndMetadata committed(final TopicPartition partition, final Duration timeout) {
-    return delegate.committed(partition, timeout);
-  }
-
-  @Override
-  public Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions) {
-    return delegate.committed(partitions);
-  }
-
-  @Override
-  public Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions,
-      final Duration timeout) {
-    return delegate.committed(partitions, timeout);
-  }
-
-  @Override
-  public Map<MetricName, ? extends Metric> metrics() {
-    return delegate.metrics();
-  }
-
-  @Override
-  public List<PartitionInfo> partitionsFor(final String topic) {
-    return delegate.partitionsFor(topic);
-  }
-
-  @Override
-  public List<PartitionInfo> partitionsFor(final String topic, final Duration timeout) {
-    return delegate.partitionsFor(topic, timeout);
-  }
-
-  @Override
-  public Map<String, List<PartitionInfo>> listTopics() {
-    return delegate.listTopics();
-  }
-
-  @Override
-  public Map<String, List<PartitionInfo>> listTopics(final Duration timeout) {
-    return delegate.listTopics(timeout);
-  }
-
-  @Override
-  public void pause(final Collection<TopicPartition> partitions) {
-    delegate.pause(partitions);
-  }
-
-  @Override
-  public void resume(final Collection<TopicPartition> partitions) {
-    delegate.resume(partitions);
-  }
-
-  @Override
-  public Set<TopicPartition> paused() {
-    return delegate.paused();
-  }
-
-  @Override
-  public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(
-      final Map<TopicPartition, Long> timestampsToSearch) {
-    return delegate.offsetsForTimes(timestampsToSearch);
-  }
-
-  @Override
-  public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(
-      final Map<TopicPartition, Long> timestampsToSearch, final Duration timeout) {
-    return delegate.offsetsForTimes(timestampsToSearch, timeout);
-  }
-
-  @Override
-  public Map<TopicPartition, Long> beginningOffsets(final Collection<TopicPartition> partitions) {
-    return delegate.beginningOffsets(partitions);
-  }
-
-  @Override
-  public Map<TopicPartition, Long> beginningOffsets(final Collection<TopicPartition> partitions,
-      final Duration timeout) {
-    return delegate.beginningOffsets(partitions, timeout);
-  }
-
-  @Override
-  public Map<TopicPartition, Long> endOffsets(final Collection<TopicPartition> partitions) {
-    return delegate.endOffsets(partitions);
-  }
-
-  @Override
-  public Map<TopicPartition, Long> endOffsets(final Collection<TopicPartition> partitions,
-      final Duration timeout) {
-    return delegate.endOffsets(partitions, timeout);
-  }
-
-  @Override
-  public OptionalLong currentLag(final TopicPartition topicPartition) {
-    return delegate.currentLag(topicPartition);
-  }
-
-  @Override
-  public ConsumerGroupMetadata groupMetadata() {
-    return delegate.groupMetadata();
-  }
-
-  @Override
-  public void enforceRebalance(final String reason) {
-    delegate.enforceRebalance(reason);
-  }
-
-  @Override
-  public void enforceRebalance() {
-    delegate.enforceRebalance();
-  }
-
-  @Override
-  public void close() {
-    delegate.close();
-  }
-
-  @Override
-  public void close(final Duration timeout) {
-    delegate.close(timeout);
-  }
-
-  @Override
-  public void wakeup() {
-    delegate.wakeup();
   }
 
   /**

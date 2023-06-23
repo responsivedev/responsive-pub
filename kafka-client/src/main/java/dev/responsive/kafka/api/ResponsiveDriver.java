@@ -27,6 +27,7 @@ import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.shaded.guava.common.annotations.VisibleForTesting;
 import dev.responsive.db.CassandraClient;
 import dev.responsive.kafka.config.ResponsiveDriverConfig;
+import dev.responsive.kafka.consumer.ResponsiveGlobalConsumer;
 import dev.responsive.utils.SessionUtil;
 import java.io.Closeable;
 import java.io.IOException;

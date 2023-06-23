@@ -20,7 +20,7 @@ import static org.apache.kafka.streams.StreamsConfig.BOOTSTRAP_SERVERS_CONFIG;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 
-import dev.responsive.kafka.api.ResponsiveGlobalConsumer;
+import dev.responsive.kafka.consumer.ResponsiveGlobalConsumer;
 import dev.responsive.utils.ContainerExtension;
 import java.io.File;
 import java.util.HashMap;
