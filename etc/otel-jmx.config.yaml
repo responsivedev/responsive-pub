@@ -82,7 +82,7 @@ rules:
      process-ratio:
        metric: kafka.streams.thread.process.ratio
        type: gauge
-       desc: ratio of time spent processing
+       desc: fraction of time spent in process
      commit-rate:
        metric: kafka.streams.thread.commit.rate
        type: gauge
@@ -91,7 +91,7 @@ rules:
      commit-ratio:
        metric: kafka.streams.thread.commit.ratio
        type: gauge
-       desc: ratio of time spent committing
+       desc: fraction of time spent in commit
      commit-latency-avg:
        metric: kafka.streams.thread.commit.latency.avg
        type: gauge
@@ -110,7 +110,7 @@ rules:
      poll-ratio:
        metric: kafka.streams.thread.poll.ratio
        type: gauge
-       desc: ratio of time spent polling
+       desc: fraction of time spent in poll
      poll-records-avg:
        metric: kafka.streams.thread.poll.records.avg
        type: gauge
@@ -119,7 +119,7 @@ rules:
      punctuate-ratio:
        metric: kafka.streams.thread.punctuate.ratio
        type: gauge
-       desc: ratio of time spent punctuating
+       desc: fraction of time spent in punctuate
      task-closed-rate:
        metric: kafka.streams.thread.task.closed.rate
        type: gauge
@@ -137,13 +137,19 @@ rules:
        unit: '{milliseconds}'
 
  # Kafka Streams task metrics
- ## THESE ARE GENERALLY **DEBUG** METRICS AND MAY NOT BE ENABLED
+ ## THESE ARE GENERALLY **DEBUG** METRICS AND MIGHT NOT BE ENABLED
  ## Most Streams metrics below the client and thread level are debug or even trace
  - bean: kafka.streams:type=stream-task-metrics,thread-id=*,task-id=*
    metricAttribute:
      thread: param(thread-id)
      task: param(task-id)
    mapping:
+     ## INFO
+     active-process-ratio:
+       metric: kafka.streams.task.process.ratio
+       type: gauge
+       desc: fraction of time spent processing this task out of all the active tasks
+     ## DEBUG
      process-total:
        metric: kafka.streams.task.process.total
        type: gauge
