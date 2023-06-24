@@ -34,9 +34,9 @@ public class ManagedApplication {
   }
 
   public int getReplicas() {
-    if (appClass == Deployment.class) {
+    if (appClass.equals(Deployment.class)) {
       return ((Deployment) application).getSpec().getReplicas();
-    } else if (appClass == StatefulSet.class) {
+    } else if (appClass.equals(StatefulSet.class)) {
       return ((StatefulSet) application).getSpec().getReplicas();
     }
 
@@ -47,7 +47,7 @@ public class ManagedApplication {
 
   public void setReplicas(final Integer targetReplicas, final Context<ResponsivePolicy> context) {
     final var appClient = context.getClient().apps();
-    if (appClass == Deployment.class) {
+    if (appClass.equals(Deployment.class)) {
       appClient.deployments()
           .inNamespace(namespace)
           .withName(appName)
@@ -62,7 +62,7 @@ public class ManagedApplication {
       return;
     }
 
-    if (appClass == StatefulSet.class) {
+    if (appClass.equals(StatefulSet.class)) {
       appClient.statefulSets()
           .inNamespace(namespace)
           .withName(appName)
@@ -82,19 +82,19 @@ public class ManagedApplication {
   }
 
   public String appType() {
-    if (appClass == Deployment.class) {
+    if (appClass.equals(Deployment.class)) {
       return "Deployment";
-    } else if (appClass == StatefulSet.class) {
+    } else if (appClass.equals(StatefulSet.class)) {
       return "StatefulSet";
     }
 
-    return "UKNOWN";
+    return "UNKNOWN";
   }
 
   public String getResourceVersion() {
-    if (appClass == Deployment.class) {
+    if (appClass.equals(Deployment.class)) {
       return ((Deployment) application).getMetadata().getResourceVersion();
-    } else if (appClass == StatefulSet.class) {
+    } else if (appClass.equals(StatefulSet.class)) {
       return ((StatefulSet) application).getMetadata().getResourceVersion();
     }
 
