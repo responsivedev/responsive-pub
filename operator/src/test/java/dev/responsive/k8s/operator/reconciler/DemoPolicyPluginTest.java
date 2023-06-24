@@ -36,6 +36,9 @@ import io.fabric8.kubernetes.api.model.ObjectMeta;
 import io.fabric8.kubernetes.api.model.apps.Deployment;
 import io.fabric8.kubernetes.api.model.apps.DeploymentList;
 import io.fabric8.kubernetes.api.model.apps.DeploymentSpec;
+import io.fabric8.kubernetes.api.model.apps.StatefulSet;
+import io.fabric8.kubernetes.api.model.apps.StatefulSetList;
+import io.fabric8.kubernetes.api.model.apps.StatefulSetSpec;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.dsl.AppsAPIGroupDSL;
 import io.fabric8.kubernetes.client.dsl.MixedOperation;
@@ -48,6 +51,7 @@ import io.javaoperatorsdk.operator.processing.event.ResourceID;
 import io.javaoperatorsdk.operator.processing.event.source.EventSource;
 import io.javaoperatorsdk.operator.processing.event.source.informer.InformerEventSource;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.UnaryOperator;
@@ -84,6 +88,16 @@ class DemoPolicyPluginTest {
   private RollableScalableResource<Deployment> rsDeployment;
   @Captor
   private ArgumentCaptor<UnaryOperator<Deployment>> deploymentEdit;
+  @Mock
+  private MixedOperation<StatefulSet, StatefulSetList, RollableScalableResource<StatefulSet>>
+      statefulSetClient;
+  @Mock
+  private NonNamespaceOperation<StatefulSet, StatefulSetList, RollableScalableResource<StatefulSet>>
+      nsStatefulSetClient;
+  @Mock
+  private RollableScalableResource<StatefulSet> rsStatefulSet;
+  @Captor
+  private ArgumentCaptor<UnaryOperator<StatefulSet>> statefulSetEdit;
   @Captor
   private ArgumentCaptor<ControllerOuterClass.CurrentStateRequest> currentStateRequestCaptor;
   @Mock
@@ -92,6 +106,7 @@ class DemoPolicyPluginTest {
   private final dev.responsive.k8s.operator.reconciler.DemoPolicyPlugin
       plugin = new dev.responsive.k8s.operator.reconciler.DemoPolicyPlugin();
   private final Deployment deployment = new Deployment();
+  private final StatefulSet statefulSet = new StatefulSet();
   private final ResponsivePolicy policy = new ResponsivePolicy();
   private final ControllerOuterClass.ApplicationState targetState =
       ControllerOuterClass.ApplicationState.newBuilder()
@@ -105,6 +120,18 @@ class DemoPolicyPluginTest {
   public void setup() {
     initDeployment(
         deployment,
+        "baz",
+        "biz",
+        "v1",
+        3,
+        ImmutableMap.of(
+            dev.responsive.k8s.operator.reconciler.ResponsivePolicyReconciler.NAME_LABEL, "bar",
+            dev.responsive.k8s.operator.reconciler.ResponsivePolicyReconciler.NAMESPACE_LABEL, "foo"
+        )
+    );
+
+    initStatefulSet(
+        statefulSet,
         "baz",
         "biz",
         "v1",
@@ -137,9 +164,6 @@ class DemoPolicyPluginTest {
 
     lenient().when(ctx.getClient()).thenReturn(client);
     lenient().when(client.apps()).thenReturn(appsClient);
-    lenient().when(appsClient.deployments()).thenReturn(deploymentsClient);
-    setupDeploymentToBeReturned(deployment);
-    lenient().when(ctx.getSecondaryResource(Deployment.class)).thenReturn(Optional.of(deployment));
     lenient().when(ctx.getSecondaryResource(
             dev.responsive.k8s.operator.reconciler.TargetStateWithTimestamp.class))
         .thenReturn(Optional.of(new TargetStateWithTimestamp(targetState)));
@@ -165,7 +189,8 @@ class DemoPolicyPluginTest {
     final Optional<InformerEventSource<Deployment, ResponsivePolicy>> src
         = maybePullSrc(sources, Deployment.class);
     assert src.isPresent();
-    final var s2pMapper = src.get().getConfiguration().getSecondaryToPrimaryMapper();
+    final var s2pMapper = src.get().getConfiguration()
+        .getSecondaryToPrimaryMapper();
     final var ids = s2pMapper.toPrimaryResourceIDs(deployment);
     assertThat(ids, contains(new ResourceID("bar", "foo")));
   }
@@ -179,7 +204,8 @@ class DemoPolicyPluginTest {
     final Optional<InformerEventSource<Deployment, ResponsivePolicy>> src
         = maybePullSrc(sources, Deployment.class);
     assert src.isPresent();
-    final var s2pMapper = src.get().getConfiguration().getPrimaryToSecondaryMapper();
+    final var s2pMapper = src.get().getConfiguration()
+        .getPrimaryToSecondaryMapper();
     final var ids = s2pMapper.toSecondaryResourceIDs(policy);
     assertThat(ids, contains(new ResourceID("baz", "biz")));
   }
@@ -187,8 +213,10 @@ class DemoPolicyPluginTest {
   @Test
   public void shouldPatchDeploymentWithReferenceToPolicy() {
     // given:
+    setupForDeployment();
     when(ctx.getSecondaryResource(Deployment.class)).thenReturn(Optional.empty());
-    final var deployment = createDeployment("baz", "biz", "v1", 5, Collections.emptyMap());
+    final var deployment = createDeployment("baz", "biz",
+        "v1", 5, Collections.emptyMap());
     setupDeploymentToBeReturned(deployment);
 
     // when:
@@ -212,6 +240,7 @@ class DemoPolicyPluginTest {
   @Test
   public void shouldReportCurrentState() {
     // when:
+    setupForDeployment();
     plugin.reconcile(policy, ctx, responsiveCtx);
 
     // then:
@@ -235,12 +264,14 @@ class DemoPolicyPluginTest {
   @Test
   public void shouldPatchDeploymentIfReplicasChanged() {
     // when:
+    setupForDeployment();
     plugin.reconcile(policy, ctx, responsiveCtx);
 
     // then:
     verify(rsDeployment).edit(deploymentEdit.capture());
     final var edit = deploymentEdit.getValue();
-    final var blank = createDeployment("biz", "baz", "v1", 3, Collections.emptyMap());
+    final var blank = createDeployment("biz", "baz",
+        "v1", 3, Collections.emptyMap());
     edit.apply(blank);
     assertThat(blank.getSpec().getReplicas(), is(5));
   }
@@ -248,6 +279,7 @@ class DemoPolicyPluginTest {
   @Test
   public void shouldNotPatchDeploymentIfReplicasNotChanged() {
     // given:
+    setupForDeployment();
     deployment.getSpec().setReplicas(5);
 
     // when:
@@ -260,6 +292,7 @@ class DemoPolicyPluginTest {
   @Test
   public void shouldNotPatchDeploymentIfNoTargetStateSpecified() {
     // given:
+    setupForDeployment();
     when(ctx.getSecondaryResource(TargetStateWithTimestamp.class))
         .thenReturn(Optional.of(new TargetStateWithTimestamp()));
 
@@ -268,6 +301,117 @@ class DemoPolicyPluginTest {
 
     // then:
     verifyNoInteractions(rsDeployment);
+  }
+
+
+  @Test
+  public void shouldAddStatefulSetSource() {
+    // when:
+    final var sources = plugin.prepareEventSources(esCtx, responsiveCtx);
+
+    // then:
+    final Optional<InformerEventSource<StatefulSet, ResponsivePolicy>> src
+        = maybePullSrc(sources, StatefulSet.class);
+    assertThat(src.isPresent(), is(true));
+  }
+
+  @Test
+  public void shouldSetSecondaryMapperForStatefulSetEventSource() {
+    // when:
+    final var sources = plugin.prepareEventSources(esCtx, responsiveCtx);
+
+    // then:
+    final Optional<InformerEventSource<StatefulSet, ResponsivePolicy>> src
+        = maybePullSrc(sources, StatefulSet.class);
+    assert src.isPresent();
+    final var s2pMapper = src.get().getConfiguration()
+        .getSecondaryToPrimaryMapper();
+    final var ids = s2pMapper.toPrimaryResourceIDs(statefulSet);
+    assertThat(ids, contains(new ResourceID("bar", "foo")));
+  }
+
+  @Test
+  public void shouldSetPrimaryToSecondaryMapperForStatefulSetEventSource() {
+    // when:
+    final var sources = plugin.prepareEventSources(esCtx, responsiveCtx);
+
+    // then:
+    final Optional<InformerEventSource<StatefulSet, ResponsivePolicy>> src
+        = maybePullSrc(sources, StatefulSet.class);
+    assert src.isPresent();
+    final var s2pMapper = src.get().getConfiguration()
+        .getPrimaryToSecondaryMapper();
+    final var ids = s2pMapper.toSecondaryResourceIDs(policy);
+    assertThat(ids, contains(new ResourceID("baz", "biz")));
+  }
+
+  @Test
+  public void shouldPatchStatefulSetWithReferenceToPolicy() {
+    // given:
+    setupForStatefulSet();
+    when(ctx.getSecondaryResource(StatefulSet.class)).thenReturn(Optional.empty());
+    final var statefulSet = createStatefulSet("baz", "biz", "v1",
+        5, Collections.emptyMap());
+    setupStatefulSetToBeReturned(statefulSet);
+
+    // when:
+    plugin.reconcile(policy, ctx, responsiveCtx);
+
+    // then:
+    verify(rsStatefulSet).edit(statefulSetEdit.capture());
+    final var edit = statefulSetEdit.getValue();
+    final var blank = createStatefulSet(
+        "baz", "biz", "v1", 3, Collections.emptyMap()
+    );
+    edit.apply(blank);
+    assertThat(blank.getMetadata().getLabels().get(
+            dev.responsive.k8s.operator.reconciler.ResponsivePolicyReconciler.NAMESPACE_LABEL),
+        is("foo"));
+    assertThat(blank.getMetadata().getLabels().get(
+            dev.responsive.k8s.operator.reconciler.ResponsivePolicyReconciler.NAME_LABEL),
+        is("bar"));
+  }
+
+  @Test
+  public void shouldPatchStatefulSetIfReplicasChanged() {
+    // when:
+    setupForStatefulSet();
+    plugin.reconcile(policy, ctx, responsiveCtx);
+
+    // then:
+    verify(rsStatefulSet).edit(statefulSetEdit.capture());
+    final var edit = statefulSetEdit.getValue();
+    final var blank = createStatefulSet("biz", "baz", "v1",
+        3, Collections.emptyMap());
+    edit.apply(blank);
+    assertThat(blank.getSpec().getReplicas(), is(5));
+  }
+
+  @Test
+  public void shouldNotPatchStatefulSetIfReplicasNotChanged() {
+    // given:
+    setupForStatefulSet();
+    statefulSet.getSpec().setReplicas(5);
+
+    // when:
+    plugin.reconcile(policy, ctx, responsiveCtx);
+
+    // then:
+    verifyNoInteractions(rsStatefulSet);
+  }
+
+  @Test
+  public void shouldNotPatchStatefulSetIfNoTargetStateSpecified() {
+    // given:
+    setupForStatefulSet();
+    when(ctx.getSecondaryResource(TargetStateWithTimestamp.class))
+        .thenReturn(Optional.of(new TargetStateWithTimestamp()));
+
+    // when:
+    plugin.reconcile(policy, ctx, responsiveCtx);
+
+    // then:
+    verifyNoInteractions(rsStatefulSet);
   }
 
   @SuppressWarnings("unchecked")
@@ -292,6 +436,51 @@ class DemoPolicyPluginTest {
     lenient().when(nsDeploymentsClient.withName(deployment.getMetadata().getName()))
         .thenReturn(rsDeployment);
     lenient().when(rsDeployment.get()).thenReturn(deployment);
+
+    final DeploymentList list = new DeploymentList();
+    list.setItems(List.of(deployment));
+    lenient().when(nsDeploymentsClient.list()).thenReturn(list);
+  }
+
+  private void setupStatefulSetToBeReturned(final StatefulSet statefulSet) {
+    lenient().when(statefulSetClient.inNamespace(statefulSet.getMetadata().getNamespace()))
+        .thenReturn(nsStatefulSetClient);
+    lenient().when(nsStatefulSetClient.withName(statefulSet.getMetadata().getName()))
+        .thenReturn(rsStatefulSet);
+    lenient().when(rsStatefulSet.get()).thenReturn(statefulSet);
+
+    final StatefulSetList list = new StatefulSetList();
+    list.setItems(List.of(statefulSet));
+    lenient().when(nsStatefulSetClient.list()).thenReturn(list);
+  }
+
+  private StatefulSet createStatefulSet(
+      final String name,
+      final String namespace,
+      final String version,
+      int replicas,
+      final Map<String, String> labels
+  ) {
+    final StatefulSet statefulSet = new StatefulSet();
+    initStatefulSet(statefulSet, name, namespace, version, replicas, labels);
+    return statefulSet;
+  }
+
+  private void initStatefulSet(
+      final StatefulSet statefulSet,
+      final String name,
+      final String namespace,
+      final String version,
+      int replicas,
+      final Map<String, String> labels
+  ) {
+    statefulSet.setMetadata(new ObjectMeta());
+    statefulSet.getMetadata().setNamespace(namespace);
+    statefulSet.getMetadata().setName(name);
+    statefulSet.getMetadata().setLabels(labels);
+    statefulSet.getMetadata().setResourceVersion(version);
+    statefulSet.setSpec(new StatefulSetSpec());
+    statefulSet.getSpec().setReplicas(replicas);
   }
 
   private Deployment createDeployment(
@@ -321,5 +510,37 @@ class DemoPolicyPluginTest {
     deployment.getMetadata().setResourceVersion(version);
     deployment.setSpec(new DeploymentSpec());
     deployment.getSpec().setReplicas(replicas);
+  }
+
+  private void setupForDeployment() {
+    lenient().when(appsClient.deployments()).thenReturn(deploymentsClient);
+    setupDeploymentToBeReturned(deployment);
+    lenient().when(ctx.getSecondaryResource(StatefulSet.class)).thenReturn(Optional.empty());
+    lenient().when(ctx.getSecondaryResource(Deployment.class)).thenReturn(Optional.of(deployment));
+
+    // set this up so that ManagedApplication.isStatefulSet() returns false.
+    lenient().when(appsClient.statefulSets()).thenReturn(statefulSetClient);
+    lenient().when(statefulSetClient.inNamespace(deployment.getMetadata().getNamespace()))
+        .thenReturn(nsStatefulSetClient);
+    final StatefulSetList statefulSetList = new StatefulSetList();
+    statefulSetList.setItems(Collections.<StatefulSet>emptyList());
+    lenient().when(nsStatefulSetClient.list()).thenReturn(statefulSetList);
+
+  }
+
+  private void setupForStatefulSet() {
+    lenient().when(appsClient.statefulSets()).thenReturn(statefulSetClient);
+    setupStatefulSetToBeReturned(statefulSet);
+    lenient().when(ctx.getSecondaryResource(Deployment.class)).thenReturn(Optional.empty());
+    lenient().when(ctx.getSecondaryResource(StatefulSet.class))
+        .thenReturn(Optional.of(statefulSet));
+
+    // set this up so that ManagedApplication.isDeployment() returns false.
+    lenient().when(appsClient.deployments()).thenReturn(deploymentsClient);
+    lenient().when(deploymentsClient.inNamespace(statefulSet.getMetadata().getNamespace()))
+        .thenReturn(nsDeploymentsClient);
+    final DeploymentList deploymentList = new DeploymentList();
+    deploymentList.setItems(Collections.<Deployment>emptyList());
+    lenient().when(nsDeploymentsClient.list()).thenReturn(deploymentList);
   }
 }
