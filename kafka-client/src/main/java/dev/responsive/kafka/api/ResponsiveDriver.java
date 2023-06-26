@@ -39,8 +39,6 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.KafkaClientSupplier;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -50,10 +48,6 @@ import org.apache.kafka.streams.state.WindowStore;
 /**
  * The {@code ResponsiveDriver} should be instantiated once per JVM
  * and maintains a session and connection to the remote storage server.
- *
- * <p>It is also required to use this as a {@link KafkaClientSupplier} when
- * creating your Kafka Streams application to ensure that all advanced
- * Responsive functionality functions properly.</p>
  */
 // TODO(agavra): we should put more thought into this API and consider splitting
 // it up into a "reusable" session class and a "per-streams" driver so that we
@@ -67,7 +61,6 @@ public class ResponsiveDriver implements StreamsStoreDriver, Closeable {
   private final CqlSession session;
   private final CassandraClient client;
   private final Admin admin;
-  private final StreamsConfig config;
 
   /**
    * @param props the properties to pass in
@@ -103,20 +96,18 @@ public class ResponsiveDriver implements StreamsStoreDriver, Closeable {
             tenant,
             clientId,
             clientSecret == null ? null : clientSecret.value()),
-        Admin.create(props),
-        new StreamsConfig(props));
+        Admin.create(props)
+    );
   }
 
   @VisibleForTesting
   public ResponsiveDriver(
       final CqlSession session,
-      final Admin admin,
-      final StreamsConfig config
+      final Admin admin
   ) {
     this.session = session;
     this.client = new CassandraClient(session);
     this.admin = admin;
-    this.config = config;
   }
 
   /**
