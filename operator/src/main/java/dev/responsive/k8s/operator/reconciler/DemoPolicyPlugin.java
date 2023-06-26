@@ -93,7 +93,7 @@ public class DemoPolicyPlugin implements PolicyPlugin {
     }
 
     final var targetState = maybeTargetState.get();
-    LOGGER.info("target state {} {}", appName, targetState);
+    LOGGER.info("target state for app {} {}", appName, targetState);
 
     if (targetState.getTargetState().isEmpty()) {
       LOGGER.info(

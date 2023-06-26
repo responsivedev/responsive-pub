@@ -11,113 +11,38 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class ManagedApplication {
+public abstract class ManagedApplication {
+  public abstract int getReplicas();
 
-  private static final Logger LOGGER = LoggerFactory.getLogger(ManagedApplication.class);
-  private final HasMetadata application;
-  private final Class<?> appClass;
-  private final String appName;
-  private final String namespace;
+  public abstract void setReplicas(final Integer targetReplicas,
+                                   final Context<ResponsivePolicy> context);
 
-  public ManagedApplication(HasMetadata application, Class<?> appClass,
-                            ResponsivePolicy policy) {
-    this (application, appClass, policy.getSpec().getApplicationName(),
-        policy.getSpec().getApplicationNamespace());
-  }
+  public abstract String appType();
 
-  public ManagedApplication(HasMetadata application, Class<?> appClass,
-                            String appName, String namespace) {
-    this.application = application;
-    this.appClass = appClass;
-    this.appName = appName;
-    this.namespace = namespace;
-  }
+  public abstract String getResourceVersion();
 
-  public int getReplicas() {
-    if (appClass.equals(Deployment.class)) {
-      return ((Deployment) application).getSpec().getReplicas();
-    } else if (appClass.equals(StatefulSet.class)) {
-      return ((StatefulSet) application).getSpec().getReplicas();
-    }
-
-    throw new RuntimeException(
-        String.format("Expecting app to be either a Deployment or StatefulSet. It was %s",
-            appClass.toString()));
-  }
-
-  public void setReplicas(final Integer targetReplicas, final Context<ResponsivePolicy> context) {
-    final var appClient = context.getClient().apps();
-    if (appClass.equals(Deployment.class)) {
-      appClient.deployments()
-          .inNamespace(namespace)
-          .withName(appName)
-          .edit(d -> {
-            if (d.getMetadata().getResourceVersion()
-                .equals(getResourceVersion())) {
-              d.getSpec().setReplicas(targetReplicas);
-            }
-            return d;
-          });
-
-      return;
-    }
-
-    if (appClass.equals(StatefulSet.class)) {
-      appClient.statefulSets()
-          .inNamespace(namespace)
-          .withName(appName)
-          .edit(d -> {
-            if (d.getMetadata().getResourceVersion()
-                .equals(getResourceVersion())) {
-              d.getSpec().setReplicas(targetReplicas);
-            }
-            return d;
-          });
-      return;
-    }
-
-    throw new RuntimeException(
-        String.format("Expecting app to be either a Deployment or StatefulSet. It was %s",
-            appClass.toString()));
-  }
-
-  public String appType() {
-    if (appClass.equals(Deployment.class)) {
-      return "Deployment";
-    } else if (appClass.equals(StatefulSet.class)) {
-      return "StatefulSet";
-    }
-
-    return "UNKNOWN";
-  }
-
-  public String getResourceVersion() {
-    if (appClass.equals(Deployment.class)) {
-      return ((Deployment) application).getMetadata().getResourceVersion();
-    } else if (appClass.equals(StatefulSet.class)) {
-      return ((StatefulSet) application).getMetadata().getResourceVersion();
-    }
-
-    throw new RuntimeException(
-        String.format("Expecting app to be either a Deployment or StatefulSet. It was %s",
-            appClass.toString()));
-  }
+  public abstract void maybeAddResponsiveLabel(Context<ResponsivePolicy> ctx,
+                                               ResponsivePolicy policy);
 
   public static ManagedApplication build(Context<ResponsivePolicy> ctx,
                                          ResponsivePolicy policy) {
     if (ctx.getSecondaryResource(Deployment.class).isPresent()) {
       final Deployment deployment = ctx.getSecondaryResource(Deployment.class).get();
       validateLabels(deployment, policy);
-      return new ManagedApplication(deployment, Deployment.class, policy);
+      return new ManagedDeployment(deployment, policy.getSpec().getApplicationName(),
+          policy.getSpec().getApplicationNamespace());
     } else if (ctx.getSecondaryResource(StatefulSet.class).isPresent()) {
       final StatefulSet statefulSet = ctx.getSecondaryResource(StatefulSet.class).get();
       validateLabels(statefulSet, policy);
-      return new ManagedApplication(statefulSet, StatefulSet.class, policy);
+      return new ManagedStatefulSet(statefulSet, policy.getSpec().getApplicationName(),
+          policy.getSpec().getApplicationNamespace());
     } else {
       // The framework has no associated deployment or StatefulSet yet, which means there is no
       // deployment or StatefulSet with the required label. Label the app here.
       // TODO(rohan): double-check this understanding
-      return buildFromContext(ctx, policy);
+      final ManagedApplication managedApplication =  buildFromContext(ctx, policy);
+      managedApplication.maybeAddResponsiveLabel(ctx, policy);
+      return managedApplication;
     }
   }
 
@@ -149,98 +74,17 @@ public class ManagedApplication {
           .inNamespace(namespace)
           .withName(appName)
           .get();
-      maybeAddResponsiveLabel(deployment, policy, ctx);
-      return new ManagedApplication(deployment, Deployment.class, policy);
+      return new ManagedDeployment(deployment, appName, namespace);
     }
 
     final StatefulSet statefulSet = appClient.statefulSets()
         .inNamespace(namespace)
         .withName(appName)
         .get();
-    maybeAddResponsiveLabel(statefulSet, policy, ctx);
-    return new ManagedApplication(statefulSet, StatefulSet.class, appName, namespace);
 
+    return new ManagedStatefulSet(statefulSet, appName, namespace);
   }
 
-  private static void maybeAddResponsiveLabel(
-      final Deployment deployment,
-      final ResponsivePolicy policy,
-      final Context<ResponsivePolicy> ctx) {
-    final boolean hasNameLabel
-        = deployment.getMetadata().getLabels().containsKey(ResponsivePolicyReconciler.NAME_LABEL);
-    final boolean hasNamespaceLabel
-        = deployment.getMetadata().getLabels()
-        .containsKey(ResponsivePolicyReconciler.NAMESPACE_LABEL);
-    if (!hasNameLabel || !hasNamespaceLabel) {
-      final var appClient = ctx.getClient().apps();
-      // TODO(rohan): I don't think this is patching the way I expect. Review the patch APIs
-      //  things to check: do we need to check the version or does that happen automatically?
-      //  things to check: this should only be updating the labels and thats it (e.g. truly a patch)
-      //
-      appClient.deployments()
-          .inNamespace(deployment.getMetadata().getNamespace())
-          .withName(deployment.getMetadata().getName())
-          .edit(d -> {
-            if (d.getMetadata().getResourceVersion()
-                .equals(deployment.getMetadata().getResourceVersion())) {
-              final HashMap<String, String> newLabels = new HashMap<>(d.getMetadata().getLabels());
-              newLabels.put(
-                  ResponsivePolicyReconciler.NAMESPACE_LABEL,
-                  policy.getMetadata().getNamespace()
-              );
-              newLabels.put(ResponsivePolicyReconciler.NAME_LABEL, policy.getMetadata().getName());
-              d.getMetadata().setLabels(newLabels);
-            }
-            LOGGER.info("Added labels '{}:{}' and '{}:{}' to deployment {}",
-                ResponsivePolicyReconciler.NAME_LABEL,
-                policy.getMetadata().getName(),
-                ResponsivePolicyReconciler.NAMESPACE_LABEL,
-                policy.getMetadata().getNamespace(),
-                deployment.getMetadata().getName());
-            return d;
-          });
-    }
-  }
-
-  private static void maybeAddResponsiveLabel(
-      final StatefulSet statefulSet,
-      final ResponsivePolicy policy,
-      final Context<ResponsivePolicy> ctx) {
-    final boolean hasNameLabel
-        = statefulSet.getMetadata().getLabels().containsKey(ResponsivePolicyReconciler.NAME_LABEL);
-    final boolean hasNamespaceLabel
-        = statefulSet.getMetadata().getLabels()
-        .containsKey(ResponsivePolicyReconciler.NAMESPACE_LABEL);
-    if (!hasNameLabel || !hasNamespaceLabel) {
-      final var appClient = ctx.getClient().apps();
-      // TODO(rohan): I don't think this is patching the way I expect. Review the patch APIs
-      //  things to check: do we need to check the version or does that happen automatically?
-      //  things to check: this should only be updating the labels and thats it (e.g. truly a patch)
-      //
-      appClient.statefulSets()
-          .inNamespace(statefulSet.getMetadata().getNamespace())
-          .withName(statefulSet.getMetadata().getName())
-          .edit(d -> {
-            if (d.getMetadata().getResourceVersion()
-                .equals(statefulSet.getMetadata().getResourceVersion())) {
-              final HashMap<String, String> newLabels = new HashMap<>(d.getMetadata().getLabels());
-              newLabels.put(
-                  ResponsivePolicyReconciler.NAMESPACE_LABEL,
-                  policy.getMetadata().getNamespace()
-              );
-              newLabels.put(ResponsivePolicyReconciler.NAME_LABEL, policy.getMetadata().getName());
-              d.getMetadata().setLabels(newLabels);
-            }
-            LOGGER.info("Added labels '{}:{}' and '{}:{}' to statefulset {}",
-                ResponsivePolicyReconciler.NAME_LABEL,
-                policy.getMetadata().getName(),
-                ResponsivePolicyReconciler.NAMESPACE_LABEL,
-                policy.getMetadata().getNamespace(),
-                statefulSet.getMetadata().getName());
-            return d;
-          });
-    }
-  }
 
   private static boolean isDeployment(AppsAPIGroupDSL appClient, String namespace, String appName) {
     final long matches = appClient.deployments()
