@@ -33,10 +33,13 @@ val fatJar = task("fatJar", type = Jar::class) {
     manifest {
         attributes["Implementation-Title"] = "Responsive Analyzer Tool"
         attributes["Implementation-Version"] = "0.1.0"
-        attributes["Main-Class"] = "dev.responsive.tools.analyzer.Main"
     }
     from(configurations.runtimeClasspath.get().map { if (it.isDirectory) it else zipTree(it) })
     with(tasks.jar.get() as CopySpec)
+}
+
+tasks.withType<JavaCompile> {
+    options.compilerArgs.addAll(arrayOf("-Aproject=${project.group}/${project.name}"))
 }
 
 tasks {
