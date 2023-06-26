@@ -18,7 +18,9 @@ package dev.responsive.kafka.api;
 
 import java.time.Duration;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
@@ -30,6 +32,8 @@ import org.apache.kafka.streams.state.WindowStore;
  * in memory stores for all state stores.
  */
 public class TestStoreDriver implements StreamsStoreDriver {
+
+  private final KafkaClientSupplier delegateClientSupplier = new DefaultKafkaClientSupplier();
 
   @Override
   public KeyValueBytesStoreSupplier kv(final String name) {
@@ -48,6 +52,11 @@ public class TestStoreDriver implements StreamsStoreDriver {
   }
 
   @Override
+  public KeyValueBytesStoreSupplier globalKv(final String name) {
+    return kv(name);
+  }
+
+  @Override
   public <K, V> Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized(final String name) {
     return Materialized.as(kv(name));
   }
@@ -57,4 +66,11 @@ public class TestStoreDriver implements StreamsStoreDriver {
       final long retentionMs, final long windowSize, final boolean retainDuplicates) {
     return Materialized.as(windowed(name, retentionMs, windowSize, retainDuplicates));
   }
+
+  @Override
+  public <K, V> Materialized<K, V, KeyValueStore<Bytes, byte[]>> globalMaterialized(
+      final String name) {
+    return Materialized.as(globalKv(name));
+  }
+
 }

@@ -28,6 +28,7 @@ import java.util.stream.Collectors;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.metrics.JmxReporter;
@@ -48,6 +49,7 @@ import org.slf4j.LoggerFactory;
  * wrapped kafka producers/consumers that are instrumented to work with the responsive platform
  * by, for example, emitting metrics useful for debug and scaling.
  *
+ * <p>
  * Synchronization: This class is read/written during client initialization and close (via the
  * close callbacks on the returned clients). As these calls are not on the performance path we
  * rely on coarse-grained locks around sections reading/writing shared state.
@@ -61,6 +63,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier,
   private boolean configured = false;
   private Metrics metrics;
   private EndOffsetsPoller endOffsetsPoller;
+  private String applicationId;
 
   public ResponsiveKafkaClientSupplier() {
     this(new Factories() {}, new DefaultKafkaClientSupplier());
@@ -93,6 +96,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier,
     );
     endOffsetsPoller = factories.createEndOffsetPoller(configs, metrics);
     configured = true;
+    applicationId = (String) configs.get(StreamsConfig.APPLICATION_ID_CONFIG);
   }
 
   @Override
@@ -163,7 +167,15 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier,
 
   @Override
   public Consumer<byte[], byte[]> getGlobalConsumer(final Map<String, Object> config) {
-    return wrapped.getGlobalConsumer(config);
+    config.put(ConsumerConfig.GROUP_ID_CONFIG, applicationId + "-global");
+    config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+    config.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, true);
+
+    return new ResponsiveGlobalConsumer(
+        config,
+        wrapped.getGlobalConsumer(config),
+        getAdmin(config)
+    );
   }
 
   private String threadIdFromProducerConfig(final Map<String, Object> config) {
@@ -323,7 +335,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier,
       return new ResponsiveConsumer<>(clientId, wrapped, listeners);
     }
 
-    default <K, V> MetricPublishingCommitListener createMetricsPublishingCommitListener(
+    default MetricPublishingCommitListener createMetricsPublishingCommitListener(
         final Metrics metrics,
         final String threadId
     ) {

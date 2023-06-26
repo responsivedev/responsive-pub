@@ -52,6 +52,16 @@ public interface StreamsStoreDriver {
   );
 
   /**
+   * Creates a materialization for a global store, which handles update and
+   * read semantics differently from normal stores.
+   *
+   * @param name the state store name
+   * @return a key value store supplier with the given name that uses Responsive's
+   *         storage for its backend
+   */
+  KeyValueBytesStoreSupplier globalKv(final String name);
+
+  /**
    * @see #kv(String)
    */
   <K, V> Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized(
@@ -66,6 +76,13 @@ public interface StreamsStoreDriver {
       final long retentionMs,
       final long windowSize,
       final boolean retainDuplicates
+  );
+
+  /**
+   * @see #globalKv(String)
+   */
+  <K, V> Materialized<K, V, KeyValueStore<Bytes, byte[]>> globalMaterialized(
+      final String name
   );
 
 }

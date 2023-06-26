@@ -21,7 +21,6 @@ plugins {
 }
 
 include("kafka-client")
-include("kafka-instrumentation")
 include("controller-api")
 include("operator")
 

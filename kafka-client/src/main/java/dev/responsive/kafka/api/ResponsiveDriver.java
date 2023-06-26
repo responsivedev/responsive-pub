@@ -48,9 +48,10 @@ import org.apache.kafka.streams.state.WindowStore;
 /**
  * The {@code ResponsiveDriver} should be instantiated once per JVM
  * and maintains a session and connection to the remote storage server.
- * The driver can be reused to create new state stores, even across
- * different Kafka Streams applications.
  */
+// TODO(agavra): we should put more thought into this API and consider splitting
+// it up into a "reusable" session class and a "per-streams" driver so that we
+// can properly track resources created by the driver
 public class ResponsiveDriver implements StreamsStoreDriver, Closeable {
 
   private static final Map<String, String> CHANGELOG_CONFIG = Map.of(
@@ -95,11 +96,15 @@ public class ResponsiveDriver implements StreamsStoreDriver, Closeable {
             tenant,
             clientId,
             clientSecret == null ? null : clientSecret.value()),
-        Admin.create(props));
+        Admin.create(props)
+    );
   }
 
   @VisibleForTesting
-  public ResponsiveDriver(final CqlSession session, final Admin admin) {
+  public ResponsiveDriver(
+      final CqlSession session,
+      final Admin admin
+  ) {
     this.session = session;
     this.client = new CassandraClient(session);
     this.admin = admin;
@@ -134,6 +139,11 @@ public class ResponsiveDriver implements StreamsStoreDriver, Closeable {
     );
   }
 
+  @Override
+  public KeyValueBytesStoreSupplier globalKv(final String name) {
+    return new ResponsiveGlobalKeyValueBytesStoreSupplier(client, name, executor);
+  }
+
   /**
    * {@inheritDoc}
    */
@@ -157,6 +167,14 @@ public class ResponsiveDriver implements StreamsStoreDriver, Closeable {
   ) {
     return Materialized.<K, V>as(windowed(name, retentionMs, windowSize, retainDuplicates))
         .withLoggingEnabled(CHANGELOG_CONFIG);
+  }
+
+  @Override
+  public <K, V> Materialized<K, V, KeyValueStore<Bytes, byte[]>> globalMaterialized(
+      final String name
+  ) {
+    return Materialized.<K, V>as(globalKv(name))
+        .withCachingDisabled();
   }
 
   @Override

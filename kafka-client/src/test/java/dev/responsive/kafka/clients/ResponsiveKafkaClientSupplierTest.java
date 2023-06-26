@@ -38,6 +38,7 @@ import org.apache.kafka.common.serialization.BytesDeserializer;
 import org.apache.kafka.common.serialization.BytesSerializer;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -152,7 +153,7 @@ class ResponsiveKafkaClientSupplierTest {
     final var producer = supplier.getProducer(PRODUCER_CONFIGS);
 
     // then:
-    assertThat(producer, is(responsiveProducer));
+    assertThat(producer, Matchers.is(responsiveProducer));
   }
 
   @Test
@@ -162,7 +163,7 @@ class ResponsiveKafkaClientSupplierTest {
 
     // then:
     verify(factories).createResponsiveProducer(any(), any(), producerListenerCaptor.capture());
-    assertThat(producerListenerCaptor.getValue(), hasItem(metricPublishingCommitListener));
+    assertThat(producerListenerCaptor.getValue(), Matchers.hasItem(metricPublishingCommitListener));
     verify(factories).createMetricsPublishingCommitListener(metrics, "StreamThread-0");
   }
 
@@ -173,7 +174,7 @@ class ResponsiveKafkaClientSupplierTest {
 
     // then:
     verify(factories).createResponsiveConsumer(any(), any(), consumerListenerCaptor.capture());
-    assertThat(consumerListenerCaptor.getValue(), hasItem(metricPublishingCommitListener));
+    assertThat(consumerListenerCaptor.getValue(), Matchers.hasItem(metricPublishingCommitListener));
     verify(factories).createMetricsPublishingCommitListener(metrics, "StreamThread-0");
   }
 
@@ -203,7 +204,7 @@ class ResponsiveKafkaClientSupplierTest {
 
     // then:
     verify(factories).createResponsiveConsumer(any(), any(), consumerListenerCaptor.capture());
-    assertThat(consumerListenerCaptor.getValue(), hasItem(consumerEndOffsetsPollListener));
+    assertThat(consumerListenerCaptor.getValue(), Matchers.hasItem(consumerEndOffsetsPollListener));
   }
 
   @Test
