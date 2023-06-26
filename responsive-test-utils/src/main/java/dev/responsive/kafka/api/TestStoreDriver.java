@@ -73,8 +73,4 @@ public class TestStoreDriver implements StreamsStoreDriver {
     return Materialized.as(globalKv(name));
   }
 
-  @Override
-  public KafkaClientSupplier kafkaClientSupplier() {
-    return new DefaultKafkaClientSupplier();
-  }
 }

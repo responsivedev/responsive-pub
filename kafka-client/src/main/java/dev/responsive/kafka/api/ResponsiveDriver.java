@@ -187,11 +187,6 @@ public class ResponsiveDriver implements StreamsStoreDriver, Closeable {
   }
 
   @Override
-  public KafkaClientSupplier kafkaClientSupplier() {
-    return new ResponsiveKafkaClientSupplier(config);
-  }
-
-  @Override
   public void close() throws IOException {
     session.close();
     executor.shutdown();

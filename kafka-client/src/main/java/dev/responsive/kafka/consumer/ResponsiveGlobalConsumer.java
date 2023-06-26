@@ -34,8 +34,6 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.utils.SystemTime;
-import org.apache.kafka.common.utils.Time;
 
 /**
  * The {@code ResponsiveGlobalConsumer} is a proxy {@link KafkaConsumer} that
@@ -60,11 +58,6 @@ import org.apache.kafka.common.utils.Time;
  *   the store for those partitions. The issue with this is that if we use {@code subscribe}
  *   in place of {@code assign} we may get events from partitions that were not
  *   specified in the {@code assign} call. These records would otherwise be dropped.</li>
- *
- *   <li>It commits before every call to {@link #poll(Duration)} because
- *   otherwise the Streams implementation for global stores will never commit. We
- *   should consider changing this to every {@code N} polls, but this would be
- *   more difficult to test (we could make it configurable).</li>
  * </ol>
  *
  * <p>This class breaks a lot of abstraction barriers, but allows us to

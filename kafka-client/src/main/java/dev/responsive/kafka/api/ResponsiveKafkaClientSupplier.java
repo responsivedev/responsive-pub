@@ -22,17 +22,19 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.common.Configurable;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 
-public class ResponsiveKafkaClientSupplier implements KafkaClientSupplier {
+public class ResponsiveKafkaClientSupplier implements KafkaClientSupplier, Configurable {
 
   private final KafkaClientSupplier delegateClientSupplier = new DefaultKafkaClientSupplier();
-  private final StreamsConfig config;
+  private Map<String, ?> config;
 
-  public ResponsiveKafkaClientSupplier(final StreamsConfig config) {
-    this.config = config;
+  @Override
+  public void configure(final Map<String, ?> configs) {
+    config = configs;
   }
 
   @Override
@@ -57,7 +59,12 @@ public class ResponsiveKafkaClientSupplier implements KafkaClientSupplier {
 
   @Override
   public Consumer<byte[], byte[]> getGlobalConsumer(final Map<String, Object> config) {
-    final String groupId = this.config.getString(StreamsConfig.APPLICATION_ID_CONFIG) + "-global";
+    if (!this.config.containsKey(StreamsConfig.APPLICATION_ID_CONFIG)) {
+      throw new IllegalArgumentException(
+          "Expected configuration from ResponsiveKafkaClientSupplier to include application.id");
+    }
+
+    final String groupId = this.config.get(StreamsConfig.APPLICATION_ID_CONFIG) + "-global";
     config.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
     config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
     config.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, true);
@@ -68,5 +75,4 @@ public class ResponsiveKafkaClientSupplier implements KafkaClientSupplier {
         getAdmin(config)
     );
   }
-
 }

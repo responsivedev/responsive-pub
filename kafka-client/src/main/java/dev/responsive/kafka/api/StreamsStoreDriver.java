@@ -17,7 +17,6 @@
 package dev.responsive.kafka.api;
 
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -85,11 +84,5 @@ public interface StreamsStoreDriver {
   <K, V> Materialized<K, V, KeyValueStore<Bytes, byte[]>> globalMaterialized(
       final String name
   );
-
-  /**
-   * @return the {@link KafkaClientSupplier} that should be used when supplying
-   *         this driver
-   */
-  KafkaClientSupplier kafkaClientSupplier();
 
 }
