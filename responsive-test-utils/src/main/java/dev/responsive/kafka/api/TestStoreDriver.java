@@ -33,8 +33,6 @@ import org.apache.kafka.streams.state.WindowStore;
  */
 public class TestStoreDriver implements StreamsStoreDriver {
 
-  private final KafkaClientSupplier delegateClientSupplier = new DefaultKafkaClientSupplier();
-
   @Override
   public KeyValueBytesStoreSupplier kv(final String name) {
     return Stores.inMemoryKeyValueStore(name);

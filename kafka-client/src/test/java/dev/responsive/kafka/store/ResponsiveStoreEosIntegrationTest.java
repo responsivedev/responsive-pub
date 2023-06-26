@@ -270,10 +270,7 @@ public class ResponsiveStoreEosIntegrationTest {
   }
 
   private StoreBuilder<KeyValueStore<Long, Long>> storeSupplier() {
-    final ResponsiveDriver responsiveDriver = new ResponsiveDriver(
-        session,
-        admin
-    );
+    final ResponsiveDriver responsiveDriver = new ResponsiveDriver(session);
     return Stores.keyValueStoreBuilder(
         responsiveDriver.kv(STORE_NAME),
         Serdes.Long(),

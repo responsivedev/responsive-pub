@@ -25,7 +25,7 @@ import org.apache.kafka.streams.state.WindowStore;
 
 /**
  * An interface that allows for easily wrapping different Kafka Streams
- * state store implementations and swapping them at ease.
+ * state store implementations and swapping them with ease.
  */
 public interface StreamsStoreDriver {
 

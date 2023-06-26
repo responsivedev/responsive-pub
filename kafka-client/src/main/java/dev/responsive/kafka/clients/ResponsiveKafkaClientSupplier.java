@@ -65,6 +65,8 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier,
   private EndOffsetsPoller endOffsetsPoller;
   private String applicationId;
 
+  // TODO(sophie): optionally delegate to the user's configured default if they have set the
+  //  "default.client.supplier" StreamsConfig
   public ResponsiveKafkaClientSupplier() {
     this(new Factories() {}, new DefaultKafkaClientSupplier());
   }
@@ -74,6 +76,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier,
     this.wrapped = wrapped;
   }
 
+  // TODO(sophie): we should just pass the configs into the constructor?
   @Override
   public void configure(final Map<String, ?> configs) {
     LOGGER.trace(

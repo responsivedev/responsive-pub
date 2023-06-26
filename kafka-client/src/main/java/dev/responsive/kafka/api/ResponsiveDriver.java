@@ -33,48 +33,31 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.Map;
 import java.util.Properties;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
-import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.config.types.Password;
-import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
-import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
-import org.apache.kafka.streams.state.WindowStore;
+import org.apache.kafka.streams.StreamsConfig;
+
 
 /**
  * The {@code ResponsiveDriver} should be instantiated once per JVM
  * and maintains a session and connection to the remote storage server.
  */
-// TODO(agavra): we should put more thought into this API and consider splitting
-// it up into a "reusable" session class and a "per-streams" driver so that we
-// can properly track resources created by the driver
-public class ResponsiveDriver implements StreamsStoreDriver, Closeable {
+public class ResponsiveDriver implements Closeable {
 
-  private static final Map<String, String> CHANGELOG_CONFIG = Map.of(
-      TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE);
-
-  private final ScheduledExecutorService executor = new ScheduledThreadPoolExecutor(2);
   private final CqlSession session;
-  private final CassandraClient client;
-  private final Admin admin;
 
   /**
-   * @param props the properties to pass in
-   * @return a new {@code ResponsiveDriver} and opens connections to remote Responsive servers
+   * @param props the Responsive properties for this session
+   * @return a new {@link ResponsiveDriver} and opens connections to remote Responsive servers
    */
   public static ResponsiveDriver connect(final Map<String, Object> props) {
-    final Properties properties = new Properties();
+    final Properties properties = new Properties(props.size());
     properties.putAll(props);
     return connect(properties);
   }
 
   /**
-   * @param props the properties to pass in
-   * @return a new {@code ResponsiveDriver} and opens connections to remote Responsive servers
+   * @param props the Responsive properties for this session
+   * @return a new {@link ResponsiveDriver} and opens connections to remote Responsive servers
    */
   public static ResponsiveDriver connect(final Properties props) {
     final ResponsiveDriverConfig configs = new ResponsiveDriverConfig(props);
@@ -95,91 +78,27 @@ public class ResponsiveDriver implements StreamsStoreDriver, Closeable {
             datacenter,
             tenant,
             clientId,
-            clientSecret == null ? null : clientSecret.value()),
-        Admin.create(props)
+            clientSecret == null ? null : clientSecret.value())
     );
+  }
+
+  /**
+   * @param streamsConfigs the configs for this KafkaStreams application.
+   *        Must include all required {@link StreamsConfig StreamsConfigs}
+   *
+   * @return the driver for a new Streams application. See {@link StreamsApplicationDriver} javadocs
+   */
+  public StreamsApplicationDriver newApplication(final Map<String, Object> streamsConfigs) {
+    return new ResponsiveApplicationDriver(new CassandraClient(session), streamsConfigs);
   }
 
   @VisibleForTesting
-  public ResponsiveDriver(
-      final CqlSession session,
-      final Admin admin
-  ) {
+  public ResponsiveDriver(final CqlSession session) {
     this.session = session;
-    this.client = new CassandraClient(session);
-    this.admin = admin;
-  }
-
-  /**
-   * {@inheritDoc}
-   */
-  @Override
-  public KeyValueBytesStoreSupplier kv(final String name) {
-    return new ResponsiveKeyValueBytesStoreSupplier(client, name, executor, admin);
-  }
-
-  /**
-   * {@inheritDoc}
-   */
-  @Override
-  public WindowBytesStoreSupplier windowed(
-      final String name,
-      final long retentionMs,
-      final long windowSize,
-      final boolean retainDuplicates
-  ) {
-    return new ResponsiveWindowedStoreSupplier(
-        client,
-        name,
-        executor,
-        admin,
-        retentionMs,
-        windowSize,
-        retainDuplicates
-    );
-  }
-
-  @Override
-  public KeyValueBytesStoreSupplier globalKv(final String name) {
-    return new ResponsiveGlobalKeyValueBytesStoreSupplier(client, name, executor);
-  }
-
-  /**
-   * {@inheritDoc}
-   */
-  @Override
-  public <K, V> Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized(
-      final String name
-  ) {
-    return Materialized.<K, V>as(kv(name))
-        .withLoggingEnabled(CHANGELOG_CONFIG);
-  }
-
-  /**
-   * {@inheritDoc}
-   */
-  @Override
-  public <K, V> Materialized<K, V, WindowStore<Bytes, byte[]>> materialized(
-      final String name,
-      final long retentionMs,
-      final long windowSize,
-      final boolean retainDuplicates
-  ) {
-    return Materialized.<K, V>as(windowed(name, retentionMs, windowSize, retainDuplicates))
-        .withLoggingEnabled(CHANGELOG_CONFIG);
-  }
-
-  @Override
-  public <K, V> Materialized<K, V, KeyValueStore<Bytes, byte[]>> globalMaterialized(
-      final String name
-  ) {
-    return Materialized.<K, V>as(globalKv(name))
-        .withCachingDisabled();
   }
 
   @Override
   public void close() throws IOException {
     session.close();
-    executor.shutdown();
   }
 }

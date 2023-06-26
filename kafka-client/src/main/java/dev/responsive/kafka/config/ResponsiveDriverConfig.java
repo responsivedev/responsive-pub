@@ -25,8 +25,10 @@ import org.apache.kafka.common.config.ConfigDef.Validator;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.types.Password;
 
+import dev.responsive.kafka.api.ResponsiveDriver;
+
 /**
- * Configurations for {@link dev.responsive.kafka.api.ResponsiveDriver}
+ * Configurations for {@link ResponsiveDriver}
  */
 public class ResponsiveDriverConfig extends AbstractConfig {
 
