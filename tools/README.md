@@ -1,9 +1,16 @@
 # Responsive Tools
 
 This module contains tools that can be helpful when using the Responsive
-Platform. To run a tool in this module execute:
+Platform. This module builds a Fat JAR containing all dependencies required
+to run the tools. Once you have the JAR, you can run any of its commands -
+the example below runs `StreamsBytecodeAnalyzer`:
 ```bash
-./gradlew :tools:run --args=<args>
+java -cp tools/build/libs/tools-fat-0.1.0-1-SNAPSHOT.jar dev.responsive.tools.analyzer.StreamsBytecodeAnalyzer --help
+Usage: analyze [-hV] <jarPath>
+analyzes a JAR file for Kafka Stream usage
+      <jarPath>   Path to JAR File
+  -h, --help      Show this help message and exit.
+  -V, --version   Print version information and exit.
 ```
 
 ## Streams Bytecode Analyzer
@@ -13,7 +20,6 @@ in the `org.apache.kafka.streams` package that the JAR references. An example
 output:
 
 ```
-> Task :tools:run
 org/apache/kafka/streams/StreamsConfig -> [<init>(Map)]
 org/apache/kafka/streams/kstream/KStream -> [selectKey(KeyValueMapper), to(String), join(KTable, ValueJoiner), filter(Predicate)]
 org/apache/kafka/streams/KafkaStreams -> [<init>(Topology, StreamsConfig), start(), close()]
