@@ -6,10 +6,7 @@ import io.fabric8.kubernetes.api.model.apps.Deployment;
 import io.fabric8.kubernetes.api.model.apps.StatefulSet;
 import io.fabric8.kubernetes.client.dsl.AppsAPIGroupDSL;
 import io.javaoperatorsdk.operator.api.reconciler.Context;
-import java.util.HashMap;
 import java.util.Map;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public abstract class ManagedApplication {
   public abstract int getReplicas();
