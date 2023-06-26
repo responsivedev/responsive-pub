@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package dev.responsive.kafka.consumer;
+package dev.responsive.kafka.clients;
 
 import java.time.Duration;
 import java.util.ArrayList;
