@@ -33,17 +33,34 @@ spec:
           env:
               - name: CONTROLLER_EP
                 value: {{ .Values.controllerEndpoint }}
+              - name: LOGGING_KAFKA_EP
+                value: {{ .Values.logging.kafka.endpoint }}
+              - name: LOGGING_TOPIC
+                value: {{ .Values.logging.kafka.topic }}
+              - name: LOGGING_KAFKA_KEY_FILE
+                value: /etc/responsive-operator/logging_kafka/key.properties
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
             - name: cfg
               mountPath: /etc/responsive-operator/
               readOnly: true
+            {{- if ne .Values.logging.kafka.keySecret "" }}
+            - name: logging-kafka-key
+              mountPath: /etc/responsive-operator/logging_kafka/
+              readOnly: true
+            {{- end }}
       volumes:
         - name: cfg
           secret:
             secretName: {{ .Values.controllerSecret }}
             optional: true
+        {{- if ne .Values.logging.kafka.keySecret "" }}
+        - name: logging-kafka-key
+          secret:
+            secretName: {{ .Values.logging.kafka.keySecret }}
+            optional: true
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

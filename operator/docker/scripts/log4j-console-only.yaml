@@ -1,0 +1,12 @@
+Configuration:
+  name: Log4JWithKafka
+  Appenders:
+    Console:
+      Name: console
+      PatternLayout:
+        Pattern: "%d{yyyy-MM-dd HH:mm:ss} %-5p %c{1}:%L - %m%n"
+  Loggers:
+    Root:
+      level: INFO
+      AppenderRef:
+        - ref: console
