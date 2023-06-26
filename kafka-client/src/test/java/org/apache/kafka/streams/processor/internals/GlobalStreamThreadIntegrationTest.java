@@ -123,6 +123,7 @@ public class GlobalStreamThreadIntegrationTest {
         ConsumerConfig.MAX_POLL_RECORDS_CONFIG, MAX_POLL,
         ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class,
         ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class,
+        ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, 100, // make tests faster
         ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class,
         ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class
     );
