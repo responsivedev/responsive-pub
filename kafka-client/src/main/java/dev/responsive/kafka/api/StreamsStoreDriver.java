@@ -28,7 +28,7 @@ import org.apache.kafka.streams.state.WindowStore;
  * An interface that allows for easily wrapping different Kafka Streams
  * state store implementations and swapping them at ease.
  */
-public interface StreamsStoreDriver extends KafkaClientSupplier {
+public interface StreamsStoreDriver {
 
   /**
    * @param name the state store name
@@ -85,5 +85,11 @@ public interface StreamsStoreDriver extends KafkaClientSupplier {
   <K, V> Materialized<K, V, KeyValueStore<Bytes, byte[]>> globalMaterialized(
       final String name
   );
+
+  /**
+   * @return the {@link KafkaClientSupplier} that should be used when supplying
+   *         this driver
+   */
+  KafkaClientSupplier kafkaClientSupplier();
 
 }

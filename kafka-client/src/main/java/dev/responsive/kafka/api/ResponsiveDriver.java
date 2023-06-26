@@ -27,7 +27,6 @@ import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.shaded.guava.common.annotations.VisibleForTesting;
 import dev.responsive.db.CassandraClient;
 import dev.responsive.kafka.config.ResponsiveDriverConfig;
-import dev.responsive.kafka.consumer.ResponsiveGlobalConsumer;
 import dev.responsive.utils.SessionUtil;
 import java.io.Closeable;
 import java.io.IOException;
@@ -37,16 +36,12 @@ import java.util.Properties;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
@@ -73,7 +68,6 @@ public class ResponsiveDriver implements StreamsStoreDriver, Closeable {
   private final CassandraClient client;
   private final Admin admin;
   private final StreamsConfig config;
-  private final KafkaClientSupplier delegateClientSupplier = new DefaultKafkaClientSupplier();
 
   /**
    * @param props the properties to pass in
@@ -193,37 +187,8 @@ public class ResponsiveDriver implements StreamsStoreDriver, Closeable {
   }
 
   @Override
-  public Admin getAdmin(final Map<String, Object> config) {
-    return delegateClientSupplier.getAdmin(config);
-  }
-
-  @Override
-  public Producer<byte[], byte[]> getProducer(final Map<String, Object> config) {
-    return delegateClientSupplier.getProducer(config);
-  }
-
-  @Override
-  public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
-    return delegateClientSupplier.getConsumer(config);
-  }
-
-  @Override
-  public Consumer<byte[], byte[]> getRestoreConsumer(final Map<String, Object> config) {
-    return delegateClientSupplier.getRestoreConsumer(config);
-  }
-
-  @Override
-  public Consumer<byte[], byte[]> getGlobalConsumer(final Map<String, Object> config) {
-    final String groupId = this.config.getString(StreamsConfig.APPLICATION_ID_CONFIG) + "-global";
-    config.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
-    config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-    config.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
-
-    return new ResponsiveGlobalConsumer(
-        config,
-        delegateClientSupplier.getGlobalConsumer(config),
-        admin
-    );
+  public KafkaClientSupplier kafkaClientSupplier() {
+    return new ResponsiveKafkaClientSupplier(config);
   }
 
   @Override

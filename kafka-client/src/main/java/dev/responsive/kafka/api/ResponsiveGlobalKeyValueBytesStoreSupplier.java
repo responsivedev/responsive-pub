@@ -57,6 +57,6 @@ public class ResponsiveGlobalKeyValueBytesStoreSupplier implements KeyValueBytes
 
   @Override
   public String metricsScope() {
-    return "responsive";
+    return "responsive-global";
   }
 }

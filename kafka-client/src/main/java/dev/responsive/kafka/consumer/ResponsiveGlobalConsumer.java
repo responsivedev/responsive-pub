@@ -34,6 +34,8 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.common.utils.Time;
 
 /**
  * The {@code ResponsiveGlobalConsumer} is a proxy {@link KafkaConsumer} that
@@ -95,7 +97,6 @@ public class ResponsiveGlobalConsumer extends DelegatingConsumer<byte[], byte[]>
     );
   }
 
-  @Override
   @Deprecated
   public ConsumerRecords<byte[], byte[]> poll(final long timeoutMs) {
     return poll(Duration.ofMillis(timeoutMs));
@@ -103,7 +104,6 @@ public class ResponsiveGlobalConsumer extends DelegatingConsumer<byte[], byte[]>
 
   @Override
   public ConsumerRecords<byte[], byte[]> poll(final Duration timeout) {
-    commitSync();
     final ConsumerRecords<byte[], byte[]> poll = delegate.poll(timeout);
     return SingletonConsumerRecords.of(poll);
   }

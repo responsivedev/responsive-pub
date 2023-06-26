@@ -17,9 +17,6 @@
 package dev.responsive.kafka.api;
 
 import java.time.Duration;
-import java.util.Map;
-import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.kstream.Materialized;
@@ -77,22 +74,7 @@ public class TestStoreDriver implements StreamsStoreDriver {
   }
 
   @Override
-  public Producer<byte[], byte[]> getProducer(final Map<String, Object> config) {
-    return delegateClientSupplier.getProducer(config);
-  }
-
-  @Override
-  public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
-    return delegateClientSupplier.getConsumer(config);
-  }
-
-  @Override
-  public Consumer<byte[], byte[]> getRestoreConsumer(final Map<String, Object> config) {
-    return delegateClientSupplier.getRestoreConsumer(config);
-  }
-
-  @Override
-  public Consumer<byte[], byte[]> getGlobalConsumer(final Map<String, Object> config) {
-    return delegateClientSupplier.getGlobalConsumer(config);
+  public KafkaClientSupplier kafkaClientSupplier() {
+    return new DefaultKafkaClientSupplier();
   }
 }
