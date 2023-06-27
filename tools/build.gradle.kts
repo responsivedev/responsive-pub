@@ -39,7 +39,10 @@ val fatJar = task("fatJar", type = Jar::class) {
 }
 
 tasks.withType<JavaCompile> {
-    options.compilerArgs.addAll(arrayOf("-Aproject=${project.group}/${project.name}"))
+    options.compilerArgs.addAll(arrayOf(
+        "-Xlint:-processing",
+        "-Aproject=${project.group}/${project.name}"
+    ))
 }
 
 tasks {
