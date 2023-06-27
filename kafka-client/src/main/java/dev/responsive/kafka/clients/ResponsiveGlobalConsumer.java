@@ -147,6 +147,18 @@ public class ResponsiveGlobalConsumer extends DelegatingConsumer<byte[], byte[]>
     }
   }
 
+  @Override
+  public void close() {
+    super.close();
+    admin.close();
+  }
+  
+  @Override
+  public void close(final Duration timeout) {
+    super.close(timeout);
+    admin.close();
+  }
+
   /**
    * A hack that will return all records that were polled when calling
    * {@link #records(TopicPartition)}.
