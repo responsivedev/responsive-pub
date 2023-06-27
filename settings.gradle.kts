@@ -37,6 +37,7 @@ dependencyResolutionManagement {
             version("grpc", "1.52.1")
             version("protobuf-java", "3.22.3")
             version("slf4j", "1.7.5")
+            version("log4j2", "2.20.0")
 
             library("jackson", "com.fasterxml.jackson.datatype", "jackson-datatype-jdk8").versionRef("jackson")
 
@@ -70,9 +71,9 @@ dependencyResolutionManagement {
             // do not include these in jars that are distributed - these
             // should only be used when the distributed artifact is deployable (e.g.
             // a docker image)
-            library("slf4j", "org.slf4j", "slf4j-log4j12").versionRef("slf4j")
-            library("log4j-core", "org.apache.logging.log4j:log4j-core:2.17.1")
-            bundle("logging", listOf("slf4j", "log4j-core"))
+            library("slf4j-log4j2", "org.apache.logging.log4j", "log4j-slf4j-impl").versionRef("log4j2")
+            library("log4j-core", "org.apache.logging.log4j", "log4j-core").versionRef("log4j2")
+            bundle("logging", listOf("slf4j-log4j2", "log4j-core"))
         }
 
         create("testlibs") {

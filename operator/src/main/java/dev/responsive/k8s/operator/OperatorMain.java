@@ -39,6 +39,7 @@ public class OperatorMain {
   private static final String SECRET_CONFIG = "responsive.platform.api.secret";
 
   public static void main(String[] args) {
+    LOGGER.info("Starting main");
 
     final Options options = OperatorOptions.OPTIONS;
     final CommandLineParser parser = new DefaultParser();

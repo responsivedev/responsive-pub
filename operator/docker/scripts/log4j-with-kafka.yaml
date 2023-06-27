@@ -1,0 +1,29 @@
+Configuration:
+  name: Log4JWithKafka
+  Appenders:
+    Kafka:
+      Name: kafka
+      Topic: ${LOGGING_TOPIC}
+      JsonLayout:
+        compact: true
+      property:
+        - name: bootstrap.servers
+          value: ${LOGGING_KAFKA_EP}
+        - name: sasl.jaas.config
+          value: dev.responsive.kafka.auth.PropertiesFileLoginModule required properties='${LOGGING_KAFKA_KEY_FILE}';
+        - name: security.protocol
+          value: SASL_SSL
+        - name: sasl.mechanism
+          value: PLAIN
+        - name: client.dns.lookup
+          value: use_all_dns_ips
+    Console:
+      Name: console
+      PatternLayout:
+        Pattern: "%d{yyyy-MM-dd HH:mm:ss} %-5p %c{1}:%L - %m%n"
+  Loggers:
+    Root:
+      level: INFO
+      AppenderRef:
+        - ref: kafka
+        - ref: console

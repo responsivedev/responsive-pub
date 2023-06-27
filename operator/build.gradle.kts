@@ -34,6 +34,8 @@ dependencies {
     implementation(libs.bundles.commons)
     implementation(libs.bundles.logging)
 
+    implementation(libs.kafka.clients)
+
     annotationProcessor(libs.javaoperatorsdk)
     annotationProcessor(libs.crd.generator.atp)
 
