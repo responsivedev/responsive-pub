@@ -69,6 +69,10 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier,
     this(new Factories() {}, new DefaultKafkaClientSupplier());
   }
 
+  public ResponsiveKafkaClientSupplier(final KafkaClientSupplier clientSupplier) {
+    this(new Factories() {}, clientSupplier);
+  }
+
   ResponsiveKafkaClientSupplier(final Factories factories, final KafkaClientSupplier wrapped) {
     this.factories = factories;
     this.wrapped = wrapped;
