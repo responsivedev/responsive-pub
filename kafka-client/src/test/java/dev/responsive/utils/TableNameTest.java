@@ -33,7 +33,7 @@ class TableNameTest {
     final var name = new TableName(kafkaName);
 
     // Then:
-    MatcherAssert.assertThat(name.cassandraName(), Matchers.is("foo_Bar_baz_qux"));
+    MatcherAssert.assertThat(name.cassandraName(), Matchers.is("foo_bar_baz_qux"));
   }
 
 }
