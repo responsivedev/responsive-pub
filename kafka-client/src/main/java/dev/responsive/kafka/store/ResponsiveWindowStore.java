@@ -27,6 +27,7 @@ import dev.responsive.model.Result;
 import dev.responsive.model.Stamped;
 import dev.responsive.utils.Iterators;
 import dev.responsive.utils.RemoteMonitor;
+import dev.responsive.utils.TableName;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.Arrays;
@@ -57,8 +58,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
   private static final Logger LOG = LoggerFactory.getLogger(ResponsiveWindowStore.class);
 
   private final CassandraClient client;
-  private final String name;
-  private final String tableName;
+  private final TableName name;
   private final RemoteMonitor initRemote;
   private final Admin admin;
   private final long windowSize;
@@ -69,14 +69,13 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
 
   @SuppressWarnings("rawtypes")
   private InternalProcessorContext context;
-  private Supplier recordCollector;
   private int partition;
   private CommitBuffer<Stamped<Bytes>> buffer;
   private long observedStreamTime;
 
   public ResponsiveWindowStore(
       final CassandraClient client,
-      final String name,
+      final TableName name,
       final RemoteMonitor initRemote,
       final Admin admin,
       final long retentionPeriod,
@@ -85,7 +84,6 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
   ) {
     this.client = client;
     this.name = name;
-    this.tableName = '"' + name + '"';
     this.initRemote = initRemote;
     this.admin = admin;
 
@@ -116,7 +114,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
 
   @Override
   public String name() {
-    return name;
+    return name.kafkaName();
   }
 
   @Override
@@ -134,25 +132,24 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
   @Override
   public void init(final StateStoreContext context, final StateStore root) {
     try {
-      LOG.info("Initializing state store {} with remote table name {}", name, tableName);
+      LOG.info("Initializing state store {}", name);
       this.context = asInternalProcessorContext(context);
-      this.recordCollector = asRecordCollector(context);
 
       partition = context.taskId().partition();
-      client.createWindowedDataTable(tableName);
+      client.createWindowedDataTable(name.cassandraName());
       initRemote.await(Duration.ofSeconds(60));
-      LOG.info("Remote table {} is available for querying.", tableName);
+      LOG.info("Remote table {} is available for querying.", name.cassandraName());
 
-      client.prepareWindowedStatements(tableName);
-      client.initializeOffset(tableName, partition);
+      client.prepareWindowedStatements(name.cassandraName());
+      client.initializeOffset(name.cassandraName(), partition);
 
       buffer = new CommitBuffer<>(
           client,
-          tableName,
+          name.cassandraName(),
           new TopicPartition(
-              changelogFor(context, name, false),
+              changelogFor(context, name.kafkaName(), false),
               partition),
-          recordCollector,
+          asRecordCollector(context),
           admin,
           new Plugin(this::withinRetention)
       );
@@ -214,7 +211,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
     }
 
     final KeyValueIterator<Stamped<Bytes>, byte[]> remoteResult = client.fetch(
-        tableName,
+        name.cassandraName(),
         partition,
         key,
         time,
@@ -241,7 +238,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
     return Iterators.windowed(
         new LocalRemoteKvIterator<>(
             buffer.range(from, to),
-            client.fetch(tableName, partition, key, start, timeTo),
+            client.fetch(name.cassandraName(), partition, key, start, timeTo),
             ResponsiveWindowStore::compareKeys
         )
     );
@@ -261,7 +258,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
     return Iterators.windowedKey(
         new LocalRemoteKvIterator<>(
             buffer.range(from, to),
-            client.fetchRange(tableName, partition, keyFrom, keyTo, start, timeTo),
+            client.fetchRange(name.cassandraName(), partition, keyFrom, keyTo, start, timeTo),
             ResponsiveWindowStore::compareKeys
         ), windowSize);
   }
@@ -279,7 +276,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
     return Iterators.windowed(
         new LocalRemoteKvIterator<>(
             buffer.backRange(from, to),
-            client.backFetch(tableName, partition, key, start, timeTo),
+            client.backFetch(name.cassandraName(), partition, key, start, timeTo),
             ResponsiveWindowStore::compareKeys
         )
     );
@@ -299,7 +296,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
     return Iterators.windowedKey(
         new LocalRemoteKvIterator<>(
             buffer.backRange(from, to),
-            client.backFetchRange(tableName, partition, keyFrom, keyTo, start, timeTo),
+            client.backFetchRange(name.cassandraName(), partition, keyFrom, keyTo, start, timeTo),
             ResponsiveWindowStore::compareKeys
         ), windowSize);
   }
@@ -313,7 +310,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
     return Iterators.windowedKey(
         new LocalRemoteKvIterator<>(
             buffer.all(k -> k.stamp >= start && k.stamp < timeTo),
-            client.fetchAll(tableName, partition, start, timeTo),
+            client.fetchAll(name.cassandraName(), partition, start, timeTo),
             ResponsiveWindowStore::compareKeys
         ), windowSize
     );
@@ -329,7 +326,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
     return Iterators.windowedKey(
         new LocalRemoteKvIterator<>(
             buffer.backAll(k -> k.stamp >= start && k.stamp < timeTo),
-            client.backFetchAll(tableName, partition, start, timeTo),
+            client.backFetchAll(name.cassandraName(), partition, start, timeTo),
             ResponsiveWindowStore::compareKeys
         ), windowSize
     );
@@ -342,7 +339,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
     return Iterators.windowedKey(
         new LocalRemoteKvIterator<>(
             buffer.all(),
-            client.fetchAll(tableName, partition, start, Long.MAX_VALUE),
+            client.fetchAll(name.cassandraName(), partition, start, Long.MAX_VALUE),
             ResponsiveWindowStore::compareKeys
         ), windowSize
     );
@@ -355,7 +352,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
     return Iterators.windowedKey(
         new LocalRemoteKvIterator<>(
             buffer.backAll(x -> true),
-            client.backFetchAll(tableName, partition, start, Long.MAX_VALUE),
+            client.backFetchAll(name.cassandraName(), partition, start, Long.MAX_VALUE),
             ResponsiveWindowStore::compareKeys
         ), windowSize
     );

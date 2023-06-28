@@ -18,6 +18,7 @@ package dev.responsive.kafka.store;
 
 import dev.responsive.db.CassandraClient;
 import dev.responsive.utils.RemoteMonitor;
+import dev.responsive.utils.TableName;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
@@ -42,8 +43,7 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
   private static final Logger LOG = LoggerFactory.getLogger(ResponsiveGlobalStore.class);
 
   private final CassandraClient client;
-  private final String name;
-  private final String tableName;
+  private final TableName name;
   private final RemoteMonitor initRemote;
   private final Position position;
 
@@ -53,19 +53,18 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
 
   public ResponsiveGlobalStore(
       final CassandraClient client,
-      final String name,
+      final TableName name,
       final RemoteMonitor initRemote
   ) {
     this.client = client;
     this.name = name;
-    this.tableName = '"' + name + '"';
     this.initRemote = initRemote;
     this.position = Position.emptyPosition();
   }
 
   @Override
   public String name() {
-    return name;
+    return name.kafkaName();
   }
 
   @Override
@@ -83,7 +82,7 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
   @Override
   public void init(final StateStoreContext context, final StateStore root) {
     try {
-      LOG.info("Initializing global state store {} with remote table name {}", name, tableName);
+      LOG.info("Initializing global state store {}", name);
       this.context = context;
       // this is bad, but the assumption is that global tables are small
       // and can fit in a single partition - all writers will write using
@@ -92,12 +91,12 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
       // to be more evently distributed and take the hit only on range
       // queries
       partition = 0;
-      client.createDataTable(tableName);
+      client.createDataTable(name.cassandraName());
       initRemote.await(Duration.ofSeconds(60));
-      LOG.info("Global table {} is available for querying.", tableName);
+      LOG.info("Global table {} is available for querying.", name);
 
-      client.prepareStatements(tableName);
-      client.initializeOffset(tableName, partition);
+      client.prepareStatements(name.cassandraName());
+      client.initializeOffset(name.cassandraName(), partition);
 
       open = true;
 
@@ -125,7 +124,7 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
 
   @Override
   public void put(final Bytes key, final byte[] value) {
-    client.execute(client.insertData(tableName, partition, key, value));
+    client.execute(client.insertData(name.cassandraName(), partition, key, value));
     StoreQueryUtils.updatePosition(position, context);
   }
 
@@ -147,23 +146,23 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
   @Override
   public byte[] delete(final Bytes key) {
     final byte[] bytes = get(key);
-    client.execute(client.deleteData(tableName, partition, key));
+    client.execute(client.deleteData(name.cassandraName(), partition, key));
     return bytes;
   }
 
   @Override
   public byte[] get(final Bytes key) {
-    return client.get(tableName, partition, key);
+    return client.get(name.cassandraName(), partition, key);
   }
 
   @Override
   public KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
-    return client.range(tableName, partition, from, to);
+    return client.range(name.cassandraName(), partition, from, to);
   }
 
   @Override
   public KeyValueIterator<Bytes, byte[]> all() {
-    return client.all(tableName, partition);
+    return client.all(name.cassandraName(), partition);
   }
 
   @Override
@@ -173,7 +172,7 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
 
   @Override
   public long approximateNumEntries() {
-    return client.count(tableName, partition);
+    return client.count(name.cassandraName(), partition);
   }
 
   @Override

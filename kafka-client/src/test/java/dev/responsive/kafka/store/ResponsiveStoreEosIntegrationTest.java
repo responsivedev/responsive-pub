@@ -112,7 +112,7 @@ public class ResponsiveStoreEosIntegrationTest {
   private static final int MAX_POLL_MS = 5000;
   private static final String INPUT_TOPIC = "input";
   private static final String OUTPUT_TOPIC = "output";
-  private static final String STORE_NAME = "store";
+  private static final String STORE_NAME = "store-Name"; // use non-valid cassandra chars (-)
 
   private String name;
   private String bootstrapServers;
