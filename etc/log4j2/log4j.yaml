@@ -1,0 +1,34 @@
+
+Configuration:
+  name: Log4JWithKafka
+  Appenders:
+    Kafka:
+      Name: kafka
+      Topic: responsive.telemetry.logs.<YOUR ORG>.application
+      JsonLayout:
+        compact: true
+      property:
+        - name: bootstrap.servers
+          value: pkc-rgm37.us-west-2.aws.confluent.cloud:9092
+        - name: sasl.jaas.config
+          value: org.apache.kafka.common.security.plain.PlainLoginModule required username='<YOUR LOGGING API KEY>' password='<YOUR LOGGING API SECRET>';
+        - name: security.protocol
+          value: SASL_SSL
+        - name: sasl.mechanism
+          value: PLAIN
+        - name: client.dns.lookup
+          value: use_all_dns_ips
+    Console:
+      Name: console
+      PatternLayout:
+        Pattern: "%d{yyyy-MM-dd HH:mm:ss} %-5p %c{1}:%L - %m%n"
+  Loggers:
+    Root:
+      level: INFO
+      AppenderRef:
+        - ref: console
+    Logger:
+      name: dev.responsive
+      level: INFO
+      AppenderRef:
+        - ref: kafka

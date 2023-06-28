@@ -1,0 +1,23 @@
+<Configuration>
+  <Appenders>
+    <Kafka name="kafka" topic="responsive.telemetry.logs.<YOUR ORG>.application">
+      <JsonLayout compact="true"/>
+      <Property name="bootstrap.servers">pkc-rgm37.us-west-2.aws.confluent.cloud:9092</Property>
+      <Property name="sasl.jaas.config">org.apache.kafka.common.security.plain.PlainLoginModule required username='<YOUR LOGGING API KEY>' password='<YOUR LOGGING API SECRET>';</Property>
+      <Property name="security.protocol">SASL_SSL</Property>
+      <Property name="sasl.mechanism">PLAIN</Property>
+      <Property name="client.dns.lookup">use_all_dns_ips</Property>
+    </Kafka>
+    <Console name="console">
+      <PatternLayout pattern="%d{yyyy-MM-dd HH:mm:ss} %-5p %c{1}:%L - %m%n"/>
+    </Console>
+  </Appenders>
+  <Loggers>
+    <Root level="INFO">
+      <AppenderRef ref="console"/>
+    </Root>
+    <Logger name="dev.responsive" level="INFO">
+      <AppenderRef ref="kafka"/>
+    </Logger>
+  </Loggers>
+</Configuration>
