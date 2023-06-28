@@ -20,6 +20,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 
@@ -30,19 +31,52 @@ import org.apache.kafka.streams.state.WindowStore;
 public interface StreamsStoreDriver {
 
   /**
+   * Create a {@link KeyValueBytesStoreSupplier} for a Responsive state store.
+   * <p>
+   * If you want to create a {@link TimestampedKeyValueStore timestamped} or
+   * global {@link KeyValueStore}, you should use {@link #timestampedKv(String)}
+   * or {@link #globalKv(String)}, respectively, for your store supplier instead.
+   * 
    * @param name the state store name
-   * @return a key value store supplier with the given name that uses Responsive's
-   *         storage for its backend
+   * @return a key value store supplier with the given name that can be used to build a
+   *         key-value store that uses Responsive's storage for its backend
    */
   KeyValueBytesStoreSupplier kv(final String name);
 
   /**
+   * Create a {@link KeyValueBytesStoreSupplier} for a timestamped Responsive state store.
+   * <p>
+   * If you want to create a global {@link KeyValueStore}, you should use
+   * {@link #globalKv(String)} for your store supplier instead.
+   * 
+   * @param name the state store name
+   * @return a key value store supplier with the given name that can be used to build a
+   *        key-(timestamp/value) store that uses Responsive's storage for its backend
+   */
+  KeyValueBytesStoreSupplier timestampedKv(final String name);
+
+
+  /**
+   * Create a {@link KeyValueBytesStoreSupplier} for a global Responsive state store.
+   * <p>
+   * If you want to create a {@link TimestampedKeyValueStore timestamped} KeyValueStore,
+   * you should use {@link #timestampedKv(String)} for your store supplier instead.
+   *
+   * @param name the state store name
+   * @return a {@link KeyValueBytesStoreSupplier} with the given name that can be
+   *         used to build a global key-value store backed by Responsive's storage
+   */
+  KeyValueBytesStoreSupplier globalKv(final String name);
+
+  /**
+   * Create a {@link WindowBytesStoreSupplier} for a windowed Responsive state store.
+   * 
    * @param name the state store name
    * @param retentionMs the retention for each entry
    * @param windowSize the window size
    * @param retainDuplicates whether to retain duplicates
-   * @return a windowed key value store supplier with the given name that
-   *         uses Responsive's storage for its backend
+   * @return a window store supplier with the given name that can be used to build a
+   *         window store that uses Responsive's storage for its backend
    */
   WindowBytesStoreSupplier windowed(
       final String name,
@@ -52,19 +86,16 @@ public interface StreamsStoreDriver {
   );
 
   /**
-   * Creates a materialization for a global store, which handles update and
-   * read semantics differently from normal stores.
-   *
-   * @param name the state store name
-   * @return a key value store supplier with the given name that uses Responsive's
-   *         storage for its backend
-   */
-  KeyValueBytesStoreSupplier globalKv(final String name);
-
-  /**
    * @see #kv(String)
    */
   <K, V> Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized(
+      final String name
+  );
+
+  /**
+   * @see #globalKv(String)
+   */
+  <K, V> Materialized<K, V, KeyValueStore<Bytes, byte[]>> globalMaterialized(
       final String name
   );
 
@@ -76,13 +107,6 @@ public interface StreamsStoreDriver {
       final long retentionMs,
       final long windowSize,
       final boolean retainDuplicates
-  );
-
-  /**
-   * @see #globalKv(String)
-   */
-  <K, V> Materialized<K, V, KeyValueStore<Bytes, byte[]>> globalMaterialized(
-      final String name
   );
 
 }

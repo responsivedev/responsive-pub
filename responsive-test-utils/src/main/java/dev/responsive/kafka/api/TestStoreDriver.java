@@ -41,6 +41,11 @@ public class TestStoreDriver implements StreamsStoreDriver {
   }
 
   @Override
+  public KeyValueBytesStoreSupplier timestampedKv(final String name) {
+    return Stores.inMemoryKeyValueStore(name);
+  }
+
+  @Override
   public WindowBytesStoreSupplier windowed(final String name, final long retentionMs,
       final long windowSize, final boolean retainDuplicates) {
     return Stores.inMemoryWindowStore(
@@ -58,7 +63,7 @@ public class TestStoreDriver implements StreamsStoreDriver {
 
   @Override
   public <K, V> Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized(final String name) {
-    return Materialized.as(kv(name));
+    return Materialized.as(timestampedKv(name));
   }
 
   @Override

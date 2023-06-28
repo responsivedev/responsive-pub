@@ -115,7 +115,15 @@ public class ResponsiveDriver implements StreamsStoreDriver, Closeable {
    */
   @Override
   public KeyValueBytesStoreSupplier kv(final String name) {
-    return new ResponsiveKeyValueBytesStoreSupplier(client, name, executor, admin);
+    return new ResponsiveKeyValueBytesStoreSupplier(client, name, executor, admin, false);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  @Override
+  public KeyValueBytesStoreSupplier timestampedKv(final String name) {
+    return new ResponsiveKeyValueBytesStoreSupplier(client, name, executor, admin, true);
   }
 
   /**
@@ -151,7 +159,7 @@ public class ResponsiveDriver implements StreamsStoreDriver, Closeable {
   public <K, V> Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized(
       final String name
   ) {
-    return Materialized.<K, V>as(kv(name))
+    return Materialized.<K, V>as(timestampedKv(name))
         .withLoggingEnabled(CHANGELOG_CONFIG);
   }
 
