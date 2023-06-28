@@ -55,7 +55,6 @@ public interface StreamsStoreDriver {
    */
   KeyValueBytesStoreSupplier timestampedKv(final String name);
 
-
   /**
    * Create a {@link KeyValueBytesStoreSupplier} for a global Responsive state store.
    * <p>
