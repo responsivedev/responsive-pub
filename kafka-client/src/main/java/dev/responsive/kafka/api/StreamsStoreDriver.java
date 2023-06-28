@@ -36,7 +36,7 @@ public interface StreamsStoreDriver {
    * If you want to create a {@link TimestampedKeyValueStore timestamped} or
    * global {@link KeyValueStore}, you should use {@link #timestampedKv(String)}
    * or {@link #globalKv(String)}, respectively, for your store supplier instead.
-   * 
+   *
    * @param name the state store name
    * @return a key value store supplier with the given name that can be used to build a
    *         key-value store that uses Responsive's storage for its backend
@@ -48,7 +48,7 @@ public interface StreamsStoreDriver {
    * <p>
    * If you want to create a global {@link KeyValueStore}, you should use
    * {@link #globalKv(String)} for your store supplier instead.
-   * 
+   *
    * @param name the state store name
    * @return a key value store supplier with the given name that can be used to build a
    *        key-(timestamp/value) store that uses Responsive's storage for its backend
@@ -70,7 +70,7 @@ public interface StreamsStoreDriver {
 
   /**
    * Create a {@link WindowBytesStoreSupplier} for a windowed Responsive state store.
-   * 
+   *
    * @param name the state store name
    * @param retentionMs the retention for each entry
    * @param windowSize the window size
@@ -102,7 +102,7 @@ public interface StreamsStoreDriver {
   /**
    * @see #windowed(String, long, long, boolean)
    */
-  <K, V> Materialized<K, V, WindowStore<Bytes, byte[]>> materialized(
+  <K, V> Materialized<K, V, WindowStore<Bytes, byte[]>> windowMaterialized(
       final String name,
       final long retentionMs,
       final long windowSize,

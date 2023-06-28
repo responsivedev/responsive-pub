@@ -167,7 +167,7 @@ public class ResponsiveDriver implements StreamsStoreDriver, Closeable {
    * {@inheritDoc}
    */
   @Override
-  public <K, V> Materialized<K, V, WindowStore<Bytes, byte[]>> materialized(
+  public <K, V> Materialized<K, V, WindowStore<Bytes, byte[]>> windowMaterialized(
       final String name,
       final long retentionMs,
       final long windowSize,

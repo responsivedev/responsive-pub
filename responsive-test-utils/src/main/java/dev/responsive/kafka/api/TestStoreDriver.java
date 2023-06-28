@@ -67,14 +67,19 @@ public class TestStoreDriver implements StreamsStoreDriver {
   }
 
   @Override
-  public <K, V> Materialized<K, V, WindowStore<Bytes, byte[]>> materialized(final String name,
-      final long retentionMs, final long windowSize, final boolean retainDuplicates) {
+  public <K, V> Materialized<K, V, WindowStore<Bytes, byte[]>> windowMaterialized(
+      final String name,
+      final long retentionMs,
+      final long windowSize,
+      final boolean retainDuplicates
+  ) {
     return Materialized.as(windowed(name, retentionMs, windowSize, retainDuplicates));
   }
 
   @Override
   public <K, V> Materialized<K, V, KeyValueStore<Bytes, byte[]>> globalMaterialized(
-      final String name) {
+      final String name
+  ) {
     return Materialized.as(globalKv(name));
   }
 
