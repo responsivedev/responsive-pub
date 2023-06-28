@@ -1,7 +1,31 @@
 ---
 rules:
-  # kafka client metrics
+ # Responsive metrics
+ - bean: dev.responsive:type=responsive.streams,thread=*,topic=*,partition=*
+   metricAttribute:
+     thread: param(thread)
+     partition: param(partition)
+     topic: param(topic)
+   mapping:
+     end-offset:
+       metric: responsive.kafka.streams.source.offset.end
+       type: gauge
+       desc: the current end offset of the partition
+       unit: '{offset}'
+ - bean: dev.responsive:type=responsive.streams,consumerGroup=*,thread=*,topic=*,partition=*
+   metricAttribute:
+     group: param(group)
+     thread: param(thread)
+     partition: param(partition)
+     topic: param(topic)
+   mapping:
+     committed-offset:
+       metric: responsive.kafka.streams.source.offset.committed
+       type: gauge
+       desc: the current committed offset of the partition
+       unit: '{offset}'
 
+ # Kafka Consumer metrics
  - bean: kafka.consumer:type=consumer-fetch-manager-metrics,partition=*,topic=*,client-id=*
    metricAttribute:
      partition: param(partition)
@@ -12,7 +36,7 @@ rules:
        metric: kafka.streams.records.lag
        type: gauge
        desc: the current lag of the partition
-       unit: '{messages}'
+       unit: '{records}'
  - bean: kafka.consumer:type=consumer-fetch-manager-metrics,client-id=*
    metricAttribute:
      clientid: param(client-id)
@@ -20,17 +44,24 @@ rules:
      records-lag-max:
        metric: kafka.streams.records.lag.max
        type: gauge
-       desc: the current lag of the partition
-       unit: '{messages}'
- - bean: kafka.streams:type=stream-thread-metrics,thread-id=*
-   metricAttribute:
-     thread: param(thread-id)
-   mapping:
-     process-total:
-       metric: kafka.streams.thread.process.total
-       type: gauge
-       desc: total records processed
+       desc: the max lag of all partitions
        unit: '{records}'
+ - bean: kafka.consumer:type=consumer-coordinator-metrics,client-id=*
+   metricAttribute:
+     clientid: param(client-id)
+   mapping:
+     rebalance-rate-per-hour:
+       metric: kafka.streams.rebalance.rate
+       type: gauge
+       desc: the rate of rebalances
+       unit: '{rebalances-per-hour}'
+     failed-rebalance-rate-per-hour:
+       metric: kafka.streams.failed.rebalance.rate
+       type: gauge
+       desc: the rate of failed rebalances
+       unit: '{rebalances-per-hour}'
+
+ # Kafka Streams topic metrics
  - bean: kafka.streams:type=stream-topic-metrics,thread-id=*,task-id=*,processor-node-id=*,topic=*
    metricAttribute:
      thread: param(thread-id)
@@ -43,31 +74,95 @@ rules:
        type: gauge
        desc: total records consumed
        unit: '{records}'
- - bean: kafka.streams:type=stream-task-metrics,thread-id=*,task-id=*
-   metricAttribute:
-     thread: param(thread-id)
-     task: param(task-id)
-   mapping:
-     process-total:
-       metric: kafka.streams.task.process.total
-       type: gauge
-       desc: total records processed
-       unit: '{records}'
+
+ # Kafka Streams thread metrics
  - bean: kafka.streams:type=stream-thread-metrics,thread-id=*
    metricAttribute:
      thread: param(thread-id)
    mapping:
+     process-total:
+       metric: kafka.streams.thread.process.total
+       type: gauge
+       desc: total records processed
+       unit: '{records}'
+     process-rate:
+       metric: kafka.streams.thread.process.rate
+       type: gauge
+       desc: rate of records processed
+       unit: '{records-per-second}'
+     process-ratio:
+       metric: kafka.streams.thread.process.ratio
+       type: gauge
+       desc: fraction of time spent in process
+     commit-rate:
+       metric: kafka.streams.thread.commit.rate
+       type: gauge
+       desc: rate of commit
+       unit: '{ops-per-second}'
+     commit-ratio:
+       metric: kafka.streams.thread.commit.ratio
+       type: gauge
+       desc: fraction of time spent in commit
+     commit-latency-avg:
+       metric: kafka.streams.thread.commit.latency.avg
+       type: gauge
+       desc: avg latency of a commit
+       unit: '{milliseconds}'
+     commit-latency-max:
+       metric: kafka.streams.thread.commit.latency.max
+       type: gauge
+       desc: max latency of a commit
+       unit: '{milliseconds}'
+     poll-rate:
+       metric: kafka.streams.thread.poll.rate
+       type: gauge
+       desc: rate of poll calls
+       unit: '{ops-per-second}'
+     poll-ratio:
+       metric: kafka.streams.thread.poll.ratio
+       type: gauge
+       desc: fraction of time spent in poll
+     poll-records-avg:
+       metric: kafka.streams.thread.poll.records.avg
+       type: gauge
+       desc: avg records per poll
+       unit: '{records}'
+     punctuate-ratio:
+       metric: kafka.streams.thread.punctuate.ratio
+       type: gauge
+       desc: fraction of time spent in punctuate
+     task-closed-rate:
+       metric: kafka.streams.thread.task.closed.rate
+       type: gauge
+       desc: rate of tasks closed
+       unit: '{tasks-per-second}'
      blocked-time-ns-total:
        metric: kafka.streams.thread.blocked.time.total.ns
        type: gauge
        desc: total time the stream thread was blocked
        unit: '{nanoseconds}'
- - bean: kafka.streams:type=stream-thread-metrics,thread-id=*
-   metricAttribute:
-     thread: param(thread-id)
-   mapping:
      thread-start-time:
        metric: kafka.streams.thread.start.time
        type: gauge
        desc: the time the kafka streams thread was started
        unit: '{milliseconds}'
+
+ # Kafka Streams task metrics
+ ## THESE ARE GENERALLY **DEBUG** METRICS AND MIGHT NOT BE ENABLED
+ ## Most Streams metrics below the client and thread level are debug or even trace
+ - bean: kafka.streams:type=stream-task-metrics,thread-id=*,task-id=*
+   metricAttribute:
+     thread: param(thread-id)
+     task: param(task-id)
+   mapping:
+     ## INFO
+     active-process-ratio:
+       metric: kafka.streams.task.process.ratio
+       type: gauge
+       desc: fraction of time spent processing this task out of all the active tasks
+     ## DEBUG
+     process-total:
+       metric: kafka.streams.task.process.total
+       type: gauge
+       desc: total records processed
+       unit: '{records}'
