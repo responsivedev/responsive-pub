@@ -43,8 +43,12 @@ import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.internals.StoreQueryUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class ResponsiveStore implements KeyValueStore<Bytes, byte[]> {
+
+  private static final Logger LOG = LoggerFactory.getLogger(ResponsiveStore.class);
 
   // visible for testing
   static final Plugin PLUGIN = new Plugin();
@@ -98,12 +102,14 @@ public class ResponsiveStore implements KeyValueStore<Bytes, byte[]> {
   @Override
   public void init(final StateStoreContext context, final StateStore root) {
     try {
+      LOG.info("Initializing state store {} with remote table name {}", name, tableName);
       this.context = asInternalProcessorContext(context);
       this.recordCollector = asRecordCollector(context);
 
       partition = context.taskId().partition();
       client.createDataTable(tableName);
       initRemote.await(Duration.ofSeconds(60));
+      LOG.info("Remote table {} is available for querying.", tableName);
 
       client.prepareStatements(tableName);
       client.initializeOffset(tableName, partition);

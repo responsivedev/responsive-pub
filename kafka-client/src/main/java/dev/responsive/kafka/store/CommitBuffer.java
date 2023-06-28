@@ -173,6 +173,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
   public void flush() {
     if (buffer.isEmpty()) {
       // no need to do anything if the buffer is empty
+      LOG.info("Ignoring flush() to empty commit buffer for {}[{}]", tableName, partition);
       return;
     }
 
@@ -215,6 +216,14 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
 
   @SuppressWarnings("BooleanMethodIsAlwaysInverted")
   private boolean flush(final long offset, final UUID txnid) {
+    LOG.info("Flushing {} records to remote {}[{}] (offset={}, transactionId={})",
+        buffer.size(),
+        tableName,
+        partition,
+        offset,
+        txnid
+    );
+
     final Iterator<Entry<K, Result<K>>> entries = buffer.entrySet().iterator();
     boolean firstBatch = true;
     while (entries.hasNext()) {
@@ -261,11 +270,18 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
       }
     }
 
-    LOG.info("Flushed offsets for {}[{}] up to {} to cassandra.", tableName, partition, offset);
+    LOG.info("Completed flushing {} records to remote {}[{}] (offset={}, transactionId={})",
+        buffer.size(),
+        tableName,
+        partition,
+        offset,
+        txnid
+    );
     buffer.clear();
 
     try {
       admin.deleteRecords(Map.of(changelog, RecordsToDelete.beforeOffset(offset))).all().get();
+      LOG.info("Truncated changelog topic {} before offset {}", changelog, offset);
     } catch (final ExecutionException e) {
       LOG.warn("Could not truncate changelog topic-partition {}.", changelog, e);
     } catch (final InterruptedException e) {
