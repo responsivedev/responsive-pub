@@ -36,8 +36,9 @@ public class TableName {
 
   public TableName(final String kafkaName) {
     this.kafkaName = kafkaName;
+    final var escaped = kafkaName.replaceAll("_", "__"); // escape existing underscores
     cassandraName = INVALID_CASSANDRA_CHARS
-        .matcher(kafkaName)
+        .matcher(escaped)
         .replaceAll("_")
         .toLowerCase();
   }

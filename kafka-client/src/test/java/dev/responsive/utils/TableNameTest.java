@@ -16,8 +16,6 @@
 
 package dev.responsive.utils;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-
 import org.hamcrest.MatcherAssert;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
@@ -33,7 +31,7 @@ class TableNameTest {
     final var name = new TableName(kafkaName);
 
     // Then:
-    MatcherAssert.assertThat(name.cassandraName(), Matchers.is("foo_bar_baz_qux"));
+    MatcherAssert.assertThat(name.cassandraName(), Matchers.is("foo_bar_baz__qux"));
   }
 
 }
