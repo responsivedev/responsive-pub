@@ -31,11 +31,15 @@ import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.internals.StoreQueryUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * The {@code ResponsiveGlobalStore}
  */
 public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
+
+  private static final Logger LOG = LoggerFactory.getLogger(ResponsiveGlobalStore.class);
 
   private final CassandraClient client;
   private final String name;
@@ -79,6 +83,7 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
   @Override
   public void init(final StateStoreContext context, final StateStore root) {
     try {
+      LOG.info("Initializing global state store {} with remote table name {}", name, tableName);
       this.context = context;
       // this is bad, but the assumption is that global tables are small
       // and can fit in a single partition - all writers will write using
@@ -89,6 +94,7 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
       partition = 0;
       client.createDataTable(tableName);
       initRemote.await(Duration.ofSeconds(60));
+      LOG.info("Global table {} is available for querying.", tableName);
 
       client.prepareStatements(tableName);
       client.initializeOffset(tableName, partition);

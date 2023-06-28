@@ -49,6 +49,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * {@code CassandraClient} wraps a {@link CqlSession} with utility methods
@@ -57,6 +59,8 @@ import org.apache.kafka.streams.state.KeyValueIterator;
  * non-default keyspace.
  */
 public class CassandraClient {
+
+  private static final Logger LOG = LoggerFactory.getLogger(CassandraClient.class);
 
   public static final Bytes OFFSET_KEY = Bytes.wrap("_offset".getBytes(StandardCharsets.UTF_8));
   public static final UUID UNSET_PERMIT = new UUID(0, 0);
@@ -231,6 +235,7 @@ public class CassandraClient {
    * @param tableName the name of the table
    */
   public void createDataTable(final String tableName) {
+    LOG.info("Creating data table {} in remote store.", tableName);
     session.execute(SchemaBuilder
         .createTable(tableName)
         .ifNotExists()
@@ -266,6 +271,7 @@ public class CassandraClient {
     // this would also help us avoid having a partitioning key that is
     // too small in cardinality) we just filter the results to match the
     // time bounds
+    LOG.info("Creating windowed data table {} in remote store.", tableName);
     session.execute(SchemaBuilder
         .createTable(tableName)
         .ifNotExists()

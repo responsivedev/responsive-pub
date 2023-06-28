@@ -134,21 +134,14 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
   @Override
   public void init(final StateStoreContext context, final StateStore root) {
     try {
+      LOG.info("Initializing state store {} with remote table name {}", name, tableName);
       this.context = asInternalProcessorContext(context);
       this.recordCollector = asRecordCollector(context);
 
       partition = context.taskId().partition();
-      if (partition == 0) {
-        // since all partitions share a single table in cassandra, we avoid
-        // race conditions by just having the 0th partition to create the
-        // offset and data tables (they use IF NOT EXISTS but some Cassandra
-        // vendors do not handle that properly as it requires LWT support)
-        client.createWindowedDataTable(tableName);
-
-        initRemote.await(Duration.ofSeconds(60));
-      } else {
-        initRemote.await(Duration.ofSeconds(60));
-      }
+      client.createWindowedDataTable(tableName);
+      initRemote.await(Duration.ofSeconds(60));
+      LOG.info("Remote table {} is available for querying.", tableName);
 
       client.prepareWindowedStatements(tableName);
       client.initializeOffset(tableName, partition);
