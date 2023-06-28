@@ -24,6 +24,7 @@ import dev.responsive.db.CassandraClient;
 import dev.responsive.kafka.store.CommitBuffer.BufferPlugin;
 import dev.responsive.model.Result;
 import dev.responsive.utils.RemoteMonitor;
+import dev.responsive.utils.TableName;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
@@ -54,8 +55,7 @@ public class ResponsiveStore implements KeyValueStore<Bytes, byte[]> {
   static final Plugin PLUGIN = new Plugin();
 
   private final CassandraClient client;
-  private final String name;
-  private final String tableName;
+  private final TableName name;
   private final RemoteMonitor initRemote;
   private final Admin admin;
   private final Position position;
@@ -65,18 +65,16 @@ public class ResponsiveStore implements KeyValueStore<Bytes, byte[]> {
 
   @SuppressWarnings("rawtypes")
   private InternalProcessorContext context;
-  private Supplier recordCollector;
   private int partition;
 
   public ResponsiveStore(
       final CassandraClient client,
-      final String name,
+      final TableName name,
       final RemoteMonitor initRemote,
       final Admin admin
   ) {
     this.client = client;
     this.name = name;
-    this.tableName = '"' + name + '"';
     this.initRemote = initRemote;
     this.admin = admin;
     this.position = Position.emptyPosition();
@@ -84,7 +82,7 @@ public class ResponsiveStore implements KeyValueStore<Bytes, byte[]> {
 
   @Override
   public String name() {
-    return name;
+    return name.kafkaName();
   }
 
   @Override
@@ -102,25 +100,24 @@ public class ResponsiveStore implements KeyValueStore<Bytes, byte[]> {
   @Override
   public void init(final StateStoreContext context, final StateStore root) {
     try {
-      LOG.info("Initializing state store {} with remote table name {}", name, tableName);
+      LOG.info("Initializing state store {}", name);
       this.context = asInternalProcessorContext(context);
-      this.recordCollector = asRecordCollector(context);
 
       partition = context.taskId().partition();
-      client.createDataTable(tableName);
+      client.createDataTable(name.cassandraName());
       initRemote.await(Duration.ofSeconds(60));
-      LOG.info("Remote table {} is available for querying.", tableName);
+      LOG.info("Remote table {} is available for querying.", name.cassandraName());
 
-      client.prepareStatements(tableName);
-      client.initializeOffset(tableName, partition);
+      client.prepareStatements(name.cassandraName());
+      client.initializeOffset(name.cassandraName(), partition);
 
       buffer = new CommitBuffer<>(
           client,
-          tableName,
+          name.cassandraName(),
           new TopicPartition(
-              changelogFor(context, name, false),
+              changelogFor(context, name.kafkaName(), false),
               partition),
-          recordCollector,
+          asRecordCollector(context),
           admin,
           PLUGIN
       );
@@ -209,14 +206,14 @@ public class ResponsiveStore implements KeyValueStore<Bytes, byte[]> {
       return result.isTombstone ? null : result.value;
     }
 
-    return client.get(tableName, partition, key);
+    return client.get(name.cassandraName(), partition, key);
   }
 
   @Override
   public KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
     return new LocalRemoteKvIterator<>(
         buffer.range(from, to),
-        client.range(tableName, partition, from, to),
+        client.range(name.cassandraName(), partition, from, to),
         PLUGIN
     );
   }
@@ -225,7 +222,7 @@ public class ResponsiveStore implements KeyValueStore<Bytes, byte[]> {
   public KeyValueIterator<Bytes, byte[]> all() {
     return new LocalRemoteKvIterator<>(
         buffer.all(),
-        client.all(tableName, partition),
+        client.all(name.cassandraName(), partition),
         PLUGIN
     );
   }
@@ -237,7 +234,7 @@ public class ResponsiveStore implements KeyValueStore<Bytes, byte[]> {
 
   @Override
   public long approximateNumEntries() {
-    return client.count(tableName, partition);
+    return client.count(name.cassandraName(), partition);
   }
 
   @Override

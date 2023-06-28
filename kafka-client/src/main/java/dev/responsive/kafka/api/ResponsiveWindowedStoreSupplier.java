@@ -19,6 +19,7 @@ package dev.responsive.kafka.api;
 import dev.responsive.db.CassandraClient;
 import dev.responsive.kafka.store.ResponsiveWindowStore;
 import dev.responsive.utils.RemoteMonitor;
+import dev.responsive.utils.TableName;
 import java.util.concurrent.ScheduledExecutorService;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.utils.Bytes;
@@ -27,7 +28,7 @@ import org.apache.kafka.streams.state.WindowStore;
 
 public class ResponsiveWindowedStoreSupplier implements WindowBytesStoreSupplier {
 
-  private final String name;
+  private final TableName name;
   private final long retentionPeriod;
   private final long windowSize;
   private final boolean retainDuplicates;
@@ -45,22 +46,17 @@ public class ResponsiveWindowedStoreSupplier implements WindowBytesStoreSupplier
       final boolean retainDuplicates
   ) {
     this.client = client;
-    this.name = name;
+    this.name = new TableName(name);
     this.admin = admin;
     this.retentionPeriod = retentionPeriod;
     this.windowSize = windowSize;
     this.retainDuplicates = retainDuplicates;
-
-    // we maintain the name without quotes because quotes are
-    // not valid in Kafka topics, but on the other hand they
-    // are necessary to ensure that Cassandra can accept whatever
-    // the client tosses at it
-    awaitTable = client.awaitTable('"' + name + '"', executorService);
+    awaitTable = client.awaitTable(this.name.cassandraName(), executorService);
   }
 
   @Override
   public String name() {
-    return name;
+    return name.kafkaName();
   }
 
   @Override

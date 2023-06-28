@@ -19,6 +19,7 @@ package dev.responsive.kafka.api;
 import dev.responsive.db.CassandraClient;
 import dev.responsive.kafka.store.ResponsiveStore;
 import dev.responsive.utils.RemoteMonitor;
+import dev.responsive.utils.TableName;
 import java.util.concurrent.ScheduledExecutorService;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.utils.Bytes;
@@ -28,7 +29,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 public class ResponsiveKeyValueBytesStoreSupplier implements KeyValueBytesStoreSupplier {
 
   private final CassandraClient client;
-  private final String name;
+  private final TableName name;
   private final RemoteMonitor awaitTable;
   private final Admin admin;
 
@@ -39,19 +40,14 @@ public class ResponsiveKeyValueBytesStoreSupplier implements KeyValueBytesStoreS
       final Admin admin
   ) {
     this.client = client;
-    this.name = name;
+    this.name = new TableName(name);
     this.admin = admin;
-
-    // we maintain the name without quotes because quotes are
-    // not valid in Kafka topics, but on the other hand they
-    // are necessary to ensure that Cassandra can accept whatever
-    // the client tosses at it
-    awaitTable = client.awaitTable('"' + name + '"', executorService);
+    awaitTable = client.awaitTable(this.name.cassandraName(), executorService);
   }
 
   @Override
   public String name() {
-    return name;
+    return name.kafkaName();
   }
 
   @Override
