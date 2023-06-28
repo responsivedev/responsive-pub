@@ -1,5 +1,30 @@
 ---
 rules:
+ # Responsive metrics
+ - bean: dev.responsive:type=responsive.streams,thread=*,topic=*,partition=*
+   metricAttribute:
+     thread: param(thread)
+     partition: param(partition)
+     topic: param(topic)
+   mapping:
+     end-offset:
+       metric: responsive.kafka.streams.source.offset.end
+       type: gauge
+       desc: the current end offset of the partition
+       unit: '{offset}'
+ - bean: dev.responsive:type=responsive.streams,consumerGroup=*,thread=*,topic=*,partition=*
+   metricAttribute:
+     group: param(group)
+     thread: param(thread)
+     partition: param(partition)
+     topic: param(topic)
+   mapping:
+     committed-offset:
+       metric: responsive.kafka.streams.source.offset.committed
+       type: gauge
+       desc: the current committed offset of the partition
+       unit: '{offset}'
+
  # Kafka Consumer metrics
  - bean: kafka.consumer:type=consumer-fetch-manager-metrics,partition=*,topic=*,client-id=*
    metricAttribute:
@@ -35,20 +60,6 @@ rules:
        type: gauge
        desc: the rate of failed rebalances
        unit: '{rebalances-per-hour}'
-
- # Kafka Streams application metrics
- ## CAUTION: these are referred to as "client metrics" in the Streams docs, but we call
- ## them "application metrics" to avoid confusion with the consumer/producer clients.
- ## Note the translation from 'client-id' to 'application-id' in our tags
- - bean: kafka.streams:type=stream-metrics,client-id=*
-   metricAttribute:
-     application-id: param(client-id)
-   mapping:
-     state:
-       metric: kafka.streams.state
-       type: gauge
-       desc: the current state of this Streams application
-       unit: '{KafkaStreams.State}'
 
  # Kafka Streams topic metrics
  - bean: kafka.streams:type=stream-topic-metrics,thread-id=*,task-id=*,processor-node-id=*,topic=*
@@ -132,7 +143,7 @@ rules:
        unit: '{nanoseconds}'
      thread-start-time:
        metric: kafka.streams.thread.start.time
-       type: value
+       type: gauge
        desc: the time the kafka streams thread was started
        unit: '{milliseconds}'
 
