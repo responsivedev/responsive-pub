@@ -24,15 +24,18 @@ import dev.responsive.db.CassandraClient;
 import dev.responsive.kafka.store.CommitBuffer.BufferPlugin;
 import dev.responsive.model.Result;
 import dev.responsive.utils.RemoteMonitor;
+import dev.responsive.utils.StoreUtil;
 import dev.responsive.utils.TableName;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeoutException;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
@@ -101,6 +104,7 @@ public class ResponsiveStore implements KeyValueStore<Bytes, byte[]> {
   public void init(final StateStoreContext context, final StateStore root) {
     try {
       LOG.info("Initializing state store {}", name);
+      StoreUtil.validateTopologyOptimizationConfig(context.appConfigs());
       this.context = asInternalProcessorContext(context);
 
       partition = context.taskId().partition();

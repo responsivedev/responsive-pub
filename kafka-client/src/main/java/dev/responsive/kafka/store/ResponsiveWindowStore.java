@@ -27,6 +27,7 @@ import dev.responsive.model.Result;
 import dev.responsive.model.Stamped;
 import dev.responsive.utils.Iterators;
 import dev.responsive.utils.RemoteMonitor;
+import dev.responsive.utils.StoreUtil;
 import dev.responsive.utils.TableName;
 import java.nio.ByteBuffer;
 import java.time.Duration;
@@ -133,6 +134,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
   public void init(final StateStoreContext context, final StateStore root) {
     try {
       LOG.info("Initializing state store {}", name);
+      StoreUtil.validateTopologyOptimizationConfig(context.appConfigs());
       this.context = asInternalProcessorContext(context);
 
       partition = context.taskId().partition();
