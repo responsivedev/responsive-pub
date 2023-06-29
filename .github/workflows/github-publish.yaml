@@ -52,7 +52,7 @@ jobs:
           ./gradlew :${{ inputs.module }}:markNextVersion \
             -Prelease.incrementer=${{ inputs.increment }} \
             -Prelease.dryRun | grep "Creating" | git commit --allow-empty -F -
-          git push -f
+          git push
 
       - name: Increment Version
         uses: gradle/gradle-build-action@v2
