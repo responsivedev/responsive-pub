@@ -38,12 +38,19 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
+import org.apache.kafka.streams.state.internals.TimestampedKeyValueStoreBuilder;
+import org.slf4j.Logger;
 
 /**
  * The {@code ResponsiveDriver} should be instantiated once per JVM
@@ -150,6 +157,41 @@ public class ResponsiveDriver implements StreamsStoreDriver, Closeable {
   @Override
   public KeyValueBytesStoreSupplier globalKv(final String name) {
     return new ResponsiveGlobalKeyValueBytesStoreSupplier(client, name, executor);
+  }
+
+  public <K, V> StoreBuilder<TimestampedKeyValueStore<K, V>> timestampedKeyValueStoreBuilder(
+      final String name,
+      final Serde<K> keySerde,
+      final Serde<V> valueSerde
+  ) {
+    return new TimestampedKeyValueStoreBuilder<>(
+        timestampedKv(name),
+        keySerde,
+        valueSerde,
+        Time.SYSTEM) {
+      private final Logger log =
+          new LogContext(String.format("store-builder [%s]", name)).logger(ResponsiveDriver.class);
+
+      @Override
+      public StoreBuilder<TimestampedKeyValueStore<K, V>> withLoggingEnabled(
+          final Map<String, String> config
+      ) {
+        final String cleanupPolicy = config.get(TopicConfig.CLEANUP_POLICY_CONFIG);
+
+        if (cleanupPolicy == null || cleanupPolicy.equals(TopicConfig.CLEANUP_POLICY_COMPACT)) {
+          log.debug("Overriding the changelog topic cleanup.policy from compact to delete");
+          config.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE);
+          // If they set it to [delete] or [compact, delete] themselves, don't override anything
+        } else if (cleanupPolicy.contains(TopicConfig.CLEANUP_POLICY_DELETE)) {
+          log.debug("Using user-provided cleanup.policy configuration: {}", cleanupPolicy);
+        } else {
+          log.error("Did not recognize the provided cleanup.policy configuration: {}",
+                    cleanupPolicy);
+          config.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE);
+        }
+        return super.withLoggingEnabled(config);
+      }
+    }.withLoggingEnabled(CHANGELOG_CONFIG);
   }
 
   /**
