@@ -27,6 +27,7 @@ import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.shaded.guava.common.annotations.VisibleForTesting;
 import dev.responsive.db.CassandraClient;
 import dev.responsive.kafka.config.ResponsiveDriverConfig;
+import dev.responsive.kafka.store.ResponsiveStoreBuilder;
 import dev.responsive.utils.SessionUtil;
 import java.io.Closeable;
 import java.io.IOException;
@@ -38,12 +39,17 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
+import org.apache.kafka.streams.state.internals.TimestampedKeyValueStoreBuilder;
 
 /**
  * The {@code ResponsiveDriver} should be instantiated once per JVM
@@ -150,6 +156,22 @@ public class ResponsiveDriver implements StreamsStoreDriver, Closeable {
   @Override
   public KeyValueBytesStoreSupplier globalKv(final String name) {
     return new ResponsiveGlobalKeyValueBytesStoreSupplier(client, name, executor);
+  }
+
+  @Override
+  public <K, V> StoreBuilder<TimestampedKeyValueStore<K, V>> timestampedKeyValueStoreBuilder(
+      final String name,
+      final Serde<K> keySerde,
+      final Serde<V> valueSerde
+  ) {
+    return new ResponsiveStoreBuilder<>(
+        new TimestampedKeyValueStoreBuilder<>(
+            timestampedKv(name),
+            keySerde,
+            valueSerde,
+            Time.SYSTEM
+        )
+    ).withLoggingEnabled(CHANGELOG_CONFIG);
   }
 
   /**

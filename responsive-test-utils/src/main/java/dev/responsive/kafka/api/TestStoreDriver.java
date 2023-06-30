@@ -17,13 +17,16 @@
 package dev.responsive.kafka.api;
 
 import java.time.Duration;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 
@@ -43,6 +46,16 @@ public class TestStoreDriver implements StreamsStoreDriver {
   @Override
   public KeyValueBytesStoreSupplier timestampedKv(final String name) {
     return Stores.inMemoryKeyValueStore(name);
+  }
+
+  @Override
+  public <K, V> StoreBuilder<TimestampedKeyValueStore<K, V>> timestampedKeyValueStoreBuilder(
+      final String name, final Serde<K> keySerde, final Serde<V> valueSerde) {
+    return Stores.timestampedKeyValueStoreBuilder(
+        Stores.inMemoryKeyValueStore(name),
+        keySerde,
+        valueSerde
+    );
   }
 
   @Override

@@ -16,10 +16,13 @@
 
 package dev.responsive.kafka.api;
 
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
@@ -54,6 +57,15 @@ public interface StreamsStoreDriver {
    *        key-(timestamp/value) store that uses Responsive's storage for its backend
    */
   KeyValueBytesStoreSupplier timestampedKv(final String name);
+
+  /**
+   * @see Stores#timestampedKeyValueStoreBuilder(KeyValueBytesStoreSupplier, Serde, Serde)
+   */
+  <K, V> StoreBuilder<TimestampedKeyValueStore<K, V>> timestampedKeyValueStoreBuilder(
+      final String name,
+      final Serde<K> keySerde,
+      final Serde<V> valueSerde
+  );
 
   /**
    * Create a {@link KeyValueBytesStoreSupplier} for a global Responsive state store.
