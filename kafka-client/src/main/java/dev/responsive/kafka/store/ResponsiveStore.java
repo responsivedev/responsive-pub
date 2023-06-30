@@ -128,19 +128,7 @@ public class ResponsiveStore implements KeyValueStore<Bytes, byte[]> {
 
       open = true;
 
-      // TODO: commits won't trigger the `onCommit` callback
-      // we use the CommitCallback when registering the StateStore with
-      // the StateStoreContext to trigger the flush after committing
-      // but this won't actually happen - instead it seems that flushing
-      // the state store only happens when either (1) enough events
-      // have been processed (currently hard-coded to 10K) or (2) the
-      // system is closing down. This means that this cache may grow too
-      // large in some situations
-      //
-      // we should figure out a way to flush only on commit, but
-      // perhaps not on _every_ commit as it might hit the performance
-      // issues outlined in KAFKA-9450
-      context.register(root, buffer, buffer::flush);
+      context.register(root, buffer);
     } catch (InterruptedException | TimeoutException e) {
       throw new ProcessorStateException("Failed to initialize store.", e);
     }
