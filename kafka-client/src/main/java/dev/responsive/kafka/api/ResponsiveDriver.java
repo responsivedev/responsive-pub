@@ -31,6 +31,7 @@ import dev.responsive.utils.SessionUtil;
 import java.io.Closeable;
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ScheduledExecutorService;
@@ -180,16 +181,19 @@ public class ResponsiveDriver implements StreamsStoreDriver, Closeable {
 
         if (cleanupPolicy == null || cleanupPolicy.equals(TopicConfig.CLEANUP_POLICY_COMPACT)) {
           log.debug("Overriding the changelog topic cleanup.policy from compact to delete");
-          config.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE);
-          // If they set it to [delete] or [compact, delete] themselves, don't override anything
+          final Map<String, String> configCopy = new HashMap<>(config);
+          configCopy.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE);
+          return super.withLoggingEnabled(configCopy);
+
+          // We allow both [delete] and [compact, delete]
         } else if (cleanupPolicy.contains(TopicConfig.CLEANUP_POLICY_DELETE)) {
-          log.debug("Using user-provided cleanup.policy configuration: {}", cleanupPolicy);
+          log.debug("Setting changelog topic configuration cleanup.policy=[{}]", cleanupPolicy);
+          return super.withLoggingEnabled(config);
         } else {
           log.error("Did not recognize the provided cleanup.policy configuration: {}",
                     cleanupPolicy);
-          config.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE);
+          throw new RuntimeException("Invalid 'cleanup.policy' value in changelog configs");
         }
-        return super.withLoggingEnabled(config);
       }
     }.withLoggingEnabled(CHANGELOG_CONFIG);
   }
