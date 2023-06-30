@@ -27,11 +27,11 @@ import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.shaded.guava.common.annotations.VisibleForTesting;
 import dev.responsive.db.CassandraClient;
 import dev.responsive.kafka.config.ResponsiveDriverConfig;
+import dev.responsive.kafka.store.ResponsiveStoreBuilder;
 import dev.responsive.utils.SessionUtil;
 import java.io.Closeable;
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ScheduledExecutorService;
@@ -41,7 +41,6 @@ import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
@@ -51,7 +50,6 @@ import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.internals.TimestampedKeyValueStoreBuilder;
-import org.slf4j.Logger;
 
 /**
  * The {@code ResponsiveDriver} should be instantiated once per JVM
@@ -160,42 +158,20 @@ public class ResponsiveDriver implements StreamsStoreDriver, Closeable {
     return new ResponsiveGlobalKeyValueBytesStoreSupplier(client, name, executor);
   }
 
+  @Override
   public <K, V> StoreBuilder<TimestampedKeyValueStore<K, V>> timestampedKeyValueStoreBuilder(
       final String name,
       final Serde<K> keySerde,
       final Serde<V> valueSerde
   ) {
-    return new TimestampedKeyValueStoreBuilder<>(
-        timestampedKv(name),
-        keySerde,
-        valueSerde,
-        Time.SYSTEM) {
-      private final Logger log =
-          new LogContext(String.format("store-builder [%s]", name)).logger(ResponsiveDriver.class);
-
-      @Override
-      public StoreBuilder<TimestampedKeyValueStore<K, V>> withLoggingEnabled(
-          final Map<String, String> config
-      ) {
-        final String cleanupPolicy = config.get(TopicConfig.CLEANUP_POLICY_CONFIG);
-
-        if (cleanupPolicy == null || cleanupPolicy.equals(TopicConfig.CLEANUP_POLICY_COMPACT)) {
-          log.debug("Overriding the changelog topic cleanup.policy from compact to delete");
-          final Map<String, String> configCopy = new HashMap<>(config);
-          configCopy.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE);
-          return super.withLoggingEnabled(configCopy);
-
-          // We allow both [delete] and [compact, delete]
-        } else if (cleanupPolicy.contains(TopicConfig.CLEANUP_POLICY_DELETE)) {
-          log.debug("Setting changelog topic configuration cleanup.policy=[{}]", cleanupPolicy);
-          return super.withLoggingEnabled(config);
-        } else {
-          log.error("Did not recognize the provided cleanup.policy configuration: {}",
-                    cleanupPolicy);
-          throw new RuntimeException("Invalid 'cleanup.policy' value in changelog configs");
-        }
-      }
-    }.withLoggingEnabled(CHANGELOG_CONFIG);
+    return new ResponsiveStoreBuilder<>(
+        new TimestampedKeyValueStoreBuilder<>(
+            timestampedKv(name),
+            keySerde,
+            valueSerde,
+            Time.SYSTEM
+        )
+    ).withLoggingEnabled(CHANGELOG_CONFIG);
   }
 
   /**
