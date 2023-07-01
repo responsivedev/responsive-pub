@@ -16,38 +16,21 @@
 
 package dev.responsive.kafka.api;
 
-import dev.responsive.db.CassandraClient;
 import dev.responsive.kafka.store.ResponsiveStore;
 import dev.responsive.kafka.store.ResponsiveTimestampedStore;
-import dev.responsive.utils.RemoteMonitor;
 import dev.responsive.utils.TableName;
-import java.util.concurrent.ScheduledExecutorService;
-import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 
 public class ResponsiveKeyValueBytesStoreSupplier implements KeyValueBytesStoreSupplier {
 
-  private final CassandraClient client;
   private final TableName name;
-  private final RemoteMonitor awaitTable;
-  private final Admin admin;
   private final boolean isTimestamped;
 
-  public ResponsiveKeyValueBytesStoreSupplier(
-      final CassandraClient client,
-      final String name,
-      final ScheduledExecutorService executorService,
-      final Admin admin,
-      final boolean isTimestamped
-  ) {
-    this.client = client;
+  public ResponsiveKeyValueBytesStoreSupplier(final String name, final boolean isTimestamped) {
     this.name = new TableName(name);
-    this.admin = admin;
     this.isTimestamped = isTimestamped;
-
-    awaitTable = client.awaitTable(this.name.cassandraName(), executorService);
   }
 
   @Override
@@ -58,9 +41,9 @@ public class ResponsiveKeyValueBytesStoreSupplier implements KeyValueBytesStoreS
   @Override
   public KeyValueStore<Bytes, byte[]> get() {
     if (isTimestamped) {
-      return new ResponsiveTimestampedStore(client, name, awaitTable, admin);
+      return new ResponsiveTimestampedStore(name);
     } else {
-      return new ResponsiveStore(client, name, awaitTable, admin);
+      return new ResponsiveStore(name);
     }
   }
 

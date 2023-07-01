@@ -40,7 +40,8 @@ import static org.hamcrest.Matchers.lessThan;
 
 import com.datastax.oss.driver.api.core.CqlSession;
 import dev.responsive.db.CassandraClient;
-import dev.responsive.kafka.api.ResponsiveDriver;
+import dev.responsive.kafka.api.ResponsiveKafkaStreams;
+import dev.responsive.kafka.api.ResponsiveStores;
 import dev.responsive.utils.ContainerExtension;
 import dev.responsive.utils.RemoteMonitor;
 import java.lang.reflect.Field;
@@ -83,7 +84,6 @@ import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KafkaStreams.StateListener;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
@@ -92,7 +92,6 @@ import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.namedtopology.KafkaStreamsNamedTopologyWrapper;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.Stores;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -270,19 +269,15 @@ public class ResponsiveStoreEosIntegrationTest {
   }
 
   private StoreBuilder<KeyValueStore<Long, Long>> storeSupplier() {
-    final ResponsiveDriver responsiveDriver = new ResponsiveDriver(
-        session,
-        admin
-    );
-    return Stores.keyValueStoreBuilder(
-        responsiveDriver.kv(STORE_NAME),
+    return ResponsiveStores.keyValueStoreBuilder(
+        STORE_NAME,
         Serdes.Long(),
         Serdes.Long()
     ).withLoggingEnabled(
         Map.of(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE));
   }
 
-  private KafkaStreams buildStreams(
+  private ResponsiveKafkaStreams buildStreams(
       final Map<String, Object> originals,
       final String instance,
       final SharedState state
@@ -290,7 +285,6 @@ public class ResponsiveStoreEosIntegrationTest {
     final Map<String, Object> properties = new HashMap<>(originals);
     properties.put(APPLICATION_SERVER_CONFIG, instance + ":1024");
 
-    final StreamsConfig config = new StreamsConfig(properties);
     final StreamsBuilder builder = new StreamsBuilder();
     builder.addStateStore(storeSupplier());
 
@@ -299,7 +293,7 @@ public class ResponsiveStoreEosIntegrationTest {
         .process(() -> new TestProcessor(instance, state), STORE_NAME)
         .to(OUTPUT_TOPIC);
 
-    return new KafkaStreams(builder.build(), config);
+    return ResponsiveKafkaStreams.create(builder.build(), properties);
   }
 
   private void startAndAwaitRunning(

@@ -1,12 +1,14 @@
 package dev.responsive.kafka.api;
 
-import java.time.Duration;
+import dev.responsive.kafka.store.ResponsiveMaterialized;
+import dev.responsive.kafka.store.ResponsiveStoreBuilder;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.kstream.StreamJoined;
+import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
@@ -25,116 +27,172 @@ public final class ResponsiveStores {
   /**
    * Create a {@link StoreBuilder} that can be used to build a Responsive
    * {@link KeyValueStore} and connect it via the Processor API. If using the DSL, use
-   * {@link #materialized(KeyValueStoreOptions)} instead.
+   * {@link #materialized(String)} instead.
    *
-   * @param options the {@link KeyValueStoreOptions} to use
+   * @param name the store name
+   * @param keySerde the key serde. If null, the default.key.serde config will be used
+   * @param valueSerde the value serde. If null, the default.value.serde config will be used
    * @return a store builder that can be used to build a key-value store with the given options
    *         that uses Responsive's storage for its backend
    */
   public static <K, V> StoreBuilder<KeyValueStore<K, V>> keyValueStoreBuilder(
-      final KeyValueStoreOptions<K, V> options
+      final String name,
+      final Serde<K> keySerde,
+      final Serde<V> valueSerde
   ) {
-    throw new UnsupportedOperationException("Not yet implemented: use ResponsiveDriver for now");
+    final KeyValueBytesStoreSupplier storeSupplier =
+        new ResponsiveKeyValueBytesStoreSupplier(name, false);
+
+    return new ResponsiveStoreBuilder<>(
+        Stores.keyValueStoreBuilder(storeSupplier, keySerde, valueSerde),
+        false
+    );
   }
 
   /**
    * Create a {@link StoreBuilder} that can be used to build a Responsive
    * {@link TimestampedKeyValueStore} and connect it via the Processor API. If using the DSL, use
-   * {@link #materialized(KeyValueStoreOptions)} instead.
+   * {@link #materialized} instead.
    *
-   * @param options the {@link KeyValueStoreOptions} to use
+   * @param name the store name
+   * @param keySerde the key serde. If null, the default.key.serde config will be used
+   * @param valueSerde the value serde. If null, the default.value.serde config will be used
    * @return a store builder that can be used to build a key-value store with the given options
    *         that uses Responsive's storage for its backend
    */
   public static <K, V> StoreBuilder<TimestampedKeyValueStore<K, V>> timestampedKeyValueStoreBuilder(
-      final KeyValueStoreOptions<K, V> options
+      final String name,
+      final Serde<K> keySerde,
+      final Serde<V> valueSerde
   ) {
-    throw new UnsupportedOperationException("Not yet implemented: use ResponsiveDriver for now");
+
+    return new ResponsiveStoreBuilder<>(
+        Stores.timestampedKeyValueStoreBuilder(
+            new ResponsiveKeyValueBytesStoreSupplier(name, true),
+            keySerde,
+            valueSerde),
+        false
+    );
   }
 
   /**
    * Create a {@link StoreBuilder} that can be used to build a Responsive {@link WindowStore}
    * and connect it via the Processor API. If using the DSL, use
-   * {@link #windowMaterialized(WindowStoreOptions)} instead for most operators and
-   * {@link #streamJoinedStore(String, JoinWindows)} for stream-stream joins specifically.
+   * {@link #windowMaterialized} instead.
    *
-   * @param options the {@link WindowStoreOptions} to use
+   * @param name the store name
+   * @param retentionMs the retention period in milliseconds
+   * @param windowSize the window size in milliseconds
+   * @param retainDuplicates whether to retain duplicates. Should be false for most operators
+   * @param keySerde the key serde. If null, the default.key.serde config will be used
+   * @param valueSerde the value serde. If null, the default.value.serde config will be used
    * @return a store builder that can be used to build a window store with the given options
    *         that uses Responsive's storage for its backend
    */
   public static <K, V> StoreBuilder<WindowStore<K, V>> windowStoreBuilder(
-      final WindowStoreOptions<K, V> options
+      final String name,
+      final long retentionMs,
+      final long windowSize,
+      final boolean retainDuplicates,
+      final Serde<K> keySerde,
+      final Serde<V> valueSerde
   ) {
-    throw new UnsupportedOperationException("Not yet implemented: use ResponsiveDriver for now");
+    final WindowBytesStoreSupplier storeSupplier = new ResponsiveWindowedStoreSupplier(
+        name,
+        retentionMs,
+        windowSize,
+        retainDuplicates
+    );
+
+    return new ResponsiveStoreBuilder<>(
+        Stores.windowStoreBuilder(storeSupplier, keySerde, valueSerde),
+        false
+    );
   }
 
   /**
    * Create a {@link StoreBuilder} that can be used to build a Responsive
    * {@link TimestampedWindowStore} and connect it via the Processor API. If using the DSL, use
-   * {@link #windowMaterialized(WindowStoreOptions)} instead for most operators and
-   * {@link #streamJoinedStore(String, JoinWindows)} for stream-stream joins specifically.
+   * {@link #windowMaterialized} instead.
    *
-   * @param options the {@link WindowStoreOptions} to use
+   * @param name the store name
+   * @param retentionMs the retention period in milliseconds
+   * @param windowSize the window size in milliseconds
+   * @param retainDuplicates whether to retain duplicates. Should be false for most operators
+   * @param keySerde the key serde. If null, the default.key.serde config will be used
+   * @param valueSerde the value serde. If null, the default.value.serde config will be used
    * @return a store builder that can be used to build a window store with the given options
    *         that uses Responsive's storage for its backend
    */
   public static <K, V> StoreBuilder<TimestampedWindowStore<K, V>> timestampedWindowStoreBuilder(
-      final WindowStoreOptions<K, V> options
-  ) {
-    throw new UnsupportedOperationException("Not yet implemented: use ResponsiveDriver for now");
-  }
-
-  /**
-   * Create a {@link WindowBytesStoreSupplier} for a windowed Responsive state store specific to
-   * stream-stream joins in the DSL. This should be set for both stores in the {@link StreamJoined}
-   * configuration options passed in to the stream-stream join operator.
-   *
-   * @param name the name for this store
-   * @param joinWindows the window configuration for this stream-stream join
-   * @return a store supplier that can be used to build a window store for stream-stream joins
-   *         with the given name that uses Responsive's storage for its backend
-   */
-  public static WindowBytesStoreSupplier streamJoinedStore(
       final String name,
-      final JoinWindows joinWindows
+      final long retentionMs,
+      final long windowSize,
+      final boolean retainDuplicates,
+      final Serde<K> keySerde,
+      final Serde<V> valueSerde
   ) {
-    final WindowStoreOptions<?, ?> options =
-        WindowStoreOptions.withNameAndSize(name, Duration.ofMillis(joinWindows.size()))
-            .withRetention(Duration.ofMillis(joinWindows.size() + joinWindows.gracePeriodMs()))
-            .withRetainDuplicates(true);
-    throw new UnsupportedOperationException("Not yet implemented: use ResponsiveDriver for now");
+    final WindowBytesStoreSupplier storeSupplier = new ResponsiveWindowedStoreSupplier(
+        name,
+        retentionMs,
+        windowSize,
+        retainDuplicates
+    );
+
+    return new ResponsiveStoreBuilder<>(
+        Stores.timestampedWindowStoreBuilder(
+            storeSupplier,
+            keySerde,
+            valueSerde),
+        false
+    );
   }
 
   /**
    * Create a {@link Materialized} that can be used to build a Responsive {@link KeyValueStore}
    * and materialized in the DSL. If using the low-level Processor API, use
-   * {@link #keyValueStoreBuilder(KeyValueStoreOptions)} instead.
+   * {@link #keyValueStoreBuilder} instead.
    *
-   * @param options the {@link KeyValueStoreOptions} to use
+   * @param name the store name
    * @return a Materialized configuration that can be used to build a key value store with the
    *         given options that uses Responsive's storage for its backend
    */
   public static <K, V> Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized(
-      final KeyValueStoreOptions<?, ?> options
+      final String name
   ) {
-    throw new UnsupportedOperationException("Not yet implemented: use ResponsiveDriver for now");
+    final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized =
+        Materialized.as(new ResponsiveKeyValueBytesStoreSupplier(name, true));
+
+    return new ResponsiveMaterialized<>(materialized, false);
   }
 
   /**
    * Create a {@link Materialized} that can be used to build a Responsive {@link WindowStore}
-   * and materialized in the DSL for most operators. For stream-stream joins specifically, see
-   * {@link #streamJoinedStore(String, JoinWindows)} instead. If using the low-level Processor API,
-   * use {@link #windowStoreBuilder(WindowStoreOptions)}
+   * and materialized in the DSL for most operators. If using the low-level Processor API,
+   * use {@link #windowStoreBuilder}
    *
-   * @param options the {@link WindowStoreOptions} to use
+   * @param name the store name
+   * @param retentionMs the retention period in milliseconds
+   * @param windowSize the window size in milliseconds
+   * @param retainDuplicates whether to retain duplicates. Should be false for most operators
    * @return a Materialized configuration that can be used to build a key value store with the
    *         given options that uses Responsive's storage for its backend
    */
   public static <K, V> Materialized<K, V, WindowStore<Bytes, byte[]>> windowMaterialized(
-      final WindowStoreOptions<?, ?> options
+      final String name,
+      final long retentionMs,
+      final long windowSize,
+      final boolean retainDuplicates
   ) {
-    throw new UnsupportedOperationException("Not yet implemented: use ResponsiveDriver for now");
-  };
+    final Materialized<K, V, WindowStore<Bytes, byte[]>> materialized = Materialized.as(
+        new ResponsiveWindowedStoreSupplier(name, retentionMs, windowSize, retainDuplicates)
+    );
+
+    return new ResponsiveMaterialized<>(
+        materialized,
+        false
+    );
+  }
 
 
   private ResponsiveStores() { }

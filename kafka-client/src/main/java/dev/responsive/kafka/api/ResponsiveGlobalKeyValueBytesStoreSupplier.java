@@ -16,29 +16,18 @@
 
 package dev.responsive.kafka.api;
 
-import dev.responsive.db.CassandraClient;
 import dev.responsive.kafka.store.ResponsiveGlobalStore;
-import dev.responsive.utils.RemoteMonitor;
 import dev.responsive.utils.TableName;
-import java.util.concurrent.ScheduledExecutorService;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 
 public class ResponsiveGlobalKeyValueBytesStoreSupplier implements KeyValueBytesStoreSupplier {
 
-  private final CassandraClient client;
   private final TableName name;
-  private final RemoteMonitor awaitTable;
 
-  public ResponsiveGlobalKeyValueBytesStoreSupplier(
-      final CassandraClient client,
-      final String name,
-      final ScheduledExecutorService executorService
-  ) {
-    this.client = client;
+  public ResponsiveGlobalKeyValueBytesStoreSupplier(final String name) {
     this.name = new TableName(name);
-    awaitTable = client.awaitTable(this.name.cassandraName(), executorService);
   }
 
   @Override
@@ -48,7 +37,7 @@ public class ResponsiveGlobalKeyValueBytesStoreSupplier implements KeyValueBytes
 
   @Override
   public KeyValueStore<Bytes, byte[]> get() {
-    return new ResponsiveGlobalStore(client, name, awaitTable);
+    return new ResponsiveGlobalStore(name);
   }
 
   @Override

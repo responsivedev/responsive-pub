@@ -45,7 +45,7 @@ public class TopologyTestDriverExampleTest {
     props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
     props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
 
-    final Topology topo = topology(new TestStoreDriver());
+    final Topology topo = topology();
     final TopologyTestDriver driver = new TopologyTestDriver(topo, props);
 
     final TestInputTopic<String, String> bids = driver.createInputTopic(
@@ -75,13 +75,13 @@ public class TopologyTestDriverExampleTest {
     driver.close();
   }
 
-  Topology topology(final StreamsStoreDriver driver) {
+  Topology topology() {
     final StreamsBuilder builder = new StreamsBuilder();
 
     // schema for bids is key: <bid_id> value: <bid_id, amount, person_id>
     final KStream<String, String> bids = builder.stream("bids");
     // schema for people is key: <person_id> value: <person_id, name, state>
-    final KTable<String, String> people = builder.table("people", driver.materialized("people"));
+    final KTable<String, String> people = builder.table("people", ResponsiveStores.materialized("people"));
 
     bids
         // person_id is 3rd column

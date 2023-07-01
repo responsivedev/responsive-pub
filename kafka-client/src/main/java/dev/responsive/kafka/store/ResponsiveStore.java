@@ -21,6 +21,7 @@ import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils
 
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.db.CassandraClient;
+import dev.responsive.kafka.api.SharedClients;
 import dev.responsive.kafka.store.CommitBuffer.BufferPlugin;
 import dev.responsive.model.Result;
 import dev.responsive.utils.RemoteMonitor;
@@ -29,7 +30,6 @@ import dev.responsive.utils.TableName;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
-import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Bytes;
@@ -55,10 +55,9 @@ public class ResponsiveStore implements KeyValueStore<Bytes, byte[]> {
   // visible for testing
   static final Plugin PLUGIN = new Plugin();
 
-  private final CassandraClient client;
+  private CassandraClient client;
+
   private final TableName name;
-  private final RemoteMonitor initRemote;
-  private final Admin admin;
   private final Position position;
 
   private boolean open;
@@ -69,15 +68,9 @@ public class ResponsiveStore implements KeyValueStore<Bytes, byte[]> {
   private int partition;
 
   public ResponsiveStore(
-      final CassandraClient client,
-      final TableName name,
-      final RemoteMonitor initRemote,
-      final Admin admin
+      final TableName name
   ) {
-    this.client = client;
     this.name = name;
-    this.initRemote = initRemote;
-    this.admin = admin;
     this.position = Position.emptyPosition();
   }
 
@@ -104,10 +97,14 @@ public class ResponsiveStore implements KeyValueStore<Bytes, byte[]> {
       LOG.info("Initializing state store {}", name);
       StoreUtil.validateTopologyOptimizationConfig(context.appConfigs());
       this.context = asInternalProcessorContext(context);
-
       partition = context.taskId().partition();
+
+      final SharedClients sharedClients = new SharedClients(context.appConfigs());
+      client = sharedClients.cassandraClient;
+
+      final RemoteMonitor monitor = client.awaitTable(name.cassandraName(), sharedClients.executor);
       client.createDataTable(name.cassandraName());
-      initRemote.await(Duration.ofSeconds(60));
+      monitor.await(Duration.ofSeconds(60));
       LOG.info("Remote table {} is available for querying.", name.cassandraName());
 
       client.prepareStatements(name.cassandraName());
@@ -120,7 +117,7 @@ public class ResponsiveStore implements KeyValueStore<Bytes, byte[]> {
               changelogFor(context, name.kafkaName(), false),
               partition),
           asRecordCollector(context),
-          admin,
+          sharedClients.admin,
           PLUGIN
       );
 

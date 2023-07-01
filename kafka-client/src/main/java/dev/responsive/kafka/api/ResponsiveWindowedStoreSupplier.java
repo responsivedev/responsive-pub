@@ -16,12 +16,8 @@
 
 package dev.responsive.kafka.api;
 
-import dev.responsive.db.CassandraClient;
 import dev.responsive.kafka.store.ResponsiveWindowStore;
-import dev.responsive.utils.RemoteMonitor;
 import dev.responsive.utils.TableName;
-import java.util.concurrent.ScheduledExecutorService;
-import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
@@ -32,26 +28,17 @@ public class ResponsiveWindowedStoreSupplier implements WindowBytesStoreSupplier
   private final long retentionPeriod;
   private final long windowSize;
   private final boolean retainDuplicates;
-  private final CassandraClient client;
-  private final RemoteMonitor awaitTable;
-  private final Admin admin;
 
   public ResponsiveWindowedStoreSupplier(
-      final CassandraClient client,
       final String name,
-      final ScheduledExecutorService executorService,
-      final Admin admin,
       final long retentionPeriod,
       final long windowSize,
       final boolean retainDuplicates
   ) {
-    this.client = client;
     this.name = new TableName(name);
-    this.admin = admin;
     this.retentionPeriod = retentionPeriod;
     this.windowSize = windowSize;
     this.retainDuplicates = retainDuplicates;
-    awaitTable = client.awaitTable(this.name.cassandraName(), executorService);
   }
 
   @Override
@@ -62,10 +49,7 @@ public class ResponsiveWindowedStoreSupplier implements WindowBytesStoreSupplier
   @Override
   public WindowStore<Bytes, byte[]> get() {
     return new ResponsiveWindowStore(
-        client,
         name,
-        awaitTable,
-        admin,
         retentionPeriod,
         windowSize,
         retainDuplicates

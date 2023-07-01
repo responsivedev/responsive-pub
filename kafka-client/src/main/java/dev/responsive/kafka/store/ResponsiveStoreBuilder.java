@@ -16,17 +16,23 @@
 
 package dev.responsive.kafka.store;
 
+import static dev.responsive.utils.StoreUtil.validateLogConfigs;
+
 import java.util.Map;
-import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 
 public class ResponsiveStoreBuilder<T extends StateStore> implements StoreBuilder<T> {
 
   private final StoreBuilder<T> delegate;
+  private final boolean truncateChangelog;
 
-  public ResponsiveStoreBuilder(final StoreBuilder<T> delegate) {
+  public ResponsiveStoreBuilder(
+      final StoreBuilder<T> delegate,
+      final boolean truncateChangelog
+  ) {
     this.delegate = delegate;
+    this.truncateChangelog = truncateChangelog;
   }
 
   @Override
@@ -43,14 +49,7 @@ public class ResponsiveStoreBuilder<T extends StateStore> implements StoreBuilde
 
   @Override
   public StoreBuilder<T> withLoggingEnabled(final Map<String, String> config) {
-    // TODO(rodesai): when we support the source-changelog optimization we should edit this
-    final String cleanupPolicy = config.get(TopicConfig.CLEANUP_POLICY_CONFIG);
-    if (!cleanupPolicy.equals(TopicConfig.CLEANUP_POLICY_DELETE)) {
-      throw new IllegalArgumentException(String.format("Changelogs must use %s=[%s]. Got [%s]",
-          TopicConfig.CLEANUP_POLICY_CONFIG,
-          TopicConfig.CLEANUP_POLICY_DELETE,
-          cleanupPolicy));
-    }
+    validateLogConfigs(config, truncateChangelog);
 
     delegate.withLoggingEnabled(config);
     return this;
