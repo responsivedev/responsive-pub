@@ -29,18 +29,16 @@ public class ManagedStatefulSet extends ManagedApplication {
 
   @Override
   public void setReplicas(final Integer targetReplicas, final Context<ResponsivePolicy> context) {
-    try (final var appClient = context.getClient().apps()) {
-      appClient.statefulSets()
-          .inNamespace(namespace)
-          .withName(appName)
-          .edit(d -> {
-            if (d.getMetadata().getResourceVersion()
-                .equals(getResourceVersion())) {
-              d.getSpec().setReplicas(targetReplicas);
-            }
-            return d;
-          });
-    }
+    context.getClient().apps().statefulSets()
+        .inNamespace(namespace)
+        .withName(appName)
+        .edit(d -> {
+          if (d.getMetadata().getResourceVersion()
+              .equals(getResourceVersion())) {
+            d.getSpec().setReplicas(targetReplicas);
+          }
+          return d;
+        });
   }
 
   @Override
@@ -60,36 +58,34 @@ public class ManagedStatefulSet extends ManagedApplication {
         = statefulSet.getMetadata().getLabels()
         .containsKey(ResponsivePolicyReconciler.NAMESPACE_LABEL);
     if (!hasNameLabel || !hasNamespaceLabel) {
-      try (final var appClient = ctx.getClient().apps()) {
-        // TODO(rohan): I don't think this is patching the way I expect. Review the patch APIs
-        //  things to check: do we need to check the version or does that happen automatically?
-        //  things to check: this should only be updating the labels and thats it (e.g. truly
-        //  a patch)
-        appClient.statefulSets()
-            .inNamespace(statefulSet.getMetadata().getNamespace())
-            .withName(statefulSet.getMetadata().getName())
-            .edit(d -> {
-              if (d.getMetadata().getResourceVersion()
-                  .equals(statefulSet.getMetadata().getResourceVersion())) {
-                final HashMap<String, String> newLabels =
-                    new HashMap<>(d.getMetadata().getLabels());
-                newLabels.put(
-                    ResponsivePolicyReconciler.NAMESPACE_LABEL,
-                    policy.getMetadata().getNamespace()
-                );
-                newLabels.put(ResponsivePolicyReconciler.NAME_LABEL,
-                    policy.getMetadata().getName());
-                d.getMetadata().setLabels(newLabels);
-              }
-              LOGGER.info("Added labels '{}:{}' and '{}:{}' to statefulset {}",
-                  ResponsivePolicyReconciler.NAME_LABEL,
-                  policy.getMetadata().getName(),
+      // TODO(rohan): I don't think this is patching the way I expect. Review the patch APIs
+      //  things to check: do we need to check the version or does that happen automatically?
+      //  things to check: this should only be updating the labels and thats it (e.g. truly
+      //  a patch)
+      ctx.getClient().apps().statefulSets()
+          .inNamespace(statefulSet.getMetadata().getNamespace())
+          .withName(statefulSet.getMetadata().getName())
+          .edit(d -> {
+            if (d.getMetadata().getResourceVersion()
+                .equals(statefulSet.getMetadata().getResourceVersion())) {
+              final HashMap<String, String> newLabels =
+                  new HashMap<>(d.getMetadata().getLabels());
+              newLabels.put(
                   ResponsivePolicyReconciler.NAMESPACE_LABEL,
-                  policy.getMetadata().getNamespace(),
-                  statefulSet.getMetadata().getName());
-              return d;
-            });
-      }
+                  policy.getMetadata().getNamespace()
+              );
+              newLabels.put(ResponsivePolicyReconciler.NAME_LABEL,
+                  policy.getMetadata().getName());
+              d.getMetadata().setLabels(newLabels);
+            }
+            LOGGER.info("Added labels '{}:{}' and '{}:{}' to statefulset {}",
+                ResponsivePolicyReconciler.NAME_LABEL,
+                policy.getMetadata().getName(),
+                ResponsivePolicyReconciler.NAMESPACE_LABEL,
+                policy.getMetadata().getNamespace(),
+                statefulSet.getMetadata().getName());
+            return d;
+          });
     }
   }
 }
