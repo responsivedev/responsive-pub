@@ -31,7 +31,6 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
   private final ScheduledExecutorService executor;
   private final Admin admin;
 
-
   private ResponsiveKafkaStreams(
       final Topology topology,
       final StreamsConfig streamsConfigs,
@@ -91,25 +90,29 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     );
   }
 
-  @Override
-  public void close() {
-    super.close();
+  private void closeClients() {
     session.close();
     admin.close();
     executor.shutdown();
   }
 
   @Override
+  public void close() {
+    super.close();
+    closeClients();
+  }
+
+  @Override
   public boolean close(final Duration timeout) {
     final boolean closed = super.close(timeout);
-    close();
+    closeClients();
     return closed;
   }
 
   @Override
   public boolean close(final CloseOptions options) {
     final boolean closed = super.close(options);
-    close();
+    closeClients();
     return closed;
   }
 }
