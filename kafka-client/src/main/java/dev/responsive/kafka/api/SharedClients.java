@@ -9,7 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Basic container class for shared clients and structures
+ * Basic container class for session clients and other shared resources
  */
 public class SharedClients {
   private static final String INTERNAL_CASSANDRA_CLIENT_CONFIG = "__internal.responsive.cassandra.client__";
