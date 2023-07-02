@@ -24,6 +24,7 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigDef.Validator;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
 
 /**
  * Configurations for {@link dev.responsive.kafka.api.ResponsiveDriver}
@@ -62,6 +63,12 @@ public class ResponsiveDriverConfig extends AbstractConfig {
   private static final String REQUEST_TIMEOUT_MS_DOC = "The timeout for making requests to the "
       + "responsive server. This applies both to metadata requests and query execution.";
   private static final long REQUEST_TIMEOUT_MS_DEFAULT = 5000L;
+
+
+  // ------------------ required StreamsConfig overrides ----------------------
+
+  public static final int NUM_STANDBYS_OVERRIDE = 0;
+  public static final String TASK_ASSIGNOR_CLASS_OVERRIDE = StickyTaskAssignor.class.getName();
 
   private static final ConfigDef CONFIG_DEF = new ConfigDef()
       .define(

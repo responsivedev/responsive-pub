@@ -1,4 +1,4 @@
-package dev.responsive.kafka.api;
+package dev.responsive.kafka.clients;
 
 import dev.responsive.db.CassandraClient;
 import java.util.HashMap;
