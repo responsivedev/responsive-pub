@@ -9,7 +9,7 @@ import org.slf4j.LoggerFactory;
 
 public class ManagedStatefulSet extends ManagedApplication {
 
-  private static final Logger LOGGER = LoggerFactory.getLogger(ManagedStatefulSet.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ManagedStatefulSet.class);
 
   private final StatefulSet statefulSet;
   private final String appName;
@@ -78,7 +78,7 @@ public class ManagedStatefulSet extends ManagedApplication {
                   policy.getMetadata().getName());
               d.getMetadata().setLabels(newLabels);
             }
-            LOGGER.info("Added labels '{}:{}' and '{}:{}' to statefulset {}",
+            LOG.info("Added labels '{}:{}' and '{}:{}' to statefulset {}",
                 ResponsivePolicyReconciler.NAME_LABEL,
                 policy.getMetadata().getName(),
                 ResponsivePolicyReconciler.NAMESPACE_LABEL,

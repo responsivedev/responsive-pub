@@ -43,8 +43,7 @@ import org.slf4j.LoggerFactory;
  */
 public class MetricPublishingCommitListener
     implements ResponsiveProducer.Listener, ResponsiveConsumer.Listener, Closeable {
-  private static final Logger LOGGER
-      = LoggerFactory.getLogger(MetricPublishingCommitListener.class);
+  private static final Logger LOG = LoggerFactory.getLogger(MetricPublishingCommitListener.class);
   private final Metrics metrics;
   private final String threadId;
   private final Map<TopicPartition, Optional<CommittedOffset>> offsets = new ConcurrentHashMap<>();
@@ -92,7 +91,7 @@ public class MetricPublishingCommitListener
           e.getKey().getPartition(),
           (k, v) -> {
             if (v.isEmpty()) {
-              LOGGER.info("add committed offset metric for {} {}", threadId, k);
+              LOG.info("add committed offset metric for {} {}", threadId, k);
               metrics.addMetric(
                   metricName(e.getKey()),
                   (Gauge<Long>) (config, now) ->
@@ -100,7 +99,7 @@ public class MetricPublishingCommitListener
                           .map(CommittedOffset::getOffset).orElse(-1L)
               );
             }
-            LOGGER.info("record committed offset {} {}: {}", threadId, k, e.getValue());
+            LOG.info("record committed offset {} {}: {}", threadId, k, e.getValue());
             return Optional.of(new CommittedOffset(e.getValue(), e.getKey().getConsumerGroup()));
           }
       );
@@ -113,7 +112,7 @@ public class MetricPublishingCommitListener
 
   @Override
   public void onPartitionsRevoked(final Collection<TopicPartition> partitions) {
-    LOGGER.info("Remove committed offset metrics entry for {}",
+    LOG.info("Remove committed offset metrics entry for {}",
         partitions.stream()
             .filter(offsets::containsKey)
             .map(TopicPartition::toString)
@@ -129,7 +128,7 @@ public class MetricPublishingCommitListener
 
   @Override
   public void onPartitionsAssigned(final Collection<TopicPartition> partitions) {
-    LOGGER.info("Add committed offsets metrics entry for {}",
+    LOG.info("Add committed offsets metrics entry for {}",
         partitions.stream().map(TopicPartition::toString).collect(Collectors.joining(","))
     );
     for (final var p : partitions) {
@@ -147,7 +146,7 @@ public class MetricPublishingCommitListener
     // at this point we assume no threads will call the other callbacks
     for (final TopicPartition p : offsets.keySet()) {
       if (offsets.get(p).isPresent()) {
-        LOGGER.info("Clean up committed offset metric {} {}", threadId, p);
+        LOG.info("Clean up committed offset metric {} {}", threadId, p);
         metrics.removeMetric(metricName(p, offsets.get(p).get().getConsumerGroup()));
       }
     }

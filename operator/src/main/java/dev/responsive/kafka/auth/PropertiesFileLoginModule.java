@@ -13,7 +13,7 @@ import org.slf4j.LoggerFactory;
 
 
 public class PropertiesFileLoginModule implements LoginModule {
-  private static final Logger LOGGER = LoggerFactory.getLogger(PropertiesFileLoginModule.class);
+  private static final Logger LOG = LoggerFactory.getLogger(PropertiesFileLoginModule.class);
 
   private static final String PROPERTIES_FILE = "properties";
   private static final String USERNAME_CONFIG = "username";
@@ -28,18 +28,18 @@ public class PropertiesFileLoginModule implements LoginModule {
   ) {
     final String propertiesPath = (String) options.get(PROPERTIES_FILE);
     if (propertiesPath == null) {
-      LOGGER.info("no properties file specified in JAAS config");
+      LOG.info("no properties file specified in JAAS config");
       return;
     }
     final Properties properties = new Properties();
     try (InputStream in = new FileInputStream(propertiesPath)) {
       properties.load(in);
     } catch (final IOException e) {
-      LOGGER.info("error loading properties file", e);
+      LOG.info("error loading properties file", e);
     }
     String username = properties.getProperty(USERNAME_CONFIG);
     if (username != null) {
-      LOGGER.info("login using name " + username);
+      LOG.info("login using name " + username);
       subject.getPublicCredentials().add(username);
     }
     String password = properties.getProperty(PASSWORD_CONFIG);

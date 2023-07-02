@@ -30,7 +30,6 @@ import io.javaoperatorsdk.operator.api.reconciler.Reconciler;
 import io.javaoperatorsdk.operator.api.reconciler.UpdateControl;
 import io.javaoperatorsdk.operator.processing.event.source.EventSource;
 import io.javaoperatorsdk.operator.processing.event.source.polling.PerResourcePollingEventSource;
-import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
@@ -43,7 +42,7 @@ import org.slf4j.LoggerFactory;
 @ControllerConfiguration
 public class ResponsivePolicyReconciler implements
     Reconciler<ResponsivePolicy>, EventSourceInitializer<ResponsivePolicy> {
-  private static final Logger LOGGER = LoggerFactory.getLogger(ResponsivePolicyReconciler.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ResponsivePolicyReconciler.class);
 
   public static final String NAME_LABEL = "responsivePolicyName";
   public static final String NAMESPACE_LABEL = "responsivePolicyNamespace";
@@ -76,7 +75,7 @@ public class ResponsivePolicyReconciler implements
                 responsiveCtx.getControllerClient()
                     .getTargetState(ControllerProtoFactories.emptyRequest(policy))));
           } catch (final Throwable t) {
-            LOGGER.error("Error fetching target state", t);
+            LOG.error("Error fetching target state", t);
             // We return an empty target state to force reconciliation to run, since right now the
             // controller is stateless and relies on periodic updates after it restarts
             return ImmutableSet.of(new TargetStateWithTimestamp());
@@ -103,7 +102,7 @@ public class ResponsivePolicyReconciler implements
   @Override
   public UpdateControl<ResponsivePolicy> reconcile(final ResponsivePolicy resource,
                                                    final Context<ResponsivePolicy> ctx) {
-    LOGGER.info("Received event for {}", resource.getFullResourceName());
+    LOG.info("Received event for {}", resource.getFullResourceName());
     responsiveCtx.getControllerClient()
         .upsertPolicy(ControllerProtoFactories.upsertPolicyRequest(resource));
     plugins.get(resource.getSpec().getPolicyType()).reconcile(resource, ctx, responsiveCtx);

@@ -37,7 +37,7 @@ import org.slf4j.LoggerFactory;
 import responsive.controller.v1.controller.proto.ControllerOuterClass;
 
 public class DemoPolicyPlugin implements PolicyPlugin {
-  private static final Logger LOGGER = LoggerFactory.getLogger(DemoPolicyPlugin.class);
+  private static final Logger LOG = LoggerFactory.getLogger(DemoPolicyPlugin.class);
 
   @Override
   public Map<String, EventSource> prepareEventSources(
@@ -78,7 +78,7 @@ public class DemoPolicyPlugin implements PolicyPlugin {
     final var appName = policy.getSpec().getApplicationName();
     final var managedApp = ManagedApplication.build(ctx, policy);
 
-    LOGGER.info("Found type {} for app {}/{}", managedApp.appType(), appNamespace, appName);
+    LOG.info("Found type {} for app {}/{}", managedApp.appType(), appNamespace, appName);
 
     responsiveCtx.getControllerClient().currentState(
         ControllerProtoFactories.currentStateRequest(policy,
@@ -88,21 +88,21 @@ public class DemoPolicyPlugin implements PolicyPlugin {
     final var maybeTargetState =
         ctx.getSecondaryResource(TargetStateWithTimestamp.class);
     if (maybeTargetState.isEmpty()) {
-      LOGGER.warn("No target state present in ctx. This should not happen");
+      LOG.warn("No target state present in ctx. This should not happen");
       return;
     }
 
     final var targetState = maybeTargetState.get();
-    LOGGER.info("target state for app {} {}", appName, targetState);
+    LOG.info("target state for app {} {}", appName, targetState);
 
     if (targetState.getTargetState().isEmpty()) {
-      LOGGER.info(
+      LOG.info(
           "we were not able to get a target state from controller, so don't try to reconcile one");
       return;
     }
     final var targetReplicas = targetState.getTargetState().get().getDemoState().getReplicas();
     if (targetReplicas != managedApp.getReplicas()) {
-      LOGGER.info(
+      LOG.info(
           "Scaling {}/{} from {} to {}",
           appNamespace,
           appName,

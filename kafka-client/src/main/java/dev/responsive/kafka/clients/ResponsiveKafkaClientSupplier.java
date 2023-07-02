@@ -55,7 +55,7 @@ import org.slf4j.LoggerFactory;
  * rely on coarse-grained locks around sections reading/writing shared state.
  */
 public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier, Configurable {
-  private static final Logger LOGGER = LoggerFactory.getLogger(ResponsiveKafkaClientSupplier.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ResponsiveKafkaClientSupplier.class);
   private final SharedListeners sharedListeners = new SharedListeners();
   private final KafkaClientSupplier wrapped;
   private final Factories factories;
@@ -80,7 +80,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier,
 
   @Override
   public void configure(final Map<String, ?> configs) {
-    LOGGER.trace(
+    LOG.trace(
         "Configuring the client supplier. Got configs: {}",
         configs.entrySet().stream()
             .map(e -> e.getKey() + ":" + e.getValue())
@@ -116,7 +116,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier,
     if (!eosV2) {
       return wrapped.getProducer(config);
     }
-    LOGGER.info("Creating responsive producer");
+    LOG.info("Creating responsive producer");
     final String tid = threadIdFromProducerConfig(config);
     final ListenersForThread tc = sharedListeners.getAndMaybeInitListenersForThread(
         tid,
@@ -144,7 +144,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier,
     if (!eosV2) {
       return wrapped.getConsumer(config);
     }
-    LOGGER.info("Creating responsive consumer");
+    LOG.info("Creating responsive consumer");
     final String tid = threadIdFromConsumerConfig(config);
     final ListenersForThread tc = sharedListeners.getAndMaybeInitListenersForThread(
         tid,
@@ -184,7 +184,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier,
 
   private String threadIdFromProducerConfig(final Map<String, Object> config) {
     final String clientId = (String) config.get(CommonClientConfigs.CLIENT_ID_CONFIG);
-    LOGGER.info("Found producer client ID {}", clientId);
+    LOG.info("Found producer client ID {}", clientId);
     final var regex = Pattern.compile(".*-(StreamThread-\\d+)-producer");
     final var match = regex.matcher(clientId);
     if (!match.find()) {
@@ -195,7 +195,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier,
 
   private String threadIdFromConsumerConfig(final Map<String, Object> config) {
     final String clientId = (String) config.get(CommonClientConfigs.CLIENT_ID_CONFIG);
-    LOGGER.info("Found consumer client ID {}", clientId);
+    LOG.info("Found consumer client ID {}", clientId);
     final var regex = Pattern.compile(".*-(StreamThread-\\d+)-consumer$");
     final var match = regex.matcher(clientId);
     if (!match.find()) {
@@ -283,15 +283,15 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier,
     }
 
     private void ref() {
-      LOGGER.info("bumping ref count for {} to {}", name, count + 1);
+      LOG.info("bumping ref count for {} to {}", name, count + 1);
       count += 1;
     }
 
     private boolean deref() {
-      LOGGER.info("reducing ref count for {} to {}", name, count - 1);
+      LOG.info("reducing ref count for {} to {}", name, count - 1);
       count -= 1;
       if (count == 0) {
-        LOGGER.info("closing referred value for {}", name);
+        LOG.info("closing referred value for {}", name);
         try {
           val.close();
         } catch (final IOException e) {
