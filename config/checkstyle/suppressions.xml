@@ -23,4 +23,6 @@
 <suppressions>
   <suppress checks="Javadoc" files="."/>
   <suppress checks="[a-zA-Z0-9]*" files=".*[\\/]generated[\\/].*"/>
+
+  <suppress checks="LineLength" files="SharedClients.java"/>
 </suppressions>

@@ -141,7 +141,9 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       LOG.error(errorMsg);
       throw new ConfigException(errorMsg);
     } else {
-      propsWithOverrides.put(InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS, TASK_ASSIGNOR_CLASS_OVERRIDE);
+      propsWithOverrides.put(
+          InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS, TASK_ASSIGNOR_CLASS_OVERRIDE
+      );
     }
 
     return new StreamsConfig(propsWithOverrides);

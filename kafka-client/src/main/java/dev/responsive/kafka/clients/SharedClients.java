@@ -23,7 +23,7 @@ public class SharedClients {
   public final ScheduledExecutorService executor;
 
   public SharedClients(final Map<String, Object> configs) {
-    {
+      {
       final Object o = configs.get(INTERNAL_CASSANDRA_CLIENT_CONFIG);
       if (o == null) {
         final IllegalStateException fatalException =
@@ -32,7 +32,7 @@ public class SharedClients {
         throw fatalException;
       } else if (!(o instanceof CassandraClient)) {
         final IllegalStateException fatalException = new IllegalStateException(
-            String.format("%s is not an instance of %s", 
+            String.format("%s is not an instance of %s",
                           o.getClass().getName(), CassandraClient.class.getName())
         );
         LOG.error(fatalException.getMessage(), fatalException);
@@ -40,9 +40,9 @@ public class SharedClients {
       } else {
         cassandraClient = (CassandraClient) o;
       }
-    }
+      }
 
-    {
+      {
       final Object o = configs.get(INTERNAL_ADMIN_CLIENT_CONFIG);
       if (o == null) {
         final IllegalStateException fatalException =
@@ -51,7 +51,7 @@ public class SharedClients {
         throw fatalException;
       } else if (!(o instanceof Admin)) {
         final IllegalStateException fatalException = new IllegalStateException(
-            String.format("%s is not an instance of %s", 
+            String.format("%s is not an instance of %s",
                           o.getClass().getName(), Admin.class.getName())
         );
         LOG.error(fatalException.getMessage(), fatalException);
@@ -59,9 +59,9 @@ public class SharedClients {
       } else {
         admin = (Admin) o;
       }
-    }
+      }
 
-    {
+      {
       final Object o = configs.get(INTERNAL_EXECUTOR_CLIENT_CONFIG);
       if (o == null) {
         final IllegalStateException fatalException =
@@ -78,7 +78,7 @@ public class SharedClients {
       } else {
         executor = (ScheduledExecutorService) o;
       }
-    }
+      }
   }
 
   public static Map<String, Object> sharedClientConfigs(
