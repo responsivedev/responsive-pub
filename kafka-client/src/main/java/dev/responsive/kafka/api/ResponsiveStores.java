@@ -20,7 +20,7 @@ import org.apache.kafka.streams.state.WindowStore;
  * See {@link org.apache.kafka.streams.state.Stores} for instructions on how to plug in custom
  * state stores and configure them.
  */
-public class ResponsiveStoreFactory {
+public final class ResponsiveStores {
 
   /**
    * Create a {@link StoreBuilder} that can be used to build a Responsive
@@ -136,4 +136,6 @@ public class ResponsiveStoreFactory {
     throw new UnsupportedOperationException("Not yet implemented: use ResponsiveDriver for now");
   };
 
+
+  private ResponsiveStores() { }
 }
