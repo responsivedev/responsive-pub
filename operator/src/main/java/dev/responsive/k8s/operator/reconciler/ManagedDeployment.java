@@ -29,18 +29,16 @@ public class ManagedDeployment extends ManagedApplication {
 
   @Override
   public void setReplicas(final Integer targetReplicas, final Context<ResponsivePolicy> context) {
-    try (final var appClient = context.getClient().apps()) {
-      appClient.deployments()
-          .inNamespace(namespace)
-          .withName(appName)
-          .edit(d -> {
-            if (d.getMetadata().getResourceVersion()
-                .equals(getResourceVersion())) {
-              d.getSpec().setReplicas(targetReplicas);
-            }
-            return d;
-          });
-    }
+    context.getClient().apps().deployments()
+        .inNamespace(namespace)
+        .withName(appName)
+        .edit(d -> {
+          if (d.getMetadata().getResourceVersion()
+              .equals(getResourceVersion())) {
+            d.getSpec().setReplicas(targetReplicas);
+          }
+          return d;
+        });
   }
 
   @Override
@@ -61,37 +59,34 @@ public class ManagedDeployment extends ManagedApplication {
         = deployment.getMetadata().getLabels()
         .containsKey(ResponsivePolicyReconciler.NAMESPACE_LABEL);
     if (!hasNameLabel || !hasNamespaceLabel) {
-      try (final var appClient = ctx.getClient().apps()) {
-
-        // TODO(rohan): I don't think this is patching the way I expect. Review the patch APIs
-        //  things to check: do we need to check the version or does that happen automatically?
-        //  things to check: this should only be updating the labels and thats it (e.g. truly
-        //  a patch)
-        appClient.deployments()
-            .inNamespace(deployment.getMetadata().getNamespace())
-            .withName(deployment.getMetadata().getName())
-            .edit(d -> {
-              if (d.getMetadata().getResourceVersion()
-                  .equals(deployment.getMetadata().getResourceVersion())) {
-                final HashMap<String, String> newLabels =
-                    new HashMap<>(d.getMetadata().getLabels());
-                newLabels.put(
-                    ResponsivePolicyReconciler.NAMESPACE_LABEL,
-                    policy.getMetadata().getNamespace()
-                );
-                newLabels.put(ResponsivePolicyReconciler.NAME_LABEL,
-                    policy.getMetadata().getName());
-                d.getMetadata().setLabels(newLabels);
-              }
-              LOGGER.info("Added labels '{}:{}' and '{}:{}' to deployment {}",
-                  ResponsivePolicyReconciler.NAME_LABEL,
-                  policy.getMetadata().getName(),
+      // TODO(rohan): I don't think this is patching the way I expect. Review the patch APIs
+      //  things to check: do we need to check the version or does that happen automatically?
+      //  things to check: this should only be updating the labels and thats it (e.g. truly
+      //  a patch)
+      ctx.getClient().apps().deployments()
+          .inNamespace(deployment.getMetadata().getNamespace())
+          .withName(deployment.getMetadata().getName())
+          .edit(d -> {
+            if (d.getMetadata().getResourceVersion()
+                .equals(deployment.getMetadata().getResourceVersion())) {
+              final HashMap<String, String> newLabels =
+                  new HashMap<>(d.getMetadata().getLabels());
+              newLabels.put(
                   ResponsivePolicyReconciler.NAMESPACE_LABEL,
-                  policy.getMetadata().getNamespace(),
-                  deployment.getMetadata().getName());
-              return d;
-            });
-      }
+                  policy.getMetadata().getNamespace()
+              );
+              newLabels.put(ResponsivePolicyReconciler.NAME_LABEL,
+                  policy.getMetadata().getName());
+              d.getMetadata().setLabels(newLabels);
+            }
+            LOGGER.info("Added labels '{}:{}' and '{}:{}' to deployment {}",
+                ResponsivePolicyReconciler.NAME_LABEL,
+                policy.getMetadata().getName(),
+                ResponsivePolicyReconciler.NAMESPACE_LABEL,
+                policy.getMetadata().getNamespace(),
+                deployment.getMetadata().getName());
+            return d;
+          });
     }
   }
 

@@ -21,6 +21,7 @@ import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -238,6 +239,22 @@ class DemoPolicyPluginTest {
   }
 
   @Test
+  public void shouldNotCloseAppClientOnDeploymentLabelSet() {
+    // given:
+    setupForDeployment();
+    when(ctx.getSecondaryResource(Deployment.class)).thenReturn(Optional.empty());
+    final var deployment = createDeployment("baz", "biz",
+        "v1", 5, Collections.emptyMap());
+    setupDeploymentToBeReturned(deployment);
+
+    // when:
+    plugin.reconcile(policy, ctx, responsiveCtx);
+
+    // then:
+    verify(appsClient, times(0)).close();
+  }
+
+  @Test
   public void shouldReportCurrentState() {
     // when:
     setupForDeployment();
@@ -274,6 +291,16 @@ class DemoPolicyPluginTest {
         "v1", 3, Collections.emptyMap());
     edit.apply(blank);
     assertThat(blank.getSpec().getReplicas(), is(5));
+  }
+
+  @Test
+  public void shouldNotCloseAppClientWhenPatchDeploymentReplicas() {
+    // when:
+    setupForDeployment();
+    plugin.reconcile(policy, ctx, responsiveCtx);
+
+    // then:
+    verify(appsClient, times(0)).close();
   }
 
   @Test
@@ -373,6 +400,22 @@ class DemoPolicyPluginTest {
   }
 
   @Test
+  public void shouldNotCloseAppClientWhenSettingStatefulSetLabels() {
+    // given:
+    setupForStatefulSet();
+    when(ctx.getSecondaryResource(StatefulSet.class)).thenReturn(Optional.empty());
+    final var statefulSet = createStatefulSet("baz", "biz", "v1",
+        5, Collections.emptyMap());
+    setupStatefulSetToBeReturned(statefulSet);
+
+    // when:
+    plugin.reconcile(policy, ctx, responsiveCtx);
+
+    // then:
+    verify(appsClient, times(0)).close();
+  }
+
+  @Test
   public void shouldPatchStatefulSetIfReplicasChanged() {
     // when:
     setupForStatefulSet();
@@ -386,6 +429,17 @@ class DemoPolicyPluginTest {
     edit.apply(blank);
     assertThat(blank.getSpec().getReplicas(), is(5));
   }
+
+  @Test
+  public void shouldNotCloseAppClientWhenPatchingStatefulSetReplicas() {
+    // when:
+    setupForStatefulSet();
+    plugin.reconcile(policy, ctx, responsiveCtx);
+
+    // then:
+    verify(appsClient, times(0)).close();
+  }
+
 
   @Test
   public void shouldNotPatchStatefulSetIfReplicasNotChanged() {
