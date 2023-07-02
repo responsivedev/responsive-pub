@@ -7,7 +7,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 /**
  * Configuration options for building a Responsive {@link KeyValueStore}. Use {@link #named(String)}
  * (or {@link #namedGlobal(String)} if this is a global store) to get a new object and pass that in
- * to one of the {@link ResponsiveStoreFactory} APIs, or apply any of the additional optional
+ * to one of the {@link ResponsiveStores} APIs, or apply any of the additional optional
  * configs via the {@code #withXXX} methods below.
  */
 public class KeyValueStoreOptions<K, V> {

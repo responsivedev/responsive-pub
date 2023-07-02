@@ -16,6 +16,7 @@
 
 package dev.responsive.utils;
 
+import java.time.Duration;
 import java.util.Map;
 import org.apache.kafka.streams.StreamsConfig;
 
@@ -27,6 +28,23 @@ public final class StoreUtil {
         || optimizations.contains(StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS)) {
       throw new IllegalArgumentException(
           "Responsive stores cannot be used with reuse.ktable.source.topics optimization");
+    }
+  }
+
+  /**
+   * Validate and convert the {@link Duration} to milliseconds
+   */
+  public static long durationToMillis(final Duration duration, final String parameterName) {
+    final String errorMsgPrefix =
+        String.format("Cannot convert %s Duration to milliseconds", parameterName);
+    try {
+      if (duration == null) {
+        throw new IllegalArgumentException(errorMsgPrefix + " due to parameter being null");
+      }
+
+      return duration.toMillis();
+    } catch (final ArithmeticException e) {
+      throw new IllegalArgumentException(errorMsgPrefix + " due to arithmetic exception", e);
     }
   }
 }
