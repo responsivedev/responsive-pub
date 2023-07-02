@@ -12,9 +12,12 @@ import org.slf4j.LoggerFactory;
  * Basic container class for session clients and other shared resources
  */
 public class SharedClients {
-  private static final String INTERNAL_CASSANDRA_CLIENT_CONFIG = "__internal.responsive.cassandra.client__";
-  private static final String INTERNAL_ADMIN_CLIENT_CONFIG = "__internal.responsive.admin.client__";
-  private static final String INTERNAL_EXECUTOR_CLIENT_CONFIG = "__internal.responsive.executor.client__";
+  private static final String INTERNAL_CASSANDRA_CLIENT_CONFIG =
+      "__internal.responsive.cassandra.client__";
+  private static final String INTERNAL_ADMIN_CLIENT_CONFIG =
+      "__internal.responsive.admin.client__";
+  private static final String INTERNAL_EXECUTOR_CLIENT_CONFIG =
+      "__internal.responsive.executor.client__";
 
   private static final Logger LOG = LoggerFactory.getLogger(SharedClients.class);
 
@@ -64,8 +67,9 @@ public class SharedClients {
       {
       final Object o = configs.get(INTERNAL_EXECUTOR_CLIENT_CONFIG);
       if (o == null) {
-        final IllegalStateException fatalException =
-            new IllegalStateException("Shared ScheduledExecutorService client was missing");
+        final IllegalStateException fatalException = new IllegalStateException(
+            "Shared ScheduledExecutorService client was missing"
+        );
         LOG.error(fatalException.getMessage(), fatalException);
         throw fatalException;
       } else if (!(o instanceof ScheduledExecutorService)) {
