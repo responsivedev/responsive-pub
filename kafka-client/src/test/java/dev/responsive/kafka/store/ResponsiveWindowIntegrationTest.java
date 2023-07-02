@@ -35,6 +35,8 @@ import static org.hamcrest.MatcherAssert.assertThat;
 
 import com.datastax.oss.driver.api.core.CqlSession;
 import dev.responsive.db.CassandraClient;
+import dev.responsive.kafka.api.ResponsiveKafkaStreams;
+import dev.responsive.kafka.api.ResponsiveStores;
 import dev.responsive.kafka.api.ResponsiveWindowedStoreSupplier;
 import dev.responsive.utils.ContainerExtension;
 import java.time.Duration;
@@ -64,7 +66,6 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.StreamJoined;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -131,7 +132,6 @@ public class ResponsiveWindowIntegrationTest {
   public void shouldComputeWindowedAggregateWithRetention() throws InterruptedException {
     // Given:
     final Map<String, Object> properties = getMutableProperties();
-    final StreamsConfig config = new StreamsConfig(properties);
     final StreamsBuilder builder = new StreamsBuilder();
 
     final ConcurrentMap<Windowed<Long>, Long> collect = new ConcurrentHashMap<>();
@@ -143,16 +143,11 @@ public class ResponsiveWindowIntegrationTest {
         .aggregate(
             () -> 0L,
             (k, v, agg) -> agg + v,
-            Materialized.as(
-                new ResponsiveWindowedStoreSupplier(
-                    client,
-                    name,
-                    executor,
-                    admin,
-                    6_000,
-                    5_000,
-                    false
-                )
+            ResponsiveStores.windowMaterialized(
+                name,
+                6_000,
+                5_000,
+                false
             ))
         .toStream()
         .peek((k, v) -> {
@@ -176,7 +171,10 @@ public class ResponsiveWindowIntegrationTest {
     final AtomicLong timestamp = new AtomicLong(baseTs);
     properties.put(APPLICATION_SERVER_CONFIG, "host1:1024");
     try (
-        final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), config);
+        final ResponsiveKafkaStreams kafkaStreams = ResponsiveKafkaStreams.create(
+            builder.build(),
+            properties
+        );
         final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties)
     ) {
       kafkaStreams.start();
@@ -195,7 +193,10 @@ public class ResponsiveWindowIntegrationTest {
     // the old Kafka Streams and creating a new one
     properties.put(APPLICATION_SERVER_CONFIG, "host2:1024");
     try (
-        final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), config);
+        final ResponsiveKafkaStreams kafkaStreams = ResponsiveKafkaStreams.create(
+            builder.build(),
+            properties
+        );
         final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties)
     ) {
       kafkaStreams.start();
@@ -251,9 +252,9 @@ public class ResponsiveWindowIntegrationTest {
             JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofMillis(500)),
             StreamJoined.with(
                 new ResponsiveWindowedStoreSupplier(
-                    client, "input" + name, executor, admin, 1000, 1000, true),
+                    "input" + name, 1000, 1000, true),
                 new ResponsiveWindowedStoreSupplier(
-                    client, "other" + name, executor, admin, 1000, 1000, true)
+                    "other" + name, 1000, 1000, true)
             ))
         .peek((k, v) -> {
           collect.computeIfAbsent(k, old -> new ArrayBlockingQueue<>(10)).add(v);

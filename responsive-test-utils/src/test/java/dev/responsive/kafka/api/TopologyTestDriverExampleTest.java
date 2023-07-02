@@ -81,7 +81,10 @@ public class TopologyTestDriverExampleTest {
     // schema for bids is key: <bid_id> value: <bid_id, amount, person_id>
     final KStream<String, String> bids = builder.stream("bids");
     // schema for people is key: <person_id> value: <person_id, name, state>
-    final KTable<String, String> people = builder.table("people", ResponsiveStores.materialized("people"));
+    final KTable<String, String> people = builder.table(
+        "people",
+        ResponsiveStores.materialized("people")
+    );
 
     bids
         // person_id is 3rd column
