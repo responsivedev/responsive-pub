@@ -10,7 +10,7 @@ import org.slf4j.LoggerFactory;
 
 public class ManagedDeployment extends ManagedApplication {
 
-  private static final Logger LOGGER = LoggerFactory.getLogger(ManagedDeployment.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ManagedDeployment.class);
   private final Deployment deployment;
   private final String appName;
   private  final String namespace;
@@ -79,7 +79,7 @@ public class ManagedDeployment extends ManagedApplication {
                   policy.getMetadata().getName());
               d.getMetadata().setLabels(newLabels);
             }
-            LOGGER.info("Added labels '{}:{}' and '{}:{}' to deployment {}",
+            LOG.info("Added labels '{}:{}' and '{}:{}' to deployment {}",
                 ResponsivePolicyReconciler.NAME_LABEL,
                 policy.getMetadata().getName(),
                 ResponsivePolicyReconciler.NAMESPACE_LABEL,

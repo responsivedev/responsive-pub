@@ -34,12 +34,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class OperatorMain {
-  private static final Logger LOGGER = LoggerFactory.getLogger(OperatorMain.class);
+  private static final Logger LOG = LoggerFactory.getLogger(OperatorMain.class);
   private static final String API_KEY_CONFIG = "responsive.platform.api.key";
   private static final String SECRET_CONFIG = "responsive.platform.api.secret";
 
   public static void main(String[] args) {
-    LOGGER.info("Starting main");
+    LOG.info("Starting main");
 
     final Options options = OperatorOptions.OPTIONS;
     final CommandLineParser parser = new DefaultParser();
@@ -50,7 +50,7 @@ public class OperatorMain {
     try {
       cmd = parser.parse(options, args);
     } catch (ParseException e) {
-      LOGGER.error("Error parsing command line params: ", e);
+      LOG.error("Error parsing command line params: ", e);
       formatter.printHelp("Operator", options);
       System.exit(1);
       return;
@@ -61,7 +61,7 @@ public class OperatorMain {
     final Properties config = load(secretFilePath);
 
     if (!(config.containsKey(API_KEY_CONFIG) && config.containsKey(SECRET_CONFIG))) {
-      LOGGER.error("Couldn't find API Key or secret properties in config file {}. "
+      LOG.error("Couldn't find API Key or secret properties in config file {}. "
               + "We expect both {} and {} properties to be present", secretFilePath,
               API_KEY_CONFIG, SECRET_CONFIG);
       System.exit(1);
@@ -83,7 +83,7 @@ public class OperatorMain {
       final Reader reader = new FileReader(fileName);
       properties.load(reader);
     } catch (Exception e) {
-      LOGGER.error("Error loading configuration properties.", e);
+      LOG.error("Error loading configuration properties.", e);
     }
     return properties;
   }

@@ -33,12 +33,10 @@ import java.util.function.Supplier;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.OffsetSpec;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.serialization.BytesDeserializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,7 +48,7 @@ import org.slf4j.LoggerFactory;
  * state.
  */
 public class EndOffsetsPoller {
-  private static final Logger LOGGER = LoggerFactory.getLogger(EndOffsetsPoller.class);
+  private static final Logger LOG = LoggerFactory.getLogger(EndOffsetsPoller.class);
 
   private final Map<String, Listener> threadIdToMetrics = new HashMap<>();
   private final Metrics metrics;
@@ -90,12 +88,12 @@ public class EndOffsetsPoller {
   }
 
   public synchronized Listener addForThread(final String threadId) {
-    LOGGER.info("add end offset metrics for thread {}", threadId);
+    LOG.info("add end offset metrics for thread {}", threadId);
     final var tm = new Listener(threadId, metrics, this::removeForThread);
     if (threadIdToMetrics.containsKey(threadId)) {
       final var msg = String.format("end offset poller already has metrics for %s", threadId);
       final var err = new RuntimeException(msg);
-      LOGGER.error(msg, err);
+      LOG.error(msg, err);
       throw err;
     }
     if (threadIdToMetrics.isEmpty()) {
@@ -112,7 +110,7 @@ public class EndOffsetsPoller {
         stopPoller();
       }
     } else {
-      LOGGER.warn("no metrics found for thread {}", threadId);
+      LOG.warn("no metrics found for thread {}", threadId);
     }
   }
 
@@ -121,7 +119,7 @@ public class EndOffsetsPoller {
   }
 
   private void initPoller() {
-    LOGGER.info("init end offsets poller");
+    LOG.info("init end offsets poller");
     if (poller != null) {
       throw new IllegalStateException("poller already initialized");
     }
@@ -129,11 +127,11 @@ public class EndOffsetsPoller {
   }
 
   private void stopPoller() {
-    LOGGER.info("stopping end offsets poller");
+    LOG.info("stopping end offsets poller");
     try {
       poller.stop();
     } catch (final RuntimeException e) {
-      LOGGER.warn("poller stop returned an unexpected error. It will be ignored, and the poller "
+      LOG.warn("poller stop returned an unexpected error. It will be ignored, and the poller "
           + "task + admin client might be leaked.", e);
     }
     poller = null;
