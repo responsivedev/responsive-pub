@@ -16,6 +16,10 @@
 
 package dev.responsive.kafka.store;
 
+import static dev.responsive.kafka.config.ResponsiveDriverConfig.STORAGE_DATACENTER_CONFIG;
+import static dev.responsive.kafka.config.ResponsiveDriverConfig.STORAGE_HOSTNAME_CONFIG;
+import static dev.responsive.kafka.config.ResponsiveDriverConfig.STORAGE_PORT_CONFIG;
+import static dev.responsive.kafka.config.ResponsiveDriverConfig.TENANT_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.MAX_POLL_RECORDS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG;
@@ -28,13 +32,12 @@ import static org.apache.kafka.streams.StreamsConfig.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.COMMIT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS;
 import static org.apache.kafka.streams.StreamsConfig.NUM_STREAM_THREADS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
 import static org.hamcrest.MatcherAssert.assertThat;
 
-import com.datastax.oss.driver.api.core.CqlSession;
-import dev.responsive.db.CassandraClient;
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.ResponsiveStores;
 import dev.responsive.kafka.api.ResponsiveWindowedStoreSupplier;
@@ -49,8 +52,6 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 import org.apache.kafka.clients.admin.Admin;
@@ -60,16 +61,15 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes.LongSerde;
-import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.StreamJoined;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
+import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -86,13 +86,11 @@ public class ResponsiveWindowIntegrationTest {
   private static final String OTHER_TOPIC = "other";
   private static final String OUTPUT_TOPIC = "output";
 
-  private Admin admin;
-  private CqlSession session;
-  private CassandraClient client;
-  private ScheduledExecutorService executor;
+  private final Map<String, Object> responsiveProps = new HashMap<>();
 
   private String name;
   private String bootstrapServers;
+  private Admin admin;
 
   @BeforeEach
   public void before(
@@ -101,14 +99,14 @@ public class ResponsiveWindowIntegrationTest {
       final KafkaContainer kafka
   ) {
     name = info.getTestMethod().orElseThrow().getName();
-    session = CqlSession.builder()
-        .addContactPoint(cassandra.getContactPoint())
-        .withLocalDatacenter(cassandra.getLocalDatacenter())
-        .withKeyspace("responsive_clients") // NOTE: this keyspace is expected to exist
-        .build();
-    client = new CassandraClient(session);
-    executor = new ScheduledThreadPoolExecutor(2);
     bootstrapServers = kafka.getBootstrapServers();
+
+    responsiveProps.put(STORAGE_HOSTNAME_CONFIG, cassandra.getContactPoint().getHostName());
+    responsiveProps.put(STORAGE_PORT_CONFIG, cassandra.getContactPoint().getPort());
+    responsiveProps.put(STORAGE_DATACENTER_CONFIG, cassandra.getLocalDatacenter());
+    responsiveProps.put(TENANT_ID_CONFIG, "responsive_clients");   // keyspace is expected to exist
+    responsiveProps.put(INTERNAL_TASK_ASSIGNOR_CLASS, StickyTaskAssignor.class.getName());
+
     admin = Admin.create(Map.of(BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers()));
 
     admin.createTopics(
@@ -122,8 +120,6 @@ public class ResponsiveWindowIntegrationTest {
 
   @AfterEach
   public void after() {
-    session.close();
-    executor.shutdown();
     admin.deleteTopics(List.of(INPUT_TOPIC, OTHER_TOPIC, OUTPUT_TOPIC));
     admin.close();
   }
@@ -171,10 +167,8 @@ public class ResponsiveWindowIntegrationTest {
     final AtomicLong timestamp = new AtomicLong(baseTs);
     properties.put(APPLICATION_SERVER_CONFIG, "host1:1024");
     try (
-        final ResponsiveKafkaStreams kafkaStreams = ResponsiveKafkaStreams.create(
-            builder.build(),
-            properties
-        );
+        final ResponsiveKafkaStreams kafkaStreams =
+            ResponsiveKafkaStreams.create(builder.build(), properties);
         final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties)
     ) {
       kafkaStreams.start();
@@ -235,7 +229,6 @@ public class ResponsiveWindowIntegrationTest {
   public void shouldComputeWindowedJoinUsingRanges() throws InterruptedException {
     // Given:
     final Map<String, Object> properties = getMutableProperties();
-    final StreamsConfig config = new StreamsConfig(properties);
     final StreamsBuilder builder = new StreamsBuilder();
 
     final KStream<Long, Long> input = builder.stream(INPUT_TOPIC);
@@ -274,7 +267,9 @@ public class ResponsiveWindowIntegrationTest {
     final AtomicLong timestamp = new AtomicLong(baseTs);
     properties.put(APPLICATION_SERVER_CONFIG, "host1:1024");
     try (
-        final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), config);
+        final ResponsiveKafkaStreams kafkaStreams = ResponsiveKafkaStreams.create(
+            builder.build(), properties
+        );
         final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties)
     ) {
       kafkaStreams.start();
@@ -291,7 +286,8 @@ public class ResponsiveWindowIntegrationTest {
     // the old Kafka Streams and creating a new one
     properties.put(APPLICATION_SERVER_CONFIG, "host2:1024");
     try (
-        final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), config);
+        final ResponsiveKafkaStreams kafkaStreams =
+            ResponsiveKafkaStreams.create(builder.build(), properties);
         final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties)
     ) {
       kafkaStreams.start();
@@ -353,7 +349,7 @@ public class ResponsiveWindowIntegrationTest {
   }
 
   private Map<String, Object> getMutableProperties() {
-    final Map<String, Object> properties = new HashMap<>();
+    final Map<String, Object> properties = new HashMap<>(responsiveProps);
 
     properties.put(BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
     properties.put(KEY_SERIALIZER_CLASS_CONFIG, LongSerializer.class);

@@ -16,6 +16,8 @@
 
 package dev.responsive.kafka.clients;
 
+import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_V2;
+
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.Arrays;
@@ -30,7 +32,6 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.Producer;
-import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -54,7 +55,7 @@ import org.slf4j.LoggerFactory;
  * close callbacks on the returned clients). As these calls are not on the performance path we
  * rely on coarse-grained locks around sections reading/writing shared state.
  */
-public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier, Configurable {
+public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier {
   private static final Logger LOG = LoggerFactory.getLogger(ResponsiveKafkaClientSupplier.class);
   private final SharedListeners sharedListeners = new SharedListeners();
   private final KafkaClientSupplier wrapped;
@@ -65,29 +66,36 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier,
   private EndOffsetsPoller endOffsetsPoller;
   private String applicationId;
 
-  public ResponsiveKafkaClientSupplier() {
-    this(new Factories() {}, new DefaultKafkaClientSupplier());
+  public ResponsiveKafkaClientSupplier(final Map<String, ?> configs) {
+    this(new Factories() {}, new DefaultKafkaClientSupplier(), configs);
   }
 
-  public ResponsiveKafkaClientSupplier(final KafkaClientSupplier clientSupplier) {
-    this(new Factories() {}, clientSupplier);
+  public ResponsiveKafkaClientSupplier(
+      final KafkaClientSupplier clientSupplier,
+      final Map<String, ?> configs
+  ) {
+    this(new Factories() {}, clientSupplier, configs);
   }
 
-  ResponsiveKafkaClientSupplier(final Factories factories, final KafkaClientSupplier wrapped) {
+  ResponsiveKafkaClientSupplier(
+      final Factories factories,
+      final KafkaClientSupplier wrapped,
+      final Map<String, ?> configs
+  ) {
     this.factories = factories;
     this.wrapped = wrapped;
+    configure(configs);
   }
 
-  @Override
-  public void configure(final Map<String, ?> configs) {
+
+  private void configure(final Map<String, ?> configs) {
     LOG.trace(
         "Configuring the client supplier. Got configs: {}",
         configs.entrySet().stream()
             .map(e -> e.getKey() + ":" + e.getValue())
             .collect(Collectors.joining("\n"))
     );
-    eosV2 = (configs.get(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))
-        .equals(StreamsConfig.EXACTLY_ONCE_V2);
+    eosV2 = EXACTLY_ONCE_V2.equals(configs.get(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
     final JmxReporter jmxReporter = new JmxReporter();
     jmxReporter.configure(configs);
     final MetricsContext metricsContext

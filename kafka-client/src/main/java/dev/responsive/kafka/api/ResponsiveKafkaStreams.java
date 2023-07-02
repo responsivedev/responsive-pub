@@ -36,6 +36,8 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
 
   private static final Logger LOG = LoggerFactory.getLogger(ResponsiveKafkaStreams.class);
 
+  private StateListener stateListener;
+
   private final CqlSession session;
   private final ScheduledExecutorService executor;
   private final Admin admin;
@@ -44,7 +46,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       final Topology topology,
       final Map<String, Object> configs
   ) {
-    return connect(topology, configs, new ResponsiveKafkaClientSupplier());
+    return connect(topology, configs, new ResponsiveKafkaClientSupplier(configs));
   }
 
   public static ResponsiveKafkaStreams create(
@@ -52,7 +54,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       final Map<String, Object> configs,
       final KafkaClientSupplier clientSupplier
   ) {
-    return connect(topology, configs, new ResponsiveKafkaClientSupplier(clientSupplier));
+    return connect(topology, configs, new ResponsiveKafkaClientSupplier(clientSupplier, configs));
   }
 
   private static ResponsiveKafkaStreams connect(
@@ -121,8 +123,9 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     final Integer numStandbys = (Integer) configs.get(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG);
     if (numStandbys != null && numStandbys != 0) {
       final String errorMsg = String.format(
-          "Invalid Streams configuration '%s': please override to '%d'",
+          "Invalid Streams configuration value for '%s': got %d, expected '%d'",
           StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG,
+          numStandbys,
           NUM_STANDBYS_OVERRIDE
       );
       LOG.error(errorMsg);
@@ -131,22 +134,39 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
 
     // TODO(sophie): finish writing KIP to make this a public StreamsConfig, it's a bit awkward to
     //  be asking users to set an internal config and very very rare to be set to anything else
-    final String taskAssignor = (String) configs.get(InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS);
-    if (!TASK_ASSIGNOR_CLASS_OVERRIDE.equals(taskAssignor)) {
+    final Object o = configs.get(InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS);
+    if (o == null) {
       final String errorMsg = String.format(
-          "Invalid Streams configuration '%s': please override to '%s'",
+          "Invalid Streams configuration value for '%s': please override to '%s'",
           InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS,
           TASK_ASSIGNOR_CLASS_OVERRIDE
       );
       LOG.error(errorMsg);
       throw new ConfigException(errorMsg);
-    } else {
-      propsWithOverrides.put(
-          InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS, TASK_ASSIGNOR_CLASS_OVERRIDE
+    }
+
+    if (!TASK_ASSIGNOR_CLASS_OVERRIDE.equals(o.toString())) {
+      final String errorMsg = String.format(
+          "Invalid Streams configuration value for '%s': got %s, expected '%s'",
+          InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS,
+          o,
+          TASK_ASSIGNOR_CLASS_OVERRIDE
       );
+      LOG.error(errorMsg);
+      throw new ConfigException(errorMsg);
     }
 
     return new StreamsConfig(propsWithOverrides);
+  }
+
+  @Override
+  public void setStateListener(final StateListener stateListener) {
+    super.setStateListener(stateListener);
+    this.stateListener = stateListener;
+  }
+
+  public StateListener stateListener() {
+    return stateListener;
   }
 
   private void closeClients() {

@@ -102,9 +102,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       // as it's only used to ensure the result of stream-stream joins include
       // duplicate results for the joins if there are duplicate keys in the source
       // with the same timestamp
-      throw new UnsupportedOperationException(
-          "Window stores with retainDuplicate semantics are not yet supported"
-      );
+      LOG.warn("ResponsiveWindowStore does not fully support retaining duplicates");
     }
   }
 

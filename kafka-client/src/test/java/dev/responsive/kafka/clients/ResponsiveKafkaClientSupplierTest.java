@@ -111,18 +111,16 @@ class ResponsiveKafkaClientSupplierTest {
     lenient().when(factories.createMetricsPublishingCommitListener(any(), any()))
         .thenReturn(metricPublishingCommitListener);
 
-    supplier = new ResponsiveKafkaClientSupplier(factories, wrapped);
-    supplier.configure(CONFIGS);
+    supplier = new ResponsiveKafkaClientSupplier(factories, wrapped, CONFIGS);
   }
 
   @Test
   public void shouldNotWrapProducerIfNotEosV2() {
     // given:
-    final var supplier = new ResponsiveKafkaClientSupplier(factories, wrapped);
+    final var supplier = new ResponsiveKafkaClientSupplier(factories, wrapped, CONFIGS);
     final var config = configsWithOverrides(
         PRODUCER_CONFIGS,
         Map.of(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.AT_LEAST_ONCE));
-    supplier.configure(config);
 
     // when:
     final var producer = supplier.getProducer(config);
@@ -134,11 +132,10 @@ class ResponsiveKafkaClientSupplierTest {
   @Test
   public void shouldNotWrapConsumerIfNotEosV2() {
     // given:
-    final var supplier = new ResponsiveKafkaClientSupplier(factories, wrapped);
     final var config = configsWithOverrides(
         CONSUMER_CONFIGS,
         Map.of(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.AT_LEAST_ONCE));
-    supplier.configure(config);
+    final var supplier = new ResponsiveKafkaClientSupplier(factories, wrapped, config);
 
     // when:
     final var consumer = supplier.getConsumer(config);
