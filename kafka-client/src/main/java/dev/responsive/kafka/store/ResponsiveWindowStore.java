@@ -22,7 +22,7 @@ import static org.apache.kafka.streams.state.StateSerdes.TIMESTAMP_SIZE;
 
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.db.CassandraClient;
-import dev.responsive.kafka.api.SharedClients;
+import dev.responsive.kafka.clients.SharedClients;
 import dev.responsive.kafka.store.CommitBuffer.BufferPlugin;
 import dev.responsive.model.Result;
 import dev.responsive.model.Stamped;

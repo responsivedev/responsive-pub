@@ -17,7 +17,7 @@
 package dev.responsive.kafka.store;
 
 import dev.responsive.db.CassandraClient;
-import dev.responsive.kafka.api.SharedClients;
+import dev.responsive.kafka.clients.SharedClients;
 import dev.responsive.utils.RemoteMonitor;
 import dev.responsive.utils.StoreUtil;
 import dev.responsive.utils.TableName;
@@ -52,6 +52,8 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
   private int partition;
   private StateStoreContext context;
 
+  // TODO: instead of splitting this out into a separate store implementation, we should just
+  //  check whether a store is global at runtime (during init) and branch the logic from there
   public ResponsiveGlobalStore(final TableName name) {
     this.name = name;
     this.position = Position.emptyPosition();
