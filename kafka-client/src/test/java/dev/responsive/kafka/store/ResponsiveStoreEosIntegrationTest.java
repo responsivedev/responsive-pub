@@ -270,7 +270,7 @@ public class ResponsiveStoreEosIntegrationTest {
 
   private StoreBuilder<KeyValueStore<Long, Long>> storeSupplier() {
     return ResponsiveStores.keyValueStoreBuilder(
-        STORE_NAME,
+        ResponsiveStores.keyValueStore(STORE_NAME),
         Serdes.Long(),
         Serdes.Long()
     ).withLoggingEnabled(
