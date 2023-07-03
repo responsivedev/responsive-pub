@@ -18,6 +18,7 @@ package dev.responsive.kafka.clients;
 
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_V2;
 
+import dev.responsive.kafka.store.ResponsiveStoreRegistry;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.Arrays;
@@ -59,6 +60,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
   private static final Logger LOG = LoggerFactory.getLogger(ResponsiveKafkaClientSupplier.class);
   private final SharedListeners sharedListeners = new SharedListeners();
   private final KafkaClientSupplier wrapped;
+  private final ResponsiveStoreRegistry storeRegistry;
   private final Factories factories;
   private boolean eosV2 = false;
   private boolean configured = false;
@@ -66,24 +68,29 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
   private EndOffsetsPoller endOffsetsPoller;
   private String applicationId;
 
-  public ResponsiveKafkaClientSupplier(final Map<String, ?> configs) {
-    this(new Factories() {}, new DefaultKafkaClientSupplier(), configs);
+  public ResponsiveKafkaClientSupplier(
+      final Map<String, ?> configs,
+      final ResponsiveStoreRegistry storeRegistry) {
+    this(new Factories() {}, new DefaultKafkaClientSupplier(), configs, storeRegistry);
   }
 
   public ResponsiveKafkaClientSupplier(
       final KafkaClientSupplier clientSupplier,
-      final Map<String, ?> configs
+      final Map<String, ?> configs,
+      final ResponsiveStoreRegistry storeRegistry
   ) {
-    this(new Factories() {}, clientSupplier, configs);
+    this(new Factories() {}, clientSupplier, configs, storeRegistry);
   }
 
   ResponsiveKafkaClientSupplier(
       final Factories factories,
       final KafkaClientSupplier wrapped,
-      final Map<String, ?> configs
+      final Map<String, ?> configs,
+      final ResponsiveStoreRegistry storeRegistry
   ) {
     this.factories = factories;
     this.wrapped = wrapped;
+    this.storeRegistry = storeRegistry;
     configure(configs);
   }
 

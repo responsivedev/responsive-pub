@@ -26,6 +26,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import dev.responsive.kafka.clients.ResponsiveKafkaClientSupplier.Factories;
+import dev.responsive.kafka.store.ResponsiveStoreRegistry;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -94,6 +95,8 @@ class ResponsiveKafkaClientSupplierTest {
   private ArgumentCaptor<List<ResponsiveConsumer.Listener>> consumerListenerCaptor;
   private ResponsiveKafkaClientSupplier supplier;
 
+  private final ResponsiveStoreRegistry storeRegistry = new ResponsiveStoreRegistry();
+
   @BeforeEach
   @SuppressWarnings("unchecked")
   public void setup() {
@@ -111,7 +114,7 @@ class ResponsiveKafkaClientSupplierTest {
     lenient().when(factories.createMetricsPublishingCommitListener(any(), any()))
         .thenReturn(metricPublishingCommitListener);
 
-    supplier = new ResponsiveKafkaClientSupplier(factories, wrapped, CONFIGS);
+    supplier = new ResponsiveKafkaClientSupplier(factories, wrapped, CONFIGS, storeRegistry);
   }
 
   @Test
@@ -120,7 +123,8 @@ class ResponsiveKafkaClientSupplierTest {
     final var config = configsWithOverrides(
         PRODUCER_CONFIGS,
         Map.of(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.AT_LEAST_ONCE));
-    final var supplier = new ResponsiveKafkaClientSupplier(factories, wrapped, config);
+    final var supplier
+        = new ResponsiveKafkaClientSupplier(factories, wrapped, config, storeRegistry);
 
     // when:
     final var producer = supplier.getProducer(config);
@@ -135,7 +139,8 @@ class ResponsiveKafkaClientSupplierTest {
     final var config = configsWithOverrides(
         CONSUMER_CONFIGS,
         Map.of(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.AT_LEAST_ONCE));
-    final var supplier = new ResponsiveKafkaClientSupplier(factories, wrapped, config);
+    final var supplier
+        = new ResponsiveKafkaClientSupplier(factories, wrapped, config, storeRegistry);
 
     // when:
     final var consumer = supplier.getConsumer(config);
