@@ -39,15 +39,19 @@ import static org.apache.kafka.streams.StreamsConfig.PROCESSING_GUARANTEE_CONFIG
 import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
 import static org.apache.kafka.streams.StreamsConfig.producerPrefix;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.lessThan;
 
+import com.datastax.oss.driver.api.core.CqlSession;
+import dev.responsive.db.CassandraClient;
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.ResponsiveStores;
 import dev.responsive.kafka.config.ResponsiveDriverConfig;
 import dev.responsive.utils.ContainerExtension;
 import dev.responsive.utils.RemoteMonitor;
+import dev.responsive.utils.TableName;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -65,6 +69,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.apache.kafka.clients.admin.Admin;
@@ -88,6 +93,7 @@ import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KafkaStreams.StateListener;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.api.Processor;
@@ -114,9 +120,9 @@ public class ResponsiveStoreEosIntegrationTest {
       = LoggerFactory.getLogger(ResponsiveStoreEosIntegrationTest.class);
 
   private static final int MAX_POLL_MS = 5000;
+  private static final int NUM_INPUT_PARTITIONS = 2;
   private static final String INPUT_TOPIC = "input";
   private static final String OUTPUT_TOPIC = "output";
-  private static final String STORE_NAME = "store-Name"; // use non-valid cassandra chars (-)
 
   private final Map<String, Object> responsiveProps = new HashMap<>();
 
@@ -124,6 +130,8 @@ public class ResponsiveStoreEosIntegrationTest {
   private String bootstrapServers;
   private Admin admin;
   private ScheduledExecutorService executor;
+  private String storeName;
+  private CassandraClient client;
 
   @BeforeEach
   public void before(
@@ -132,6 +140,7 @@ public class ResponsiveStoreEosIntegrationTest {
       final KafkaContainer kafka
   ) {
     name = info.getTestMethod().orElseThrow().getName();
+    storeName = name + "store";
     executor = new ScheduledThreadPoolExecutor(2);
     bootstrapServers = kafka.getBootstrapServers();
 
@@ -144,10 +153,17 @@ public class ResponsiveStoreEosIntegrationTest {
     admin = Admin.create(Map.of(BOOTSTRAP_SERVERS_CONFIG, bootstrapServers));
     admin.createTopics(
         List.of(
-            new NewTopic(INPUT_TOPIC, Optional.of(2), Optional.empty()),
+            new NewTopic(INPUT_TOPIC, Optional.of(NUM_INPUT_PARTITIONS), Optional.empty()),
             new NewTopic(OUTPUT_TOPIC, Optional.of(1), Optional.empty())
         )
     );
+
+    final CqlSession session = CqlSession.builder()
+        .addContactPoint(cassandra.getContactPoint())
+        .withLocalDatacenter(cassandra.getLocalDatacenter())
+        .withKeyspace("responsive_clients") // NOTE: this keyspace is expected to exist
+        .build();
+    client = new CassandraClient(session);
   }
 
   @AfterEach
@@ -162,11 +178,12 @@ public class ResponsiveStoreEosIntegrationTest {
     final Map<String, Object> properties = getMutableProperties();
     final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties);
     final SharedState state = new SharedState();
+    final Function<String, Topology> topoFun = instance -> testProcessorTopology(instance, state);
 
     // When:
     try (
-        final ResponsiveKafkaStreams streamsA = buildStreams(properties, "a", state);
-        final ResponsiveKafkaStreams streamsB = buildStreams(properties, "b", state);
+        final ResponsiveKafkaStreams streamsA = buildStreams(properties, "a", topoFun);
+        final ResponsiveKafkaStreams streamsB = buildStreams(properties, "b", topoFun);
     ) {
       startAndAwaitRunning(Duration.ofSeconds(10), streamsA, streamsB);
 
@@ -201,9 +218,9 @@ public class ResponsiveStoreEosIntegrationTest {
           // if either streams has 2 topic partitions assigned to it
           // then a rebalance has happened
           () -> streamsA.metadataForAllStreamsClients()
-              .stream().anyMatch(sm -> sm.topicPartitions().size() == 2)
+              .stream().anyMatch(sm -> sm.topicPartitions().size() == NUM_INPUT_PARTITIONS)
               || streamsB.metadataForAllStreamsClients()
-              .stream().anyMatch(sm -> sm.topicPartitions().size() == 2))
+              .stream().anyMatch(sm -> sm.topicPartitions().size() == NUM_INPUT_PARTITIONS))
           .await(Duration.ofSeconds(30));
 
       // 20 more values beyond the first read are now committed (10
@@ -239,6 +256,43 @@ public class ResponsiveStoreEosIntegrationTest {
       for (final long val : new long[]{55, 66, 78, 91, 105}) {
         assertThat(dupes.get(new KeyValue<>(0L, val)), is(2));
       }
+    }
+  }
+
+  @Test
+  public void shouldFlushToRemoteEvery10kRecords() throws Exception {
+    // Given:
+    final Map<String, Object> properties = getMutableProperties();
+    final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties);
+    final Function<String, Topology> topoFun = ignored -> simpleDslTopology();
+
+    try (
+        final var streams = buildStreams(properties, "a", topoFun);
+        final var serializer = new LongSerializer();
+    ) {
+      // When:
+      startAndAwaitRunning(Duration.ofSeconds(10), streams);
+      pipeInput(producer, System::currentTimeMillis, 0, 10_000, 0, 1);
+
+      // Then
+      // the commit.interval.ms should be plenty of time to read all the required outputs
+      // by this point we should have also flushed to the remote store as well
+      final List<KeyValue<Long, Long>> result = readOutput(0, 4, false, properties);
+      assertThat(result, containsInAnyOrder(
+          new KeyValue<>(0L, 5_000L),
+          new KeyValue<>(0L, 10_000L),
+          new KeyValue<>(1L, 5_000L),
+          new KeyValue<>(1L, 10_000L)
+      ));
+
+      final String cassandraName = new TableName(storeName).cassandraName();
+      assertThat(client.count(cassandraName, 0), is(2L));
+      assertThat(
+          client.get(cassandraName, 0, Bytes.wrap(serializer.serialize("", 0L))),
+          is(serializer.serialize("", 10_000L)));
+      assertThat(
+          client.get(cassandraName, 0, Bytes.wrap(serializer.serialize("", 1L))),
+          is(serializer.serialize("", 10_000L)));
     }
   }
 
@@ -279,7 +333,7 @@ public class ResponsiveStoreEosIntegrationTest {
 
   private StoreBuilder<KeyValueStore<Long, Long>> storeSupplier() {
     return ResponsiveStores.keyValueStoreBuilder(
-        ResponsiveStores.keyValueStore(STORE_NAME),
+        ResponsiveStores.keyValueStore(storeName),
         Serdes.Long(),
         Serdes.Long()
     ).withLoggingEnabled(
@@ -289,20 +343,67 @@ public class ResponsiveStoreEosIntegrationTest {
   private ResponsiveKafkaStreams buildStreams(
       final Map<String, Object> originals,
       final String instance,
-      final SharedState state
+      final Function<String, Topology> topology
   ) {
     final Map<String, Object> properties = new HashMap<>(originals);
     properties.put(APPLICATION_SERVER_CONFIG, instance + ":1024");
 
+    return ResponsiveKafkaStreams.create(topology.apply(instance), properties);
+  }
+
+  private Topology testProcessorTopology(final String instance, final SharedState state) {
     final StreamsBuilder builder = new StreamsBuilder();
     builder.addStateStore(storeSupplier());
 
     final KStream<Long, Long> input = builder.stream(INPUT_TOPIC);
     input
-        .process(() -> new TestProcessor(instance, state), STORE_NAME)
+        .process(() -> new TestProcessor(instance, state, storeName), storeName)
         .to(OUTPUT_TOPIC);
 
-    return ResponsiveKafkaStreams.create(builder.build(), properties);
+    return builder.build();
+  }
+
+  private Topology simpleDslTopology() {
+    final var builder = new StreamsBuilder();
+    builder.addStateStore(storeSupplier());
+
+    final KStream<Long, Long> stream = builder.stream(INPUT_TOPIC);
+    stream.process(() -> new Processor<Long, Long, Long, Long>() {
+
+      private final AtomicInteger processed = new AtomicInteger();
+
+      private ProcessorContext<Long, Long> context;
+      private KeyValueStore<Long, Long> store;
+
+      @Override
+      public void init(final ProcessorContext<Long, Long> context) {
+        this.context = context;
+        this.store = context.getStateStore(storeName);
+      }
+
+      @Override
+      public void process(final Record<Long, Long> record) {
+        final Long old = store.get(record.key());
+        final long count;
+        if (old == null) {
+          count = 1L;
+        } else {
+          count = old + 1L;
+        }
+        store.put(record.key(), count);
+
+        if (processed.incrementAndGet() % 5000 == 0) {
+          context.commit();
+          context.forward(new Record<>(record.key(), count, record.timestamp()));
+
+          // TODO(agavra): remove this when we fix the state store flushing issue in EOS!
+          store.flush();
+        }
+      }
+    }, storeName)
+        .to(OUTPUT_TOPIC);
+
+    return builder.build();
   }
 
   private void startAndAwaitRunning(
@@ -311,7 +412,7 @@ public class ResponsiveStoreEosIntegrationTest {
   ) throws Exception {
     final ReentrantLock lock = new ReentrantLock();
     final Condition onRunning = lock.newCondition();
-    final Boolean[] running = new Boolean[]{false, false};
+    final Boolean[] running = new Boolean[streams.length];
 
     for (int i = 0; i < streams.length; i++) {
       final int idx = i;
@@ -361,7 +462,7 @@ public class ResponsiveStoreEosIntegrationTest {
       for (long v = valFrom; v < valTo; v++) {
         producer.send(new ProducerRecord<>(
             INPUT_TOPIC,
-            (int) k % 2,
+            (int) k % NUM_INPUT_PARTITIONS,
             timestamp.get(),
             k,
             v
@@ -422,24 +523,27 @@ public class ResponsiveStoreEosIntegrationTest {
 
     private final String instance;
     private final SharedState state;
+    private final String storeName;
     private ProcessorContext<Long, Long> context;
     private KeyValueStore<Long, Long> store;
 
-    public TestProcessor(final String instance, final SharedState state) {
+    public TestProcessor(final String instance, final SharedState state, final String storeName) {
       this.instance = instance;
       this.state = state;
+      this.storeName = storeName;
     }
 
     @Override
     public void init(final ProcessorContext<Long, Long> context) {
       this.context = context;
-      this.store = context.getStateStore(STORE_NAME);
+      this.store = context.getStateStore(storeName);
     }
 
     @Override
     public void process(final Record<Long, Long> record) {
       // only stall the processor of partition 0
-      if (record.key() % 2 == 0 && state.stall.compareAndSet(Stall.INJECTED, Stall.STALLING)) {
+      if (record.key() % NUM_INPUT_PARTITIONS == 0
+          && state.stall.compareAndSet(Stall.INJECTED, Stall.STALLING)) {
         stall();
         LOG.info("Instance {} recovered from a stall as a zombie.", instance);
       }
