@@ -29,6 +29,7 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -132,20 +133,14 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       throw new ConfigException(errorMsg);
     }
 
-    // TODO(sophie): finish writing KIP to make this a public StreamsConfig, it's a bit awkward to
-    //  be asking users to set an internal config and very very rare to be set to anything else
+    // TODO(sophie): finish writing KIP to make this a public StreamsConfig
     final Object o = configs.get(InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS);
     if (o == null) {
-      final String errorMsg = String.format(
-          "Invalid Streams configuration value for '%s': please override to '%s'",
+      propsWithOverrides.put(
           InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS,
           TASK_ASSIGNOR_CLASS_OVERRIDE
       );
-      LOG.error(errorMsg);
-      throw new ConfigException(errorMsg);
-    }
-
-    if (!TASK_ASSIGNOR_CLASS_OVERRIDE.equals(o.toString())) {
+    } else if (!TASK_ASSIGNOR_CLASS_OVERRIDE.equals(o.toString())) {
       final String errorMsg = String.format(
           "Invalid Streams configuration value for '%s': got %s, expected '%s'",
           InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS,
