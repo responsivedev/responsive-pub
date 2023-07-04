@@ -64,6 +64,14 @@ public class ResponsiveDriverConfig extends AbstractConfig {
       + "responsive server. This applies both to metadata requests and query execution.";
   private static final long REQUEST_TIMEOUT_MS_DEFAULT = 5000L;
 
+  // ------------------- other configurations ---------------------------------
+  public static final String PARTITION_EXPLODE_FACTOR_CONFIG = "responsive.partition"
+      + ".explode.factor";
+  public static final String PARTITION_EXPLODE_FACTOR_DOC = "Explodes kafka partitions "
+      + "into remote partition counts";
+  public static final int PARTITION_EXPLODE_FACTOR_DEFAULT = 31;
+
+  public static final String INTERNAL_PARTITIONER = "__internal.responsive.partitioner__";
 
   // ------------------ required StreamsConfig overrides ----------------------
 
@@ -123,6 +131,12 @@ public class ResponsiveDriverConfig extends AbstractConfig {
           REQUEST_TIMEOUT_MS_DEFAULT,
           Importance.MEDIUM,
           REQUEST_TIMEOUT_MS_DOC
+      ).define(
+          PARTITION_EXPLODE_FACTOR_CONFIG,
+          Type.INT,
+          PARTITION_EXPLODE_FACTOR_DEFAULT,
+          Importance.MEDIUM,
+          PARTITION_EXPLODE_FACTOR_DOC
       );
 
   private static class NonEmptyPassword implements Validator {

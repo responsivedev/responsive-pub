@@ -18,7 +18,6 @@ package dev.responsive.kafka.store;
 
 import static dev.responsive.db.CassandraClient.UNSET_PERMIT;
 
-import com.datastax.oss.driver.api.core.cql.BatchStatement;
 import com.datastax.oss.driver.api.core.cql.BatchStatementBuilder;
 import com.datastax.oss.driver.api.core.cql.BatchType;
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
@@ -26,9 +25,11 @@ import com.datastax.oss.driver.api.core.cql.ResultSet;
 import dev.responsive.db.CassandraClient;
 import dev.responsive.db.CassandraClient.OffsetRow;
 import dev.responsive.model.Result;
+import dev.responsive.utils.ExplodePartitioner;
 import dev.responsive.utils.Iterators;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -63,15 +64,16 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
   private final Supplier recordCollector;
   private final TopicPartition changelog;
   private final BufferPlugin<K> plugin;
+  private final ExplodePartitioner<K, byte[]> partitioner;
 
   CommitBuffer(
       final CassandraClient client,
       final String tableName,
       final TopicPartition changelog,
-      final RecordCollector.Supplier recordCollector,
+      final Supplier recordCollector,
       final Admin admin,
-      final BufferPlugin<K> plugin
-  ) {
+      final BufferPlugin<K> plugin,
+      final ExplodePartitioner<K, byte[]> partitioner) {
     this.client = client;
     this.tableName = tableName;
     this.recordCollector = recordCollector;
@@ -81,6 +83,11 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
     this.plugin = plugin;
 
     this.buffer = new TreeMap<>(plugin);
+    this.partitioner = partitioner;
+
+    for (int i = 0; i < partitioner.getFactor(); i++) {
+      client.initializeOffset(tableName, partition + i);
+    }
   }
 
   public void put(final K key, final byte[] value) {
@@ -201,21 +208,23 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
     // this is possible then we will be flushing data to Cassandra
     // that is not yet in the changelog
     final UUID txnid = UUID.randomUUID();
-    if (!flush(offset, txnid)) {
-      final OffsetRow stored = client.getOffset(tableName, partition);
+    final int exploded = flush(offset, txnid);
+    if (exploded != -1) {
+      final OffsetRow stored = client.getOffset(tableName, exploded);
       // we were fenced - the only conditional statement is the
       // offset update, so it's the only failure point
       throw new ProcessorStateException(
-          "Failure to write batch to " + tableName + "[" + partition + "] with end offset " + offset
-              + " and stored offset " + stored.offset + ". If the stored offset is "
-              + "larger than the end offset it is likely that this client was fenced by a more "
-              + "up to date consumer. txnId: " + txnid + " and stored txnId: " + stored.txind
+          "Failure to write batch to " + tableName + "[" + partition + ":" + exploded
+              + "] with end " + "offset " + offset + " and stored offset " + stored.offset
+              + ". If the stored offset is larger than the end offset it is likely that "
+              + "this client was fenced by a more up to date consumer. txnId: " + txnid
+              + " and stored txnId: " + stored.txind
       );
     }
   }
 
   @SuppressWarnings("BooleanMethodIsAlwaysInverted")
-  private boolean flush(final long offset, final UUID txnid) {
+  private int flush(final long offset, final UUID txnid) {
     LOG.info("Flushing {} records to remote {}[{}] (offset={}, transactionId={})",
         buffer.size(),
         tableName,
@@ -224,49 +233,49 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
         txnid
     );
 
-    final Iterator<Entry<K, Result<K>>> entries = buffer.entrySet().iterator();
-    boolean firstBatch = true;
-    while (entries.hasNext()) {
-      final BatchStatementBuilder builder = new BatchStatementBuilder(BatchType.UNLOGGED);
-      if (txnid != null) {
-        builder.addStatement(client.acquirePermit(
-            tableName,
-            partition,
-            firstBatch ? UNSET_PERMIT : txnid,
-            txnid,
-            offset
-        ));
-        firstBatch = false;
-      } else {
-        builder.addStatement(client.revokePermit(tableName, partition, offset));
-      }
+    final var entries = buffer.entrySet().iterator();
+    final var builders = new HashMap<Integer, PartitionedBuilder>();
 
-      for (int i = 0; i < MAX_BATCH_SIZE && entries.hasNext(); i++) {
-        final Result<K> result = entries.next().getValue();
-        if (result.isTombstone || plugin.retain(result.key)) {
-          builder.addStatement(result.isTombstone
-              ? plugin.deleteData(client, tableName, partition, result.key)
-              : plugin.insertData(client, tableName, partition, result.key, result.value));
+    for (int i = 0; i < partitioner.getFactor(); i++) {
+      final int explodedPartition = partitioner.mapToBase(partition) + i;
+      final var builder = new PartitionedBuilder(explodedPartition);
+      builders.put(explodedPartition, builder);
+      builder.initBatch(txnid, offset);
+    }
+
+    while (entries.hasNext()) {
+      final Result<K> result = entries.next().getValue();
+      final int explodedPartition = partitioner.repartition(result.key, result.value);
+
+      final var builder = builders.get(explodedPartition);
+
+      if (result.isTombstone || plugin.retain(result.key)) {
+        builder.add(result);
+        if (builder.shouldFlush()) {
+          if (!builder.flush()) {
+            return builder.partition;
+          }
+          builder.initBatch(txnid, offset);
         }
       }
+    }
 
-      // all of our writes are idempotent, and the Cassandra client will only retry
-      // idempotent writes on write timeouts
-      builder.setIdempotence(true);
-      final BatchStatement batch = builder.build();
-
-      final ResultSet resultSet = client.execute(batch);
-      if (!resultSet.wasApplied()) {
-        return false;
+    for (final Entry<Integer, PartitionedBuilder> entry : builders.entrySet()) {
+      if (!entry.getValue().flush()) {
+        return entry.getKey();
       }
     }
 
     // this needs to be done separately
     if (txnid != null) {
-      final ResultSet result = client.execute(
-          client.finalizeTxn(tableName, partition, txnid, offset));
-      if (!result.wasApplied()) {
-        return false;
+      for (int i = 0; i < partitioner.getFactor(); i++) {
+        final int explodedPartition = partition + i;
+        final ResultSet result = client.execute(
+            client.finalizeTxn(tableName, explodedPartition, txnid, offset)
+        );
+        if (!result.wasApplied()) {
+          return explodedPartition;
+        }
       }
     }
 
@@ -288,12 +297,16 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
       throw new ProcessorStateException("Interrupted while truncating " + changelog, e);
     }
 
-    return true;
+    return -1;
   }
 
   @Override
   public void restoreBatch(final Collection<ConsumerRecord<byte[], byte[]>> records) {
-    final long committedOffset = client.getOffset(tableName, partition).offset;
+    // it's OK to just check the first partition since a successful write will
+    // have written the same offset to all the sub-partitions within the exploded
+    // partition space
+    final int explodedPartition = partitioner.mapToBase(partition);
+    final long committedOffset = client.getOffset(tableName, explodedPartition).offset;
 
     long consumedOffset = -1L;
     for (ConsumerRecord<byte[], byte[]> record : records) {
@@ -310,7 +323,8 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
     }
 
     if (consumedOffset >= 0) {
-      if (!flush(consumedOffset, null)) {
+      final int result = flush(consumedOffset, null);
+      if (-1L != result) {
         // it is possible that this is a warmup replica that while restoring the
         // active replica is still writing and flushing to cassandra, in that
         // case just clear the buffer and try to restore the next batch
@@ -318,12 +332,13 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
 
         final OffsetRow stored = client.getOffset(tableName, partition);
         LOG.warn(
-            "Restoration for {}[{}] was fenced. There is likely an existing active "
+            "Restoration for {}[{}:{}] was fenced. There is likely an existing active "
                 + "replica that is writing to Cassandra. Original Offset: {}, Batch Offset: "
                 + "{}, Latest Offset: {}, Stored txnid: {}. This is not a problem but may "
                 + "cause rebalancing to take longer.",
             tableName,
             partition,
+            result,
             committedOffset,
             consumedOffset,
             stored.offset,
@@ -331,6 +346,63 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
         );
       }
     }
+  }
+
+  // use non-static class since this is only ever used internally
+  // to this class
+  private class PartitionedBuilder {
+
+    final int partition;
+
+    BatchStatementBuilder builder;
+    int size = 0;
+    boolean firstBatch = true;
+
+    private PartitionedBuilder(final int partition) {
+      this.partition = partition;
+    }
+
+    void initBatch(final UUID txnid, final long offset) {
+      if (size != 0) {
+        return;
+      }
+
+      builder = new BatchStatementBuilder(BatchType.UNLOGGED);
+      if (txnid != null) {
+        builder.addStatement(client.acquirePermit(
+            tableName,
+            partition,
+            firstBatch ? UNSET_PERMIT : txnid,
+            txnid,
+            offset
+        ));
+        firstBatch = false;
+      } else {
+        builder.addStatement(client.revokePermit(tableName, partition, offset));
+      }
+
+      builder.setIdempotence(true);
+    }
+
+    void add(final Result<K> result) {
+      size++;
+      if (result.isTombstone || plugin.retain(result.key)) {
+        builder.addStatement(result.isTombstone
+            ? plugin.deleteData(client, tableName, partition, result.key)
+            : plugin.insertData(client, tableName, partition, result.key, result.value));
+      }
+    }
+
+    boolean shouldFlush() {
+      return size >= MAX_BATCH_SIZE;
+    }
+
+    boolean flush() {
+      size = 0;
+      final var batch = builder.build();
+      return client.execute(batch).wasApplied();
+    }
+
   }
 
   interface BufferPlugin<K> extends Comparator<K> {

@@ -22,13 +22,16 @@ import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.db.CassandraClient;
 import dev.responsive.kafka.clients.SharedClients;
+import dev.responsive.kafka.config.ResponsiveDriverConfig;
 import dev.responsive.kafka.store.CommitBuffer.BufferPlugin;
 import dev.responsive.model.Result;
+import dev.responsive.utils.ExplodePartitioner;
 import dev.responsive.utils.RemoteMonitor;
 import dev.responsive.utils.StoreUtil;
 import dev.responsive.utils.TableName;
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
@@ -38,6 +41,8 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.processor.internals.DefaultStreamPartitioner;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.RecordCollector.Supplier;
@@ -91,6 +96,7 @@ public class ResponsiveStore implements KeyValueStore<Bytes, byte[]> {
     }
   }
 
+  @SuppressWarnings("unchecked")
   @Override
   public void init(final StateStoreContext context, final StateStore root) {
     try {
@@ -99,6 +105,7 @@ public class ResponsiveStore implements KeyValueStore<Bytes, byte[]> {
       this.context = asInternalProcessorContext(context);
       partition = context.taskId().partition();
 
+      final var driverConfig = new ResponsiveDriverConfig(context.appConfigs());
       final SharedClients sharedClients = new SharedClients(context.appConfigs());
       client = sharedClients.cassandraClient;
 
@@ -110,6 +117,25 @@ public class ResponsiveStore implements KeyValueStore<Bytes, byte[]> {
       client.prepareStatements(name.cassandraName());
       client.initializeOffset(name.cassandraName(), partition);
 
+      final String changelog = changelogFor(context, name.kafkaName(), false);
+      final int partitions = sharedClients.admin.describeTopics(List.of(changelog))
+          .allTopicNames()
+          .get()
+          .get(changelog)
+          .partitions()
+          .size();
+      final var partitioner = new ExplodePartitioner<>(
+         (StreamPartitioner<Bytes, byte[]>) context.appConfigs().getOrDefault(
+            ResponsiveDriverConfig.INTERNAL_PARTITIONER,
+            new DefaultStreamPartitioner<Bytes, byte[]>(
+                (t, k) -> k.get()
+            )
+          ),
+          changelog,
+          driverConfig.getInt(ResponsiveDriverConfig.PARTITION_EXPLODE_FACTOR_CONFIG),
+          partitions
+      );
+
       buffer = new CommitBuffer<>(
           client,
           name.cassandraName(),
@@ -118,13 +144,14 @@ public class ResponsiveStore implements KeyValueStore<Bytes, byte[]> {
               partition),
           asRecordCollector(context),
           sharedClients.admin,
-          PLUGIN
+          PLUGIN,
+          partitioner
       );
 
       open = true;
 
       context.register(root, buffer);
-    } catch (InterruptedException | TimeoutException e) {
+    } catch (InterruptedException | TimeoutException | ExecutionException e) {
       throw new ProcessorStateException("Failed to initialize store.", e);
     }
   }
