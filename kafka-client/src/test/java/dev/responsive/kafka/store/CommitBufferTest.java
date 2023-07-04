@@ -62,6 +62,7 @@ public class CommitBufferTest {
   private static final Bytes KEY = Bytes.wrap(ByteBuffer.allocate(4).putInt(0).array());
   private static final Bytes KEY2 = Bytes.wrap(ByteBuffer.allocate(4).putInt(1).array());
   private static final byte[] VALUE = new byte[]{1};
+  private static final int KAFKA_PARTITION = 2;
 
   private CqlSession session;
   private CassandraClient client;
@@ -82,7 +83,7 @@ public class CommitBufferTest {
         .withKeyspace("responsive_clients") // NOTE: this keyspace is expected to exist
         .build();
     client = new CassandraClient(session);
-    changelogTp = new TopicPartition("log", 0);
+    changelogTp = new TopicPartition("log", KAFKA_PARTITION);
     setPartitioner(1);
 
     client.createDataTable(name);
@@ -90,13 +91,13 @@ public class CommitBufferTest {
 
     when(supplier.recordCollector()).thenReturn(collector);
     when(collector.offsets())
-        .thenReturn(Collections.singletonMap(new TopicPartition("log", 0), 100L));
+        .thenReturn(Collections.singletonMap(new TopicPartition("log", KAFKA_PARTITION), 100L));
     when(admin.deleteRecords(Mockito.any()))
         .thenReturn(new DeleteRecordsResult(Map.of()));
   }
 
   private void setPartitioner(final int factor) {
-    partitioner = new ExplodePartitioner(factor);
+    partitioner = new ExplodePartitioner(factor, k -> ByteBuffer.wrap(k.get()).getInt() % 2);
   }
 
   @AfterEach
@@ -120,9 +121,9 @@ public class CommitBufferTest {
 
     // Then:
     final byte[] key = ByteBuffer.allocate(4).putInt(0).array();
-    final byte[] value = client.get(tableName, 0, Bytes.wrap(key));
+    final byte[] value = client.get(tableName, KAFKA_PARTITION, Bytes.wrap(key));
     assertThat(value, is(VALUE));
-    assertThat(client.getOffset(tableName, 0).offset, is(100L));
+    assertThat(client.getOffset(tableName, KAFKA_PARTITION).offset, is(100L));
   }
 
   @Test
@@ -141,11 +142,11 @@ public class CommitBufferTest {
     buffer.flush();
 
     // Then:
-    assertThat(client.get(tableName, 0, KEY), is(VALUE));
-    assertThat(client.get(tableName, 1, KEY2), is(VALUE));
+    assertThat(client.get(tableName, KAFKA_PARTITION * 2, KEY), is(VALUE));
+    assertThat(client.get(tableName, KAFKA_PARTITION * 2 + 1, KEY2), is(VALUE));
 
-    assertThat(client.getOffset(tableName, 0).offset, is(100L));
-    assertThat(client.getOffset(tableName, 1).offset, is(100L));
+    assertThat(client.getOffset(tableName, KAFKA_PARTITION * 2).offset, is(100L));
+    assertThat(client.getOffset(tableName, KAFKA_PARTITION * 2 + 1).offset, is(100L));
   }
 
   @Test
@@ -165,10 +166,10 @@ public class CommitBufferTest {
     buffer.flush();
 
     // Then:
-    assertThat(client.get(tableName, 0, KEY), is(VALUE));
+    assertThat(client.get(tableName, KAFKA_PARTITION * 2, KEY), is(VALUE));
 
-    assertThat(client.getOffset(tableName, 0).offset, is(100L));
-    assertThat(client.getOffset(tableName, 1).offset, is(100L));
+    assertThat(client.getOffset(tableName, KAFKA_PARTITION * 2).offset, is(100L));
+    assertThat(client.getOffset(tableName, KAFKA_PARTITION * 2 + 1).offset, is(100L));
   }
 
   @Test
@@ -184,7 +185,7 @@ public class CommitBufferTest {
     buffer.flush();
 
     // Then:
-    final byte[] value = client.get(table, 0, KEY);
+    final byte[] value = client.get(table, KAFKA_PARTITION, KEY);
     assertThat(value, nullValue());
   }
 
@@ -194,7 +195,7 @@ public class CommitBufferTest {
     final String tableName = name;
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
         client, tableName, changelogTp, supplier, admin, ResponsiveStore.PLUGIN, partitioner);
-    client.execute(client.revokePermit(tableName, 0, 101));
+    client.execute(client.revokePermit(tableName, KAFKA_PARTITION, 101));
 
     // Expect
     // When:
@@ -210,7 +211,8 @@ public class CommitBufferTest {
     final String tableName = name;
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
         client, tableName, changelogTp, supplier, admin, ResponsiveStore.PLUGIN, partitioner);
-    client.execute(client.acquirePermit(tableName, 0, UNSET_PERMIT, UUID.randomUUID(), 1));
+    client.execute(
+        client.acquirePermit(tableName, KAFKA_PARTITION, UNSET_PERMIT, UUID.randomUUID(), 1));
 
     // Expect
     // When:
@@ -226,7 +228,7 @@ public class CommitBufferTest {
     final String tableName = name;
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
         client, tableName, changelogTp, supplier, admin, ResponsiveStore.PLUGIN, partitioner);
-    client.execute(client.revokePermit(tableName, 0, 100));
+    client.execute(client.revokePermit(tableName, KAFKA_PARTITION, 100));
 
     // Expect
     // When:
@@ -242,7 +244,7 @@ public class CommitBufferTest {
     final String tableName = name;
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
         client, tableName, changelogTp, supplier, admin, ResponsiveStore.PLUGIN, partitioner);
-    client.execute(client.revokePermit(tableName, 0, 100));
+    client.execute(client.revokePermit(tableName, KAFKA_PARTITION, 100));
 
     final ConsumerRecord<byte[], byte[]> ignored = new ConsumerRecord<>(
         changelogTp.topic(), changelogTp.partition(), 100, KEY.get(), new byte[]{1});
@@ -253,7 +255,7 @@ public class CommitBufferTest {
     buffer.restoreBatch(List.of(ignored, restored));
 
     // Then:
-    assertThat(client.getOffset(tableName, 0).offset, is(101L));
+    assertThat(client.getOffset(tableName, KAFKA_PARTITION).offset, is(101L));
   }
 
   @Test
@@ -261,7 +263,7 @@ public class CommitBufferTest {
   public void shouldIgnoreFlushFailuresOnRestore() {
     // Given:
     final String tableName = name;
-    client.execute(client.revokePermit(tableName, 0, 100));
+    client.execute(client.revokePermit(tableName, KAFKA_PARTITION, 100));
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
         client, tableName, changelogTp, supplier, admin, ResponsiveStore.PLUGIN, partitioner);
 
@@ -282,7 +284,7 @@ public class CommitBufferTest {
     try {
       executor.submit(() -> {
         latch2.await();
-        client.execute(client.revokePermit(tableName, 0, 102));
+        client.execute(client.revokePermit(tableName, KAFKA_PARTITION, 102));
         latch1.countDown();
         return null;
       });

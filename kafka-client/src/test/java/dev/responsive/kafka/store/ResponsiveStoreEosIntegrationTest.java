@@ -50,9 +50,9 @@ import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.ResponsiveStores;
 import dev.responsive.kafka.config.ResponsiveDriverConfig;
 import dev.responsive.utils.ContainerExtension;
-import dev.responsive.utils.ExplodePartitioner;
 import dev.responsive.utils.RemoteMonitor;
 import dev.responsive.utils.TableName;
+import dev.responsive.utils.TestUtils;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -61,6 +61,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -121,12 +122,12 @@ public class ResponsiveStoreEosIntegrationTest {
 
   private static final int MAX_POLL_MS = 5000;
   private static final int NUM_INPUT_PARTITIONS = 2;
-  private static final String INPUT_TOPIC = "input";
-  private static final String OUTPUT_TOPIC = "output";
 
   private final Map<String, Object> responsiveProps = new HashMap<>();
 
   private String name;
+  private String inputTopic;
+  private String outputTopic;
   private String bootstrapServers;
   private Admin admin;
   private ScheduledExecutorService executor;
@@ -138,11 +139,13 @@ public class ResponsiveStoreEosIntegrationTest {
       final TestInfo info,
       final CassandraContainer<?> cassandra,
       final KafkaContainer kafka
-  ) {
+  ) throws InterruptedException, TimeoutException {
     name = info.getTestMethod().orElseThrow().getName();
     storeName = name + "store";
     executor = new ScheduledThreadPoolExecutor(2);
     bootstrapServers = kafka.getBootstrapServers();
+    inputTopic = name + "input";
+    outputTopic = name + "output";
 
     responsiveProps.put(STORAGE_HOSTNAME_CONFIG, cassandra.getContactPoint().getHostName());
     responsiveProps.put(STORAGE_PORT_CONFIG, cassandra.getContactPoint().getPort());
@@ -151,10 +154,12 @@ public class ResponsiveStoreEosIntegrationTest {
     responsiveProps.put(INTERNAL_TASK_ASSIGNOR_CLASS, StickyTaskAssignor.class.getName());
 
     admin = Admin.create(Map.of(BOOTSTRAP_SERVERS_CONFIG, bootstrapServers));
-    admin.createTopics(
+
+    TestUtils.awaitTopics(
+        admin,
         List.of(
-            new NewTopic(INPUT_TOPIC, Optional.of(NUM_INPUT_PARTITIONS), Optional.empty()),
-            new NewTopic(OUTPUT_TOPIC, Optional.of(1), Optional.empty())
+            new NewTopic(inputTopic, Optional.of(NUM_INPUT_PARTITIONS), Optional.empty()),
+            new NewTopic(outputTopic, Optional.of(1), Optional.empty())
         )
     );
 
@@ -168,7 +173,11 @@ public class ResponsiveStoreEosIntegrationTest {
 
   @AfterEach
   public void after() {
-    admin.deleteTopics(List.of(INPUT_TOPIC, OUTPUT_TOPIC));
+    try {
+      admin.deleteTopics(List.of(inputTopic, outputTopic)).all().get();
+    } catch (InterruptedException | ExecutionException e) {
+      // ignore
+    }
     admin.close();
   }
 
@@ -358,10 +367,10 @@ public class ResponsiveStoreEosIntegrationTest {
     final StreamsBuilder builder = new StreamsBuilder();
     builder.addStateStore(storeSupplier());
 
-    final KStream<Long, Long> input = builder.stream(INPUT_TOPIC);
+    final KStream<Long, Long> input = builder.stream(inputTopic);
     input
         .process(() -> new TestProcessor(instance, state, storeName), storeName)
-        .to(OUTPUT_TOPIC);
+        .to(outputTopic);
 
     return builder.build();
   }
@@ -370,7 +379,7 @@ public class ResponsiveStoreEosIntegrationTest {
     final var builder = new StreamsBuilder();
     builder.addStateStore(storeSupplier());
 
-    final KStream<Long, Long> stream = builder.stream(INPUT_TOPIC);
+    final KStream<Long, Long> stream = builder.stream(inputTopic);
     stream.process(() -> new Processor<Long, Long, Long, Long>() {
 
       private final AtomicInteger processed = new AtomicInteger();
@@ -404,7 +413,7 @@ public class ResponsiveStoreEosIntegrationTest {
         }
       }
     }, storeName)
-        .to(OUTPUT_TOPIC);
+        .to(outputTopic);
 
     return builder.build();
   }
@@ -464,7 +473,7 @@ public class ResponsiveStoreEosIntegrationTest {
     for (final long k : keys) {
       for (long v = valFrom; v < valTo; v++) {
         producer.send(new ProducerRecord<>(
-            INPUT_TOPIC,
+            inputTopic,
             (int) k % NUM_INPUT_PARTITIONS,
             timestamp.get(),
             k,
@@ -472,6 +481,7 @@ public class ResponsiveStoreEosIntegrationTest {
         ));
       }
     }
+    producer.flush();
   }
 
   private List<KeyValue<Long, Long>> readOutput(
@@ -486,7 +496,7 @@ public class ResponsiveStoreEosIntegrationTest {
         : IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT));
 
     try (final KafkaConsumer<Long, Long> consumer = new KafkaConsumer<>(properties)) {
-      final TopicPartition output = new TopicPartition(OUTPUT_TOPIC, 0);
+      final TopicPartition output = new TopicPartition(outputTopic, 0);
       consumer.assign(List.of(output));
       consumer.seek(output, from);
 

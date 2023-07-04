@@ -40,7 +40,7 @@ public class ExplodePartitioner {
     this(factor, k -> SALT * Murmur3.hash32(k.get()));
   }
 
-  ExplodePartitioner(
+  public ExplodePartitioner(
       final int factor,
       final Function<Bytes, Integer> hasher
   ) {

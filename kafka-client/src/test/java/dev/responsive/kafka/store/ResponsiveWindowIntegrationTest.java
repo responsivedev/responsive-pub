@@ -42,6 +42,7 @@ import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.ResponsiveStores;
 import dev.responsive.kafka.api.ResponsiveWindowedStoreSupplier;
 import dev.responsive.utils.ContainerExtension;
+import dev.responsive.utils.TestUtils;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
@@ -52,6 +53,8 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 import org.apache.kafka.clients.admin.Admin;
@@ -82,23 +85,27 @@ import org.testcontainers.containers.KafkaContainer;
 @ExtendWith(ContainerExtension.class)
 public class ResponsiveWindowIntegrationTest {
 
-  private static final String INPUT_TOPIC = "input";
-  private static final String OTHER_TOPIC = "other";
-  private static final String OUTPUT_TOPIC = "output";
-
   private final Map<String, Object> responsiveProps = new HashMap<>();
 
   private String name;
   private String bootstrapServers;
   private Admin admin;
 
+  private String inputToipc;
+  private String otherTopic;
+  private String outputTopic;
+
   @BeforeEach
   public void before(
       final TestInfo info,
       final CassandraContainer<?> cassandra,
       final KafkaContainer kafka
-  ) {
+  ) throws ExecutionException, InterruptedException, TimeoutException {
     name = info.getTestMethod().orElseThrow().getName();
+    inputToipc = name + "input";
+    otherTopic = name + "other";
+    outputTopic = name + "output";
+
     bootstrapServers = kafka.getBootstrapServers();
 
     responsiveProps.put(STORAGE_HOSTNAME_CONFIG, cassandra.getContactPoint().getHostName());
@@ -109,18 +116,23 @@ public class ResponsiveWindowIntegrationTest {
 
     admin = Admin.create(Map.of(BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers()));
 
-    admin.createTopics(
+    TestUtils.awaitTopics(
+        admin,
         List.of(
-            new NewTopic(INPUT_TOPIC, Optional.of(1), Optional.empty()),
-            new NewTopic(OTHER_TOPIC, Optional.of(1), Optional.empty()),
-            new NewTopic(OUTPUT_TOPIC, Optional.of(1), Optional.empty())
+            new NewTopic(inputToipc, Optional.of(1), Optional.empty()),
+            new NewTopic(otherTopic, Optional.of(1), Optional.empty()),
+            new NewTopic(outputTopic, Optional.of(1), Optional.empty())
         )
     );
   }
 
   @AfterEach
   public void after() {
-    admin.deleteTopics(List.of(INPUT_TOPIC, OTHER_TOPIC, OUTPUT_TOPIC));
+    try {
+      admin.deleteTopics(List.of(inputToipc, otherTopic, outputTopic)).all().get();
+    } catch (InterruptedException | ExecutionException e) {
+      // ignore
+    }
     admin.close();
   }
 
@@ -133,7 +145,7 @@ public class ResponsiveWindowIntegrationTest {
     final ConcurrentMap<Windowed<Long>, Long> collect = new ConcurrentHashMap<>();
     final CountDownLatch latch1 = new CountDownLatch(2);
     final CountDownLatch latch2 = new CountDownLatch(2);
-    final KStream<Long, Long> input = builder.stream(INPUT_TOPIC);
+    final KStream<Long, Long> input = builder.stream(inputToipc);
     input.groupByKey()
         .windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofSeconds(5)))
         .aggregate(
@@ -158,7 +170,7 @@ public class ResponsiveWindowIntegrationTest {
         // discard the window, so we don't have to serialize it
         // we're not checking the output topic anyway
         .map((k, v) -> new KeyValue<>(k.key(), v))
-        .to(OUTPUT_TOPIC);
+        .to(outputTopic);
 
     // When:
     // use a base timestamp that is aligned with a minute boundary to
@@ -179,7 +191,7 @@ public class ResponsiveWindowIntegrationTest {
       // 5 at a time to make sure that the timestamp hasn't moved past
       // retention (and therefore events from the second key would
       // be dropped)
-      pipeInput(producer, INPUT_TOPIC, () -> timestamp.getAndAdd(100), 0, 3, 0, 1);
+      pipeInput(producer, inputToipc, () -> timestamp.getAndAdd(100), 0, 3, 0, 1);
       latch1.await();
     }
 
@@ -194,21 +206,21 @@ public class ResponsiveWindowIntegrationTest {
         final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties)
     ) {
       kafkaStreams.start();
-      pipeInput(producer, INPUT_TOPIC, () -> timestamp.getAndAdd(100), 3, 5, 0, 1);
+      pipeInput(producer, inputToipc, () -> timestamp.getAndAdd(100), 3, 5, 0, 1);
 
       timestamp.set(baseTs + 10000);
-      pipeInput(producer, INPUT_TOPIC, () -> timestamp.getAndAdd(100), 5, 10, 0, 1);
+      pipeInput(producer, inputToipc, () -> timestamp.getAndAdd(100), 5, 10, 0, 1);
 
       // at this point the records produced by this pipe should be
       // past the retention period and therefore be ignored from the
       // first window
       timestamp.set(baseTs);
-      pipeInput(producer, INPUT_TOPIC, timestamp::get, 100, 101, 0, 1);
+      pipeInput(producer, inputToipc, timestamp::get, 100, 101, 0, 1);
 
       // use this to signify that we're done processing and count
       // down the latch
       timestamp.set(baseTs + 15000);
-      pipeInput(producer, INPUT_TOPIC, timestamp::get, 1000, 1001, 0, 1);
+      pipeInput(producer, inputToipc, timestamp::get, 1000, 1001, 0, 1);
       latch2.await();
     }
 
@@ -231,8 +243,8 @@ public class ResponsiveWindowIntegrationTest {
     final Map<String, Object> properties = getMutableProperties();
     final StreamsBuilder builder = new StreamsBuilder();
 
-    final KStream<Long, Long> input = builder.stream(INPUT_TOPIC);
-    final KStream<Long, Long> other = builder.stream(OTHER_TOPIC);
+    final KStream<Long, Long> input = builder.stream(inputToipc);
+    final KStream<Long, Long> other = builder.stream(otherTopic);
     final Map<Long, Queue<Long>> collect = new ConcurrentHashMap<>();
 
     final CountDownLatch latch1 = new CountDownLatch(2);
@@ -258,7 +270,7 @@ public class ResponsiveWindowIntegrationTest {
             latch2.countDown();
           }
         })
-        .to(OUTPUT_TOPIC);
+        .to(outputTopic);
 
     // When:
     // use a base timestamp that is aligned with a minute boundary to
@@ -275,9 +287,9 @@ public class ResponsiveWindowIntegrationTest {
       kafkaStreams.start();
 
       // interleave events in the first window
-      pipeInput(producer, INPUT_TOPIC, () -> timestamp.getAndAdd(100), 0, 2, 0, 1);
+      pipeInput(producer, inputToipc, () -> timestamp.getAndAdd(100), 0, 2, 0, 1);
       timestamp.set(baseTs + 50);
-      pipeInput(producer, OTHER_TOPIC, () -> timestamp.getAndAdd(50), 0, 2, 0, 1);
+      pipeInput(producer, otherTopic, () -> timestamp.getAndAdd(50), 0, 2, 0, 1);
 
       latch1.await();
     }
@@ -293,14 +305,14 @@ public class ResponsiveWindowIntegrationTest {
       kafkaStreams.start();
 
       // add one more event to each window
-      pipeInput(producer, INPUT_TOPIC, () -> timestamp.getAndAdd(100), 2, 3, 0, 1);
+      pipeInput(producer, inputToipc, () -> timestamp.getAndAdd(100), 2, 3, 0, 1);
       timestamp.set(baseTs + 250);
-      pipeInput(producer, OTHER_TOPIC, () -> timestamp.getAndAdd(50), 2, 3, 0, 1);
+      pipeInput(producer, otherTopic, () -> timestamp.getAndAdd(50), 2, 3, 0, 1);
 
       // add two events in a different window
       timestamp.set(baseTs + 10000);
-      pipeInput(producer, INPUT_TOPIC, () -> timestamp.getAndAdd(10), 100, 101, 0, 1);
-      pipeInput(producer, OTHER_TOPIC, () -> timestamp.getAndAdd(10), 100, 101, 0, 1);
+      pipeInput(producer, inputToipc, () -> timestamp.getAndAdd(10), 100, 101, 0, 1);
+      pipeInput(producer, otherTopic, () -> timestamp.getAndAdd(10), 100, 101, 0, 1);
 
       latch2.await();
     }
