@@ -50,6 +50,7 @@ import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.ResponsiveStores;
 import dev.responsive.kafka.config.ResponsiveDriverConfig;
 import dev.responsive.utils.ContainerExtension;
+import dev.responsive.utils.ExplodePartitioner;
 import dev.responsive.utils.RemoteMonitor;
 import dev.responsive.utils.TableName;
 import java.time.Duration;
@@ -95,7 +96,6 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
@@ -286,12 +286,20 @@ public class ResponsiveStoreEosIntegrationTest {
       ));
 
       final String cassandraName = new TableName(storeName).cassandraName();
-      assertThat(client.count(cassandraName, 0), is(2L));
+      client.prepareStatements(cassandraName);
+
+      // this isn't ideal for the test here as it's testing something pretty
+      // orthogonal to the test suite (that the data exists in C* and that it's
+      // in the correct exploded partition) - but it's the most convenient place
+      // for it for now. also note that after salting, key 0L -> partition 1 and
+      // key 1L -> partition 2 (out of partitions [0,3])
+      assertThat(client.count(cassandraName, 1), is(2L));
+      assertThat(client.count(cassandraName, 2), is(2L));
       assertThat(
-          client.get(cassandraName, 0, Bytes.wrap(serializer.serialize("", 0L))),
+          client.get(cassandraName, 1, Bytes.wrap(serializer.serialize("", 0L))),
           is(serializer.serialize("", 10_000L)));
       assertThat(
-          client.get(cassandraName, 0, Bytes.wrap(serializer.serialize("", 1L))),
+          client.get(cassandraName, 2, Bytes.wrap(serializer.serialize("", 1L))),
           is(serializer.serialize("", 10_000L)));
     }
   }
@@ -322,12 +330,7 @@ public class ResponsiveStoreEosIntegrationTest {
     properties.put(consumerPrefix(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG), MAX_POLL_MS);
     properties.put(consumerPrefix(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG), MAX_POLL_MS - 1);
 
-    final LongDeserializer deserializer = new LongDeserializer();
-    properties.put(
-        ResponsiveDriverConfig.INTERNAL_PARTITIONER,
-        (StreamPartitioner<Bytes, byte[]>) (t, k, v, np)
-            -> (int) ((deserializer.deserialize(t, k.get())) % np));
-
+    properties.put(ResponsiveDriverConfig.PARTITION_EXPLODE_FACTOR_CONFIG, 2);
     return properties;
   }
 

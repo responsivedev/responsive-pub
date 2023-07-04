@@ -346,6 +346,7 @@ public class ResponsiveWindowIntegrationTest {
         ));
       }
     }
+    producer.flush();
   }
 
   private Map<String, Object> getMutableProperties() {

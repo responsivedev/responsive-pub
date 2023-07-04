@@ -35,8 +35,6 @@ import dev.responsive.utils.TableName;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.Arrays;
-import java.util.List;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Predicate;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -47,8 +45,6 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
-import org.apache.kafka.streams.processor.StreamPartitioner;
-import org.apache.kafka.streams.processor.internals.DefaultStreamPartitioner;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.RecordCollector.Supplier;
@@ -78,6 +74,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
   private int partition;
   private CommitBuffer<Stamped<Bytes>> buffer;
   private long observedStreamTime;
+  private ExplodePartitioner partitioner;
 
   public ResponsiveWindowStore(
       final TableName name,
@@ -129,7 +126,6 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
     }
   }
 
-  @SuppressWarnings("unchecked")
   @Override
   public void init(final StateStoreContext context, final StateStore root) {
     try {
@@ -149,24 +145,8 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
 
       client.prepareWindowedStatements(name.cassandraName());
 
-      final String changelog = changelogFor(context, name.kafkaName(), false);
-      final int partitions = sharedClients.admin.describeTopics(List.of(changelog))
-          .allTopicNames()
-          .get()
-          .get(changelog)
-          .partitions()
-          .size();
-
-      final var partitioner = new ExplodePartitioner<>(
-          (StreamPartitioner<Stamped<Bytes>, byte[]>) context.appConfigs().getOrDefault(
-              ResponsiveDriverConfig.INTERNAL_PARTITIONER,
-              new DefaultStreamPartitioner<Stamped<Bytes>, byte[]>(
-                  (t, k) -> k.key.get()
-              )
-          ),
-          changelog,
-          driverConfig.getInt(ResponsiveDriverConfig.PARTITION_EXPLODE_FACTOR_CONFIG),
-          partitions
+      partitioner = new ExplodePartitioner(
+          driverConfig.getInt(ResponsiveDriverConfig.PARTITION_EXPLODE_FACTOR_CONFIG)
       );
 
       buffer = new CommitBuffer<>(
@@ -184,7 +164,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       open = true;
 
       context.register(root, buffer);
-    } catch (InterruptedException | TimeoutException | ExecutionException e) {
+    } catch (InterruptedException | TimeoutException e) {
       throw new ProcessorStateException("Failed to initialize store.", e);
     }
   }
@@ -227,7 +207,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
 
     final KeyValueIterator<Stamped<Bytes>, byte[]> remoteResult = client.fetch(
         name.cassandraName(),
-        partition,
+        partitioner.repartition(partition, key),
         key,
         time,
         time + 1
@@ -253,7 +233,13 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
     return Iterators.windowed(
         new LocalRemoteKvIterator<>(
             buffer.range(from, to),
-            client.fetch(name.cassandraName(), partition, key, start, timeTo),
+            client.fetch(
+                name.cassandraName(),
+                partitioner.repartition(partition, key),
+                key,
+                start,
+                timeTo
+            ),
             ResponsiveWindowStore::compareKeys
         )
     );
@@ -266,16 +252,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       final long timeFrom,
       final long timeTo
   ) {
-    final long start = Math.max(observedStreamTime - retentionPeriod, timeFrom);
-    final Stamped<Bytes> from = new Stamped<>(keyFrom, start);
-    final Stamped<Bytes> to = new Stamped<>(keyTo, timeTo);
-
-    return Iterators.windowedKey(
-        new LocalRemoteKvIterator<>(
-            buffer.range(from, to),
-            client.fetchRange(name.cassandraName(), partition, keyFrom, keyTo, start, timeTo),
-            ResponsiveWindowStore::compareKeys
-        ), windowSize);
+    throw new UnsupportedOperationException();
   }
 
   @Override
@@ -291,7 +268,13 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
     return Iterators.windowed(
         new LocalRemoteKvIterator<>(
             buffer.backRange(from, to),
-            client.backFetch(name.cassandraName(), partition, key, start, timeTo),
+            client.backFetch(
+                name.cassandraName(),
+                partitioner.repartition(partition, key),
+                key,
+                start,
+                timeTo
+            ),
             ResponsiveWindowStore::compareKeys
         )
     );
@@ -304,16 +287,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       final long timeFrom,
       final long timeTo
   ) {
-    final long start = Math.max(observedStreamTime - retentionPeriod, timeFrom);
-    final Stamped<Bytes> from = new Stamped<>(keyFrom, start);
-    final Stamped<Bytes> to = new Stamped<>(keyTo, timeTo);
-
-    return Iterators.windowedKey(
-        new LocalRemoteKvIterator<>(
-            buffer.backRange(from, to),
-            client.backFetchRange(name.cassandraName(), partition, keyFrom, keyTo, start, timeTo),
-            ResponsiveWindowStore::compareKeys
-        ), windowSize);
+    throw new UnsupportedOperationException();
   }
 
   @Override
@@ -321,14 +295,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       final long timeFrom,
       final long timeTo
   ) {
-    final long start = Math.max(observedStreamTime - retentionPeriod, timeFrom);
-    return Iterators.windowedKey(
-        new LocalRemoteKvIterator<>(
-            buffer.all(k -> k.stamp >= start && k.stamp < timeTo),
-            client.fetchAll(name.cassandraName(), partition, start, timeTo),
-            ResponsiveWindowStore::compareKeys
-        ), windowSize
-    );
+    throw new UnsupportedOperationException();
   }
 
   @Override
@@ -336,41 +303,17 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       final long timeFrom,
       final long timeTo
   ) {
-    final long start = Math.max(observedStreamTime - retentionPeriod, timeFrom);
-
-    return Iterators.windowedKey(
-        new LocalRemoteKvIterator<>(
-            buffer.backAll(k -> k.stamp >= start && k.stamp < timeTo),
-            client.backFetchAll(name.cassandraName(), partition, start, timeTo),
-            ResponsiveWindowStore::compareKeys
-        ), windowSize
-    );
+    throw new UnsupportedOperationException();
   }
 
   @Override
   public KeyValueIterator<Windowed<Bytes>, byte[]> all() {
-    final long start = observedStreamTime - retentionPeriod;
-
-    return Iterators.windowedKey(
-        new LocalRemoteKvIterator<>(
-            buffer.all(),
-            client.fetchAll(name.cassandraName(), partition, start, Long.MAX_VALUE),
-            ResponsiveWindowStore::compareKeys
-        ), windowSize
-    );
+    throw new UnsupportedOperationException();
   }
 
   @Override
   public KeyValueIterator<Windowed<Bytes>, byte[]> backwardAll() {
-    final long start = observedStreamTime - retentionPeriod;
-
-    return Iterators.windowedKey(
-        new LocalRemoteKvIterator<>(
-            buffer.backAll(x -> true),
-            client.backFetchAll(name.cassandraName(), partition, start, Long.MAX_VALUE),
-            ResponsiveWindowStore::compareKeys
-        ), windowSize
-    );
+    throw new UnsupportedOperationException();
   }
 
   @Override
@@ -450,6 +393,11 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
     @Override
     public boolean retain(final Stamped<Bytes> key) {
       return retain.test(key);
+    }
+
+    @Override
+    public Bytes bytes(final Stamped<Bytes> key) {
+      return key.key;
     }
   }
 }

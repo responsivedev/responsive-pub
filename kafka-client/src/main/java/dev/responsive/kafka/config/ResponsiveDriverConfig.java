@@ -71,8 +71,6 @@ public class ResponsiveDriverConfig extends AbstractConfig {
       + "into remote partition counts";
   public static final int PARTITION_EXPLODE_FACTOR_DEFAULT = 31;
 
-  public static final String INTERNAL_PARTITIONER = "__internal.responsive.partitioner__";
-
   // ------------------ required StreamsConfig overrides ----------------------
 
   public static final int NUM_STANDBYS_OVERRIDE = 0;

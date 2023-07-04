@@ -31,7 +31,6 @@ import dev.responsive.utils.StoreUtil;
 import dev.responsive.utils.TableName;
 import java.time.Duration;
 import java.util.List;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
@@ -41,8 +40,6 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
-import org.apache.kafka.streams.processor.StreamPartitioner;
-import org.apache.kafka.streams.processor.internals.DefaultStreamPartitioner;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.RecordCollector.Supplier;
@@ -71,6 +68,7 @@ public class ResponsiveStore implements KeyValueStore<Bytes, byte[]> {
   @SuppressWarnings("rawtypes")
   private InternalProcessorContext context;
   private int partition;
+  private ExplodePartitioner partitioner;
 
   public ResponsiveStore(
       final TableName name
@@ -96,7 +94,6 @@ public class ResponsiveStore implements KeyValueStore<Bytes, byte[]> {
     }
   }
 
-  @SuppressWarnings("unchecked")
   @Override
   public void init(final StateStoreContext context, final StateStore root) {
     try {
@@ -117,23 +114,9 @@ public class ResponsiveStore implements KeyValueStore<Bytes, byte[]> {
       client.prepareStatements(name.cassandraName());
       client.initializeOffset(name.cassandraName(), partition);
 
-      final String changelog = changelogFor(context, name.kafkaName(), false);
-      final int partitions = sharedClients.admin.describeTopics(List.of(changelog))
-          .allTopicNames()
-          .get()
-          .get(changelog)
-          .partitions()
-          .size();
-      final var partitioner = new ExplodePartitioner<>(
-         (StreamPartitioner<Bytes, byte[]>) context.appConfigs().getOrDefault(
-            ResponsiveDriverConfig.INTERNAL_PARTITIONER,
-            new DefaultStreamPartitioner<Bytes, byte[]>(
-                (t, k) -> k.get()
-            )
-          ),
-          changelog,
-          driverConfig.getInt(ResponsiveDriverConfig.PARTITION_EXPLODE_FACTOR_CONFIG),
-          partitions
+      partitioner = new ExplodePartitioner(
+          driverConfig.getInt(ResponsiveDriverConfig.PARTITION_EXPLODE_FACTOR_CONFIG)
+
       );
 
       buffer = new CommitBuffer<>(
@@ -151,7 +134,7 @@ public class ResponsiveStore implements KeyValueStore<Bytes, byte[]> {
       open = true;
 
       context.register(root, buffer);
-    } catch (InterruptedException | TimeoutException | ExecutionException e) {
+    } catch (InterruptedException | TimeoutException e) {
       throw new ProcessorStateException("Failed to initialize store.", e);
     }
   }
@@ -220,11 +203,15 @@ public class ResponsiveStore implements KeyValueStore<Bytes, byte[]> {
       return result.isTombstone ? null : result.value;
     }
 
-    return client.get(name.cassandraName(), partition, key);
+    final int storePartition = partitioner.repartition(partition, key);
+    return client.get(name.cassandraName(), storePartition, key);
   }
 
   @Override
   public KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
+    if (!from.equals(to)) {
+      throw new UnsupportedOperationException("range not yet implemented for multi-keys");
+    }
     return new LocalRemoteKvIterator<>(
         buffer.range(from, to),
         client.range(name.cassandraName(), partition, from, to),
@@ -234,11 +221,7 @@ public class ResponsiveStore implements KeyValueStore<Bytes, byte[]> {
 
   @Override
   public KeyValueIterator<Bytes, byte[]> all() {
-    return new LocalRemoteKvIterator<>(
-        buffer.all(),
-        client.all(name.cassandraName(), partition),
-        PLUGIN
-    );
+    throw new UnsupportedOperationException();
   }
 
   @Override
@@ -289,6 +272,11 @@ public class ResponsiveStore implements KeyValueStore<Bytes, byte[]> {
         final Bytes key
     ) {
       return client.deleteData(tableName, partition, key);
+    }
+
+    @Override
+    public Bytes bytes(final Bytes key) {
+      return key;
     }
 
     @Override

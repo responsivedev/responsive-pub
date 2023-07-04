@@ -30,7 +30,6 @@ import dev.responsive.utils.Iterators;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NavigableMap;
@@ -42,6 +41,7 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.RecordsToDelete;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
@@ -64,7 +64,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
   private final Supplier recordCollector;
   private final TopicPartition changelog;
   private final BufferPlugin<K> plugin;
-  private final ExplodePartitioner<K, byte[]> partitioner;
+  private final ExplodePartitioner partitioner;
 
   CommitBuffer(
       final CassandraClient client,
@@ -73,7 +73,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
       final Supplier recordCollector,
       final Admin admin,
       final BufferPlugin<K> plugin,
-      final ExplodePartitioner<K, byte[]> partitioner) {
+      final ExplodePartitioner partitioner) {
     this.client = client;
     this.tableName = tableName;
     this.recordCollector = recordCollector;
@@ -86,7 +86,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
     this.partitioner = partitioner;
 
     for (int i = 0; i < partitioner.getFactor(); i++) {
-      client.initializeOffset(tableName, partition + i);
+      client.initializeOffset(tableName, partitioner.base(partition) + i);
     }
   }
 
@@ -237,17 +237,17 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
     final var builders = new HashMap<Integer, PartitionedBuilder>();
 
     for (int i = 0; i < partitioner.getFactor(); i++) {
-      final int explodedPartition = partitioner.mapToBase(partition) + i;
-      final var builder = new PartitionedBuilder(explodedPartition);
-      builders.put(explodedPartition, builder);
+      final int storePartition = partitioner.base(partition) + i;
+      final var builder = new PartitionedBuilder(storePartition);
+      builders.put(storePartition, builder);
       builder.initBatch(txnid, offset);
     }
 
     while (entries.hasNext()) {
       final Result<K> result = entries.next().getValue();
-      final int explodedPartition = partitioner.repartition(result.key, result.value);
+      final int storePartition = partitioner.repartition(partition, plugin.bytes(result.key));
 
-      final var builder = builders.get(explodedPartition);
+      final var builder = builders.get(storePartition);
 
       if (result.isTombstone || plugin.retain(result.key)) {
         builder.add(result);
@@ -269,12 +269,12 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
     // this needs to be done separately
     if (txnid != null) {
       for (int i = 0; i < partitioner.getFactor(); i++) {
-        final int explodedPartition = partition + i;
+        final int storePartition = partitioner.base(partition) + i;
         final ResultSet result = client.execute(
-            client.finalizeTxn(tableName, explodedPartition, txnid, offset)
+            client.finalizeTxn(tableName, storePartition, txnid, offset)
         );
         if (!result.wasApplied()) {
-          return explodedPartition;
+          return storePartition;
         }
       }
     }
@@ -305,8 +305,8 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
     // it's OK to just check the first partition since a successful write will
     // have written the same offset to all the sub-partitions within the exploded
     // partition space
-    final int explodedPartition = partitioner.mapToBase(partition);
-    final long committedOffset = client.getOffset(tableName, explodedPartition).offset;
+    final int basePartition = partitioner.base(partition);
+    final long committedOffset = client.getOffset(tableName, partitioner.base(partition)).offset;
 
     long consumedOffset = -1L;
     for (ConsumerRecord<byte[], byte[]> record : records) {
@@ -427,5 +427,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
     default boolean retain(final K key) {
       return true;
     }
+
+    Bytes bytes(final K key);
   }
 }

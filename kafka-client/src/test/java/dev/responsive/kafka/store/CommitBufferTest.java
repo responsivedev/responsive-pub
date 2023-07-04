@@ -66,7 +66,7 @@ public class CommitBufferTest {
   private CqlSession session;
   private CassandraClient client;
   private TopicPartition changelogTp;
-  private ExplodePartitioner<Bytes, byte[]> partitioner;
+  private ExplodePartitioner partitioner;
 
   private String name;
   @Mock private RecordCollector.Supplier supplier;
@@ -83,7 +83,7 @@ public class CommitBufferTest {
         .build();
     client = new CassandraClient(session);
     changelogTp = new TopicPartition("log", 0);
-    setPartitioner(1, 1);
+    setPartitioner(1);
 
     client.createDataTable(name);
     client.prepareStatements(name);
@@ -95,13 +95,8 @@ public class CommitBufferTest {
         .thenReturn(new DeleteRecordsResult(Map.of()));
   }
 
-  private void setPartitioner(final int numPartitions, final int factor) {
-    partitioner = new ExplodePartitioner<>(
-        (topic, key, value, np) -> ByteBuffer.wrap(key.get()).getInt() % np,
-        changelogTp.topic(),
-        factor,
-        numPartitions
-    );
+  private void setPartitioner(final int factor) {
+    partitioner = new ExplodePartitioner(factor);
   }
 
   @AfterEach
@@ -133,7 +128,7 @@ public class CommitBufferTest {
   @Test
   public void shouldExplodeFlushAndUpdateOffsetWhenLargerOffset() {
     // Given:
-    setPartitioner(1, 2);
+    setPartitioner(2);
     final String tableName = name;
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
         client, tableName, changelogTp, supplier, admin, ResponsiveStore.PLUGIN, partitioner);
@@ -156,7 +151,7 @@ public class CommitBufferTest {
   @Test
   public void shouldExplodeFlushWhenThereAreEmptyPartitionSets() {
     // Given:
-    setPartitioner(1, 2);
+    setPartitioner(2);
     final String tableName = name;
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
         client, tableName, changelogTp, supplier, admin, ResponsiveStore.PLUGIN, partitioner);

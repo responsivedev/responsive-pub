@@ -16,53 +16,50 @@
 
 package dev.responsive.utils;
 
-import org.apache.kafka.streams.processor.StreamPartitioner;
+import java.util.function.Function;
+import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.state.internals.Murmur3;
 
 /**
  * {@code ExplodePartitioner} allows mapping a smaller subset of partitions
  * into a larger partition space.
  */
-public class ExplodePartitioner<K, V> {
+public class ExplodePartitioner {
 
-  private final StreamPartitioner<K, V> base;
+  private static final int SALT = 31;
+
   private final int factor;
-  private final int numPartitions;
-  private final String topic;
+  private final Function<Bytes, Integer> hasher;
 
   public ExplodePartitioner(
-      final StreamPartitioner<K, V> base,
-      final String topic,
-      final int factor,
-      final int numPartitions
+      final int factor
   ) {
-    if (factor != 1 && factor == numPartitions) {
-      // we don't necessarily have to use the same partitioner for the
-      // second round of hashing as we do for the first one, but we'll
-      // leave that as a follow-up and just throw an exception for now
-      throw new IllegalArgumentException("Cannot explode by the same "
-          + "number as original partitions " + numPartitions
-          + " as that will ensure collisions.");
-    }
-    this.base = base;
-    this.topic = topic;
-    this.factor = factor;
-    this.numPartitions = numPartitions;
+    // we use a salt in case the original partitioner used Murmur3.hash32, which
+    // would cause all keys within a base partition to map to the same mapped partition
+    this(factor, k -> SALT * Murmur3.hash32(k.get()));
   }
 
-  @SuppressWarnings("deprecation")
-  public int repartition(final K key, final V value) {
+  ExplodePartitioner(
+      final int factor,
+      final Function<Bytes, Integer> hasher
+  ) {
+    this.factor = factor;
+    this.hasher = hasher;
+  }
+
+  public int repartition(final int original, final Bytes key) {
     // map the original partition to a new base by multiplying it by factor
     // and then determine the sub-partition within the new base by partitioning
     // it as if there were that many partitions
-    return base.partition(topic, key, value, numPartitions) * factor
-        + base.partition(topic, key, value, factor);
+    return original * factor + Utils.toPositive(hasher.apply(key)) % factor;
   }
 
   public int getFactor() {
     return factor;
   }
 
-  public int mapToBase(final int partition) {
+  public int base(final int partition) {
     return partition * factor;
   }
 }

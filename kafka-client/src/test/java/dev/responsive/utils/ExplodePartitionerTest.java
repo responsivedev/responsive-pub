@@ -19,7 +19,7 @@ package dev.responsive.utils;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 
-import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.common.utils.Bytes;
 import org.junit.jupiter.api.Test;
 
 class ExplodePartitionerTest {
@@ -27,25 +27,19 @@ class ExplodePartitionerTest {
   @Test
   public void shouldMapPartitionsToLargerSpace() {
     // Given:
-    final StreamPartitioner<Integer, Integer> base = (t, k, v, np) -> k % np;
-    final ExplodePartitioner<Integer, Integer> partitioner = new ExplodePartitioner<>(
-        base,
-        "",
-        2,
-        1
-    );
+    final var partitioner = new ExplodePartitioner(2, k -> k.get()[0] % 2);
 
     // When:
-    final int zero = partitioner.repartition(0, 0);
-    final int one = partitioner.repartition(1, 0);
-    final int two = partitioner.repartition(2, 0);
-    final int three = partitioner.repartition(3, 0);
+    final int zero = partitioner.repartition(0, Bytes.wrap(new byte[]{0}));
+    final int one = partitioner.repartition(0, Bytes.wrap(new byte[]{1}));
+    final int two = partitioner.repartition(1, Bytes.wrap(new byte[]{2}));
+    final int three = partitioner.repartition(1, Bytes.wrap(new byte[]{3}));
 
     // Then:
     assertThat(zero, is(0));
     assertThat(one, is(1));
-    assertThat(two, is(0));
-    assertThat(three, is(1));
+    assertThat(two, is(2));
+    assertThat(three, is(3));
   }
 
 }
