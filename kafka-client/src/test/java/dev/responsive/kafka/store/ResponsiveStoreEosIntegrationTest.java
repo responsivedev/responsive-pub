@@ -16,6 +16,10 @@
 
 package dev.responsive.kafka.store;
 
+import static dev.responsive.kafka.config.ResponsiveDriverConfig.STORAGE_DATACENTER_CONFIG;
+import static dev.responsive.kafka.config.ResponsiveDriverConfig.STORAGE_HOSTNAME_CONFIG;
+import static dev.responsive.kafka.config.ResponsiveDriverConfig.STORAGE_PORT_CONFIG;
+import static dev.responsive.kafka.config.ResponsiveDriverConfig.TENANT_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
@@ -29,6 +33,7 @@ import static org.apache.kafka.streams.StreamsConfig.COMMIT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_V2;
+import static org.apache.kafka.streams.StreamsConfig.InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS;
 import static org.apache.kafka.streams.StreamsConfig.NUM_STREAM_THREADS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.PROCESSING_GUARANTEE_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
@@ -38,12 +43,10 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.lessThan;
 
-import com.datastax.oss.driver.api.core.CqlSession;
-import dev.responsive.db.CassandraClient;
-import dev.responsive.kafka.api.ResponsiveDriver;
+import dev.responsive.kafka.api.ResponsiveKafkaStreams;
+import dev.responsive.kafka.api.ResponsiveStores;
 import dev.responsive.utils.ContainerExtension;
 import dev.responsive.utils.RemoteMonitor;
-import java.lang.reflect.Field;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -83,16 +86,14 @@ import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KafkaStreams.StateListener;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.StreamThread;
-import org.apache.kafka.streams.processor.internals.namedtopology.KafkaStreamsNamedTopologyWrapper;
+import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.Stores;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -114,11 +115,11 @@ public class ResponsiveStoreEosIntegrationTest {
   private static final String OUTPUT_TOPIC = "output";
   private static final String STORE_NAME = "store-Name"; // use non-valid cassandra chars (-)
 
+  private final Map<String, Object> responsiveProps = new HashMap<>();
+
   private String name;
   private String bootstrapServers;
   private Admin admin;
-  private CqlSession session;
-  private CassandraClient client;
   private ScheduledExecutorService executor;
 
   @BeforeEach
@@ -128,16 +129,16 @@ public class ResponsiveStoreEosIntegrationTest {
       final KafkaContainer kafka
   ) {
     name = info.getTestMethod().orElseThrow().getName();
-    session = CqlSession.builder()
-        .addContactPoint(cassandra.getContactPoint())
-        .withLocalDatacenter(cassandra.getLocalDatacenter())
-        .withKeyspace("responsive_clients") // NOTE: this keyspace is expected to exist
-        .build();
-    client = new CassandraClient(session);
     executor = new ScheduledThreadPoolExecutor(2);
     bootstrapServers = kafka.getBootstrapServers();
-    admin = Admin.create(Map.of(BOOTSTRAP_SERVERS_CONFIG, bootstrapServers));
 
+    responsiveProps.put(STORAGE_HOSTNAME_CONFIG, cassandra.getContactPoint().getHostName());
+    responsiveProps.put(STORAGE_PORT_CONFIG, cassandra.getContactPoint().getPort());
+    responsiveProps.put(STORAGE_DATACENTER_CONFIG, cassandra.getLocalDatacenter());
+    responsiveProps.put(TENANT_ID_CONFIG, "responsive_clients");   // keyspace is expected to exist
+    responsiveProps.put(INTERNAL_TASK_ASSIGNOR_CLASS, StickyTaskAssignor.class.getName());
+
+    admin = Admin.create(Map.of(BOOTSTRAP_SERVERS_CONFIG, bootstrapServers));
     admin.createTopics(
         List.of(
             new NewTopic(INPUT_TOPIC, Optional.of(2), Optional.empty()),
@@ -148,8 +149,6 @@ public class ResponsiveStoreEosIntegrationTest {
 
   @AfterEach
   public void after() {
-    session.close();
-    executor.shutdown();
     admin.deleteTopics(List.of(INPUT_TOPIC, OUTPUT_TOPIC));
     admin.close();
   }
@@ -163,8 +162,8 @@ public class ResponsiveStoreEosIntegrationTest {
 
     // When:
     try (
-        final KafkaStreams streamsA = buildStreams(properties, "a", state);
-        final KafkaStreams streamsB = buildStreams(properties, "b", state);
+        final ResponsiveKafkaStreams streamsA = buildStreams(properties, "a", state);
+        final ResponsiveKafkaStreams streamsB = buildStreams(properties, "b", state);
     ) {
       startAndAwaitRunning(Duration.ofSeconds(10), streamsA, streamsB);
 
@@ -241,7 +240,7 @@ public class ResponsiveStoreEosIntegrationTest {
   }
 
   private Map<String, Object> getMutableProperties() {
-    final Map<String, Object> properties = new HashMap<>();
+    final Map<String, Object> properties = new HashMap<>(responsiveProps);
 
     properties.put(BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
     properties.put(KEY_SERIALIZER_CLASS_CONFIG, LongSerializer.class);
@@ -270,19 +269,15 @@ public class ResponsiveStoreEosIntegrationTest {
   }
 
   private StoreBuilder<KeyValueStore<Long, Long>> storeSupplier() {
-    final ResponsiveDriver responsiveDriver = new ResponsiveDriver(
-        session,
-        admin
-    );
-    return Stores.keyValueStoreBuilder(
-        responsiveDriver.kv(STORE_NAME),
+    return ResponsiveStores.keyValueStoreBuilder(
+        ResponsiveStores.keyValueStore(STORE_NAME),
         Serdes.Long(),
         Serdes.Long()
     ).withLoggingEnabled(
         Map.of(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE));
   }
 
-  private KafkaStreams buildStreams(
+  private ResponsiveKafkaStreams buildStreams(
       final Map<String, Object> originals,
       final String instance,
       final SharedState state
@@ -290,7 +285,6 @@ public class ResponsiveStoreEosIntegrationTest {
     final Map<String, Object> properties = new HashMap<>(originals);
     properties.put(APPLICATION_SERVER_CONFIG, instance + ":1024");
 
-    final StreamsConfig config = new StreamsConfig(properties);
     final StreamsBuilder builder = new StreamsBuilder();
     builder.addStateStore(storeSupplier());
 
@@ -299,12 +293,12 @@ public class ResponsiveStoreEosIntegrationTest {
         .process(() -> new TestProcessor(instance, state), STORE_NAME)
         .to(OUTPUT_TOPIC);
 
-    return new KafkaStreams(builder.build(), config);
+    return ResponsiveKafkaStreams.create(builder.build(), properties);
   }
 
   private void startAndAwaitRunning(
       final Duration timeout,
-      final KafkaStreams... streams
+      final ResponsiveKafkaStreams... streams
   ) throws Exception {
     final ReentrantLock lock = new ReentrantLock();
     final Condition onRunning = lock.newCondition();
@@ -312,7 +306,7 @@ public class ResponsiveStoreEosIntegrationTest {
 
     for (int i = 0; i < streams.length; i++) {
       final int idx = i;
-      final StateListener oldListener = getStateListener(streams[i]);
+      final StateListener oldListener = streams[i].stateListener();
       final StateListener listener = (newState, oldState) -> {
         if (oldListener != null) {
           oldListener.onChange(newState, oldState);
@@ -398,22 +392,6 @@ public class ResponsiveStoreEosIntegrationTest {
         }
       }
       return result;
-    }
-  }
-
-  private static StateListener getStateListener(final KafkaStreams streams) {
-    try {
-      if (streams instanceof KafkaStreamsNamedTopologyWrapper) {
-        final Field field = streams.getClass().getSuperclass().getDeclaredField("stateListener");
-        field.setAccessible(true);
-        return (StateListener) field.get(streams);
-      } else {
-        final Field field = streams.getClass().getDeclaredField("stateListener");
-        field.setAccessible(true);
-        return (StateListener) field.get(streams);
-      }
-    } catch (final IllegalAccessException | NoSuchFieldException e) {
-      throw new RuntimeException("Failed to get StateListener through reflection", e);
     }
   }
 

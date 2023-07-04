@@ -1,9 +1,6 @@
 package dev.responsive.kafka.store;
 
-import dev.responsive.db.CassandraClient;
-import dev.responsive.utils.RemoteMonitor;
 import dev.responsive.utils.TableName;
-import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 
 /**
@@ -18,13 +15,7 @@ import org.apache.kafka.streams.state.TimestampedBytesStore;
  */
 public class ResponsiveTimestampedStore extends ResponsiveStore implements TimestampedBytesStore {
 
-  public ResponsiveTimestampedStore(
-      final CassandraClient client,
-      final TableName name,
-      final RemoteMonitor initRemote,
-      final Admin admin
-  ) {
-    super(client, name, initRemote, admin);
+  public ResponsiveTimestampedStore(final TableName name) {
+    super(name);
   }
-
 }

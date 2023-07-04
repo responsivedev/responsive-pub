@@ -22,6 +22,7 @@ import static org.apache.kafka.streams.state.StateSerdes.TIMESTAMP_SIZE;
 
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.db.CassandraClient;
+import dev.responsive.kafka.clients.SharedClients;
 import dev.responsive.kafka.store.CommitBuffer.BufferPlugin;
 import dev.responsive.model.Result;
 import dev.responsive.model.Stamped;
@@ -34,7 +35,6 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Predicate;
-import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Bytes;
@@ -58,10 +58,9 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
 
   private static final Logger LOG = LoggerFactory.getLogger(ResponsiveWindowStore.class);
 
-  private final CassandraClient client;
+  private CassandraClient client;
+
   private final TableName name;
-  private final RemoteMonitor initRemote;
-  private final Admin admin;
   private final long windowSize;
   private final Position position;
   private final long retentionPeriod;
@@ -75,18 +74,12 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
   private long observedStreamTime;
 
   public ResponsiveWindowStore(
-      final CassandraClient client,
       final TableName name,
-      final RemoteMonitor initRemote,
-      final Admin admin,
       final long retentionPeriod,
       final long windowSize,
       final boolean retainDuplicates
   ) {
-    this.client = client;
     this.name = name;
-    this.initRemote = initRemote;
-    this.admin = admin;
 
     // TODO: figure out how to implement retention period in Cassandra
     // there are a few options for this: we can use the wall-clock based
@@ -136,10 +129,14 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       LOG.info("Initializing state store {}", name);
       StoreUtil.validateTopologyOptimizationConfig(context.appConfigs());
       this.context = asInternalProcessorContext(context);
-
       partition = context.taskId().partition();
+
+      final SharedClients sharedClients = new SharedClients(context.appConfigs());
+      client = sharedClients.cassandraClient;
+
+      final RemoteMonitor monitor = client.awaitTable(name.cassandraName(), sharedClients.executor);
       client.createWindowedDataTable(name.cassandraName());
-      initRemote.await(Duration.ofSeconds(60));
+      monitor.await(Duration.ofSeconds(60));
       LOG.info("Remote table {} is available for querying.", name.cassandraName());
 
       client.prepareWindowedStatements(name.cassandraName());
@@ -152,7 +149,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
               changelogFor(context, name.kafkaName(), false),
               partition),
           asRecordCollector(context),
-          admin,
+          sharedClients.admin,
           new Plugin(this::withinRetention)
       );
 

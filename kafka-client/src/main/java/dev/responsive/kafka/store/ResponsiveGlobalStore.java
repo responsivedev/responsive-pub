@@ -17,6 +17,7 @@
 package dev.responsive.kafka.store;
 
 import dev.responsive.db.CassandraClient;
+import dev.responsive.kafka.clients.SharedClients;
 import dev.responsive.utils.RemoteMonitor;
 import dev.responsive.utils.StoreUtil;
 import dev.responsive.utils.TableName;
@@ -43,23 +44,18 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
 
   private static final Logger LOG = LoggerFactory.getLogger(ResponsiveGlobalStore.class);
 
-  private final CassandraClient client;
+  private CassandraClient client;
   private final TableName name;
-  private final RemoteMonitor initRemote;
   private final Position position;
 
   private boolean open;
   private int partition;
   private StateStoreContext context;
 
-  public ResponsiveGlobalStore(
-      final CassandraClient client,
-      final TableName name,
-      final RemoteMonitor initRemote
-  ) {
-    this.client = client;
+  // TODO: instead of splitting this out into a separate store implementation, we should just
+  //  check whether a store is global at runtime (during init) and branch the logic from there
+  public ResponsiveGlobalStore(final TableName name) {
     this.name = name;
-    this.initRemote = initRemote;
     this.position = Position.emptyPosition();
   }
 
@@ -93,8 +89,12 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
       // to be more evently distributed and take the hit only on range
       // queries
       partition = 0;
+      final SharedClients sharedClients = new SharedClients(context.appConfigs());
+      client = sharedClients.cassandraClient;
+
+      final RemoteMonitor monitor = client.awaitTable(name.cassandraName(), sharedClients.executor);
       client.createDataTable(name.cassandraName());
-      initRemote.await(Duration.ofSeconds(60));
+      monitor.await(Duration.ofSeconds(60));
       LOG.info("Global table {} is available for querying.", name);
 
       client.prepareStatements(name.cassandraName());

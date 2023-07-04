@@ -16,7 +16,9 @@
 
 package dev.responsive.utils;
 
+import java.time.Duration;
 import java.util.Map;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.streams.StreamsConfig;
 
 public final class StoreUtil {
@@ -27,6 +29,40 @@ public final class StoreUtil {
         || optimizations.contains(StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS)) {
       throw new IllegalArgumentException(
           "Responsive stores cannot be used with reuse.ktable.source.topics optimization");
+    }
+  }
+
+  public static void validateLogConfigs(
+      final Map<String, String> config,
+      final boolean truncateChangelog
+  ) {
+    if (truncateChangelog) {
+      final String cleanupPolicy = config.get(TopicConfig.CLEANUP_POLICY_CONFIG);
+      if (cleanupPolicy != null && !cleanupPolicy.equals(TopicConfig.CLEANUP_POLICY_DELETE)) {
+        throw new IllegalArgumentException(String.format(
+            "Changelogs must use %s=[%s]. Got [%s]",
+            TopicConfig.CLEANUP_POLICY_CONFIG,
+            TopicConfig.CLEANUP_POLICY_DELETE,
+            cleanupPolicy)
+        );
+      }
+    }
+  }
+
+  /**
+   * Validate and convert the {@link Duration} to milliseconds
+   */
+  public static long durationToMillis(final Duration duration, final String parameterName) {
+    final String errorMsgPrefix =
+        String.format("Cannot convert %s Duration to milliseconds", parameterName);
+    try {
+      if (duration == null) {
+        throw new IllegalArgumentException(errorMsgPrefix + " due to parameter being null");
+      }
+
+      return duration.toMillis();
+    } catch (final ArithmeticException e) {
+      throw new IllegalArgumentException(errorMsgPrefix + " due to arithmetic exception", e);
     }
   }
 }
