@@ -181,7 +181,10 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
 
   @Override
   public Consumer<byte[], byte[]> getRestoreConsumer(final Map<String, Object> config) {
-    return wrapped.getRestoreConsumer(config);
+    return new ResponsiveRestoreConsumer<>(
+        wrapped.getRestoreConsumer(config),
+        storeRegistry::getCommittedOffset
+    );
   }
 
   @Override

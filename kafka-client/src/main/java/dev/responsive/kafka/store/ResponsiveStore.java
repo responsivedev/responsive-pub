@@ -123,16 +123,22 @@ public class ResponsiveStore implements KeyValueStore<Bytes, byte[]> {
           topicPartition,
           asRecordCollector(context),
           sharedClients.admin,
-          PLUGIN
+          PLUGIN,
+          StoreUtil.shouldTruncateChangelog(
+              topicPartition.topic(),
+              sharedClients.admin,
+              context.appConfigs()
+          )
       );
 
       open = true;
 
       context.register(root, buffer);
+      final long offset = buffer.offset();
       registration = new ResponsiveStoreRegistration(
           name.kafkaName(),
           topicPartition,
-          0
+          offset == -1 ? 0 : offset
       );
       storeRegistry = InternalConfigs.loadStoreRegistry(context.appConfigs());
       storeRegistry.registerStore(registration);

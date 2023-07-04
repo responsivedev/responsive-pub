@@ -53,7 +53,8 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
         topology,
         configs,
         new ResponsiveKafkaClientSupplier(configs, storeRegistry),
-        storeRegistry
+        storeRegistry,
+        new DefaultCassandraClientFactory()
     );
   }
 
@@ -67,7 +68,24 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
         topology,
         configs,
         new ResponsiveKafkaClientSupplier(clientSupplier, configs, storeRegistry),
-        storeRegistry
+        storeRegistry,
+        new DefaultCassandraClientFactory()
+    );
+  }
+
+  public static ResponsiveKafkaStreams create(
+      final Topology topology,
+      final Map<String, Object> configs,
+      final KafkaClientSupplier clientSupplier,
+      final CassandraClientFactory cassandraClientFactory
+  ) {
+    final ResponsiveStoreRegistry storeRegistry = new ResponsiveStoreRegistry();
+    return connect(
+        topology,
+        configs,
+        new ResponsiveKafkaClientSupplier(clientSupplier, configs, storeRegistry),
+        storeRegistry,
+        cassandraClientFactory
     );
   }
 
@@ -75,7 +93,8 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       final Topology topology,
       final Map<String, Object> configs,
       final ResponsiveKafkaClientSupplier responsiveClientSupplier,
-      final ResponsiveStoreRegistry storeRegistry
+      final ResponsiveStoreRegistry storeRegistry,
+      final CassandraClientFactory cassandraClientFactory
   ) {
     final ResponsiveDriverConfig responsiveConfigs = new ResponsiveDriverConfig(configs);
 
@@ -89,13 +108,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     final Password clientSecret = responsiveConfigs.getPassword(CLIENT_SECRET_CONFIG);
     final String tenant = responsiveConfigs.getString(TENANT_ID_CONFIG);
 
-    final CqlSession session = SessionUtil.connect(
-        address,
-        datacenter,
-        tenant,
-        clientId,
-        clientSecret == null ? null : clientSecret.value()
-    );
+    final CqlSession session = cassandraClientFactory.createCqlSession(responsiveConfigs);
 
     final Admin admin = responsiveClientSupplier.getAdmin(configs);
     final ScheduledExecutorService executor = new ScheduledThreadPoolExecutor(2);
@@ -103,7 +116,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
         topology,
         verifiedStreamsConfigs(
             configs,
-            new CassandraClient(session),
+            cassandraClientFactory.createCassandraClient(session),
             admin,
             executor,
             storeRegistry,
@@ -140,7 +153,13 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
   ) {
     final Properties propsWithOverrides = new Properties();
     propsWithOverrides.putAll(configs);
-    propsWithOverrides.putAll(getConfigs(cassandraClient, admin, executor, storeRegistry));
+    propsWithOverrides.putAll(new InternalConfigs.Builder()
+            .withCassandraClient(cassandraClient)
+            .withKafkaAdmin(admin)
+            .withExecutorService(executor)
+            .withStoreRegistry(storeRegistry)
+            .withTopologyDescription(topologyDescription)
+            .build());
 
     // In this case the default and our desired value are both 0, so we only need to check for
     // accidental user overrides
