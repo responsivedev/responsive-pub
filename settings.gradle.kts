@@ -91,6 +91,7 @@ dependencyResolutionManagement {
             library("log4j-core", "org.apache.logging.log4j:log4j-core:2.17.1")
 
             library("kafka-streams-test-utils", "org.apache.kafka:kafka-streams-test-utils:3.4.0")
+            library("kafka-clients", "org.apache.kafka:kafka-clients:3.4.0")
 
             library("testcontainers", "org.testcontainers", "testcontainers").versionRef("testcontainers")
             library("testcontainers-junit", "org.testcontainers", "junit-jupiter").versionRef("testcontainers")
