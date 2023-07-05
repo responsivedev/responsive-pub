@@ -24,4 +24,5 @@ dependencies {
     testImplementation(testlibs.bundles.base)
     testImplementation(libs.bundles.logging)
     testImplementation(testlibs.kafka.streams.test.utils)
+    testImplementation(testlibs.kafka.clients)
 }
