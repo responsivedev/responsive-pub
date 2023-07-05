@@ -35,9 +35,7 @@ import org.junit.jupiter.api.Test;
 
 public class TopologyTestDriverExampleTest {
 
-  // TODO: re-enable this test when we have test-driver versions of the SharedClients required
-  //  by our state stores
-  // @Test
+  @Test
   public void shouldRunWithoutResponsiveConnection() {
     // Given:
     final Properties props = new Properties();
