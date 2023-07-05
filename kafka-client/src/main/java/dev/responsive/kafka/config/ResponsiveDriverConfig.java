@@ -27,7 +27,7 @@ import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
 
 /**
- * Configurations for {@link dev.responsive.kafka.api.ResponsiveDriver}
+ * Configurations for {@link dev.responsive.kafka.api.ResponsiveKafkaStreams}
  */
 public class ResponsiveDriverConfig extends AbstractConfig {
 

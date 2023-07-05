@@ -104,8 +104,8 @@ public final class ResponsiveStores {
    * See for example {@link Stores#inMemoryWindowStore(String, Duration, Duration, boolean)}
    *
    * @param name the store name
-   * @param retentionPeriod the retention period, must be >= window size
-   * @param windowSize the window size, must be > 0
+   * @param retentionPeriod the retention period, must be greater than or equal to window size
+   * @param windowSize the window size, must be greater than 0
    * @param retainDuplicates whether to retain duplicates vs overwrite records, this must be false
    *                         for all DSL operators except stream-stream joins which require true
    * @return a supplier for a window store with the given options
