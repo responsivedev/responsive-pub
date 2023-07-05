@@ -6,15 +6,11 @@ import dev.responsive.db.CassandraClient;
 import java.time.Instant;
 import java.util.Properties;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
-import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
-import org.mockito.Mock;
 
 public class ResponsiveTopologyTestDriver extends TopologyTestDriver {
-
-  @Mock
-  private static Admin admin;
 
   /**
    * Create a new test diver instance.
@@ -71,7 +67,7 @@ public class ResponsiveTopologyTestDriver extends TopologyTestDriver {
     props.putAll(baseProps);
     props.putAll(sharedClientConfigs(
         new CassandraClientStub(),
-        admin,
+        new MockAdminClient(),
         new ScheduledThreadPoolExecutor(1))
     );
     return props;
