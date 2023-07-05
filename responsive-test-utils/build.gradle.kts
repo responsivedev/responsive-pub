@@ -20,6 +20,12 @@ plugins {
 
 dependencies {
     implementation(project(":kafka-client"))
+    implementation(libs.kafka.streams.test.utils)
+    implementation(libs.kafka.clients) {
+        artifact {
+            classifier = "test"
+        }
+    }
 
     testImplementation(testlibs.bundles.base)
     testImplementation(libs.bundles.logging)

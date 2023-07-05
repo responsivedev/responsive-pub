@@ -44,6 +44,7 @@ dependencyResolutionManagement {
 
             library("kafka-clients", "org.apache.kafka", "kafka-clients").versionRef("kafka")
             library("kafka-streams", "org.apache.kafka", "kafka-streams").versionRef("kafka")
+            library("kafka-streams-test-utils", "org.apache.kafka:kafka-streams-test-utils:3.4.0")
 
             library("scylla-driver-core", "com.scylladb", "java-driver-core").versionRef("scylla")
             library("scylla-query-builder", "com.scylladb", "java-driver-query-builder").versionRef("scylla")

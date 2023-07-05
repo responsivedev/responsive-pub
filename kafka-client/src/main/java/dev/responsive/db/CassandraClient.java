@@ -120,6 +120,10 @@ public class CassandraClient {
     finalizeTxn = new ConcurrentHashMap<>();
   }
 
+  protected CassandraClient() {
+    this(null);
+  }
+
   /**
    * Executes an arbitrary statement directly with Cassandra. It
    * is preferred to use any of the strongly typed methods if

@@ -35,8 +35,7 @@ import org.junit.jupiter.api.Test;
 
 public class TopologyTestDriverExampleTest {
 
-  // TODO: re-enable this test when we have test-driver versions of the SharedClients required
-  //  by our state stores
+  // TODO: re-enable this test once ResponsiveTopologyTestDriver is fully implemented
   // @Test
   public void shouldRunWithoutResponsiveConnection() {
     // Given:
@@ -45,7 +44,7 @@ public class TopologyTestDriverExampleTest {
     props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
 
     final Topology topo = topology();
-    final TopologyTestDriver driver = new TopologyTestDriver(topo, props);
+    final TopologyTestDriver driver = new ResponsiveTopologyTestDriver(topo, props);
 
     final TestInputTopic<String, String> bids = driver.createInputTopic(
         "bids", new StringSerializer(), new StringSerializer());
