@@ -20,7 +20,6 @@ plugins {
 
 dependencies {
     implementation(project(":kafka-client"))
-    implementation(project(":api"))
     implementation(libs.kafka.streams.test.utils)
     implementation(libs.kafka.clients) {
         artifact {
