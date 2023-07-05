@@ -75,7 +75,7 @@ public class ResponsiveTopologyTestDriver extends TopologyTestDriver {
 
   private static class CassandraClientStub extends CassandraClient {
     CassandraClientStub() {
-      super(null);
+      super();
     }
 
     // TODO: override CassandraClient methods to stash data in a local in-memory stub
