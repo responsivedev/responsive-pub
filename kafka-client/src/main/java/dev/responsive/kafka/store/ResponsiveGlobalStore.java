@@ -80,7 +80,6 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
   public void init(final StateStoreContext context, final StateStore root) {
     try {
       LOG.info("Initializing global state store {}", name);
-      StoreUtil.validateTopologyOptimizationConfig(context.appConfigs());
       this.context = context;
       // this is bad, but the assumption is that global tables are small
       // and can fit in a single partition - all writers will write using

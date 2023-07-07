@@ -21,6 +21,9 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.datastax.oss.driver.api.core.CqlSession;
@@ -102,7 +105,7 @@ public class CommitBufferTest {
     final String tableName = name;
     client.initializeOffset(tableName, 0);
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, supplier, admin, ResponsiveStore.PLUGIN);
+        client, tableName, changelogTp, supplier, admin, ResponsiveStore.PLUGIN, true);
 
     // When:
     for (int i = 0; i < CommitBuffer.MAX_BATCH_SIZE * 1.5; i++) {
@@ -117,13 +120,49 @@ public class CommitBufferTest {
   }
 
   @Test
+  public void shouldTruncateTopicAfterFlushIfTruncateEnabled() {
+    // Given:
+    final String tableName = name;
+    client.initializeOffset(tableName, 0);
+    final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
+        client, tableName, changelogTp, supplier, admin, ResponsiveStore.PLUGIN, true);
+    for (int i = 0; i < CommitBuffer.MAX_BATCH_SIZE * 1.5; i++) {
+      buffer.put(KEY, VALUE);
+    }
+
+    // when:
+    buffer.flush();
+
+    // Then:
+    verify(admin).deleteRecords(any());
+  }
+
+  @Test
+  public void shouldNotTruncateTopicAfterFlushIfTruncateDisabled() {
+    // Given:
+    final String tableName = name;
+    client.initializeOffset(tableName, 0);
+    final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
+        client, tableName, changelogTp, supplier, admin, ResponsiveStore.PLUGIN, false);
+    for (int i = 0; i < CommitBuffer.MAX_BATCH_SIZE * 1.5; i++) {
+      buffer.put(KEY, VALUE);
+    }
+
+    // when:
+    buffer.flush();
+
+    // Then:
+    verifyNoInteractions(admin);
+  }
+
+  @Test
   public void shouldDeleteRowInCassandraWithTombstone() {
     // Given:
     final String table = name;
     client.initializeOffset(table, 0);
     client.insertData(table, 0, KEY, VALUE);
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, table, changelogTp, supplier, admin, ResponsiveStore.PLUGIN);
+        client, table, changelogTp, supplier, admin, ResponsiveStore.PLUGIN, true);
 
     // When:
     buffer.tombstone(Bytes.wrap(new byte[]{1}));
@@ -141,7 +180,7 @@ public class CommitBufferTest {
     client.initializeOffset(tableName, 0);
     client.execute(client.revokePermit(tableName, 0, 101));
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, supplier, admin, ResponsiveStore.PLUGIN);
+        client, tableName, changelogTp, supplier, admin, ResponsiveStore.PLUGIN, true);
 
     // Expect
     // When:
@@ -158,7 +197,7 @@ public class CommitBufferTest {
     client.initializeOffset(tableName, 0);
     client.execute(client.acquirePermit(tableName, 0, UNSET_PERMIT, UUID.randomUUID(), 1));
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, supplier, admin, ResponsiveStore.PLUGIN);
+        client, tableName, changelogTp, supplier, admin, ResponsiveStore.PLUGIN, true);
 
     // Expect
     // When:
@@ -175,7 +214,7 @@ public class CommitBufferTest {
     client.initializeOffset(tableName, 0);
     client.execute(client.revokePermit(tableName, 0, 100));
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, supplier, admin, ResponsiveStore.PLUGIN);
+        client, tableName, changelogTp, supplier, admin, ResponsiveStore.PLUGIN, true);
 
     // Expect
     // When:
@@ -192,7 +231,7 @@ public class CommitBufferTest {
     client.initializeOffset(tableName, 0);
     client.execute(client.revokePermit(tableName, 0, 100));
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, supplier, admin, ResponsiveStore.PLUGIN);
+        client, tableName, changelogTp, supplier, admin, ResponsiveStore.PLUGIN, true);
 
     final ConsumerRecord<byte[], byte[]> ignored = new ConsumerRecord<>(
         changelogTp.topic(), changelogTp.partition(), 100, new byte[]{1}, new byte[]{1});
@@ -214,7 +253,7 @@ public class CommitBufferTest {
     client.initializeOffset(tableName, 0);
     client.execute(client.revokePermit(tableName, 0, 100));
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, supplier, admin, ResponsiveStore.PLUGIN);
+        client, tableName, changelogTp, supplier, admin, ResponsiveStore.PLUGIN, true);
 
     final CountDownLatch latch1 = new CountDownLatch(0);
     final CountDownLatch latch2 = new CountDownLatch(0);

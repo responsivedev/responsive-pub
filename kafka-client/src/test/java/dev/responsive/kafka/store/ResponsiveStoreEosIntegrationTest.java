@@ -46,10 +46,10 @@ import static org.hamcrest.Matchers.lessThan;
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.ResponsiveStores;
 import dev.responsive.utils.ContainerExtension;
+import dev.responsive.utils.IntegrationTestUtils;
 import dev.responsive.utils.RemoteMonitor;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -62,8 +62,6 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.apache.kafka.clients.admin.Admin;
@@ -81,9 +79,6 @@ import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serdes.LongSerde;
-import org.apache.kafka.streams.KafkaStreams;
-import org.apache.kafka.streams.KafkaStreams.State;
-import org.apache.kafka.streams.KafkaStreams.StateListener;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.KStream;
@@ -165,7 +160,7 @@ public class ResponsiveStoreEosIntegrationTest {
         final ResponsiveKafkaStreams streamsA = buildStreams(properties, "a", state);
         final ResponsiveKafkaStreams streamsB = buildStreams(properties, "b", state);
     ) {
-      startAndAwaitRunning(Duration.ofSeconds(10), streamsA, streamsB);
+      IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(10), streamsA, streamsB);
 
       // committed data first, then second set of uncommitted data
       pipeInput(producer, System::currentTimeMillis, 0, 10, 0, 1);
@@ -294,51 +289,6 @@ public class ResponsiveStoreEosIntegrationTest {
         .to(OUTPUT_TOPIC);
 
     return ResponsiveKafkaStreams.create(builder.build(), properties);
-  }
-
-  private void startAndAwaitRunning(
-      final Duration timeout,
-      final ResponsiveKafkaStreams... streams
-  ) throws Exception {
-    final ReentrantLock lock = new ReentrantLock();
-    final Condition onRunning = lock.newCondition();
-    final Boolean[] running = new Boolean[]{false, false};
-
-    for (int i = 0; i < streams.length; i++) {
-      final int idx = i;
-      final StateListener oldListener = streams[i].stateListener();
-      final StateListener listener = (newState, oldState) -> {
-        if (oldListener != null) {
-          oldListener.onChange(newState, oldState);
-        }
-
-        lock.lock();
-        try {
-          running[idx] = (newState == State.RUNNING);
-          onRunning.signalAll();
-        } finally {
-          lock.unlock();
-        }
-      };
-      streams[i].setStateListener(listener);
-    }
-
-    for (final KafkaStreams stream : streams) {
-      stream.start();
-    }
-
-    final long end = System.nanoTime() + timeout.toNanos();
-    lock.lock();
-    try {
-      while (Arrays.stream(running).anyMatch(b -> !b)) {
-        if (System.nanoTime() > end
-            || !onRunning.await(end - System.nanoTime(), TimeUnit.NANOSECONDS)) {
-          throw new TimeoutException("Not all streams were running after " + timeout);
-        }
-      }
-    } finally {
-      lock.unlock();
-    }
   }
 
   private void pipeInput(

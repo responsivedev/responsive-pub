@@ -1,10 +1,8 @@
 package dev.responsive.kafka.store;
 
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.is;
 
-import java.util.List;
 import java.util.OptionalLong;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,14 +29,6 @@ class ResponsiveStoreRegistryTest {
   }
 
   @Test
-  public void shouldGetRegisteredStoreForChangelog() {
-    assertThat(
-        registry.getRegisteredStoresForChangelog(TOPIC_PARTITION),
-        is(List.of(REGISTRATION))
-    );
-  }
-
-  @Test
   public void shouldReturnEmptyCommittedOffsetFromNotRegisteredStore() {
     assertThat(
         registry.getCommittedOffset(new TopicPartition("foo", 1)),
@@ -52,10 +42,9 @@ class ResponsiveStoreRegistryTest {
     registry.deregisterStore(REGISTRATION);
 
     // when:
-    final List<ResponsiveStoreRegistration> registered
-        = registry.getRegisteredStoresForChangelog(TOPIC_PARTITION);
+    final OptionalLong offset = registry.getCommittedOffset(TOPIC_PARTITION);
 
     // then:
-    assertThat(registered, is(empty()));
+    assertThat(offset, is(OptionalLong.empty()));
   }
 }

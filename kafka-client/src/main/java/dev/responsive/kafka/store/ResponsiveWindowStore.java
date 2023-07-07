@@ -127,7 +127,6 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
   public void init(final StateStoreContext context, final StateStore root) {
     try {
       LOG.info("Initializing state store {}", name);
-      StoreUtil.validateTopologyOptimizationConfig(context.appConfigs());
       this.context = asInternalProcessorContext(context);
       partition = context.taskId().partition();
 
@@ -142,15 +141,22 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       client.prepareWindowedStatements(name.cassandraName());
       client.initializeOffset(name.cassandraName(), partition);
 
+      final TopicPartition topicPartition =  new TopicPartition(
+          changelogFor(context, name.kafkaName(), false),
+          partition
+      );
       buffer = new CommitBuffer<>(
           client,
           name.cassandraName(),
-          new TopicPartition(
-              changelogFor(context, name.kafkaName(), false),
-              partition),
+          topicPartition,
           asRecordCollector(context),
           sharedClients.admin,
-          new Plugin(this::withinRetention)
+          new Plugin(this::withinRetention),
+          StoreUtil.shouldTruncateChangelog(
+              topicPartition.topic(),
+              sharedClients.admin,
+              context.appConfigs()
+          )
       );
 
       open = true;

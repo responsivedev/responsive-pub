@@ -63,6 +63,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
   private final Supplier recordCollector;
   private final TopicPartition changelog;
   private final BufferPlugin<K> plugin;
+  private final boolean truncateChangelog;
 
   CommitBuffer(
       final CassandraClient client,
@@ -70,7 +71,8 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
       final TopicPartition changelog,
       final RecordCollector.Supplier recordCollector,
       final Admin admin,
-      final BufferPlugin<K> plugin
+      final BufferPlugin<K> plugin,
+      final boolean truncateChangelog
   ) {
     this.client = client;
     this.tableName = tableName;
@@ -81,6 +83,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
     this.plugin = plugin;
 
     this.buffer = new TreeMap<>(plugin);
+    this.truncateChangelog = truncateChangelog;
   }
 
   public void put(final K key, final byte[] value) {
@@ -163,6 +166,10 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
             kv -> plugin.retain(kv.getKey()) && filter.test(kv.getKey())),
         result -> new KeyValue<>(result.getKey(), result.getValue())
     );
+  }
+
+  long offset() {
+    return client.getOffset(tableName, partition).offset;
   }
 
   // Visible For Testing
@@ -279,13 +286,15 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
     );
     buffer.clear();
 
-    try {
-      admin.deleteRecords(Map.of(changelog, RecordsToDelete.beforeOffset(offset))).all().get();
-      LOG.info("Truncated changelog topic {} before offset {}", changelog, offset);
-    } catch (final ExecutionException e) {
-      LOG.warn("Could not truncate changelog topic-partition {}.", changelog, e);
-    } catch (final InterruptedException e) {
-      throw new ProcessorStateException("Interrupted while truncating " + changelog, e);
+    if (truncateChangelog) {
+      try {
+        admin.deleteRecords(Map.of(changelog, RecordsToDelete.beforeOffset(offset))).all().get();
+        LOG.info("Truncated changelog topic {} before offset {}", changelog, offset);
+      } catch (final ExecutionException e) {
+        LOG.warn("Could not truncate changelog topic-partition {}.", changelog, e);
+      } catch (final InterruptedException e) {
+        throw new ProcessorStateException("Interrupted while truncating " + changelog, e);
+      }
     }
 
     return true;
