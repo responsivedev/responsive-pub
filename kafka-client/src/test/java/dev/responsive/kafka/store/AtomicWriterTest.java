@@ -37,7 +37,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.utils.Bytes;
 import org.junit.jupiter.api.BeforeEach;
@@ -251,8 +250,11 @@ class AtomicWriterTest {
   }
 
   private interface ArgumentCapturingStatement extends BoundStatement {
+
     String callingMethod();
+
     Object[] args();
+
   }
 
 }
