@@ -105,7 +105,7 @@ public class CommitBufferTest {
     final String tableName = name;
     client.initializeOffset(tableName, 0);
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, supplier, admin, ResponsiveStore.PLUGIN, true);
+        client, tableName, changelogTp, supplier, admin, ResponsivePartitionedStore.PLUGIN, true);
 
     // When:
     for (int i = 0; i < CommitBuffer.MAX_BATCH_SIZE * 1.5; i++) {
@@ -125,7 +125,7 @@ public class CommitBufferTest {
     final String tableName = name;
     client.initializeOffset(tableName, 0);
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, supplier, admin, ResponsiveStore.PLUGIN, true);
+        client, tableName, changelogTp, supplier, admin, ResponsivePartitionedStore.PLUGIN, true);
     for (int i = 0; i < CommitBuffer.MAX_BATCH_SIZE * 1.5; i++) {
       buffer.put(KEY, VALUE);
     }
@@ -143,7 +143,7 @@ public class CommitBufferTest {
     final String tableName = name;
     client.initializeOffset(tableName, 0);
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, supplier, admin, ResponsiveStore.PLUGIN, false);
+        client, tableName, changelogTp, supplier, admin, ResponsivePartitionedStore.PLUGIN, false);
     for (int i = 0; i < CommitBuffer.MAX_BATCH_SIZE * 1.5; i++) {
       buffer.put(KEY, VALUE);
     }
@@ -162,7 +162,7 @@ public class CommitBufferTest {
     client.initializeOffset(table, 0);
     client.insertData(table, 0, KEY, VALUE);
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, table, changelogTp, supplier, admin, ResponsiveStore.PLUGIN, true);
+        client, table, changelogTp, supplier, admin, ResponsivePartitionedStore.PLUGIN, true);
 
     // When:
     buffer.tombstone(Bytes.wrap(new byte[]{1}));
@@ -180,7 +180,7 @@ public class CommitBufferTest {
     client.initializeOffset(tableName, 0);
     client.execute(client.revokePermit(tableName, 0, 101));
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, supplier, admin, ResponsiveStore.PLUGIN, true);
+        client, tableName, changelogTp, supplier, admin, ResponsivePartitionedStore.PLUGIN, true);
 
     // Expect
     // When:
@@ -197,7 +197,7 @@ public class CommitBufferTest {
     client.initializeOffset(tableName, 0);
     client.execute(client.acquirePermit(tableName, 0, UNSET_PERMIT, UUID.randomUUID(), 1));
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, supplier, admin, ResponsiveStore.PLUGIN, true);
+        client, tableName, changelogTp, supplier, admin, ResponsivePartitionedStore.PLUGIN, true);
 
     // Expect
     // When:
@@ -214,7 +214,7 @@ public class CommitBufferTest {
     client.initializeOffset(tableName, 0);
     client.execute(client.revokePermit(tableName, 0, 100));
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, supplier, admin, ResponsiveStore.PLUGIN, true);
+        client, tableName, changelogTp, supplier, admin, ResponsivePartitionedStore.PLUGIN, true);
 
     // Expect
     // When:
@@ -231,7 +231,7 @@ public class CommitBufferTest {
     client.initializeOffset(tableName, 0);
     client.execute(client.revokePermit(tableName, 0, 100));
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, supplier, admin, ResponsiveStore.PLUGIN, true);
+        client, tableName, changelogTp, supplier, admin, ResponsivePartitionedStore.PLUGIN, true);
 
     final ConsumerRecord<byte[], byte[]> ignored = new ConsumerRecord<>(
         changelogTp.topic(), changelogTp.partition(), 100, new byte[]{1}, new byte[]{1});
@@ -253,7 +253,7 @@ public class CommitBufferTest {
     client.initializeOffset(tableName, 0);
     client.execute(client.revokePermit(tableName, 0, 100));
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, supplier, admin, ResponsiveStore.PLUGIN, true);
+        client, tableName, changelogTp, supplier, admin, ResponsivePartitionedStore.PLUGIN, true);
 
     final CountDownLatch latch1 = new CountDownLatch(0);
     final CountDownLatch latch2 = new CountDownLatch(0);

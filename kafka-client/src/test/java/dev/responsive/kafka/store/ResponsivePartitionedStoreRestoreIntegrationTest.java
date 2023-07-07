@@ -16,10 +16,7 @@
 
 package dev.responsive.kafka.store;
 
-import static dev.responsive.kafka.config.ResponsiveDriverConfig.STORAGE_DATACENTER_CONFIG;
-import static dev.responsive.kafka.config.ResponsiveDriverConfig.STORAGE_HOSTNAME_CONFIG;
-import static dev.responsive.kafka.config.ResponsiveDriverConfig.STORAGE_PORT_CONFIG;
-import static dev.responsive.kafka.config.ResponsiveDriverConfig.TENANT_ID_CONFIG;
+import static dev.responsive.utils.IntegrationTestUtils.pipeInput;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
@@ -27,17 +24,13 @@ import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CL
 import static org.apache.kafka.clients.producer.ProducerConfig.TRANSACTION_TIMEOUT_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.APPLICATION_ID_CONFIG;
-import static org.apache.kafka.streams.StreamsConfig.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.COMMIT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_V2;
-import static org.apache.kafka.streams.StreamsConfig.InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS;
 import static org.apache.kafka.streams.StreamsConfig.NUM_STREAM_THREADS_CONFIG;
-import static org.apache.kafka.streams.StreamsConfig.OPTIMIZE;
 import static org.apache.kafka.streams.StreamsConfig.PROCESSING_GUARANTEE_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG;
-import static org.apache.kafka.streams.StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
 import static org.apache.kafka.streams.StreamsConfig.producerPrefix;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -63,6 +56,7 @@ import dev.responsive.kafka.api.ResponsiveStores;
 import dev.responsive.kafka.config.ResponsiveDriverConfig;
 import dev.responsive.utils.ContainerExtension;
 import dev.responsive.utils.IntegrationTestUtils;
+import dev.responsive.utils.ResponsiveConfigParam;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
@@ -78,7 +72,6 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Supplier;
 import java.util.stream.LongStream;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
@@ -90,7 +83,6 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
@@ -104,17 +96,14 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
-import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.testcontainers.containers.CassandraContainer;
-import org.testcontainers.containers.KafkaContainer;
 
 @ExtendWith(ContainerExtension.class)
-public class ResponsiveStoreRestoreIntegrationTest {
+public class ResponsivePartitionedStoreRestoreIntegrationTest {
 
   private static final int MAX_POLL_MS = 5000;
   private static final String INPUT_TOPIC = "input";
@@ -125,25 +114,19 @@ public class ResponsiveStoreRestoreIntegrationTest {
   private final Map<String, Object> responsiveProps = new HashMap<>();
 
   private String name;
-  private String bootstrapServers;
   private Admin admin;
 
   @BeforeEach
   public void before(
       final TestInfo info,
-      final CassandraContainer<?> cassandra,
-      final KafkaContainer kafka
+      final Admin admin,
+      @ResponsiveConfigParam final Map<String, Object> responsiveProps
+
   ) {
     name = info.getTestMethod().orElseThrow().getName();
-    bootstrapServers = kafka.getBootstrapServers();
+    this.responsiveProps.putAll(responsiveProps);
 
-    responsiveProps.put(STORAGE_HOSTNAME_CONFIG, cassandra.getContactPoint().getHostName());
-    responsiveProps.put(STORAGE_PORT_CONFIG, cassandra.getContactPoint().getPort());
-    responsiveProps.put(STORAGE_DATACENTER_CONFIG, cassandra.getLocalDatacenter());
-    responsiveProps.put(TENANT_ID_CONFIG, "responsive_clients");   // keyspace is expected to exist
-    responsiveProps.put(INTERNAL_TASK_ASSIGNOR_CLASS, StickyTaskAssignor.class.getName());
-
-    admin = Admin.create(Map.of(BOOTSTRAP_SERVERS_CONFIG, bootstrapServers));
+    this.admin = admin;
     admin.createTopics(
         List.of(
             new NewTopic(INPUT_TOPIC, Optional.of(1), Optional.empty()),
@@ -159,7 +142,6 @@ public class ResponsiveStoreRestoreIntegrationTest {
   @AfterEach
   public void after() {
     admin.deleteTopics(List.of(INPUT_TOPIC, INPUT_TBL_TOPIC, OUTPUT_TOPIC, OUTPUT_JOINED));
-    admin.close();
   }
 
   @Test
@@ -175,9 +157,9 @@ public class ResponsiveStoreRestoreIntegrationTest {
              = buildAggregatorApp(properties, defaultClientSupplier, defaultFactory)) {
       IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(10), streams);
       // Send some data through
-      pipeInput(producer, INPUT_TBL_TOPIC, System::currentTimeMillis, 0, 10, 0, 1, 2, 3);
+      pipeInput(INPUT_TBL_TOPIC, producer, System::currentTimeMillis, 0, 10, 0, 1, 2, 3);
       waitTillFullyConsumed(inputTbl, Duration.ofSeconds(120));
-      pipeInput(producer, INPUT_TOPIC, System::currentTimeMillis, 0, 10, 0);
+      pipeInput(INPUT_TOPIC, producer, System::currentTimeMillis, 0, 10, 0);
       // Wait for it to be processed
       waitTillFullyConsumed(input, Duration.ofSeconds(120));
     }
@@ -195,7 +177,7 @@ public class ResponsiveStoreRestoreIntegrationTest {
 
       // Send some more data through and wait for it to be committed
       final long endInput = endOffset(input);
-      pipeInput(producer, INPUT_TOPIC, System::currentTimeMillis, 10, 20, 0);
+      pipeInput(INPUT_TOPIC, producer, System::currentTimeMillis, 10, 20, 0);
       producer.flush();
       waitTillConsumedPast(input, endInput + 1, Duration.ofSeconds(30));
     }
@@ -219,7 +201,7 @@ public class ResponsiveStoreRestoreIntegrationTest {
              = buildAggregatorApp(properties, recordingClientSupplier, defaultFactory)) {
       IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(30), streams);
       // Send some more data through and check output
-      pipeInput(producer, INPUT_TOPIC, System::currentTimeMillis, 20, 30, 0);
+      pipeInput(INPUT_TOPIC, producer, System::currentTimeMillis, 20, 30, 0);
       producer.flush();
       waitTillFullyConsumed(input, Duration.ofSeconds(120));
     }
@@ -388,7 +370,6 @@ public class ResponsiveStoreRestoreIntegrationTest {
   private Map<String, Object> getMutableProperties() {
     final Map<String, Object> properties = new HashMap<>(responsiveProps);
 
-    properties.put(BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
     properties.put(KEY_SERIALIZER_CLASS_CONFIG, LongSerializer.class);
     properties.put(VALUE_SERIALIZER_CLASS_CONFIG, LongSerializer.class);
     properties.put(KEY_DESERIALIZER_CLASS_CONFIG, LongDeserializer.class);
@@ -412,27 +393,6 @@ public class ResponsiveStoreRestoreIntegrationTest {
     properties.put(consumerPrefix(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG), MAX_POLL_MS - 1);
 
     return properties;
-  }
-
-  private void pipeInput(
-      final KafkaProducer<Long, Long> producer,
-      final String input,
-      final Supplier<Long> timestamp,
-      final long valFrom,
-      final long valTo,
-      final long... keys
-  ) {
-    for (final long k : keys) {
-      for (long v = valFrom; v < valTo; v++) {
-        producer.send(new ProducerRecord<>(
-            input,
-            0,
-            timestamp.get(),
-            k,
-            v
-        ));
-      }
-    }
   }
 
   private long endOffset(final TopicPartition topic)

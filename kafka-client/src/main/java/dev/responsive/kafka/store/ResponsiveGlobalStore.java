@@ -19,7 +19,6 @@ package dev.responsive.kafka.store;
 import dev.responsive.db.CassandraClient;
 import dev.responsive.kafka.clients.SharedClients;
 import dev.responsive.utils.RemoteMonitor;
-import dev.responsive.utils.StoreUtil;
 import dev.responsive.utils.TableName;
 import java.time.Duration;
 import java.util.List;
