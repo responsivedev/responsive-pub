@@ -16,22 +16,12 @@
 
 package dev.responsive.kafka.store;
 
-import static dev.responsive.db.CassandraClient.UNSET_PERMIT;
-
-import com.datastax.oss.driver.api.core.cql.BatchStatement;
-import com.datastax.oss.driver.api.core.cql.BatchStatementBuilder;
-import com.datastax.oss.driver.api.core.cql.BatchType;
-import com.datastax.oss.driver.api.core.cql.BoundStatement;
-import com.datastax.oss.driver.api.core.cql.ResultSet;
 import dev.responsive.db.CassandraClient;
 import dev.responsive.db.CassandraClient.OffsetRow;
 import dev.responsive.model.Result;
 import dev.responsive.utils.Iterators;
 import java.util.Collection;
-import java.util.Comparator;
-import java.util.Iterator;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 import java.util.UUID;
@@ -208,7 +198,8 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
     // this is possible then we will be flushing data to Cassandra
     // that is not yet in the changelog
     final UUID txnid = UUID.randomUUID();
-    if (!flush(offset, txnid)) {
+    final var result = flush(offset, txnid);
+    if (!result.wasApplied()) {
       final OffsetRow stored = client.getOffset(tableName, partition);
       // we were fenced - the only conditional statement is the
       // offset update, so it's the only failure point
@@ -222,7 +213,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
   }
 
   @SuppressWarnings("BooleanMethodIsAlwaysInverted")
-  private boolean flush(final long offset, final UUID txnid) {
+  private AtomicWriteResult flush(final long offset, final UUID txnid) {
     LOG.info("Flushing {} records to remote {}[{}] (offset={}, transactionId={})",
         buffer.size(),
         tableName,
@@ -231,50 +222,27 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
         txnid
     );
 
-    final Iterator<Entry<K, Result<K>>> entries = buffer.entrySet().iterator();
-    boolean firstBatch = true;
-    while (entries.hasNext()) {
-      final BatchStatementBuilder builder = new BatchStatementBuilder(BatchType.UNLOGGED);
-      if (txnid != null) {
-        builder.addStatement(client.acquirePermit(
-            tableName,
-            partition,
-            firstBatch ? UNSET_PERMIT : txnid,
-            txnid,
-            offset
-        ));
-        firstBatch = false;
-      } else {
-        builder.addStatement(client.revokePermit(tableName, partition, offset));
-      }
+    final var writer = new AtomicWriter<K>(
+        client,
+        tableName,
+        partition,
+        plugin,
+        offset,
+        txnid,
+        MAX_BATCH_SIZE
+    );
 
-      for (int i = 0; i < MAX_BATCH_SIZE && entries.hasNext(); i++) {
-        final Result<K> result = entries.next().getValue();
-        if (result.isTombstone || plugin.retain(result.key)) {
-          builder.addStatement(result.isTombstone
-              ? plugin.deleteData(client, tableName, partition, result.key)
-              : plugin.insertData(client, tableName, partition, result.key, result.value));
-        }
-      }
+    writer.addAll(buffer.values());
 
-      // all of our writes are idempotent, and the Cassandra client will only retry
-      // idempotent writes on write timeouts
-      builder.setIdempotence(true);
-      final BatchStatement batch = builder.build();
-
-      final ResultSet resultSet = client.execute(batch);
-      if (!resultSet.wasApplied()) {
-        return false;
+    AtomicWriteResult result;
+    try {
+      result = writer.flush().toCompletableFuture().get();
+      if (result.wasApplied()) {
+        result = writer.finalizeTxn().toCompletableFuture().get();
       }
-    }
-
-    // this needs to be done separately
-    if (txnid != null) {
-      final ResultSet result = client.execute(
-          client.finalizeTxn(tableName, partition, txnid, offset));
-      if (!result.wasApplied()) {
-        return false;
-      }
+    } catch (InterruptedException | ExecutionException e) {
+      throw new ProcessorStateException(
+          "Could not flush to remote storage for partition " + partition, e);
     }
 
     LOG.info("Completed flushing {} records to remote {}[{}] (offset={}, transactionId={})",
@@ -297,7 +265,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
       }
     }
 
-    return true;
+    return result;
   }
 
   @Override
@@ -319,7 +287,8 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
     }
 
     if (consumedOffset >= 0) {
-      if (!flush(consumedOffset, null)) {
+      final var flush = flush(consumedOffset, null);
+      if (!flush.wasApplied()) {
         // it is possible that this is a warmup replica that while restoring the
         // active replica is still writing and flushing to cassandra, in that
         // case just clear the buffer and try to restore the next batch
@@ -328,7 +297,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
         final OffsetRow stored = client.getOffset(tableName, partition);
         LOG.warn(
             "Restoration for {}[{}] was fenced. There is likely an existing active "
-                + "replica that is writing to Cassandra. Original Offset: {}, Batch Offset: "
+                + "replica that is writing to the remote store. Original Offset: {}, Batch Offset: "
                 + "{}, Latest Offset: {}, Stored txnid: {}. This is not a problem but may "
                 + "cause rebalancing to take longer.",
             tableName,
@@ -342,27 +311,4 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
     }
   }
 
-  interface BufferPlugin<K> extends Comparator<K> {
-
-    K keyFromRecord(final ConsumerRecord<byte[], byte[]> record);
-
-    BoundStatement insertData(
-        final CassandraClient client,
-        final String tableName,
-        final int partition,
-        final K key,
-        final byte[] value
-    );
-
-    BoundStatement deleteData(
-        final CassandraClient client,
-        final String tableName,
-        final int partition,
-        final K key
-    );
-
-    default boolean retain(final K key) {
-      return true;
-    }
-  }
 }
