@@ -25,6 +25,7 @@ import static dev.responsive.db.ColumnNames.PERMIT;
 import static dev.responsive.db.ColumnNames.WINDOW_START;
 
 import com.datastax.oss.driver.api.core.CqlSession;
+import com.datastax.oss.driver.api.core.cql.AsyncResultSet;
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
 import com.datastax.oss.driver.api.core.cql.ResultSet;
@@ -44,6 +45,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
 import org.apache.kafka.common.utils.Bytes;
@@ -130,6 +132,16 @@ public class CassandraClient {
    */
   public ResultSet execute(final Statement<?> statement) {
     return session.execute(statement);
+  }
+
+  /**
+   * An asynchronous execution of an arbitrary statement directly
+   * with Cassandra.
+   *
+   * @see #execute(Statement)
+   */
+  public CompletionStage<AsyncResultSet> executeAsync(final Statement<?> statement) {
+    return session.executeAsync(statement);
   }
 
   /**

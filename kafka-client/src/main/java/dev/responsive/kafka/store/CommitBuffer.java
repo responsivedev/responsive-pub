@@ -18,23 +18,26 @@ package dev.responsive.kafka.store;
 
 import static dev.responsive.db.CassandraClient.UNSET_PERMIT;
 
+import com.datastax.oss.driver.api.core.cql.AsyncResultSet;
 import com.datastax.oss.driver.api.core.cql.BatchStatementBuilder;
 import com.datastax.oss.driver.api.core.cql.BatchType;
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
-import com.datastax.oss.driver.api.core.cql.ResultSet;
+import com.datastax.oss.driver.api.core.cql.Statement;
 import dev.responsive.db.CassandraClient;
 import dev.responsive.db.CassandraClient.OffsetRow;
 import dev.responsive.model.Result;
 import dev.responsive.utils.ExplodePartitioner;
 import dev.responsive.utils.Iterators;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Predicate;
 import org.apache.kafka.clients.admin.Admin;
@@ -55,6 +58,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
 
   public static final int MAX_BATCH_SIZE = 1000;
   private static final Logger LOG = LoggerFactory.getLogger(CommitBuffer.class);
+  private static final int MAX_CONCURRENT_WRITES = 1024;
 
   private final NavigableMap<K, Result<K>> buffer;
   private final CassandraClient client;
@@ -208,13 +212,13 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
     // this is possible then we will be flushing data to Cassandra
     // that is not yet in the changelog
     final UUID txnid = UUID.randomUUID();
-    final int exploded = flush(offset, txnid);
-    if (exploded != -1) {
-      final OffsetRow stored = client.getOffset(tableName, exploded);
+    final FlushResult flush = flush(offset, txnid);
+    if (!flush.wasApplied) {
+      final OffsetRow stored = client.getOffset(tableName, flush.partition);
       // we were fenced - the only conditional statement is the
       // offset update, so it's the only failure point
       throw new ProcessorStateException(
-          "Failure to write batch to " + tableName + "[" + partition + ":" + exploded
+          "Failure to write batch to " + tableName + "[" + partition + ":" + flush.partition
               + "] with end " + "offset " + offset + " and stored offset " + stored.offset
               + ". If the stored offset is larger than the end offset it is likely that "
               + "this client was fenced by a more up to date consumer. txnId: " + txnid
@@ -224,7 +228,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
   }
 
   @SuppressWarnings("BooleanMethodIsAlwaysInverted")
-  private int flush(final long offset, final UUID txnid) {
+  private FlushResult flush(final long offset, final UUID txnid) {
     LOG.info("Flushing {} records to remote {}[{}] (offset={}, transactionId={})",
         buffer.size(),
         tableName,
@@ -238,9 +242,9 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
 
     for (int i = 0; i < partitioner.getFactor(); i++) {
       final int storePartition = partitioner.base(partition) + i;
-      final var builder = new PartitionedBuilder(storePartition);
+      final var builder = new PartitionedBuilder(storePartition, txnid, offset);
       builders.put(storePartition, builder);
-      builder.initBatch(txnid, offset);
+      builder.initBatch();
     }
 
     while (entries.hasNext()) {
@@ -251,31 +255,46 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
 
       if (result.isTombstone || plugin.retain(result.key)) {
         builder.add(result);
-        if (builder.shouldFlush()) {
-          if (!builder.flush()) {
-            return builder.partition;
+        if (builder.hitBatchLimit()) {
+          builder.flush();
+          builder.initBatch();
+        }
+      }
+    }
+
+    final var flushes = new ArrayList<CompletableFuture<FlushResult>>();
+    for (PartitionedBuilder builder : builders.values()) {
+      var stage = builder.flush();
+      var result = stage.thenCompose(
+          fr -> !fr.wasApplied
+              ? CompletableFuture.completedStage(fr)
+              : finalize(fr, txnid, offset));
+      flushes.add(result.toCompletableFuture());
+
+      if (flushes.size() % MAX_CONCURRENT_WRITES == 0) {
+        for (CompletableFuture<FlushResult> flush : flushes) {
+          try {
+            flush.get();
+          } catch (InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
           }
-          builder.initBatch(txnid, offset);
         }
       }
     }
 
-    for (final Entry<Integer, PartitionedBuilder> entry : builders.entrySet()) {
-      if (!entry.getValue().flush()) {
-        return entry.getKey();
-      }
-    }
-
-    // this needs to be done separately
-    if (txnid != null) {
-      for (int i = 0; i < partitioner.getFactor(); i++) {
-        final int storePartition = partitioner.base(partition) + i;
-        final ResultSet result = client.execute(
-            client.finalizeTxn(tableName, storePartition, txnid, offset)
-        );
-        if (!result.wasApplied()) {
-          return storePartition;
+    var iterator = flushes.iterator();
+    while (iterator.hasNext()) {
+      final CompletableFuture<FlushResult> flush = iterator.next();
+      try {
+        final FlushResult flushResult = flush.get();
+        if (!flushResult.wasApplied) {
+          return flushResult;
         }
+      } catch (InterruptedException | ExecutionException e) {
+        throw new ProcessorStateException(
+            String.format("Failed while flushing partition %s to remote", partition), e);
+      } finally {
+        iterator.forEachRemaining(fut -> fut.cancel(true));
       }
     }
 
@@ -297,7 +316,16 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
       throw new ProcessorStateException("Interrupted while truncating " + changelog, e);
     }
 
-    return -1;
+    return FlushResult.success();
+  }
+
+  private CompletionStage<FlushResult> finalize(
+      final FlushResult fr,
+      final UUID txnid,
+      final long offset
+  ) {
+    return client.executeAsync(client.finalizeTxn(tableName, fr.partition, txnid, offset))
+        .thenApply(ar -> FlushResult.fromResult(ar, fr.partition));
   }
 
   @Override
@@ -323,8 +351,8 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
     }
 
     if (consumedOffset >= 0) {
-      final int result = flush(consumedOffset, null);
-      if (-1L != result) {
+      final FlushResult result = flush(consumedOffset, null);
+      if (!result.wasApplied) {
         // it is possible that this is a warmup replica that while restoring the
         // active replica is still writing and flushing to cassandra, in that
         // case just clear the buffer and try to restore the next batch
@@ -353,16 +381,24 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
   private class PartitionedBuilder {
 
     final int partition;
+    final UUID txnid;
+    final long offset;
 
     BatchStatementBuilder builder;
     int size = 0;
     boolean firstBatch = true;
 
-    private PartitionedBuilder(final int partition) {
+    CompletionStage<FlushResult> result;
+
+    private PartitionedBuilder(final int partition, final UUID txnid, final long offset) {
       this.partition = partition;
+      this.txnid = txnid;
+      this.offset = offset;
+
+      this.result = CompletableFuture.completedStage(new FlushResult(partition, true));
     }
 
-    void initBatch(final UUID txnid, final long offset) {
+    void initBatch() {
       if (size != 0) {
         return;
       }
@@ -393,16 +429,44 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
       }
     }
 
-    boolean shouldFlush() {
+    boolean hitBatchLimit() {
       return size >= MAX_BATCH_SIZE;
     }
 
-    boolean flush() {
-      size = 0;
+    CompletionStage<FlushResult> flush() {
       final var batch = builder.build();
-      return client.execute(batch).wasApplied();
+      size = 0;
+
+      result = result.thenCompose(fr -> !fr.wasApplied
+          ? CompletableFuture.completedStage(fr)
+          : execute(batch));
+      return result;
     }
 
+    CompletionStage<FlushResult> execute(final Statement<?> statement) {
+      return client.executeAsync(statement)
+          .thenApply(ar -> new FlushResult(partition, ar.wasApplied()));
+    }
+
+  }
+
+  private static class FlushResult {
+
+    final int partition;
+    final boolean wasApplied;
+
+    public static FlushResult fromResult(final AsyncResultSet result, final int partition) {
+      return new FlushResult(partition, result.wasApplied());
+    }
+
+    public static FlushResult success() {
+      return new FlushResult(-1, true);
+    }
+
+    private FlushResult(final int partition, final boolean wasApplied) {
+      this.partition = partition;
+      this.wasApplied = wasApplied;
+    }
   }
 
   interface BufferPlugin<K> extends Comparator<K> {
