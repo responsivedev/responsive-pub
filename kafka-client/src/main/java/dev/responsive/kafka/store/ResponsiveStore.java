@@ -23,7 +23,6 @@ import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.db.CassandraClient;
 import dev.responsive.kafka.api.InternalConfigs;
 import dev.responsive.kafka.clients.SharedClients;
-import dev.responsive.kafka.store.CommitBuffer.BufferPlugin;
 import dev.responsive.model.Result;
 import dev.responsive.utils.RemoteMonitor;
 import dev.responsive.utils.StoreUtil;
