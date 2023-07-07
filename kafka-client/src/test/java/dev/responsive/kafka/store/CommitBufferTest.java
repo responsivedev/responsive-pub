@@ -30,7 +30,6 @@ import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
 import dev.responsive.db.CassandraClient;
 import dev.responsive.utils.ContainerExtension;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -43,7 +42,6 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.errors.ProcessorStateException;
-import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -68,8 +66,6 @@ public class CommitBufferTest {
   private TopicPartition changelogTp;
 
   private String name;
-  @Mock private RecordCollector.Supplier supplier;
-  @Mock private RecordCollector collector;
   @Mock private Admin admin;
 
   @BeforeEach
@@ -86,9 +82,6 @@ public class CommitBufferTest {
     client.createDataTable(name);
     client.prepareStatements(name);
 
-    when(supplier.recordCollector()).thenReturn(collector);
-    when(collector.offsets())
-        .thenReturn(Collections.singletonMap(new TopicPartition("log", 0), 100L));
     when(admin.deleteRecords(Mockito.any()))
         .thenReturn(new DeleteRecordsResult(Map.of()));
   }
@@ -105,13 +98,13 @@ public class CommitBufferTest {
     final String tableName = name;
     client.initializeOffset(tableName, 0);
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, supplier, admin, ResponsivePartitionedStore.PLUGIN, true);
+        client, tableName, changelogTp, admin, ResponsivePartitionedStore.PLUGIN, true);
 
     // When:
     for (int i = 0; i < CommitBuffer.MAX_BATCH_SIZE * 1.5; i++) {
       buffer.put(KEY, VALUE);
     }
-    buffer.flush();
+    buffer.flush(100L);
 
     // Then:
     final byte[] value = client.get(tableName, 0, KEY);
@@ -125,13 +118,13 @@ public class CommitBufferTest {
     final String tableName = name;
     client.initializeOffset(tableName, 0);
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, supplier, admin, ResponsivePartitionedStore.PLUGIN, true);
+        client, tableName, changelogTp, admin, ResponsivePartitionedStore.PLUGIN, true);
     for (int i = 0; i < CommitBuffer.MAX_BATCH_SIZE * 1.5; i++) {
       buffer.put(KEY, VALUE);
     }
 
     // when:
-    buffer.flush();
+    buffer.flush(100L);
 
     // Then:
     verify(admin).deleteRecords(any());
@@ -143,13 +136,13 @@ public class CommitBufferTest {
     final String tableName = name;
     client.initializeOffset(tableName, 0);
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, supplier, admin, ResponsivePartitionedStore.PLUGIN, false);
+        client, tableName, changelogTp, admin, ResponsivePartitionedStore.PLUGIN, false);
     for (int i = 0; i < CommitBuffer.MAX_BATCH_SIZE * 1.5; i++) {
       buffer.put(KEY, VALUE);
     }
 
     // when:
-    buffer.flush();
+    buffer.flush(100L);
 
     // Then:
     verifyNoInteractions(admin);
@@ -162,11 +155,11 @@ public class CommitBufferTest {
     client.initializeOffset(table, 0);
     client.insertData(table, 0, KEY, VALUE);
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, table, changelogTp, supplier, admin, ResponsivePartitionedStore.PLUGIN, true);
+        client, table, changelogTp, admin, ResponsivePartitionedStore.PLUGIN, true);
 
     // When:
     buffer.tombstone(Bytes.wrap(new byte[]{1}));
-    buffer.flush();
+    buffer.flush(100L);
 
     // Then:
     final byte[] value = client.get(table, 0, KEY);
@@ -180,13 +173,13 @@ public class CommitBufferTest {
     client.initializeOffset(tableName, 0);
     client.execute(client.revokePermit(tableName, 0, 101));
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, supplier, admin, ResponsivePartitionedStore.PLUGIN, true);
+        client, tableName, changelogTp, admin, ResponsivePartitionedStore.PLUGIN, true);
 
     // Expect
     // When:
     assertThrows(ProcessorStateException.class, () -> {
       buffer.put(KEY, VALUE);
-      buffer.flush();
+      buffer.flush(100L);
     }, "client was fenced");
   }
 
@@ -197,13 +190,13 @@ public class CommitBufferTest {
     client.initializeOffset(tableName, 0);
     client.execute(client.acquirePermit(tableName, 0, UNSET_PERMIT, UUID.randomUUID(), 1));
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, supplier, admin, ResponsivePartitionedStore.PLUGIN, true);
+        client, tableName, changelogTp, admin, ResponsivePartitionedStore.PLUGIN, true);
 
     // Expect
     // When:
     assertThrows(ProcessorStateException.class, () -> {
       buffer.put(KEY, VALUE);
-      buffer.flush();
+      buffer.flush(100L);
     }, "client was fenced");
   }
 
@@ -214,13 +207,13 @@ public class CommitBufferTest {
     client.initializeOffset(tableName, 0);
     client.execute(client.revokePermit(tableName, 0, 100));
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, supplier, admin, ResponsivePartitionedStore.PLUGIN, true);
+        client, tableName, changelogTp, admin, ResponsivePartitionedStore.PLUGIN, true);
 
     // Expect
     // When:
     assertThrows(ProcessorStateException.class, () -> {
       buffer.put(KEY, VALUE);
-      buffer.flush();
+      buffer.flush(100L);
     }, "client was fenced");
   }
 
@@ -231,7 +224,7 @@ public class CommitBufferTest {
     client.initializeOffset(tableName, 0);
     client.execute(client.revokePermit(tableName, 0, 100));
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, supplier, admin, ResponsivePartitionedStore.PLUGIN, true);
+        client, tableName, changelogTp, admin, ResponsivePartitionedStore.PLUGIN, true);
 
     final ConsumerRecord<byte[], byte[]> ignored = new ConsumerRecord<>(
         changelogTp.topic(), changelogTp.partition(), 100, new byte[]{1}, new byte[]{1});
@@ -253,7 +246,7 @@ public class CommitBufferTest {
     client.initializeOffset(tableName, 0);
     client.execute(client.revokePermit(tableName, 0, 100));
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, supplier, admin, ResponsivePartitionedStore.PLUGIN, true);
+        client, tableName, changelogTp, admin, ResponsivePartitionedStore.PLUGIN, true);
 
     final CountDownLatch latch1 = new CountDownLatch(0);
     final CountDownLatch latch2 = new CountDownLatch(0);

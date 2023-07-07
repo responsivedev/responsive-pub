@@ -17,11 +17,13 @@
 package dev.responsive.kafka.clients;
 
 import java.time.Duration;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.Callback;
@@ -38,79 +40,23 @@ import org.slf4j.LoggerFactory;
 
 public class ResponsiveProducer<K, V> implements Producer<K, V> {
   private final Producer<K, V> wrapped;
-  private final OffsetRecorder offsetRecorder = new OffsetRecorder();
   private final List<Listener> listeners;
   private final Logger logger;
 
-  public static class RecordingKey {
-    private final TopicPartition partition;
-    private final String consumerGroup;
-
-    public RecordingKey(
-        final TopicPartition partition,
-        final String consumerGroup
-    ) {
-      this.partition = partition;
-      this.consumerGroup = consumerGroup;
-    }
-
-    @Override
-    public boolean equals(final Object o) {
-      if (this == o) {
-        return true;
-      }
-      if (o == null || getClass() != o.getClass()) {
-        return false;
-      }
-      final RecordingKey that = (RecordingKey) o;
-      return Objects.equals(partition, that.partition)
-          && Objects.equals(consumerGroup, that.consumerGroup);
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(partition, consumerGroup);
-    }
-
-    @Override
-    public String toString() {
-      return "RecordingKey{" + "partition=" + partition
-          + ", consumerGroup='" + consumerGroup + '\'' + '}';
-    }
-
-    public TopicPartition getPartition() {
-      return partition;
-    }
-
-    public String getConsumerGroup() {
-      return consumerGroup;
-    }
-  }
-
-  private static class OffsetRecorder {
-    final Map<RecordingKey, Long> uncommitted = new HashMap<>();
-
-    private void record(
-        final String consumerGroup,
-        final TopicPartition partition,
-        final long offset
-    ) {
-      uncommitted.put(new RecordingKey(partition, consumerGroup), offset);
-    }
-
-    private Map<RecordingKey, Long> onCommit() {
-      final Map<RecordingKey, Long> ret = Map.copyOf(uncommitted);
-      uncommitted.clear();
-      return ret;
-    }
-
-    private void onAbort() {
-      uncommitted.clear();
-    }
-  }
-
   public interface Listener {
-    default void onCommit(final Map<RecordingKey, Long> committedOffsets) {
+    default void onCommit() {
+    }
+
+    default void onAbort() {
+    }
+
+    default void onSendCompleted(final RecordMetadata recordMetadata) {
+    }
+
+    default void onSendOffsetsToTransaction(
+        final Map<TopicPartition, OffsetAndMetadata> offsets,
+        final String consumerGroupId
+    ) {
     }
 
     default void onClose() {
@@ -144,8 +90,10 @@ public class ResponsiveProducer<K, V> implements Producer<K, V> {
       final Map<TopicPartition, OffsetAndMetadata> offsets,
       final String consumerGroupId
   ) throws ProducerFencedException {
-    offsets.forEach((p, o) -> offsetRecorder.record(consumerGroupId, p, o.offset()));
     wrapped.sendOffsetsToTransaction(offsets, consumerGroupId);
+    for (final var l : listeners) {
+      l.onSendOffsetsToTransaction(offsets, consumerGroupId);
+    }
   }
 
   @Override
@@ -153,37 +101,98 @@ public class ResponsiveProducer<K, V> implements Producer<K, V> {
       final Map<TopicPartition, OffsetAndMetadata> offsets,
       final ConsumerGroupMetadata groupMetadata
   ) throws ProducerFencedException {
-    offsets.forEach((p, o) -> offsetRecorder.record(groupMetadata.groupId(), p, o.offset()));
     wrapped.sendOffsetsToTransaction(offsets, groupMetadata);
+    for (final var l : listeners) {
+      l.onSendOffsetsToTransaction(offsets, groupMetadata.groupId());
+    }
   }
 
   @Override
   public void commitTransaction() throws ProducerFencedException {
     wrapped.commitTransaction();
-    final Map<RecordingKey, Long> offsets = offsetRecorder.onCommit();
-    for (final var listener : listeners) {
-      try {
-        listener.onCommit(offsets);
-      } catch (final Throwable t) {
-        logger.error("error from responsive producer commit listener", t);
-      }
-    }
+    listeners.forEach(Listener::onCommit);
   }
 
   @Override
   public void abortTransaction() throws ProducerFencedException {
     wrapped.abortTransaction();
-    offsetRecorder.onAbort();
+    listeners.forEach(Listener::onAbort);
+  }
+
+  private static class RecordingFuture implements Future<RecordMetadata> {
+    private final Future<RecordMetadata> wrapped;
+    private final List<Listener> listeners;
+
+    public RecordingFuture(final Future<RecordMetadata> wrapped, final List<Listener> listeners) {
+      this.wrapped = wrapped;
+      this.listeners = listeners;
+    }
+
+    @Override
+    public boolean cancel(boolean mayInterruptIfRunning) {
+      return wrapped.cancel(mayInterruptIfRunning);
+    }
+
+    @Override
+    public boolean isCancelled() {
+      return wrapped.isCancelled();
+    }
+
+    @Override
+    public boolean isDone() {
+      return wrapped.isDone();
+    }
+
+    @Override
+    public RecordMetadata get() throws InterruptedException, ExecutionException {
+      final RecordMetadata recordMetadata = wrapped.get();
+      for (final var l : listeners) {
+        l.onSendCompleted(recordMetadata);
+      }
+      return recordMetadata;
+    }
+
+    @Override
+    public RecordMetadata get(final long timeout, final TimeUnit unit)
+        throws InterruptedException, ExecutionException, TimeoutException {
+      final RecordMetadata recordMetadata = wrapped.get(timeout, unit);
+      for (final var l : listeners) {
+        l.onSendCompleted(recordMetadata);
+      }
+      return recordMetadata;
+    }
+  }
+
+  private static class RecordingCallback implements Callback {
+    private final Callback wrapped;
+    private final List<Listener> listeners;
+
+    public RecordingCallback(final Callback wrapped, final List<Listener> listeners) {
+      this.wrapped = wrapped;
+      this.listeners = listeners;
+    }
+
+    @Override
+    public void onCompletion(final RecordMetadata metadata, final Exception exception) {
+      wrapped.onCompletion(metadata, exception);
+      if (exception == null) {
+        for (final var l : listeners) {
+          l.onSendCompleted(metadata);
+        }
+      }
+    }
   }
 
   @Override
   public Future<RecordMetadata> send(final ProducerRecord<K, V> record) {
-    return wrapped.send(record);
+    return new RecordingFuture(wrapped.send(record), listeners);
   }
 
   @Override
   public Future<RecordMetadata> send(final ProducerRecord<K, V> record, final Callback callback) {
-    return wrapped.send(record, callback);
+    return new RecordingFuture(
+        wrapped.send(record, new RecordingCallback(callback, listeners)), listeners
+    );
   }
 
   @Override
@@ -214,6 +223,7 @@ public class ResponsiveProducer<K, V> implements Producer<K, V> {
   }
 
   private void closeListeners() {
+    // TODO(rohan): use consistent error behaviour on all callbacks - just throw up
     for (final var l : listeners) {
       try {
         l.onClose();

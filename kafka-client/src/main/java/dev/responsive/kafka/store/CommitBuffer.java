@@ -50,7 +50,6 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
   private final String tableName;
   private final int partition;
   private final Admin admin;
-  private final Supplier recordCollector;
   private final TopicPartition changelog;
   private final BufferPlugin<K> plugin;
   private final boolean truncateChangelog;
@@ -59,14 +58,12 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
       final CassandraClient client,
       final String tableName,
       final TopicPartition changelog,
-      final RecordCollector.Supplier recordCollector,
       final Admin admin,
       final BufferPlugin<K> plugin,
       final boolean truncateChangelog
   ) {
     this.client = client;
     this.tableName = tableName;
-    this.recordCollector = recordCollector;
     this.changelog = changelog;
     this.partition = changelog.partition();
     this.admin = admin;
@@ -167,29 +164,11 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
     return buffer.size();
   }
 
-  public void flush() {
+  public void flush(long offset) {
     if (buffer.isEmpty()) {
       // no need to do anything if the buffer is empty
       LOG.info("Ignoring flush() to empty commit buffer for {}[{}]", tableName, partition);
       return;
-    }
-
-    // TODO: what happens if flush is called before there's any committed offsets?
-    // TODO: this also won't work if the source-changelog optimization is used
-    final RecordCollector collector = recordCollector.recordCollector();
-    if (collector == null) {
-      // this shouldn't happen? collector can be null if this instance
-      // is either a standby replica or not transitioned yet to active,
-      // but we don't run with standbys and flush should only happen
-      // when active...
-      throw new IllegalStateException(
-          "Unexpected null record collector for " + tableName + "[" + partition + "]");
-    }
-
-    final Long offset = collector.offsets().get(changelog);
-    if (offset == null) {
-      throw new IllegalStateException(
-          "Unexpected state: buffer is non-empty but no write has gone to changelog");
     }
 
     // TODO: support KIP-892 so the following is guaranteed not to happen

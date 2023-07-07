@@ -120,7 +120,6 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
           client,
           name.cassandraName(),
           topicPartition,
-          asRecordCollector(context),
           sharedClients.admin,
           PLUGIN,
           StoreUtil.shouldTruncateChangelog(
@@ -137,7 +136,8 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
       registration = new ResponsiveStoreRegistration(
           name.kafkaName(),
           topicPartition,
-          offset == -1 ? 0 : offset
+          offset == -1 ? 0 : offset,
+          buffer::flush
       );
       storeRegistry = InternalConfigs.loadStoreRegistry(context.appConfigs());
       storeRegistry.registerStore(registration);
@@ -146,8 +146,8 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
     }
   }
 
-  private Supplier asRecordCollector(final StateStoreContext context) {
-    return ((RecordCollector.Supplier) context);
+  @Override
+  public void flush() {
   }
 
   @Override
@@ -239,11 +239,6 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
   @Override
   public long approximateNumEntries() {
     return client.count(name.cassandraName(), partition);
-  }
-
-  @Override
-  public void flush() {
-    buffer.flush();
   }
 
   @Override

@@ -35,6 +35,7 @@ import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
 import static org.apache.kafka.streams.StreamsConfig.producerPrefix;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
+import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.hasItem;
@@ -145,6 +146,36 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
   }
 
   @Test
+  public void shouldFlushStoresBeforeClose() throws Exception {
+    final Map<String, Object> properties = getMutableProperties();
+    final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties);
+    final KafkaClientSupplier defaultClientSupplier = new DefaultKafkaClientSupplier();
+    final CassandraClientFactory defaultFactory = new DefaultCassandraClientFactory();
+    final TopicPartition input = new TopicPartition(INPUT_TOPIC, 0);
+
+    try (final ResponsiveKafkaStreams streams
+             = buildAggregatorApp(properties, defaultClientSupplier, defaultFactory)) {
+      IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(30), streams);
+      // Send some data through
+      pipeInput(producer, INPUT_TOPIC, System::currentTimeMillis, 0, 10, 0);
+      // Wait for it to be processed
+      waitTillFullyConsumed(input, Duration.ofSeconds(120));
+
+      // Make sure changelog is even w/ cassandra
+      final CassandraClient cassandraClient = defaultFactory.createCassandraClient(
+          defaultFactory.createCqlSession(new ResponsiveDriverConfig(properties))
+      );
+      final long cassandraOffset = cassandraClient.getOffset("testagg", 0).offset;
+      assertThat(cassandraOffset, greaterThan(0L));
+      final TopicPartition changelog = new TopicPartition(name + "-testagg-changelog", 0);
+      final List<ConsumerRecord<Long, Long>> changelogRecords
+          = slurpPartition(changelog, properties);
+      final long last = changelogRecords.get(changelogRecords.size() - 1).offset();
+      assertThat(cassandraOffset, equalTo(last));
+    }
+  }
+
+  @Test
   public void shouldRestoreUnflushedChangelog() throws Exception {
     final Map<String, Object> properties = getMutableProperties();
     final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties);
@@ -188,10 +219,10 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
     );
     final long cassandraOffset = cassandraClient.getOffset("testagg", 0).offset;
     assertThat(cassandraOffset, greaterThan(0L));
-    final TopicPartition outputTp = new TopicPartition(OUTPUT_TOPIC, 0);
-    final long changelogOffset = admin.listOffsets(Map.of(outputTp, OffsetSpec.latest())).all()
+    final TopicPartition changelog = new TopicPartition(name + "-testagg-changelog", 0);
+    final long changelogOffset = admin.listOffsets(Map.of(changelog, OffsetSpec.latest())).all()
         .get()
-        .get(outputTp)
+        .get(changelog)
         .offset();
     assertThat(cassandraOffset, lessThan(changelogOffset));
 
@@ -211,7 +242,6 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
     assertThat(lastRecord.isPresent(), is(true));
     assertThat(lastRecord.get().key(), is(0L));
     assertThat(lastRecord.get().value(), is(LongStream.range(0, 30).sum()));
-    final TopicPartition changelog = new TopicPartition(name + "-testagg-changelog", 0);
     assertThat(recordingClientSupplier.restoreRecords.keySet(), hasItem(changelog));
     assertThat(recordingClientSupplier.restoreRecords.get(changelog), not(empty()));
     // Assert that we never restored from an offset earlier than committed to Cassandra

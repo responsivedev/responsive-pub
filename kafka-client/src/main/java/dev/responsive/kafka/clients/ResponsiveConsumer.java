@@ -20,11 +20,14 @@ package dev.responsive.kafka.clients;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.regex.Pattern;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -133,6 +136,45 @@ public class ResponsiveConsumer<K, V> extends DelegatingConsumer<K, V> {
     listeners.forEach(l -> ignoreException(l::onClose));
   }
 
+  @Override
+  public void commitSync() {
+    throw new UnsupportedOperationException("ResponsiveConsumer only supports commit with offsets");
+  }
+
+  @Override
+  public void commitSync(Duration timeout) {
+    throw new UnsupportedOperationException("ResponsiveConsumer only supports commit with offsets");
+  }
+
+  @Override
+  public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets) {
+    delegate.commitSync(offsets);
+    listeners.forEach(l -> l.onCommit(offsets));
+  }
+
+  @Override
+  public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets,
+                         Duration timeout) {
+    delegate.commitSync(offsets, timeout);
+    listeners.forEach(l -> l.onCommit(offsets));
+  }
+
+  @Override
+  public void commitAsync() {
+    throw new UnsupportedOperationException("ResponsiveConsumer only supports commit with offsets");
+  }
+
+  @Override
+  public void commitAsync(OffsetCommitCallback callback) {
+    throw new UnsupportedOperationException("ResponsiveConsumer only supports commit with offsets");
+  }
+
+  @Override
+  public void commitAsync(Map<TopicPartition, OffsetAndMetadata> offsets,
+                          OffsetCommitCallback callback) {
+    throw new UnsupportedOperationException("ResponsiveConsumer only supports commitSync");
+  }
+
   private void ignoreException(final Runnable r) {
     ignoreException(logger, r);
   }
@@ -153,6 +195,9 @@ public class ResponsiveConsumer<K, V> extends DelegatingConsumer<K, V> {
     }
 
     default void onPartitionsLost(Collection<TopicPartition> partitions) {
+    }
+
+    default void onCommit(final Map<TopicPartition, OffsetAndMetadata> offsets) {
     }
 
     default void onClose() {
