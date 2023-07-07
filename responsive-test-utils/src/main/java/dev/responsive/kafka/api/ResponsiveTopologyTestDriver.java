@@ -1,8 +1,9 @@
 package dev.responsive.kafka.api;
 
-import static dev.responsive.kafka.clients.SharedClients.sharedClientConfigs;
+import static dev.responsive.kafka.api.InternalConfigs.getConfigs;
 
 import dev.responsive.db.CassandraClient;
+import dev.responsive.kafka.store.ResponsiveStoreRegistry;
 import java.time.Instant;
 import java.util.Properties;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
@@ -65,11 +66,12 @@ public class ResponsiveTopologyTestDriver extends TopologyTestDriver {
   private static Properties testDriverProps(final Properties baseProps) {
     final Properties props = new Properties();
     props.putAll(baseProps);
-    props.putAll(sharedClientConfigs(
+    props.putAll(getConfigs(
         new CassandraClientStub(),
         new MockAdminClient(),
-        new ScheduledThreadPoolExecutor(1))
-    );
+        new ScheduledThreadPoolExecutor(1),
+        new ResponsiveStoreRegistry()
+    ));
     return props;
   }
 

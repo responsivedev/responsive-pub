@@ -1,6 +1,6 @@
 package dev.responsive.kafka.api;
 
-import static dev.responsive.kafka.clients.SharedClients.sharedClientConfigs;
+import static dev.responsive.kafka.api.InternalConfigs.getConfigs;
 import static dev.responsive.kafka.config.ResponsiveDriverConfig.CLIENT_ID_CONFIG;
 import static dev.responsive.kafka.config.ResponsiveDriverConfig.CLIENT_SECRET_CONFIG;
 import static dev.responsive.kafka.config.ResponsiveDriverConfig.NUM_STANDBYS_OVERRIDE;
@@ -14,6 +14,7 @@ import com.datastax.oss.driver.api.core.CqlSession;
 import dev.responsive.db.CassandraClient;
 import dev.responsive.kafka.clients.ResponsiveKafkaClientSupplier;
 import dev.responsive.kafka.config.ResponsiveDriverConfig;
+import dev.responsive.kafka.store.ResponsiveStoreRegistry;
 import dev.responsive.utils.SessionUtil;
 import java.net.InetSocketAddress;
 import java.time.Duration;
@@ -29,7 +30,7 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.Topology;
-import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
+import org.apache.kafka.streams.TopologyDescription;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,7 +48,13 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       final Topology topology,
       final Map<String, Object> configs
   ) {
-    return connect(topology, configs, new ResponsiveKafkaClientSupplier(configs));
+    final ResponsiveStoreRegistry storeRegistry = new ResponsiveStoreRegistry();
+    return connect(
+        topology,
+        configs,
+        new ResponsiveKafkaClientSupplier(configs, storeRegistry),
+        storeRegistry
+    );
   }
 
   public static ResponsiveKafkaStreams create(
@@ -55,13 +62,20 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       final Map<String, Object> configs,
       final KafkaClientSupplier clientSupplier
   ) {
-    return connect(topology, configs, new ResponsiveKafkaClientSupplier(clientSupplier, configs));
+    final ResponsiveStoreRegistry storeRegistry = new ResponsiveStoreRegistry();
+    return connect(
+        topology,
+        configs,
+        new ResponsiveKafkaClientSupplier(clientSupplier, configs, storeRegistry),
+        storeRegistry
+    );
   }
 
   private static ResponsiveKafkaStreams connect(
       final Topology topology,
       final Map<String, Object> configs,
-      final ResponsiveKafkaClientSupplier responsiveClientSupplier
+      final ResponsiveKafkaClientSupplier responsiveClientSupplier,
+      final ResponsiveStoreRegistry storeRegistry
   ) {
     final ResponsiveDriverConfig responsiveConfigs = new ResponsiveDriverConfig(configs);
 
@@ -87,7 +101,14 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     final ScheduledExecutorService executor = new ScheduledThreadPoolExecutor(2);
     return new ResponsiveKafkaStreams(
         topology,
-        verifiedStreamsConfigs(configs, new CassandraClient(session), admin, executor),
+        verifiedStreamsConfigs(
+            configs,
+            new CassandraClient(session),
+            admin,
+            executor,
+            storeRegistry,
+            topology.describe()
+        ),
         responsiveClientSupplier,
         session,
         admin,
@@ -113,11 +134,13 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       final Map<String, Object> configs,
       final CassandraClient cassandraClient,
       final Admin admin,
-      final ScheduledExecutorService executor
+      final ScheduledExecutorService executor,
+      final ResponsiveStoreRegistry storeRegistry,
+      final TopologyDescription topologyDescription
   ) {
     final Properties propsWithOverrides = new Properties();
     propsWithOverrides.putAll(configs);
-    propsWithOverrides.putAll(sharedClientConfigs(cassandraClient, admin, executor));
+    propsWithOverrides.putAll(getConfigs(cassandraClient, admin, executor, storeRegistry));
 
     // In this case the default and our desired value are both 0, so we only need to check for
     // accidental user overrides

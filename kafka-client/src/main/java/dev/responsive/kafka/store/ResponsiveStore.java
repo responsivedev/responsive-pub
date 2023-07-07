@@ -21,6 +21,7 @@ import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils
 
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.db.CassandraClient;
+import dev.responsive.kafka.api.InternalConfigs;
 import dev.responsive.kafka.clients.SharedClients;
 import dev.responsive.kafka.store.CommitBuffer.BufferPlugin;
 import dev.responsive.model.Result;
@@ -59,6 +60,8 @@ public class ResponsiveStore implements KeyValueStore<Bytes, byte[]> {
 
   private final TableName name;
   private final Position position;
+  private ResponsiveStoreRegistry storeRegistry;
+  private ResponsiveStoreRegistration registration;
 
   private boolean open;
   private CommitBuffer<Bytes> buffer;
@@ -110,12 +113,14 @@ public class ResponsiveStore implements KeyValueStore<Bytes, byte[]> {
       client.prepareStatements(name.cassandraName());
       client.initializeOffset(name.cassandraName(), partition);
 
+      final TopicPartition topicPartition =  new TopicPartition(
+          changelogFor(context, name.kafkaName(), false),
+          partition
+      );
       buffer = new CommitBuffer<>(
           client,
           name.cassandraName(),
-          new TopicPartition(
-              changelogFor(context, name.kafkaName(), false),
-              partition),
+          topicPartition,
           asRecordCollector(context),
           sharedClients.admin,
           PLUGIN
@@ -124,6 +129,13 @@ public class ResponsiveStore implements KeyValueStore<Bytes, byte[]> {
       open = true;
 
       context.register(root, buffer);
+      registration = new ResponsiveStoreRegistration(
+          name.kafkaName(),
+          topicPartition,
+          0
+      );
+      storeRegistry = InternalConfigs.loadStoreRegistry(context.appConfigs());
+      storeRegistry.registerStore(registration);
     } catch (InterruptedException | TimeoutException e) {
       throw new ProcessorStateException("Failed to initialize store.", e);
     }
@@ -231,6 +243,9 @@ public class ResponsiveStore implements KeyValueStore<Bytes, byte[]> {
 
   @Override
   public void close() {
+    if (storeRegistry != null) {
+      storeRegistry.deregisterStore(registration);
+    }
     // the client is shared across state stores, so only the
     // buffer needs to be flushed
     flush();
