@@ -16,6 +16,18 @@
 
 package dev.responsive.utils;
 
+import static dev.responsive.kafka.config.ResponsiveDriverConfig.STORAGE_DATACENTER_CONFIG;
+import static dev.responsive.kafka.config.ResponsiveDriverConfig.STORAGE_HOSTNAME_CONFIG;
+import static dev.responsive.kafka.config.ResponsiveDriverConfig.STORAGE_PORT_CONFIG;
+import static dev.responsive.kafka.config.ResponsiveDriverConfig.TASK_ASSIGNOR_CLASS_OVERRIDE;
+import static dev.responsive.kafka.config.ResponsiveDriverConfig.TENANT_ID_CONFIG;
+import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS;
+
+import java.util.HashMap;
+import java.util.Map;
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.junit.jupiter.api.extension.AfterAllCallback;
 import org.junit.jupiter.api.extension.BeforeAllCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
@@ -36,16 +48,20 @@ public class ContainerExtension implements BeforeAllCallback, AfterAllCallback,
       .withEnv("KAFKA_GROUP_MAX_SESSION_TIMEOUT_MS", "60000")
       .withReuse(true);
 
+  public static Admin admin;
+
   @Override
   public void beforeAll(final ExtensionContext context) throws Exception {
     cassandra.start();
     kafka.start();
+    admin = Admin.create(Map.of(BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers()));
   }
 
   @Override
   public void afterAll(final ExtensionContext context) throws Exception {
     cassandra.stop();
     kafka.stop();
+    admin.close();
   }
 
   @Override
@@ -54,7 +70,9 @@ public class ContainerExtension implements BeforeAllCallback, AfterAllCallback,
       final ExtensionContext extensionContext
   ) throws ParameterResolutionException {
     return parameterContext.getParameter().getType().equals(CassandraContainer.class)
-        || parameterContext.getParameter().getType().equals(KafkaContainer.class);
+        || parameterContext.getParameter().getType().equals(KafkaContainer.class)
+        || parameterContext.getParameter().getType().equals(Admin.class)
+        || isContainerConfig(parameterContext);
   }
 
   @Override
@@ -62,7 +80,28 @@ public class ContainerExtension implements BeforeAllCallback, AfterAllCallback,
       final ParameterContext parameterContext,
       final ExtensionContext extensionContext
   ) throws ParameterResolutionException {
-    return parameterContext.getParameter().getType() == CassandraContainer.class
-        ? cassandra : kafka;
+    if (parameterContext.getParameter().getType() == CassandraContainer.class) {
+      return cassandra;
+    } else if (parameterContext.getParameter().getType() == KafkaContainer.class) {
+      return kafka;
+    } else if (parameterContext.getParameter().getType() == Admin.class) {
+      return admin;
+    } else if (isContainerConfig(parameterContext)) {
+      return new HashMap<>(Map.of(
+          STORAGE_HOSTNAME_CONFIG, cassandra.getContactPoint().getHostName(),
+          STORAGE_PORT_CONFIG, cassandra.getContactPoint().getPort(),
+          STORAGE_DATACENTER_CONFIG, cassandra.getLocalDatacenter(),
+          TENANT_ID_CONFIG, "responsive_clients",
+          INTERNAL_TASK_ASSIGNOR_CLASS, TASK_ASSIGNOR_CLASS_OVERRIDE,
+          BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers()
+      ));
+    }
+
+    throw new IllegalArgumentException("Unexpected parameter " + parameterContext);
+  }
+
+  private static boolean isContainerConfig(final ParameterContext context) {
+    return context.getParameter().getType().equals(Map.class)
+        && context.getParameter().getAnnotation(ResponsiveConfigParam.class) != null;
   }
 }

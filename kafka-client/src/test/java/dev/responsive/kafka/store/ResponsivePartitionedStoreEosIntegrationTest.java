@@ -16,11 +16,8 @@
 
 package dev.responsive.kafka.store;
 
-import static dev.responsive.kafka.config.ResponsiveDriverConfig.STORAGE_DATACENTER_CONFIG;
-import static dev.responsive.kafka.config.ResponsiveDriverConfig.STORAGE_HOSTNAME_CONFIG;
-import static dev.responsive.kafka.config.ResponsiveDriverConfig.STORAGE_PORT_CONFIG;
-import static dev.responsive.kafka.config.ResponsiveDriverConfig.TENANT_ID_CONFIG;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_CONFIG;
+import static dev.responsive.utils.IntegrationTestUtils.pipeInput;
+import static dev.responsive.utils.IntegrationTestUtils.readOutput;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
@@ -28,12 +25,10 @@ import static org.apache.kafka.clients.producer.ProducerConfig.TRANSACTION_TIMEO
 import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.APPLICATION_ID_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.APPLICATION_SERVER_CONFIG;
-import static org.apache.kafka.streams.StreamsConfig.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.COMMIT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_V2;
-import static org.apache.kafka.streams.StreamsConfig.InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS;
 import static org.apache.kafka.streams.StreamsConfig.NUM_STREAM_THREADS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.PROCESSING_GUARANTEE_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
@@ -48,32 +43,22 @@ import dev.responsive.kafka.api.ResponsiveStores;
 import dev.responsive.utils.ContainerExtension;
 import dev.responsive.utils.IntegrationTestUtils;
 import dev.responsive.utils.RemoteMonitor;
+import dev.responsive.utils.ResponsiveConfigParam;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.IsolationLevel;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
@@ -86,7 +71,6 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.StreamThread;
-import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.junit.jupiter.api.AfterEach;
@@ -96,14 +80,12 @@ import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.testcontainers.containers.CassandraContainer;
-import org.testcontainers.containers.KafkaContainer;
 
 @ExtendWith(ContainerExtension.class)
-public class ResponsiveStoreEosIntegrationTest {
+public class ResponsivePartitionedStoreEosIntegrationTest {
 
   private static final Logger LOG
-      = LoggerFactory.getLogger(ResponsiveStoreEosIntegrationTest.class);
+      = LoggerFactory.getLogger(ResponsivePartitionedStoreEosIntegrationTest.class);
 
   private static final int MAX_POLL_MS = 5000;
   private static final String INPUT_TOPIC = "input";
@@ -113,27 +95,21 @@ public class ResponsiveStoreEosIntegrationTest {
   private final Map<String, Object> responsiveProps = new HashMap<>();
 
   private String name;
-  private String bootstrapServers;
   private Admin admin;
   private ScheduledExecutorService executor;
 
   @BeforeEach
   public void before(
       final TestInfo info,
-      final CassandraContainer<?> cassandra,
-      final KafkaContainer kafka
+      final Admin admin,
+      @ResponsiveConfigParam final Map<String, Object> responsiveProps
   ) {
     name = info.getTestMethod().orElseThrow().getName();
     executor = new ScheduledThreadPoolExecutor(2);
-    bootstrapServers = kafka.getBootstrapServers();
 
-    responsiveProps.put(STORAGE_HOSTNAME_CONFIG, cassandra.getContactPoint().getHostName());
-    responsiveProps.put(STORAGE_PORT_CONFIG, cassandra.getContactPoint().getPort());
-    responsiveProps.put(STORAGE_DATACENTER_CONFIG, cassandra.getLocalDatacenter());
-    responsiveProps.put(TENANT_ID_CONFIG, "responsive_clients");   // keyspace is expected to exist
-    responsiveProps.put(INTERNAL_TASK_ASSIGNOR_CLASS, StickyTaskAssignor.class.getName());
+    this.responsiveProps.putAll(responsiveProps);
 
-    admin = Admin.create(Map.of(BOOTSTRAP_SERVERS_CONFIG, bootstrapServers));
+    this.admin = admin;
     admin.createTopics(
         List.of(
             new NewTopic(INPUT_TOPIC, Optional.of(2), Optional.empty()),
@@ -145,7 +121,6 @@ public class ResponsiveStoreEosIntegrationTest {
   @AfterEach
   public void after() {
     admin.deleteTopics(List.of(INPUT_TOPIC, OUTPUT_TOPIC));
-    admin.close();
   }
 
   @Test
@@ -163,8 +138,8 @@ public class ResponsiveStoreEosIntegrationTest {
       IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(10), streamsA, streamsB);
 
       // committed data first, then second set of uncommitted data
-      pipeInput(producer, System::currentTimeMillis, 0, 10, 0, 1);
-      pipeInput(producer, System::currentTimeMillis, 10, 15, 0, 1);
+      pipeInput(INPUT_TOPIC, producer, System::currentTimeMillis, 0, 10, 0, 1);
+      pipeInput(INPUT_TOPIC, producer, System::currentTimeMillis, 10, 15, 0, 1);
 
       new RemoteMonitor(executor, () -> state.numCommits.get() == 2)
           .await(Duration.ofSeconds(5));
@@ -173,7 +148,7 @@ public class ResponsiveStoreEosIntegrationTest {
       // an additional 10 values are uncommitted (5 for each partition)
       // this statement below just blocks until we've read 30 uncommitted
       // records before causing one of the tasks to stall
-      readOutput(0, 30, true, properties);
+      readOutput(OUTPUT_TOPIC, 0, 30, true, properties);
 
       state.stall.set(Stall.INJECTED);
 
@@ -181,7 +156,7 @@ public class ResponsiveStoreEosIntegrationTest {
       // topic-partitions should be assigned to the first client, at
       // which point 5 of the writes should be aborted and reprocessed
       // by the new client
-      pipeInput(producer, System::currentTimeMillis, 15, 20, 0, 1);
+      pipeInput(INPUT_TOPIC, producer, System::currentTimeMillis, 15, 20, 0, 1);
 
       // the stall only happens on process, so this needs to be after the
       // previous pipeInput call
@@ -201,8 +176,8 @@ public class ResponsiveStoreEosIntegrationTest {
       // 20 more values beyond the first read are now committed (10
       // for each partition), but 5 should never have been committed
       // so there should be more uncommitted reads in total
-      final List<KeyValue<Long, Long>> readC = readOutput(0, 40, false, properties);
-      final List<KeyValue<Long, Long>> readU = readOutput(0, 45, true, properties);
+      final List<KeyValue<Long, Long>> readC = readOutput(OUTPUT_TOPIC, 0, 40, false, properties);
+      final List<KeyValue<Long, Long>> readU = readOutput(OUTPUT_TOPIC, 0, 45, true, properties);
 
       // now we release the stalled consumer
       state.stall.set(Stall.RELEASED);
@@ -237,7 +212,6 @@ public class ResponsiveStoreEosIntegrationTest {
   private Map<String, Object> getMutableProperties() {
     final Map<String, Object> properties = new HashMap<>(responsiveProps);
 
-    properties.put(BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
     properties.put(KEY_SERIALIZER_CLASS_CONFIG, LongSerializer.class);
     properties.put(VALUE_SERIALIZER_CLASS_CONFIG, LongSerializer.class);
     properties.put(KEY_DESERIALIZER_CLASS_CONFIG, LongDeserializer.class);
@@ -289,60 +263,6 @@ public class ResponsiveStoreEosIntegrationTest {
         .to(OUTPUT_TOPIC);
 
     return ResponsiveKafkaStreams.create(builder.build(), properties);
-  }
-
-  private void pipeInput(
-      final KafkaProducer<Long, Long> producer,
-      final Supplier<Long> timestamp,
-      final long valFrom,
-      final long valTo,
-      final long... keys
-  ) {
-    for (final long k : keys) {
-      for (long v = valFrom; v < valTo; v++) {
-        producer.send(new ProducerRecord<>(
-            INPUT_TOPIC,
-            (int) k % 2,
-            timestamp.get(),
-            k,
-            v
-        ));
-      }
-    }
-  }
-
-  private List<KeyValue<Long, Long>> readOutput(
-      final long from,
-      final long numEvents,
-      final boolean readUncommitted,
-      final Map<String, Object> originals
-  ) throws TimeoutException {
-    final Map<String, Object> properties = new HashMap<>(originals);
-    properties.put(ISOLATION_LEVEL_CONFIG, readUncommitted
-        ? IsolationLevel.READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT)
-        : IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT));
-
-    try (final KafkaConsumer<Long, Long> consumer = new KafkaConsumer<>(properties)) {
-      final TopicPartition output = new TopicPartition(OUTPUT_TOPIC, 0);
-      consumer.assign(List.of(output));
-      consumer.seek(output, from);
-
-      final long end = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
-      final List<KeyValue<Long, Long>> result = new ArrayList<>();
-      while (result.size() < numEvents) {
-        // this is configured to only poll one record at a time, so we
-        // can guarantee we won't accidentally poll more than numEvents
-        final ConsumerRecords<Long, Long> polled = consumer.poll(Duration.ofSeconds(30));
-        for (ConsumerRecord<Long, Long> rec : polled) {
-          result.add(new KeyValue<>(rec.key(), rec.value()));
-        }
-        if (System.nanoTime() > end) {
-          throw new TimeoutException(
-              "Timed out trying to read " + numEvents + " events from " + output);
-        }
-      }
-      return result;
-    }
   }
 
   private static class SharedState {
