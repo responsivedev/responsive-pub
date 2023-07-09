@@ -34,8 +34,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
-import org.apache.kafka.streams.processor.internals.RecordCollector;
-import org.apache.kafka.streams.processor.internals.RecordCollector.Supplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,6 +51,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
   private final TopicPartition changelog;
   private final BufferPlugin<K> plugin;
   private final boolean truncateChangelog;
+  private final int flushThreshold;
 
   CommitBuffer(
       final CassandraClient client,
@@ -60,7 +59,8 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
       final TopicPartition changelog,
       final Admin admin,
       final BufferPlugin<K> plugin,
-      final boolean truncateChangelog
+      final boolean truncateChangelog,
+      final int flushThreshold
   ) {
     this.client = client;
     this.tableName = tableName;
@@ -71,6 +71,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
 
     this.buffer = new TreeMap<>(plugin);
     this.truncateChangelog = truncateChangelog;
+    this.flushThreshold = flushThreshold;
   }
 
   public void put(final K key, final byte[] value) {
@@ -165,6 +166,14 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
   }
 
   public void flush(long offset) {
+    if (buffer.size() < flushThreshold) {
+      LOG.debug("Ignoring flush() - commit buffer {} smaller than flush threshold {}",
+          buffer.size(),
+          flushThreshold
+      );
+      return;
+    }
+
     if (buffer.isEmpty()) {
       // no need to do anything if the buffer is empty
       LOG.info("Ignoring flush() to empty commit buffer for {}[{}]", tableName, partition);

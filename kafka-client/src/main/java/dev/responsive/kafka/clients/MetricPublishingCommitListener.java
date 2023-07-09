@@ -72,7 +72,7 @@ public class MetricPublishingCommitListener implements ResponsiveConsumer.Listen
   ) {
     this.metrics = Objects.requireNonNull(metrics);
     this.threadId = Objects.requireNonNull(threadId);
-    offsetRecorder.addCommitCallback(this::onCommit);
+    offsetRecorder.addCommitCallback(this::commitCallback);
   }
 
   private MetricName metricName(final RecordingKey k) {
@@ -88,7 +88,7 @@ public class MetricPublishingCommitListener implements ResponsiveConsumer.Listen
     return new MetricName("committed-offset", "responsive.streams", "", tags);
   }
 
-  public void onCommit(
+  private void commitCallback(
       final Map<RecordingKey, Long> committedOffsets,
       final Map<TopicPartition, Long> unused
   ) {

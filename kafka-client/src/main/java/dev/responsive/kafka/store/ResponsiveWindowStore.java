@@ -24,6 +24,7 @@ import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.db.CassandraClient;
 import dev.responsive.kafka.api.InternalConfigs;
 import dev.responsive.kafka.clients.SharedClients;
+import dev.responsive.kafka.config.ResponsiveDriverConfig;
 import dev.responsive.model.Result;
 import dev.responsive.model.Stamped;
 import dev.responsive.utils.Iterators;
@@ -129,7 +130,11 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
   public void init(final StateStoreContext context, final StateStore root) {
     try {
       LOG.info("Initializing state store {}", name);
+
       this.context = asInternalProcessorContext(context);
+
+      final ResponsiveDriverConfig driverConfig = new ResponsiveDriverConfig(context.appConfigs());
+
       partition = context.taskId().partition();
 
       final SharedClients sharedClients = new SharedClients(context.appConfigs());
@@ -157,7 +162,8 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
               topicPartition.topic(),
               sharedClients.admin,
               context.appConfigs()
-          )
+          ),
+          driverConfig.getInt(ResponsiveDriverConfig.STORE_FLUSH_RECORDS_THRESHOLD)
       );
       registration = new ResponsiveStoreRegistration(
           name.kafkaName(),

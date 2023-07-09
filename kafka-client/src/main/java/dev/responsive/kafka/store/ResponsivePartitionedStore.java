@@ -23,6 +23,7 @@ import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.db.CassandraClient;
 import dev.responsive.kafka.api.InternalConfigs;
 import dev.responsive.kafka.clients.SharedClients;
+import dev.responsive.kafka.config.ResponsiveDriverConfig;
 import dev.responsive.model.Result;
 import dev.responsive.utils.RemoteMonitor;
 import dev.responsive.utils.StoreUtil;
@@ -98,6 +99,7 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
     try {
       LOG.info("Initializing state store {}", name);
       StoreUtil.validateTopologyOptimizationConfig(context.appConfigs());
+      final ResponsiveDriverConfig driverConfig = new ResponsiveDriverConfig(context.appConfigs());
       this.context = asInternalProcessorContext(context);
       partition = context.taskId().partition();
 
@@ -126,7 +128,8 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
               topicPartition.topic(),
               sharedClients.admin,
               context.appConfigs()
-          )
+          ),
+          driverConfig.getInt(ResponsiveDriverConfig.STORE_FLUSH_RECORDS_THRESHOLD)
       );
 
       open = true;

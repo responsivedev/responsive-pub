@@ -1,22 +1,13 @@
 package dev.responsive.kafka.api;
 
-import static dev.responsive.kafka.api.InternalConfigs.getConfigs;
-import static dev.responsive.kafka.config.ResponsiveDriverConfig.CLIENT_ID_CONFIG;
-import static dev.responsive.kafka.config.ResponsiveDriverConfig.CLIENT_SECRET_CONFIG;
 import static dev.responsive.kafka.config.ResponsiveDriverConfig.NUM_STANDBYS_OVERRIDE;
-import static dev.responsive.kafka.config.ResponsiveDriverConfig.STORAGE_DATACENTER_CONFIG;
-import static dev.responsive.kafka.config.ResponsiveDriverConfig.STORAGE_HOSTNAME_CONFIG;
-import static dev.responsive.kafka.config.ResponsiveDriverConfig.STORAGE_PORT_CONFIG;
 import static dev.responsive.kafka.config.ResponsiveDriverConfig.TASK_ASSIGNOR_CLASS_OVERRIDE;
-import static dev.responsive.kafka.config.ResponsiveDriverConfig.TENANT_ID_CONFIG;
 
 import com.datastax.oss.driver.api.core.CqlSession;
 import dev.responsive.db.CassandraClient;
 import dev.responsive.kafka.clients.ResponsiveKafkaClientSupplier;
 import dev.responsive.kafka.config.ResponsiveDriverConfig;
 import dev.responsive.kafka.store.ResponsiveStoreRegistry;
-import dev.responsive.utils.SessionUtil;
-import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Properties;
@@ -24,7 +15,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsConfig;
@@ -97,16 +87,6 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       final CassandraClientFactory cassandraClientFactory
   ) {
     final ResponsiveDriverConfig responsiveConfigs = new ResponsiveDriverConfig(configs);
-
-    final InetSocketAddress address = InetSocketAddress.createUnresolved(
-        responsiveConfigs.getString(STORAGE_HOSTNAME_CONFIG),
-        responsiveConfigs.getInt(STORAGE_PORT_CONFIG)
-    );
-
-    final String datacenter = responsiveConfigs.getString(STORAGE_DATACENTER_CONFIG);
-    final String clientId = responsiveConfigs.getString(CLIENT_ID_CONFIG);
-    final Password clientSecret = responsiveConfigs.getPassword(CLIENT_SECRET_CONFIG);
-    final String tenant = responsiveConfigs.getString(TENANT_ID_CONFIG);
 
     final CqlSession session = cassandraClientFactory.createCqlSession(responsiveConfigs);
 

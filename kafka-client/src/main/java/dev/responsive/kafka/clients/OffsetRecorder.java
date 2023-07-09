@@ -32,7 +32,15 @@ class OffsetRecorder {
     commitCallback.add(callback);
   }
 
-  public synchronized void recordConsumedOffsets(
+  public ResponsiveProducer.Listener getProducerListener() {
+    return producerListener;
+  }
+
+  public ResponsiveConsumer.Listener getConsumerListener() {
+    return consumerListener;
+  }
+
+  private synchronized void onConsumedOffsets(
       final String consumerGroup,
       final TopicPartition partition,
       final long offset
@@ -40,7 +48,7 @@ class OffsetRecorder {
     uncommitted.put(new RecordingKey(partition, consumerGroup), offset);
   }
 
-  public synchronized void recordProduce(final RecordMetadata recordMetadata) {
+  private synchronized void onProduce(final RecordMetadata recordMetadata) {
     final TopicPartition partition
         = new TopicPartition(recordMetadata.topic(), recordMetadata.partition());
     written.compute(
@@ -49,25 +57,21 @@ class OffsetRecorder {
     );
   }
 
-  public synchronized void recordCommit() {
-    final Map<RecordingKey, Long> committedOffsets = Map.copyOf(uncommitted);
-    final Map<TopicPartition, Long> writtenOffsets = Map.copyOf(written);
+  private void onCommit() {
+    final Map<RecordingKey, Long> committedOffsets;
+    final Map<TopicPartition, Long> writtenOffsets;
+    synchronized (this) {
+      committedOffsets = Map.copyOf(uncommitted);
+      writtenOffsets = Map.copyOf(written);
+      uncommitted.clear();
+      written.clear();
+    }
     commitCallback.forEach(c -> c.onCommit(committedOffsets, writtenOffsets));
+  }
+
+  private synchronized void onAbort() {
     uncommitted.clear();
     written.clear();
-  }
-
-  public synchronized void recordAbort() {
-    uncommitted.clear();
-    written.clear();
-  }
-
-  public ResponsiveProducer.Listener getProducerListener() {
-    return producerListener;
-  }
-
-  public ResponsiveConsumer.Listener getConsumerListener() {
-    return consumerListener;
   }
 
   @FunctionalInterface
@@ -84,8 +88,8 @@ class OffsetRecorder {
       if (eos) {
         throw new IllegalStateException("consumer commit is not expected with EOS");
       }
-      offsets.forEach((p, o) -> recordConsumedOffsets("", p, o.offset()));
-      recordCommit();
+      offsets.forEach((p, o) -> onConsumedOffsets("", p, o.offset()));
+      OffsetRecorder.this.onCommit();
     }
   }
 
@@ -96,23 +100,25 @@ class OffsetRecorder {
       if (!eos) {
         throw new IllegalStateException("producer commit is not expected with alos");
       }
-      offsets.forEach((p, o) -> recordConsumedOffsets(consumerGroupId, p, o.offset()));
+      offsets.forEach((p, o) -> onConsumedOffsets(consumerGroupId, p, o.offset()));
     }
 
     @Override
     public void onCommit() {
-      // TODO: throw if not eos
-      recordCommit();
+      if (!eos) {
+        throw new IllegalStateException("producer commit is not expected with alos");
+      }
+      OffsetRecorder.this.onCommit();
     }
 
     @Override
     public void onAbort() {
-      recordAbort();
+      OffsetRecorder.this.onAbort();
     }
 
     @Override
     public void onSendCompleted(final RecordMetadata recordMetadata) {
-      recordProduce(recordMetadata);
+      onProduce(recordMetadata);
     }
   }
 
