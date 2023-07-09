@@ -65,8 +65,8 @@ public class ResponsiveDriverConfig extends AbstractConfig {
   //       transaction sizes.
   public static final String STORE_FLUSH_RECORDS_THRESHOLD
       = "responsive.store.flush.records.interval";
-  public static final String STORE_FLUSH_RECORDS_THRESHOLD_DOC = "The number of records to" +
-      " accumulate in each store before flushing to remote";
+  public static final String STORE_FLUSH_RECORDS_THRESHOLD_DOC = "The number of records to"
+      + " accumulate in each store before flushing to remote";
   public static final int STORE_FLUSH_RECORDS_THRESHOLD_DEFAULT = 10000;
 
   // ------------------ request configurations --------------------------------
