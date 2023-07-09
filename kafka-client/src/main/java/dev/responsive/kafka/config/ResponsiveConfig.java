@@ -29,7 +29,8 @@ import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssigno
 /**
  * Configurations for {@link dev.responsive.kafka.api.ResponsiveKafkaStreams}
  */
-public class ResponsiveDriverConfig extends AbstractConfig {
+@SuppressWarnings("checkstyle:linelength")
+public class ResponsiveConfig extends AbstractConfig {
 
   // ------------------ connection configurations -----------------------------
 
@@ -75,6 +76,28 @@ public class ResponsiveDriverConfig extends AbstractConfig {
   private static final String REQUEST_TIMEOUT_MS_DOC = "The timeout for making requests to the "
       + "responsive server. This applies both to metadata requests and query execution.";
   private static final long REQUEST_TIMEOUT_MS_DEFAULT = 5000L;
+
+
+  // ------------------ performance related configurations --------------------
+
+  // TODO: we should make this configurable per-store
+  public static final String STORAGE_DESIRED_NUM_PARTITION_CONFIG = "responsive.storage.desired.num.partitions";
+  private static final String STORAGE_DESIRED_NUM_PARTITIONS_DOC = "The desired number of "
+      + "partitions to create in the remote store. This is a best effort target, as the actual "
+      + "number of partitions must be a multiple of the Kafka store's number of partitions. This "
+      + "configuration does not apply to global stores.";
+  private static final int STORAGE_DESIRED_NUM_PARTITIONS_DEFAULT = 4096;
+
+  // TODO: consider if we want this as a local, global or per-store configuration
+  public static final String MAX_CONCURRENT_REMOTE_WRITES_CONFIG = "responsive.max.concurrent.writes";
+  private static final String MAX_CONCURRENT_REMOTE_WRITES_DOC = "The maximum number of writes "
+      + "that will every be concurrently issued to the remote store. Increasing this value will "
+      + "reduce the time that it takes to flush data to the remote store, but potentially increase "
+      + "the latency of each individual write and any other concurrent reads from other threads. "
+      + "This configuration is 'local': in practice, the number of concurrent writes from all "
+      + "applications to the remote store is this number * the number of stream threads running "
+      + "across all nodes.";
+  public static final int MAX_CONCURRENT_REMOTE_WRITES_DEFAULT = 32;
 
 
   // ------------------ required StreamsConfig overrides ----------------------
@@ -164,7 +187,7 @@ public class ResponsiveDriverConfig extends AbstractConfig {
     }
   }
 
-  public ResponsiveDriverConfig(final Map<?, ?> originals) {
+  public ResponsiveConfig(final Map<?, ?> originals) {
     super(CONFIG_DEF, originals);
   }
 }

@@ -244,6 +244,11 @@ class AtomicWriterTest {
     }
 
     @Override
+    public Bytes bytes(final Bytes key) {
+      return key;
+    }
+
+    @Override
     public int compare(final Bytes o1, final Bytes o2) {
       return o1.compareTo(o2);
     }

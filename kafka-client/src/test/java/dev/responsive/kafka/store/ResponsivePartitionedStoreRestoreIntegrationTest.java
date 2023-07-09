@@ -54,7 +54,7 @@ import dev.responsive.kafka.api.CassandraClientFactory;
 import dev.responsive.kafka.api.DefaultCassandraClientFactory;
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.ResponsiveStores;
-import dev.responsive.kafka.config.ResponsiveDriverConfig;
+import dev.responsive.kafka.config.ResponsiveConfig;
 import dev.responsive.utils.ContainerExtension;
 import dev.responsive.utils.IntegrationTestUtils;
 import dev.responsive.utils.ResponsiveConfigParam;
@@ -163,7 +163,7 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
 
       // Make sure changelog is even w/ cassandra
       final CassandraClient cassandraClient = defaultFactory.createCassandraClient(
-          defaultFactory.createCqlSession(new ResponsiveDriverConfig(properties))
+          defaultFactory.createCqlSession(new ResponsiveConfig(properties))
       );
       final long cassandraOffset = cassandraClient.getOffset(aggName(), 0).offset;
       assertThat(cassandraOffset, greaterThan(0L));
@@ -216,7 +216,7 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
 
     // Make sure changelog is ahead of cassandra
     final CassandraClient cassandraClient = defaultFactory.createCassandraClient(
-        defaultFactory.createCqlSession(new ResponsiveDriverConfig(properties))
+        defaultFactory.createCqlSession(new ResponsiveConfig(properties))
     );
     final long cassandraOffset = cassandraClient.getOffset(aggName(), 0).offset;
     assertThat(cassandraOffset, greaterThan(0L));
@@ -359,7 +359,7 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
     private final AtomicReference<Fault> fault = new AtomicReference<>(null);
 
     @Override
-    public CqlSession createCqlSession(ResponsiveDriverConfig config) {
+    public CqlSession createCqlSession(ResponsiveConfig config) {
       final CqlSession wrapped = wrappedFactory.createCqlSession(config);
       final var spy = spy(wrapped);
       doAnswer(a -> {
@@ -443,7 +443,7 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
     properties.put(consumerPrefix(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG), MAX_POLL_MS);
     properties.put(consumerPrefix(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG), MAX_POLL_MS - 1);
 
-    properties.put(ResponsiveDriverConfig.STORE_FLUSH_RECORDS_THRESHOLD, 0);
+    properties.put(ResponsiveConfig.STORE_FLUSH_RECORDS_THRESHOLD, 0);
 
     return properties;
   }
