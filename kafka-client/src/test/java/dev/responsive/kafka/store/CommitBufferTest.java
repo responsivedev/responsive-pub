@@ -30,12 +30,16 @@ import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
 import dev.responsive.db.CassandraClient;
 import dev.responsive.utils.ContainerExtension;
+import java.nio.charset.Charset;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DeleteRecordsResult;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -257,6 +261,37 @@ public class CommitBufferTest {
 
     // Then:
     assertThat(client.getOffset(tableName, 0).offset, is(101L));
+  }
+
+  @Test
+  public void shouldRestoreStreamsBatchLargerThanCassandraBatch() {
+    // Given:
+    final String tableName = name;
+    client.initializeOffset(tableName, 0);
+    client.execute(client.revokePermit(tableName, 0, 100));
+    final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
+        client, tableName, changelogTp, admin, ResponsivePartitionedStore.PLUGIN, true, 0, 3);
+    final List<ConsumerRecord<byte[], byte[]>> records = IntStream.range(0, 5)
+        .mapToObj(i -> new ConsumerRecord<>(
+            changelogTp.topic(),
+            changelogTp.partition(),
+            101 + i,
+            Integer.toString(i).getBytes(Charset.defaultCharset()),
+            Integer.toString(i).getBytes(Charset.defaultCharset())))
+        .collect(Collectors.toList());
+
+    // when:
+    buffer.restoreBatch(records);
+
+    // then:
+    for (int i = 0; i < 5; i++) {
+      assertThat(
+          client.get(
+              tableName,
+              0,
+              Bytes.wrap(Integer.toString(i).getBytes(Charset.defaultCharset()))),
+          is(Integer.toString(i).getBytes(Charset.defaultCharset())));
+    }
   }
 
   @Test
