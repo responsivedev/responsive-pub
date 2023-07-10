@@ -55,7 +55,9 @@ class ResponsiveKafkaClientSupplierTest {
       ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, BytesDeserializer.class,
       ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, BytesSerializer.class,
       ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, BytesSerializer.class,
-      StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2
+      StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2,
+      StreamsConfig.APPLICATION_ID_CONFIG, "appid",
+      StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092"
   );
   private static final Map<String, Object> PRODUCER_CONFIGS = configsWithOverrides(
       Map.of(
