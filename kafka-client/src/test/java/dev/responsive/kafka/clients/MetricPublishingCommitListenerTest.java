@@ -17,18 +17,18 @@
 package dev.responsive.kafka.clients;
 
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-import dev.responsive.kafka.clients.ResponsiveProducer.RecordingKey;
+import dev.responsive.kafka.clients.ResponsiveProducer.Listener;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Gauge;
@@ -55,23 +55,27 @@ class MetricPublishingCommitListenerTest {
   @Captor
   private ArgumentCaptor<Gauge<Long>> metricCaptor;
 
+  private final OffsetRecorder offsetRecorder = new OffsetRecorder(true);
+
   private MetricPublishingCommitListener listener;
 
   @BeforeEach
   public void setup() {
-    listener = new MetricPublishingCommitListener(metrics, THREAD_ID);
+    listener = new MetricPublishingCommitListener(metrics, THREAD_ID, offsetRecorder);
   }
 
   @Test
   public void shouldReportCommittedOffsets() {
     // given:
     listener.onPartitionsAssigned(List.of(PARTITION1, PARTITION2));
+    final Listener recorderProducerListener = offsetRecorder.getProducerListener();
+    recorderProducerListener.onSendOffsetsToTransaction(
+        Map.of(PARTITION1, new OffsetAndMetadata(123L), PARTITION2, new OffsetAndMetadata(345L)),
+        GROUP
+    );
 
     // when:
-    listener.onCommit(Map.of(
-        new RecordingKey(PARTITION1, GROUP), 123L,
-        new RecordingKey(PARTITION2, GROUP), 345L
-    ));
+    recorderProducerListener.onCommit();
 
     // then:
     verify(metrics, times(2)).addMetric(
@@ -89,10 +93,12 @@ class MetricPublishingCommitListenerTest {
   public void shouldCleanupCommittedOffsetOnRevoke() {
     // given:
     listener.onPartitionsAssigned(List.of(PARTITION1, PARTITION2));
-    listener.onCommit(Map.of(
-        new RecordingKey(PARTITION1, GROUP), 123L,
-        new RecordingKey(PARTITION2, GROUP), 345L
-    ));
+    final Listener recorderProducerListener = offsetRecorder.getProducerListener();
+    recorderProducerListener.onSendOffsetsToTransaction(
+        Map.of(PARTITION1, new OffsetAndMetadata(123L), PARTITION2, new OffsetAndMetadata(345L)),
+        GROUP
+    );
+    recorderProducerListener.onCommit();
 
     // when:
     listener.onPartitionsRevoked(List.of(PARTITION1));
@@ -106,12 +112,14 @@ class MetricPublishingCommitListenerTest {
   public void shouldAddCommittedOffsetMetricOnAssign() {
     // given:
     listener.onPartitionsAssigned(List.of(PARTITION1, PARTITION2));
+    final Listener recorderProducerListener = offsetRecorder.getProducerListener();
+    recorderProducerListener.onSendOffsetsToTransaction(
+        Map.of(PARTITION1, new OffsetAndMetadata(123L), PARTITION2, new OffsetAndMetadata(345L)),
+        GROUP
+    );
 
     // when:
-    listener.onCommit(Map.of(
-        new RecordingKey(PARTITION1, GROUP), 123L,
-        new RecordingKey(PARTITION2, GROUP), 345L
-    ));
+    recorderProducerListener.onCommit();
 
     // then:
     verify(metrics, times(2))
@@ -126,10 +134,12 @@ class MetricPublishingCommitListenerTest {
   public void shouldCleanupMetricsOnClose() {
     // given:
     listener.onPartitionsAssigned(List.of(PARTITION1, PARTITION2));
-    listener.onCommit(Map.of(
-        new RecordingKey(PARTITION1, GROUP), 123L,
-        new RecordingKey(PARTITION2, GROUP), 345L
-    ));
+    final Listener recorderProducerListener = offsetRecorder.getProducerListener();
+    recorderProducerListener.onSendOffsetsToTransaction(
+        Map.of(PARTITION1, new OffsetAndMetadata(123L), PARTITION2, new OffsetAndMetadata(345L)),
+        GROUP
+    );
+    recorderProducerListener.onCommit();
 
     // when:
     listener.close();

@@ -17,9 +17,9 @@
 package dev.responsive.kafka.clients;
 
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -55,7 +55,9 @@ class ResponsiveKafkaClientSupplierTest {
       ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, BytesDeserializer.class,
       ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, BytesSerializer.class,
       ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, BytesSerializer.class,
-      StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2
+      StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2,
+      StreamsConfig.APPLICATION_ID_CONFIG, "appid",
+      StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092"
   );
   private static final Map<String, Object> PRODUCER_CONFIGS = configsWithOverrides(
       Map.of(
@@ -88,11 +90,14 @@ class ResponsiveKafkaClientSupplierTest {
   @Mock
   private ResponsiveConsumer<byte[], byte[]> responsiveConsumer;
   @Mock
-  private MetricPublishingCommitListener metricPublishingCommitListener;
+  private MetricPublishingCommitListener commitMetricListener;
+  @Mock
+  private ResponsiveProducer.Listener commitMetricProducerListener;
   @Captor
   private ArgumentCaptor<List<ResponsiveProducer.Listener>> producerListenerCaptor;
   @Captor
   private ArgumentCaptor<List<ResponsiveConsumer.Listener>> consumerListenerCaptor;
+  private final OffsetRecorder offsetRecorder = new OffsetRecorder(true);
   private ResponsiveKafkaClientSupplier supplier;
 
   private final ResponsiveStoreRegistry storeRegistry = new ResponsiveStoreRegistry();
@@ -111,14 +116,15 @@ class ResponsiveKafkaClientSupplierTest {
     lenient().when(
         factories.createResponsiveConsumer(any(), (ResponsiveConsumer<byte[], byte[]>) any(), any())
     ).thenReturn(responsiveConsumer);
-    lenient().when(factories.createMetricsPublishingCommitListener(any(), any()))
-        .thenReturn(metricPublishingCommitListener);
+    lenient().when(factories.createMetricsPublishingCommitListener(any(), any(), any()))
+        .thenReturn(commitMetricListener);
+    lenient().when(factories.createOffsetRecorder(anyBoolean())).thenReturn(offsetRecorder);
 
     supplier = new ResponsiveKafkaClientSupplier(factories, wrapped, CONFIGS, storeRegistry);
   }
 
   @Test
-  public void shouldNotWrapProducerIfNotEosV2() {
+  public void shouldWrapProducerIfAlos() {
     // given:
     final var config = configsWithOverrides(
         PRODUCER_CONFIGS,
@@ -130,11 +136,11 @@ class ResponsiveKafkaClientSupplierTest {
     final var producer = supplier.getProducer(config);
 
     // then:
-    assertThat(producer, is(wrappedProducer));
+    assertThat(producer, is(responsiveProducer));
   }
 
   @Test
-  public void shouldNotWrapConsumerIfNotEosV2() {
+  public void shouldWrapConsumerIfAlos() {
     // given:
     final var config = configsWithOverrides(
         CONSUMER_CONFIGS,
@@ -146,7 +152,7 @@ class ResponsiveKafkaClientSupplierTest {
     final var consumer = supplier.getConsumer(config);
 
     // then:
-    assertThat(consumer, is(wrappedConsumer));
+    assertThat(consumer, is(responsiveConsumer));
   }
 
   @Test
@@ -159,14 +165,18 @@ class ResponsiveKafkaClientSupplierTest {
   }
 
   @Test
-  public void shouldAddMetricPublishingCommitListenerToProducer() {
+  public void shouldAddOffsetRecorderCommitListenerToProducer() {
     // when:
     supplier.getProducer(PRODUCER_CONFIGS);
 
     // then:
     verify(factories).createResponsiveProducer(any(), any(), producerListenerCaptor.capture());
-    assertThat(producerListenerCaptor.getValue(), Matchers.hasItem(metricPublishingCommitListener));
-    verify(factories).createMetricsPublishingCommitListener(metrics, "StreamThread-0");
+    assertThat(
+        producerListenerCaptor.getValue(),
+        Matchers.hasItem(offsetRecorder.getProducerListener())
+    );
+    verify(factories)
+        .createMetricsPublishingCommitListener(metrics, "StreamThread-0", offsetRecorder);
   }
 
   @Test
@@ -176,8 +186,9 @@ class ResponsiveKafkaClientSupplierTest {
 
     // then:
     verify(factories).createResponsiveConsumer(any(), any(), consumerListenerCaptor.capture());
-    assertThat(consumerListenerCaptor.getValue(), Matchers.hasItem(metricPublishingCommitListener));
-    verify(factories).createMetricsPublishingCommitListener(metrics, "StreamThread-0");
+    assertThat(consumerListenerCaptor.getValue(), Matchers.hasItem(commitMetricListener));
+    verify(factories)
+        .createMetricsPublishingCommitListener(metrics, "StreamThread-0", offsetRecorder);
   }
 
   @Test
@@ -194,9 +205,9 @@ class ResponsiveKafkaClientSupplierTest {
 
     // then:
     verify(factories, times(1))
-        .createMetricsPublishingCommitListener(metrics, "StreamThread-0");
+        .createMetricsPublishingCommitListener(metrics, "StreamThread-0", offsetRecorder);
     verify(factories, times(1))
-        .createMetricsPublishingCommitListener(metrics, "StreamThread-1");
+        .createMetricsPublishingCommitListener(metrics, "StreamThread-1", offsetRecorder);
   }
 
   @Test
@@ -218,10 +229,10 @@ class ResponsiveKafkaClientSupplierTest {
     // then:
     verify(factories).createResponsiveConsumer(any(), any(), consumerListenerCaptor.capture());
     consumerListenerCaptor.getValue().forEach(ResponsiveConsumer.Listener::onClose);
-    verify(metricPublishingCommitListener, times(0)).close();
+    verify(commitMetricListener, times(0)).close();
     verify(factories).createResponsiveProducer(any(), any(), producerListenerCaptor.capture());
     producerListenerCaptor.getValue().forEach(ResponsiveProducer.Listener::onClose);
-    verify(metricPublishingCommitListener).close();
+    verify(commitMetricListener).close();
   }
 
   private static Map<String, Object> configsWithOverrides(final Map<String, Object> overrides) {

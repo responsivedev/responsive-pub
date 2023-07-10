@@ -57,6 +57,18 @@ public class ResponsiveDriverConfig extends AbstractConfig {
   public static final String CLIENT_SECRET_CONFIG = "responsive.client.secret";
   private static final String CLIENT_SECRET_DOC = "The client secret for authenticated access";
 
+  // ------------------ store tuning parameters -------------------------------
+
+  // TODO: we should have another config that's applied globally, that sets a size bound on
+  //       the total amount of buffered data. That config can be used to keep a bound on
+  //       memory usage and restore times. This config sets a store-level threshold for optimal
+  //       transaction sizes.
+  public static final String STORE_FLUSH_RECORDS_THRESHOLD
+      = "responsive.store.flush.records.interval";
+  public static final String STORE_FLUSH_RECORDS_THRESHOLD_DOC = "The number of records to"
+      + " accumulate in each store before flushing to remote";
+  public static final int STORE_FLUSH_RECORDS_THRESHOLD_DEFAULT = 10000;
+
   // ------------------ request configurations --------------------------------
 
   public static final String REQUEST_TIMEOUT_MS_CONFIG = "responsive.request.timeout.ms";
@@ -123,6 +135,12 @@ public class ResponsiveDriverConfig extends AbstractConfig {
           REQUEST_TIMEOUT_MS_DEFAULT,
           Importance.MEDIUM,
           REQUEST_TIMEOUT_MS_DOC
+      ).define(
+          STORE_FLUSH_RECORDS_THRESHOLD,
+          Type.INT,
+          STORE_FLUSH_RECORDS_THRESHOLD_DEFAULT,
+          Importance.MEDIUM,
+          STORE_FLUSH_RECORDS_THRESHOLD_DOC
       );
 
   private static class NonEmptyPassword implements Validator {

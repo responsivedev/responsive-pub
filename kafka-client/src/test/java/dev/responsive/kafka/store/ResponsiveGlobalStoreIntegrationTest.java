@@ -111,9 +111,9 @@ public class ResponsiveGlobalStoreIntegrationTest {
         final var streams = buildStreams(properties)
     ) {
       // When:
-      pipeInput(GLOBAL_TOPIC, producer, System::currentTimeMillis, 0, 3, 0, 1);
+      pipeInput(GLOBAL_TOPIC, 2, producer, System::currentTimeMillis, 0, 3, 0, 1);
       IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(10), streams);
-      pipeInput(INPUT_TOPIC, producer, System::currentTimeMillis, 0, 10, 0, 1);
+      pipeInput(INPUT_TOPIC, 2, producer, System::currentTimeMillis, 0, 10, 0, 1);
 
       // Then:
       final Set<KeyValue<Long, Long>> result = new HashSet<>(

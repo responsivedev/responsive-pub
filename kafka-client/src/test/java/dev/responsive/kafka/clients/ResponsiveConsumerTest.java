@@ -16,15 +16,19 @@
 
 package dev.responsive.kafka.clients;
 
+import static org.junit.Assert.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 
+import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Pattern;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -178,6 +182,42 @@ class ResponsiveConsumerTest {
     // then:
     verify(listener1).onClose();
     verify(listener2).onClose();
+  }
+
+  @Test
+  public void shouldNotifyOnCommitSync() {
+    // given:
+    final var commits = Map.of(PARTITION, new OffsetAndMetadata(123L));
+
+    // when:
+    consumer.commitSync(commits);
+
+    // then:
+    verify(listener1).onCommit(commits);
+    verify(listener2).onCommit(commits);
+  }
+
+  @Test
+  public void shouldNotifyOnCommitSyncWithTimeout() {
+    // given:
+    final var commits = Map.of(PARTITION, new OffsetAndMetadata(123L));
+
+    // when:
+    consumer.commitSync(commits, Duration.ofSeconds(30));
+
+    // then:
+    verify(listener1).onCommit(commits);
+    verify(listener2).onCommit(commits);
+  }
+
+  @Test
+  public void shouldThrowOnCommitsWithoutOffsetsAndAsyncCommits() {
+    assertThrows(UnsupportedOperationException.class, () -> consumer.commitSync());
+    assertThrows(UnsupportedOperationException.class, () -> consumer.commitAsync());
+    assertThrows(UnsupportedOperationException.class, () -> consumer.commitAsync((c, e) -> {}));
+    assertThrows(
+        UnsupportedOperationException.class, () -> consumer.commitAsync(Map.of(), (c, e) -> {})
+    );
   }
 
   @Test

@@ -16,7 +16,7 @@
 
 package dev.responsive.kafka.clients;
 
-import dev.responsive.kafka.clients.ResponsiveProducer.RecordingKey;
+import dev.responsive.kafka.clients.OffsetRecorder.RecordingKey;
 import java.io.Closeable;
 import java.util.Collection;
 import java.util.HashMap;
@@ -41,8 +41,7 @@ import org.slf4j.LoggerFactory;
  *
  * Synchronization: All shared access goes through the "offsets" map.
  */
-public class MetricPublishingCommitListener
-    implements ResponsiveProducer.Listener, ResponsiveConsumer.Listener, Closeable {
+public class MetricPublishingCommitListener implements ResponsiveConsumer.Listener, Closeable {
   private static final Logger LOG = LoggerFactory.getLogger(MetricPublishingCommitListener.class);
   private final Metrics metrics;
   private final String threadId;
@@ -66,9 +65,14 @@ public class MetricPublishingCommitListener
     }
   }
 
-  public MetricPublishingCommitListener(final Metrics metrics, final String threadId) {
+  public MetricPublishingCommitListener(
+      final Metrics metrics,
+      final String threadId,
+      final OffsetRecorder offsetRecorder
+  ) {
     this.metrics = Objects.requireNonNull(metrics);
     this.threadId = Objects.requireNonNull(threadId);
+    offsetRecorder.addCommitCallback(this::commitCallback);
   }
 
   private MetricName metricName(final RecordingKey k) {
@@ -84,8 +88,10 @@ public class MetricPublishingCommitListener
     return new MetricName("committed-offset", "responsive.streams", "", tags);
   }
 
-  @Override
-  public void onCommit(final Map<RecordingKey, Long> committedOffsets) {
+  private void commitCallback(
+      final Map<RecordingKey, Long> committedOffsets,
+      final Map<TopicPartition, Long> unused
+  ) {
     for (final var e : committedOffsets.entrySet()) {
       offsets.computeIfPresent(
           e.getKey().getPartition(),
@@ -104,10 +110,6 @@ public class MetricPublishingCommitListener
           }
       );
     }
-  }
-
-  @Override
-  public void onClose() {
   }
 
   @Override

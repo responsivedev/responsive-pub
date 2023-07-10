@@ -13,7 +13,8 @@ class ResponsiveStoreRegistryTest {
   private static final ResponsiveStoreRegistration REGISTRATION = new ResponsiveStoreRegistration(
       "store",
       TOPIC_PARTITION,
-      123L
+      123L,
+      o -> {}
   );
 
   private final ResponsiveStoreRegistry registry = new ResponsiveStoreRegistry();

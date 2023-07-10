@@ -35,6 +35,7 @@ public final class IntegrationTestUtils {
 
   public static void pipeInput(
       final String topic,
+      final int partitions,
       final KafkaProducer<Long, Long> producer,
       final Supplier<Long> timestamp,
       final long valFrom,
@@ -45,7 +46,7 @@ public final class IntegrationTestUtils {
       for (long v = valFrom; v < valTo; v++) {
         producer.send(new ProducerRecord<>(
             topic,
-            (int) k % 2,
+            (int) k % partitions,
             timestamp.get(),
             k,
             v

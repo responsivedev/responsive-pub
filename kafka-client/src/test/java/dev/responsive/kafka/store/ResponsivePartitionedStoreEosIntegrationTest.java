@@ -138,8 +138,8 @@ public class ResponsivePartitionedStoreEosIntegrationTest {
       IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(10), streamsA, streamsB);
 
       // committed data first, then second set of uncommitted data
-      pipeInput(INPUT_TOPIC, producer, System::currentTimeMillis, 0, 10, 0, 1);
-      pipeInput(INPUT_TOPIC, producer, System::currentTimeMillis, 10, 15, 0, 1);
+      pipeInput(INPUT_TOPIC, 2, producer, System::currentTimeMillis, 0, 10, 0, 1);
+      pipeInput(INPUT_TOPIC, 2, producer, System::currentTimeMillis, 10, 15, 0, 1);
 
       new RemoteMonitor(executor, () -> state.numCommits.get() == 2)
           .await(Duration.ofSeconds(5));
@@ -156,7 +156,7 @@ public class ResponsivePartitionedStoreEosIntegrationTest {
       // topic-partitions should be assigned to the first client, at
       // which point 5 of the writes should be aborted and reprocessed
       // by the new client
-      pipeInput(INPUT_TOPIC, producer, System::currentTimeMillis, 15, 20, 0, 1);
+      pipeInput(INPUT_TOPIC, 2, producer, System::currentTimeMillis, 15, 20, 0, 1);
 
       // the stall only happens on process, so this needs to be after the
       // previous pipeInput call

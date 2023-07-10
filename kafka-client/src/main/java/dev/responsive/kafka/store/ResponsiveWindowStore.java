@@ -22,7 +22,9 @@ import static org.apache.kafka.streams.state.StateSerdes.TIMESTAMP_SIZE;
 
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.db.CassandraClient;
+import dev.responsive.kafka.api.InternalConfigs;
 import dev.responsive.kafka.clients.SharedClients;
+import dev.responsive.kafka.config.ResponsiveDriverConfig;
 import dev.responsive.model.Result;
 import dev.responsive.model.Stamped;
 import dev.responsive.utils.Iterators;
@@ -71,6 +73,8 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
   private int partition;
   private CommitBuffer<Stamped<Bytes>> buffer;
   private long observedStreamTime;
+  private ResponsiveStoreRegistry registry;
+  private ResponsiveStoreRegistration registration;
 
   public ResponsiveWindowStore(
       final TableName name,
@@ -126,7 +130,11 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
   public void init(final StateStoreContext context, final StateStore root) {
     try {
       LOG.info("Initializing state store {}", name);
+
       this.context = asInternalProcessorContext(context);
+
+      final ResponsiveDriverConfig driverConfig = new ResponsiveDriverConfig(context.appConfigs());
+
       partition = context.taskId().partition();
 
       final SharedClients sharedClients = new SharedClients(context.appConfigs());
@@ -139,8 +147,8 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
 
       client.prepareWindowedStatements(name.cassandraName());
       client.initializeOffset(name.cassandraName(), partition);
-
-      final TopicPartition topicPartition =  new TopicPartition(
+      registry = InternalConfigs.loadStoreRegistry(context.appConfigs());
+      final TopicPartition topicPartition = new TopicPartition(
           changelogFor(context, name.kafkaName(), false),
           partition
       );
@@ -148,15 +156,23 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
           client,
           name.cassandraName(),
           topicPartition,
-          asRecordCollector(context),
           sharedClients.admin,
           new Plugin(this::withinRetention),
           StoreUtil.shouldTruncateChangelog(
               topicPartition.topic(),
               sharedClients.admin,
               context.appConfigs()
-          )
+          ),
+          driverConfig.getInt(ResponsiveDriverConfig.STORE_FLUSH_RECORDS_THRESHOLD)
       );
+      final long offset = buffer.offset();
+      registration = new ResponsiveStoreRegistration(
+          name.kafkaName(),
+          topicPartition,
+          offset == -1 ? 0 : offset,
+          buffer::flush
+      );
+      registry.registerStore(registration);
 
       open = true;
 
@@ -352,12 +368,10 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
 
   @Override
   public void flush() {
-    buffer.flush();
   }
 
   @Override
   public void close() {
-    flush();
   }
 
   @Override

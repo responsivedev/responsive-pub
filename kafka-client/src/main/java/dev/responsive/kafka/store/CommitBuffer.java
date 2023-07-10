@@ -34,8 +34,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
-import org.apache.kafka.streams.processor.internals.RecordCollector;
-import org.apache.kafka.streams.processor.internals.RecordCollector.Supplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,23 +48,22 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
   private final String tableName;
   private final int partition;
   private final Admin admin;
-  private final Supplier recordCollector;
   private final TopicPartition changelog;
   private final BufferPlugin<K> plugin;
   private final boolean truncateChangelog;
+  private final int flushThreshold;
 
   CommitBuffer(
       final CassandraClient client,
       final String tableName,
       final TopicPartition changelog,
-      final RecordCollector.Supplier recordCollector,
       final Admin admin,
       final BufferPlugin<K> plugin,
-      final boolean truncateChangelog
+      final boolean truncateChangelog,
+      final int flushThreshold
   ) {
     this.client = client;
     this.tableName = tableName;
-    this.recordCollector = recordCollector;
     this.changelog = changelog;
     this.partition = changelog.partition();
     this.admin = admin;
@@ -74,6 +71,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
 
     this.buffer = new TreeMap<>(plugin);
     this.truncateChangelog = truncateChangelog;
+    this.flushThreshold = flushThreshold;
   }
 
   public void put(final K key, final byte[] value) {
@@ -167,29 +165,19 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
     return buffer.size();
   }
 
-  public void flush() {
+  public void flush(long offset) {
+    if (buffer.size() < flushThreshold) {
+      LOG.debug("Ignoring flush() - commit buffer {} smaller than flush threshold {}",
+          buffer.size(),
+          flushThreshold
+      );
+      return;
+    }
+
     if (buffer.isEmpty()) {
       // no need to do anything if the buffer is empty
       LOG.info("Ignoring flush() to empty commit buffer for {}[{}]", tableName, partition);
       return;
-    }
-
-    // TODO: what happens if flush is called before there's any committed offsets?
-    // TODO: this also won't work if the source-changelog optimization is used
-    final RecordCollector collector = recordCollector.recordCollector();
-    if (collector == null) {
-      // this shouldn't happen? collector can be null if this instance
-      // is either a standby replica or not transitioned yet to active,
-      // but we don't run with standbys and flush should only happen
-      // when active...
-      throw new IllegalStateException(
-          "Unexpected null record collector for " + tableName + "[" + partition + "]");
-    }
-
-    final Long offset = collector.offsets().get(changelog);
-    if (offset == null) {
-      throw new IllegalStateException(
-          "Unexpected state: buffer is non-empty but no write has gone to changelog");
     }
 
     // TODO: support KIP-892 so the following is guaranteed not to happen

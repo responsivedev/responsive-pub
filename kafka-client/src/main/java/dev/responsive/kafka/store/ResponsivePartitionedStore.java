@@ -23,6 +23,7 @@ import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.db.CassandraClient;
 import dev.responsive.kafka.api.InternalConfigs;
 import dev.responsive.kafka.clients.SharedClients;
+import dev.responsive.kafka.config.ResponsiveDriverConfig;
 import dev.responsive.model.Result;
 import dev.responsive.utils.RemoteMonitor;
 import dev.responsive.utils.StoreUtil;
@@ -98,6 +99,7 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
     try {
       LOG.info("Initializing state store {}", name);
       StoreUtil.validateTopologyOptimizationConfig(context.appConfigs());
+      final ResponsiveDriverConfig driverConfig = new ResponsiveDriverConfig(context.appConfigs());
       this.context = asInternalProcessorContext(context);
       partition = context.taskId().partition();
 
@@ -120,14 +122,14 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
           client,
           name.cassandraName(),
           topicPartition,
-          asRecordCollector(context),
           sharedClients.admin,
           PLUGIN,
           StoreUtil.shouldTruncateChangelog(
               topicPartition.topic(),
               sharedClients.admin,
               context.appConfigs()
-          )
+          ),
+          driverConfig.getInt(ResponsiveDriverConfig.STORE_FLUSH_RECORDS_THRESHOLD)
       );
 
       open = true;
@@ -137,7 +139,8 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
       registration = new ResponsiveStoreRegistration(
           name.kafkaName(),
           topicPartition,
-          offset == -1 ? 0 : offset
+          offset == -1 ? 0 : offset,
+          buffer::flush
       );
       storeRegistry = InternalConfigs.loadStoreRegistry(context.appConfigs());
       storeRegistry.registerStore(registration);
@@ -146,8 +149,8 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
     }
   }
 
-  private Supplier asRecordCollector(final StateStoreContext context) {
-    return ((RecordCollector.Supplier) context);
+  @Override
+  public void flush() {
   }
 
   @Override
@@ -239,11 +242,6 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
   @Override
   public long approximateNumEntries() {
     return client.count(name.cassandraName(), partition);
-  }
-
-  @Override
-  public void flush() {
-    buffer.flush();
   }
 
   @Override
