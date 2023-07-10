@@ -119,6 +119,56 @@ public class ResponsiveProducer<K, V> implements Producer<K, V> {
     listeners.forEach(Listener::onAbort);
   }
 
+  @Override
+  public Future<RecordMetadata> send(final ProducerRecord<K, V> record) {
+    return new RecordingFuture(wrapped.send(record), listeners);
+  }
+
+  @Override
+  public Future<RecordMetadata> send(final ProducerRecord<K, V> record, final Callback callback) {
+    return new RecordingFuture(
+        wrapped.send(record, new RecordingCallback(callback, listeners)), listeners
+    );
+  }
+
+  @Override
+  public void flush() {
+    wrapped.flush();
+  }
+
+  @Override
+  public List<PartitionInfo> partitionsFor(final String topic) {
+    return wrapped.partitionsFor(topic);
+  }
+
+  @Override
+  public Map<MetricName, ? extends Metric> metrics() {
+    return wrapped.metrics();
+  }
+
+  @Override
+  public void close() {
+    wrapped.close();
+    closeListeners();
+  }
+
+  @Override
+  public void close(final Duration timeout) {
+    wrapped.close();
+    closeListeners();
+  }
+
+  private void closeListeners() {
+    // TODO(rohan): use consistent error behaviour on all callbacks - just throw up
+    for (final var l : listeners) {
+      try {
+        l.onClose();
+      } catch (final Throwable t) {
+        logger.error("error during producer listener close", t);
+      }
+    }
+  }
+
   private static class RecordingFuture implements Future<RecordMetadata> {
     private final Future<RecordMetadata> wrapped;
     private final List<Listener> listeners;
@@ -179,56 +229,6 @@ public class ResponsiveProducer<K, V> implements Producer<K, V> {
         for (final var l : listeners) {
           l.onSendCompleted(metadata);
         }
-      }
-    }
-  }
-
-  @Override
-  public Future<RecordMetadata> send(final ProducerRecord<K, V> record) {
-    return new RecordingFuture(wrapped.send(record), listeners);
-  }
-
-  @Override
-  public Future<RecordMetadata> send(final ProducerRecord<K, V> record, final Callback callback) {
-    return new RecordingFuture(
-        wrapped.send(record, new RecordingCallback(callback, listeners)), listeners
-    );
-  }
-
-  @Override
-  public void flush() {
-    wrapped.flush();
-  }
-
-  @Override
-  public List<PartitionInfo> partitionsFor(final String topic) {
-    return wrapped.partitionsFor(topic);
-  }
-
-  @Override
-  public Map<MetricName, ? extends Metric> metrics() {
-    return wrapped.metrics();
-  }
-
-  @Override
-  public void close() {
-    wrapped.close();
-    closeListeners();
-  }
-
-  @Override
-  public void close(final Duration timeout) {
-    wrapped.close();
-    closeListeners();
-  }
-
-  private void closeListeners() {
-    // TODO(rohan): use consistent error behaviour on all callbacks - just throw up
-    for (final var l : listeners) {
-      try {
-        l.onClose();
-      } catch (final Throwable t) {
-        logger.error("error during producer listener close", t);
       }
     }
   }
