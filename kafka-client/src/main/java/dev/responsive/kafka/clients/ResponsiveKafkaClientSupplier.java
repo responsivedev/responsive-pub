@@ -96,8 +96,8 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
   }
 
   @SuppressWarnings("deprecation")
-  private void verifyNotEosV1(final Map<String, ?> configs) {
-    if (EXACTLY_ONCE.equals(configs.get(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
+  private void verifyNotEosV1(final StreamsConfig streamsConfig) {
+    if (EXACTLY_ONCE.equals(streamsConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
       throw new IllegalStateException("Responsive driver can only be used with ALOS/EOS-V2");
     }
   }
@@ -109,8 +109,10 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
             .map(e -> e.getKey() + ":" + e.getValue())
             .collect(Collectors.joining("\n"))
     );
-    verifyNotEosV1(configs);
-    eos = !AT_LEAST_ONCE.equals(configs.get(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
+    final StreamsConfig streamsConfig = new StreamsConfig(configs);
+    verifyNotEosV1(streamsConfig);
+    eos = !(AT_LEAST_ONCE.equals(
+        streamsConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)));
     final JmxReporter jmxReporter = new JmxReporter();
     jmxReporter.configure(configs);
     final MetricsContext metricsContext

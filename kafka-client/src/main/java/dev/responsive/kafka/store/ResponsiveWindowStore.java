@@ -165,10 +165,11 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
           ),
           driverConfig.getInt(ResponsiveDriverConfig.STORE_FLUSH_RECORDS_THRESHOLD)
       );
+      final long offset = buffer.offset();
       registration = new ResponsiveStoreRegistration(
           name.kafkaName(),
           topicPartition,
-          0,
+          offset == -1 ? 0 : offset,
           buffer::flush
       );
       registry.registerStore(registration);
