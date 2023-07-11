@@ -144,7 +144,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
   }
 
   public Result<K> get(final K key) {
-    final Result<K> result = buffer.reader().get(key);
+    final Result<K> result = buffer.getReader().get(key);
     if (result != null && plugin.retain(result.key)) {
       return result;
     }
@@ -154,7 +154,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
   public KeyValueIterator<K, Result<K>> range(final K from, final K to) {
     return Iterators.kv(
         Iterators.filter(
-            buffer.reader().subMap(from, to).entrySet().iterator(),
+            buffer.getReader().subMap(from, to).entrySet().iterator(),
             e -> plugin.retain(e.getKey())),
         result -> new KeyValue<>(result.getKey(), result.getValue())
     );
@@ -167,7 +167,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
   ) {
     return Iterators.kv(
         Iterators.filter(
-            buffer.reader().subMap(from, to).entrySet().iterator(),
+            buffer.getReader().subMap(from, to).entrySet().iterator(),
             e -> plugin.retain(e.getKey()) && filter.test(e.getKey())
         ),
         result -> new KeyValue<>(result.getKey(), result.getValue())
@@ -177,7 +177,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
   public KeyValueIterator<K, Result<K>> backRange(final K from, final K to) {
     return Iterators.kv(
         Iterators.filter(
-            buffer.reader().descendingMap().subMap(to, from).entrySet().iterator(),
+            buffer.getReader().descendingMap().subMap(to, from).entrySet().iterator(),
             e -> plugin.retain(e.getKey())
         ),
         result -> new KeyValue<>(result.getKey(), result.getValue())
@@ -188,7 +188,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
   ) {
     return Iterators.kv(
         Iterators.filter(
-            buffer.reader().entrySet().iterator(),
+            buffer.getReader().entrySet().iterator(),
             e -> plugin.retain(e.getKey())
         ),
         result -> new KeyValue<>(result.getKey(), result.getValue())
@@ -200,7 +200,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
   ) {
     return Iterators.kv(
         Iterators.filter(
-            buffer.reader().entrySet().iterator(),
+            buffer.getReader().entrySet().iterator(),
             kv -> plugin.retain(kv.getKey()) && filter.test(kv.getKey())),
         result -> new KeyValue<>(result.getKey(), result.getValue())
     );
@@ -211,7 +211,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
   ) {
     return Iterators.kv(
         Iterators.filter(
-            buffer.reader().descendingMap().entrySet().iterator(),
+            buffer.getReader().descendingMap().entrySet().iterator(),
             kv -> plugin.retain(kv.getKey()) && filter.test(kv.getKey())),
         result -> new KeyValue<>(result.getKey(), result.getValue())
     );
@@ -230,7 +230,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
 
   // Visible For Testing
   int size() {
-    return buffer.reader().size();
+    return buffer.getReader().size();
   }
 
   private long totalBytesBuffered() {
@@ -241,15 +241,15 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
     boolean recordsTrigger = false;
     boolean bytesTrigger = false;
     boolean timeTrigger = false;
-    if (buffer.reader().size() >= flushTriggers.getRecords()) {
+    if (buffer.getReader().size() >= flushTriggers.getRecords()) {
       LOG.info("will flush due to records buffered {} over trigger {}",
-          buffer.reader().size(),
+          buffer.getReader().size(),
           flushTriggers.getRecords()
       );
       recordsTrigger = true;
     } else {
       LOG.debug("records buffered {} not over trigger {}",
-          buffer.reader().size(),
+          buffer.getReader().size(),
           flushTriggers.getRecords()
       );
     }
@@ -289,7 +289,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
       return;
     }
 
-    if (buffer.reader().isEmpty()) {
+    if (buffer.getReader().isEmpty()) {
       // no need to do anything if the buffer is empty
       LOG.info("Ignoring flush() to empty commit buffer for {}[{}]", tableName, partition);
       return;
@@ -328,7 +328,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
   @SuppressWarnings("BooleanMethodIsAlwaysInverted")
   private AtomicWriteResult flush(final long offset, final UUID txnid, final int batchSize) {
     LOG.info("Flushing {} records to remote {}[{}] (offset={}, transactionId={})",
-        buffer.reader().size(),
+        buffer.getReader().size(),
         tableName,
         partition,
         offset,
@@ -346,7 +346,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
         batchSize
     )));
 
-    buffer.reader().values().forEach(val ->
+    buffer.getReader().values().forEach(val ->
         writers
             .get(subPartitioner.partition(partition, plugin.bytes(val.key)))
             .add(val)
@@ -363,7 +363,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
     }
 
     LOG.info("Completed flushing {} records to remote {}[{}] (offset={}, transactionId={})",
-        buffer.reader().size(),
+        buffer.getReader().size(),
         tableName,
         partition,
         offset,

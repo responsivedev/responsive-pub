@@ -23,7 +23,10 @@ public class SizeTrackingBuffer<K> {
   }
 
   public void put(final K key, final Result<K> value) {
-    bytes += plugin.bytes(key).get().length + (value.isTombstone ? 0 : value.value.length);
+    if (buffer.containsKey(key)) {
+      bytes -= sizeOf(key, buffer.get(key));
+    }
+    bytes += sizeOf(key, value);
     buffer.put(key, value);
   }
 
@@ -32,7 +35,11 @@ public class SizeTrackingBuffer<K> {
     buffer.clear();
   }
 
-  public NavigableMap<K, Result<K>> reader() {
+  public NavigableMap<K, Result<K>> getReader() {
     return reader;
+  }
+
+  private long sizeOf(final K key, final Result<K> value) {
+    return plugin.bytes(key).get().length + (value.isTombstone ? 0 : value.value.length);
   }
 }
