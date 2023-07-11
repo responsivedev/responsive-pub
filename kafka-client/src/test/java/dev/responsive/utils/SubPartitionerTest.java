@@ -78,7 +78,7 @@ class SubPartitionerTest {
     // Given:
     final var actualRemoteCount = OptionalInt.of(128);
     final int kafkaPartitions = 32;
-    final int desiredPartitions = 129;
+    final int desiredPartitions = 127;
 
     // When:
     final SubPartitioner subPartitioner = SubPartitioner.create(
@@ -118,7 +118,7 @@ class SubPartitionerTest {
     // Given:
     final var actualRemoteCount = OptionalInt.of(129);
     final int kafkaPartitions = 32;
-    final int desiredPartitions = 129;
+    final int desiredPartitions = 128;
 
     // Expect:
     final ConfigException error = Assertions.assertThrows(

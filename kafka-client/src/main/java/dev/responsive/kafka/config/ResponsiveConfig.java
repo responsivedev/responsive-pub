@@ -91,9 +91,10 @@ public class ResponsiveConfig extends AbstractConfig {
   public static final String STORAGE_DESIRED_NUM_PARTITION_CONFIG = "responsive.storage.desired.num.partitions";
   private static final String STORAGE_DESIRED_NUM_PARTITIONS_DOC = "The desired number of "
       + "partitions to create in the remote store. This is a best effort target, as the actual "
-      + "number of partitions must be a multiple of the Kafka store's number of partitions. This "
-      + "configuration does not apply to global stores. A value of -1 indicates to use the number"
-      + "of Kafka Partitions as the remote partitions as well.";
+      + "number of partitions will be the next multiple of the Kafka topic's number of partitions "
+      + "that is greater than or equal to this number. This configuration does not apply to global "
+      + "stores. A value of -1 indicates to use the number of Kafka Partitions as the remote "
+      + "partitions as well.";
   public static final int STORAGE_DESIRED_NUM_PARTITIONS_DEFAULT = 4096;
   public static final int NO_SUBPARTITIONS = -1;
 

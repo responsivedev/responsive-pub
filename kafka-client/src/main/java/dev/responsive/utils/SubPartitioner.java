@@ -65,7 +65,8 @@ public class SubPartitioner {
       final TableName name,
       final String changelogTopicName
   ) {
-    final int factor = (desiredNum == ResponsiveConfig.NO_SUBPARTITIONS) ? 1 : desiredNum / kafkaPartitions;
+    final int factor = (desiredNum == ResponsiveConfig.NO_SUBPARTITIONS)
+        ? 1 : (int) Math.ceil((double) desiredNum / kafkaPartitions);
     final int computedRemoteNum = factor * kafkaPartitions;
 
     if (actualRemoteCount.isPresent() && actualRemoteCount.getAsInt() != computedRemoteNum) {
