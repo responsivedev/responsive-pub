@@ -168,7 +168,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
               sharedClients.admin,
               context.appConfigs()
           ),
-          FlushTriggers.fromConfig(driverConfig),
+          FlushTriggers.fromConfig(config),
           partitioner
       );
       buffer.init();
