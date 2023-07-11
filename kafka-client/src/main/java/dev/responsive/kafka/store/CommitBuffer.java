@@ -20,8 +20,8 @@ import dev.responsive.db.CassandraClient;
 import dev.responsive.db.CassandraClient.OffsetRow;
 import dev.responsive.model.Result;
 import dev.responsive.utils.Iterators;
+import java.util.ArrayList;
 import java.util.Collection;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
@@ -284,7 +284,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
 
   @Override
   public void restoreBatch(final Collection<ConsumerRecord<byte[], byte[]>> records) {
-    final List<ConsumerRecord<byte[], byte[]>> batch = new LinkedList<>();
+    final List<ConsumerRecord<byte[], byte[]>> batch = new ArrayList<>(maxBatchSize);
     for (final ConsumerRecord<byte[], byte[]> r : records) {
       batch.add(r);
       if (batch.size() >= maxBatchSize) {
