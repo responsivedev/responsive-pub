@@ -20,6 +20,7 @@ import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.db.CassandraClient;
 import java.util.Comparator;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.utils.Bytes;
 
 /**
  * Used to ensure that {@link CommitBuffer} can work both with
@@ -47,4 +48,6 @@ interface BufferPlugin<K> extends Comparator<K> {
   default boolean retain(final K key) {
     return true;
   }
+
+  Bytes bytes(final K key);
 }

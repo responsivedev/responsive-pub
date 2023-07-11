@@ -1,12 +1,12 @@
 package dev.responsive.kafka.api;
 
-import static dev.responsive.kafka.config.ResponsiveDriverConfig.NUM_STANDBYS_OVERRIDE;
-import static dev.responsive.kafka.config.ResponsiveDriverConfig.TASK_ASSIGNOR_CLASS_OVERRIDE;
+import static dev.responsive.kafka.config.ResponsiveConfig.NUM_STANDBYS_OVERRIDE;
+import static dev.responsive.kafka.config.ResponsiveConfig.TASK_ASSIGNOR_CLASS_OVERRIDE;
 
 import com.datastax.oss.driver.api.core.CqlSession;
 import dev.responsive.db.CassandraClient;
 import dev.responsive.kafka.clients.ResponsiveKafkaClientSupplier;
-import dev.responsive.kafka.config.ResponsiveDriverConfig;
+import dev.responsive.kafka.config.ResponsiveConfig;
 import dev.responsive.kafka.store.ResponsiveStoreRegistry;
 import java.time.Duration;
 import java.util.Map;
@@ -86,7 +86,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       final ResponsiveStoreRegistry storeRegistry,
       final CassandraClientFactory cassandraClientFactory
   ) {
-    final ResponsiveDriverConfig responsiveConfigs = new ResponsiveDriverConfig(configs);
+    final ResponsiveConfig responsiveConfigs = new ResponsiveConfig(configs);
 
     final CqlSession session = cassandraClientFactory.createCqlSession(responsiveConfigs);
 

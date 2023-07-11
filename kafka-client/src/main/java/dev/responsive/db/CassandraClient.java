@@ -48,6 +48,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
+import javax.annotation.CheckReturnValue;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -198,6 +199,7 @@ public class CassandraClient {
    *         for {@code offset} has a value smaller than the supplied
    *         {@code offset} parameter.
    */
+  @CheckReturnValue
   public BoundStatement revokePermit(
       final String table,
       final int partitionKey,
@@ -209,6 +211,7 @@ public class CassandraClient {
         .setLong(OFFSET.bind(), offset);
   }
 
+  @CheckReturnValue
   public BoundStatement acquirePermit(
       final String table,
       final int partitionKey,
@@ -224,6 +227,7 @@ public class CassandraClient {
         .setLong(OFFSET.bind(), offset);
   }
 
+  @CheckReturnValue
   public BoundStatement finalizeTxn(
       final String table,
       final int partitionKey,
@@ -505,6 +509,7 @@ public class CassandraClient {
    *         matching {@code partitionKey} and {@code key} in the
    *         {@code table}
    */
+  @CheckReturnValue
   public BoundStatement deleteData(
       final String table,
       final int partitionKey,
@@ -529,6 +534,7 @@ public class CassandraClient {
    *         matching {@code partitionKey} and {@code key} in the
    *         {@code table} with value {@code value}
    */
+  @CheckReturnValue
   public BoundStatement insertData(
       final String table,
       final int partitionKey,
@@ -555,6 +561,7 @@ public class CassandraClient {
    *         matching {@code partitionKey} and {@code key} in the
    *         {@code table} with value {@code value}
    */
+  @CheckReturnValue
   public BoundStatement insertWindowed(
       final String table,
       final int partitionKey,
@@ -866,7 +873,9 @@ public class CassandraClient {
     ).all();
 
     if (result.size() != 1) {
-      throw new IllegalArgumentException();
+      throw new IllegalStateException(String.format(
+          "Expected exactly one offset row for %s[%s] but got %d",
+          tableName, partition, result.size()));
     } else {
       return new OffsetRow(
           result.get(0).getLong(OFFSET.column()),

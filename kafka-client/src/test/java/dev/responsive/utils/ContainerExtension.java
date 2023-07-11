@@ -16,18 +16,17 @@
 
 package dev.responsive.utils;
 
-import static dev.responsive.kafka.config.ResponsiveDriverConfig.STORAGE_DATACENTER_CONFIG;
-import static dev.responsive.kafka.config.ResponsiveDriverConfig.STORAGE_HOSTNAME_CONFIG;
-import static dev.responsive.kafka.config.ResponsiveDriverConfig.STORAGE_PORT_CONFIG;
-import static dev.responsive.kafka.config.ResponsiveDriverConfig.TASK_ASSIGNOR_CLASS_OVERRIDE;
-import static dev.responsive.kafka.config.ResponsiveDriverConfig.TENANT_ID_CONFIG;
+import static dev.responsive.kafka.config.ResponsiveConfig.STORAGE_DATACENTER_CONFIG;
+import static dev.responsive.kafka.config.ResponsiveConfig.STORAGE_HOSTNAME_CONFIG;
+import static dev.responsive.kafka.config.ResponsiveConfig.STORAGE_PORT_CONFIG;
+import static dev.responsive.kafka.config.ResponsiveConfig.TASK_ASSIGNOR_CLASS_OVERRIDE;
+import static dev.responsive.kafka.config.ResponsiveConfig.TENANT_ID_CONFIG;
 import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS;
 
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.junit.jupiter.api.extension.AfterAllCallback;
 import org.junit.jupiter.api.extension.BeforeAllCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;

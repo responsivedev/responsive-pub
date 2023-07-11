@@ -18,16 +18,23 @@ package dev.responsive.kafka.store;
 
 import dev.responsive.db.CassandraClient;
 import dev.responsive.db.CassandraClient.OffsetRow;
+import dev.responsive.kafka.config.ResponsiveConfig;
 import dev.responsive.model.Result;
 import dev.responsive.utils.Iterators;
+import dev.responsive.utils.SubPartitioner;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.RecordsToDelete;
@@ -55,6 +62,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
   private final boolean truncateChangelog;
   private final int flushThreshold;
   private final int maxBatchSize;
+  private final SubPartitioner subPartitioner;
 
   CommitBuffer(
       final CassandraClient client,
@@ -63,7 +71,8 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
       final Admin admin,
       final BufferPlugin<K> plugin,
       final boolean truncateChangelog,
-      final int flushThreshold
+      final int flushThreshold,
+      final SubPartitioner subPartitioner
   ) {
     this(
         client,
@@ -73,7 +82,8 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
         plugin,
         truncateChangelog,
         flushThreshold,
-        MAX_BATCH_SIZE
+        MAX_BATCH_SIZE,
+        subPartitioner
     );
   }
 
@@ -85,7 +95,8 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
       final BufferPlugin<K> plugin,
       final boolean truncateChangelog,
       final int flushThreshold,
-      final int maxBatchSize
+      final int maxBatchSize,
+      final SubPartitioner subPartitioner
   ) {
     this.client = client;
     this.tableName = tableName;
@@ -98,6 +109,22 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
     this.truncateChangelog = truncateChangelog;
     this.flushThreshold = flushThreshold;
     this.maxBatchSize = maxBatchSize;
+    this.subPartitioner = subPartitioner;
+  }
+
+  public void init() {
+    subPartitioner.all(partition).forEach(p -> client.initializeOffset(tableName, p));
+
+    // when we initialize a new state store, we should revoke all ongoing
+    // transactions to the remote store - otherwise it is possible that
+    // there's a hanging transaction that will fence this writer if there
+    // is no data to restore
+    final long offset = offset();
+    if (offset >= 0) {
+      subPartitioner
+          .all(partition)
+          .forEach(p -> client.execute(client.revokePermit(tableName, p, offset)));
+    }
   }
 
   public void put(final K key, final byte[] value) {
@@ -183,7 +210,14 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
   }
 
   long offset() {
-    return client.getOffset(tableName, partition).offset;
+    return subPartitioner.all(partition)
+        .mapToLong(p -> client.getOffset(tableName, p).offset)
+        .min()
+        .orElseThrow(() -> new IllegalStateException(
+            "Expected an offset to exist in remote for kafka partition " + partition
+                + ". If you see this error it means that init() was not called on "
+                + "the CommitBuffer.")
+        );
   }
 
   // Visible For Testing
@@ -212,16 +246,25 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
     // this is possible then we will be flushing data to Cassandra
     // that is not yet in the changelog
     final UUID txnid = UUID.randomUUID();
-    final var result = flush(offset, txnid, maxBatchSize);
-    if (!result.wasApplied()) {
+    final var writeResult = flush(offset, txnid, maxBatchSize);
+    if (!writeResult.wasApplied()) {
       final OffsetRow stored = client.getOffset(tableName, partition);
       // we were fenced - the only conditional statement is the
       // offset update, so it's the only failure point
       throw new ProcessorStateException(
-          "Failure to write batch to " + tableName + "[" + partition + "] with end offset " + offset
-              + " and stored offset " + stored.offset + ". If the stored offset is "
-              + "larger than the end offset it is likely that this client was fenced by a more "
-              + "up to date consumer. txnId: " + txnid + " and stored txnId: " + stored.txind
+          String.format(
+              "Failure to write batch to %s[%d:%d] with end offset %d and stored offset %d. "
+                  + "If the stored offset is larger than the end offset it is likely that "
+                  + "this client was fenced by a more up to date consumer. txnId: %s and "
+                  + "stored txnId: %s",
+              tableName,
+              partition,
+              writeResult.getPartition(),
+              offset,
+              stored.offset,
+              txnid,
+              stored.txind
+          )
       );
     }
   }
@@ -236,27 +279,31 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
         txnid
     );
 
-    final var writer = new AtomicWriter<K>(
+    final var writers = new HashMap<Integer, AtomicWriter<K>>();
+    subPartitioner.all(partition).forEach(p -> writers.put(p, new AtomicWriter<>(
         client,
         tableName,
-        partition,
+        p,
         plugin,
         offset,
         txnid,
         batchSize
+    )));
+
+    buffer.values().forEach(val ->
+        writers
+            .get(subPartitioner.partition(partition, plugin.bytes(val.key)))
+            .add(val)
     );
 
-    writer.addAll(buffer.values());
+    var writeResult = drain(writers.values(), AtomicWriter::flush);
+    if (!writeResult.wasApplied()) {
+      return writeResult;
+    }
 
-    AtomicWriteResult result;
-    try {
-      result = writer.flush().toCompletableFuture().get();
-      if (result.wasApplied()) {
-        result = writer.finalizeTxn().toCompletableFuture().get();
-      }
-    } catch (InterruptedException | ExecutionException e) {
-      throw new ProcessorStateException(
-          "Could not flush to remote storage for partition " + partition, e);
+    writeResult = drain(writers.values(), AtomicWriter::finalizeTxn);
+    if (!writeResult.wasApplied()) {
+      return writeResult;
     }
 
     LOG.info("Completed flushing {} records to remote {}[{}] (offset={}, transactionId={})",
@@ -268,6 +315,78 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
     );
     buffer.clear();
 
+    maybeTruncateChangelog(offset);
+    return AtomicWriteResult.success(partition);
+  }
+
+  private AtomicWriteResult drain(
+      final Collection<AtomicWriter<K>> writers,
+      final Function<AtomicWriter<K>, CompletionStage<AtomicWriteResult>> action
+  ) {
+    return drain(
+        writers,
+        action,
+        AtomicWriter::partition,
+        partition,
+        ResponsiveConfig.MAX_CONCURRENT_REMOTE_WRITES_DEFAULT
+    );
+  }
+
+  // Visible for Testing
+  static <I> AtomicWriteResult drain(
+      final Collection<I> writers,
+      final Function<I, CompletionStage<AtomicWriteResult>> action,
+      final Function<I, Integer> keyFunction,
+      final int partition,
+      final int maxConcurrentWrites
+  ) {
+    final var results = new HashMap<Integer, CompletableFuture<AtomicWriteResult>>();
+    try {
+      final AtomicReference<AtomicWriteResult> failed = new AtomicReference<>(null);
+
+      for (final I writer : writers) {
+        if (results.size() >= maxConcurrentWrites) {
+          CompletableFuture.anyOf(results.values().toArray(CompletableFuture[]::new)).get();
+          results.values().removeIf(CompletableFuture::isDone);
+        }
+
+        if (failed.get() != null) {
+          return failed.get();
+        }
+
+        results.put(
+            keyFunction.apply(writer),
+            action.apply(writer).thenApply(r -> maybeSetFailure(failed, r)).toCompletableFuture());
+      }
+
+      // drain any remaining
+      for (final var future : results.values()) {
+        final var result = future.get();
+        if (!result.wasApplied()) {
+          return result;
+        }
+      }
+    } catch (ExecutionException | InterruptedException e) {
+      throw new ProcessorStateException(
+          "Failed while flushing partition " + partition + " to remote", e);
+    } finally {
+      results.values().forEach(fut -> fut.cancel(true));
+    }
+
+    return AtomicWriteResult.success(partition);
+  }
+
+  private static AtomicWriteResult maybeSetFailure(
+      final AtomicReference<AtomicWriteResult> failed,
+      final AtomicWriteResult awr
+  ) {
+    if (!awr.wasApplied()) {
+      failed.set(awr);
+    }
+    return awr;
+  }
+
+  private void maybeTruncateChangelog(final long offset) {
     if (truncateChangelog) {
       try {
         admin.deleteRecords(Map.of(changelog, RecordsToDelete.beforeOffset(offset))).all().get();
@@ -278,8 +397,6 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
         throw new ProcessorStateException("Interrupted while truncating " + changelog, e);
       }
     }
-
-    return result;
   }
 
   @Override
@@ -298,7 +415,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
   }
 
   private void restoreCassandraBatch(final Collection<ConsumerRecord<byte[], byte[]>> records) {
-    final long committedOffset = client.getOffset(tableName, partition).offset;
+    final long committedOffset = offset();
 
     long consumedOffset = -1L;
     for (ConsumerRecord<byte[], byte[]> record : records) {
@@ -315,21 +432,22 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
     }
 
     if (consumedOffset >= 0) {
-      final var flush = flush(consumedOffset, null, records.size());
-      if (!flush.wasApplied()) {
+      final var writeResult = flush(consumedOffset, null, records.size());
+      if (!writeResult.wasApplied()) {
         // it is possible that this is a warmup replica that while restoring the
         // active replica is still writing and flushing to cassandra, in that
         // case just clear the buffer and try to restore the next batch
         buffer.clear();
 
-        final OffsetRow stored = client.getOffset(tableName, partition);
+        final OffsetRow stored = client.getOffset(tableName, writeResult.getPartition());
         LOG.warn(
-            "Restoration for {}[{}] was fenced. There is likely an existing active "
+            "Restoration for {}[{}:{}] was fenced. There is likely an existing active "
                 + "replica that is writing to the remote store. Original Offset: {}, Batch Offset: "
                 + "{}, Latest Offset: {}, Stored txnid: {}. This is not a problem but may "
                 + "cause rebalancing to take longer.",
             tableName,
             partition,
+            writeResult.getPartition(),
             committedOffset,
             consumedOffset,
             stored.offset,

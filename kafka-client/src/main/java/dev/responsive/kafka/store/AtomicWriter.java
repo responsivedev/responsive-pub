@@ -69,7 +69,7 @@ class AtomicWriter<K> {
     results.forEach(this::add);
   }
 
-  private void add(final Result<K> result) {
+  public void add(final Result<K> result) {
     if (result.isTombstone || plugin.retain(result.key)) {
       statements.add(result.isTombstone
           ? plugin.deleteData(client, tableName, partition, result.key)
@@ -130,5 +130,9 @@ class AtomicWriter<K> {
             permit,
             offset
         );
+  }
+
+  public int partition() {
+    return partition;
   }
 }

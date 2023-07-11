@@ -16,10 +16,10 @@
 
 package dev.responsive.kafka.store;
 
-import static dev.responsive.kafka.config.ResponsiveDriverConfig.STORAGE_DATACENTER_CONFIG;
-import static dev.responsive.kafka.config.ResponsiveDriverConfig.STORAGE_HOSTNAME_CONFIG;
-import static dev.responsive.kafka.config.ResponsiveDriverConfig.STORAGE_PORT_CONFIG;
-import static dev.responsive.kafka.config.ResponsiveDriverConfig.TENANT_ID_CONFIG;
+import static dev.responsive.kafka.config.ResponsiveConfig.STORAGE_DATACENTER_CONFIG;
+import static dev.responsive.kafka.config.ResponsiveConfig.STORAGE_HOSTNAME_CONFIG;
+import static dev.responsive.kafka.config.ResponsiveConfig.STORAGE_PORT_CONFIG;
+import static dev.responsive.kafka.config.ResponsiveConfig.TENANT_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.MAX_POLL_RECORDS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG;
@@ -41,7 +41,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.ResponsiveStores;
 import dev.responsive.kafka.api.ResponsiveWindowedStoreSupplier;
-import dev.responsive.kafka.config.ResponsiveDriverConfig;
+import dev.responsive.kafka.config.ResponsiveConfig;
 import dev.responsive.utils.ContainerExtension;
 import java.time.Duration;
 import java.util.HashMap;
@@ -371,7 +371,7 @@ public class ResponsiveWindowIntegrationTest {
 
     properties.put(consumerPrefix(MAX_POLL_RECORDS_CONFIG), 1);
 
-    properties.put(ResponsiveDriverConfig.STORE_FLUSH_RECORDS_THRESHOLD, 1);
+    properties.put(ResponsiveConfig.STORE_FLUSH_RECORDS_THRESHOLD, 1);
 
     return properties;
   }

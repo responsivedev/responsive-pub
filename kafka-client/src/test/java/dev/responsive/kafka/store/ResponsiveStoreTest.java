@@ -27,7 +27,7 @@ import static org.mockito.Mockito.when;
 import dev.responsive.db.CassandraClient;
 import dev.responsive.db.CassandraClient.OffsetRow;
 import dev.responsive.kafka.api.InternalConfigs;
-import dev.responsive.kafka.config.ResponsiveDriverConfig;
+import dev.responsive.kafka.config.ResponsiveConfig;
 import dev.responsive.utils.RemoteMonitor;
 import dev.responsive.utils.TableName;
 import java.util.HashMap;
@@ -89,7 +89,7 @@ public class ResponsiveStoreTest {
         StreamsConfig.APPLICATION_ID_CONFIG, "test",
         StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, StringSerde.class,
         StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, StringSerde.class,
-        ResponsiveDriverConfig.TENANT_ID_CONFIG, "foo"
+        ResponsiveConfig.TENANT_ID_CONFIG, "foo"
     ));
     config.putAll(
         new InternalConfigs.Builder()
