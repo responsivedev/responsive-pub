@@ -231,37 +231,12 @@ public class ResponsiveConfig extends AbstractConfig {
       throw new RuntimeException(e);
     }
 
-    return getSubPartitioner(
+    return SubPartitioner.create(
         actualRemoteCount,
         kafkaPartitions,
         getInt(STORAGE_DESIRED_NUM_PARTITION_CONFIG),
         name,
         changelogTopicName
     );
-  }
-
-  static SubPartitioner getSubPartitioner(
-      final OptionalInt actualRemoteCount,
-      final int kafkaPartitions,
-      final int desiredNum,
-      final TableName name,
-      final String changelogTopicName
-  ) {
-    final int factor = (desiredNum == NO_SUBPARTITIONS) ? 1 : desiredNum / kafkaPartitions;
-    final int computedRemoteNum = factor * kafkaPartitions;
-
-    if (actualRemoteCount.isPresent() && actualRemoteCount.getAsInt() != computedRemoteNum) {
-      throw new IllegalArgumentException(String.format("%s was configured to %d, which "
-              + "given %s partitions in kafka topic %s would result in %d remote partitions "
-              + "for table %s (remote partitions must be a multiple of the kafka partitions). "
-              + "The remote store is already initialized with %d partitions - it is backwards "
-              + "incompatible to change this. Please set %s to %d.",
-          STORAGE_DESIRED_NUM_PARTITION_CONFIG, desiredNum, kafkaPartitions,
-          changelogTopicName, computedRemoteNum, name.cassandraName(),
-          actualRemoteCount.getAsInt(), STORAGE_DESIRED_NUM_PARTITION_CONFIG,
-          actualRemoteCount.getAsInt()));
-    }
-
-    return new SubPartitioner(factor);
   }
 }
