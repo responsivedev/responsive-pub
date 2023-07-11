@@ -26,6 +26,7 @@ import java.util.OptionalInt;
 import java.util.stream.Collectors;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Bytes;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -116,9 +117,9 @@ class SubPartitionerTest {
   @Test
   public void shouldThrowExceptionIfActualPartitionsDoesNotMatchComputedPartitions() {
     // Given:
-    final var actualRemoteCount = OptionalInt.of(129);
+    final var actualRemoteCount = OptionalInt.of(100);
     final int kafkaPartitions = 32;
-    final int desiredPartitions = 128;
+    final int desiredPartitions = 127;
 
     // Expect:
     final ConfigException error = Assertions.assertThrows(
@@ -135,8 +136,12 @@ class SubPartitionerTest {
     // Then:
     assertThat(
         error.getMessage(),
-        containsString("was configured to 129, which given 32 partitions in "
-            + "kafka topic changelog would result in 128 remote partitions"));
+        Matchers.allOf(
+            containsString("was configured to 127, which given 32 partitions in "
+            + "kafka topic changelog would result in 128 remote partitions"),
+            containsString("already initialized with 100 partitions")
+        )
+    );
   }
 
 }
