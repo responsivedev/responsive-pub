@@ -23,6 +23,11 @@ dependencies {
 
     implementation(libs.bundles.scylla)
 
+    testImplementation(libs.kafka.clients) {
+        artifact {
+            classifier = "test"
+        }
+    }
     testImplementation(testlibs.bundles.base)
     testImplementation(testlibs.bundles.testcontainers)
     testImplementation(testlibs.kafka.streams.test.utils)

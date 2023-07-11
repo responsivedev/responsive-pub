@@ -44,6 +44,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
+import java.util.OptionalInt;
 import java.util.UUID;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
@@ -902,6 +903,18 @@ public class CassandraClient {
     );
 
     return result.one().getLong(0);
+  }
+
+  /**
+   * @param tableName the table to query
+   * @return the number of partitions for this table, or empty if the table has not been
+   *         initialized
+   */
+  public OptionalInt numPartitions(final String tableName) {
+    final ResultSet result = session.execute(
+        String.format("SELECT DISTINCT %s FROM %s;", PARTITION_KEY.column(), tableName));
+    final int numPartitions = result.all().size();
+    return numPartitions == 0 ? OptionalInt.empty() : OptionalInt.of(numPartitions);
   }
 
   /**

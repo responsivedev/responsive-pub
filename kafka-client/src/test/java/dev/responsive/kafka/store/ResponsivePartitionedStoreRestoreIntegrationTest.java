@@ -55,9 +55,9 @@ import dev.responsive.kafka.api.DefaultCassandraClientFactory;
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.ResponsiveStores;
 import dev.responsive.kafka.config.ResponsiveConfig;
-import dev.responsive.utils.ContainerExtension;
 import dev.responsive.utils.IntegrationTestUtils;
 import dev.responsive.utils.ResponsiveConfigParam;
+import dev.responsive.utils.ResponsiveExtension;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
@@ -103,7 +103,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.ExtendWith;
 
-@ExtendWith(ContainerExtension.class)
+@ExtendWith(ResponsiveExtension.class)
 public class ResponsivePartitionedStoreRestoreIntegrationTest {
 
   private static final int MAX_POLL_MS = 5000;

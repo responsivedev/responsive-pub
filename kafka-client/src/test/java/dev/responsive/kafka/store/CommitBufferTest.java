@@ -31,7 +31,7 @@ import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.cql.SimpleStatementBuilder;
 import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
 import dev.responsive.db.CassandraClient;
-import dev.responsive.utils.ContainerExtension;
+import dev.responsive.utils.ResponsiveExtension;
 import dev.responsive.utils.SubPartitioner;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
@@ -61,7 +61,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.testcontainers.containers.CassandraContainer;
 
-@ExtendWith({MockitoExtension.class, ContainerExtension.class})
+@ExtendWith({MockitoExtension.class, ResponsiveExtension.class})
 @MockitoSettings(strictness = Strictness.LENIENT)
 public class CommitBufferTest {
 

@@ -99,7 +99,7 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
     try {
       LOG.info("Initializing state store {}", name);
       StoreUtil.validateTopologyOptimizationConfig(context.appConfigs());
-      final ResponsiveConfig driverConfig = new ResponsiveConfig(context.appConfigs());
+      final ResponsiveConfig config = new ResponsiveConfig(context.appConfigs());
       this.context = asInternalProcessorContext(context);
       partition = context.taskId().partition();
 
@@ -111,14 +111,15 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
       monitor.await(Duration.ofSeconds(60));
       LOG.info("Remote table {} is available for querying.", name.cassandraName());
 
-      partitioner = SubPartitioner.NO_SUBPARTITIONS;
-
       client.prepareStatements(name.cassandraName());
 
       final TopicPartition topicPartition =  new TopicPartition(
           changelogFor(context, name.kafkaName(), false),
           partition
       );
+      partitioner = config.getSubPartitioner(
+          client, sharedClients.admin, name, topicPartition.topic());
+
       buffer = new CommitBuffer<>(
           client,
           name.cassandraName(),
@@ -130,7 +131,7 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
               sharedClients.admin,
               context.appConfigs()
           ),
-          driverConfig.getInt(ResponsiveConfig.STORE_FLUSH_RECORDS_THRESHOLD),
+          config.getInt(ResponsiveConfig.STORE_FLUSH_RECORDS_THRESHOLD),
           partitioner
       );
       buffer.init();

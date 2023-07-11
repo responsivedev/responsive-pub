@@ -17,6 +17,7 @@
 package dev.responsive.utils;
 
 import static dev.responsive.kafka.config.ResponsiveConfig.STORAGE_DATACENTER_CONFIG;
+import static dev.responsive.kafka.config.ResponsiveConfig.STORAGE_DESIRED_NUM_PARTITION_CONFIG;
 import static dev.responsive.kafka.config.ResponsiveConfig.STORAGE_HOSTNAME_CONFIG;
 import static dev.responsive.kafka.config.ResponsiveConfig.STORAGE_PORT_CONFIG;
 import static dev.responsive.kafka.config.ResponsiveConfig.TASK_ASSIGNOR_CLASS_OVERRIDE;
@@ -36,7 +37,7 @@ import org.junit.jupiter.api.extension.ParameterResolver;
 import org.testcontainers.containers.CassandraContainer;
 import org.testcontainers.containers.KafkaContainer;
 
-public class ContainerExtension implements BeforeAllCallback, AfterAllCallback,
+public class ResponsiveExtension implements BeforeAllCallback, AfterAllCallback,
     ParameterResolver {
 
   public static CassandraContainer<?> cassandra = new CassandraContainer<>(TestConstants.CASSANDRA)
@@ -92,7 +93,8 @@ public class ContainerExtension implements BeforeAllCallback, AfterAllCallback,
           STORAGE_DATACENTER_CONFIG, cassandra.getLocalDatacenter(),
           TENANT_ID_CONFIG, "responsive_clients",
           INTERNAL_TASK_ASSIGNOR_CLASS, TASK_ASSIGNOR_CLASS_OVERRIDE,
-          BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers()
+          BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers(),
+          STORAGE_DESIRED_NUM_PARTITION_CONFIG, -1
       ));
     }
 

@@ -21,7 +21,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 
 import dev.responsive.kafka.clients.ResponsiveGlobalConsumer;
-import dev.responsive.utils.ContainerExtension;
+import dev.responsive.utils.ResponsiveExtension;
 import java.io.File;
 import java.util.HashMap;
 import java.util.List;
@@ -69,7 +69,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.testcontainers.containers.KafkaContainer;
 
-@ExtendWith(ContainerExtension.class)
+@ExtendWith(ResponsiveExtension.class)
 public class GlobalStreamThreadIntegrationTest {
 
   private static final String GLOBAL_TOPIC_SUFFIX = "global-topic";

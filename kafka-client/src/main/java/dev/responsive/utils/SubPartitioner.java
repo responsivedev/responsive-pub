@@ -16,8 +16,11 @@
 
 package dev.responsive.utils;
 
+import dev.responsive.kafka.config.ResponsiveConfig;
+import java.util.OptionalInt;
 import java.util.function.Function;
 import java.util.stream.IntStream;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.state.internals.Murmur3;
@@ -47,13 +50,39 @@ public class SubPartitioner {
   // number of sub partitions is equal to the number of original
   // partitions, all keys would be mapped to the same sub-partition
   // and all other sub-partitions would be empty
-  private static final int SALT = 31;
+  static final int SALT = 31;
 
   /**
    * the number of subpartitions is: {@code original_partitions * n}
    */
   private final int factor;
   private final Function<Bytes, Integer> hasher;
+
+  public static SubPartitioner create(
+      final OptionalInt actualRemoteCount,
+      final int kafkaPartitions,
+      final int desiredNum,
+      final TableName name,
+      final String changelogTopicName
+  ) {
+    final int factor = (desiredNum == ResponsiveConfig.NO_SUBPARTITIONS)
+        ? 1 : (int) Math.ceil((double) desiredNum / kafkaPartitions);
+    final int computedRemoteNum = factor * kafkaPartitions;
+
+    if (actualRemoteCount.isPresent() && actualRemoteCount.getAsInt() != computedRemoteNum) {
+      throw new ConfigException(String.format("%s was configured to %d, which "
+              + "given %s partitions in kafka topic %s would result in %d remote partitions "
+              + "for table %s (remote partitions must be a multiple of the kafka partitions). "
+              + "The remote store is already initialized with %d partitions - it is backwards "
+              + "incompatible to change this. Please set %s to %d.",
+          ResponsiveConfig.STORAGE_DESIRED_NUM_PARTITION_CONFIG, desiredNum, kafkaPartitions,
+          changelogTopicName, computedRemoteNum, name.kafkaName(),
+          actualRemoteCount.getAsInt(), ResponsiveConfig.STORAGE_DESIRED_NUM_PARTITION_CONFIG,
+          actualRemoteCount.getAsInt()));
+    }
+
+    return new SubPartitioner(factor);
+  }
 
   public SubPartitioner(final int factor) {
     this(factor, k -> SALT * Murmur3.hash32(k.get()));

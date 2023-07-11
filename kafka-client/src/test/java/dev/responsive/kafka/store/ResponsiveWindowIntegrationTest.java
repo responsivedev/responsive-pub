@@ -42,7 +42,7 @@ import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.ResponsiveStores;
 import dev.responsive.kafka.api.ResponsiveWindowedStoreSupplier;
 import dev.responsive.kafka.config.ResponsiveConfig;
-import dev.responsive.utils.ContainerExtension;
+import dev.responsive.utils.ResponsiveExtension;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
@@ -81,7 +81,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.testcontainers.containers.CassandraContainer;
 import org.testcontainers.containers.KafkaContainer;
 
-@ExtendWith(ContainerExtension.class)
+@ExtendWith(ResponsiveExtension.class)
 public class ResponsiveWindowIntegrationTest {
 
   private static final String INPUT_TOPIC = "input";
