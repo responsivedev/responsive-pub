@@ -22,13 +22,13 @@ import dev.responsive.kafka.config.ResponsiveConfig;
 import dev.responsive.model.Result;
 import dev.responsive.utils.Iterators;
 import dev.responsive.utils.SubPartitioner;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.NavigableMap;
-import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -36,6 +36,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.RecordsToDelete;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -52,7 +53,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
   public static final int MAX_BATCH_SIZE = 1000;
   private static final Logger LOG = LoggerFactory.getLogger(CommitBuffer.class);
 
-  private final NavigableMap<K, Result<K>> buffer;
+  private final SizeTrackingBuffer<K> buffer;
   private final CassandraClient client;
   private final String tableName;
   private final int partition;
@@ -60,9 +61,12 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
   private final TopicPartition changelog;
   private final BufferPlugin<K> plugin;
   private final boolean truncateChangelog;
-  private final int flushThreshold;
+  private final FlushTriggers flushTriggers;
   private final int maxBatchSize;
   private final SubPartitioner subPartitioner;
+  private final Supplier<Instant> clock;
+
+  private Instant lastFlush;
 
   CommitBuffer(
       final CassandraClient client,
@@ -71,7 +75,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
       final Admin admin,
       final BufferPlugin<K> plugin,
       final boolean truncateChangelog,
-      final int flushThreshold,
+      final FlushTriggers flushTriggers,
       final SubPartitioner subPartitioner
   ) {
     this(
@@ -81,9 +85,10 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
         admin,
         plugin,
         truncateChangelog,
-        flushThreshold,
+        flushTriggers,
         MAX_BATCH_SIZE,
-        subPartitioner
+        subPartitioner,
+        Instant::now
     );
   }
 
@@ -94,9 +99,10 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
       final Admin admin,
       final BufferPlugin<K> plugin,
       final boolean truncateChangelog,
-      final int flushThreshold,
+      final FlushTriggers flushTriggers,
       final int maxBatchSize,
-      final SubPartitioner subPartitioner
+      final SubPartitioner subPartitioner,
+      final Supplier<Instant> clock
   ) {
     this.client = client;
     this.tableName = tableName;
@@ -105,11 +111,13 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
     this.admin = admin;
     this.plugin = plugin;
 
-    this.buffer = new TreeMap<>(plugin);
+    this.buffer = new SizeTrackingBuffer<>(plugin);
     this.truncateChangelog = truncateChangelog;
-    this.flushThreshold = flushThreshold;
+    this.flushTriggers = flushTriggers;
     this.maxBatchSize = maxBatchSize;
     this.subPartitioner = subPartitioner;
+    this.clock = clock;
+    lastFlush = clock.get();
   }
 
   public void init() {
@@ -136,7 +144,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
   }
 
   public Result<K> get(final K key) {
-    final Result<K> result = buffer.get(key);
+    final Result<K> result = buffer.getReader().get(key);
     if (result != null && plugin.retain(result.key)) {
       return result;
     }
@@ -146,7 +154,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
   public KeyValueIterator<K, Result<K>> range(final K from, final K to) {
     return Iterators.kv(
         Iterators.filter(
-            buffer.subMap(from, to).entrySet().iterator(),
+            buffer.getReader().subMap(from, to).entrySet().iterator(),
             e -> plugin.retain(e.getKey())),
         result -> new KeyValue<>(result.getKey(), result.getValue())
     );
@@ -159,7 +167,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
   ) {
     return Iterators.kv(
         Iterators.filter(
-            buffer.subMap(from, to).entrySet().iterator(),
+            buffer.getReader().subMap(from, to).entrySet().iterator(),
             e -> plugin.retain(e.getKey()) && filter.test(e.getKey())
         ),
         result -> new KeyValue<>(result.getKey(), result.getValue())
@@ -169,7 +177,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
   public KeyValueIterator<K, Result<K>> backRange(final K from, final K to) {
     return Iterators.kv(
         Iterators.filter(
-            buffer.descendingMap().subMap(to, from).entrySet().iterator(),
+            buffer.getReader().descendingMap().subMap(to, from).entrySet().iterator(),
             e -> plugin.retain(e.getKey())
         ),
         result -> new KeyValue<>(result.getKey(), result.getValue())
@@ -180,7 +188,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
   ) {
     return Iterators.kv(
         Iterators.filter(
-            buffer.entrySet().iterator(),
+            buffer.getReader().entrySet().iterator(),
             e -> plugin.retain(e.getKey())
         ),
         result -> new KeyValue<>(result.getKey(), result.getValue())
@@ -192,7 +200,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
   ) {
     return Iterators.kv(
         Iterators.filter(
-            buffer.entrySet().iterator(),
+            buffer.getReader().entrySet().iterator(),
             kv -> plugin.retain(kv.getKey()) && filter.test(kv.getKey())),
         result -> new KeyValue<>(result.getKey(), result.getValue())
     );
@@ -203,7 +211,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
   ) {
     return Iterators.kv(
         Iterators.filter(
-            buffer.descendingMap().entrySet().iterator(),
+            buffer.getReader().descendingMap().entrySet().iterator(),
             kv -> plugin.retain(kv.getKey()) && filter.test(kv.getKey())),
         result -> new KeyValue<>(result.getKey(), result.getValue())
     );
@@ -222,19 +230,76 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
 
   // Visible For Testing
   int size() {
-    return buffer.size();
+    return buffer.getReader().size();
+  }
+
+  private long totalBytesBuffered() {
+    return buffer.getBytes();
+  }
+
+  private boolean shouldFlush() {
+    boolean recordsTrigger = false;
+    boolean bytesTrigger = false;
+    boolean timeTrigger = false;
+    if (buffer.getReader().size() >= flushTriggers.getRecords()) {
+      LOG.info("{}[{}] will flush due to records buffered {} over trigger {}",
+          tableName,
+          partition,
+          buffer.getReader().size(),
+          flushTriggers.getRecords()
+      );
+      recordsTrigger = true;
+    } else {
+      LOG.debug("{}[{}] records buffered {} not over trigger {}",
+          tableName,
+          partition,
+          buffer.getReader().size(),
+          flushTriggers.getRecords()
+      );
+    }
+    final long totalBytesBuffered = totalBytesBuffered();
+    if (totalBytesBuffered >= flushTriggers.getBytes()) {
+      LOG.info("{}[{}] will flush due to bytes buffered {} over bytes trigger {}",
+          tableName,
+          partition,
+          totalBytesBuffered,
+          flushTriggers.getBytes()
+      );
+      bytesTrigger = true;
+    } else {
+      LOG.debug("{}[{}] bytes buffered {} not over trigger {}",
+          tableName,
+          partition,
+          totalBytesBuffered,
+          flushTriggers.getBytes()
+      );
+    }
+    final var now = clock.get();
+    if (lastFlush.plus(flushTriggers.getInterval()).isBefore(now)) {
+      LOG.info("{}[{}] will flush due to time since last flush {} over interval trigger {}",
+          tableName,
+          partition,
+          Duration.between(lastFlush, now),
+          now
+      );
+      timeTrigger = true;
+    } else {
+      LOG.debug("{}[{}] time since last flush {} not over trigger {}",
+          tableName,
+          partition,
+          Duration.between(lastFlush, now),
+          now
+      );
+    }
+    return recordsTrigger || bytesTrigger || timeTrigger;
   }
 
   public void flush(long offset) {
-    if (buffer.size() < flushThreshold) {
-      LOG.debug("Ignoring flush() - commit buffer {} smaller than flush threshold {}",
-          buffer.size(),
-          flushThreshold
-      );
+    if (!shouldFlush()) {
       return;
     }
 
-    if (buffer.isEmpty()) {
+    if (buffer.getReader().isEmpty()) {
       // no need to do anything if the buffer is empty
       LOG.info("Ignoring flush() to empty commit buffer for {}[{}]", tableName, partition);
       return;
@@ -267,12 +332,13 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
           )
       );
     }
+    lastFlush = clock.get();
   }
 
   @SuppressWarnings("BooleanMethodIsAlwaysInverted")
   private AtomicWriteResult flush(final long offset, final UUID txnid, final int batchSize) {
     LOG.info("Flushing {} records to remote {}[{}] (offset={}, transactionId={})",
-        buffer.size(),
+        buffer.getReader().size(),
         tableName,
         partition,
         offset,
@@ -290,7 +356,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
         batchSize
     )));
 
-    buffer.values().forEach(val ->
+    buffer.getReader().values().forEach(val ->
         writers
             .get(subPartitioner.partition(partition, plugin.bytes(val.key)))
             .add(val)
@@ -307,7 +373,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
     }
 
     LOG.info("Completed flushing {} records to remote {}[{}] (offset={}, transactionId={})",
-        buffer.size(),
+        buffer.getReader().size(),
         tableName,
         partition,
         offset,

@@ -19,6 +19,7 @@ package dev.responsive.kafka.config;
 import dev.responsive.db.CassandraClient;
 import dev.responsive.utils.SubPartitioner;
 import dev.responsive.utils.TableName;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
@@ -65,18 +66,6 @@ public class ResponsiveConfig extends AbstractConfig {
   public static final String CLIENT_SECRET_CONFIG = "responsive.client.secret";
   private static final String CLIENT_SECRET_DOC = "The client secret for authenticated access";
 
-  // ------------------ store tuning parameters -------------------------------
-
-  // TODO: we should have another config that's applied globally, that sets a size bound on
-  //       the total amount of buffered data. That config can be used to keep a bound on
-  //       memory usage and restore times. This config sets a store-level threshold for optimal
-  //       transaction sizes.
-  public static final String STORE_FLUSH_RECORDS_THRESHOLD
-      = "responsive.store.flush.records.interval";
-  public static final String STORE_FLUSH_RECORDS_THRESHOLD_DOC = "The number of records to"
-      + " accumulate in each store before flushing to remote";
-  public static final int STORE_FLUSH_RECORDS_THRESHOLD_DEFAULT = 10000;
-
   // ------------------ request configurations --------------------------------
 
   public static final String REQUEST_TIMEOUT_MS_CONFIG = "responsive.request.timeout.ms";
@@ -97,6 +86,27 @@ public class ResponsiveConfig extends AbstractConfig {
       + "partitions as well.";
   public static final int STORAGE_DESIRED_NUM_PARTITIONS_DEFAULT = 4096;
   public static final int NO_SUBPARTITIONS = -1;
+
+  // TODO: we should have another config that's applied globally, that sets a size bound on
+  //       the total amount of buffered data. That config can be used to keep a bound on
+  //       memory usage and restore times.
+
+  public static final String STORE_FLUSH_RECORDS_TRIGGER_CONFIG = "responsive.store.flush.trigger.local.records";
+  public static final String STORE_FLUSH_RECORDS_TRIGGER_DOC = "The number of records to"
+      + " accumulate in each store before flushing to remote";
+  public static final int STORE_FLUSH_RECORDS_TRIGGER_DEFAULT = Integer.MAX_VALUE;
+
+  public static final String STORE_FLUSH_BYTES_TRIGGER_CONFIG = "responsive.store.flush.trigger.local.bytes";
+  public static final String STORE_FLUSH_BYTES_TRIGGER_DOC = "The size in bytes of buffered"
+      + "records to accumulate in each store before flushing to remote";
+  public static final Long STORE_FLUSH_BYTES_TRIGGER_DEFAULT = Long.MAX_VALUE;
+
+  public static final String STORE_FLUSH_INTERVAL_TRIGGER_MS_CONFIG = "responsive.store.flush.trigger.local.interval.ms";
+  public static final String STORE_FLUSH_INTERVAL_TRIGGER_DOC = "The maximum time to wait "
+      + "between consecutive flushes of a given store. Note that this is only evaluated at "
+      + "commit time.";
+  public static final long STORE_FLUSH_INTERVAL_TRIGGER_DEFAULT
+      = Duration.ofSeconds(30).toMillis();
 
   // TODO: consider if we want this as a local, global or per-store configuration
   public static final String MAX_CONCURRENT_REMOTE_WRITES_CONFIG = "responsive.max.concurrent.writes";
@@ -169,11 +179,11 @@ public class ResponsiveConfig extends AbstractConfig {
           Importance.MEDIUM,
           REQUEST_TIMEOUT_MS_DOC
       ).define(
-          STORE_FLUSH_RECORDS_THRESHOLD,
+          STORE_FLUSH_RECORDS_TRIGGER_CONFIG,
           Type.INT,
-          STORE_FLUSH_RECORDS_THRESHOLD_DEFAULT,
+          STORE_FLUSH_RECORDS_TRIGGER_DEFAULT,
           Importance.MEDIUM,
-          STORE_FLUSH_RECORDS_THRESHOLD_DOC
+          STORE_FLUSH_RECORDS_TRIGGER_DOC
       ).define(
           STORAGE_DESIRED_NUM_PARTITION_CONFIG,
           Type.INT,
@@ -186,6 +196,18 @@ public class ResponsiveConfig extends AbstractConfig {
           MAX_CONCURRENT_REMOTE_WRITES_DEFAULT,
           Importance.MEDIUM,
           MAX_CONCURRENT_REMOTE_WRITES_DOC
+      ).define(
+          STORE_FLUSH_BYTES_TRIGGER_CONFIG,
+          Type.LONG,
+          STORE_FLUSH_BYTES_TRIGGER_DEFAULT,
+          Importance.MEDIUM,
+          STORE_FLUSH_BYTES_TRIGGER_DOC
+      ).define(
+          STORE_FLUSH_INTERVAL_TRIGGER_MS_CONFIG,
+          Type.LONG,
+          STORE_FLUSH_INTERVAL_TRIGGER_DEFAULT,
+          Importance.MEDIUM,
+          STORE_FLUSH_INTERVAL_TRIGGER_DOC
       );
 
   private static class NonEmptyPassword implements Validator {

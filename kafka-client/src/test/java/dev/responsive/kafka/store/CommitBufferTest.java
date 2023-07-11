@@ -35,12 +35,15 @@ import dev.responsive.utils.ResponsiveExtension;
 import dev.responsive.utils.SubPartitioner;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.apache.kafka.clients.admin.Admin;
@@ -64,11 +67,11 @@ import org.testcontainers.containers.CassandraContainer;
 @ExtendWith({MockitoExtension.class, ResponsiveExtension.class})
 @MockitoSettings(strictness = Strictness.LENIENT)
 public class CommitBufferTest {
-
   private static final Bytes KEY = Bytes.wrap(ByteBuffer.allocate(4).putInt(0).array());
   private static final Bytes KEY2 = Bytes.wrap(ByteBuffer.allocate(4).putInt(1).array());
   private static final byte[] VALUE = new byte[]{1};
   private static final int KAFKA_PARTITION = 2;
+  private static final FlushTriggers TRIGGERS = FlushTriggers.ALWAYS;
 
   private CqlSession session;
   private CassandraClient client;
@@ -112,7 +115,7 @@ public class CommitBufferTest {
     // Given:
     final String tableName = name;
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, admin, PLUGIN, true, 0, partitioner);
+        client, tableName, changelogTp, admin, PLUGIN, true, TRIGGERS, partitioner);
     buffer.init();
 
     // When:
@@ -133,7 +136,7 @@ public class CommitBufferTest {
     setPartitioner(2);
     final String tableName = name;
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, admin, PLUGIN, true, 0, partitioner);
+        client, tableName, changelogTp, admin, PLUGIN, true, TRIGGERS, partitioner);
     buffer.init();
 
     // When:
@@ -157,7 +160,7 @@ public class CommitBufferTest {
     setPartitioner(2);
     final String tableName = name;
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, admin, PLUGIN, true, 0, partitioner);
+        client, tableName, changelogTp, admin, PLUGIN, true, TRIGGERS, partitioner);
     buffer.init();
 
     // When:
@@ -180,7 +183,7 @@ public class CommitBufferTest {
     // Given:
     final String tableName = name;
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, admin, PLUGIN, true, 0, partitioner);
+        client, tableName, changelogTp, admin, PLUGIN, true, TRIGGERS, partitioner);
     buffer.init();
     for (int i = 0; i < CommitBuffer.MAX_BATCH_SIZE * 1.5; i++) {
       buffer.put(KEY, VALUE);
@@ -198,7 +201,7 @@ public class CommitBufferTest {
     // Given:
     final String tableName = name;
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, admin, PLUGIN, false, 0, partitioner);
+        client, tableName, changelogTp, admin, PLUGIN, false, TRIGGERS, partitioner);
     buffer.init();
 
     for (int i = 0; i < CommitBuffer.MAX_BATCH_SIZE * 1.5; i++) {
@@ -213,11 +216,19 @@ public class CommitBufferTest {
   }
 
   @Test
-  public void shouldOnlyFlushWhenBufferFull() {
+  public void shouldOnlyFlushWhenBufferFullWithRecordsTrigger() {
     // Given:
     final String tableName = name;
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, admin, PLUGIN, false, 10, partitioner);
+        client,
+        tableName,
+        changelogTp,
+        admin,
+        PLUGIN,
+        false,
+        FlushTriggers.ofRecords(10),
+        partitioner
+    );
     buffer.init();
 
     for (byte i = 0; i < 9; i++) {
@@ -235,12 +246,73 @@ public class CommitBufferTest {
   }
 
   @Test
+  public void shouldOnlyFlushWhenBufferFullWithBytesTrigger() {
+    // Given:
+    final String tableName = name;
+    final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
+        client,
+        tableName,
+        changelogTp,
+        admin,
+        PLUGIN,
+        false,
+        FlushTriggers.ofBytes(100),
+        partitioner
+    );
+    buffer.init();
+    final byte[] value = new byte[9];
+    for (byte i = 0; i < 9; i++) {
+      buffer.put(Bytes.wrap(new byte[]{i}), value);
+    }
+
+    // when:
+    buffer.flush(9L);
+
+    // Then:
+    assertThat(client.getOffset(tableName, KAFKA_PARTITION).offset, is(-1L));
+    buffer.put(Bytes.wrap(new byte[]{10}), value);
+    buffer.flush(10L);
+    assertThat(client.getOffset(tableName, KAFKA_PARTITION).offset, is(10L));
+  }
+
+  @Test
+  public void shouldOnlyFlushWhenIntervalTriggerElapsed() {
+    // Given:
+    final String tableName = name;
+    // just use an atomic reference as a mutable reference type
+    final AtomicReference<Instant> clock = new AtomicReference<>(Instant.now());
+    final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
+        client,
+        tableName,
+        changelogTp,
+        admin,
+        PLUGIN,
+        false,
+        FlushTriggers.ofInterval(Duration.ofSeconds(30)),
+        100,
+        partitioner,
+        clock::get
+    );
+    buffer.init();
+    buffer.put(Bytes.wrap(new byte[]{18}), VALUE);
+
+    // When:
+    buffer.flush(1L);
+
+    // Then:
+    assertThat(client.getOffset(tableName, KAFKA_PARTITION).offset, is(-1L));
+    clock.set(clock.get().plus(Duration.ofSeconds(35)));
+    buffer.flush(5L);
+    assertThat(client.getOffset(tableName, KAFKA_PARTITION).offset, is(5L));
+  }
+
+  @Test
   public void shouldDeleteRowInCassandraWithTombstone() {
     // Given:
     final String table = name;
     client.execute(client.insertData(table, KAFKA_PARTITION, KEY, VALUE));
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, table, changelogTp, admin, PLUGIN, true, 0, partitioner);
+        client, table, changelogTp, admin, PLUGIN, true, TRIGGERS, partitioner);
     buffer.init();
 
     // When:
@@ -257,7 +329,7 @@ public class CommitBufferTest {
     // Given:
     final String tableName = name;
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, admin, PLUGIN, true, 0, partitioner);
+        client, tableName, changelogTp, admin, PLUGIN, true, TRIGGERS, partitioner);
     buffer.init();
     client.execute(client.revokePermit(tableName, KAFKA_PARTITION, 101));
 
@@ -274,7 +346,7 @@ public class CommitBufferTest {
     // Given:
     final String tableName = name;
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, admin, PLUGIN, true, 0, partitioner);
+        client, tableName, changelogTp, admin, PLUGIN, true, TRIGGERS, partitioner);
     buffer.init();
     client.execute(
         client.acquirePermit(tableName, KAFKA_PARTITION, UNSET_PERMIT, UUID.randomUUID(), 1));
@@ -292,7 +364,7 @@ public class CommitBufferTest {
     // Given:
     final String tableName = name;
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, admin, PLUGIN, true, 0, partitioner);
+        client, tableName, changelogTp, admin, PLUGIN, true, TRIGGERS, partitioner);
     buffer.init();
     client.execute(client.revokePermit(tableName, KAFKA_PARTITION, 100));
 
@@ -309,7 +381,7 @@ public class CommitBufferTest {
     // Given:
     final String tableName = name;
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, admin, PLUGIN, true, 0, partitioner);
+        client, tableName, changelogTp, admin, PLUGIN, true, TRIGGERS, partitioner);
     buffer.init();
     client.execute(client.revokePermit(tableName, KAFKA_PARTITION, 100));
 
@@ -330,10 +402,19 @@ public class CommitBufferTest {
     // Given:
     final String tableName = name;
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, admin, PLUGIN, true, 0, 3, partitioner);
+        client,
+        tableName,
+        changelogTp,
+        admin,
+        PLUGIN,
+        true,
+        TRIGGERS,
+        3,
+        partitioner,
+        Instant::now
+    );
     buffer.init();
     client.execute(client.revokePermit(tableName, 0, 100));
-
     final List<ConsumerRecord<byte[], byte[]>> records = IntStream.range(0, 5)
         .mapToObj(i -> new ConsumerRecord<>(
             changelogTp.topic(),
@@ -363,7 +444,7 @@ public class CommitBufferTest {
     // Given:
     final String tableName = name;
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, admin, PLUGIN, true, 0, partitioner);
+        client, tableName, changelogTp, admin, PLUGIN, true, TRIGGERS, partitioner);
     buffer.init();
     client.execute(client.revokePermit(tableName, KAFKA_PARTITION, 100));
 
@@ -402,7 +483,7 @@ public class CommitBufferTest {
     // Given:
     final String tableName = name;
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, admin, PLUGIN, true, 0, partitioner);
+        client, tableName, changelogTp, admin, PLUGIN, true, TRIGGERS, partitioner);
     // first initialize the offsets
     client.initializeOffset(tableName, 0);
 
