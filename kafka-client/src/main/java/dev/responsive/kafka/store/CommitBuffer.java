@@ -20,7 +20,9 @@ import dev.responsive.db.CassandraClient;
 import dev.responsive.db.CassandraClient.OffsetRow;
 import dev.responsive.model.Result;
 import dev.responsive.utils.Iterators;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
@@ -52,6 +54,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
   private final BufferPlugin<K> plugin;
   private final boolean truncateChangelog;
   private final int flushThreshold;
+  private final int maxBatchSize;
 
   CommitBuffer(
       final CassandraClient client,
@@ -61,6 +64,28 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
       final BufferPlugin<K> plugin,
       final boolean truncateChangelog,
       final int flushThreshold
+  ) {
+    this(
+        client,
+        tableName,
+        changelog,
+        admin,
+        plugin,
+        truncateChangelog,
+        flushThreshold,
+        MAX_BATCH_SIZE
+    );
+  }
+
+  CommitBuffer(
+      final CassandraClient client,
+      final String tableName,
+      final TopicPartition changelog,
+      final Admin admin,
+      final BufferPlugin<K> plugin,
+      final boolean truncateChangelog,
+      final int flushThreshold,
+      final int maxBatchSize
   ) {
     this.client = client;
     this.tableName = tableName;
@@ -72,6 +97,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
     this.buffer = new TreeMap<>(plugin);
     this.truncateChangelog = truncateChangelog;
     this.flushThreshold = flushThreshold;
+    this.maxBatchSize = maxBatchSize;
   }
 
   public void put(final K key, final byte[] value) {
@@ -186,7 +212,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
     // this is possible then we will be flushing data to Cassandra
     // that is not yet in the changelog
     final UUID txnid = UUID.randomUUID();
-    final var result = flush(offset, txnid);
+    final var result = flush(offset, txnid, maxBatchSize);
     if (!result.wasApplied()) {
       final OffsetRow stored = client.getOffset(tableName, partition);
       // we were fenced - the only conditional statement is the
@@ -201,7 +227,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
   }
 
   @SuppressWarnings("BooleanMethodIsAlwaysInverted")
-  private AtomicWriteResult flush(final long offset, final UUID txnid) {
+  private AtomicWriteResult flush(final long offset, final UUID txnid, final int batchSize) {
     LOG.info("Flushing {} records to remote {}[{}] (offset={}, transactionId={})",
         buffer.size(),
         tableName,
@@ -217,7 +243,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
         plugin,
         offset,
         txnid,
-        MAX_BATCH_SIZE
+        batchSize
     );
 
     writer.addAll(buffer.values());
@@ -258,6 +284,20 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
 
   @Override
   public void restoreBatch(final Collection<ConsumerRecord<byte[], byte[]>> records) {
+    final List<ConsumerRecord<byte[], byte[]>> batch = new ArrayList<>(maxBatchSize);
+    for (final ConsumerRecord<byte[], byte[]> r : records) {
+      batch.add(r);
+      if (batch.size() >= maxBatchSize) {
+        restoreCassandraBatch(batch);
+        batch.clear();
+      }
+    }
+    if (batch.size() > 0) {
+      restoreCassandraBatch(batch);
+    }
+  }
+
+  private void restoreCassandraBatch(final Collection<ConsumerRecord<byte[], byte[]>> records) {
     final long committedOffset = client.getOffset(tableName, partition).offset;
 
     long consumedOffset = -1L;
@@ -275,7 +315,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
     }
 
     if (consumedOffset >= 0) {
-      final var flush = flush(consumedOffset, null);
+      final var flush = flush(consumedOffset, null, records.size());
       if (!flush.wasApplied()) {
         // it is possible that this is a warmup replica that while restoring the
         // active replica is still writing and flushing to cassandra, in that
