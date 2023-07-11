@@ -23,11 +23,11 @@ public class SizeTrackingBuffer<K> {
   }
 
   public void put(final K key, final Result<K> value) {
-    if (buffer.containsKey(key)) {
-      bytes -= sizeOf(key, buffer.get(key));
-    }
     bytes += sizeOf(key, value);
-    buffer.put(key, value);
+    final Result<K> old = buffer.put(key, value);
+    if (old != null) {
+      bytes -= sizeOf(key, old);
+    }
   }
 
   public void clear() {
