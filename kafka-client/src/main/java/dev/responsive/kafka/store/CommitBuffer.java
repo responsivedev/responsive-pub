@@ -22,6 +22,8 @@ import dev.responsive.kafka.config.ResponsiveConfig;
 import dev.responsive.model.Result;
 import dev.responsive.utils.Iterators;
 import dev.responsive.utils.SubPartitioner;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -36,6 +38,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.RecordsToDelete;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -60,9 +63,12 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
   private final TopicPartition changelog;
   private final BufferPlugin<K> plugin;
   private final boolean truncateChangelog;
-  private final int flushThreshold;
+  private final FlushTriggers flushTriggers;
   private final int maxBatchSize;
   private final SubPartitioner subPartitioner;
+  private final Supplier<Instant> clock;
+
+  private Instant lastFlush;
 
   CommitBuffer(
       final CassandraClient client,
@@ -71,7 +77,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
       final Admin admin,
       final BufferPlugin<K> plugin,
       final boolean truncateChangelog,
-      final int flushThreshold,
+      final FlushTriggers flushTriggers,
       final SubPartitioner subPartitioner
   ) {
     this(
@@ -81,9 +87,10 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
         admin,
         plugin,
         truncateChangelog,
-        flushThreshold,
+        flushTriggers,
         MAX_BATCH_SIZE,
-        subPartitioner
+        subPartitioner,
+        Instant::now
     );
   }
 
@@ -94,9 +101,10 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
       final Admin admin,
       final BufferPlugin<K> plugin,
       final boolean truncateChangelog,
-      final int flushThreshold,
+      final FlushTriggers flushTriggers,
       final int maxBatchSize,
-      final SubPartitioner subPartitioner
+      final SubPartitioner subPartitioner,
+      final Supplier<Instant> clock
   ) {
     this.client = client;
     this.tableName = tableName;
@@ -107,9 +115,11 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
 
     this.buffer = new TreeMap<>(plugin);
     this.truncateChangelog = truncateChangelog;
-    this.flushThreshold = flushThreshold;
+    this.flushTriggers = flushTriggers;
     this.maxBatchSize = maxBatchSize;
     this.subPartitioner = subPartitioner;
+    this.clock = clock;
+    lastFlush = clock.get();
   }
 
   public void init() {
@@ -225,12 +235,61 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
     return buffer.size();
   }
 
-  public void flush(long offset) {
-    if (buffer.size() < flushThreshold) {
-      LOG.debug("Ignoring flush() - commit buffer {} smaller than flush threshold {}",
+  private long totalBytesBuffered() {
+    return buffer.values().stream()
+        .mapToLong(e -> plugin.bytes(e.key).get().length + (e.isTombstone ? 0 : e.value.length))
+        .sum();
+  }
+
+  private boolean shouldFlush() {
+    boolean recordsTrigger = false;
+    boolean bytesTrigger = false;
+    boolean timeTrigger = false;
+    if (buffer.size() >= flushTriggers.getRecords()) {
+      LOG.info("will flush due to records buffered {} over trigger {}",
           buffer.size(),
-          flushThreshold
+          flushTriggers.getRecords()
       );
+      recordsTrigger = true;
+    } else {
+      LOG.debug("records buffered {} not over trigger {}",
+          buffer.size(),
+          flushTriggers.getRecords()
+      );
+    }
+    // This is a little inefficient (as opposed to maintaining the size as we go along).
+    // On the other hand, it's much less error-prone.
+    final long totalBytesBuffered = totalBytesBuffered();
+    if (totalBytesBuffered >= flushTriggers.getBytes()) {
+      LOG.info("will flush due to bytes buffered {} over bytes trigger {}",
+          totalBytesBuffered,
+          flushTriggers.getBytes()
+      );
+      bytesTrigger = true;
+    } else {
+      LOG.debug("bytes buffered {} not over trigger {}",
+          totalBytesBuffered,
+          flushTriggers.getBytes()
+      );
+    }
+    final var now = clock.get();
+    if (lastFlush.plus(flushTriggers.getInterval()).isBefore(now)) {
+      LOG.info("will flush due to time since last flush {} over interval trigger {}",
+          Duration.between(lastFlush, now),
+          now
+      );
+      timeTrigger = true;
+    } else {
+      LOG.debug("time since last flush {} not over trigger {}",
+          Duration.between(lastFlush, now),
+          now
+      );
+    }
+    return recordsTrigger || bytesTrigger || timeTrigger;
+  }
+
+  public void flush(long offset) {
+    if (!shouldFlush()) {
       return;
     }
 
@@ -267,6 +326,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
           )
       );
     }
+    lastFlush = clock.get();
   }
 
   @SuppressWarnings("BooleanMethodIsAlwaysInverted")

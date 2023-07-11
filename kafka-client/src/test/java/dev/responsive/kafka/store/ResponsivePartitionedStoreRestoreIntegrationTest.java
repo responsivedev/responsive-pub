@@ -443,7 +443,7 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
     properties.put(consumerPrefix(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG), MAX_POLL_MS);
     properties.put(consumerPrefix(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG), MAX_POLL_MS - 1);
 
-    properties.put(ResponsiveConfig.STORE_FLUSH_RECORDS_THRESHOLD, 0);
+    properties.put(ResponsiveConfig.STORE_FLUSH_RECORDS_TRIGGER, 0);
 
     return properties;
   }

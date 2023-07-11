@@ -131,7 +131,7 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
               sharedClients.admin,
               context.appConfigs()
           ),
-          config.getInt(ResponsiveConfig.STORE_FLUSH_RECORDS_THRESHOLD),
+          FlushTriggers.fromConfig(driverConfig),
           partitioner
       );
       buffer.init();
