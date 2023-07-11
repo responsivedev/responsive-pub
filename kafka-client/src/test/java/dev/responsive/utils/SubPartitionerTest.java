@@ -57,4 +57,13 @@ class SubPartitionerTest {
     assertThat(result, contains(4, 5));
   }
 
+  @Test
+  public void shouldNotChangeSalt() {
+    assertThat(
+        "changing the salt from 31 to another number is backwards incompatible!",
+        SubPartitioner.SALT,
+        is(31)
+    );
+  }
+
 }

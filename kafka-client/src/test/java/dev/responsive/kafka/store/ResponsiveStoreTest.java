@@ -31,11 +31,12 @@ import dev.responsive.kafka.config.ResponsiveConfig;
 import dev.responsive.utils.RemoteMonitor;
 import dev.responsive.utils.TableName;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ScheduledExecutorService;
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.DescribeConfigsResult;
-import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.clients.admin.MockAdminClient;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.serialization.Serdes.StringSerde;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyDescription;
@@ -64,17 +65,15 @@ public class ResponsiveStoreTest {
   @Mock
   private RemoteMonitor monitor;
   @Mock
-  private Admin admin;
-  @Mock
   private StateStore root;
   @Mock
   private ScheduledExecutorService executor;
   @Mock
-  private DescribeConfigsResult describeConfigs;
-  @Mock
   private TopologyDescription description;
   @Mock
   private ResponsiveStoreRegistry registry;
+
+  private Admin admin = MockAdminClient.create().build();
 
   private Map<String, Object> config;
 
@@ -82,8 +81,6 @@ public class ResponsiveStoreTest {
   public void before() {
     when(client.awaitTable(any(), any())).thenReturn(monitor);
     when(client.getOffset(any(), anyInt())).thenReturn(new OffsetRow(0, null));
-    when(admin.describeConfigs(any())).thenReturn(describeConfigs);
-    when(describeConfigs.all()).thenReturn(KafkaFuture.completedFuture(Map.of()));
     config = new HashMap<>(Map.of(
         StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092",
         StreamsConfig.APPLICATION_ID_CONFIG, "test",
@@ -100,12 +97,16 @@ public class ResponsiveStoreTest {
             .withStoreRegistry(registry)
             .build()
     );
+    admin.createTopics(List.of(
+        new NewTopic("app-table-changelog", 1, (short) 1)
+    ));
   }
 
   @Test
   public void shouldCreateGlobalStoreWhenPassedGlobalStoreContext() {
     // Given:
     final StateStoreContext context = Mockito.mock(GlobalProcessorContextImpl.class);
+    when(context.applicationId()).thenReturn("app");
     when(context.appConfigs()).thenReturn(config);
     final var store = new ResponsiveStore(NAME);
 
@@ -121,6 +122,7 @@ public class ResponsiveStoreTest {
   public void shouldCreatePartitionedStoreWhenPassedStoreContext() {
     // Given:
     final StateStoreContext context = Mockito.mock(ProcessorContextImpl.class);
+    when(context.applicationId()).thenReturn("app");
     when(context.appConfigs()).thenReturn(config);
     when(context.taskId()).thenReturn(new TaskId(0, 0));
     final var store = new ResponsiveStore(NAME);

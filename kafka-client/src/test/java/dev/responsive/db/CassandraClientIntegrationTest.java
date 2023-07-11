@@ -18,7 +18,7 @@ package dev.responsive.db;
 
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
-import dev.responsive.utils.ContainerExtension;
+import dev.responsive.utils.ResponsiveExtension;
 import java.util.ArrayList;
 import java.util.List;
 import org.apache.kafka.common.utils.Bytes;
@@ -31,7 +31,7 @@ import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.testcontainers.containers.CassandraContainer;
 
-@ExtendWith(ContainerExtension.class)
+@ExtendWith(ResponsiveExtension.class)
 public class CassandraClientIntegrationTest {
 
   private CqlSession session;

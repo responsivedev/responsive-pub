@@ -47,7 +47,7 @@ public class SubPartitioner {
   // number of sub partitions is equal to the number of original
   // partitions, all keys would be mapped to the same sub-partition
   // and all other sub-partitions would be empty
-  private static final int SALT = 31;
+  static final int SALT = 31;
 
   /**
    * the number of subpartitions is: {@code original_partitions * n}

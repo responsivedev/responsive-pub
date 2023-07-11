@@ -135,7 +135,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
 
       this.context = asInternalProcessorContext(context);
 
-      final ResponsiveConfig driverConfig = new ResponsiveConfig(context.appConfigs());
+      final ResponsiveConfig config = new ResponsiveConfig(context.appConfigs());
 
       partition = context.taskId().partition();
 
@@ -147,7 +147,6 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       monitor.await(Duration.ofSeconds(60));
       LOG.info("Remote table {} is available for querying.", name.cassandraName());
 
-      partitioner = SubPartitioner.NO_SUBPARTITIONS;
 
       client.prepareWindowedStatements(name.cassandraName());
       registry = InternalConfigs.loadStoreRegistry(context.appConfigs());
@@ -155,6 +154,9 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
           changelogFor(context, name.kafkaName(), false),
           partition
       );
+      partitioner = config.getSubPartitioner(
+          client, sharedClients.admin, name, topicPartition.topic());
+
       buffer = new CommitBuffer<>(
           client,
           name.cassandraName(),
@@ -166,7 +168,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
               sharedClients.admin,
               context.appConfigs()
           ),
-          driverConfig.getInt(ResponsiveConfig.STORE_FLUSH_RECORDS_THRESHOLD),
+          config.getInt(ResponsiveConfig.STORE_FLUSH_RECORDS_THRESHOLD),
           partitioner
       );
       buffer.init();

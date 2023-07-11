@@ -16,7 +16,14 @@
 
 package dev.responsive.kafka.config;
 
+import dev.responsive.db.CassandraClient;
+import dev.responsive.utils.SubPartitioner;
+import dev.responsive.utils.TableName;
+import java.util.List;
 import java.util.Map;
+import java.util.OptionalInt;
+import java.util.concurrent.ExecutionException;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -85,8 +92,10 @@ public class ResponsiveConfig extends AbstractConfig {
   private static final String STORAGE_DESIRED_NUM_PARTITIONS_DOC = "The desired number of "
       + "partitions to create in the remote store. This is a best effort target, as the actual "
       + "number of partitions must be a multiple of the Kafka store's number of partitions. This "
-      + "configuration does not apply to global stores.";
-  private static final int STORAGE_DESIRED_NUM_PARTITIONS_DEFAULT = 4096;
+      + "configuration does not apply to global stores. A value of -1 indicates to use the number"
+      + "of Kafka Partitions as the remote partitions as well.";
+  public static final int STORAGE_DESIRED_NUM_PARTITIONS_DEFAULT = 4096;
+  public static final int NO_SUBPARTITIONS = -1;
 
   // TODO: consider if we want this as a local, global or per-store configuration
   public static final String MAX_CONCURRENT_REMOTE_WRITES_CONFIG = "responsive.max.concurrent.writes";
@@ -164,6 +173,18 @@ public class ResponsiveConfig extends AbstractConfig {
           STORE_FLUSH_RECORDS_THRESHOLD_DEFAULT,
           Importance.MEDIUM,
           STORE_FLUSH_RECORDS_THRESHOLD_DOC
+      ).define(
+          STORAGE_DESIRED_NUM_PARTITION_CONFIG,
+          Type.INT,
+          STORAGE_DESIRED_NUM_PARTITIONS_DEFAULT,
+          Importance.MEDIUM,
+          STORAGE_DESIRED_NUM_PARTITIONS_DOC
+      ).define(
+          MAX_CONCURRENT_REMOTE_WRITES_CONFIG,
+          Type.INT,
+          MAX_CONCURRENT_REMOTE_WRITES_DEFAULT,
+          Importance.MEDIUM,
+          MAX_CONCURRENT_REMOTE_WRITES_DOC
       );
 
   private static class NonEmptyPassword implements Validator {
@@ -189,5 +210,58 @@ public class ResponsiveConfig extends AbstractConfig {
 
   public ResponsiveConfig(final Map<?, ?> originals) {
     super(CONFIG_DEF, originals);
+  }
+
+  public SubPartitioner getSubPartitioner(
+      final CassandraClient cassandraClient,
+      final Admin admin,
+      final TableName name,
+      final String changelogTopicName
+  ) {
+    final OptionalInt actualRemoteCount = cassandraClient.numPartitions(name.cassandraName());
+    final int kafkaPartitions;
+    try {
+      kafkaPartitions = admin.describeTopics(List.of(changelogTopicName))
+          .allTopicNames()
+          .get()
+          .get(changelogTopicName)
+          .partitions()
+          .size();
+    } catch (InterruptedException | ExecutionException e) {
+      throw new RuntimeException(e);
+    }
+
+    return getSubPartitioner(
+        actualRemoteCount,
+        kafkaPartitions,
+        getInt(STORAGE_DESIRED_NUM_PARTITION_CONFIG),
+        name,
+        changelogTopicName
+    );
+  }
+
+  static SubPartitioner getSubPartitioner(
+      final OptionalInt actualRemoteCount,
+      final int kafkaPartitions,
+      final int desiredNum,
+      final TableName name,
+      final String changelogTopicName
+  ) {
+    final int factor = (desiredNum == NO_SUBPARTITIONS) ? 1 : desiredNum / kafkaPartitions;
+    final int computedRemoteNum = factor * kafkaPartitions;
+
+    if (actualRemoteCount.isPresent() && actualRemoteCount.getAsInt() != computedRemoteNum) {
+      throw new IllegalArgumentException(String.format("%s was configured to %d, which "
+              + "given %s partitions in kafka topic %s would result in %d remote partitions "
+              + "for table %s (remote partitions must be a multiple of the kafka partitions). "
+              + "The remote store is already initialized with %d partitions - it is backwards "
+              + "incompatible to change this. Please set %s to %d.",
+          STORAGE_DESIRED_NUM_PARTITION_CONFIG, desiredNum, kafkaPartitions,
+          changelogTopicName, computedRemoteNum, name.cassandraName(),
+          actualRemoteCount.getAsInt(), STORAGE_DESIRED_NUM_PARTITION_CONFIG,
+          actualRemoteCount.getAsInt()));
+    }
+
+    return new SubPartitioner(factor);
   }
 }

@@ -30,9 +30,9 @@ import static org.apache.kafka.streams.StreamsConfig.NUM_STREAM_THREADS_CONFIG;
 
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.ResponsiveStores;
-import dev.responsive.utils.ContainerExtension;
 import dev.responsive.utils.IntegrationTestUtils;
 import dev.responsive.utils.ResponsiveConfigParam;
+import dev.responsive.utils.ResponsiveExtension;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -60,7 +60,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-@ExtendWith(ContainerExtension.class)
+@ExtendWith(ResponsiveExtension.class)
 public class ResponsiveGlobalStoreIntegrationTest {
 
   private static final Logger LOG
