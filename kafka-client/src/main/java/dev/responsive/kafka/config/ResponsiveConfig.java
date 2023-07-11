@@ -91,20 +91,17 @@ public class ResponsiveConfig extends AbstractConfig {
   //       the total amount of buffered data. That config can be used to keep a bound on
   //       memory usage and restore times.
 
-  public static final String STORE_FLUSH_RECORDS_TRIGGER
-      = "responsive.store.flush.trigger.local.records";
+  public static final String STORE_FLUSH_RECORDS_TRIGGER_CONFIG = "responsive.store.flush.trigger.local.records";
   public static final String STORE_FLUSH_RECORDS_TRIGGER_DOC = "The number of records to"
       + " accumulate in each store before flushing to remote";
   public static final int STORE_FLUSH_RECORDS_TRIGGER_DEFAULT = Integer.MAX_VALUE;
 
-  public static final String STORE_FLUSH_BYTES_TRIGGER
-      = "responsive.store.flush.trigger.local.bytes";
+  public static final String STORE_FLUSH_BYTES_TRIGGER_CONFIG = "responsive.store.flush.trigger.local.bytes";
   public static final String STORE_FLUSH_BYTES_TRIGGER_DOC = "The size in bytes of buffered"
       + "records to accumulate in each store before flushing to remote";
   public static final Long STORE_FLUSH_BYTES_TRIGGER_DEFAULT = Long.MAX_VALUE;
 
-  public static final String STORE_FLUSH_INTERVAL_TRIGGER
-      = "responsive.store.flush.trigger.local.interval.ms";
+  public static final String STORE_FLUSH_INTERVAL_TRIGGER_MS_CONFIG = "responsive.store.flush.trigger.local.interval.ms";
   public static final String STORE_FLUSH_INTERVAL_TRIGGER_DOC = "The maximum time to wait "
       + "between consecutive flushes of a given store. Note that this is only evaluated at "
       + "commit time.";
@@ -182,7 +179,7 @@ public class ResponsiveConfig extends AbstractConfig {
           Importance.MEDIUM,
           REQUEST_TIMEOUT_MS_DOC
       ).define(
-          STORE_FLUSH_RECORDS_TRIGGER,
+          STORE_FLUSH_RECORDS_TRIGGER_CONFIG,
           Type.INT,
           STORE_FLUSH_RECORDS_TRIGGER_DEFAULT,
           Importance.MEDIUM,
@@ -200,13 +197,13 @@ public class ResponsiveConfig extends AbstractConfig {
           Importance.MEDIUM,
           MAX_CONCURRENT_REMOTE_WRITES_DOC
       ).define(
-          STORE_FLUSH_BYTES_TRIGGER,
+          STORE_FLUSH_BYTES_TRIGGER_CONFIG,
           Type.LONG,
           STORE_FLUSH_BYTES_TRIGGER_DEFAULT,
           Importance.MEDIUM,
           STORE_FLUSH_BYTES_TRIGGER_DOC
       ).define(
-          STORE_FLUSH_INTERVAL_TRIGGER,
+          STORE_FLUSH_INTERVAL_TRIGGER_MS_CONFIG,
           Type.LONG,
           STORE_FLUSH_INTERVAL_TRIGGER_DEFAULT,
           Importance.MEDIUM,

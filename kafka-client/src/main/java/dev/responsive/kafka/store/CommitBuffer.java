@@ -242,41 +242,51 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
     boolean bytesTrigger = false;
     boolean timeTrigger = false;
     if (buffer.getReader().size() >= flushTriggers.getRecords()) {
-      LOG.info("will flush due to records buffered {} over trigger {}",
+      LOG.info("{}[{}] will flush due to records buffered {} over trigger {}",
+          tableName,
+          partition,
           buffer.getReader().size(),
           flushTriggers.getRecords()
       );
       recordsTrigger = true;
     } else {
-      LOG.debug("records buffered {} not over trigger {}",
+      LOG.debug("{}[{}] records buffered {} not over trigger {}",
+          tableName,
+          partition,
           buffer.getReader().size(),
           flushTriggers.getRecords()
       );
     }
-    // This is a little inefficient (as opposed to maintaining the size as we go along).
-    // On the other hand, it's much less error-prone.
     final long totalBytesBuffered = totalBytesBuffered();
     if (totalBytesBuffered >= flushTriggers.getBytes()) {
-      LOG.info("will flush due to bytes buffered {} over bytes trigger {}",
+      LOG.info("{}[{}] will flush due to bytes buffered {} over bytes trigger {}",
+          tableName,
+          partition,
           totalBytesBuffered,
           flushTriggers.getBytes()
       );
       bytesTrigger = true;
     } else {
-      LOG.debug("bytes buffered {} not over trigger {}",
+      LOG.debug("{}[{}] bytes buffered {} not over trigger {}",
+          tableName,
+          partition,
           totalBytesBuffered,
           flushTriggers.getBytes()
       );
     }
     final var now = clock.get();
     if (lastFlush.plus(flushTriggers.getInterval()).isBefore(now)) {
-      LOG.info("will flush due to time since last flush {} over interval trigger {}",
+      LOG.info("{}[{}] will flush due to time since last flush {} over interval trigger {}",
+          tableName,
+          partition,
           Duration.between(lastFlush, now),
           now
       );
       timeTrigger = true;
     } else {
-      LOG.debug("time since last flush {} not over trigger {}",
+      LOG.debug("{}[{}] time since last flush {} not over trigger {}",
+          tableName,
+          partition,
           Duration.between(lastFlush, now),
           now
       );

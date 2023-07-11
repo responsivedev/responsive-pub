@@ -12,9 +12,9 @@ public class FlushTriggers {
 
   public static FlushTriggers fromConfig(final ResponsiveConfig config) {
     return new FlushTriggers(
-        config.getInt(ResponsiveConfig.STORE_FLUSH_RECORDS_TRIGGER),
-        config.getLong(ResponsiveConfig.STORE_FLUSH_BYTES_TRIGGER),
-        Duration.ofMillis(config.getLong(ResponsiveConfig.STORE_FLUSH_INTERVAL_TRIGGER))
+        config.getInt(ResponsiveConfig.STORE_FLUSH_RECORDS_TRIGGER_CONFIG),
+        config.getLong(ResponsiveConfig.STORE_FLUSH_BYTES_TRIGGER_CONFIG),
+        Duration.ofMillis(config.getLong(ResponsiveConfig.STORE_FLUSH_INTERVAL_TRIGGER_MS_CONFIG))
     );
   }
 

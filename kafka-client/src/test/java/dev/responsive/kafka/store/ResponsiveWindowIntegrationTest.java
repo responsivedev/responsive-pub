@@ -371,7 +371,7 @@ public class ResponsiveWindowIntegrationTest {
 
     properties.put(consumerPrefix(MAX_POLL_RECORDS_CONFIG), 1);
 
-    properties.put(ResponsiveConfig.STORE_FLUSH_RECORDS_TRIGGER, 1);
+    properties.put(ResponsiveConfig.STORE_FLUSH_RECORDS_TRIGGER_CONFIG, 1);
 
     return properties;
   }
