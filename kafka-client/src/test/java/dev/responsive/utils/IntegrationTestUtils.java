@@ -7,9 +7,11 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -56,6 +58,39 @@ public final class IntegrationTestUtils {
     producer.flush();
   }
 
+  public static void awaitOutput(
+      final String topic,
+      final long from,
+      final Set<KeyValue<Long, Long>> expected,
+      final boolean readUncommitted,
+      final Map<String, Object> originals
+  ) throws TimeoutException {
+    final Map<String, Object> properties = new HashMap<>(originals);
+    properties.put(ISOLATION_LEVEL_CONFIG, readUncommitted
+        ? IsolationLevel.READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT)
+        : IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT));
+
+    final var notYetSeen = new HashSet<>(expected);
+    try (final KafkaConsumer<Long, Long> consumer = new KafkaConsumer<>(properties)) {
+      final TopicPartition output = new TopicPartition(topic, 0);
+      consumer.assign(List.of(output));
+      consumer.seek(output, from);
+
+      final long end = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
+      while (!notYetSeen.isEmpty()) {
+        final ConsumerRecords<Long, Long> polled = consumer.poll(Duration.ofSeconds(30));
+        for (ConsumerRecord<Long, Long> rec : polled) {
+          notYetSeen.remove(new KeyValue<>(rec.key(), rec.value()));
+        }
+        if (System.nanoTime() > end) {
+          throw new TimeoutException(
+              "Timed out trying to read " + expected + " events from " + output
+                  + ". Not yet seen: " + notYetSeen);
+        }
+      }
+    }
+  }
+
   public static List<KeyValue<Long, Long>> readOutput(
       final String topic,
       final long from,
@@ -84,7 +119,8 @@ public final class IntegrationTestUtils {
         }
         if (System.nanoTime() > end) {
           throw new TimeoutException(
-              "Timed out trying to read " + numEvents + " events from " + output);
+              "Timed out trying to read " + numEvents + " events from " + output
+                  + ". Read " + result);
         }
       }
       return result;

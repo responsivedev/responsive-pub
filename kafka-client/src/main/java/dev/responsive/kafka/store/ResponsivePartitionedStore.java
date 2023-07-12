@@ -27,7 +27,7 @@ import dev.responsive.kafka.config.ResponsiveConfig;
 import dev.responsive.model.Result;
 import dev.responsive.utils.RemoteMonitor;
 import dev.responsive.utils.StoreUtil;
-import dev.responsive.utils.SubPartitioner;
+import dev.responsive.db.partitioning.SubPartitioner;
 import dev.responsive.utils.TableName;
 import java.time.Duration;
 import java.util.List;

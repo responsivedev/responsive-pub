@@ -30,7 +30,7 @@ import dev.responsive.model.Stamped;
 import dev.responsive.utils.Iterators;
 import dev.responsive.utils.RemoteMonitor;
 import dev.responsive.utils.StoreUtil;
-import dev.responsive.utils.SubPartitioner;
+import dev.responsive.db.partitioning.SubPartitioner;
 import dev.responsive.utils.TableName;
 import java.nio.ByteBuffer;
 import java.time.Duration;

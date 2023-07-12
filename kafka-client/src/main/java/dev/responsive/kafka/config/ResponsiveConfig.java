@@ -17,7 +17,9 @@
 package dev.responsive.kafka.config;
 
 import dev.responsive.db.CassandraClient;
-import dev.responsive.utils.SubPartitioner;
+import dev.responsive.db.partitioning.Hasher;
+import dev.responsive.db.partitioning.Murmur3Hasher;
+import dev.responsive.db.partitioning.SubPartitioner;
 import dev.responsive.utils.TableName;
 import java.time.Duration;
 import java.util.List;
@@ -119,6 +121,10 @@ public class ResponsiveConfig extends AbstractConfig {
       + "across all nodes.";
   public static final int MAX_CONCURRENT_REMOTE_WRITES_DEFAULT = 32;
 
+  public static final String SUBPARTITION_HASHER_CONFIG = "responsive.subpartition.hasher";
+  private static final String SUBPARTITION_HASHER_DOC = "Hasher to use for sub-partitioning.";
+  private static final Class<?> SUBPARTITION_HASHER_DEFAULT = Murmur3Hasher.class;
+
 
   // ------------------ required StreamsConfig overrides ----------------------
 
@@ -208,6 +214,12 @@ public class ResponsiveConfig extends AbstractConfig {
           STORE_FLUSH_INTERVAL_TRIGGER_DEFAULT,
           Importance.MEDIUM,
           STORE_FLUSH_INTERVAL_TRIGGER_DOC
+      ).define(
+          SUBPARTITION_HASHER_CONFIG,
+          Type.CLASS,
+          SUBPARTITION_HASHER_DEFAULT,
+          Importance.LOW,
+          SUBPARTITION_HASHER_DOC
       );
 
   private static class NonEmptyPassword implements Validator {
@@ -241,7 +253,8 @@ public class ResponsiveConfig extends AbstractConfig {
       final TableName name,
       final String changelogTopicName
   ) {
-    final OptionalInt actualRemoteCount = cassandraClient.numPartitions(name.cassandraName());
+    // TODO(agavra): write the actual remote partition count into cassandra
+    final OptionalInt actualRemoteCount = OptionalInt.empty();
     final int kafkaPartitions;
     try {
       kafkaPartitions = admin.describeTopics(List.of(changelogTopicName))
@@ -259,7 +272,8 @@ public class ResponsiveConfig extends AbstractConfig {
         kafkaPartitions,
         getInt(STORAGE_DESIRED_NUM_PARTITION_CONFIG),
         name,
-        changelogTopicName
+        changelogTopicName,
+        getConfiguredInstance(SUBPARTITION_HASHER_CONFIG, Hasher.class)
     );
   }
 }

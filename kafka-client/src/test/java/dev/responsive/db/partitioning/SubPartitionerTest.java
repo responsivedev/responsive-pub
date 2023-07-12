@@ -14,13 +14,14 @@
  * limitations under the License.
  */
 
-package dev.responsive.utils;
+package dev.responsive.db.partitioning;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.is;
 
+import dev.responsive.utils.TableName;
 import java.util.List;
 import java.util.OptionalInt;
 import java.util.stream.Collectors;
@@ -35,10 +36,12 @@ class SubPartitionerTest {
   private static final TableName NAME = new TableName("table");
   private static final String CHANGELOG_TOPIC_NAME = "changelog";
 
+  private static final Hasher SINGLE_BYTE_HASHER = k -> (int) k.get()[0];
+
   @Test
   public void shouldMapPartitionsToLargerSpace() {
     // Given:
-    final var partitioner = new SubPartitioner(2, k -> (int) k.get()[0]);
+    final var partitioner = new SubPartitioner(2, SINGLE_BYTE_HASHER);
 
     // When:
     final int zero = partitioner.partition(0, Bytes.wrap(new byte[]{0}));
@@ -56,22 +59,13 @@ class SubPartitionerTest {
   @Test
   public void shouldIterateAllSubPartitions() {
     // Given:
-    final var partitioner = new SubPartitioner(2, k -> (int) k.get()[0]);
+    final var partitioner = new SubPartitioner(2, SINGLE_BYTE_HASHER);
 
     // When:
     final List<Integer> result = partitioner.all(2).boxed().collect(Collectors.toList());
 
     // Then:
     assertThat(result, contains(4, 5));
-  }
-
-  @Test
-  public void shouldNotChangeSalt() {
-    assertThat(
-        "changing the salt from 31 to another number is backwards incompatible!",
-        SubPartitioner.SALT,
-        is(31)
-    );
   }
 
   @Test
@@ -87,7 +81,8 @@ class SubPartitionerTest {
         kafkaPartitions,
         desiredPartitions,
         NAME,
-        CHANGELOG_TOPIC_NAME
+        CHANGELOG_TOPIC_NAME,
+        SINGLE_BYTE_HASHER
     );
 
     // Then:
@@ -107,7 +102,8 @@ class SubPartitionerTest {
         kafkaPartitions,
         desiredPartitions,
         NAME,
-        CHANGELOG_TOPIC_NAME
+        CHANGELOG_TOPIC_NAME,
+        SINGLE_BYTE_HASHER
     );
 
     // Then:
@@ -129,7 +125,8 @@ class SubPartitionerTest {
             kafkaPartitions,
             desiredPartitions,
             NAME,
-            CHANGELOG_TOPIC_NAME
+            CHANGELOG_TOPIC_NAME,
+            SINGLE_BYTE_HASHER
         )
     );
 

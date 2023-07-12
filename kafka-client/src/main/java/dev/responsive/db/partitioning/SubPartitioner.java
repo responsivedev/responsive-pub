@@ -14,9 +14,10 @@
  * limitations under the License.
  */
 
-package dev.responsive.utils;
+package dev.responsive.db.partitioning;
 
 import dev.responsive.kafka.config.ResponsiveConfig;
+import dev.responsive.utils.TableName;
 import java.util.OptionalInt;
 import java.util.function.Function;
 import java.util.stream.IntStream;
@@ -44,13 +45,6 @@ public class SubPartitioner {
 
   public static final SubPartitioner NO_SUBPARTITIONS = new SubPartitioner(1, k -> 0);
 
-  // ensure that the default sub-partitioning hasher is unlikely
-  // to be the same as the hasher that was used for the original
-  // partition scheme - if the hashers are the same, and the
-  // number of sub partitions is equal to the number of original
-  // partitions, all keys would be mapped to the same sub-partition
-  // and all other sub-partitions would be empty
-  static final int SALT = 31;
 
   /**
    * the number of subpartitions is: {@code original_partitions * n}
@@ -63,7 +57,8 @@ public class SubPartitioner {
       final int kafkaPartitions,
       final int desiredNum,
       final TableName name,
-      final String changelogTopicName
+      final String changelogTopicName,
+      final Hasher hasher
   ) {
     final int factor = (desiredNum == ResponsiveConfig.NO_SUBPARTITIONS)
         ? 1 : (int) Math.ceil((double) desiredNum / kafkaPartitions);
@@ -81,11 +76,7 @@ public class SubPartitioner {
           actualRemoteCount.getAsInt()));
     }
 
-    return new SubPartitioner(factor);
-  }
-
-  public SubPartitioner(final int factor) {
-    this(factor, k -> SALT * Murmur3.hash32(k.get()));
+    return new SubPartitioner(factor, hasher);
   }
 
   public SubPartitioner(final int factor, final Function<Bytes, Integer> hasher) {
