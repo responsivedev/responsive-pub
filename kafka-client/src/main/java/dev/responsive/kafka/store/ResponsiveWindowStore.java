@@ -157,19 +157,12 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       partitioner = config.getSubPartitioner(
           client, sharedClients.admin, name, topicPartition.topic());
 
-      buffer = new CommitBuffer<>(
-          client,
-          name.cassandraName(),
+      buffer = CommitBuffer.from(
+          sharedClients,
+          name,
           topicPartition,
-          sharedClients.admin,
           new Plugin(this::withinRetention),
-          StoreUtil.shouldTruncateChangelog(
-              topicPartition.topic(),
-              sharedClients.admin,
-              context.appConfigs()
-          ),
-          FlushTriggers.fromConfig(config),
-          partitioner
+          config
       );
       buffer.init();
 

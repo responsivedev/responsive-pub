@@ -16,12 +16,17 @@
 
 package dev.responsive.kafka.store;
 
+import static dev.responsive.kafka.config.ResponsiveConfig.MAX_CONCURRENT_REMOTE_WRITES_CONFIG;
+
 import dev.responsive.db.CassandraClient;
 import dev.responsive.db.CassandraClient.OffsetRow;
 import dev.responsive.db.partitioning.SubPartitioner;
+import dev.responsive.kafka.clients.SharedClients;
 import dev.responsive.kafka.config.ResponsiveConfig;
 import dev.responsive.model.Result;
 import dev.responsive.utils.Iterators;
+import dev.responsive.utils.StoreUtil;
+import dev.responsive.utils.TableName;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -65,8 +70,37 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
   private final int maxBatchSize;
   private final SubPartitioner subPartitioner;
   private final Supplier<Instant> clock;
+  private final int maxConcurrentWrites;
 
   private Instant lastFlush;
+
+
+  static <K> CommitBuffer<K> from(
+      final SharedClients clients,
+      final TableName tableName,
+      final TopicPartition changelog,
+      final BufferPlugin<K> plugin,
+      final ResponsiveConfig config
+  ) {
+    final var admin = clients.admin;
+    final var cassandraClient = clients.cassandraClient;
+    final var partitioner = config.getSubPartitioner(
+        cassandraClient, admin, tableName, changelog.topic());
+    final boolean truncate = StoreUtil.shouldTruncateChangelog(
+        changelog.topic(), admin, config.originals());
+
+    return new CommitBuffer<>(
+        cassandraClient,
+        tableName.cassandraName(),
+        changelog,
+        admin,
+        plugin,
+        truncate,
+        FlushTriggers.fromConfig(config),
+        partitioner,
+        config.getInt(MAX_CONCURRENT_REMOTE_WRITES_CONFIG)
+    );
+  }
 
   CommitBuffer(
       final CassandraClient client,
@@ -76,7 +110,8 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
       final BufferPlugin<K> plugin,
       final boolean truncateChangelog,
       final FlushTriggers flushTriggers,
-      final SubPartitioner subPartitioner
+      final SubPartitioner subPartitioner,
+      final int maxConcurrentWrites
   ) {
     this(
         client,
@@ -88,7 +123,8 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
         flushTriggers,
         MAX_BATCH_SIZE,
         subPartitioner,
-        Instant::now
+        Instant::now,
+        maxConcurrentWrites
     );
   }
 
@@ -102,7 +138,8 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
       final FlushTriggers flushTriggers,
       final int maxBatchSize,
       final SubPartitioner subPartitioner,
-      final Supplier<Instant> clock
+      final Supplier<Instant> clock,
+      final int maxConcurrentWrites
   ) {
     this.client = client;
     this.tableName = tableName;
@@ -117,6 +154,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
     this.maxBatchSize = maxBatchSize;
     this.subPartitioner = subPartitioner;
     this.clock = clock;
+    this.maxConcurrentWrites = maxConcurrentWrites;
     lastFlush = clock.get();
   }
 
@@ -394,7 +432,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
         action,
         AtomicWriter::partition,
         partition,
-        ResponsiveConfig.MAX_CONCURRENT_REMOTE_WRITES_DEFAULT
+        maxConcurrentWrites
     );
   }
 
