@@ -18,10 +18,10 @@ package dev.responsive.kafka.store;
 
 import dev.responsive.db.CassandraClient;
 import dev.responsive.db.CassandraClient.OffsetRow;
+import dev.responsive.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.config.ResponsiveConfig;
 import dev.responsive.model.Result;
 import dev.responsive.utils.Iterators;
-import dev.responsive.utils.SubPartitioner;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;

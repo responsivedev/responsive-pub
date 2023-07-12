@@ -22,6 +22,7 @@ import static org.apache.kafka.streams.state.StateSerdes.TIMESTAMP_SIZE;
 
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.db.CassandraClient;
+import dev.responsive.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.api.InternalConfigs;
 import dev.responsive.kafka.clients.SharedClients;
 import dev.responsive.kafka.config.ResponsiveConfig;
@@ -30,7 +31,6 @@ import dev.responsive.model.Stamped;
 import dev.responsive.utils.Iterators;
 import dev.responsive.utils.RemoteMonitor;
 import dev.responsive.utils.StoreUtil;
-import dev.responsive.utils.SubPartitioner;
 import dev.responsive.utils.TableName;
 import java.nio.ByteBuffer;
 import java.time.Duration;
