@@ -120,19 +120,12 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
       partitioner = config.getSubPartitioner(
           client, sharedClients.admin, name, topicPartition.topic());
 
-      buffer = new CommitBuffer<>(
-          client,
-          name.cassandraName(),
+      buffer = CommitBuffer.from(
+          sharedClients,
+          name,
           topicPartition,
-          sharedClients.admin,
           PLUGIN,
-          StoreUtil.shouldTruncateChangelog(
-              topicPartition.topic(),
-              sharedClients.admin,
-              context.appConfigs()
-          ),
-          FlushTriggers.fromConfig(config),
-          partitioner
+          config
       );
       buffer.init();
 

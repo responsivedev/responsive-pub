@@ -115,7 +115,7 @@ public class CommitBufferTest {
     // Given:
     final String tableName = name;
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, admin, PLUGIN, true, TRIGGERS, partitioner);
+        client, tableName, changelogTp, admin, PLUGIN, true, TRIGGERS, partitioner, 1);
     buffer.init();
 
     // When:
@@ -136,7 +136,7 @@ public class CommitBufferTest {
     setPartitioner(2);
     final String tableName = name;
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, admin, PLUGIN, true, TRIGGERS, partitioner);
+        client, tableName, changelogTp, admin, PLUGIN, true, TRIGGERS, partitioner, 1);
     buffer.init();
 
     // When:
@@ -160,7 +160,7 @@ public class CommitBufferTest {
     setPartitioner(2);
     final String tableName = name;
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, admin, PLUGIN, true, TRIGGERS, partitioner);
+        client, tableName, changelogTp, admin, PLUGIN, true, TRIGGERS, partitioner, 1);
     buffer.init();
 
     // When:
@@ -183,7 +183,7 @@ public class CommitBufferTest {
     // Given:
     final String tableName = name;
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, admin, PLUGIN, true, TRIGGERS, partitioner);
+        client, tableName, changelogTp, admin, PLUGIN, true, TRIGGERS, partitioner, 1);
     buffer.init();
     for (int i = 0; i < CommitBuffer.MAX_BATCH_SIZE * 1.5; i++) {
       buffer.put(KEY, VALUE);
@@ -201,7 +201,7 @@ public class CommitBufferTest {
     // Given:
     final String tableName = name;
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, admin, PLUGIN, false, TRIGGERS, partitioner);
+        client, tableName, changelogTp, admin, PLUGIN, false, TRIGGERS, partitioner, 1);
     buffer.init();
 
     for (int i = 0; i < CommitBuffer.MAX_BATCH_SIZE * 1.5; i++) {
@@ -227,8 +227,8 @@ public class CommitBufferTest {
         PLUGIN,
         false,
         FlushTriggers.ofRecords(10),
-        partitioner
-    );
+        partitioner,
+        1);
     buffer.init();
 
     for (byte i = 0; i < 9; i++) {
@@ -257,8 +257,8 @@ public class CommitBufferTest {
         PLUGIN,
         false,
         FlushTriggers.ofBytes(100),
-        partitioner
-    );
+        partitioner,
+        1);
     buffer.init();
     final byte[] value = new byte[9];
     for (byte i = 0; i < 9; i++) {
@@ -291,8 +291,8 @@ public class CommitBufferTest {
         FlushTriggers.ofInterval(Duration.ofSeconds(30)),
         100,
         partitioner,
-        clock::get
-    );
+        clock::get,
+        1);
     buffer.init();
     buffer.put(Bytes.wrap(new byte[]{18}), VALUE);
 
@@ -312,7 +312,7 @@ public class CommitBufferTest {
     final String table = name;
     client.execute(client.insertData(table, KAFKA_PARTITION, KEY, VALUE));
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, table, changelogTp, admin, PLUGIN, true, TRIGGERS, partitioner);
+        client, table, changelogTp, admin, PLUGIN, true, TRIGGERS, partitioner, 1);
     buffer.init();
 
     // When:
@@ -329,7 +329,7 @@ public class CommitBufferTest {
     // Given:
     final String tableName = name;
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, admin, PLUGIN, true, TRIGGERS, partitioner);
+        client, tableName, changelogTp, admin, PLUGIN, true, TRIGGERS, partitioner, 1);
     buffer.init();
     client.execute(client.revokePermit(tableName, KAFKA_PARTITION, 101));
 
@@ -346,7 +346,7 @@ public class CommitBufferTest {
     // Given:
     final String tableName = name;
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, admin, PLUGIN, true, TRIGGERS, partitioner);
+        client, tableName, changelogTp, admin, PLUGIN, true, TRIGGERS, partitioner, 1);
     buffer.init();
     client.execute(
         client.acquirePermit(tableName, KAFKA_PARTITION, UNSET_PERMIT, UUID.randomUUID(), 1));
@@ -364,7 +364,7 @@ public class CommitBufferTest {
     // Given:
     final String tableName = name;
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, admin, PLUGIN, true, TRIGGERS, partitioner);
+        client, tableName, changelogTp, admin, PLUGIN, true, TRIGGERS, partitioner, 1);
     buffer.init();
     client.execute(client.revokePermit(tableName, KAFKA_PARTITION, 100));
 
@@ -381,7 +381,7 @@ public class CommitBufferTest {
     // Given:
     final String tableName = name;
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, admin, PLUGIN, true, TRIGGERS, partitioner);
+        client, tableName, changelogTp, admin, PLUGIN, true, TRIGGERS, partitioner, 1);
     buffer.init();
     client.execute(client.revokePermit(tableName, KAFKA_PARTITION, 100));
 
@@ -411,8 +411,8 @@ public class CommitBufferTest {
         TRIGGERS,
         3,
         partitioner,
-        Instant::now
-    );
+        Instant::now,
+        1);
     buffer.init();
     client.execute(client.revokePermit(tableName, 0, 100));
     final List<ConsumerRecord<byte[], byte[]>> records = IntStream.range(0, 5)
@@ -444,7 +444,7 @@ public class CommitBufferTest {
     // Given:
     final String tableName = name;
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, admin, PLUGIN, true, TRIGGERS, partitioner);
+        client, tableName, changelogTp, admin, PLUGIN, true, TRIGGERS, partitioner, 1);
     buffer.init();
     client.execute(client.revokePermit(tableName, KAFKA_PARTITION, 100));
 
@@ -483,7 +483,7 @@ public class CommitBufferTest {
     // Given:
     final String tableName = name;
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, admin, PLUGIN, true, TRIGGERS, partitioner);
+        client, tableName, changelogTp, admin, PLUGIN, true, TRIGGERS, partitioner, 1);
     // first initialize the offsets
     client.initializeOffset(tableName, 0);
 
