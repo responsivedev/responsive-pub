@@ -402,11 +402,15 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
 
     var writeResult = drain(writers.values(), AtomicWriter::flush);
     if (!writeResult.wasApplied()) {
+      LOG.warn("Write was not applied during flush for {}[{}:{}]",
+          tableName, partition, writeResult.getPartition());
       return writeResult;
     }
 
     writeResult = drain(writers.values(), AtomicWriter::finalizeTxn);
     if (!writeResult.wasApplied()) {
+      LOG.warn("Write was not applied during finalizeTxn for {}[{}:{}]",
+          tableName, partition, writeResult.getPartition());
       return writeResult;
     }
 

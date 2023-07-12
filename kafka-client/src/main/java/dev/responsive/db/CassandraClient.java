@@ -206,6 +206,7 @@ public class CassandraClient {
       final int partitionKey,
       final long offset
   ) {
+    LOG.debug("Revoking permits for {}[{}] prior to offset {}", table, partitionKey, offset);
     return revokePermit.get(table)
         .bind()
         .setInt(PARTITION_KEY.bind(), partitionKey)
@@ -220,6 +221,8 @@ public class CassandraClient {
       final UUID newPermit,
       final long offset
   ) {
+    LOG.debug("Acquiring permit {} for {}[{}] assuming old permit is {} and offset <= {}",
+        newPermit, table, partitionKey, oldPermit, offset);
     return acquirePermit.get(table)
         .bind()
         .setInt(PARTITION_KEY.bind(), partitionKey)
@@ -235,6 +238,8 @@ public class CassandraClient {
       final UUID permit,
       final long offset
   ) {
+    LOG.debug("Finalizing permit for {}[{}] assuming permit is {} and offset is {}",
+        table, partitionKey, permit, offset);
     return finalizeTxn.get(table)
         .bind()
         .setInt(PARTITION_KEY.bind(), partitionKey)
