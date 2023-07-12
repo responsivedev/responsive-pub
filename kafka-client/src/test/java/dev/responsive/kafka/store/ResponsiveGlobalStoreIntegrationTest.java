@@ -16,6 +16,7 @@
 
 package dev.responsive.kafka.store;
 
+import static dev.responsive.utils.IntegrationTestUtils.awaitOutput;
 import static dev.responsive.utils.IntegrationTestUtils.pipeInput;
 import static dev.responsive.utils.IntegrationTestUtils.readOutput;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
@@ -40,6 +41,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.LongStream;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -116,14 +118,13 @@ public class ResponsiveGlobalStoreIntegrationTest {
       pipeInput(INPUT_TOPIC, 2, producer, System::currentTimeMillis, 0, 10, 0, 1);
 
       // Then:
-      final Set<KeyValue<Long, Long>> result = new HashSet<>(
-          readOutput(OUTPUT_TOPIC, 0, 20, false, properties));
-
+      final Set<KeyValue<Long, Long>> expected = new HashSet<>();
       for (int k = 0; k < 2; k++) {
         for (int i = 0; i < 10; i++) {
-          MatcherAssert.assertThat(result, Matchers.hasItem(new KeyValue<>((long) k, i + 2L)));
+          expected.add(new KeyValue<>((long) k, i + 2L));
         }
       }
+      awaitOutput(OUTPUT_TOPIC, 0, expected, false, properties);
     }
   }
 
