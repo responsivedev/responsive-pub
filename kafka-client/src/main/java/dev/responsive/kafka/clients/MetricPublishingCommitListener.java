@@ -97,7 +97,7 @@ public class MetricPublishingCommitListener implements ResponsiveConsumer.Listen
           e.getKey().getPartition(),
           (k, v) -> {
             if (v.isEmpty()) {
-              LOG.info("add committed offset metric for {} {}", threadId, k);
+              LOG.debug("add committed offset metric for {} {}", threadId, k);
               metrics.addMetric(
                   metricName(e.getKey()),
                   (Gauge<Long>) (config, now) ->
@@ -105,7 +105,7 @@ public class MetricPublishingCommitListener implements ResponsiveConsumer.Listen
                           .map(CommittedOffset::getOffset).orElse(-1L)
               );
             }
-            LOG.info("record committed offset {} {}: {}", threadId, k, e.getValue());
+            LOG.debug("record committed offset {} {}: {}", threadId, k, e.getValue());
             return Optional.of(new CommittedOffset(e.getValue(), e.getKey().getConsumerGroup()));
           }
       );
