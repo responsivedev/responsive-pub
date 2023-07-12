@@ -351,7 +351,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
     final UUID txnid = UUID.randomUUID();
     final var writeResult = flush(offset, txnid, maxBatchSize);
     if (!writeResult.wasApplied()) {
-      final OffsetRow stored = client.getOffset(tableName, partition);
+      final OffsetRow stored = client.getOffset(tableName, writeResult.getPartition());
       // we were fenced - the only conditional statement is the
       // offset update, so it's the only failure point
       throw new ProcessorStateException(
