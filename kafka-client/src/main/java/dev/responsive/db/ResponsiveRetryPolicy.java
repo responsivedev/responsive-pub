@@ -62,6 +62,11 @@ public class ResponsiveRetryPolicy extends DefaultRetryPolicy {
       if (decision == RetryDecision.RETRY_SAME && LOG.isTraceEnabled()) {
         LOG.trace(
             RETRYING_ON_WRITE_TIMEOUT, logPrefix, cl, writeType, blockFor, received, retryCount);
+      } else if (decision.equals(RetryDecision.RETHROW)) {
+        final var msg = "[{}] Rethrowing write timeout error due to too many retries "
+            + "(consistency: {}, write type: {}, required acknowledgments: {}, "
+            + "received acknowledgments: {}, retries: {})";
+        LOG.info(msg, logPrefix, cl, writeType, blockFor, received, retryCount);
       }
 
       return decision;
