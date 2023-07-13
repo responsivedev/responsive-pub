@@ -53,8 +53,8 @@ import org.mockito.quality.Strictness;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class AtomicWriterTest {
 
-  private static final UUID PERMIT = UUID.randomUUID();
   private static final long OFFSET = 123L;
+  private static final long EPOCH = 3;
 
   @Mock
   private CassandraClient client;
@@ -65,10 +65,8 @@ class AtomicWriterTest {
 
   @BeforeEach
   public void beforeEach() {
-    when(client.acquirePermit(any(), anyInt(), any(), any(), anyLong()))
-        .thenAnswer(iom -> capturingStatement("acquirePermit", iom.getArguments()));
-    when(client.revokePermit(any(), anyInt(), anyLong()))
-        .thenAnswer(iom -> capturingStatement("revokePermit", iom.getArguments()));
+    when(client.ensureEpoch(any(), anyInt(), anyLong()))
+        .thenAnswer(iom -> capturingStatement("ensureEpoch", iom.getArguments()));
     when(client.executeAsync(any()))
         .thenReturn(CompletableFuture.completedFuture(asyncResultSet));
     when(asyncResultSet.wasApplied()).thenReturn(true);
@@ -85,72 +83,13 @@ class AtomicWriterTest {
   }
 
   @Test
-  public void shouldWriteOffsetCommitOnEmptyBatch() {
-    // Given:
-    final var writer = new AtomicWriter<>(
-        client,
-        "foo",
-        0,
-        new TestPlugin(),
-        OFFSET,
-        PERMIT,
-        10
-    );
-
-    // When:
-    writer.flush();
-
-    // Then:
-    verify(client, times(1)).executeAsync(statementCaptor.capture());
-    final DefaultBatchStatement sent = (DefaultBatchStatement) statementCaptor.getValue();
-
-    final var statements = new ArrayList<ArgumentCapturingStatement>();
-    sent.iterator().forEachRemaining(stmt -> statements.add((ArgumentCapturingStatement) stmt));
-
-    assertThat(statements.size(), is(1));
-    assertThat(statements.get(0).callingMethod(), is("acquirePermit"));
-    assertThat(statements.get(0).args(), is(new Object[]{
-        "foo", 0, UNSET_PERMIT, PERMIT, OFFSET
-    }));
-  }
-
-  @Test
-  public void shouldRevokeOffsetCommitOnEmptyBatchNoPermit() {
-    // Given:
-    final var writer = new AtomicWriter<>(
-        client,
-        "foo",
-        0,
-        new TestPlugin(),
-        OFFSET,
-        null,
-        10
-    );
-
-    // When:
-    writer.flush();
-
-    // Then:
-    verify(client, times(1)).executeAsync(statementCaptor.capture());
-    final DefaultBatchStatement sent = (DefaultBatchStatement) statementCaptor.getValue();
-
-    final var statements = new ArrayList<ArgumentCapturingStatement>();
-    sent.iterator().forEachRemaining(stmt -> statements.add((ArgumentCapturingStatement) stmt));
-
-    assertThat(statements.size(), is(1));
-    assertThat(statements.get(0).callingMethod(), is("revokePermit"));
-    assertThat(statements.get(0).args(), is(new Object[]{"foo", 0, OFFSET }));
-  }
-
-  @Test
   public void shouldFlushInBatches() {
     final var writer = new AtomicWriter<>(
         client,
         "foo",
         0,
         new TestPlugin(),
-        OFFSET,
-        PERMIT,
+        EPOCH,
         2
     );
 
@@ -173,7 +112,7 @@ class AtomicWriterTest {
     batch1.iterator().forEachRemaining(stmt -> statements1.add((ArgumentCapturingStatement) stmt));
 
     assertThat(statements1.size(), is(3));
-    assertThat(statements1.get(0).callingMethod(), is("acquirePermit"));
+    assertThat(statements1.get(0).callingMethod(), is("ensureEpoch"));
     assertThat(statements1.get(1).callingMethod(), is("insertData"));
     assertThat(statements1.get(2).callingMethod(), is("deleteData"));
 
@@ -183,23 +122,22 @@ class AtomicWriterTest {
     batch2.iterator().forEachRemaining(stmt -> statements2.add((ArgumentCapturingStatement) stmt));
 
     assertThat(statements2.size(), is(2));
-    assertThat(statements2.get(0).callingMethod(), is("acquirePermit"));
+    assertThat(statements2.get(0).callingMethod(), is("ensureEpoch"));
     assertThat(statements2.get(0).args(), is(new Object[]{
-        "foo", 0, PERMIT, PERMIT, OFFSET
+        "foo", 0, EPOCH
     }));
     assertThat(statements2.get(1).callingMethod(), is("insertData"));
   }
 
   @Test
-  public void shouldNotIssueSecondBatchIfFirstWasNotApplied() {
+  public void shouldIssueSecondBatchEvenIfFirstWasNotApplied() {
     when(asyncResultSet.wasApplied()).thenReturn(false);
     final var writer = new AtomicWriter<>(
         client,
         "foo",
         0,
         new TestPlugin(),
-        OFFSET,
-        PERMIT,
+        EPOCH,
         2
     );
 
@@ -212,7 +150,7 @@ class AtomicWriterTest {
     writer.flush();
 
     // Then:
-    verify(client, times(1)).executeAsync(statementCaptor.capture());
+    verify(client, times(2)).executeAsync(statementCaptor.capture());
   }
 
   private static class TestPlugin implements BufferPlugin<Bytes> {

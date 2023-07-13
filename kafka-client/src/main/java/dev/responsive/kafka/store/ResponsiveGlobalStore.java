@@ -96,7 +96,7 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
       LOG.info("Global table {} is available for querying.", name);
 
       client.prepareStatements(name.cassandraName());
-      client.initializeOffset(name.cassandraName(), partition);
+      client.initializeMetadata(name.cassandraName(), partition);
 
       open = true;
 

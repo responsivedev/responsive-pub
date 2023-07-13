@@ -57,15 +57,15 @@ class SubPartitionerTest {
   }
 
   @Test
-  public void shouldIterateAllSubPartitions() {
+  public void shouldIterateAllSubPartitionsInOrder() {
     // Given:
-    final var partitioner = new SubPartitioner(2, SINGLE_BYTE_HASHER);
+    final var partitioner = new SubPartitioner(3, SINGLE_BYTE_HASHER);
 
     // When:
     final List<Integer> result = partitioner.all(2).boxed().collect(Collectors.toList());
 
     // Then:
-    assertThat(result, contains(4, 5));
+    assertThat(result, contains(6, 7, 8));
   }
 
   @Test

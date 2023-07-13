@@ -53,9 +53,9 @@ public class CommitBufferDrainTest {
     final ConcurrentLinkedDeque<Integer> tracker = new ConcurrentLinkedDeque<>();
     final ConcurrentLinkedDeque<Integer> interrupted = new ConcurrentLinkedDeque<>();
 
-    final var p0 = new TestWriter(latches, 0, 1, true, exec, tracker, interrupted);
-    final var p1 = new TestWriter(latches, 1, 2, true, exec, tracker, interrupted);
-    final var p2 = new TestWriter(latches, 2, 2, true, exec, tracker, interrupted);
+    final var p0 = new TestWriter(latches, 0, 1, true, exec, tracker);
+    final var p1 = new TestWriter(latches, 1, 2, true, exec, tracker);
+    final var p2 = new TestWriter(latches, 2, 2, true, exec, tracker);
 
     // When:
     final AtomicWriteResult result = CommitBuffer.drain(
@@ -79,7 +79,7 @@ public class CommitBufferDrainTest {
   }
 
   @Test
-  public void shouldCancelOngoingAndNotContinueDrainOnFailure() throws InterruptedException {
+  public void shouldExecAllWritesEvenWhenEarlierWriteFails() throws InterruptedException {
     // Given:
     final var latches = Map.of(
         0, new CountDownLatch(0),
@@ -89,14 +89,13 @@ public class CommitBufferDrainTest {
     final ExecutorService exec = Executors.newFixedThreadPool(4);
 
     final ConcurrentLinkedDeque<Integer> tracker = new ConcurrentLinkedDeque<>();
-    final ConcurrentLinkedDeque<Integer> interrupted = new ConcurrentLinkedDeque<>();
-    final var p0 = new TestWriter(latches, 0, 1, false, exec, tracker, interrupted);
-    final var p1 = new TestWriter(latches, 1, 2, true, exec, tracker, interrupted);
-    final var p2 = new TestWriter(latches, 2, 0, true, exec, tracker, interrupted);
+    final var p0 = new TestWriter(latches, 0, 1, false, exec, tracker);
+    final var p1 = new TestWriter(latches, 1, 2, true, exec, tracker);
+    final var p2 = new TestWriter(latches, 2, 0, true, exec, tracker);
 
     // When:
     final AtomicWriteResult result = CommitBuffer.drain(
-        // 0 fails, which should cancel 1 and 2 should never have run
+        // 0 fails, which should allow 1 to complete and 2 to run
         List.of(p1, p0, p2),
         TestWriter::get,
         TestWriter::partition,
@@ -107,17 +106,10 @@ public class CommitBufferDrainTest {
     // Then:
     assertThat(result.wasApplied(), is(false));
     assertThat(result.getPartition(), is(0));
-    assertThat(tracker, hasSize(1));
-    assertThat(tracker, contains(0));
+    assertThat(tracker, hasSize(3));
+    assertThat(tracker, contains(0, 1, 2));
 
-    exec.shutdownNow();
-
-    // we should count down 1 when it is interrupted
-    latches.get(1).await();
-
-    // 2 should never have run, so it isn't interrupted
-    assertThat(interrupted.size(), is(1));
-    assertThat(interrupted, contains(1));
+    exec.shutdown();
   }
 
   static class TestWriter implements Supplier<CompletionStage<AtomicWriteResult>> {
@@ -128,7 +120,6 @@ public class CommitBufferDrainTest {
     private final boolean success;
     private final Executor exec;
     private final ConcurrentLinkedDeque<Integer> orderTracker;
-    private final ConcurrentLinkedDeque<Integer> interrupted;
 
     public TestWriter(
         final Map<Integer, CountDownLatch> latches,
@@ -136,21 +127,19 @@ public class CommitBufferDrainTest {
         final int release,
         final boolean success,
         final Executor exec,
-        final ConcurrentLinkedDeque<Integer> successTracker,
-        final ConcurrentLinkedDeque<Integer> interrupted) {
+        final ConcurrentLinkedDeque<Integer> successTracker) {
       this.latches = latches;
       this.partition = partition;
       this.release = release;
       this.success = success;
       this.exec = exec;
       this.orderTracker = successTracker;
-      this.interrupted = interrupted;
     }
 
     @Override
     public CompletionStage<AtomicWriteResult> get() {
       return supplyAsync(
-          awrSupplier(latches, partition, release, success, orderTracker, interrupted), exec
+          awrSupplier(latches, partition, release, success, orderTracker), exec
       );
     }
 
@@ -164,27 +153,24 @@ public class CommitBufferDrainTest {
       final int partition,
       final int release,
       final boolean success,
-      final ConcurrentLinkedDeque<Integer> tracker,
-      final ConcurrentLinkedDeque<Integer> interrupted
+      final ConcurrentLinkedDeque<Integer> tracker
   ) {
     return () -> {
       try {
         LOG.info("Started execution of {}", partition);
         latches.get(partition).await();
         tracker.add(partition);
+        latches.get(release).countDown();
 
         if (success) {
           LOG.info("Finished execution of {}.. Releasing {}", partition, release);
-          latches.get(release).countDown();
           return AtomicWriteResult.success(partition);
         } else {
-          LOG.info("Failed execution of {}.. not releasing {}", partition, release);
+          LOG.info("Failed execution of {}.. Releasing {}", partition, release);
           return AtomicWriteResult.failure(partition);
         }
       } catch (InterruptedException e) {
         LOG.info("Interrupted partition {}", partition);
-        interrupted.add(partition);
-        latches.get(partition).countDown(); // count yourself down
         throw new CompletionException(e);
       }
     };

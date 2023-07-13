@@ -16,9 +16,9 @@
 
 package dev.responsive.kafka.store;
 
-import static dev.responsive.db.CassandraClient.UNSET_PERMIT;
 import static dev.responsive.kafka.store.ResponsivePartitionedStore.PLUGIN;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -28,9 +28,9 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.datastax.oss.driver.api.core.CqlSession;
-import com.datastax.oss.driver.api.core.cql.SimpleStatementBuilder;
 import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
 import dev.responsive.db.CassandraClient;
+import dev.responsive.db.CassandraClient.MetadataRow;
 import dev.responsive.db.partitioning.SubPartitioner;
 import dev.responsive.utils.ResponsiveExtension;
 import java.nio.ByteBuffer;
@@ -39,10 +39,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -51,8 +47,10 @@ import org.apache.kafka.clients.admin.DeleteRecordsResult;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
@@ -111,71 +109,75 @@ public class CommitBufferTest {
   }
 
   @Test
-  public void shouldFlushAndUpdateOffsetWhenLargerOffset() {
+  public void shouldFlushWithCorrectEpochAndOffsetForAllSubpartitions() {
     // Given:
+    setPartitioner(3);
     final String tableName = name;
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
         client, tableName, changelogTp, admin, PLUGIN, true, TRIGGERS, partitioner, 1);
     buffer.init();
 
+    final Bytes k0 = Bytes.wrap(ByteBuffer.allocate(4).putInt(0).array());
+    final Bytes k1 = Bytes.wrap(ByteBuffer.allocate(4).putInt(1).array());
+
     // When:
-    for (int i = 0; i < CommitBuffer.MAX_BATCH_SIZE * 1.5; i++) {
-      buffer.put(KEY, VALUE);
-    }
+    // key 0 -> subpartition 2 * 3 + 0 % 3 = 6
+    // key 1 -> subpartition 2 * 3 + 1 % 3 =  7
+    // nothing in subpartition 8, but offset should still be flushed
+    buffer.put(k0, VALUE);
+    buffer.put(k1, VALUE);
     buffer.flush(100L);
 
     // Then:
-    final byte[] value = client.get(tableName, KAFKA_PARTITION, KEY);
-    assertThat(value, is(VALUE));
-    assertThat(client.getOffset(tableName, KAFKA_PARTITION).offset, is(100L));
+    assertThat(client.get(tableName, 6, k0), is(VALUE));
+    assertThat(client.get(tableName, 7, k1), is(VALUE));
+    assertThat(client.metadata(tableName, 6), is(new MetadataRow(100L, 1L)));
+    assertThat(client.metadata(tableName, 7), is(new MetadataRow(100L, 1L)));
+    assertThat(client.metadata(tableName, 8), is(new MetadataRow(100L, 1L)));
   }
 
   @Test
-  public void shouldExplodeFlushAndUpdateOffsetWhenLargerOffset() {
+  public void shouldNotFlushWithExpiredEpoch() {
     // Given:
-    setPartitioner(2);
     final String tableName = name;
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
         client, tableName, changelogTp, admin, PLUGIN, true, TRIGGERS, partitioner, 1);
     buffer.init();
+    client.execute(client.reserveEpoch(tableName, KAFKA_PARTITION, 100L));
 
     // When:
-    for (int i = 0; i < CommitBuffer.MAX_BATCH_SIZE * 2.5; i++) {
-      final byte[] array = ByteBuffer.allocate(4).putInt(i).array();
-      buffer.put(new Bytes(array), VALUE);
-    }
-    buffer.flush(100L);
+    final TaskMigratedException e = assertThrows(
+        TaskMigratedException.class,
+        () -> {
+          buffer.put(KEY, VALUE);
+          buffer.flush(100L);
+        }
+    );
 
     // Then:
-    assertThat(client.get(tableName, KAFKA_PARTITION * 2, KEY), is(VALUE));
-    assertThat(client.get(tableName, KAFKA_PARTITION * 2 + 1, KEY2), is(VALUE));
-
-    assertThat(client.getOffset(tableName, KAFKA_PARTITION * 2).offset, is(100L));
-    assertThat(client.getOffset(tableName, KAFKA_PARTITION * 2 + 1).offset, is(100L));
+    assertThat(
+        e.getMessage(),
+        Matchers.containsString("Local Epoch: 1, Persisted Epoch: 100"));
   }
 
   @Test
-  public void shouldExplodeFlushWhenThereAreEmptyPartitionSets() {
+  public void shouldIncrementEpochAndReserveForAllSubpartitionsOnInit() {
     // Given:
-    setPartitioner(2);
     final String tableName = name;
+    setPartitioner(2);
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
         client, tableName, changelogTp, admin, PLUGIN, true, TRIGGERS, partitioner, 1);
+    // throwaway init to initialize table
     buffer.init();
+    client.execute(client.reserveEpoch(tableName, 4, 100L));
+    client.execute(client.reserveEpoch(tableName, 5, 100L));
 
     // When:
-    for (int i = 0; i < CommitBuffer.MAX_BATCH_SIZE * 1.5; i++) {
-      // i << 1 ensures they all go to partition 0
-      final byte[] array = ByteBuffer.allocate(4).putInt(i << 1).array();
-      buffer.put(new Bytes(array), VALUE);
-    }
-    buffer.flush(100L);
+    buffer.init();
 
     // Then:
-    assertThat(client.get(tableName, KAFKA_PARTITION * 2, KEY), is(VALUE));
-
-    assertThat(client.getOffset(tableName, KAFKA_PARTITION * 2).offset, is(100L));
-    assertThat(client.getOffset(tableName, KAFKA_PARTITION * 2 + 1).offset, is(100L));
+    assertThat(client.metadata(tableName, 4).epoch, is(101L));
+    assertThat(client.metadata(tableName, 5).epoch, is(101L));
   }
 
   @Test
@@ -185,9 +187,7 @@ public class CommitBufferTest {
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
         client, tableName, changelogTp, admin, PLUGIN, true, TRIGGERS, partitioner, 1);
     buffer.init();
-    for (int i = 0; i < CommitBuffer.MAX_BATCH_SIZE * 1.5; i++) {
-      buffer.put(KEY, VALUE);
-    }
+    buffer.put(KEY, VALUE);
 
     // when:
     buffer.flush(100L);
@@ -203,10 +203,7 @@ public class CommitBufferTest {
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
         client, tableName, changelogTp, admin, PLUGIN, false, TRIGGERS, partitioner, 1);
     buffer.init();
-
-    for (int i = 0; i < CommitBuffer.MAX_BATCH_SIZE * 1.5; i++) {
-      buffer.put(KEY, VALUE);
-    }
+    buffer.put(KEY, VALUE);
 
     // when:
     buffer.flush(100L);
@@ -239,10 +236,10 @@ public class CommitBufferTest {
     buffer.flush(9L);
 
     // Then:
-    assertThat(client.getOffset(tableName, KAFKA_PARTITION).offset, is(-1L));
+    assertThat(client.metadata(tableName, KAFKA_PARTITION).offset, is(-1L));
     buffer.put(Bytes.wrap(new byte[]{10}), VALUE);
     buffer.flush(10L);
-    assertThat(client.getOffset(tableName, KAFKA_PARTITION).offset, is(10L));
+    assertThat(client.metadata(tableName, KAFKA_PARTITION).offset, is(10L));
   }
 
   @Test
@@ -269,10 +266,10 @@ public class CommitBufferTest {
     buffer.flush(9L);
 
     // Then:
-    assertThat(client.getOffset(tableName, KAFKA_PARTITION).offset, is(-1L));
+    assertThat(client.metadata(tableName, KAFKA_PARTITION).offset, is(-1L));
     buffer.put(Bytes.wrap(new byte[]{10}), value);
     buffer.flush(10L);
-    assertThat(client.getOffset(tableName, KAFKA_PARTITION).offset, is(10L));
+    assertThat(client.metadata(tableName, KAFKA_PARTITION).offset, is(10L));
   }
 
   @Test
@@ -300,10 +297,10 @@ public class CommitBufferTest {
     buffer.flush(1L);
 
     // Then:
-    assertThat(client.getOffset(tableName, KAFKA_PARTITION).offset, is(-1L));
+    assertThat(client.metadata(tableName, KAFKA_PARTITION).offset, is(-1L));
     clock.set(clock.get().plus(Duration.ofSeconds(35)));
     buffer.flush(5L);
-    assertThat(client.getOffset(tableName, KAFKA_PARTITION).offset, is(5L));
+    assertThat(client.metadata(tableName, KAFKA_PARTITION).offset, is(5L));
   }
 
   @Test
@@ -325,76 +322,44 @@ public class CommitBufferTest {
   }
 
   @Test
-  public void shouldThrowErrorOnFlushWhenSmallerOffset() {
+  public void shouldRestoreRecords() {
     // Given:
     final String tableName = name;
     final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
         client, tableName, changelogTp, admin, PLUGIN, true, TRIGGERS, partitioner, 1);
     buffer.init();
-    client.execute(client.revokePermit(tableName, KAFKA_PARTITION, 101));
 
-    // Expect
-    // When:
-    assertThrows(ProcessorStateException.class, () -> {
-      buffer.put(KEY, VALUE);
-      buffer.flush(100L);
-    }, "client was fenced");
-  }
-
-  @Test
-  public void shouldThrowErrorOnFlushWhenDifferentTxnIdIsSet() {
-    // Given:
-    final String tableName = name;
-    final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, admin, PLUGIN, true, TRIGGERS, partitioner, 1);
-    buffer.init();
-    client.execute(
-        client.acquirePermit(tableName, KAFKA_PARTITION, UNSET_PERMIT, UUID.randomUUID(), 1));
-
-    // Expect
-    // When:
-    assertThrows(ProcessorStateException.class, () -> {
-      buffer.put(KEY, VALUE);
-      buffer.flush(100L);
-    }, "client was fenced");
-  }
-
-  @Test
-  public void shouldThrowErrorOnFlushWhenEqualOffset() {
-    // Given:
-    final String tableName = name;
-    final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, admin, PLUGIN, true, TRIGGERS, partitioner, 1);
-    buffer.init();
-    client.execute(client.revokePermit(tableName, KAFKA_PARTITION, 100));
-
-    // Expect
-    // When:
-    assertThrows(ProcessorStateException.class, () -> {
-      buffer.put(KEY, VALUE);
-      buffer.flush(100L);
-    }, "client was fenced");
-  }
-
-  @Test
-  public void shouldRestoreRecordsGreaterThanCassandraOffset() {
-    // Given:
-    final String tableName = name;
-    final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, admin, PLUGIN, true, TRIGGERS, partitioner, 1);
-    buffer.init();
-    client.execute(client.revokePermit(tableName, KAFKA_PARTITION, 100));
-
-    final ConsumerRecord<byte[], byte[]> ignored = new ConsumerRecord<>(
-        changelogTp.topic(), changelogTp.partition(), 100, new byte[]{1}, new byte[]{1});
-    final ConsumerRecord<byte[], byte[]> restored = new ConsumerRecord<>(
-        changelogTp.topic(), changelogTp.partition(), 101, new byte[]{2}, new byte[]{2});
+    final ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>(
+        changelogTp.topic(), changelogTp.partition(), 100, KEY.get(), VALUE);
 
     // When:
-    buffer.restoreBatch(List.of(ignored, restored));
+    buffer.restoreBatch(List.of(record));
 
     // Then:
-    assertThat(client.getOffset(tableName, KAFKA_PARTITION).offset, is(101L));
+    assertThat(client.metadata(tableName, KAFKA_PARTITION).offset, is(100L));
+    final byte[] value = client.get(tableName, KAFKA_PARTITION, KEY);
+    assertThat(value, is(VALUE));
+  }
+
+  @Test
+  public void shouldNotRestoreRecordsWhenFencedByEpoch() {
+    // Given:
+    final String tableName = name;
+    final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
+        client, tableName, changelogTp, admin, PLUGIN, true, TRIGGERS, partitioner, 1);
+    buffer.init();
+    client.execute(client.reserveEpoch(tableName, KAFKA_PARTITION, 100)); // first epoch is 1
+
+    final ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>(
+        changelogTp.topic(), KAFKA_PARTITION, 100, KEY.get(), VALUE);
+
+    // When:
+    final var e = assertThrows(
+        TaskMigratedException.class,
+        () -> buffer.restoreBatch(List.of(record)));
+
+    // Then:
+    assertThat(e.getMessage(), containsString("Local Epoch: 1, Persisted Epoch: 100"));
   }
 
   @Test
@@ -414,7 +379,8 @@ public class CommitBufferTest {
         Instant::now,
         1);
     buffer.init();
-    client.execute(client.revokePermit(tableName, 0, 100));
+    client.execute(client.setOffset(tableName, 0, 100, 1));
+
     final List<ConsumerRecord<byte[], byte[]>> records = IntStream.range(0, 5)
         .mapToObj(i -> new ConsumerRecord<>(
             changelogTp.topic(),
@@ -436,74 +402,6 @@ public class CommitBufferTest {
               Bytes.wrap(Integer.toString(i).getBytes(Charset.defaultCharset()))),
           is(Integer.toString(i).getBytes(Charset.defaultCharset())));
     }
-  }
-
-  @Test
-  @SuppressWarnings({"rawtypes", "unchecked"})
-  public void shouldIgnoreFlushFailuresOnRestore() {
-    // Given:
-    final String tableName = name;
-    final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, admin, PLUGIN, true, TRIGGERS, partitioner, 1);
-    buffer.init();
-    client.execute(client.revokePermit(tableName, KAFKA_PARTITION, 100));
-
-    final CountDownLatch latch1 = new CountDownLatch(0);
-    final CountDownLatch latch2 = new CountDownLatch(0);
-
-    final ConsumerRecord restoreRecord = Mockito.mock(ConsumerRecord.class);
-    when(restoreRecord.key()).thenAnswer(iom -> {
-      latch2.countDown();
-      latch1.await();
-      return KEY.get();
-    });
-    when(restoreRecord.value()).thenReturn(VALUE);
-    when(restoreRecord.offset()).thenReturn(101L);
-
-    // When:
-    final ExecutorService executor = Executors.newSingleThreadExecutor();
-    try {
-      executor.submit(() -> {
-        latch2.await();
-        client.execute(client.revokePermit(tableName, KAFKA_PARTITION, 102));
-        latch1.countDown();
-        return null;
-      });
-      buffer.restoreBatch(List.of(restoreRecord));
-    } finally {
-      executor.shutdown();
-    }
-
-    // Then:
-    assertThat(buffer.size(), is(0)); // nothing should have been added
-  }
-
-  @Test
-  public void shouldRevokeCorruptedPermitsOnInit() {
-    // Given:
-    final String tableName = name;
-    final CommitBuffer<Bytes> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, admin, PLUGIN, true, TRIGGERS, partitioner, 1);
-    // first initialize the offsets
-    client.initializeOffset(tableName, 0);
-
-    // simulate that offset 100 was already written
-    client.execute(client.revokePermit(tableName, 0, 100L));
-    client.execute(client.acquirePermit(tableName, 0, UNSET_PERMIT, UUID.randomUUID(), 100L));
-
-    // When:
-    buffer.init();
-
-    // Then:
-    final var result = client.execute(
-        new SimpleStatementBuilder(
-            "SELECT offset, permit FROM " + tableName + " WHERE partitionKey = 0"
-        ).build()
-    ).all();
-
-    assertThat(result.size(), is(1));
-    assertThat(result.get(0).get("offset", Long.class), is(100L));
-    assertThat(result.get(0).get("permit", UUID.class), is(UNSET_PERMIT));
   }
 
 }
