@@ -109,7 +109,7 @@ public class CommitBufferTest {
   }
 
   @Test
-  public void shouldFlushWithCorrectEpochAndOffsetForAllSubpartitions() {
+  public void shouldFlushWithCorrectEpochForAllSubpartitionsAndOffsetForBaseSubpartition() {
     // Given:
     setPartitioner(3);
     final String tableName = name;
@@ -132,8 +132,8 @@ public class CommitBufferTest {
     assertThat(client.get(tableName, 6, k0), is(VALUE));
     assertThat(client.get(tableName, 7, k1), is(VALUE));
     assertThat(client.metadata(tableName, 6), is(new MetadataRow(100L, 1L)));
-    assertThat(client.metadata(tableName, 7), is(new MetadataRow(100L, 1L)));
-    assertThat(client.metadata(tableName, 8), is(new MetadataRow(100L, 1L)));
+    assertThat(client.metadata(tableName, 7), is(new MetadataRow(-1L, 1L)));
+    assertThat(client.metadata(tableName, 8), is(new MetadataRow(-1L, 1L)));
   }
 
   @Test
