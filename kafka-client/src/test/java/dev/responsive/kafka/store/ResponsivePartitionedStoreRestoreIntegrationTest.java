@@ -165,6 +165,7 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
       final CassandraClient cassandraClient = defaultFactory.createCassandraClient(
           defaultFactory.createCqlSession(new ResponsiveConfig(properties))
       );
+      cassandraClient.prepareStatements(aggName());
       final long cassandraOffset = cassandraClient.metadata(aggName(), 0).offset;
       assertThat(cassandraOffset, greaterThan(0L));
       final TopicPartition changelog
@@ -218,6 +219,7 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
     final CassandraClient cassandraClient = defaultFactory.createCassandraClient(
         defaultFactory.createCqlSession(new ResponsiveConfig(properties))
     );
+    cassandraClient.prepareStatements(aggName());
     final long cassandraOffset = cassandraClient.metadata(aggName(), 0).offset;
     assertThat(cassandraOffset, greaterThan(0L));
     final TopicPartition changelog = new TopicPartition(name + "-" + aggName() + "-changelog", 0);

@@ -417,6 +417,7 @@ public class CassandraClient {
     getMetadata.computeIfAbsent(tableName, k -> session.prepare(
         QueryBuilder
             .selectFrom(tableName)
+            .column(OFFSET.column())
             .column(EPOCH.column())
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
             .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
