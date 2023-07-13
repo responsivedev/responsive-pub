@@ -66,7 +66,7 @@ public class ResponsiveRetryPolicy extends DefaultRetryPolicy {
         final var msg = "[{}] Rethrowing write timeout error due to too many retries "
             + "(consistency: {}, write type: {}, required acknowledgments: {}, "
             + "received acknowledgments: {}, retries: {})";
-        LOG.info(msg, logPrefix, cl, writeType, blockFor, received, retryCount);
+        LOG.error(msg, logPrefix, cl, writeType, blockFor, received, retryCount);
       }
 
       return decision;
