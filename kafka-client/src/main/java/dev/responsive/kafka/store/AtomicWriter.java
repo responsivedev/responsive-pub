@@ -19,6 +19,7 @@ package dev.responsive.kafka.store;
 import com.datastax.oss.driver.api.core.cql.BatchStatementBuilder;
 import com.datastax.oss.driver.api.core.cql.BatchType;
 import com.datastax.oss.driver.api.core.cql.BatchableStatement;
+import com.datastax.oss.driver.api.core.cql.ResultSet;
 import com.datastax.oss.driver.api.core.cql.Statement;
 import dev.responsive.db.CassandraClient;
 import dev.responsive.model.Result;
@@ -106,7 +107,10 @@ class AtomicWriter<K> {
     return partition;
   }
 
-  public CompletionStage<AtomicWriteResult> setOffset(final long offset) {
-    return executeAsync(client.setOffset(tableName, partition, offset, epoch));
+  public AtomicWriteResult setOffset(final long offset) {
+    final var result = client.execute(client.setOffset(tableName, partition, offset, epoch));
+    return result.wasApplied()
+        ? AtomicWriteResult.success(partition)
+        : AtomicWriteResult.failure(partition);
   }
 }

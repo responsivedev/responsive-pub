@@ -274,14 +274,8 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
   }
 
   long offset() {
-    return subPartitioner.all(partition)
-        .mapToLong(p -> client.metadata(tableName, p).offset)
-        .min()
-        .orElseThrow(() -> new IllegalStateException(
-            "Expected an offset to exist in remote for kafka partition " + partition
-                + ". If you see this error it means that init() was not called on "
-                + "the CommitBuffer.")
-        );
+    final int basePartition = subPartitioner.first(partition);
+    return client.metadata(tableName, basePartition).offset;
   }
 
   // Visible For Testing
@@ -386,8 +380,9 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
     }
 
     // this offset is only used for recovery, so it can (and should) be done only
-    // when all the flushes above have completed
-    writeResult = drain(writers.values(), writer -> writer.setOffset(offset));
+    // when all the flushes above have completed and only needs to be written to
+    // the first subpartition
+    writeResult = writers.get(subPartitioner.first(partition)).setOffset(offset);
     if (!writeResult.wasApplied()) {
       return writeResult;
     }

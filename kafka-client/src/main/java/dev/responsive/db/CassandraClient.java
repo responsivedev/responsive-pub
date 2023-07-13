@@ -863,12 +863,9 @@ public class CassandraClient {
    */
   public MetadataRow metadata(final String tableName, final int partition) {
     final List<Row> result = session.execute(
-        QueryBuilder.selectFrom(tableName)
-            .column(OFFSET.column())
-            .column(EPOCH.column())
-            .where(PARTITION_KEY.relation().isEqualTo(PARTITION_KEY.literal(partition)))
-            .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
-            .build()
+        getMetadata.get(tableName)
+            .bind()
+            .setInt(PARTITION_KEY.bind(), partition)
     ).all();
 
     if (result.size() != 1) {
