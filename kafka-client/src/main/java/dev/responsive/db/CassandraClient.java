@@ -139,14 +139,14 @@ public class CassandraClient {
    * @return the result returned from Cassandra
    */
   public ResultSet execute(final Statement<?> statement) {
-    return session.execute(statement);
+    return session.execute(statement.setIdempotent(true));
   }
 
   /**
    * The async version of {@link #execute(Statement)}
    */
   public CompletionStage<AsyncResultSet> executeAsync(final Statement<?> statement) {
-    return session.executeAsync(statement);
+    return session.executeAsync(statement.setIdempotent(true));
   }
 
   /**
@@ -590,7 +590,7 @@ public class CassandraClient {
         .setInt(PARTITION_KEY.bind(), partition)
         .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()));
 
-    final List<Row> result = session.execute(get).all();
+    final List<Row> result = execute(get).all();
     if (result.size() > 1) {
       throw new IllegalArgumentException();
     } else if (result.isEmpty()) {
@@ -629,7 +629,7 @@ public class CassandraClient {
         .setByteBuffer(FROM_BIND, ByteBuffer.wrap(from.get()))
         .setByteBuffer(TO_BIND, ByteBuffer.wrap(to.get()));
 
-    final ResultSet result = session.execute(range);
+    final ResultSet result = execute(range);
     return Iterators.kv(result.iterator(), CassandraClient::rows);
   }
 
@@ -650,7 +650,7 @@ public class CassandraClient {
       final String tableName,
       final int partition
   ) {
-    final ResultSet result = session.execute(QueryBuilder
+    final ResultSet result = execute(QueryBuilder
         .selectFrom(tableName)
         .columns(DATA_KEY.column(), DATA_VALUE.column())
         .where(PARTITION_KEY.relation().isEqualTo(PARTITION_KEY.literal(partition)))
@@ -684,7 +684,7 @@ public class CassandraClient {
         .setInstant(W_FROM_BIND, Instant.ofEpochMilli(timeFrom))
         .setInstant(W_TO_BIND, Instant.ofEpochMilli(timeTo));
 
-    final ResultSet result = session.execute(get);
+    final ResultSet result = execute(get);
     return Iterators.kv(
         result.iterator(),
         CassandraClient::windowRows
@@ -717,7 +717,7 @@ public class CassandraClient {
         .setInstant(W_FROM_BIND, Instant.ofEpochMilli(timeFrom))
         .setInstant(W_TO_BIND, Instant.ofEpochMilli(timeTo));
 
-    final ResultSet result = session.execute(get);
+    final ResultSet result = execute(get);
     return Iterators.kv(
         result.iterator(),
         CassandraClient::windowRows
@@ -751,7 +751,7 @@ public class CassandraClient {
         .setByteBuffer(FROM_BIND, ByteBuffer.wrap(fromKey.get()))
         .setByteBuffer(TO_BIND, ByteBuffer.wrap(toKey.get()));
 
-    final ResultSet result = session.execute(get);
+    final ResultSet result = execute(get);
     return Iterators.filterKv(
         Iterators.kv(result.iterator(), CassandraClient::windowRows),
         k -> k.stamp >= timeFrom && k.stamp < timeTo
@@ -785,7 +785,7 @@ public class CassandraClient {
         .setByteBuffer(FROM_BIND, ByteBuffer.wrap(fromKey.get()))
         .setByteBuffer(TO_BIND, ByteBuffer.wrap(toKey.get()));
 
-    final ResultSet result = session.execute(get);
+    final ResultSet result = execute(get);
     return Iterators.filterKv(
         Iterators.kv(result.iterator(), CassandraClient::windowRows),
         k -> k.stamp >= timeFrom && k.stamp < timeTo
@@ -815,7 +815,7 @@ public class CassandraClient {
         .setInstant(FROM_BIND, Instant.ofEpochMilli(timeFrom))
         .setInstant(TO_BIND, Instant.ofEpochMilli(timeTo));
 
-    final ResultSet result = session.execute(get);
+    final ResultSet result = execute(get);
     return Iterators.filterKv(
         Iterators.kv(result.iterator(), CassandraClient::windowRows),
         k -> k.stamp >= timeFrom && k.stamp < timeTo
@@ -843,7 +843,7 @@ public class CassandraClient {
         .bind()
         .setInt(PARTITION_KEY.bind(), partition);
 
-    final ResultSet result = session.execute(get);
+    final ResultSet result = execute(get);
     return Iterators.filterKv(
         Iterators.kv(result.iterator(), CassandraClient::windowRows),
         k -> k.stamp >= timeFrom && k.stamp < timeTo
@@ -863,7 +863,7 @@ public class CassandraClient {
    * @return the metadata row
    */
   public MetadataRow metadata(final String tableName, final int partition) {
-    final List<Row> result = session.execute(
+    final List<Row> result = execute(
         getMetadata.get(tableName)
             .bind()
             .setInt(PARTITION_KEY.bind(), partition)
@@ -891,7 +891,7 @@ public class CassandraClient {
    *         the partition
    */
   public long count(final String tableName, final int partition) {
-    final ResultSet result = session.execute(QueryBuilder
+    final ResultSet result = execute(QueryBuilder
         .selectFrom(tableName)
         .countAll()
         .where(PARTITION_KEY.relation().isEqualTo(PARTITION_KEY.literal(partition)))
