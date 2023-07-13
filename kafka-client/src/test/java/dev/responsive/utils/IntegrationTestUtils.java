@@ -70,6 +70,7 @@ public final class IntegrationTestUtils {
         ? IsolationLevel.READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT)
         : IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT));
 
+    final var allSeen = new HashSet<>();
     final var notYetSeen = new HashSet<>(expected);
     try (final KafkaConsumer<Long, Long> consumer = new KafkaConsumer<>(properties)) {
       final TopicPartition output = new TopicPartition(topic, 0);
@@ -80,12 +81,14 @@ public final class IntegrationTestUtils {
       while (!notYetSeen.isEmpty()) {
         final ConsumerRecords<Long, Long> polled = consumer.poll(Duration.ofSeconds(30));
         for (ConsumerRecord<Long, Long> rec : polled) {
-          notYetSeen.remove(new KeyValue<>(rec.key(), rec.value()));
+          final var kv = new KeyValue<>(rec.key(), rec.value());
+          notYetSeen.remove(kv);
+          allSeen.add(kv);
         }
         if (System.nanoTime() > end) {
           throw new TimeoutException(
               "Timed out trying to read " + expected + " events from " + output
-                  + ". Not yet seen: " + notYetSeen);
+                  + ".\nNot yet seen: " + notYetSeen + ".\nAll seen: " + allSeen);
         }
       }
     }
