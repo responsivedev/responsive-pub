@@ -332,7 +332,7 @@ public class CassandraClient {
             .ifColumn(EPOCH.column()).isEqualTo(bindMarker(EPOCH.bind()))
             .build()
     ));
-}
+  }
 
   /**
    * Prepares the Cassandra queries for windowed tables.
