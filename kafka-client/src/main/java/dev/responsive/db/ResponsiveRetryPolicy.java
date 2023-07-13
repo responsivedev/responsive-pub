@@ -24,12 +24,15 @@ import com.datastax.oss.driver.api.core.servererrors.WriteType;
 import com.datastax.oss.driver.api.core.session.Request;
 import com.datastax.oss.driver.internal.core.retry.DefaultRetryPolicy;
 import edu.umd.cs.findbugs.annotations.NonNull;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.JmxReporter;
+import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.CumulativeCount;
 import org.apache.kafka.common.utils.Time;
@@ -52,7 +55,12 @@ public class ResponsiveRetryPolicy extends DefaultRetryPolicy {
   ) {
     super(context, profileName);
     this.logPrefix = (context != null ? context.getSessionName() : null) + "|" + profileName;
-    this.metrics = new Metrics(new MetricConfig(), List.of(new JmxReporter()), Time.SYSTEM);
+    this.metrics = new Metrics(
+        new MetricConfig(),
+        List.of(new JmxReporter()),
+        Time.SYSTEM,
+        new KafkaMetricsContext("dev.responsive", new HashMap<>())
+    );
     this.writeTimeouts = registerWriteTimeoutSensor(metrics, context, profileName);
   }
 
