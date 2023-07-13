@@ -24,6 +24,15 @@ import com.datastax.oss.driver.api.core.servererrors.WriteType;
 import com.datastax.oss.driver.api.core.session.Request;
 import com.datastax.oss.driver.internal.core.retry.DefaultRetryPolicy;
 import edu.umd.cs.findbugs.annotations.NonNull;
+import java.util.List;
+import java.util.Map;
+import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.metrics.JmxReporter;
+import org.apache.kafka.common.metrics.MetricConfig;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.CumulativeCount;
+import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,7 +40,11 @@ public class ResponsiveRetryPolicy extends DefaultRetryPolicy {
 
   private static final Logger LOG = LoggerFactory.getLogger(ResponsiveRetryPolicy.class);
 
+  private static final String METRICS_GROUP = "responsive.cassandra.retry";
+
   private final String logPrefix;
+  private final Metrics metrics;
+  private final Sensor writeTimeouts;
 
   public ResponsiveRetryPolicy(
       final DriverContext context,
@@ -39,6 +52,29 @@ public class ResponsiveRetryPolicy extends DefaultRetryPolicy {
   ) {
     super(context, profileName);
     this.logPrefix = (context != null ? context.getSessionName() : null) + "|" + profileName;
+    this.metrics = new Metrics(new MetricConfig(), List.of(new JmxReporter()), Time.SYSTEM);
+    this.writeTimeouts = registerWriteTImeoutSensor(metrics, context, profileName);
+  }
+
+  private Sensor registerWriteTimeoutSensor(
+      final Metrics metrics,
+      final DriverContext context,
+      final String profile
+  ) {
+    final var sensor = metrics.sensor("write-timeouts-total");
+    sensor.add(
+        new MetricName(
+            "write-timeouts-total",
+            METRICS_GROUP,
+            "total write timeouts",
+            Map.of(
+                "profile", profile,
+                "session", context == null ? "" : context.getSessionName()
+            )
+        ),
+        new CumulativeCount()
+    );
+    return sensor;
   }
 
   @Override
@@ -51,6 +87,8 @@ public class ResponsiveRetryPolicy extends DefaultRetryPolicy {
       final int retryCount
   ) {
     return () -> {
+      writeTimeouts.record();
+
       // this differs from the default policy in that we know all writes to C*
       // are retry-able, not just BATCH LOG writes because all BATCH UNLOGGED
       // writes that our client issues go to only a single partition - we also
@@ -66,5 +104,10 @@ public class ResponsiveRetryPolicy extends DefaultRetryPolicy {
 
       return decision;
     };
+  }
+
+  @Override
+  public void close() {
+    metrics.close();
   }
 }
