@@ -165,7 +165,7 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
       final CassandraClient cassandraClient = defaultFactory.createCassandraClient(
           defaultFactory.createCqlSession(new ResponsiveConfig(properties))
       );
-      final long cassandraOffset = cassandraClient.getOffset(aggName(), 0).offset;
+      final long cassandraOffset = cassandraClient.metadata(aggName(), 0).offset;
       assertThat(cassandraOffset, greaterThan(0L));
       final TopicPartition changelog
           = new TopicPartition(name + "-" + aggName() + "-changelog", 0);
@@ -218,7 +218,7 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
     final CassandraClient cassandraClient = defaultFactory.createCassandraClient(
         defaultFactory.createCqlSession(new ResponsiveConfig(properties))
     );
-    final long cassandraOffset = cassandraClient.getOffset(aggName(), 0).offset;
+    final long cassandraOffset = cassandraClient.metadata(aggName(), 0).offset;
     assertThat(cassandraOffset, greaterThan(0L));
     final TopicPartition changelog = new TopicPartition(name + "-" + aggName() + "-changelog", 0);
     final long changelogOffset = admin.listOffsets(Map.of(changelog, OffsetSpec.latest())).all()

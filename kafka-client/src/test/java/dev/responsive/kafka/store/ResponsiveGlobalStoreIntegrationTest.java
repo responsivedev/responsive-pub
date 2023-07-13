@@ -16,8 +16,8 @@
 
 package dev.responsive.kafka.store;
 
+import static dev.responsive.utils.IntegrationTestUtils.awaitOutput;
 import static dev.responsive.utils.IntegrationTestUtils.pipeInput;
-import static dev.responsive.utils.IntegrationTestUtils.readOutput;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
@@ -50,8 +50,6 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.KStream;
-import org.hamcrest.MatcherAssert;
-import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -116,14 +114,13 @@ public class ResponsiveGlobalStoreIntegrationTest {
       pipeInput(INPUT_TOPIC, 2, producer, System::currentTimeMillis, 0, 10, 0, 1);
 
       // Then:
-      final Set<KeyValue<Long, Long>> result = new HashSet<>(
-          readOutput(OUTPUT_TOPIC, 0, 20, false, properties));
-
+      final Set<KeyValue<Long, Long>> expected = new HashSet<>();
       for (int k = 0; k < 2; k++) {
         for (int i = 0; i < 10; i++) {
-          MatcherAssert.assertThat(result, Matchers.hasItem(new KeyValue<>((long) k, i + 2L)));
+          expected.add(new KeyValue<>((long) k, i + 2L));
         }
       }
+      awaitOutput(OUTPUT_TOPIC, 0, expected, false, properties);
     }
   }
 

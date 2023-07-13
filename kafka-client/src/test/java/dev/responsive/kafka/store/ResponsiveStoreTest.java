@@ -25,7 +25,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import dev.responsive.db.CassandraClient;
-import dev.responsive.db.CassandraClient.OffsetRow;
+import dev.responsive.db.CassandraClient.MetadataRow;
 import dev.responsive.kafka.api.InternalConfigs;
 import dev.responsive.kafka.config.ResponsiveConfig;
 import dev.responsive.utils.RemoteMonitor;
@@ -80,7 +80,7 @@ public class ResponsiveStoreTest {
   @BeforeEach
   public void before() {
     when(client.awaitTable(any(), any())).thenReturn(monitor);
-    when(client.getOffset(any(), anyInt())).thenReturn(new OffsetRow(0, null));
+    when(client.metadata(any(), anyInt())).thenReturn(new MetadataRow(0, 0));
     config = new HashMap<>(Map.of(
         StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092",
         StreamsConfig.APPLICATION_ID_CONFIG, "test",

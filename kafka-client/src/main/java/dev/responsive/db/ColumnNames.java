@@ -28,14 +28,14 @@ import org.apache.kafka.common.utils.Bytes;
 public enum ColumnNames {
 
   // shared partition key column
-  PARTITION_KEY("partitionKey", "pk"),
+  PARTITION_KEY("partitionKey", "partitionkey"),
 
   // columns for the data tables
-  DATA_KEY("key", "k", b -> bytes((Bytes) b)),
-  DATA_VALUE("value", "v", b -> bytes((byte[]) b)),
-  OFFSET("offset", "o"),
-  PERMIT("permit", "p"),
-  WINDOW_START("windowStart", "ws", ts -> timestamp((long) ts));
+  DATA_KEY("key", "datakey", b -> bytes((Bytes) b)),
+  DATA_VALUE("value", "value", b -> bytes((byte[]) b)),
+  OFFSET("offset", "offset"),
+  EPOCH("epoch", "epoch"),
+  WINDOW_START("windowStart", "windowstart", ts -> timestamp((long) ts));
 
   private final String column;
   private final String bind;

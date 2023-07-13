@@ -19,9 +19,9 @@ package dev.responsive.db;
 import static com.datastax.oss.driver.api.querybuilder.QueryBuilder.bindMarker;
 import static dev.responsive.db.ColumnNames.DATA_KEY;
 import static dev.responsive.db.ColumnNames.DATA_VALUE;
+import static dev.responsive.db.ColumnNames.EPOCH;
 import static dev.responsive.db.ColumnNames.OFFSET;
 import static dev.responsive.db.ColumnNames.PARTITION_KEY;
-import static dev.responsive.db.ColumnNames.PERMIT;
 import static dev.responsive.db.ColumnNames.WINDOW_START;
 
 import com.datastax.oss.driver.api.core.CqlSession;
@@ -66,7 +66,7 @@ public class CassandraClient {
 
   private static final Logger LOG = LoggerFactory.getLogger(CassandraClient.class);
 
-  public static final Bytes OFFSET_KEY = Bytes.wrap("_offset".getBytes(StandardCharsets.UTF_8));
+  public static final Bytes METADATA_KEY = Bytes.wrap("_metadata".getBytes(StandardCharsets.UTF_8));
   public static final UUID UNSET_PERMIT = new UUID(0, 0);
 
   private static final String FROM_BIND = "fk";
@@ -94,9 +94,10 @@ public class CassandraClient {
   private final ConcurrentHashMap<String, PreparedStatement> windowBackFetchAll;
   private final ConcurrentHashMap<String, PreparedStatement> windowBackFetchRange;
 
-  private final ConcurrentHashMap<String, PreparedStatement> revokePermit;
-  private final ConcurrentHashMap<String, PreparedStatement> acquirePermit;
-  private final ConcurrentHashMap<String, PreparedStatement> finalizeTxn;
+  private final ConcurrentHashMap<String, PreparedStatement> getMetadata;
+  private final ConcurrentHashMap<String, PreparedStatement> reserveEpoch;
+  private final ConcurrentHashMap<String, PreparedStatement> ensureEpoch;
+  private final ConcurrentHashMap<String, PreparedStatement> setOffset;
 
   /**
    * @param session the Cassandra session, expected to be initialized
@@ -119,9 +120,10 @@ public class CassandraClient {
     windowBackFetchAll = new ConcurrentHashMap<>();
     windowBackFetchRange = new ConcurrentHashMap<>();
 
-    revokePermit = new ConcurrentHashMap<>();
-    acquirePermit = new ConcurrentHashMap<>();
-    finalizeTxn = new ConcurrentHashMap<>();
+    getMetadata = new ConcurrentHashMap<>();
+    reserveEpoch = new ConcurrentHashMap<>();
+    ensureEpoch = new ConcurrentHashMap<>();
+    setOffset = new ConcurrentHashMap<>();
   }
 
   protected CassandraClient() {
@@ -148,10 +150,9 @@ public class CassandraClient {
   }
 
   /**
-   * Initializes the offset entry for {@code table} by adding a
-   * row with key {@link CassandraClient#OFFSET_KEY} and sets a
-   * special column {@link ColumnNames#OFFSET}, which is usually
-   * unset in Cassandra.
+   * Initializes the metadata entry for {@code table} by adding a
+   * row with key {@link CassandraClient#METADATA_KEY} and sets
+   * special columns {@link ColumnNames#OFFSET} and {@link ColumnNames#EPOCH}.
    *
    * <p>The {@code partitionKey} is the unit of atomicity for the
    * offset compare-and-check operation. Two operations that run
@@ -164,7 +165,7 @@ public class CassandraClient {
    * @param table         the table that is initialized
    * @param partitionKey  the partition to initialize
    */
-  public void initializeOffset(
+  public void initializeMetadata(
       final String table,
       final int partitionKey
   ) {
@@ -174,9 +175,9 @@ public class CassandraClient {
     // th data keys) so that it's impossible for a collision to happen
     RegularInsert insert = QueryBuilder.insertInto(table)
         .value(PARTITION_KEY.column(), PARTITION_KEY.literal(partitionKey))
-        .value(DATA_KEY.column(), DATA_KEY.literal(OFFSET_KEY))
+        .value(DATA_KEY.column(), DATA_KEY.literal(METADATA_KEY))
         .value(OFFSET.column(), OFFSET.literal(-1L))
-        .value(PERMIT.column(), QueryBuilder.literal(UNSET_PERMIT));
+        .value(EPOCH.column(), QueryBuilder.literal(0L));
 
     if (windowInsert.containsKey(table)) {
       insert = insert.value(WINDOW_START.column(), WINDOW_START.literal(0L));
@@ -185,62 +186,6 @@ public class CassandraClient {
     session.execute(insert.ifNotExists().build());
   }
 
-  /**
-   * Binds a statement to conditionally update the offset for a
-   * table/partitionKey pair and additionaly revokes any ongoing
-   * transaction permit.
-   *
-   * @param table         the table to update
-   * @param partitionKey  the partition key to update
-   * @param offset        the target value of the offset
-   *
-   * @return a {@link BoundStatement} for updating the offset
-   *         for the given table/partitionKey pairing that will
-   *         be applied <i>if and only if</i> the existing entry
-   *         for {@code offset} has a value smaller than the supplied
-   *         {@code offset} parameter.
-   */
-  @CheckReturnValue
-  public BoundStatement revokePermit(
-      final String table,
-      final int partitionKey,
-      final long offset
-  ) {
-    return revokePermit.get(table)
-        .bind()
-        .setInt(PARTITION_KEY.bind(), partitionKey)
-        .setLong(OFFSET.bind(), offset);
-  }
-
-  @CheckReturnValue
-  public BoundStatement acquirePermit(
-      final String table,
-      final int partitionKey,
-      final UUID oldPermit,
-      final UUID newPermit,
-      final long offset
-  ) {
-    return acquirePermit.get(table)
-        .bind()
-        .setInt(PARTITION_KEY.bind(), partitionKey)
-        .setUuid("op", oldPermit)
-        .setUuid("np", newPermit)
-        .setLong(OFFSET.bind(), offset);
-  }
-
-  @CheckReturnValue
-  public BoundStatement finalizeTxn(
-      final String table,
-      final int partitionKey,
-      final UUID permit,
-      final long offset
-  ) {
-    return finalizeTxn.get(table)
-        .bind()
-        .setInt(PARTITION_KEY.bind(), partitionKey)
-        .setUuid(PERMIT.bind(), permit)
-        .setLong(OFFSET.bind(), offset);
-  }
 
   /**
    * Creates a new table to store changelog data with the following
@@ -261,7 +206,7 @@ public class CassandraClient {
         .withClusteringColumn(DATA_KEY.column(), DataTypes.BLOB)
         .withColumn(DATA_VALUE.column(), DataTypes.BLOB)
         .withColumn(OFFSET.column(), DataTypes.BIGINT)
-        .withColumn(PERMIT.column(), DataTypes.UUID)
+        .withColumn(EPOCH.column(), DataTypes.BIGINT)
         .build()
     );
   }
@@ -298,7 +243,7 @@ public class CassandraClient {
         .withClusteringColumn(WINDOW_START.column(), DataTypes.TIMESTAMP)
         .withColumn(DATA_VALUE.column(), DataTypes.BLOB)
         .withColumn(OFFSET.column(), DataTypes.BIGINT)
-        .withColumn(PERMIT.column(), DataTypes.UUID)
+        .withColumn(EPOCH.column(), DataTypes.BIGINT)
         .build()
     );
   }
@@ -348,40 +293,46 @@ public class CassandraClient {
             .build()
     ));
 
-    revokePermit.computeIfAbsent(tableName, k -> session.prepare(
+    getMetadata.computeIfAbsent(tableName, k -> session.prepare(
         QueryBuilder
-            .update(tableName)
-            .setColumn(OFFSET.column(), bindMarker(OFFSET.bind()))
-            .setColumn(PERMIT.column(), QueryBuilder.literal(UNSET_PERMIT))
+            .selectFrom(tableName)
+            .column(EPOCH.column())
+            .column(OFFSET.column())
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
-            .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(OFFSET_KEY)))
-            .ifColumn(OFFSET.column()).isLessThan(bindMarker(OFFSET.bind()))
+            .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
             .build()
     ));
 
-    acquirePermit.computeIfAbsent(tableName, k -> session.prepare(
+    setOffset.computeIfAbsent(tableName, k -> session.prepare(
         QueryBuilder
             .update(tableName)
-            .setColumn(PERMIT.column(), bindMarker("np"))
+            .setColumn(OFFSET.column(), bindMarker(OFFSET.bind()))
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
-            .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(OFFSET_KEY)))
-            .ifColumn(OFFSET.column()).isLessThan(bindMarker(OFFSET.bind()))
-            .ifColumn(PERMIT.column()).isEqualTo(bindMarker("op"))
+            .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
+            .ifColumn(EPOCH.column()).isEqualTo(bindMarker(EPOCH.bind()))
             .build()
     ));
 
-    finalizeTxn.computeIfAbsent(tableName, k -> session.prepare(
+    reserveEpoch.computeIfAbsent(tableName, k -> session.prepare(
         QueryBuilder
             .update(tableName)
-            .setColumn(PERMIT.column(), QueryBuilder.literal(UNSET_PERMIT))
-            .setColumn(OFFSET.column(), bindMarker(OFFSET.bind()))
+            .setColumn(EPOCH.column(), bindMarker(EPOCH.bind()))
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
-            .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(OFFSET_KEY)))
-            .ifColumn(OFFSET.column()).isLessThan(bindMarker(OFFSET.bind()))
-            .ifColumn(PERMIT.column()).isEqualTo(bindMarker(PERMIT.bind()))
+            .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
+            .ifColumn(EPOCH.column()).isLessThan(bindMarker(EPOCH.bind()))
             .build()
     ));
-  }
+
+    ensureEpoch.computeIfAbsent(tableName, k -> session.prepare(
+        QueryBuilder
+            .update(tableName)
+            .setColumn(EPOCH.column(), bindMarker(EPOCH.bind()))
+            .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
+            .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
+            .ifColumn(EPOCH.column()).isEqualTo(bindMarker(EPOCH.bind()))
+            .build()
+    ));
+}
 
   /**
    * Prepares the Cassandra queries for windowed tables.
@@ -463,42 +414,86 @@ public class CassandraClient {
             .build()
     ));
 
-    revokePermit.computeIfAbsent(tableName, k -> session.prepare(
+    getMetadata.computeIfAbsent(tableName, k -> session.prepare(
         QueryBuilder
-            .update(tableName)
-            .setColumn(OFFSET.column(), bindMarker(OFFSET.bind()))
-            .setColumn(PERMIT.column(), QueryBuilder.literal(UNSET_PERMIT))
+            .selectFrom(tableName)
+            .column(EPOCH.column())
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
-            .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(OFFSET_KEY)))
+            .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
             .where(WINDOW_START.relation().isEqualTo(WINDOW_START.literal(0L)))
-            .ifColumn(OFFSET.column()).isLessThan(bindMarker(OFFSET.bind()))
             .build()
     ));
 
-    acquirePermit.computeIfAbsent(tableName, k -> session.prepare(
+    setOffset.computeIfAbsent(tableName, k -> session.prepare(
         QueryBuilder
             .update(tableName)
-            .setColumn(PERMIT.column(), bindMarker("np"))
+            .setColumn(OFFSET.column(), bindMarker(OFFSET.bind()))
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
-            .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(OFFSET_KEY)))
+            .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
             .where(WINDOW_START.relation().isEqualTo(WINDOW_START.literal(0L)))
-            .ifColumn(OFFSET.column()).isLessThan(bindMarker(OFFSET.bind()))
-            .ifColumn(PERMIT.column()).isEqualTo(bindMarker("op"))
+            .ifColumn(EPOCH.column()).isLessThan(bindMarker(EPOCH.bind()))
             .build()
     ));
 
-    finalizeTxn.computeIfAbsent(tableName, k -> session.prepare(
+    reserveEpoch.computeIfAbsent(tableName, k -> session.prepare(
         QueryBuilder
             .update(tableName)
-            .setColumn(PERMIT.column(), QueryBuilder.literal(UNSET_PERMIT))
-            .setColumn(OFFSET.column(), bindMarker(OFFSET.bind()))
+            .setColumn(EPOCH.column(), bindMarker(EPOCH.bind()))
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
-            .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(OFFSET_KEY)))
+            .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
             .where(WINDOW_START.relation().isEqualTo(WINDOW_START.literal(0L)))
-            .ifColumn(OFFSET.column()).isLessThan(bindMarker(OFFSET.bind()))
-            .ifColumn(PERMIT.column()).isEqualTo(bindMarker(PERMIT.bind()))
+            .ifColumn(EPOCH.column()).isLessThan(bindMarker(EPOCH.bind()))
             .build()
     ));
+
+    ensureEpoch.computeIfAbsent(tableName, k -> session.prepare(
+        QueryBuilder
+            .update(tableName)
+            .setColumn(EPOCH.column(), bindMarker(EPOCH.bind()))
+            .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
+            .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
+            .where(WINDOW_START.relation().isEqualTo(WINDOW_START.literal(0L)))
+            .ifColumn(EPOCH.column()).isEqualTo(bindMarker(EPOCH.bind()))
+            .build()
+    ));
+  }
+
+  @CheckReturnValue
+  public BoundStatement reserveEpoch(
+      final String table,
+      final int partitionKey,
+      final long epoch
+  ) {
+    return reserveEpoch.get(table)
+        .bind()
+        .setInt(PARTITION_KEY.bind(), partitionKey)
+        .setLong(EPOCH.bind(), epoch);
+  }
+
+  @CheckReturnValue
+  public BoundStatement ensureEpoch(
+      final String table,
+      final int partitionKey,
+      final long epoch
+  ) {
+    return ensureEpoch.get(table)
+        .bind()
+        .setInt(PARTITION_KEY.bind(), partitionKey)
+        .setLong(EPOCH.bind(), epoch);
+  }
+
+  @CheckReturnValue
+  public BoundStatement setOffset(
+      final String table,
+      final int partitionKey,
+      final long offset,
+      final long epoch
+  ) {
+    return setOffset.get(table)
+        .bind()
+        .setInt(PARTITION_KEY.bind(), partitionKey)
+        .setLong(OFFSET.bind(), offset)
+        .setLong(EPOCH.bind(), epoch);
   }
 
   /**
@@ -855,21 +850,24 @@ public class CassandraClient {
   }
 
   /**
-   * Gets the current (last committed) offset for the table/partition
-   * pairing.
+   * Get the metadata row for the table/partition pairing which includes:
+   * <ol>
+   *   <li>The current (last committed) offset</li>
+   *   <li>The current writer epoch</li>
+   * </ol>
    *
    * @param tableName the table
    * @param partition the table partition
    *
-   * @return the last committed offset
+   * @return the metadata row
    */
-  public OffsetRow getOffset(final String tableName, final int partition) {
+  public MetadataRow metadata(final String tableName, final int partition) {
     final List<Row> result = session.execute(
         QueryBuilder.selectFrom(tableName)
             .column(OFFSET.column())
-            .column(PERMIT.column())
+            .column(EPOCH.column())
             .where(PARTITION_KEY.relation().isEqualTo(PARTITION_KEY.literal(partition)))
-            .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(OFFSET_KEY)))
+            .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
             .build()
     ).all();
 
@@ -878,9 +876,9 @@ public class CassandraClient {
           "Expected exactly one offset row for %s[%s] but got %d",
           tableName, partition, result.size()));
     } else {
-      return new OffsetRow(
+      return new MetadataRow(
           result.get(0).getLong(OFFSET.column()),
-          result.get(0).getUuid(PERMIT.column())
+          result.get(0).getLong(EPOCH.column())
       );
     }
   }
@@ -951,13 +949,38 @@ public class CassandraClient {
     );
   }
 
-  public static class OffsetRow {
+  public static class MetadataRow {
     public final long offset;
-    public final UUID txind;
+    public final long epoch;
 
-    public OffsetRow(final long offset, final UUID txind) {
+    public MetadataRow(final long offset, final long epoch) {
       this.offset = offset;
-      this.txind = txind;
+      this.epoch = epoch;
+    }
+
+    @Override
+    public String toString() {
+      return "MetadataRow{"
+          + "offset=" + offset
+          + ", epoch=" + epoch
+          + '}';
+    }
+
+    @Override
+    public boolean equals(final Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      final MetadataRow that = (MetadataRow) o;
+      return offset == that.offset && epoch == that.epoch;
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(offset, epoch);
     }
   }
 }

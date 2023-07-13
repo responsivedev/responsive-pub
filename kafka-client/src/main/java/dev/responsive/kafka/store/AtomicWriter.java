@@ -16,8 +16,6 @@
 
 package dev.responsive.kafka.store;
 
-import static dev.responsive.db.CassandraClient.UNSET_PERMIT;
-
 import com.datastax.oss.driver.api.core.cql.BatchStatementBuilder;
 import com.datastax.oss.driver.api.core.cql.BatchType;
 import com.datastax.oss.driver.api.core.cql.BatchableStatement;
@@ -26,7 +24,6 @@ import dev.responsive.db.CassandraClient;
 import dev.responsive.model.Result;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
@@ -40,29 +37,27 @@ class AtomicWriter<K> {
   private final String tableName;
   private final int partition;
 
-  private final List<BatchableStatement<?>> statements = new ArrayList<>();
+  private final List<BatchableStatement<?>> statements;
   private final BufferPlugin<K> plugin;
-  private final long offset;
-  private final UUID permit;
-  private final long batchSize;
+  private final int batchSize;
+  private final long epoch;
 
   public AtomicWriter(
       final CassandraClient client,
       final String tableName,
       final int partition,
       final BufferPlugin<K> plugin,
-      final long offset,
-      final UUID permit,
-      final long batchSize
+      final long epoch,
+      final int batchSize
   ) {
     this.client = client;
     this.tableName = tableName;
     this.partition = partition;
     this.plugin = plugin;
+    this.epoch = epoch;
 
-    this.offset = offset;
-    this.permit = permit;
     this.batchSize = batchSize;
+    this.statements = new ArrayList<>(batchSize);
   }
 
   public void addAll(final Iterable<Result<K>> results) {
@@ -78,7 +73,6 @@ class AtomicWriter<K> {
   }
 
   public CompletionStage<AtomicWriteResult> flush() {
-    boolean first = true;
     var result = CompletableFuture.completedStage(AtomicWriteResult.success(partition));
 
     final var it = statements.iterator();
@@ -90,29 +84,17 @@ class AtomicWriter<K> {
     do {
       final var builder = new BatchStatementBuilder(BatchType.UNLOGGED);
       builder.setIdempotence(true);
-      builder.addStatement(beginBatch(first));
-      first = false;
+      builder.addStatement(client.ensureEpoch(tableName, partition, epoch));
 
       for (int i = 0; i < batchSize && it.hasNext(); i++) {
         builder.addStatement(it.next());
       }
 
-      // use then compose to short circuit writes to remote if any
-      // of the writes fail
-      result = result.thenCompose(awr -> awr.wasApplied()
-          ? executeAsync(builder.build())
-          : CompletableFuture.completedStage(awr)
-      );
+      result = result.thenCompose(awr -> executeAsync(builder.build()));
     } while (it.hasNext());
 
+    statements.clear();
     return result;
-  }
-
-  public CompletionStage<AtomicWriteResult> finalizeTxn() {
-    if (permit == null) {
-      return CompletableFuture.completedStage(AtomicWriteResult.success(partition));
-    }
-    return executeAsync(client.finalizeTxn(tableName, partition, permit, offset));
   }
 
   private CompletionStage<AtomicWriteResult> executeAsync(final Statement<?> statement) {
@@ -120,19 +102,11 @@ class AtomicWriter<K> {
         .thenApply(resp -> AtomicWriteResult.of(partition, resp));
   }
 
-  private BatchableStatement<?> beginBatch(final boolean first) {
-    return permit == null
-        ? client.revokePermit(tableName, partition, offset)
-        : client.acquirePermit(
-            tableName,
-            partition,
-            first ? UNSET_PERMIT : permit,
-            permit,
-            offset
-        );
-  }
-
   public int partition() {
     return partition;
+  }
+
+  public CompletionStage<AtomicWriteResult> setOffset(final long offset) {
+    return executeAsync(client.setOffset(tableName, partition, offset, epoch));
   }
 }
