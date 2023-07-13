@@ -21,9 +21,11 @@ import static org.hamcrest.Matchers.instanceOf;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.datastax.oss.driver.api.core.cql.ResultSet;
 import dev.responsive.db.CassandraClient;
 import dev.responsive.db.CassandraClient.MetadataRow;
 import dev.responsive.kafka.api.InternalConfigs;
@@ -72,6 +74,8 @@ public class ResponsiveStoreTest {
   private TopologyDescription description;
   @Mock
   private ResponsiveStoreRegistry registry;
+  @Mock
+  private ResultSet resultSet;
 
   private Admin admin = MockAdminClient.create().build();
 
@@ -79,8 +83,10 @@ public class ResponsiveStoreTest {
 
   @BeforeEach
   public void before() {
+    when(resultSet.wasApplied()).thenReturn(true);
     when(client.awaitTable(any(), any())).thenReturn(monitor);
     when(client.metadata(any(), anyInt())).thenReturn(new MetadataRow(0, 0));
+    when(client.execute(any())).thenReturn(resultSet);
     config = new HashMap<>(Map.of(
         StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092",
         StreamsConfig.APPLICATION_ID_CONFIG, "test",

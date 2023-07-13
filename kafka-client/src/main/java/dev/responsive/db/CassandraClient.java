@@ -431,7 +431,7 @@ public class CassandraClient {
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
             .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
             .where(WINDOW_START.relation().isEqualTo(WINDOW_START.literal(0L)))
-            .ifColumn(EPOCH.column()).isLessThan(bindMarker(EPOCH.bind()))
+            .ifColumn(EPOCH.column()).isEqualTo(bindMarker(EPOCH.bind()))
             .build()
     ));
 

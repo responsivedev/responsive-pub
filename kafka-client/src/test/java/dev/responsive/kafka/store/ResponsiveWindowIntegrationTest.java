@@ -42,6 +42,7 @@ import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.ResponsiveStores;
 import dev.responsive.kafka.api.ResponsiveWindowedStoreSupplier;
 import dev.responsive.kafka.config.ResponsiveConfig;
+import dev.responsive.utils.ResponsiveConfigParam;
 import dev.responsive.utils.ResponsiveExtension;
 import java.time.Duration;
 import java.util.HashMap;
@@ -91,26 +92,17 @@ public class ResponsiveWindowIntegrationTest {
   private final Map<String, Object> responsiveProps = new HashMap<>();
 
   private String name;
-  private String bootstrapServers;
   private Admin admin;
 
   @BeforeEach
   public void before(
       final TestInfo info,
-      final CassandraContainer<?> cassandra,
-      final KafkaContainer kafka
+      final Admin admin,
+      @ResponsiveConfigParam  final Map<String, Object> responsiveProps
   ) throws InterruptedException, ExecutionException {
     name = info.getTestMethod().orElseThrow().getName();
-    bootstrapServers = kafka.getBootstrapServers();
-
-    responsiveProps.put(STORAGE_HOSTNAME_CONFIG, cassandra.getContactPoint().getHostName());
-    responsiveProps.put(STORAGE_PORT_CONFIG, cassandra.getContactPoint().getPort());
-    responsiveProps.put(STORAGE_DATACENTER_CONFIG, cassandra.getLocalDatacenter());
-    responsiveProps.put(TENANT_ID_CONFIG, "responsive_clients");   // keyspace is expected to exist
-    responsiveProps.put(INTERNAL_TASK_ASSIGNOR_CLASS, StickyTaskAssignor.class.getName());
-
-    admin = Admin.create(Map.of(BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers()));
-
+    this.responsiveProps.putAll(responsiveProps);
+    this.admin = admin;
     final var result = admin.createTopics(
         List.of(
             new NewTopic(inputTopic(), Optional.of(1), Optional.empty()),
@@ -124,7 +116,6 @@ public class ResponsiveWindowIntegrationTest {
   @AfterEach
   public void after() {
     admin.deleteTopics(List.of(inputTopic(), otherTopic(), outputTopic()));
-    admin.close();
   }
 
   @Test
@@ -354,7 +345,6 @@ public class ResponsiveWindowIntegrationTest {
   private Map<String, Object> getMutableProperties() {
     final Map<String, Object> properties = new HashMap<>(responsiveProps);
 
-    properties.put(BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
     properties.put(KEY_SERIALIZER_CLASS_CONFIG, LongSerializer.class);
     properties.put(VALUE_SERIALIZER_CLASS_CONFIG, LongSerializer.class);
     properties.put(KEY_DESERIALIZER_CLASS_CONFIG, LongDeserializer.class);

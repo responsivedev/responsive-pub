@@ -455,11 +455,11 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
   }
 
   private static AtomicWriteResult setIfNotApplied(
-      final AtomicReference<AtomicWriteResult> other,
+      final AtomicReference<AtomicWriteResult> aggResult,
       final AtomicWriteResult awr
   ) {
     if (!awr.wasApplied()) {
-      other.set(awr);
+      aggResult.set(awr);
     }
     return awr;
   }
