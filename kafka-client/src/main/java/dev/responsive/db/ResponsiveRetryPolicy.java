@@ -53,7 +53,7 @@ public class ResponsiveRetryPolicy extends DefaultRetryPolicy {
     super(context, profileName);
     this.logPrefix = (context != null ? context.getSessionName() : null) + "|" + profileName;
     this.metrics = new Metrics(new MetricConfig(), List.of(new JmxReporter()), Time.SYSTEM);
-    this.writeTimeouts = registerWriteTImeoutSensor(metrics, context, profileName);
+    this.writeTimeouts = registerWriteTimeoutSensor(metrics, context, profileName);
   }
 
   private Sensor registerWriteTimeoutSensor(
