@@ -41,6 +41,7 @@ public class ResponsivePolicySpec {
       @JsonProperty("policyType") final PolicyType policyType,
       @JsonProperty("demoPolicy") final Optional<DemoPolicy> demoPolicy
   ) {
+    // TODO(rohan): dont require these to be non-null as they crash operator
     this.applicationNamespace = Objects.requireNonNull(applicationNamespace);
     this.applicationName = Objects.requireNonNull(applicationName);
     this.status = Objects.requireNonNull(status);

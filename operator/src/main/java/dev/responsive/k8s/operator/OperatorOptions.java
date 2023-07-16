@@ -37,8 +37,11 @@ public final class OperatorOptions {
       .numberOfArgs(1)
       .build();
 
+  public static final Option TLS_OFF =
+      new Option("disableTls", "Disable TLS connection to responsive");
+
   public static final Options OPTIONS = new Options()
       .addOption(CONTROLLER_URL)
-      .addOption(SECRETS_FILE);
-
+      .addOption(SECRETS_FILE)
+      .addOption(TLS_OFF);
 }
