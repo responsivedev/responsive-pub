@@ -58,6 +58,7 @@ public class OperatorMain {
 
     final String target = cmd.getOptionValue(OperatorOptions.CONTROLLER_URL);
     final String secretFilePath = cmd.getOptionValue(OperatorOptions.SECRETS_FILE);
+    final boolean tlsOff = cmd.hasOption(OperatorOptions.TLS_OFF);
     final Properties config = load(secretFilePath);
 
     if (!(config.containsKey(API_KEY_CONFIG) && config.containsKey(SECRET_CONFIG))) {
@@ -72,8 +73,12 @@ public class OperatorMain {
 
     final Operator operator = new Operator();
     Serialization.jsonMapper().registerModule(new Jdk8Module());
-    operator.register(new ResponsivePolicyReconciler(new ControllerGrpcClient(target,
-            apiKey, secret)));
+    operator.register(new ResponsivePolicyReconciler(new ControllerGrpcClient(
+        target,
+        apiKey,
+        secret,
+        tlsOff
+    )));
     operator.start();
   }
 
