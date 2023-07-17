@@ -16,6 +16,7 @@
 
 package dev.responsive.controller.client;
 
+import java.util.Optional;
 import responsive.controller.v1.controller.proto.ControllerOuterClass.ApplicationState;
 import responsive.controller.v1.controller.proto.ControllerOuterClass.CurrentStateRequest;
 import responsive.controller.v1.controller.proto.ControllerOuterClass.EmptyRequest;
@@ -41,5 +42,5 @@ public interface ControllerClient {
    * @param request an empty request containing only the application id
    * @return the target application state that the operator should resolve
    */
-  ApplicationState getTargetState(final EmptyRequest request);
+  Optional<ApplicationState> getTargetState(final EmptyRequest request);
 }

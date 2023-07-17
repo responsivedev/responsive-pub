@@ -17,7 +17,6 @@
 package dev.responsive.k8s.operator.reconciler;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import dev.responsive.controller.client.ControllerClient;
 import dev.responsive.k8s.controller.ControllerProtoFactories;
 import dev.responsive.k8s.crd.ResponsivePolicy;
@@ -26,12 +25,13 @@ import io.javaoperatorsdk.operator.api.reconciler.Context;
 import io.javaoperatorsdk.operator.api.reconciler.ControllerConfiguration;
 import io.javaoperatorsdk.operator.api.reconciler.EventSourceContext;
 import io.javaoperatorsdk.operator.api.reconciler.EventSourceInitializer;
+import io.javaoperatorsdk.operator.api.reconciler.MaxReconciliationInterval;
 import io.javaoperatorsdk.operator.api.reconciler.Reconciler;
 import io.javaoperatorsdk.operator.api.reconciler.UpdateControl;
 import io.javaoperatorsdk.operator.processing.event.source.EventSource;
-import io.javaoperatorsdk.operator.processing.event.source.polling.PerResourcePollingEventSource;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,7 +39,12 @@ import org.slf4j.LoggerFactory;
 /**
  * Core reconciliation handler for operator
  */
-@ControllerConfiguration
+@ControllerConfiguration(
+    maxReconciliationInterval = @MaxReconciliationInterval(
+        interval = 10,
+        timeUnit = TimeUnit.SECONDS
+    )
+)
 public class ResponsivePolicyReconciler implements
     Reconciler<ResponsivePolicy>, EventSourceInitializer<ResponsivePolicy> {
   private static final Logger LOG = LoggerFactory.getLogger(ResponsivePolicyReconciler.class);
@@ -65,28 +70,7 @@ public class ResponsivePolicyReconciler implements
 
   @Override
   public Map<String, EventSource> prepareEventSources(EventSourceContext<ResponsivePolicy> ctx) {
-    final var poller = new PerResourcePollingEventSource<>(
-        policy -> {
-          try {
-            return ImmutableSet.of(new TargetStateWithTimestamp(
-                // TODO(rohan): this is a hack to force an event at each poll interval.
-                // we should either: 1. make the controller robust to not rely on polling
-                //                   2. poll in some less hacky way (while still using events)
-                responsiveCtx.getControllerClient()
-                    .getTargetState(ControllerProtoFactories.emptyRequest(policy))));
-          } catch (final Throwable t) {
-            LOG.error("Error fetching target state", t);
-            // We return an empty target state to force reconciliation to run, since right now the
-            // controller is stateless and relies on periodic updates after it restarts
-            return ImmutableSet.of(new TargetStateWithTimestamp());
-          }
-        },
-        ctx.getPrimaryCache(),
-        10000L,
-        TargetStateWithTimestamp.class
-    );
     final var builder = ImmutableMap.<String, EventSource>builder();
-    builder.putAll(EventSourceInitializer.nameEventSources(poller));
     // add the plugin event sources
     // TODO(rohan): how do we make sure that these sources dont cross streams (should be fine
     //              if they are all resource-scoped events)

@@ -23,8 +23,11 @@ import io.grpc.ClientInterceptor;
 import io.grpc.Grpc;
 import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
 import io.grpc.TlsChannelCredentials;
 import io.grpc.stub.MetadataUtils;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import responsive.controller.v1.controller.proto.ControllerGrpc;
 import responsive.controller.v1.controller.proto.ControllerOuterClass;
@@ -68,14 +71,18 @@ public class ControllerGrpcClient implements ControllerClient {
   }
 
   @Override
-  public ControllerOuterClass.ApplicationState getTargetState(
+  public Optional<ControllerOuterClass.ApplicationState> getTargetState(
       final ControllerOuterClass.EmptyRequest request) {
-    final var rsp = stub.withDeadlineAfter(5, TimeUnit.SECONDS)
-        .getTargetState(request);
-    if (!rsp.getError().equals("")) {
-      throw new RuntimeException(rsp.getError());
+    try {
+      final var rsp = stub.withDeadlineAfter(5, TimeUnit.SECONDS)
+          .getTargetState(request);
+      return Optional.of(rsp.getState());
+    } catch (final StatusRuntimeException e) {
+      if (e.getStatus().getCode().equals(Status.NOT_FOUND.getCode())) {
+        return Optional.empty();
+      }
+      throw e;
     }
-    return rsp.getState();
   }
 
   private void throwOnError(final ControllerOuterClass.SimpleResponse rsp) {
