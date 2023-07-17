@@ -38,6 +38,7 @@ import io.grpc.ServerCall;
 import io.grpc.ServerCallHandler;
 import io.grpc.ServerInterceptor;
 import io.grpc.ServerInterceptors;
+import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.TlsChannelCredentials;
 import io.grpc.examples.helloworld.GreeterGrpc;
@@ -46,6 +47,7 @@ import io.grpc.examples.helloworld.HelloRequest;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
 import io.grpc.testing.GrpcCleanupRule;
+import java.util.Optional;
 import org.junit.Rule;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -224,7 +226,7 @@ class ControllerGrpcClientTest {
     final var returnedState = client.getTargetState(req);
 
     // then:
-    assertThat(returnedState, is(state));
+    assertThat(returnedState, is(Optional.of(state)));
     verify(stub).getTargetState(req);
   }
 
@@ -232,13 +234,22 @@ class ControllerGrpcClientTest {
   public void shouldHandleTargetStatusRequestError() {
     // given:
     final var req = ControllerOuterClass.EmptyRequest.newBuilder().build();
-    when(stub.getTargetState(any())).thenReturn(
-        ControllerOuterClass.GetTargetStateResponse.newBuilder()
-            .setError("oops")
-            .build()
-    );
+    when(stub.getTargetState(any())).thenThrow(new StatusRuntimeException(Status.UNKNOWN));
 
     // when:
-    assertThrows(RuntimeException.class, () -> client.getTargetState(req));
+    assertThrows(StatusRuntimeException.class, () -> client.getTargetState(req));
+  }
+
+  @Test
+  public void shouldHandleTargetStatusRequestNotFoundError() {
+    // given:
+    final var req = ControllerOuterClass.EmptyRequest.newBuilder().build();
+    when(stub.getTargetState(any())).thenThrow(new StatusRuntimeException(Status.NOT_FOUND));
+
+    // when:
+    final var returnedState = client.getTargetState(req);
+
+    // then:
+    assertThat(returnedState, is(Optional.empty()));
   }
 }

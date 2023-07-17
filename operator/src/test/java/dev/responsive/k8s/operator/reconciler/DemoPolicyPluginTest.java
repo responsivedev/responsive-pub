@@ -165,9 +165,8 @@ class DemoPolicyPluginTest {
 
     lenient().when(ctx.getClient()).thenReturn(client);
     lenient().when(client.apps()).thenReturn(appsClient);
-    lenient().when(ctx.getSecondaryResource(
-            dev.responsive.k8s.operator.reconciler.TargetStateWithTimestamp.class))
-        .thenReturn(Optional.of(new TargetStateWithTimestamp(targetState)));
+    lenient().when(controllerClient.getTargetState(ControllerProtoFactories.emptyRequest(policy)))
+        .thenReturn(Optional.of(targetState));
   }
 
   @Test
@@ -320,8 +319,8 @@ class DemoPolicyPluginTest {
   public void shouldNotPatchDeploymentIfNoTargetStateSpecified() {
     // given:
     setupForDeployment();
-    when(ctx.getSecondaryResource(TargetStateWithTimestamp.class))
-        .thenReturn(Optional.of(new TargetStateWithTimestamp()));
+    when(controllerClient.getTargetState(ControllerProtoFactories.emptyRequest(policy)))
+        .thenReturn(Optional.empty());
 
     // when:
     plugin.reconcile(policy, ctx, responsiveCtx);
@@ -458,8 +457,8 @@ class DemoPolicyPluginTest {
   public void shouldNotPatchStatefulSetIfNoTargetStateSpecified() {
     // given:
     setupForStatefulSet();
-    when(ctx.getSecondaryResource(TargetStateWithTimestamp.class))
-        .thenReturn(Optional.of(new TargetStateWithTimestamp()));
+    when(controllerClient.getTargetState(ControllerProtoFactories.emptyRequest(policy)))
+        .thenReturn(Optional.empty());
 
     // when:
     plugin.reconcile(policy, ctx, responsiveCtx);

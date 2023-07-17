@@ -31,10 +31,12 @@ import io.javaoperatorsdk.operator.processing.event.source.EventSource;
 import io.javaoperatorsdk.operator.processing.event.source.informer.InformerEventSource;
 import java.util.Collections;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import responsive.controller.v1.controller.proto.ControllerOuterClass;
+import responsive.controller.v1.controller.proto.ControllerOuterClass.ApplicationState;
 
 public class DemoPolicyPlugin implements PolicyPlugin {
   private static final Logger LOG = LoggerFactory.getLogger(DemoPolicyPlugin.class);
@@ -85,22 +87,18 @@ public class DemoPolicyPlugin implements PolicyPlugin {
             currentStateFromApplication(managedApp))
     );
 
-    final var maybeTargetState =
-        ctx.getSecondaryResource(TargetStateWithTimestamp.class);
+    final Optional<ApplicationState> maybeTargetState
+        = responsiveCtx.getControllerClient().getTargetState(
+            ControllerProtoFactories.emptyRequest(policy));
     if (maybeTargetState.isEmpty()) {
-      LOG.warn("No target state present in ctx. This should not happen");
+      LOG.info("controller has no current target state");
       return;
     }
 
     final var targetState = maybeTargetState.get();
     LOG.info("target state for app {} {}", appName, targetState);
 
-    if (targetState.getTargetState().isEmpty()) {
-      LOG.info(
-          "we were not able to get a target state from controller, so don't try to reconcile one");
-      return;
-    }
-    final var targetReplicas = targetState.getTargetState().get().getDemoState().getReplicas();
+    final var targetReplicas = targetState.getDemoState().getReplicas();
     if (targetReplicas != managedApp.getReplicas()) {
       LOG.info(
           "Scaling {}/{} from {} to {}",
