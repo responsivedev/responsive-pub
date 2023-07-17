@@ -109,7 +109,7 @@ public class CommitBufferTest {
   }
 
   @Test
-  public void shouldFlushWithCorrectEpochForAllSubpartitionsAndOffsetForBaseSubpartition() {
+  public void shouldFlushWithCorrectEpochForPartitionsWithDataAndOffsetForBaseSubpartition() {
     // Given:
     setPartitioner(3);
     final String tableName = name;
@@ -123,7 +123,7 @@ public class CommitBufferTest {
     // When:
     // key 0 -> subpartition 2 * 3 + 0 % 3 = 6
     // key 1 -> subpartition 2 * 3 + 1 % 3 =  7
-    // nothing in subpartition 8, but offset should still be flushed
+    // nothing in subpartition 8, should not be flushed
     buffer.put(k0, VALUE);
     buffer.put(k1, VALUE);
     buffer.flush(100L);

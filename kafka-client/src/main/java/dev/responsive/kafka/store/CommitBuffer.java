@@ -37,6 +37,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -352,6 +353,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
 
   @SuppressWarnings("BooleanMethodIsAlwaysInverted")
   private AtomicWriteResult flush(final long offset, final int batchSize) {
+    final long startNs = System.nanoTime();
     log.info("Flushing {} records to remote (offset={}, epoch={})",
         buffer.getReader().size(),
         offset,
@@ -359,20 +361,14 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
     );
 
     final var writers = new HashMap<Integer, AtomicWriter<K>>();
-    subPartitioner.all(partition).forEach(p -> writers.put(p, new AtomicWriter<>(
-        client,
-        tableName,
-        p,
-        plugin,
-        epoch,
-        batchSize
-    )));
-
-    buffer.getReader().values().forEach(val ->
-        writers
-            .get(subPartitioner.partition(partition, plugin.bytes(val.key)))
-            .add(val)
-    );
+    for (Result<K> val : buffer.getReader().values()) {
+      final int subPartition = subPartitioner.partition(partition, plugin.bytes(val.key));
+      writers
+          .computeIfAbsent(subPartition, k -> new AtomicWriter<>(
+              client, tableName, subPartition, plugin, epoch, batchSize
+          ))
+          .add(val);
+    }
 
     var writeResult = drain(writers.values(), AtomicWriter::flush);
     if (!writeResult.wasApplied()) {
@@ -382,15 +378,21 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
     // this offset is only used for recovery, so it can (and should) be done only
     // when all the flushes above have completed and only needs to be written to
     // the first subpartition
-    writeResult = writers.get(subPartitioner.first(partition)).setOffset(offset);
+    writeResult = writers.computeIfAbsent(
+        subPartitioner.first(partition), k -> new AtomicWriter<>(
+            client, tableName, k, plugin, epoch, batchSize
+        )
+    ).setOffset(offset);
     if (!writeResult.wasApplied()) {
       return writeResult;
     }
 
-    log.info("Completed flushing {} records to remote (offset={}, epoch={})",
+    log.info("Flushed {} records to remote in {}ms (offset={}, epoch={}, numPartitions={})",
         buffer.getReader().size(),
+        TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNs),
         offset,
-        epoch
+        epoch,
+        writers.size()
     );
     buffer.clear();
 
