@@ -109,7 +109,7 @@ public class CommitBufferTest {
   }
 
   @Test
-  public void shouldFlushWithCorrectEpochForAllSubpartitionsAndOffsetForBaseSubpartition() {
+  public void shouldFlushWithCorrectEpochForPartitionsWithDataAndOffsetForBaseSubpartition() {
     // Given:
     setPartitioner(3);
     final String tableName = name;
@@ -117,13 +117,18 @@ public class CommitBufferTest {
         client, tableName, changelogTp, admin, PLUGIN, true, TRIGGERS, partitioner, 1);
     buffer.init();
 
+    // reserve epoch for partition 8 to ensure it doesn't get flushed
+    // if it did it would get fenced
+    client.execute(client.reserveEpoch(tableName, 8, 3));
+
     final Bytes k0 = Bytes.wrap(ByteBuffer.allocate(4).putInt(0).array());
     final Bytes k1 = Bytes.wrap(ByteBuffer.allocate(4).putInt(1).array());
 
     // When:
     // key 0 -> subpartition 2 * 3 + 0 % 3 = 6
     // key 1 -> subpartition 2 * 3 + 1 % 3 =  7
-    // nothing in subpartition 8, but offset should still be flushed
+    // nothing in subpartition 8, should not be flushed - if it did
+    // then an error would be thrown with invalid epoch
     buffer.put(k0, VALUE);
     buffer.put(k1, VALUE);
     buffer.flush(100L);
@@ -133,7 +138,7 @@ public class CommitBufferTest {
     assertThat(client.get(tableName, 7, k1), is(VALUE));
     assertThat(client.metadata(tableName, 6), is(new MetadataRow(100L, 1L)));
     assertThat(client.metadata(tableName, 7), is(new MetadataRow(-1L, 1L)));
-    assertThat(client.metadata(tableName, 8), is(new MetadataRow(-1L, 1L)));
+    assertThat(client.metadata(tableName, 8), is(new MetadataRow(-1L, 3L)));
   }
 
   @Test
