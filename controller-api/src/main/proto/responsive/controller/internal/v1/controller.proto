@@ -31,7 +31,9 @@ message PolicyState {
 }
 
 message Action {
-  ChangeApplicationState change_application_state = 1;
+  oneof action {
+    ChangeApplicationState change_application_state = 1;
+  }
 }
 
 message ChangeApplicationState {

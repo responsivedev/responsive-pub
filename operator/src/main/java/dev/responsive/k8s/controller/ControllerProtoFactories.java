@@ -16,11 +16,19 @@
 
 package dev.responsive.k8s.controller;
 
+import dev.responsive.k8s.crd.DemoPolicy;
 import dev.responsive.k8s.crd.ResponsivePolicy;
 import dev.responsive.k8s.crd.ResponsivePolicySpec;
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
 import responsive.controller.v1.controller.proto.ControllerOuterClass;
 import responsive.controller.v1.controller.proto.ControllerOuterClass.ApplicationPolicy;
 import responsive.controller.v1.controller.proto.ControllerOuterClass.ApplicationState;
+import responsive.controller.v1.controller.proto.ControllerOuterClass.DemoPolicy.Diagnoser;
+import responsive.controller.v1.controller.proto.ControllerOuterClass.DemoPolicy.DiagnoserType;
+import responsive.controller.v1.controller.proto.ControllerOuterClass.DemoPolicy.ProcessingRateDiagnoser;
 
 public final class ControllerProtoFactories {
   public static ControllerOuterClass.UpsertPolicyRequest upsertPolicyRequest(
@@ -48,6 +56,55 @@ public final class ControllerProtoFactories {
         .build();
   }
 
+  private static ProcessingRateDiagnoser processingRateDiagnoserFromK8sResource(
+      final DemoPolicy.ProcessingRateDiagnoser diagnoser
+  ) {
+    final var builder = ProcessingRateDiagnoser.newBuilder()
+        .setRate(diagnoser.getRate());
+    if (diagnoser.getWindowMs().isPresent()) {
+      builder.setWindowMs(diagnoser.getWindowMs().getAsInt());
+    }
+    return builder.build();
+  }
+
+  private static Diagnoser diagnoserFromK8sResource(final DemoPolicy.Diagnoser diagnoser) {
+    switch (diagnoser.getType()) {
+      case LAG_SCALE_UP:
+        return Diagnoser.newBuilder()
+            .setType(DiagnoserType.DIAGNOSER_TYPE_LAG)
+            .build();
+      case PROCESSING_RATE_SCALE_UP: {
+        return Diagnoser.newBuilder()
+            .setType(DiagnoserType.DIAGNOSER_TYPE_PROCESSING_RATE_SCALE_UP)
+            .setProcessingRateScaleUp(
+                processingRateDiagnoserFromK8sResource(
+                    diagnoser.getProcessingRateScaleUp().get()))
+            .build();
+      }
+      case PROCESSING_RATE_SCALE_DOWN: {
+        return Diagnoser.newBuilder()
+            .setType(DiagnoserType.DIAGNOSER_TYPE_PROCESSING_RATE_SCALE_DOWN)
+            .setProcessingRateScaleDown(
+                processingRateDiagnoserFromK8sResource(
+                    diagnoser.getProcessingRateScaleDown().get()))
+            .build();
+      }
+      default:
+        throw new IllegalStateException();
+    }
+  }
+
+  private static List<Diagnoser> diagnosersFromK8sResource(
+      final Optional<List<DemoPolicy.Diagnoser>> diagnosers
+  ) {
+    if (diagnosers.isEmpty()) {
+      return Collections.emptyList();
+    }
+    return diagnosers.get().stream()
+        .map(ControllerProtoFactories::diagnoserFromK8sResource)
+        .collect(Collectors.toList());
+  }
+
   private static ApplicationPolicy policyFromK8sResource(final ResponsivePolicySpec policySpec) {
     final var builder = ApplicationPolicy.newBuilder();
     switch (policySpec.getPolicyType()) {
@@ -56,6 +113,8 @@ public final class ControllerProtoFactories {
         final var demoPolicy = policySpec.getDemoPolicy().get();
         builder.setDemoPolicy(ControllerOuterClass.DemoPolicy.newBuilder()
             .setMaxReplicas(demoPolicy.getMaxReplicas())
+            .setMinReplicas(demoPolicy.getMinReplicas())
+            .addAllDiagnoser(diagnosersFromK8sResource(demoPolicy.getDiagnosers()))
             .build()
         );
         break;

@@ -20,6 +20,7 @@ message PostMetricsRequest {
 }
 
 // TODO(rohan): we need to encode some ordering info (generation/version for policy, timestmap for current state)
+// todo: consider setting message fields to optional so server can validate they are set
 message UpsertPolicyRequest {
   string application_id = 1;
   int64 timestamp_ms = 2;
@@ -37,18 +38,21 @@ message EmptyRequest {
 }
 
 message SimpleResponse {
+  // todo: clean me up
   string error = 1;
 }
 
 message GetTargetStateResponse {
+  // todo: clean me up
   string error = 1;
   ApplicationState state = 2;
 }
 
-// TODO(rohan): how to support different types of applications?
 // TODO(rohan): move these to a common proto file. this file is just the grpc api
 message ApplicationState {
-  DemoApplicationState demo_state = 1;
+  oneof state {
+    DemoApplicationState demo_state = 1;
+  }
 }
 
 message DemoApplicationState {
@@ -71,9 +75,31 @@ enum PolicyStatus {
 //              also, see if we can combine with the CRD somehow
 message ApplicationPolicy {
   PolicyStatus status = 1;
-  DemoPolicy demo_policy = 2;
+  oneof policy {
+    DemoPolicy demo_policy = 2;
+  }
 }
 
 message DemoPolicy {
+  enum DiagnoserType {
+    DIAGNOSER_TYPE_PROCESSING_RATE_SCALE_UP = 0;
+    DIAGNOSER_TYPE_PROCESSING_RATE_SCALE_DOWN = 1;
+    DIAGNOSER_TYPE_LAG = 2;
+  }
+
+  message ProcessingRateDiagnoser {
+    int32 rate = 1;
+    optional int32 window_ms = 2;
+  }
+
+  message Diagnoser {
+    DiagnoserType type = 1;
+    ProcessingRateDiagnoser processing_rate_scale_up = 2;
+    ProcessingRateDiagnoser processing_rate_scale_down = 3;
+  }
+
+  // TODO: change to snake case
   int32 maxReplicas = 1;
+  int32 min_replicas = 2;
+  repeated Diagnoser diagnoser = 3;
 }
