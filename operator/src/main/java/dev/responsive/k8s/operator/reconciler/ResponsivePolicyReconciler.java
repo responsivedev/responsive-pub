@@ -22,6 +22,7 @@ import dev.responsive.controller.client.ControllerClient;
 import dev.responsive.k8s.controller.ControllerProtoFactories;
 import dev.responsive.k8s.crd.ResponsivePolicy;
 import dev.responsive.k8s.crd.ResponsivePolicySpec;
+import dev.responsive.k8s.crd.ResponsivePolicyStatus;
 import io.javaoperatorsdk.operator.api.reconciler.Context;
 import io.javaoperatorsdk.operator.api.reconciler.ControllerConfiguration;
 import io.javaoperatorsdk.operator.api.reconciler.EventSourceContext;
@@ -103,6 +104,14 @@ public class ResponsivePolicyReconciler implements
   public UpdateControl<ResponsivePolicy> reconcile(final ResponsivePolicy resource,
                                                    final Context<ResponsivePolicy> ctx) {
     LOG.info("Received event for {}", resource.getFullResourceName());
+    try {
+      resource.getSpec().validate();
+    } catch (final RuntimeException e) {
+      final var msg = "invalid responsive policy spec: " + e.getMessage();
+      LOG.error(msg, e);
+      resource.setStatus(new ResponsivePolicyStatus(msg));
+      return UpdateControl.patchStatus(resource);
+    }
     responsiveCtx.getControllerClient()
         .upsertPolicy(ControllerProtoFactories.upsertPolicyRequest(resource));
     plugins.get(resource.getSpec().getPolicyType()).reconcile(resource, ctx, responsiveCtx);

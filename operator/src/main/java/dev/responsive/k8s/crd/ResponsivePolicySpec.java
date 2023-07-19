@@ -25,6 +25,7 @@ import responsive.controller.v1.controller.proto.ControllerOuterClass.PolicyStat
 public class ResponsivePolicySpec {
   private final String applicationNamespace;
   private final String applicationName;
+  // TODO: dont use the protobuf enum type in the k8s crd definition
   private final PolicyStatus status;
   private final ResponsivePolicySpec.PolicyType policyType;
   private final Optional<DemoPolicy> demoPolicy;
@@ -41,11 +42,25 @@ public class ResponsivePolicySpec {
       @JsonProperty("policyType") final PolicyType policyType,
       @JsonProperty("demoPolicy") final Optional<DemoPolicy> demoPolicy
   ) {
-    this.applicationNamespace = Objects.requireNonNull(applicationNamespace);
-    this.applicationName = Objects.requireNonNull(applicationName);
-    this.status = Objects.requireNonNull(status);
+    this.applicationNamespace = applicationNamespace;
+    this.applicationName = applicationName;
+    this.status = status;
     this.policyType = policyType;
     this.demoPolicy = Objects.requireNonNull(demoPolicy);
+  }
+
+  public void validate() {
+    Objects.requireNonNull(applicationName, "applicationName");
+    Objects.requireNonNull(applicationNamespace, "applicationNamespace");
+    Objects.requireNonNull(status, "status");
+    Objects.requireNonNull(policyType, "policyType");
+    switch (policyType) {
+      case DEMO:
+        CrdUtils.validatePresent(demoPolicy, "demoPolicy").validate();
+        break;
+      default:
+        break;
+    }
   }
 
   public String getApplicationNamespace() {
@@ -68,19 +83,4 @@ public class ResponsivePolicySpec {
     return demoPolicy;
   }
 
-  public static class DemoPolicy {
-
-    private final int maxReplicas;
-
-    @JsonCreator
-    public DemoPolicy(
-        @JsonProperty("maxReplicas") final int maxReplicas
-    ) {
-      this.maxReplicas = maxReplicas;
-    }
-
-    public int getMaxReplicas() {
-      return maxReplicas;
-    }
-  }
 }

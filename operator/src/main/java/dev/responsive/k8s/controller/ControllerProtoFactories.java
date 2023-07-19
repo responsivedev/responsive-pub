@@ -53,11 +53,8 @@ public final class ControllerProtoFactories {
     switch (policySpec.getPolicyType()) {
       case DEMO:
         assert policySpec.getDemoPolicy().isPresent();
-        final var demoPolicy = policySpec.getDemoPolicy().get();
-        builder.setDemoPolicy(ControllerOuterClass.DemoPolicy.newBuilder()
-            .setMaxReplicas(demoPolicy.getMaxReplicas())
-            .build()
-        );
+        builder.setDemoPolicy(DemoPolicyProtoFactories.demoPolicyFromK8sResource(
+            policySpec.getDemoPolicy().get()));
         break;
       default:
         throw new IllegalStateException("Unexpected type: " + policySpec.getPolicyType());

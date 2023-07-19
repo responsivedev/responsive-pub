@@ -22,23 +22,28 @@ import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.startsWith;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import dev.responsive.controller.client.ControllerClient;
 import dev.responsive.k8s.controller.ControllerProtoFactories;
+import dev.responsive.k8s.crd.DemoPolicy;
 import dev.responsive.k8s.crd.ResponsivePolicy;
 import dev.responsive.k8s.crd.ResponsivePolicySpec;
+import dev.responsive.k8s.crd.ResponsivePolicySpec.PolicyType;
 import io.fabric8.kubernetes.api.model.ObjectMeta;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.javaoperatorsdk.operator.api.config.ControllerConfiguration;
 import io.javaoperatorsdk.operator.api.reconciler.Context;
 import io.javaoperatorsdk.operator.api.reconciler.EventSourceContext;
+import io.javaoperatorsdk.operator.api.reconciler.UpdateControl;
 import io.javaoperatorsdk.operator.processing.event.source.EventSource;
 import io.javaoperatorsdk.operator.processing.event.source.IndexerResourceCache;
 import io.javaoperatorsdk.operator.processing.event.source.polling.PerResourcePollingEventSource;
@@ -97,7 +102,7 @@ class ResponsivePolicyReconcilerTest {
         "pong",
         PolicyStatus.POLICY_STATUS_MANAGED,
         ResponsivePolicySpec.PolicyType.DEMO,
-        Optional.of(new ResponsivePolicySpec.DemoPolicy(123))
+        Optional.of(new DemoPolicy(123, 7, Optional.empty()))
     ));
     reconciler = new dev.responsive.k8s.operator.reconciler.ResponsivePolicyReconciler(
         responsiveCtx,
@@ -131,7 +136,7 @@ class ResponsivePolicyReconcilerTest {
         "pong",
         PolicyStatus.POLICY_STATUS_MANAGED,
         ResponsivePolicySpec.PolicyType.DEMO,
-        Optional.of(new ResponsivePolicySpec.DemoPolicy(123))
+        Optional.of(new DemoPolicy(123, 10, Optional.empty()))
     ));
     when(controllerClient.getTargetState(any())).thenThrow(new RuntimeException("oops"));
 
@@ -167,5 +172,27 @@ class ResponsivePolicyReconcilerTest {
 
     // then:
     verify(plugin).reconcile(policy, ctx, responsiveCtx);
+  }
+
+  @Test
+  public void shouldValidatePolicy() {
+    // given:
+    policy.setSpec(new ResponsivePolicySpec(
+        "foo",
+        null,
+        PolicyStatus.POLICY_STATUS_MANAGED,
+        PolicyType.DEMO,
+        Optional.of(new DemoPolicy(10, 0, Optional.empty()))
+    ));
+
+    // when:
+    final UpdateControl<ResponsivePolicy> result = reconciler.reconcile(policy, ctx);
+
+    // then:
+    assertThat(
+        result.getResource().getStatus().getMessage(),
+        startsWith("invalid responsive policy spec")
+    );
+    verifyNoInteractions(plugin);
   }
 }
