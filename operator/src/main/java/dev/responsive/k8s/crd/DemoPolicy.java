@@ -10,19 +10,20 @@ import java.util.OptionalInt;
 public class DemoPolicy {
   public static class ProcessingRateDiagnoser {
     private final int rate;
-    private final OptionalInt windowMs;
+    // don't use OptionalInt here. The CRD schema generator only handles Optional transparently
+    private final Optional<Integer> windowMs;
 
     public int getRate() {
       return rate;
     }
 
-    public OptionalInt getWindowMs() {
+    public Optional<Integer> getWindowMs() {
       return windowMs;
     }
 
     public ProcessingRateDiagnoser(
         @JsonProperty("rate") final int rate,
-        @JsonProperty("windowMs") final OptionalInt windowMs
+        @JsonProperty("windowMs") final Optional<Integer> windowMs
     ) {
       this.rate = rate;
       this.windowMs = Objects.requireNonNull(windowMs);

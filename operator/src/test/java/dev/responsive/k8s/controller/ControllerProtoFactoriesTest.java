@@ -21,20 +21,18 @@ import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.is;
 
 import dev.responsive.k8s.crd.DemoPolicy.Diagnoser;
-import dev.responsive.k8s.crd.DemoPolicy.Diagnoser.Type;
 import dev.responsive.k8s.crd.DemoPolicy.ProcessingRateDiagnoser;
 import dev.responsive.k8s.crd.ResponsivePolicy;
 import dev.responsive.k8s.crd.ResponsivePolicySpec;
 import io.fabric8.kubernetes.api.model.ObjectMeta;
 import java.util.List;
 import java.util.Optional;
-import java.util.OptionalInt;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import responsive.controller.v1.controller.proto.ControllerOuterClass;
 import responsive.controller.v1.controller.proto.ControllerOuterClass.ApplicationState;
 import responsive.controller.v1.controller.proto.ControllerOuterClass.DemoPolicy;
-import responsive.controller.v1.controller.proto.ControllerOuterClass.DemoPolicy.DiagnoserType;
+import responsive.controller.v1.controller.proto.ControllerOuterClass.DemoPolicy.LagDiagnoser;
 import responsive.controller.v1.controller.proto.ControllerOuterClass.PolicyStatus;
 
 class ControllerProtoFactoriesTest {
@@ -98,7 +96,7 @@ class ControllerProtoFactoriesTest {
     final DemoPolicy created = request.getPolicy().getDemoPolicy();
     assertThat(created.getDiagnoserList(), contains(
         DemoPolicy.Diagnoser.newBuilder()
-            .setType(DiagnoserType.DIAGNOSER_TYPE_LAG)
+            .setLagScaleUp(LagDiagnoser.newBuilder().build())
             .build()
     ));
   }
@@ -108,7 +106,7 @@ class ControllerProtoFactoriesTest {
     // given:
     demoPolicy.setSpec(
         specWithDiagnoser(Diagnoser.processingRateScaleUp(
-            new ProcessingRateDiagnoser(10, OptionalInt.of(123))))
+            new ProcessingRateDiagnoser(10, Optional.of(123))))
     );
 
     // when:
@@ -118,7 +116,6 @@ class ControllerProtoFactoriesTest {
     final DemoPolicy created = request.getPolicy().getDemoPolicy();
     assertThat(created.getDiagnoserList(), contains(
         DemoPolicy.Diagnoser.newBuilder()
-            .setType(DiagnoserType.DIAGNOSER_TYPE_PROCESSING_RATE_SCALE_UP)
             .setProcessingRateScaleUp(DemoPolicy.ProcessingRateDiagnoser.newBuilder()
                 .setRate(10)
                 .setWindowMs(123)
@@ -132,7 +129,7 @@ class ControllerProtoFactoriesTest {
     // given:
     demoPolicy.setSpec(
         specWithDiagnoser(Diagnoser.processingRateScaleDown(
-            new ProcessingRateDiagnoser(10, OptionalInt.of(123))))
+            new ProcessingRateDiagnoser(10, Optional.of(123))))
     );
 
     // when:
@@ -142,7 +139,6 @@ class ControllerProtoFactoriesTest {
     final DemoPolicy created = request.getPolicy().getDemoPolicy();
     assertThat(created.getDiagnoserList(), contains(
         DemoPolicy.Diagnoser.newBuilder()
-            .setType(DiagnoserType.DIAGNOSER_TYPE_PROCESSING_RATE_SCALE_DOWN)
             .setProcessingRateScaleDown(DemoPolicy.ProcessingRateDiagnoser.newBuilder()
                 .setRate(10)
                 .setWindowMs(123)

@@ -81,21 +81,20 @@ message ApplicationPolicy {
 }
 
 message DemoPolicy {
-  enum DiagnoserType {
-    DIAGNOSER_TYPE_PROCESSING_RATE_SCALE_UP = 0;
-    DIAGNOSER_TYPE_PROCESSING_RATE_SCALE_DOWN = 1;
-    DIAGNOSER_TYPE_LAG = 2;
-  }
-
   message ProcessingRateDiagnoser {
     int32 rate = 1;
     optional int32 window_ms = 2;
   }
 
+  message LagDiagnoser {
+  }
+
   message Diagnoser {
-    DiagnoserType type = 1;
-    ProcessingRateDiagnoser processing_rate_scale_up = 2;
-    ProcessingRateDiagnoser processing_rate_scale_down = 3;
+    oneof diagnoser {
+      ProcessingRateDiagnoser processing_rate_scale_up = 1;
+      ProcessingRateDiagnoser processing_rate_scale_down = 2;
+      LagDiagnoser lag_scale_up = 3;
+    }
   }
 
   // TODO: change to snake case
