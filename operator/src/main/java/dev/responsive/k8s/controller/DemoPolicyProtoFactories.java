@@ -66,7 +66,8 @@ final class DemoPolicyProtoFactories {
     return ControllerOuterClass.DemoPolicy.newBuilder()
         .setMaxReplicas(demoPolicy.getMaxReplicas())
         .setMinReplicas(demoPolicy.getMinReplicas())
-        .addAllDiagnoser(DemoPolicyProtoFactories.diagnosersFromK8sResource(demoPolicy.getDiagnosers()))
+        .addAllDiagnoser(
+            DemoPolicyProtoFactories.diagnosersFromK8sResource(demoPolicy.getDiagnosers()))
         .build();
   }
 }
