@@ -141,7 +141,7 @@ public class ResponsivePartitionedStoreEosIntegrationTest {
       pipeInput(INPUT_TOPIC, 2, producer, System::currentTimeMillis, 0, 10, 0, 1);
       pipeInput(INPUT_TOPIC, 2, producer, System::currentTimeMillis, 10, 15, 0, 1);
 
-      new RemoteMonitor(executor, () -> state.numCommits.get() == 2)
+      new RemoteMonitor(executor, () -> state.numCommits.get() == 2, Duration.ofMillis(100))
           .await(Duration.ofSeconds(5));
 
       // 20 values have been committed (10 for each partition) and
@@ -160,7 +160,7 @@ public class ResponsivePartitionedStoreEosIntegrationTest {
 
       // the stall only happens on process, so this needs to be after the
       // previous pipeInput call
-      new RemoteMonitor(executor, () -> state.stall.get() == Stall.STALLING)
+      new RemoteMonitor(executor, () -> state.stall.get() == Stall.STALLING, Duration.ofMillis(100))
           .await(Duration.ofSeconds(20));
 
       // wait for a rebalance

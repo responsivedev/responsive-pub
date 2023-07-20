@@ -32,6 +32,8 @@ import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
 import dev.responsive.db.CassandraClient;
 import dev.responsive.db.CassandraClient.MetadataRow;
 import dev.responsive.db.partitioning.SubPartitioner;
+import dev.responsive.kafka.config.ResponsiveConfig;
+import dev.responsive.utils.ResponsiveConfigParam;
 import dev.responsive.utils.ResponsiveExtension;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
@@ -50,7 +52,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
@@ -80,14 +81,18 @@ public class CommitBufferTest {
   private SubPartitioner partitioner;
 
   @BeforeEach
-  public void before(final TestInfo info, final CassandraContainer<?> cassandra) {
+  public void before(
+      final TestInfo info,
+      final CassandraContainer<?> cassandra,
+      @ResponsiveConfigParam final ResponsiveConfig config
+  ) {
     name = info.getTestMethod().orElseThrow().getName();
     session = CqlSession.builder()
         .addContactPoint(cassandra.getContactPoint())
         .withLocalDatacenter(cassandra.getLocalDatacenter())
         .withKeyspace("responsive_clients") // NOTE: this keyspace is expected to exist
         .build();
-    client = new CassandraClient(session);
+    client = new CassandraClient(session, config);
     changelogTp = new TopicPartition("log", KAFKA_PARTITION);
     partitioner = SubPartitioner.NO_SUBPARTITIONS;
 

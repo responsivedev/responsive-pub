@@ -7,5 +7,8 @@ import dev.responsive.kafka.config.ResponsiveConfig;
 public interface CassandraClientFactory {
   CqlSession createCqlSession(ResponsiveConfig config);
 
-  CassandraClient createCassandraClient(CqlSession session);
+  CassandraClient createCassandraClient(
+      CqlSession session,
+      final ResponsiveConfig responsiveConfigs
+  );
 }

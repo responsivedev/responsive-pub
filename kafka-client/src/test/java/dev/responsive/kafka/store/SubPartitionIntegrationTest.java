@@ -42,6 +42,7 @@ import dev.responsive.db.partitioning.Hasher;
 import dev.responsive.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.ResponsiveStores;
+import dev.responsive.kafka.config.ResponsiveConfig;
 import dev.responsive.utils.ResponsiveConfigParam;
 import dev.responsive.utils.ResponsiveExtension;
 import dev.responsive.utils.TableName;
@@ -114,7 +115,7 @@ public class SubPartitionIntegrationTest {
         .withLocalDatacenter(cassandra.getLocalDatacenter())
         .withKeyspace("responsive_clients") // NOTE: this keyspace is expected to exist
         .build();
-    client = new CassandraClient(session);
+    client = new CassandraClient(session, new ResponsiveConfig(responsiveProps));
   }
 
   @AfterEach

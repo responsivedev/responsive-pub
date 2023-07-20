@@ -35,7 +35,10 @@ public class DefaultCassandraClientFactory implements CassandraClientFactory {
   }
 
   @Override
-  public CassandraClient createCassandraClient(final CqlSession session) {
-    return new CassandraClient(session);
+  public CassandraClient createCassandraClient(
+      final CqlSession session,
+      final ResponsiveConfig responsiveConfigs
+  ) {
+    return new CassandraClient(session, responsiveConfigs);
   }
 }

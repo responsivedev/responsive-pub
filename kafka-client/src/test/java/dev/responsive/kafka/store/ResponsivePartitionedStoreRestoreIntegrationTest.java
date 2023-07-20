@@ -162,8 +162,10 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
       waitTillFullyConsumed(input, Duration.ofSeconds(120));
 
       // Make sure changelog is even w/ cassandra
+      final ResponsiveConfig config = new ResponsiveConfig(properties);
       final CassandraClient cassandraClient = defaultFactory.createCassandraClient(
-          defaultFactory.createCqlSession(new ResponsiveConfig(properties))
+          defaultFactory.createCqlSession(config),
+          config
       );
       cassandraClient.prepareStatements(aggName());
       final long cassandraOffset = cassandraClient.metadata(aggName(), 0).offset;
@@ -216,9 +218,10 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
     }
 
     // Make sure changelog is ahead of cassandra
+    final ResponsiveConfig config = new ResponsiveConfig(properties);
     final CassandraClient cassandraClient = defaultFactory.createCassandraClient(
-        defaultFactory.createCqlSession(new ResponsiveConfig(properties))
-    );
+        defaultFactory.createCqlSession(config),
+        config);
     cassandraClient.prepareStatements(aggName());
     final long cassandraOffset = cassandraClient.metadata(aggName(), 0).offset;
     assertThat(cassandraOffset, greaterThan(0L));
@@ -375,8 +378,11 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
     }
 
     @Override
-    public CassandraClient createCassandraClient(CqlSession session) {
-      return wrappedFactory.createCassandraClient(session);
+    public CassandraClient createCassandraClient(
+        CqlSession session,
+        final ResponsiveConfig responsiveConfigs
+    ) {
+      return wrappedFactory.createCassandraClient(session, responsiveConfigs);
     }
   }
 

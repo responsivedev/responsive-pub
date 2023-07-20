@@ -75,6 +75,11 @@ public class ResponsiveConfig extends AbstractConfig {
       + "responsive server. This applies both to metadata requests and query execution.";
   private static final long REQUEST_TIMEOUT_MS_DEFAULT = 5000L;
 
+  public static final String REMOTE_TABLE_CHECK_INTERVAL_MS_CONFIG = "responsive.remote.table.check.interval.ms";
+  private static final String REMOTE_TABLE_CHECK_INTERVAL_MS_DOC = "The frequency at which to poll "
+      + "for whether or not a remote table has been created. Mostly used to speed up integration "
+      + "testing.";
+  private static final long REMOTE_TABLE_CHECK_INTERVAL_MS_DEFAULT = 1000L;
 
   // ------------------ performance related configurations --------------------
 
@@ -220,6 +225,12 @@ public class ResponsiveConfig extends AbstractConfig {
           SUBPARTITION_HASHER_DEFAULT,
           Importance.LOW,
           SUBPARTITION_HASHER_DOC
+      ).define(
+          REMOTE_TABLE_CHECK_INTERVAL_MS_CONFIG,
+          Type.LONG,
+          REMOTE_TABLE_CHECK_INTERVAL_MS_DEFAULT,
+          Importance.LOW,
+          REMOTE_TABLE_CHECK_INTERVAL_MS_DOC
       );
 
   private static class NonEmptyPassword implements Validator {

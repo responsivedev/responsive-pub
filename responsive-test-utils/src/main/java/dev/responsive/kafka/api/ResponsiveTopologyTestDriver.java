@@ -1,8 +1,10 @@
 package dev.responsive.kafka.api;
 
 import dev.responsive.db.CassandraClient;
+import dev.responsive.kafka.config.ResponsiveConfig;
 import dev.responsive.kafka.store.ResponsiveStoreRegistry;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.Properties;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import org.apache.kafka.clients.admin.MockAdminClient;
@@ -81,7 +83,7 @@ public class ResponsiveTopologyTestDriver extends TopologyTestDriver {
 
   private static class CassandraClientStub extends CassandraClient {
     CassandraClientStub() {
-      super();
+      super(new ResponsiveConfig(new HashMap<>()));
     }
 
     // TODO: override CassandraClient methods to stash data in a local in-memory stub

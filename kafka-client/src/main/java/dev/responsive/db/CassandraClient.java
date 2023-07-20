@@ -24,6 +24,7 @@ import static dev.responsive.db.ColumnNames.OFFSET;
 import static dev.responsive.db.ColumnNames.PARTITION_KEY;
 import static dev.responsive.db.ColumnNames.WINDOW_START;
 
+import com.codahale.metrics.Gauge;
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.cql.AsyncResultSet;
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
@@ -36,11 +37,13 @@ import com.datastax.oss.driver.api.core.type.DataTypes;
 import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
 import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
 import com.datastax.oss.driver.api.querybuilder.insert.RegularInsert;
+import dev.responsive.kafka.config.ResponsiveConfig;
 import dev.responsive.model.Stamped;
 import dev.responsive.utils.Iterators;
 import dev.responsive.utils.RemoteMonitor;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
@@ -49,6 +52,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.function.BooleanSupplier;
 import javax.annotation.CheckReturnValue;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
@@ -98,13 +102,15 @@ public class CassandraClient {
   private final ConcurrentHashMap<String, PreparedStatement> reserveEpoch;
   private final ConcurrentHashMap<String, PreparedStatement> ensureEpoch;
   private final ConcurrentHashMap<String, PreparedStatement> setOffset;
+  private ResponsiveConfig config;
 
   /**
    * @param session the Cassandra session, expected to be initialized
    *                and set to work with the proper keyspace (this class
    *                will not specify a keyspace in any CQL query)
+   * @param config  the responsive configuration
    */
-  public CassandraClient(final CqlSession session) {
+  public CassandraClient(final CqlSession session, final ResponsiveConfig config) {
     this.session = session;
 
     tableGets = new ConcurrentHashMap<>();
@@ -124,10 +130,12 @@ public class CassandraClient {
     reserveEpoch = new ConcurrentHashMap<>();
     ensureEpoch = new ConcurrentHashMap<>();
     setOffset = new ConcurrentHashMap<>();
+
+    this.config = config;
   }
 
-  protected CassandraClient() {
-    this(null);
+  protected CassandraClient(final ResponsiveConfig config) {
+    this(null, config);
   }
 
   /**
@@ -924,10 +932,15 @@ public class CassandraClient {
       final String tableName,
       final ScheduledExecutorService executorService
   ) {
-    return new RemoteMonitor(executorService, () -> session.getMetadata()
+    final BooleanSupplier checkRemote = () -> session.getMetadata()
         .getKeyspace(session.getKeyspace().orElseThrow())
         .flatMap(ks -> ks.getTable(tableName))
-        .isPresent());
+        .isPresent();
+    return new RemoteMonitor(
+        executorService,
+        checkRemote,
+        Duration.ofMillis(config.getLong(ResponsiveConfig.REMOTE_TABLE_CHECK_INTERVAL_MS_CONFIG))
+    );
   }
 
   private static KeyValue<Bytes, byte[]> rows(final Row row) {
