@@ -22,6 +22,8 @@ import static org.mockito.Mockito.when;
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.cql.SimpleStatement;
 import com.datastax.oss.driver.api.core.cql.Statement;
+import dev.responsive.kafka.config.ResponsiveConfig;
+import java.util.HashMap;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -41,7 +43,10 @@ class CassandraClientTest {
   @Test
   public void allStatementsShouldBeIdempotent() {
     // Given:
-    final CassandraClient client = new CassandraClient(session);
+    final CassandraClient client = new CassandraClient(
+        session,
+        new ResponsiveConfig(new HashMap<>())
+    );
     when(session.execute(statementCaptor.capture())).thenReturn(null);
 
     // When:

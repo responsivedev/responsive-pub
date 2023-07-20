@@ -18,6 +18,8 @@ package dev.responsive.db;
 
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
+import dev.responsive.kafka.config.ResponsiveConfig;
+import dev.responsive.utils.ResponsiveConfigParam;
 import dev.responsive.utils.ResponsiveExtension;
 import java.util.ArrayList;
 import java.util.List;
@@ -39,13 +41,17 @@ public class CassandraClientIntegrationTest {
   private String name;
 
   @BeforeEach
-  public void before(final TestInfo info, final CassandraContainer<?> cassandra) {
+  public void before(
+      final TestInfo info,
+      final CassandraContainer<?> cassandra,
+      @ResponsiveConfigParam final ResponsiveConfig config
+  ) {
     session = CqlSession.builder()
         .addContactPoint(cassandra.getContactPoint())
         .withLocalDatacenter(cassandra.getLocalDatacenter())
         .withKeyspace("responsive_clients") // NOTE: this keyspace is expected to exist
         .build();
-    client = new CassandraClient(session);
+    client = new CassandraClient(session, config);
 
     name = info.getTestMethod().orElseThrow().getName();
     client.createDataTable(name);

@@ -16,6 +16,7 @@
 
 package dev.responsive.utils;
 
+import static dev.responsive.kafka.config.ResponsiveConfig.REMOTE_TABLE_CHECK_INTERVAL_MS_CONFIG;
 import static dev.responsive.kafka.config.ResponsiveConfig.STORAGE_DATACENTER_CONFIG;
 import static dev.responsive.kafka.config.ResponsiveConfig.STORAGE_DESIRED_NUM_PARTITION_CONFIG;
 import static dev.responsive.kafka.config.ResponsiveConfig.STORAGE_HOSTNAME_CONFIG;
@@ -25,6 +26,8 @@ import static dev.responsive.kafka.config.ResponsiveConfig.TENANT_ID_CONFIG;
 import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS;
 
+import dev.responsive.kafka.config.ResponsiveConfig;
+import java.lang.reflect.Parameter;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.clients.admin.Admin;
@@ -87,22 +90,29 @@ public class ResponsiveExtension implements BeforeAllCallback, AfterAllCallback,
     } else if (parameterContext.getParameter().getType() == Admin.class) {
       return admin;
     } else if (isContainerConfig(parameterContext)) {
-      return new HashMap<>(Map.of(
+      final Map<String, Object> map = new HashMap<>(Map.of(
           STORAGE_HOSTNAME_CONFIG, cassandra.getContactPoint().getHostName(),
           STORAGE_PORT_CONFIG, cassandra.getContactPoint().getPort(),
           STORAGE_DATACENTER_CONFIG, cassandra.getLocalDatacenter(),
           TENANT_ID_CONFIG, "responsive_clients",
           INTERNAL_TASK_ASSIGNOR_CLASS, TASK_ASSIGNOR_CLASS_OVERRIDE,
           BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers(),
-          STORAGE_DESIRED_NUM_PARTITION_CONFIG, -1
+          STORAGE_DESIRED_NUM_PARTITION_CONFIG, -1,
+          REMOTE_TABLE_CHECK_INTERVAL_MS_CONFIG, 100
       ));
+      if (parameterContext.getParameter().getType().equals(Map.class)) {
+        return map;
+      } else  {
+        return new ResponsiveConfig(map);
+      }
     }
 
     throw new IllegalArgumentException("Unexpected parameter " + parameterContext);
   }
 
   private static boolean isContainerConfig(final ParameterContext context) {
-    return context.getParameter().getType().equals(Map.class)
-        && context.getParameter().getAnnotation(ResponsiveConfigParam.class) != null;
+    final Parameter param = context.getParameter();
+    return (param.getType().equals(Map.class) || param.getType().equals(ResponsiveConfig.class))
+        && param.getAnnotation(ResponsiveConfigParam.class) != null;
   }
 }
