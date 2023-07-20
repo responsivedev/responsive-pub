@@ -21,6 +21,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyDescription;
+import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,61 +37,65 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
 
   public static ResponsiveKafkaStreams create(
       final Topology topology,
-      final Map<String, Object> configs
+      final Map<?, ?> configs
   ) {
-    final ResponsiveStoreRegistry storeRegistry = new ResponsiveStoreRegistry();
-    return connect(
+    return create(
         topology,
         configs,
-        new ResponsiveKafkaClientSupplier(configs, storeRegistry),
-        storeRegistry,
+        new DefaultKafkaClientSupplier(),
         new DefaultCassandraClientFactory()
     );
   }
 
   public static ResponsiveKafkaStreams create(
       final Topology topology,
-      final Map<String, Object> configs,
+      final Map<?, ?> configs,
       final KafkaClientSupplier clientSupplier
   ) {
-    final ResponsiveStoreRegistry storeRegistry = new ResponsiveStoreRegistry();
-    return connect(
+    return create(
         topology,
         configs,
-        new ResponsiveKafkaClientSupplier(clientSupplier, configs, storeRegistry),
-        storeRegistry,
+        clientSupplier,
         new DefaultCassandraClientFactory()
     );
   }
 
   public static ResponsiveKafkaStreams create(
       final Topology topology,
-      final Map<String, Object> configs,
+      final Map<?, ?> configs,
       final KafkaClientSupplier clientSupplier,
       final CassandraClientFactory cassandraClientFactory
   ) {
-    final ResponsiveStoreRegistry storeRegistry = new ResponsiveStoreRegistry();
     return connect(
         topology,
         configs,
-        new ResponsiveKafkaClientSupplier(clientSupplier, configs, storeRegistry),
-        storeRegistry,
-        cassandraClientFactory
+        cassandraClientFactory,
+        clientSupplier
     );
   }
 
+  @SuppressWarnings("unchecked")
   private static ResponsiveKafkaStreams connect(
       final Topology topology,
-      final Map<String, Object> configs,
-      final ResponsiveKafkaClientSupplier responsiveClientSupplier,
-      final ResponsiveStoreRegistry storeRegistry,
-      final CassandraClientFactory cassandraClientFactory
+      final Map<?, ?> configs,
+      final CassandraClientFactory cassandraClientFactory,
+      final KafkaClientSupplier clientSupplier
   ) {
+    for (Map.Entry<?, ?> entry : configs.entrySet()) {
+      if (!(entry.getKey() instanceof String)) {
+        throw new ConfigException(
+            entry.getKey().toString(), entry.getValue(), "Key must be a string.");
+      }
+    }
+
+    final ResponsiveStoreRegistry storeRegistry = new ResponsiveStoreRegistry();
     final ResponsiveConfig responsiveConfigs = new ResponsiveConfig(configs);
 
     final CqlSession session = cassandraClientFactory.createCqlSession(responsiveConfigs);
+    final ResponsiveKafkaClientSupplier responsiveClientSupplier =
+        new ResponsiveKafkaClientSupplier(clientSupplier, (Map<String, ?>) configs, storeRegistry);
 
-    final Admin admin = responsiveClientSupplier.getAdmin(configs);
+    final Admin admin = responsiveClientSupplier.getAdmin((Map<String, Object>) configs);
     final ScheduledExecutorService executor = new ScheduledThreadPoolExecutor(2);
     return new ResponsiveKafkaStreams(
         topology,
@@ -124,7 +129,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
   }
 
   private static StreamsConfig verifiedStreamsConfigs(
-      final Map<String, Object> configs,
+      final Map<?, ?> configs,
       final CassandraClient cassandraClient,
       final Admin admin,
       final ScheduledExecutorService executor,
