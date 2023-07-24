@@ -57,6 +57,8 @@ public class OperatorMain {
     }
 
     final String target = cmd.getOptionValue(OperatorOptions.CONTROLLER_URL);
+    final String environment = cmd.hasOption(OperatorOptions.ENVIRONMENT)
+        ? cmd.getOptionValue(OperatorOptions.ENVIRONMENT) : "";
     final String secretFilePath = cmd.getOptionValue(OperatorOptions.SECRETS_FILE);
     final boolean tlsOff = cmd.hasOption(OperatorOptions.TLS_OFF);
     final Properties config = load(secretFilePath);
@@ -73,7 +75,7 @@ public class OperatorMain {
 
     final Operator operator = new Operator();
     Serialization.jsonMapper().registerModule(new Jdk8Module());
-    operator.register(new ResponsivePolicyReconciler(new ControllerGrpcClient(
+    operator.register(new ResponsivePolicyReconciler(environment, new ControllerGrpcClient(
         target,
         apiKey,
         secret,

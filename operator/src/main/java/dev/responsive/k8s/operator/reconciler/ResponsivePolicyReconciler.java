@@ -49,17 +49,24 @@ public class ResponsivePolicyReconciler implements
   public static final String NAMESPACE_LABEL = "responsivePolicyNamespace";
 
   private final ResponsiveContext responsiveCtx;
+  private final String environment;
   private final Map<ResponsivePolicySpec.PolicyType, PolicyPlugin> plugins;
 
-  public ResponsivePolicyReconciler(final ControllerClient controllerClient) {
+  public ResponsivePolicyReconciler(
+      final String environment,
+      final ControllerClient controllerClient
+  ) {
     this(
+        environment,
         new ResponsiveContext(Objects.requireNonNull(controllerClient)),
-        ImmutableMap.of(ResponsivePolicySpec.PolicyType.DEMO, new DemoPolicyPlugin())
+        ImmutableMap.of(ResponsivePolicySpec.PolicyType.DEMO, new DemoPolicyPlugin(environment))
     );
   }
 
-  ResponsivePolicyReconciler(final ResponsiveContext responsiveCtx,
+  ResponsivePolicyReconciler(final String environment,
+                             final ResponsiveContext responsiveCtx,
                              final Map<ResponsivePolicySpec.PolicyType, PolicyPlugin> plugins) {
+    this.environment = environment;
     this.responsiveCtx = Objects.requireNonNull(responsiveCtx);
     this.plugins = Objects.requireNonNull(plugins);
   }
@@ -74,7 +81,7 @@ public class ResponsivePolicyReconciler implements
                 // we should either: 1. make the controller robust to not rely on polling
                 //                   2. poll in some less hacky way (while still using events)
                 responsiveCtx.getControllerClient()
-                    .getTargetState(ControllerProtoFactories.emptyRequest(policy))));
+                    .getTargetState(ControllerProtoFactories.emptyRequest(environment, policy))));
           } catch (final Throwable t) {
             LOG.error("Error fetching target state", t);
             // We return an empty target state to force reconciliation to run, since right now the
@@ -113,7 +120,7 @@ public class ResponsivePolicyReconciler implements
       return UpdateControl.patchStatus(resource);
     }
     responsiveCtx.getControllerClient()
-        .upsertPolicy(ControllerProtoFactories.upsertPolicyRequest(resource));
+        .upsertPolicy(ControllerProtoFactories.upsertPolicyRequest(environment, resource));
     plugins.get(resource.getSpec().getPolicyType()).reconcile(resource, ctx, responsiveCtx);
     return UpdateControl.patchStatus(resource);
   }

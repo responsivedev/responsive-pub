@@ -39,6 +39,12 @@ import responsive.controller.v1.controller.proto.ControllerOuterClass;
 public class DemoPolicyPlugin implements PolicyPlugin {
   private static final Logger LOG = LoggerFactory.getLogger(DemoPolicyPlugin.class);
 
+  private final String environment;
+
+  public DemoPolicyPlugin(final String environment) {
+    this.environment = environment;
+  }
+
   @Override
   public Map<String, EventSource> prepareEventSources(
       final EventSourceContext<ResponsivePolicy> ctx,
@@ -81,7 +87,9 @@ public class DemoPolicyPlugin implements PolicyPlugin {
     LOG.info("Found type {} for app {}/{}", managedApp.appType(), appNamespace, appName);
 
     responsiveCtx.getControllerClient().currentState(
-        ControllerProtoFactories.currentStateRequest(policy,
+        ControllerProtoFactories.currentStateRequest(
+            environment,
+            policy,
             currentStateFromApplication(managedApp))
     );
 

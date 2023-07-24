@@ -39,6 +39,8 @@ spec:
                 value: {{ .Values.logging.kafka.topic }}
               - name: LOGGING_KAFKA_KEY_FILE
                 value: /etc/responsive-operator/logging_kafka/key.properties
+              - name: OPERATOR_OPTS
+                value: {{ .Values.operatorOpts }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:

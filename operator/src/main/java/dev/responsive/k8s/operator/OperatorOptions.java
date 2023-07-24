@@ -30,6 +30,13 @@ public final class OperatorOptions {
       .numberOfArgs(1)
       .build();
 
+  public static final Option ENVIRONMENT = Option.builder("environment")
+      .hasArg(true)
+      .required(false)
+      .desc("The environment this operator is running in")
+      .numberOfArgs(1)
+      .build();
+
   public static final Option SECRETS_FILE = Option.builder("secretsFile")
       .hasArg(true)
       .required(true)
@@ -43,5 +50,6 @@ public final class OperatorOptions {
   public static final Options OPTIONS = new Options()
       .addOption(CONTROLLER_URL)
       .addOption(SECRETS_FILE)
-      .addOption(TLS_OFF);
+      .addOption(TLS_OFF)
+      .addOption(ENVIRONMENT);
 }

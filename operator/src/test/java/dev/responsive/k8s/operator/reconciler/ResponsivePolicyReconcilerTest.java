@@ -105,6 +105,7 @@ class ResponsivePolicyReconcilerTest {
         Optional.of(new DemoPolicy(123, 7, Optional.empty()))
     ));
     reconciler = new dev.responsive.k8s.operator.reconciler.ResponsivePolicyReconciler(
+        "testenv",
         responsiveCtx,
         ImmutableMap.of(ResponsivePolicySpec.PolicyType.DEMO, plugin)
     );
@@ -162,7 +163,8 @@ class ResponsivePolicyReconcilerTest {
     reconciler.reconcile(policy, ctx);
 
     // then:
-    verify(controllerClient).upsertPolicy(ControllerProtoFactories.upsertPolicyRequest(policy));
+    verify(controllerClient)
+        .upsertPolicy(ControllerProtoFactories.upsertPolicyRequest("testenv", policy));
   }
 
   @Test

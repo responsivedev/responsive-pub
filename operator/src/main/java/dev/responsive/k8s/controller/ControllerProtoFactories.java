@@ -24,27 +24,32 @@ import responsive.controller.v1.controller.proto.ControllerOuterClass.Applicatio
 
 public final class ControllerProtoFactories {
   public static ControllerOuterClass.UpsertPolicyRequest upsertPolicyRequest(
+      final String environment,
       final ResponsivePolicy policy) {
     return ControllerOuterClass.UpsertPolicyRequest.newBuilder()
         .setPolicy(ControllerProtoFactories.policyFromK8sResource(policy.getSpec()))
         // TODO(rohan): dont just use a namespaced (w/ /) name
-        .setApplicationId(getFullApplicationName(policy))
+        .setApplicationId(getFullApplicationName(environment, policy))
         .build();
   }
 
   public static ControllerOuterClass.CurrentStateRequest currentStateRequest(
+      final String environment,
       final ResponsivePolicy policy,
       final ApplicationState state
   ) {
     return ControllerOuterClass.CurrentStateRequest.newBuilder()
-        .setApplicationId(getFullApplicationName(policy))
+        .setApplicationId(getFullApplicationName(environment, policy))
         .setState(state)
         .build();
   }
 
-  public static ControllerOuterClass.EmptyRequest emptyRequest(final ResponsivePolicy policy) {
+  public static ControllerOuterClass.EmptyRequest emptyRequest(
+      final String environment,
+      final ResponsivePolicy policy
+  ) {
     return ControllerOuterClass.EmptyRequest.newBuilder()
-        .setApplicationId(getFullApplicationName(policy))
+        .setApplicationId(getFullApplicationName(environment, policy))
         .build();
   }
 
@@ -63,7 +68,13 @@ public final class ControllerProtoFactories {
     return builder.build();
   }
 
-  private static String getFullApplicationName(final ResponsivePolicy policy) {
-    return policy.getSpec().getApplicationNamespace() + "/" + policy.getSpec().getApplicationName();
+  private static String getFullApplicationName(
+      final String environment,
+      final ResponsivePolicy policy
+  ) {
+    final String prefix = environment.isEmpty() ? "" : environment + "/";
+    return prefix
+        + policy.getSpec().getApplicationNamespace()
+        + "/" + policy.getSpec().getApplicationName();
   }
 }
