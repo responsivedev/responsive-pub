@@ -98,8 +98,13 @@ class ControllerGrpcClientTest {
         clientInterceptorArgumentCaptor.capture())).thenReturn(channel);
     when(grpcFactories.createBlockingStub(any())).thenReturn(stub);
     lenient().when(stub.withDeadlineAfter(anyLong(), any())).thenReturn(stub);
-    client = new dev.responsive.controller.client.grpc.ControllerGrpcClient(TARGET,
-        apiKey, secret, grpcFactories);
+    client = new dev.responsive.controller.client.grpc.ControllerGrpcClient(
+        TARGET,
+        apiKey,
+        secret,
+        false,
+        grpcFactories
+    );
   }
 
   @Test

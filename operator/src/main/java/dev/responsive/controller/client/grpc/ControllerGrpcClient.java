@@ -21,25 +21,38 @@ import dev.responsive.controller.client.ControllerClient;
 import io.grpc.ChannelCredentials;
 import io.grpc.ClientInterceptor;
 import io.grpc.Grpc;
+import io.grpc.InsecureChannelCredentials;
 import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.TlsChannelCredentials;
 import io.grpc.stub.MetadataUtils;
 import java.util.concurrent.TimeUnit;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import responsive.controller.v1.controller.proto.ControllerGrpc;
 import responsive.controller.v1.controller.proto.ControllerOuterClass;
 import responsive.platform.auth.ApiKeyHeaders;
 
 public class ControllerGrpcClient implements ControllerClient {
+  private static final Logger LOG = LoggerFactory.getLogger(ControllerGrpcClient.class);
+
   private final ManagedChannel channel;
   private final ControllerGrpc.ControllerBlockingStub stub;
 
-  public ControllerGrpcClient(final String target, final String apiKey, final String secret) {
-    this(target, apiKey, secret, new GrpcFactories() {});
+  public ControllerGrpcClient(
+      final String target,
+      final String apiKey,
+      final String secret,
+      final boolean disableTls
+  ) {
+    this(target, apiKey, secret, disableTls, new GrpcFactories() {});
   }
 
   @VisibleForTesting
-  ControllerGrpcClient(final String target, final String apiKey, final String secret,
+  ControllerGrpcClient(final String target,
+                       final String apiKey,
+                       final String secret,
+                       final boolean disableTls,
                        final GrpcFactories grpcFactories) {
 
     final Metadata metadata = new Metadata();
@@ -48,8 +61,19 @@ public class ControllerGrpcClient implements ControllerClient {
     metadata.put(Metadata.Key.of(
         ApiKeyHeaders.SECRET_METADATA_KEY, Metadata.ASCII_STRING_MARSHALLER), secret);
 
-    channel = grpcFactories.createChannel(target, TlsChannelCredentials.create(),
-            MetadataUtils.newAttachHeadersInterceptor(metadata));
+    final ChannelCredentials credentials;
+    if (disableTls) {
+      LOG.info("don't use TLS to connect to controller");
+      credentials = InsecureChannelCredentials.create();
+    } else {
+      LOG.info("use TLS to connect to controller");
+      credentials = TlsChannelCredentials.create();
+    }
+    channel = grpcFactories.createChannel(
+        target,
+        credentials,
+        MetadataUtils.newAttachHeadersInterceptor(metadata)
+    );
     stub = grpcFactories.createBlockingStub(channel);
   }
 
