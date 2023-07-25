@@ -36,6 +36,8 @@ import responsive.controller.v1.controller.proto.ControllerOuterClass.DemoPolicy
 import responsive.controller.v1.controller.proto.ControllerOuterClass.PolicyStatus;
 
 class ControllerProtoFactoriesTest {
+  private static final String TESTENV = "testenv";
+
   private final ResponsivePolicy demoPolicy = new ResponsivePolicy();
   private ApplicationState demoApplicationState;
 
@@ -62,10 +64,10 @@ class ControllerProtoFactoriesTest {
   @Test
   public void shouldCreateUpsertPolicyRequestForDemoPolicy() {
     // when:
-    final var request = ControllerProtoFactories.upsertPolicyRequest(demoPolicy);
+    final var request = ControllerProtoFactories.upsertPolicyRequest(TESTENV, demoPolicy);
 
     // then:
-    assertThat(request.getApplicationId(), is("gouda/cheddar"));
+    assertThat(request.getApplicationId(), is("testenv/gouda/cheddar"));
     assertThat(request.getPolicy().hasDemoPolicy(), is(true));
     assertThat(request.getPolicy().getStatus(), is(PolicyStatus.POLICY_STATUS_MANAGED));
     final DemoPolicy demoPolicy = request.getPolicy().getDemoPolicy();
@@ -90,7 +92,7 @@ class ControllerProtoFactoriesTest {
     demoPolicy.setSpec(specWithDiagnoser(Diagnoser.lag()));
 
     // when:
-    final var request = ControllerProtoFactories.upsertPolicyRequest(demoPolicy);
+    final var request = ControllerProtoFactories.upsertPolicyRequest(TESTENV, demoPolicy);
 
     // then:
     final DemoPolicy created = request.getPolicy().getDemoPolicy();
@@ -110,7 +112,7 @@ class ControllerProtoFactoriesTest {
     );
 
     // when:
-    final var request = ControllerProtoFactories.upsertPolicyRequest(demoPolicy);
+    final var request = ControllerProtoFactories.upsertPolicyRequest(TESTENV, demoPolicy);
 
     // then:
     final DemoPolicy created = request.getPolicy().getDemoPolicy();
@@ -133,7 +135,7 @@ class ControllerProtoFactoriesTest {
     );
 
     // when:
-    final var request = ControllerProtoFactories.upsertPolicyRequest(demoPolicy);
+    final var request = ControllerProtoFactories.upsertPolicyRequest(TESTENV, demoPolicy);
 
     // then:
     final DemoPolicy created = request.getPolicy().getDemoPolicy();
@@ -148,20 +150,46 @@ class ControllerProtoFactoriesTest {
   }
 
   @Test
+  public void shouldCreateUpsertPolicyRequestWithApplicationIdWhenEnvEmpty() {
+    // when:
+    final var request = ControllerProtoFactories.upsertPolicyRequest("", demoPolicy);
+
+    // then:
+    assertThat(request.getApplicationId(), is("gouda/cheddar"));
+  }
+
+  @Test
   public void shouldCreateCurrentStateRequestForDeployment() {
     // when:
     final var request
-        = ControllerProtoFactories.currentStateRequest(demoPolicy, demoApplicationState);
+        = ControllerProtoFactories.currentStateRequest(TESTENV, demoPolicy, demoApplicationState);
 
     // Then:
-    assertThat(request.getApplicationId(), is("gouda/cheddar"));
+    assertThat(request.getApplicationId(), is("testenv/gouda/cheddar"));
     assertThat(request.getState().hasDemoState(), is(true));
     assertThat(request.getState().getDemoState().getReplicas(), is(3));
   }
 
   @Test
+  public void shouldSetAppIdInCurrentStateRequestWhenEnvEmpty() {
+    // when:
+    final var request
+        = ControllerProtoFactories.currentStateRequest("", demoPolicy, demoApplicationState);
+
+    // Then:
+    assertThat(request.getApplicationId(), is("gouda/cheddar"));
+  }
+
+  @Test
   public void shouldCreateEmptyRequest() {
-    final var request = ControllerProtoFactories.emptyRequest(demoPolicy);
+    final var request = ControllerProtoFactories.emptyRequest(TESTENV, demoPolicy);
+
+    assertThat(request.getApplicationId(), is("testenv/gouda/cheddar"));
+  }
+
+  @Test
+  public void shouldCreateEmptyRequestWhenEnvEmpty() {
+    final var request = ControllerProtoFactories.emptyRequest("", demoPolicy);
 
     assertThat(request.getApplicationId(), is("gouda/cheddar"));
   }

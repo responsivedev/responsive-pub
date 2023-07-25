@@ -106,7 +106,7 @@ class DemoPolicyPluginTest {
   private ControllerClient controllerClient;
 
   private final dev.responsive.k8s.operator.reconciler.DemoPolicyPlugin
-      plugin = new dev.responsive.k8s.operator.reconciler.DemoPolicyPlugin();
+      plugin = new dev.responsive.k8s.operator.reconciler.DemoPolicyPlugin("testenv");
   private final Deployment deployment = new Deployment();
   private final StatefulSet statefulSet = new StatefulSet();
   private final ResponsivePolicy policy = new ResponsivePolicy();
@@ -267,6 +267,7 @@ class DemoPolicyPluginTest {
     MatcherAssert.assertThat(
         currentStateRequest,
         equalTo(ControllerProtoFactories.currentStateRequest(
+                "testenv",
                 policy,
                 ControllerOuterClass.ApplicationState.newBuilder()
                     .setDemoState(
