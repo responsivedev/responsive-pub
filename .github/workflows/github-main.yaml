@@ -38,11 +38,6 @@ jobs:
         with:
           arguments: build
 
-      - name: Release
-        uses: gradle/gradle-build-action@v2
-        with:
-          arguments: release
-
       - name: Publish
         uses: gradle/gradle-build-action@v2
         with:
