@@ -62,13 +62,10 @@ allprojects {
         tag {
             prefix.set(project.name)
             versionSeparator.set("-")
-            initialVersion({_, _ -> "0.1.0-1"})
+            initialVersion({_, _ -> "0.1.0"})
         }
 
-        // use rc versions for public artifacts
-        versionIncrementer(
-            "incrementPrerelease",
-            mapOf("initialPreReleaseIfNotOnPrerelease" to "1"))
+        versionIncrementer("incrementMinor")
 
         snapshotCreator({ _, _ -> "-SNAPSHOT" })
         ignoreUncommittedChanges.set(false)

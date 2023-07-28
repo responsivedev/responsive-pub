@@ -46,20 +46,6 @@ jobs:
         with:
           arguments: :${{ inputs.module }}:build
 
-      - name: Create Next Version Commit
-        run: |
-          git config --global user.name 'Responsive Tools'
-          git config --global user.email 'tools@responsive.dev'
-          ./gradlew :${{ inputs.module }}:markNextVersion \
-            -Prelease.incrementer=${{ inputs.increment }} \
-            -Prelease.dryRun | grep "Creating" | git commit --allow-empty -F -
-          git push
-
-      - name: Increment Version
-        uses: gradle/gradle-build-action@v2
-        with:
-          arguments: :${{ inputs.module }}:markNextVersion -Prelease.incrementer=${{ inputs.increment }}
-
       - name: Release
         uses: gradle/gradle-build-action@v2
         with:
@@ -75,10 +61,24 @@ jobs:
           SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
           SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
 
-      - name: Publish Images 
+      - name: Publish Images
         uses: gradle/gradle-build-action@v2
         if: ${{ inputs.module == 'operator' }}
         with:
           arguments: pushCRD pushDocker pushHelm -PdockerRegistry=${{ steps.login-ecr-public.outputs.registry }}/j8q9y0n6 -PhelmRegistry=${{ steps.login-ecr-public.outputs.registry }}/j8q9y0n6
         env:
           ECR_REGISTRY: ${{ steps.login-ecr-public.outputs.registry }}
+
+      - name: Create Next Version Commit
+        run: |
+          git config --global user.name 'Responsive Tools'
+          git config --global user.email 'tools@responsive.dev'
+          ./gradlew :${{ inputs.module }}:markNextVersion \
+            -Prelease.incrementer=${{ inputs.increment }} \
+            -Prelease.dryRun | grep "Creating" | git commit --allow-empty -F -
+          git push
+
+      - name: Increment Version
+        uses: gradle/gradle-build-action@v2
+        with:
+          arguments: :${{ inputs.module }}:markNextVersion -Prelease.incrementer=${{ inputs.increment }}
