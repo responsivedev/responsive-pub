@@ -1,7 +1,8 @@
 name: CI/CD Main
 on:
   push:
-    branches: main
+    branches:
+        - main
 jobs:
   build:
     permissions:
@@ -50,6 +51,17 @@ jobs:
           arguments: pushCRD pushDocker pushHelm -PdockerRegistry=${{ steps.login-ecr-public.outputs.registry }}/j8q9y0n6 -PhelmRegistry=${{ steps.login-ecr-public.outputs.registry }}/j8q9y0n6
         if: github.ref == 'refs/heads/main'
 
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: arn:aws:iam::292505934682:role/github-responsive-pub-main
+          role-session-name: github-publish-artifacts
+          aws-region: us-west-2
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
       - uses: actions/checkout@v3
         with:
           repository: responsivedev/sindri
@@ -57,20 +69,21 @@ jobs:
           ref: refs/heads/master
           token: ${{ secrets.TOOLS_GHA_TOKEN }}
 
-            - name: Install Kind
+      - name: Install Kind
         uses: helm/kind-action@v1.5.0
         with:
             install_only: true
 
       - name: Run Smoke Test
-        run: "sindri/scripts/run-smoke-test -s master -p false -i simple-example -t `./gradlew kafka-client:cV  | grep \"Project version\" | sed 's/Project version: //'`"
+        run: "sindri/scripts/run-smoke-test -s master -p true -i public.ecr.aws/j8q9y0n6/responsiveinc/simple-example -t `./gradlew kafka-client:cV  | grep \"Project version\" | sed 's/Project version: //'`"
         env:
             DD_API_KEY: ${{ secrets.DD_API_KEY }}
             PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
 
       - name: Push next pub version to Sindri
+        working-directory: sindri
         run: |
           git config --global user.name 'Responsive Tools'
           git config --global user.email 'tools@responsive.dev'
           git commit -am "update responsive-pub artifact versions"
-          gitp ush
+          git push
