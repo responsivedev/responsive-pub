@@ -35,10 +35,6 @@ jobs:
         with:
           registry-type: public
 
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v1
-
       - name: Setup Gradle
         uses: gradle/gradle-build-action@v2
         with:
@@ -55,6 +51,10 @@ jobs:
         with:
           arguments: pushCRD pushDocker pushHelm -PdockerRegistry=${{ steps.login-ecr-public.outputs.registry }}/j8q9y0n6 -PhelmRegistry=${{ steps.login-ecr-public.outputs.registry }}/j8q9y0n6
         if: github.ref == 'refs/heads/main'
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
 
       - uses: actions/checkout@v3
         with:
