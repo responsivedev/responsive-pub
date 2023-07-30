@@ -59,7 +59,7 @@ jobs:
           ref: refs/heads/master
           token: ${{ secrets.TOOLS_GHA_TOKEN }}
 
-            - name: Install Kind
+      - name: Install Kind
         uses: helm/kind-action@v1.5.0
         with:
             install_only: true
@@ -75,4 +75,4 @@ jobs:
           git config --global user.name 'Responsive Tools'
           git config --global user.email 'tools@responsive.dev'
           git commit -am "update responsive-pub artifact versions"
-          gitp ush
+          git push
