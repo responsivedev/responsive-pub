@@ -49,7 +49,7 @@ jobs:
             install_only: true
 
       - name: Run Smoke Test
-        run: "sindri/scripts/run-smoke-test -s master -p false -i simple-example -t `./gradlew kafka-client:cV  | grep \"Project version\" | sed 's/Project version: //'`"
+        run: "sindri/scripts/run-smoke-test -l -w system-tests-pub -s master -p false -i simple-example -t `./gradlew kafka-client:cV  | grep \"Project version\" | sed 's/Project version: //'`"
         env:
             DD_API_KEY: ${{ secrets.DD_API_KEY }}
             PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
