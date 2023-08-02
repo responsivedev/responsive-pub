@@ -19,9 +19,9 @@ package dev.responsive.kafka.store;
 import com.datastax.oss.driver.api.core.cql.BatchStatementBuilder;
 import com.datastax.oss.driver.api.core.cql.BatchType;
 import com.datastax.oss.driver.api.core.cql.BatchableStatement;
-import com.datastax.oss.driver.api.core.cql.ResultSet;
 import com.datastax.oss.driver.api.core.cql.Statement;
 import dev.responsive.db.CassandraClient;
+import dev.responsive.db.RemoteTable;
 import dev.responsive.model.Result;
 import java.util.ArrayList;
 import java.util.List;
@@ -39,7 +39,7 @@ class AtomicWriter<K> {
   private final int partition;
 
   private final List<BatchableStatement<?>> statements;
-  private final BufferPlugin<K> plugin;
+  private final RemoteTable<K> plugin;
   private final int batchSize;
   private final long epoch;
 
@@ -47,14 +47,14 @@ class AtomicWriter<K> {
       final CassandraClient client,
       final String tableName,
       final int partition,
-      final BufferPlugin<K> plugin,
+      final RemoteTable<K> remoteTable,
       final long epoch,
       final int batchSize
   ) {
     this.client = client;
     this.tableName = tableName;
     this.partition = partition;
-    this.plugin = plugin;
+    this.plugin = remoteTable;
     this.epoch = epoch;
 
     this.batchSize = batchSize;
@@ -68,8 +68,8 @@ class AtomicWriter<K> {
   public void add(final Result<K> result) {
     if (result.isTombstone || plugin.retain(result.key)) {
       statements.add(result.isTombstone
-          ? plugin.deleteData(client, tableName, partition, result.key)
-          : plugin.insertData(client, tableName, partition, result.key, result.value));
+          ? plugin.delete(tableName, partition, result.key)
+          : plugin.insert(tableName, partition, result.key, result.value));
     }
   }
 
@@ -85,7 +85,7 @@ class AtomicWriter<K> {
     do {
       final var builder = new BatchStatementBuilder(BatchType.UNLOGGED);
       builder.setIdempotence(true);
-      builder.addStatement(client.ensureEpoch(tableName, partition, epoch));
+      builder.addStatement(plugin.metadata().ensureEpoch(tableName, partition, epoch));
 
       for (int i = 0; i < batchSize && it.hasNext(); i++) {
         builder.addStatement(it.next());
@@ -108,7 +108,9 @@ class AtomicWriter<K> {
   }
 
   public AtomicWriteResult setOffset(final long offset) {
-    final var result = client.execute(client.setOffset(tableName, partition, offset, epoch));
+    final var result = client.execute(
+        plugin.metadata().setOffset(tableName, partition, offset, epoch));
+
     return result.wasApplied()
         ? AtomicWriteResult.success(partition)
         : AtomicWriteResult.failure(partition);

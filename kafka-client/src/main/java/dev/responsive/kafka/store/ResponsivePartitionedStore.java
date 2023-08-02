@@ -19,8 +19,9 @@ package dev.responsive.kafka.store;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.changelogFor;
 
-import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.db.CassandraClient;
+import dev.responsive.db.CassandraKeyValueTable;
+import dev.responsive.db.RemoteKeyValueTable;
 import dev.responsive.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.api.InternalConfigs;
 import dev.responsive.kafka.clients.SharedClients;
@@ -32,7 +33,6 @@ import dev.responsive.utils.TableName;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
@@ -52,11 +52,6 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
 
   private static final Logger LOG = LoggerFactory.getLogger(ResponsivePartitionedStore.class);
 
-  // visible for testing
-  static final Plugin PLUGIN = new Plugin();
-
-  private CassandraClient client;
-
   private final TableName name;
   private final Position position;
   private ResponsiveStoreRegistry storeRegistry;
@@ -64,11 +59,12 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
 
   private boolean open;
   private SubPartitioner partitioner;
-  private CommitBuffer<Bytes> buffer;
+  private CommitBuffer<Bytes, RemoteKeyValueTable> buffer;
 
   @SuppressWarnings("rawtypes")
   private InternalProcessorContext context;
   private int partition;
+  private RemoteKeyValueTable remoteTable;
 
   public ResponsivePartitionedStore(
       final TableName name
@@ -104,14 +100,16 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
       partition = context.taskId().partition();
 
       final SharedClients sharedClients = new SharedClients(context.appConfigs());
-      client = sharedClients.cassandraClient;
+      CassandraClient client = sharedClients.cassandraClient;
+
+      remoteTable = new CassandraKeyValueTable(client);
+      remoteTable.create(name.cassandraName());
 
       final RemoteMonitor monitor = client.awaitTable(name.cassandraName(), sharedClients.executor);
-      client.createDataTable(name.cassandraName());
       monitor.await(Duration.ofSeconds(60));
       LOG.info("Remote table {} is available for querying.", name.cassandraName());
 
-      client.prepareStatements(name.cassandraName());
+      remoteTable.prepare(name.cassandraName());
 
       final TopicPartition topicPartition =  new TopicPartition(
           changelogFor(context, name.kafkaName(), false),
@@ -124,7 +122,7 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
           sharedClients,
           name,
           topicPartition,
-          PLUGIN,
+          remoteTable,
           config
       );
       buffer.init();
@@ -210,7 +208,7 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
       return result.isTombstone ? null : result.value;
     }
 
-    return client.get(name.cassandraName(), partitioner.partition(partition, key), key);
+    return remoteTable.get(name.cassandraName(), partitioner.partition(partition, key), key);
   }
 
   @Override
@@ -232,7 +230,7 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
   public long approximateNumEntries() {
     return partitioner
         .all(partition)
-        .mapToLong(p -> client.count(name.cassandraName(), p))
+        .mapToLong(p -> remoteTable.metadata().count(name.cassandraName(), p))
         .sum();
   }
 
@@ -244,44 +242,5 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
     // the client is shared across state stores, so only the
     // buffer needs to be flushed
     flush();
-  }
-
-  private static class Plugin implements BufferPlugin<Bytes> {
-
-    @Override
-    public Bytes keyFromRecord(final ConsumerRecord<byte[], byte[]> record) {
-      return Bytes.wrap(record.key());
-    }
-
-    @Override
-    public BoundStatement insertData(
-        final CassandraClient client,
-        final String tableName,
-        final int partition,
-        final Bytes key,
-        final byte[] value
-    ) {
-      return client.insertData(tableName, partition, key, value);
-    }
-
-    @Override
-    public BoundStatement deleteData(
-        final CassandraClient client,
-        final String tableName,
-        final int partition,
-        final Bytes key
-    ) {
-      return client.deleteData(tableName, partition, key);
-    }
-
-    @Override
-    public Bytes bytes(final Bytes key) {
-      return key;
-    }
-
-    @Override
-    public int compare(final Bytes o1, final Bytes o2) {
-      return o1.compareTo(o2);
-    }
   }
 }

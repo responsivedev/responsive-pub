@@ -34,11 +34,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.testcontainers.containers.CassandraContainer;
 
 @ExtendWith(ResponsiveExtension.class)
-public class CassandraClientIntegrationTest {
+public class RemoteKeyValueTableIntegrationTest {
 
   private CqlSession session;
-  private CassandraClient client;
+  private RemoteKeyValueTable statements;
   private String name;
+  private CassandraClient client;
 
   @BeforeEach
   public void before(
@@ -52,10 +53,10 @@ public class CassandraClientIntegrationTest {
         .withKeyspace("responsive_clients") // NOTE: this keyspace is expected to exist
         .build();
     client = new CassandraClient(session, config);
-
+    statements = new CassandraKeyValueTable(client);
     name = info.getTestMethod().orElseThrow().getName();
-    client.createDataTable(name);
-    client.prepareStatements(name);
+    statements.create(name);
+    statements.prepare(name);
   }
 
   @Test
@@ -63,19 +64,19 @@ public class CassandraClientIntegrationTest {
     // Given:
     final String table = name;
     final List<BoundStatement> inserts = List.of(
-        client.insertData(table, 0, Bytes.wrap(new byte[]{0x0, 0x1}), new byte[]{0x1}),
-        client.insertData(table, 0, Bytes.wrap(new byte[]{0x1, 0x0}), new byte[]{0x1}),
-        client.insertData(table, 0, Bytes.wrap(new byte[]{0x2, 0x0}), new byte[]{0x1}),
-        client.insertData(table, 0, Bytes.wrap(new byte[]{0x2, 0x2}), new byte[]{0x1}),
-        client.insertData(table, 0, Bytes.wrap(new byte[]{0x1, 0x1}), new byte[]{0x1}),
-        client.insertData(table, 0, Bytes.wrap(new byte[]{0x0, 0x2}), new byte[]{0x1}),
-        client.insertData(table, 0, Bytes.wrap(new byte[]{0x2}), new byte[]{0x1}),
-        client.insertData(table, 0, Bytes.wrap(new byte[]{0x0}), new byte[]{0x1})
+        statements.insert(table, 0, Bytes.wrap(new byte[]{0x0, 0x1}), new byte[]{0x1}),
+        statements.insert(table, 0, Bytes.wrap(new byte[]{0x1, 0x0}), new byte[]{0x1}),
+        statements.insert(table, 0, Bytes.wrap(new byte[]{0x2, 0x0}), new byte[]{0x1}),
+        statements.insert(table, 0, Bytes.wrap(new byte[]{0x2, 0x2}), new byte[]{0x1}),
+        statements.insert(table, 0, Bytes.wrap(new byte[]{0x1, 0x1}), new byte[]{0x1}),
+        statements.insert(table, 0, Bytes.wrap(new byte[]{0x0, 0x2}), new byte[]{0x1}),
+        statements.insert(table, 0, Bytes.wrap(new byte[]{0x2}), new byte[]{0x1}),
+        statements.insert(table, 0, Bytes.wrap(new byte[]{0x0}), new byte[]{0x1})
     );
     inserts.forEach(client::execute);
 
     // When:
-    final KeyValueIterator<Bytes, byte[]> all = client.all(table, 0);
+    final KeyValueIterator<Bytes, byte[]> all = statements.all(table, 0);
 
     // Then:
     Bytes old = all.next().key;
@@ -91,19 +92,19 @@ public class CassandraClientIntegrationTest {
     // Given:
     final String table = name;
     final List<BoundStatement> inserts = List.of(
-        client.insertData(table, 0, Bytes.wrap(new byte[]{0x0, 0x1}), new byte[]{0x1}),
-        client.insertData(table, 0, Bytes.wrap(new byte[]{0x1, 0x0}), new byte[]{0x1}),
-        client.insertData(table, 0, Bytes.wrap(new byte[]{0x2, 0x0}), new byte[]{0x1}),
-        client.insertData(table, 0, Bytes.wrap(new byte[]{0x2, 0x2}), new byte[]{0x1}),
-        client.insertData(table, 0, Bytes.wrap(new byte[]{0x1, 0x1}), new byte[]{0x1}),
-        client.insertData(table, 0, Bytes.wrap(new byte[]{0x0, 0x2}), new byte[]{0x1}),
-        client.insertData(table, 0, Bytes.wrap(new byte[]{0x2}), new byte[]{0x1}),
-        client.insertData(table, 0, Bytes.wrap(new byte[]{0x0}), new byte[]{0x1})
+        statements.insert(table, 0, Bytes.wrap(new byte[]{0x0, 0x1}), new byte[]{0x1}),
+        statements.insert(table, 0, Bytes.wrap(new byte[]{0x1, 0x0}), new byte[]{0x1}),
+        statements.insert(table, 0, Bytes.wrap(new byte[]{0x2, 0x0}), new byte[]{0x1}),
+        statements.insert(table, 0, Bytes.wrap(new byte[]{0x2, 0x2}), new byte[]{0x1}),
+        statements.insert(table, 0, Bytes.wrap(new byte[]{0x1, 0x1}), new byte[]{0x1}),
+        statements.insert(table, 0, Bytes.wrap(new byte[]{0x0, 0x2}), new byte[]{0x1}),
+        statements.insert(table, 0, Bytes.wrap(new byte[]{0x2}), new byte[]{0x1}),
+        statements.insert(table, 0, Bytes.wrap(new byte[]{0x0}), new byte[]{0x1})
     );
     inserts.forEach(client::execute);
 
     // When:
-    final KeyValueIterator<Bytes, byte[]> range = client.range(
+    final KeyValueIterator<Bytes, byte[]> range = statements.range(
         table,
         0,
         Bytes.wrap(new byte[]{0x0, 0x1}),

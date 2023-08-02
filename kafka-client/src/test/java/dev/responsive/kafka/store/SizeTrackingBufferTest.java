@@ -3,14 +3,30 @@ package dev.responsive.kafka.store;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 
+import dev.responsive.db.KeySpec;
 import dev.responsive.model.Result;
 import java.util.List;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.utils.Bytes;
 import org.junit.jupiter.api.Test;
 
 class SizeTrackingBufferTest {
-  private final SizeTrackingBuffer<Bytes> buffer
-      = new SizeTrackingBuffer<>(ResponsivePartitionedStore.PLUGIN);
+  private final SizeTrackingBuffer<Bytes> buffer = new SizeTrackingBuffer<>(new KeySpec<>() {
+    @Override
+    public Bytes keyFromRecord(final ConsumerRecord<byte[], byte[]> record) {
+      return Bytes.wrap(record.key());
+    }
+
+    @Override
+    public Bytes bytes(final Bytes key) {
+      return key;
+    }
+
+    @Override
+    public int compare(final Bytes o1, final Bytes o2) {
+      return o1.compareTo(o2);
+    }
+  });
 
   @Test
   public void shouldReturnSizeZeroOnEmptyBuffer() {
