@@ -14,40 +14,16 @@
  * limitations under the License.
  */
 
-package dev.responsive.kafka.store;
+package dev.responsive.db;
 
-import com.datastax.oss.driver.api.core.cql.BoundStatement;
-import dev.responsive.db.CassandraClient;
 import java.util.Comparator;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.utils.Bytes;
 
-/**
- * Used to ensure that {@link CommitBuffer} can work both with
- * windowed and key-value data.
- */
-interface BufferPlugin<K> extends Comparator<K> {
+public interface KeySpec<K> extends Comparator<K> {
 
   K keyFromRecord(final ConsumerRecord<byte[], byte[]> record);
 
-  BoundStatement insertData(
-      final CassandraClient client,
-      final String tableName,
-      final int partition,
-      final K key,
-      final byte[] value
-  );
-
-  BoundStatement deleteData(
-      final CassandraClient client,
-      final String tableName,
-      final int partition,
-      final K key
-  );
-
-  default boolean retain(final K key) {
-    return true;
-  }
-
   Bytes bytes(final K key);
+
 }

@@ -16,12 +16,9 @@
 
 package dev.responsive.kafka.store;
 
-import static dev.responsive.db.CassandraClient.UNSET_PERMIT;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -32,12 +29,12 @@ import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.Statement;
 import com.datastax.oss.driver.internal.core.cql.DefaultBatchStatement;
 import dev.responsive.db.CassandraClient;
+import dev.responsive.db.CassandraKeyValueTable;
+import dev.responsive.db.MetadataStatements;
 import dev.responsive.model.Result;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.utils.Bytes;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -65,8 +62,6 @@ class AtomicWriterTest {
 
   @BeforeEach
   public void beforeEach() {
-    when(client.ensureEpoch(any(), anyInt(), anyLong()))
-        .thenAnswer(iom -> capturingStatement("ensureEpoch", iom.getArguments()));
     when(client.executeAsync(any()))
         .thenReturn(CompletableFuture.completedFuture(asyncResultSet));
     when(asyncResultSet.wasApplied()).thenReturn(true);
@@ -88,7 +83,7 @@ class AtomicWriterTest {
         client,
         "foo",
         0,
-        new TestPlugin(),
+        new TestPlugin(client),
         EPOCH,
         2
     );
@@ -136,7 +131,7 @@ class AtomicWriterTest {
         client,
         "foo",
         0,
-        new TestPlugin(),
+        new TestPlugin(client),
         EPOCH,
         2
     );
@@ -153,16 +148,14 @@ class AtomicWriterTest {
     verify(client, times(2)).executeAsync(statementCaptor.capture());
   }
 
-  private static class TestPlugin implements BufferPlugin<Bytes> {
+  private static class TestPlugin extends CassandraKeyValueTable {
 
-    @Override
-    public Bytes keyFromRecord(final ConsumerRecord<byte[], byte[]> record) {
-      return Bytes.wrap(record.key());
+    public TestPlugin(final CassandraClient client) {
+      super(client);
     }
 
     @Override
-    public BoundStatement insertData(
-        final CassandraClient client,
+    public BoundStatement insert(
         final String tableName,
         final int partition,
         final Bytes key,
@@ -172,8 +165,7 @@ class AtomicWriterTest {
     }
 
     @Override
-    public BoundStatement deleteData(
-        final CassandraClient client,
+    public BoundStatement delete(
         final String tableName,
         final int partition,
         final Bytes key
@@ -182,13 +174,21 @@ class AtomicWriterTest {
     }
 
     @Override
-    public Bytes bytes(final Bytes key) {
-      return key;
+    public MetadataStatements metadata() {
+      return new TestMetadataStatements(getClient(), new KeyValueMetadataKeys());
+    }
+  }
+
+  private static class TestMetadataStatements extends MetadataStatements {
+
+    public TestMetadataStatements(final CassandraClient client, final MetadataKeys metadataKeys) {
+      super(client, metadataKeys);
     }
 
     @Override
-    public int compare(final Bytes o1, final Bytes o2) {
-      return o1.compareTo(o2);
+    public BoundStatement ensureEpoch(final String table, final int partitionKey,
+        final long epoch) {
+      return capturingStatement("ensureEpoch", new Object[]{table, partitionKey, epoch});
     }
   }
 

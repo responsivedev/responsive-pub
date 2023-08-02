@@ -38,6 +38,8 @@ import static org.hamcrest.Matchers.is;
 
 import com.datastax.oss.driver.api.core.CqlSession;
 import dev.responsive.db.CassandraClient;
+import dev.responsive.db.CassandraKeyValueTable;
+import dev.responsive.db.RemoteKeyValueTable;
 import dev.responsive.db.partitioning.Hasher;
 import dev.responsive.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
@@ -152,7 +154,8 @@ public class SubPartitionIntegrationTest {
           true,
           properties);
       final String cassandraName = new TableName(storeName).cassandraName();
-      client.prepareStatements(cassandraName);
+      final RemoteKeyValueTable statements = new CassandraKeyValueTable(client);
+      statements.prepare(cassandraName);
 
       assertThat(client.numPartitions(cassandraName), is(OptionalInt.of(32)));
       assertThat(client.count(cassandraName, 0), is(2L));
@@ -165,7 +168,7 @@ public class SubPartitionIntegrationTest {
         assertThat(
             deserializer.deserialize("foo",
                 Arrays.copyOfRange(
-                    client.get(cassandraName, hasher.partition((int) (k % 2), kBytes), kBytes),
+                    statements.get(cassandraName, hasher.partition((int) (k % 2), kBytes), kBytes),
                     8,
                     16)),
             is(100L));

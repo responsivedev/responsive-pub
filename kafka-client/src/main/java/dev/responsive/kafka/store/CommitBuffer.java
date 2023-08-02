@@ -19,7 +19,8 @@ package dev.responsive.kafka.store;
 import static dev.responsive.kafka.config.ResponsiveConfig.MAX_CONCURRENT_REMOTE_WRITES_CONFIG;
 
 import dev.responsive.db.CassandraClient;
-import dev.responsive.db.CassandraClient.MetadataRow;
+import dev.responsive.db.MetadataRow;
+import dev.responsive.db.RemoteTable;
 import dev.responsive.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.clients.SharedClients;
 import dev.responsive.kafka.config.ResponsiveConfig;
@@ -54,7 +55,7 @@ import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCa
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.slf4j.Logger;
 
-class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
+class CommitBuffer<K, RT extends RemoteTable<K>> implements RecordBatchingStateRestoreCallback {
 
   public static final int MAX_BATCH_SIZE = 1000;
   private final Logger log;
@@ -65,7 +66,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
   private final int partition;
   private final Admin admin;
   private final TopicPartition changelog;
-  private final BufferPlugin<K> plugin;
+  private final RT remoteTable;
   private final boolean truncateChangelog;
   private final FlushTriggers flushTriggers;
   private final int maxBatchSize;
@@ -76,11 +77,11 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
   private Instant lastFlush;
   private long epoch;
 
-  static <K> CommitBuffer<K> from(
+  static <K, RT extends RemoteTable<K>> CommitBuffer<K, RT> from(
       final SharedClients clients,
       final TableName tableName,
       final TopicPartition changelog,
-      final BufferPlugin<K> plugin,
+      final RT statements,
       final ResponsiveConfig config
   ) {
     final var admin = clients.admin;
@@ -95,7 +96,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
         tableName.cassandraName(),
         changelog,
         admin,
-        plugin,
+        statements,
         truncate,
         FlushTriggers.fromConfig(config),
         partitioner,
@@ -108,7 +109,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
       final String tableName,
       final TopicPartition changelog,
       final Admin admin,
-      final BufferPlugin<K> plugin,
+      final RT remoteTable,
       final boolean truncateChangelog,
       final FlushTriggers flushTriggers,
       final SubPartitioner subPartitioner,
@@ -119,7 +120,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
         tableName,
         changelog,
         admin,
-        plugin,
+        remoteTable,
         truncateChangelog,
         flushTriggers,
         MAX_BATCH_SIZE,
@@ -134,7 +135,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
       final String tableName,
       final TopicPartition changelog,
       final Admin admin,
-      final BufferPlugin<K> plugin,
+      final RT remoteTable,
       final boolean truncateChangelog,
       final FlushTriggers flushTriggers,
       final int maxBatchSize,
@@ -147,9 +148,9 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
     this.changelog = changelog;
     this.partition = changelog.partition();
     this.admin = admin;
-    this.plugin = plugin;
+    this.remoteTable = remoteTable;
 
-    this.buffer = new SizeTrackingBuffer<>(plugin);
+    this.buffer = new SizeTrackingBuffer<>(remoteTable);
     this.truncateChangelog = truncateChangelog;
     this.flushTriggers = flushTriggers;
     this.maxBatchSize = maxBatchSize;
@@ -163,19 +164,22 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
   }
 
   public void init() {
-    subPartitioner.all(partition).forEach(p -> client.initializeMetadata(tableName, p));
+    subPartitioner.all(partition)
+        .forEach(p -> remoteTable.metadata().initializeMetadata(tableName, p));
     lastFlush = clock.get();
 
     // attempt to reserve an epoch - all epoch reservations will be done
     // under the first sub-partition and then "broadcast" to the other
     // partitions
     final int basePartition = subPartitioner.first(partition);
-    this.epoch = client.metadata(tableName, basePartition).epoch + 1;
+    this.epoch = remoteTable.metadata().metadata(tableName, basePartition).epoch + 1;
 
     for (final int subPartition : subPartitioner.all(partition).toArray()) {
-      final var setEpoch = client.execute(client.reserveEpoch(tableName, subPartition, epoch));
+      final var setEpoch = client.execute(
+          remoteTable.metadata().reserveEpoch(tableName, subPartition, epoch)
+      );
       if (!setEpoch.wasApplied()) {
-        final long otherEpoch = client.metadata(tableName, subPartition).epoch;
+        final long otherEpoch = remoteTable.metadata().metadata(tableName, subPartition).epoch;
         final var msg = String.format(
             "Could not initialize commit buffer - attempted to claim epoch %d, but was fenced "
                 + "by a writer that claimed epoch %d on partition %d",
@@ -202,7 +206,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
 
   public Result<K> get(final K key) {
     final Result<K> result = buffer.getReader().get(key);
-    if (result != null && plugin.retain(result.key)) {
+    if (result != null && remoteTable.retain(result.key)) {
       return result;
     }
     return null;
@@ -212,7 +216,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
     return Iterators.kv(
         Iterators.filter(
             buffer.getReader().subMap(from, to).entrySet().iterator(),
-            e -> plugin.retain(e.getKey())),
+            e -> remoteTable.retain(e.getKey())),
         result -> new KeyValue<>(result.getKey(), result.getValue())
     );
   }
@@ -225,7 +229,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
     return Iterators.kv(
         Iterators.filter(
             buffer.getReader().subMap(from, to).entrySet().iterator(),
-            e -> plugin.retain(e.getKey()) && filter.test(e.getKey())
+            e -> remoteTable.retain(e.getKey()) && filter.test(e.getKey())
         ),
         result -> new KeyValue<>(result.getKey(), result.getValue())
     );
@@ -235,7 +239,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
     return Iterators.kv(
         Iterators.filter(
             buffer.getReader().descendingMap().subMap(to, from).entrySet().iterator(),
-            e -> plugin.retain(e.getKey())
+            e -> remoteTable.retain(e.getKey())
         ),
         result -> new KeyValue<>(result.getKey(), result.getValue())
     );
@@ -246,7 +250,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
     return Iterators.kv(
         Iterators.filter(
             buffer.getReader().entrySet().iterator(),
-            e -> plugin.retain(e.getKey())
+            e -> remoteTable.retain(e.getKey())
         ),
         result -> new KeyValue<>(result.getKey(), result.getValue())
     );
@@ -258,7 +262,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
     return Iterators.kv(
         Iterators.filter(
             buffer.getReader().entrySet().iterator(),
-            kv -> plugin.retain(kv.getKey()) && filter.test(kv.getKey())),
+            kv -> remoteTable.retain(kv.getKey()) && filter.test(kv.getKey())),
         result -> new KeyValue<>(result.getKey(), result.getValue())
     );
   }
@@ -269,14 +273,14 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
     return Iterators.kv(
         Iterators.filter(
             buffer.getReader().descendingMap().entrySet().iterator(),
-            kv -> plugin.retain(kv.getKey()) && filter.test(kv.getKey())),
+            kv -> remoteTable.retain(kv.getKey()) && filter.test(kv.getKey())),
         result -> new KeyValue<>(result.getKey(), result.getValue())
     );
   }
 
   long offset() {
     final int basePartition = subPartitioner.first(partition);
-    return client.metadata(tableName, basePartition).offset;
+    return remoteTable.metadata().metadata(tableName, basePartition).offset;
   }
 
   // Visible For Testing
@@ -362,10 +366,10 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
 
     final var writers = new HashMap<Integer, AtomicWriter<K>>();
     for (Result<K> val : buffer.getReader().values()) {
-      final int subPartition = subPartitioner.partition(partition, plugin.bytes(val.key));
+      final int subPartition = subPartitioner.partition(partition, remoteTable.bytes(val.key));
       writers
           .computeIfAbsent(subPartition, k -> new AtomicWriter<>(
-              client, tableName, subPartition, plugin, epoch, batchSize
+              client, tableName, subPartition, remoteTable, epoch, batchSize
           ))
           .add(val);
     }
@@ -380,7 +384,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
     // the first subpartition
     writeResult = writers.computeIfAbsent(
         subPartitioner.first(partition), k -> new AtomicWriter<>(
-            client, tableName, k, plugin, epoch, batchSize
+            client, tableName, k, remoteTable, epoch, batchSize
         )
     ).setOffset(offset);
     if (!writeResult.wasApplied()) {
@@ -494,9 +498,9 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
     for (ConsumerRecord<byte[], byte[]> record : records) {
       consumedOffset = record.offset();
       if (record.value() == null) {
-        tombstone(plugin.keyFromRecord(record));
+        tombstone(remoteTable.keyFromRecord(record));
       } else {
-        put(plugin.keyFromRecord(record), record.value());
+        put(remoteTable.keyFromRecord(record), record.value());
       }
     }
 
@@ -509,7 +513,7 @@ class CommitBuffer<K> implements RecordBatchingStateRestoreCallback {
   }
 
   private void throwFencedException(final AtomicWriteResult result, final long offset) {
-    final MetadataRow stored = client.metadata(tableName, result.getPartition());
+    final MetadataRow stored = remoteTable.metadata().metadata(tableName, result.getPartition());
     // we were fenced - the only conditional statement is the
     // offset update, so it's the only failure point
     final String msg = String.format(

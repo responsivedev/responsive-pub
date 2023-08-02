@@ -18,10 +18,10 @@ package dev.responsive.kafka.store;
 
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.changelogFor;
-import static org.apache.kafka.streams.state.StateSerdes.TIMESTAMP_SIZE;
 
-import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.db.CassandraClient;
+import dev.responsive.db.CassandraWindowedTable;
+import dev.responsive.db.RemoteWindowedTable;
 import dev.responsive.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.api.InternalConfigs;
 import dev.responsive.kafka.clients.SharedClients;
@@ -30,14 +30,9 @@ import dev.responsive.model.Result;
 import dev.responsive.model.Stamped;
 import dev.responsive.utils.Iterators;
 import dev.responsive.utils.RemoteMonitor;
-import dev.responsive.utils.StoreUtil;
 import dev.responsive.utils.TableName;
-import java.nio.ByteBuffer;
 import java.time.Duration;
-import java.util.Arrays;
 import java.util.concurrent.TimeoutException;
-import java.util.function.Predicate;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.errors.ProcessorStateException;
@@ -61,6 +56,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
   private static final Logger LOG = LoggerFactory.getLogger(ResponsiveWindowStore.class);
 
   private CassandraClient client;
+  private RemoteWindowedTable remoteTable;
 
   private final TableName name;
   private final long windowSize;
@@ -72,7 +68,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
   @SuppressWarnings("rawtypes")
   private InternalProcessorContext context;
   private int partition;
-  private CommitBuffer<Stamped<Bytes>> buffer;
+  private CommitBuffer<Stamped<Bytes>, RemoteWindowedTable> buffer;
   private long observedStreamTime;
   private ResponsiveStoreRegistry registry;
   private ResponsiveStoreRegistration registration;
@@ -142,13 +138,14 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       final SharedClients sharedClients = new SharedClients(context.appConfigs());
       client = sharedClients.cassandraClient;
 
+      remoteTable = new CassandraWindowedTable(client, this::withinRetention);
+      remoteTable.create(name.cassandraName());
+
       final RemoteMonitor monitor = client.awaitTable(name.cassandraName(), sharedClients.executor);
-      client.createWindowedDataTable(name.cassandraName());
       monitor.await(Duration.ofSeconds(60));
       LOG.info("Remote table {} is available for querying.", name.cassandraName());
 
-
-      client.prepareWindowedStatements(name.cassandraName());
+      remoteTable.prepare(name.cassandraName());
       registry = InternalConfigs.loadStoreRegistry(context.appConfigs());
       final TopicPartition topicPartition =  new TopicPartition(
           changelogFor(context, name.kafkaName(), false),
@@ -161,7 +158,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
           sharedClients,
           name,
           topicPartition,
-          new Plugin(this::withinRetention),
+          remoteTable,
           config
       );
       buffer.init();
@@ -219,7 +216,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       return localResult.isTombstone ? null : localResult.value;
     }
 
-    final KeyValueIterator<Stamped<Bytes>, byte[]> remoteResult = client.fetch(
+    final KeyValueIterator<Stamped<Bytes>, byte[]> remoteResult = remoteTable.fetch(
         name.cassandraName(),
         partitioner.partition(partition, key),
         key,
@@ -248,7 +245,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
     return Iterators.windowed(
         new LocalRemoteKvIterator<>(
             buffer.range(from, to),
-            client.fetch(name.cassandraName(), subPartition, key, start, timeTo),
+            remoteTable.fetch(name.cassandraName(), subPartition, key, start, timeTo),
             ResponsiveWindowStore::compareKeys
         )
     );
@@ -278,7 +275,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
     return Iterators.windowed(
         new LocalRemoteKvIterator<>(
             buffer.backRange(from, to),
-            client.backFetch(name.cassandraName(), subPartition, key, start, timeTo),
+            remoteTable.backFetch(name.cassandraName(), subPartition, key, start, timeTo),
             ResponsiveWindowStore::compareKeys
         )
     );
@@ -337,7 +334,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
     return key.stamp > observedStreamTime - retentionPeriod;
   }
 
-  private static int compareKeys(final Stamped<Bytes> o1, final Stamped<Bytes> o2) {
+  public static int compareKeys(final Stamped<Bytes> o1, final Stamped<Bytes> o2) {
     final int key = o1.key.compareTo(o2.key);
     if (key != 0) {
       return key;
@@ -346,60 +343,4 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
     return Long.compare(o1.stamp, o2.stamp);
   }
 
-  private static class Plugin implements BufferPlugin<Stamped<Bytes>> {
-
-    private final Predicate<Stamped<Bytes>> retain;
-
-    public Plugin(final Predicate<Stamped<Bytes>> retain) {
-      this.retain = retain;
-    }
-
-    @Override
-    public Stamped<Bytes> keyFromRecord(final ConsumerRecord<byte[], byte[]> record) {
-      final byte[] key = record.key();
-      final int size = key.length - TIMESTAMP_SIZE;
-
-      final ByteBuffer buffer = ByteBuffer.wrap(key);
-      final long startTs = buffer.getLong(size);
-      final Bytes kBytes = Bytes.wrap(Arrays.copyOfRange(key, 0, size));
-
-      return new Stamped<>(kBytes, startTs);
-    }
-
-    @Override
-    public BoundStatement insertData(
-        final CassandraClient client,
-        final String tableName,
-        final int partition,
-        final Stamped<Bytes> key,
-        final byte[] value
-    ) {
-      return client.insertWindowed(tableName, partition, key.key, key.stamp, value);
-    }
-
-    @Override
-    public BoundStatement deleteData(
-        final CassandraClient client,
-        final String tableName,
-        final int partition,
-        final Stamped<Bytes> key
-    ) {
-      throw new UnsupportedOperationException("Cannot delete windowed data using the delete API");
-    }
-
-    @Override
-    public int compare(final Stamped<Bytes> o1, final Stamped<Bytes> o2) {
-      return compareKeys(o1, o2);
-    }
-
-    @Override
-    public boolean retain(final Stamped<Bytes> key) {
-      return retain.test(key);
-    }
-
-    @Override
-    public Bytes bytes(final Stamped<Bytes> key) {
-      return key.key;
-    }
-  }
 }

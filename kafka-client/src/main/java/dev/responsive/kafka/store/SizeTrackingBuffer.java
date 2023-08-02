@@ -1,5 +1,6 @@
 package dev.responsive.kafka.store;
 
+import dev.responsive.db.KeySpec;
 import dev.responsive.model.Result;
 import java.util.Collections;
 import java.util.NavigableMap;
@@ -9,12 +10,12 @@ import java.util.TreeMap;
 public class SizeTrackingBuffer<K> {
   private final NavigableMap<K, Result<K>> buffer;
   private final NavigableMap<K, Result<K>> reader;
-  private final BufferPlugin<K> plugin;
+  private final KeySpec<K> extractor;
   private long bytes = 0;
 
-  public SizeTrackingBuffer(final BufferPlugin<K> plugin) {
-    this.plugin = Objects.requireNonNull(plugin);
-    buffer = new TreeMap<>(plugin);
+  public SizeTrackingBuffer(final KeySpec<K> extractor) {
+    this.extractor = Objects.requireNonNull(extractor);
+    buffer = new TreeMap<>(extractor);
     reader = Collections.unmodifiableNavigableMap(buffer);
   }
 
@@ -40,6 +41,6 @@ public class SizeTrackingBuffer<K> {
   }
 
   private long sizeOf(final K key, final Result<K> value) {
-    return plugin.bytes(key).get().length + (value.isTombstone ? 0 : value.value.length);
+    return extractor.bytes(key).get().length + (value.isTombstone ? 0 : value.value.length);
   }
 }
