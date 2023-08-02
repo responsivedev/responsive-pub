@@ -26,7 +26,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class SimpleApplication {
-  private static final Logger LOGGER = LoggerFactory.getLogger(SimpleApplication.class);
+  private static final Logger LOG = LoggerFactory.getLogger(SimpleApplication.class);
 
   public static final class Config extends AbstractConfig {
     private static final String PREFIX = "responsive.simple.app.";
@@ -53,13 +53,13 @@ public class SimpleApplication {
     config = new Config(properties);
     maybeCreateTopics();
     maybeCreateKeyspace();
-    LOGGER.info("build topology");
+    LOG.info("build topology");
     kafkaStreams = buildTopology(config, properties);
   }
 
   public synchronized void start() {
     if (!stopped) {
-      LOGGER.info("start kafka streams");
+      LOG.info("start kafka streams");
       kafkaStreams.start();
     }
   }
@@ -108,18 +108,18 @@ public class SimpleApplication {
     try (final Admin admin = Admin.create(config.originals())) {
       final String source = config.getSourceTopic();
       for (final var topic : List.of(source, source + "-out", source + "-counts")) {
-        LOGGER.info("create topic {}", topic);
+        LOG.info("create topic {}", topic);
         try {
           admin.createTopics(List.of(new NewTopic(topic, 1, (short) 1)));
         } catch (final RuntimeException e) {
-          LOGGER.info("Error creating topic: " + e);
+          LOG.info("Error creating topic: " + e);
         }
       }
     }
   }
 
   private void maybeCreateKeyspace() {
-    LOGGER.info("create keyspace test");
+    LOG.info("create keyspace test");
     try (final CqlSession session = cqlSession()) {
       final CreateKeyspace createKeyspace = SchemaBuilder.createKeyspace("test")
           .ifNotExists()
