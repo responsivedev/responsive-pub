@@ -85,5 +85,4 @@ jobs:
         run: |
           git config --global user.name 'Responsive Tools'
           git config --global user.email 'tools@responsive.dev'
-          git commit -am "update responsive-pub artifact versions"
-          git push
+          (git commit -am "update responsive-pub artifact versions" && git push) || echo "git commit failed. likely due to empty commit"
