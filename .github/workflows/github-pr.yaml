@@ -46,10 +46,12 @@ jobs:
       - name: Install Kind
         uses: helm/kind-action@v1.5.0
         with:
-            install_only: true
+          install_only: true
 
       - name: Run Smoke Test
-        run: "sindri/scripts/run-smoke-test -l -w system-tests-pub -s master -p false -i simple-example -t `./gradlew kafka-client:cV  | grep \"Project version\" | sed 's/Project version: //'`"
+        run: |
+          sindri/scripts/update-client-versions -s master -p false -i simple-example -t `./gradlew kafka-client:cV  | grep "Project version" | sed 's/Project version: //'`
+          sindri/scripts/run-smoke-test -l -w system-tests-pub -s master
         env:
             DD_API_KEY: ${{ secrets.DD_API_KEY }}
             PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
