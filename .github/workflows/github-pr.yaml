@@ -30,4 +30,26 @@ jobs:
       - name: Build & Test
         uses: gradle/gradle-build-action@v2
         with:
-          arguments: build
+          arguments: build kafka-client-examples:simple-example:buildDocker
+
+      - uses: actions/checkout@v3
+        with:
+          repository: responsivedev/sindri
+          path: sindri
+          ref: refs/heads/master
+          token: ${{ secrets.TOOLS_GHA_TOKEN }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Install Kind
+        uses: helm/kind-action@v1.5.0
+        with:
+            install_only: true
+
+      - name: Run Smoke Test
+        run: "sindri/scripts/run-smoke-test -l -w system-tests-pub -s master -p false -i simple-example -t `./gradlew kafka-client:cV  | grep \"Project version\" | sed 's/Project version: //'`"
+        env:
+            DD_API_KEY: ${{ secrets.DD_API_KEY }}
+            PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}

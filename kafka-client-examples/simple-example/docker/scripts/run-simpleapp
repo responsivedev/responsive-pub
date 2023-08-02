@@ -1,0 +1,20 @@
+EXPORTER_OPTS="-javaagent:/usr/share/java/responsive-simpleapp/opentelemetry-javaagent-1.25.0.jar
+-Dotel.metrics.exporter=otlp
+-Dotel.service.name=simpleapp
+-Dotel.jmx.config=/otel-jmx.config
+-Dotel.exporter.otlp.endpoint=${CONTROLLER_ENDPOINT}
+-Dotel.exporter.otlp.metrics.endpoint=${CONTROLLER_ENDPOINT}
+-Dotel.resource.attributes=responsiveApplicationId=responsive/responsive-simpleapp
+-Dotel.metric.export.interval=10000
+"
+
+JMX_OPTS="-Dcom.sun.management.jmxremote=true
+-Dcom.sun.management.jmxremote.port=7192
+-Dcom.sun.management.jmxremote.authenticate=false
+-Dcom.sun.management.jmxremote.ssl=false
+-Dcom.sun.management.jmxremote.local.only=false
+-Dcom.sun.management.jmxremote.rmi.port=7192
+-Djava.rmi.server.hostname=${POD_IP}
+"
+
+java -Dorg.apache.logging.log4j.level=INFO ${EXPORTER_OPTS} ${JMX_OPTS}  -cp "/usr/share/java/responsive-simpleapp/*" dev.responsive.examples.simpleapp.Main ${CONFIG_PATH}
