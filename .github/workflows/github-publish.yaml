@@ -104,10 +104,10 @@ jobs:
         working-directory: sindri
         if: ${{ inputs.module == 'kafka-client' }}
         run: |
-            ./scripts/update-client-versions -s release -p true -i public.ecr.aws/j8q9y0n6/responsiveinc/simple-example -t `./gradlew kafka-client:cV  | grep \"Project version\" | sed 's/Project version: //'`
+            ./scripts/update-client-versions -s release -p true -i public.ecr.aws/j8q9y0n6/responsiveinc/simple-example -t `./gradlew kafka-client:cV  | grep "Project version" | sed 's/Project version: //'`
             ./scripts/run-smoke-test -s release -w system-tests-pub-release
             git checkout -- .
-            ./scripts/update-client-versions -u -s release -p true -i public.ecr.aws/j8q9y0n6/responsiveinc/simple-example -t `./gradlew kafka-client:cV  | grep \"Project version\" | sed 's/Project version: //'`
+            ./scripts/update-client-versions -u -s release -p true -i public.ecr.aws/j8q9y0n6/responsiveinc/simple-example -t `./gradlew kafka-client:cV  | grep "Project version" | sed 's/Project version: //'`
         env:
           DD_API_KEY: ${{ secrets.DD_API_KEY }}
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
