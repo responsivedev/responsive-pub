@@ -21,7 +21,9 @@ import com.datastax.oss.driver.api.core.cql.BatchType;
 import com.datastax.oss.driver.api.core.cql.BatchableStatement;
 import com.datastax.oss.driver.api.core.cql.Statement;
 import dev.responsive.db.CassandraClient;
-import dev.responsive.db.RemoteTable;
+import dev.responsive.db.FencingToken;
+import dev.responsive.db.KeySpec;
+import dev.responsive.db.RemoteSchema;
 import dev.responsive.model.Result;
 import java.util.ArrayList;
 import java.util.List;
@@ -35,27 +37,30 @@ import java.util.concurrent.CompletionStage;
 class AtomicWriter<K> {
 
   private final CassandraClient client;
-  private final String tableName;
+  private final String name;
   private final int partition;
 
   private final List<BatchableStatement<?>> statements;
-  private final RemoteTable<K> plugin;
+  private final RemoteSchema<K> table;
+  private final KeySpec<K> keySpec;
+  private final FencingToken fencingToken;
   private final int batchSize;
-  private final long epoch;
 
   public AtomicWriter(
       final CassandraClient client,
-      final String tableName,
+      final String name,
       final int partition,
-      final RemoteTable<K> remoteTable,
-      final long epoch,
+      final RemoteSchema<K> remoteSchema,
+      final KeySpec<K> keySpec,
+      final FencingToken fencingToken,
       final int batchSize
   ) {
     this.client = client;
-    this.tableName = tableName;
+    this.name = name;
     this.partition = partition;
-    this.plugin = remoteTable;
-    this.epoch = epoch;
+    this.table = remoteSchema;
+    this.keySpec = keySpec;
+    this.fencingToken = fencingToken;
 
     this.batchSize = batchSize;
     this.statements = new ArrayList<>(batchSize);
@@ -66,10 +71,10 @@ class AtomicWriter<K> {
   }
 
   public void add(final Result<K> result) {
-    if (result.isTombstone || plugin.retain(result.key)) {
+    if (result.isTombstone || keySpec.retain(result.key)) {
       statements.add(result.isTombstone
-          ? plugin.delete(tableName, partition, result.key)
-          : plugin.insert(tableName, partition, result.key, result.value));
+          ? table.delete(name, partition, result.key)
+          : table.insert(name, partition, result.key, result.value));
     }
   }
 
@@ -85,7 +90,7 @@ class AtomicWriter<K> {
     do {
       final var builder = new BatchStatementBuilder(BatchType.UNLOGGED);
       builder.setIdempotence(true);
-      builder.addStatement(plugin.metadata().ensureEpoch(tableName, partition, epoch));
+      fencingToken.addFencingStatement(builder, partition);
 
       for (int i = 0; i < batchSize && it.hasNext(); i++) {
         builder.addStatement(it.next());
@@ -108,9 +113,11 @@ class AtomicWriter<K> {
   }
 
   public AtomicWriteResult setOffset(final long offset) {
-    final var result = client.execute(
-        plugin.metadata().setOffset(tableName, partition, offset, epoch));
+    final BatchStatementBuilder builder = new BatchStatementBuilder(BatchType.UNLOGGED);
+    fencingToken.addFencingStatement(builder, partition);
+    builder.addStatement(table.setOffset(name, fencingToken, partition, offset));
 
+    final var result = client.execute(builder.build());
     return result.wasApplied()
         ? AtomicWriteResult.success(partition)
         : AtomicWriteResult.failure(partition);

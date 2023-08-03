@@ -20,10 +20,10 @@ import static com.datastax.oss.driver.api.querybuilder.QueryBuilder.bindMarker;
 import static dev.responsive.db.ColumnNames.DATA_KEY;
 import static dev.responsive.db.ColumnNames.DATA_VALUE;
 import static dev.responsive.db.ColumnNames.EPOCH;
+import static dev.responsive.db.ColumnNames.METADATA_KEY;
 import static dev.responsive.db.ColumnNames.OFFSET;
 import static dev.responsive.db.ColumnNames.PARTITION_KEY;
 import static dev.responsive.db.ColumnNames.WINDOW_START;
-import static org.apache.kafka.streams.state.StateSerdes.TIMESTAMP_SIZE;
 
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
@@ -33,31 +33,23 @@ import com.datastax.oss.driver.api.core.metadata.schema.ClusteringOrder;
 import com.datastax.oss.driver.api.core.type.DataTypes;
 import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
 import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
-import com.datastax.oss.driver.api.querybuilder.insert.RegularInsert;
-import com.datastax.oss.driver.api.querybuilder.relation.OngoingWhereClause;
-import dev.responsive.db.MetadataStatements.MetadataKeys;
-import dev.responsive.kafka.store.ResponsiveWindowStore;
+import dev.responsive.db.partitioning.SubPartitioner;
 import dev.responsive.model.Stamped;
 import dev.responsive.utils.Iterators;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Predicate;
 import javax.annotation.CheckReturnValue;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class CassandraWindowedTable implements RemoteWindowedTable {
+public class CassandraWindowedSchema implements RemoteWindowedSchema {
 
-  private static final Logger LOG = LoggerFactory.getLogger(CassandraWindowedTable.class);
-  private static final Bytes METADATA_KEY
-      = Bytes.wrap("_metadata".getBytes(StandardCharsets.UTF_8));
+  private static final Logger LOG = LoggerFactory.getLogger(CassandraWindowedSchema.class);
 
   private static final String FROM_BIND = "fk";
   private static final String TO_BIND = "tk";
@@ -65,7 +57,6 @@ public class CassandraWindowedTable implements RemoteWindowedTable {
   private static final String W_TO_BIND = "wt";
 
   private final CassandraClient client;
-  private final Predicate<Stamped<Bytes>> withinRetention;
 
   // use ConcurrentHashMap instead of ConcurrentMap in the declaration here
   // because ConcurrentHashMap guarantees that the supplied function for
@@ -79,15 +70,11 @@ public class CassandraWindowedTable implements RemoteWindowedTable {
   private final ConcurrentHashMap<String, PreparedStatement> backFetch;
   private final ConcurrentHashMap<String, PreparedStatement> backFetchAll;
   private final ConcurrentHashMap<String, PreparedStatement> backFetchRange;
+  private final ConcurrentHashMap<String, PreparedStatement> getMeta;
+  private final ConcurrentHashMap<String, PreparedStatement> setOffset;
 
-  private final MetadataStatements metadataStatements;
-
-  public CassandraWindowedTable(
-      final CassandraClient client,
-      final Predicate<Stamped<Bytes>> withinRetention
-  ) {
+  public CassandraWindowedSchema(final CassandraClient client) {
     this.client = client;
-    this.withinRetention = withinRetention;
     insert = new ConcurrentHashMap<>();
     fetch = new ConcurrentHashMap<>();
     fetchAll = new ConcurrentHashMap<>();
@@ -95,21 +82,9 @@ public class CassandraWindowedTable implements RemoteWindowedTable {
     backFetch = new ConcurrentHashMap<>();
     backFetchAll = new ConcurrentHashMap<>();
     backFetchRange = new ConcurrentHashMap<>();
-    metadataStatements = new MetadataStatements(client, new MetadataKeys() {
-      @Override
-      public <T extends OngoingWhereClause<T>> T addMetaColumnsToWhere(final T builder) {
-        return builder
-            .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
-            .where(WINDOW_START.relation().isEqualTo(WINDOW_START.literal(0L)));
-      }
+    getMeta = new ConcurrentHashMap<>();
+    setOffset = new ConcurrentHashMap<>();
 
-      @Override
-      public RegularInsert addKeyColumnsToInitMetadata(final RegularInsert insert) {
-        return insert
-            .value(DATA_KEY.column(), DATA_KEY.literal(METADATA_KEY))
-            .value(WINDOW_START.column(), WINDOW_START.literal(0L));
-      }
-    });
   }
 
   @Override
@@ -141,8 +116,60 @@ public class CassandraWindowedTable implements RemoteWindowedTable {
   }
 
   @Override
+  public FencingToken init(
+      final String table,
+      final SubPartitioner partitioner,
+      final int kafkaPartition
+  ) {
+    partitioner.all(kafkaPartition).forEach(sub -> {
+      client.execute(
+          QueryBuilder.insertInto(table)
+              .value(PARTITION_KEY.column(), PARTITION_KEY.literal(sub))
+              .value(DATA_KEY.column(), DATA_KEY.literal(ColumnNames.METADATA_KEY))
+              .value(WINDOW_START.column(), WINDOW_START.literal(0L))
+              .value(OFFSET.column(), OFFSET.literal(-1L))
+              .value(EPOCH.column(), EPOCH.literal(0L))
+              .ifNotExists()
+              .build()
+      );
+    });
+    return LwtFencingToken.reserveWindowed(this, table, partitioner, kafkaPartition);
+  }
+
+  @Override
+  public MetadataRow metadata(final String table, final int partition) {
+    final BoundStatement bound = getMeta.get(table)
+        .bind()
+        .setInt(PARTITION_KEY.bind(), partition);
+    final List<Row> result = client.execute(bound).all();
+
+    if (result.size() != 1) {
+      throw new IllegalStateException(String.format(
+          "Expected exactly one offset row for %s[%s] but got %d",
+          table, partition, result.size()));
+    } else {
+      return new MetadataRow(
+          result.get(0).getLong(OFFSET.column()),
+          result.get(0).getLong(EPOCH.column())
+      );
+    }
+  }
+
+  @Override
+  public BoundStatement setOffset(
+      final String table,
+      final FencingToken token,
+      final int partition,
+      final long offset
+  ) {
+    return setOffset.get(table)
+        .bind()
+        .setInt(PARTITION_KEY.bind(), partition)
+        .setLong(OFFSET.bind(), offset);
+  }
+
+  @Override
   public void prepare(final String tableName) {
-    metadataStatements.prepare(tableName);
     insert.computeIfAbsent(tableName, k -> client.prepare(
         QueryBuilder
             .insertInto(tableName)
@@ -216,6 +243,26 @@ public class CassandraWindowedTable implements RemoteWindowedTable {
             .orderBy(WINDOW_START.column(), ClusteringOrder.DESC)
             .build()
     ));
+
+    getMeta.computeIfAbsent(tableName, k -> client.prepare(
+        QueryBuilder
+            .selectFrom(tableName)
+            .column(EPOCH.column())
+            .column(OFFSET.column())
+            .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
+            .where(WINDOW_START.relation().isEqualTo(WINDOW_START.literal(0L)))
+            .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
+            .build()
+    ));
+
+    setOffset.computeIfAbsent(tableName, k -> client.prepare(QueryBuilder
+        .update(tableName)
+        .setColumn(OFFSET.column(), bindMarker(OFFSET.bind()))
+        .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
+        .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
+        .where(WINDOW_START.relation().isEqualTo(WINDOW_START.literal(0L)))
+        .build()
+    ));
   }
 
   @Override
@@ -247,7 +294,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable {
     return insert.get(table)
         .bind()
         .setInt(PARTITION_KEY.bind(), partitionKey)
-        .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(bytes(key).get()))
+        .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.key.get()))
         .setInstant(WINDOW_START.bind(), Instant.ofEpochMilli(key.stamp))
         .setByteBuffer(DATA_VALUE.bind(), ByteBuffer.wrap(value));
   }
@@ -261,32 +308,6 @@ public class CassandraWindowedTable implements RemoteWindowedTable {
     throw new UnsupportedOperationException("Cannot delete windowed data using the delete API");
   }
 
-  @Override
-  public Bytes bytes(final Stamped<Bytes> key) {
-    return key.key;
-  }
-
-  @Override
-  public Stamped<Bytes> keyFromRecord(final ConsumerRecord<byte[], byte[]> record) {
-    final byte[] key = record.key();
-    final int size = key.length - TIMESTAMP_SIZE;
-
-    final ByteBuffer buffer = ByteBuffer.wrap(key);
-    final long startTs = buffer.getLong(size);
-    final Bytes kBytes = Bytes.wrap(Arrays.copyOfRange(key, 0, size));
-
-    return new Stamped<>(kBytes, startTs);
-  }
-
-  @Override
-  public boolean retain(final Stamped<Bytes> key) {
-    return withinRetention.test(key);
-  }
-
-  @Override
-  public MetadataStatements metadata() {
-    return metadataStatements;
-  }
 
   /**
    * Retrieves the value of the given {@code partitionKey} and {@code key} from {@code table}.
@@ -316,7 +337,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable {
     final ResultSet result = client.execute(get);
     return Iterators.kv(
         result.iterator(),
-        CassandraWindowedTable::windowRows
+        CassandraWindowedSchema::windowRows
     );
   }
 
@@ -350,7 +371,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable {
     final ResultSet result = client.execute(get);
     return Iterators.kv(
         result.iterator(),
-        CassandraWindowedTable::windowRows
+        CassandraWindowedSchema::windowRows
     );
   }
 
@@ -384,7 +405,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable {
 
     final ResultSet result = client.execute(get);
     return Iterators.filterKv(
-        Iterators.kv(result.iterator(), CassandraWindowedTable::windowRows),
+        Iterators.kv(result.iterator(), CassandraWindowedSchema::windowRows),
         k -> k.stamp >= timeFrom && k.stamp < timeTo
     );
   }
@@ -419,7 +440,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable {
 
     final ResultSet result = client.execute(get);
     return Iterators.filterKv(
-        Iterators.kv(result.iterator(), CassandraWindowedTable::windowRows),
+        Iterators.kv(result.iterator(), CassandraWindowedSchema::windowRows),
         k -> k.stamp >= timeFrom && k.stamp < timeTo
     );
   }
@@ -451,7 +472,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable {
 
     final ResultSet result = client.execute(get);
     return Iterators.filterKv(
-        Iterators.kv(result.iterator(), CassandraWindowedTable::windowRows),
+        Iterators.kv(result.iterator(), CassandraWindowedSchema::windowRows),
         k -> k.stamp >= timeFrom && k.stamp < timeTo
     );
   }
@@ -480,7 +501,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable {
 
     final ResultSet result = client.execute(get);
     return Iterators.filterKv(
-        Iterators.kv(result.iterator(), CassandraWindowedTable::windowRows),
+        Iterators.kv(result.iterator(), CassandraWindowedSchema::windowRows),
         k -> k.stamp >= timeFrom && k.stamp < timeTo
     );
   }
@@ -495,8 +516,4 @@ public class CassandraWindowedTable implements RemoteWindowedTable {
     );
   }
 
-  @Override
-  public int compare(final Stamped<Bytes> o1, final Stamped<Bytes> o2) {
-    return ResponsiveWindowStore.compareKeys(o1, o2);
-  }
 }

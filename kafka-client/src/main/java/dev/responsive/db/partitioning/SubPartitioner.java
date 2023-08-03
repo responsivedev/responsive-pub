@@ -45,7 +45,6 @@ public class SubPartitioner {
 
   public static final SubPartitioner NO_SUBPARTITIONS = new SubPartitioner(1, k -> 0);
 
-
   /**
    * the number of subpartitions is: {@code original_partitions * n}
    */

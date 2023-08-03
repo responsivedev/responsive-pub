@@ -17,8 +17,8 @@
 package dev.responsive.kafka.store;
 
 import dev.responsive.db.CassandraClient;
-import dev.responsive.db.CassandraKeyValueTable;
-import dev.responsive.db.RemoteKeyValueTable;
+import dev.responsive.db.RemoteKeyValueSchema;
+import dev.responsive.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.clients.SharedClients;
 import dev.responsive.utils.RemoteMonitor;
 import dev.responsive.utils.TableName;
@@ -52,7 +52,7 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
   private boolean open;
   private int partition;
   private StateStoreContext context;
-  private RemoteKeyValueTable remoteTable;
+  private RemoteKeyValueSchema schema;
 
   // TODO: instead of splitting this out into a separate store implementation, we should just
   //  check whether a store is global at runtime (during init) and branch the logic from there
@@ -94,13 +94,13 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
       client = sharedClients.cassandraClient;
 
       final RemoteMonitor monitor = client.awaitTable(name.cassandraName(), sharedClients.executor);
-      remoteTable = new CassandraKeyValueTable(client);
-      remoteTable.create(name.cassandraName());
+      schema = client.kvSchema();
+      schema.create(name.cassandraName());
       monitor.await(Duration.ofSeconds(60));
       LOG.info("Global table {} is available for querying.", name);
 
-      remoteTable.prepare(name.cassandraName());
-      remoteTable.metadata().initializeMetadata(name.cassandraName(), partition);
+      schema.prepare(name.cassandraName());
+      schema.init(name.cassandraName(), SubPartitioner.NO_SUBPARTITIONS, partition);
 
       open = true;
 
@@ -128,7 +128,7 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
 
   @Override
   public void put(final Bytes key, final byte[] value) {
-    client.execute(remoteTable.insert(name.cassandraName(), partition, key, value));
+    client.execute(schema.insert(name.cassandraName(), partition, key, value));
     StoreQueryUtils.updatePosition(position, context);
   }
 
@@ -150,23 +150,23 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
   @Override
   public byte[] delete(final Bytes key) {
     final byte[] bytes = get(key);
-    client.execute(remoteTable.delete(name.cassandraName(), partition, key));
+    client.execute(schema.delete(name.cassandraName(), partition, key));
     return bytes;
   }
 
   @Override
   public byte[] get(final Bytes key) {
-    return remoteTable.get(name.cassandraName(), partition, key);
+    return schema.get(name.cassandraName(), partition, key);
   }
 
   @Override
   public KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
-    return remoteTable.range(name.cassandraName(), partition, from, to);
+    return schema.range(name.cassandraName(), partition, from, to);
   }
 
   @Override
   public KeyValueIterator<Bytes, byte[]> all() {
-    return remoteTable.all(name.cassandraName(), partition);
+    return schema.all(name.cassandraName(), partition);
   }
 
   @Override

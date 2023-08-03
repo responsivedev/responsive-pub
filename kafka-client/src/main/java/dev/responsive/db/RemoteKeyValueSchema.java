@@ -19,7 +19,13 @@ package dev.responsive.db;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
-public interface RemoteKeyValueTable extends RemoteTable<Bytes> {
+/**
+ * This specifies additional functions required for reading from
+ * a key-value store.
+ *
+ * @see RemoteSchema
+ */
+public interface RemoteKeyValueSchema extends RemoteSchema<Bytes> {
 
   byte[] get(String tableName, int partition, Bytes key);
 

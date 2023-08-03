@@ -19,9 +19,10 @@ package dev.responsive.kafka.store;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.changelogFor;
 
+import dev.responsive.db.BytesKeySpec;
 import dev.responsive.db.CassandraClient;
-import dev.responsive.db.CassandraKeyValueTable;
-import dev.responsive.db.RemoteKeyValueTable;
+import dev.responsive.db.CassandraKeyValueSchema;
+import dev.responsive.db.RemoteKeyValueSchema;
 import dev.responsive.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.api.InternalConfigs;
 import dev.responsive.kafka.clients.SharedClients;
@@ -59,12 +60,12 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
 
   private boolean open;
   private SubPartitioner partitioner;
-  private CommitBuffer<Bytes, RemoteKeyValueTable> buffer;
+  private CommitBuffer<Bytes, RemoteKeyValueSchema> buffer;
 
   @SuppressWarnings("rawtypes")
   private InternalProcessorContext context;
   private int partition;
-  private RemoteKeyValueTable remoteTable;
+  private RemoteKeyValueSchema schema;
 
   public ResponsivePartitionedStore(
       final TableName name
@@ -102,14 +103,14 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
       final SharedClients sharedClients = new SharedClients(context.appConfigs());
       CassandraClient client = sharedClients.cassandraClient;
 
-      remoteTable = new CassandraKeyValueTable(client);
-      remoteTable.create(name.cassandraName());
+      schema = new CassandraKeyValueSchema(client);
+      schema.create(name.cassandraName());
 
       final RemoteMonitor monitor = client.awaitTable(name.cassandraName(), sharedClients.executor);
       monitor.await(Duration.ofSeconds(60));
       LOG.info("Remote table {} is available for querying.", name.cassandraName());
 
-      remoteTable.prepare(name.cassandraName());
+      schema.prepare(name.cassandraName());
 
       final TopicPartition topicPartition =  new TopicPartition(
           changelogFor(context, name.kafkaName(), false),
@@ -122,7 +123,8 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
           sharedClients,
           name,
           topicPartition,
-          remoteTable,
+          schema,
+          new BytesKeySpec(),
           config
       );
       buffer.init();
@@ -208,7 +210,7 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
       return result.isTombstone ? null : result.value;
     }
 
-    return remoteTable.get(name.cassandraName(), partitioner.partition(partition, key), key);
+    return schema.get(name.cassandraName(), partitioner.partition(partition, key), key);
   }
 
   @Override
@@ -230,7 +232,7 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
   public long approximateNumEntries() {
     return partitioner
         .all(partition)
-        .mapToLong(p -> remoteTable.metadata().count(name.cassandraName(), p))
+        .mapToLong(p -> schema.getClient().count(name.cassandraName(), p))
         .sum();
   }
 

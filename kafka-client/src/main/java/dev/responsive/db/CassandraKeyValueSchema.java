@@ -20,6 +20,7 @@ import static com.datastax.oss.driver.api.querybuilder.QueryBuilder.bindMarker;
 import static dev.responsive.db.ColumnNames.DATA_KEY;
 import static dev.responsive.db.ColumnNames.DATA_VALUE;
 import static dev.responsive.db.ColumnNames.EPOCH;
+import static dev.responsive.db.ColumnNames.METADATA_KEY;
 import static dev.responsive.db.ColumnNames.OFFSET;
 import static dev.responsive.db.ColumnNames.PARTITION_KEY;
 
@@ -30,28 +31,22 @@ import com.datastax.oss.driver.api.core.cql.Row;
 import com.datastax.oss.driver.api.core.type.DataTypes;
 import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
 import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
-import com.datastax.oss.driver.api.querybuilder.insert.RegularInsert;
-import com.datastax.oss.driver.api.querybuilder.relation.OngoingWhereClause;
-import dev.responsive.db.MetadataStatements.MetadataKeys;
+import dev.responsive.db.partitioning.SubPartitioner;
 import dev.responsive.utils.Iterators;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import javax.annotation.CheckReturnValue;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class CassandraKeyValueTable implements RemoteKeyValueTable {
+public class CassandraKeyValueSchema implements RemoteKeyValueSchema {
 
-  private static final Logger LOG = LoggerFactory.getLogger(CassandraKeyValueTable.class);
-  private static final Bytes METADATA_KEY =
-      Bytes.wrap("_metadata".getBytes(StandardCharsets.UTF_8));
+  private static final Logger LOG = LoggerFactory.getLogger(CassandraKeyValueSchema.class);
 
   private static final String FROM_BIND = "fk";
   private static final String TO_BIND = "tk";
@@ -67,18 +62,18 @@ public class CassandraKeyValueTable implements RemoteKeyValueTable {
   private final ConcurrentHashMap<String, PreparedStatement> range;
   private final ConcurrentHashMap<String, PreparedStatement> insert;
   private final ConcurrentHashMap<String, PreparedStatement> delete;
-  private final MetadataStatements metadataStatements;
+  private final ConcurrentHashMap<String, PreparedStatement> getMeta;
+  private final ConcurrentHashMap<String, PreparedStatement> setOffset;
 
-  public CassandraKeyValueTable(final CassandraClient client) {
+  public CassandraKeyValueSchema(final CassandraClient client) {
     this.client = client;
     get = new ConcurrentHashMap<>();
     range = new ConcurrentHashMap<>();
     insert = new ConcurrentHashMap<>();
     delete = new ConcurrentHashMap<>();
-
-    metadataStatements = new MetadataStatements(client, new KeyValueMetadataKeys());
+    getMeta = new ConcurrentHashMap<>();
+    setOffset = new ConcurrentHashMap<>();
   }
-
 
   @Override
   public void create(final String tableName) {
@@ -95,10 +90,75 @@ public class CassandraKeyValueTable implements RemoteKeyValueTable {
     );
   }
 
+  /**
+   * Initializes the metadata entry for {@code table} by adding a
+   * row with key {@code _metadata} and sets special columns
+   * {@link ColumnNames#OFFSET} and {@link ColumnNames#EPOCH}.
+   *
+   * <p>Note that this method is idempotent as it uses Cassandra's
+   * {@code IF NOT EXISTS} functionality.
+   *
+   * @param table          the table that is initialized
+   * @param kafkaPartition the partition to initialize
+   */
+  @Override
+  public FencingToken init(
+      final String table,
+      final SubPartitioner partitioner,
+      final int kafkaPartition
+  ) {
+    // TODO: what happens if the user has data with the key "_offset"?
+    // we should consider using a special serialization format for keys
+    // (e.g. adding a magic byte of 0x00 to the offset and 0x01 to all
+    // th data keys) so that it's impossible for a collision to happen
+    partitioner.all(kafkaPartition).forEach(sub -> {
+      client.execute(
+          QueryBuilder.insertInto(table)
+              .value(PARTITION_KEY.column(), PARTITION_KEY.literal(sub))
+              .value(DATA_KEY.column(), DATA_KEY.literal(METADATA_KEY))
+              .value(OFFSET.column(), OFFSET.literal(-1L))
+              .value(EPOCH.column(), EPOCH.literal(0L))
+              .ifNotExists()
+              .build()
+      );
+    });
+    return LwtFencingToken.reserve(this, table, partitioner, kafkaPartition);
+  }
+
+  @Override
+  public MetadataRow metadata(final String table, final int partition) {
+    final BoundStatement bound = getMeta.get(table)
+        .bind()
+        .setInt(PARTITION_KEY.bind(), partition);
+    final List<Row> result = client.execute(bound).all();
+
+    if (result.size() != 1) {
+      throw new IllegalStateException(String.format(
+          "Expected exactly one offset row for %s[%s] but got %d",
+          table, partition, result.size()));
+    } else {
+      return new MetadataRow(
+          result.get(0).getLong(OFFSET.column()),
+          result.get(0).getLong(EPOCH.column())
+      );
+    }
+  }
+
+  @Override
+  public BoundStatement setOffset(
+      final String table,
+      final FencingToken token,
+      final int partition,
+      final long offset
+  ) {
+    return setOffset.get(table)
+        .bind()
+        .setInt(PARTITION_KEY.bind(), partition)
+        .setLong(OFFSET.bind(), offset);
+  }
+
   @Override
   public void prepare(final String tableName) {
-    metadataStatements.prepare(tableName);
-
     insert.computeIfAbsent(tableName, k -> client.prepare(
         QueryBuilder
             .insertInto(tableName)
@@ -134,26 +194,29 @@ public class CassandraKeyValueTable implements RemoteKeyValueTable {
             .where(DATA_KEY.relation().isEqualTo(bindMarker(DATA_KEY.bind())))
             .build()
     ));
-  }
 
-  @Override
-  public Bytes keyFromRecord(final ConsumerRecord<byte[], byte[]> record) {
-    return Bytes.wrap(record.key());
-  }
+    getMeta.computeIfAbsent(tableName, k -> client.prepare(
+        QueryBuilder
+            .selectFrom(tableName)
+            .column(EPOCH.column())
+            .column(OFFSET.column())
+            .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
+            .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
+            .build()
+    ));
 
-  @Override
-  public Bytes bytes(final Bytes key) {
-    return key;
+    setOffset.computeIfAbsent(tableName, k -> client.prepare(QueryBuilder
+        .update(tableName)
+        .setColumn(OFFSET.column(), bindMarker(OFFSET.bind()))
+        .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
+        .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
+        .build()
+    ));
   }
 
   @Override
   public CassandraClient getClient() {
     return client;
-  }
-
-  @Override
-  public MetadataStatements metadata() {
-    return metadataStatements;
   }
 
   /**
@@ -264,7 +327,7 @@ public class CassandraKeyValueTable implements RemoteKeyValueTable {
         .setByteBuffer(TO_BIND, ByteBuffer.wrap(to.get()));
 
     final ResultSet result = client.execute(range);
-    return Iterators.kv(result.iterator(), CassandraKeyValueTable::rows);
+    return Iterators.kv(result.iterator(), CassandraKeyValueSchema::rows);
   }
 
   /**
@@ -292,7 +355,7 @@ public class CassandraKeyValueTable implements RemoteKeyValueTable {
         .build()
     );
 
-    return Iterators.kv(result.iterator(), CassandraKeyValueTable::rows);
+    return Iterators.kv(result.iterator(), CassandraKeyValueSchema::rows);
   }
 
   protected static KeyValue<Bytes, byte[]> rows(final Row row) {
@@ -302,22 +365,4 @@ public class CassandraKeyValueTable implements RemoteKeyValueTable {
     );
   }
 
-  @Override
-  public int compare(final Bytes o1, final Bytes o2) {
-    return Objects.compare(o1, o2, Bytes::compareTo);
-  }
-
-  // Visible for Testing
-  public static class KeyValueMetadataKeys implements MetadataKeys {
-
-    @Override
-    public <T extends OngoingWhereClause<T>> T addMetaColumnsToWhere(final T builder) {
-      return builder.where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)));
-    }
-
-    @Override
-    public RegularInsert addKeyColumnsToInitMetadata(final RegularInsert insert) {
-      return insert.value(DATA_KEY.column(), DATA_KEY.literal(METADATA_KEY));
-    }
-  }
 }

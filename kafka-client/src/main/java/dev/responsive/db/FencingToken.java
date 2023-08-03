@@ -16,28 +16,13 @@
 
 package dev.responsive.db;
 
-import com.datastax.oss.driver.api.core.cql.BoundStatement;
-import javax.annotation.CheckReturnValue;
+import com.datastax.oss.driver.api.core.cql.BatchStatementBuilder;
 
-public interface RemoteTable<K> extends KeySpec<K> {
+public interface FencingToken {
 
-  void create(String tableName);
-
-  void prepare(final String tableName);
-
-  @CheckReturnValue
-  BoundStatement insert(String table, int partitionKey, K key, byte[] value);
-
-  @CheckReturnValue
-  BoundStatement delete(String table, int partitionKey, K key);
-
-  default boolean retain(final K key) {
-    return true;
-  }
-
-  MetadataStatements metadata();
-
-  CassandraClient getClient();
-
+  void addFencingStatement(
+      final BatchStatementBuilder builder,
+      final int partition
+  );
 
 }

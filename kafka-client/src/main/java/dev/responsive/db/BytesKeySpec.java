@@ -16,18 +16,25 @@
 
 package dev.responsive.db;
 
-import java.util.Comparator;
+import java.util.Objects;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.utils.Bytes;
 
-public interface KeySpec<K> extends Comparator<K> {
+public class BytesKeySpec implements KeySpec<Bytes> {
 
-  K keyFromRecord(final ConsumerRecord<byte[], byte[]> record);
+  @Override
+  public Bytes keyFromRecord(final ConsumerRecord<byte[], byte[]> record) {
+    return Bytes.wrap(record.key());
+  }
 
-  Bytes bytes(final K key);
+  @Override
+  public Bytes bytes(final Bytes key) {
+    return key;
+  }
 
-  default boolean retain(final K key) {
-    return true;
+  @Override
+  public int compare(final Bytes o1, final Bytes o2) {
+    return Objects.compare(o1, o2, Bytes::compareTo);
   }
 
 }
