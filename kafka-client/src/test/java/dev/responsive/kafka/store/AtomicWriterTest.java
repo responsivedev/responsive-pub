@@ -19,18 +19,23 @@ package dev.responsive.kafka.store;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.datastax.oss.driver.api.core.cql.AsyncResultSet;
+import com.datastax.oss.driver.api.core.cql.BatchStatementBuilder;
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.Statement;
 import com.datastax.oss.driver.internal.core.cql.DefaultBatchStatement;
+import dev.responsive.db.BytesKeySpec;
 import dev.responsive.db.CassandraClient;
-import dev.responsive.db.CassandraKeyValueTable;
-import dev.responsive.db.MetadataStatements;
+import dev.responsive.db.CassandraKeyValueSchema;
+import dev.responsive.db.FencingToken;
+import dev.responsive.db.KeySpec;
 import dev.responsive.model.Result;
 import java.util.ArrayList;
 import java.util.List;
@@ -51,8 +56,10 @@ import org.mockito.quality.Strictness;
 class AtomicWriterTest {
 
   private static final long OFFSET = 123L;
-  private static final long EPOCH = 3;
+  private static final KeySpec<Bytes> KEY_SPEC = new BytesKeySpec();
 
+  @Mock
+  private FencingToken epoch;
   @Mock
   private CassandraClient client;
   @Mock
@@ -62,6 +69,12 @@ class AtomicWriterTest {
 
   @BeforeEach
   public void beforeEach() {
+    doAnswer(iom -> {
+      iom.getArgument(0, BatchStatementBuilder.class).addStatement(
+          capturingStatement("fencingStatement", iom.getArguments())
+      );
+      return null;
+    }).when(epoch).addFencingStatement(any(), anyInt());
     when(client.executeAsync(any()))
         .thenReturn(CompletableFuture.completedFuture(asyncResultSet));
     when(asyncResultSet.wasApplied()).thenReturn(true);
@@ -83,8 +96,9 @@ class AtomicWriterTest {
         client,
         "foo",
         0,
-        new TestPlugin(client),
-        EPOCH,
+        new TestRemoteSchema(client),
+        KEY_SPEC,
+        epoch,
         2
     );
 
@@ -107,7 +121,7 @@ class AtomicWriterTest {
     batch1.iterator().forEachRemaining(stmt -> statements1.add((ArgumentCapturingStatement) stmt));
 
     assertThat(statements1.size(), is(3));
-    assertThat(statements1.get(0).callingMethod(), is("ensureEpoch"));
+    assertThat(statements1.get(0).callingMethod(), is("fencingStatement"));
     assertThat(statements1.get(1).callingMethod(), is("insertData"));
     assertThat(statements1.get(2).callingMethod(), is("deleteData"));
 
@@ -117,10 +131,8 @@ class AtomicWriterTest {
     batch2.iterator().forEachRemaining(stmt -> statements2.add((ArgumentCapturingStatement) stmt));
 
     assertThat(statements2.size(), is(2));
-    assertThat(statements2.get(0).callingMethod(), is("ensureEpoch"));
-    assertThat(statements2.get(0).args(), is(new Object[]{
-        "foo", 0, EPOCH
-    }));
+    assertThat(statements2.get(0).callingMethod(), is("fencingStatement"));
+    assertThat(statements2.get(0).args()[1], is(0)); // check it was for partition 0
     assertThat(statements2.get(1).callingMethod(), is("insertData"));
   }
 
@@ -131,8 +143,9 @@ class AtomicWriterTest {
         client,
         "foo",
         0,
-        new TestPlugin(client),
-        EPOCH,
+        new TestRemoteSchema(client),
+        KEY_SPEC,
+        epoch,
         2
     );
 
@@ -148,9 +161,9 @@ class AtomicWriterTest {
     verify(client, times(2)).executeAsync(statementCaptor.capture());
   }
 
-  private static class TestPlugin extends CassandraKeyValueTable {
+  private static class TestRemoteSchema extends CassandraKeyValueSchema {
 
-    public TestPlugin(final CassandraClient client) {
+    public TestRemoteSchema(final CassandraClient client) {
       super(client);
     }
 
@@ -171,24 +184,6 @@ class AtomicWriterTest {
         final Bytes key
     ) {
       return capturingStatement("deleteData", new Object[]{tableName, partition, key});
-    }
-
-    @Override
-    public MetadataStatements metadata() {
-      return new TestMetadataStatements(getClient(), new KeyValueMetadataKeys());
-    }
-  }
-
-  private static class TestMetadataStatements extends MetadataStatements {
-
-    public TestMetadataStatements(final CassandraClient client, final MetadataKeys metadataKeys) {
-      super(client, metadataKeys);
-    }
-
-    @Override
-    public BoundStatement ensureEpoch(final String table, final int partitionKey,
-        final long epoch) {
-      return capturingStatement("ensureEpoch", new Object[]{table, partitionKey, epoch});
     }
   }
 

@@ -43,6 +43,8 @@ public class CassandraClient {
 
   private final CqlSession session;
   private final ResponsiveConfig config;
+  private final RemoteKeyValueSchema kvSchema;
+  private final RemoteWindowedSchema windowedSchema;
 
   /**
    * @param session the Cassandra session, expected to be initialized
@@ -53,6 +55,8 @@ public class CassandraClient {
   public CassandraClient(final CqlSession session, final ResponsiveConfig config) {
     this.session = session;
     this.config = config;
+    this.kvSchema = new CassandraKeyValueSchema(this);
+    this.windowedSchema = new CassandraWindowedSchema(this);
   }
 
   protected CassandraClient(final ResponsiveConfig config) {
@@ -134,5 +138,13 @@ public class CassandraClient {
 
     final int numPartitions = result.all().size();
     return numPartitions == 0 ? OptionalInt.empty() : OptionalInt.of(numPartitions);
+  }
+
+  public RemoteKeyValueSchema kvSchema() {
+    return kvSchema;
+  }
+
+  public RemoteWindowedSchema windowedSchema() {
+    return windowedSchema;
   }
 }

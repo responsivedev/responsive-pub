@@ -20,7 +20,13 @@ import dev.responsive.model.Stamped;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
-public interface RemoteWindowedTable extends RemoteTable<Stamped<Bytes>> {
+/**
+ * This specifies additional functions required for reading from
+ * a windowed store.
+ *
+ * @see RemoteSchema
+ */
+public interface RemoteWindowedSchema extends RemoteSchema<Stamped<Bytes>> {
 
   KeyValueIterator<Stamped<Bytes>, byte[]> fetch(
       String tableName,

@@ -50,8 +50,8 @@ import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.cql.BatchStatement;
 import com.datastax.oss.driver.api.core.cql.Statement;
 import dev.responsive.db.CassandraClient;
-import dev.responsive.db.CassandraKeyValueTable;
-import dev.responsive.db.RemoteKeyValueTable;
+import dev.responsive.db.CassandraKeyValueSchema;
+import dev.responsive.db.RemoteKeyValueSchema;
 import dev.responsive.kafka.api.CassandraClientFactory;
 import dev.responsive.kafka.api.DefaultCassandraClientFactory;
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
@@ -169,9 +169,9 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
           defaultFactory.createCqlSession(config),
           config
       );
-      final RemoteKeyValueTable statements = new CassandraKeyValueTable(cassandraClient);
+      final RemoteKeyValueSchema statements = new CassandraKeyValueSchema(cassandraClient);
       statements.prepare(aggName());
-      final long cassandraOffset = statements.metadata().metadata(aggName(), 0).offset;
+      final long cassandraOffset = statements.metadata(aggName(), 0).offset;
       assertThat(cassandraOffset, greaterThan(0L));
       final TopicPartition changelog
           = new TopicPartition(name + "-" + aggName() + "-changelog", 0);
@@ -225,9 +225,9 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
     final CassandraClient cassandraClient = defaultFactory.createCassandraClient(
         defaultFactory.createCqlSession(config),
         config);
-    final RemoteKeyValueTable statements = new CassandraKeyValueTable(cassandraClient);
+    final RemoteKeyValueSchema statements = new CassandraKeyValueSchema(cassandraClient);
     statements.prepare(aggName());
-    final long cassandraOffset = statements.metadata().metadata(aggName(), 0).offset;
+    final long cassandraOffset = statements.metadata(aggName(), 0).offset;
     assertThat(cassandraOffset, greaterThan(0L));
     final TopicPartition changelog = new TopicPartition(name + "-" + aggName() + "-changelog", 0);
     final long changelogOffset = admin.listOffsets(Map.of(changelog, OffsetSpec.latest())).all()

@@ -21,6 +21,7 @@ import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
 import com.datastax.oss.driver.api.querybuilder.relation.ColumnRelationBuilder;
 import com.datastax.oss.driver.api.querybuilder.relation.Relation;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.function.Function;
 import org.apache.kafka.common.utils.Bytes;
@@ -37,6 +38,8 @@ public enum ColumnNames {
   EPOCH("epoch", "epoch"),
   WINDOW_START("windowStart", "windowstart", ts -> timestamp((long) ts));
 
+  static final Bytes METADATA_KEY
+      = Bytes.wrap("_metadata".getBytes(StandardCharsets.UTF_8));
   private final String column;
   private final String bind;
   private final Function<Object, Literal> getLiteral;

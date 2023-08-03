@@ -16,18 +16,15 @@
 
 package dev.responsive.db;
 
-import java.util.Comparator;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.common.utils.Bytes;
+import com.datastax.oss.driver.api.core.cql.BatchStatementBuilder;
 
-public interface KeySpec<K> extends Comparator<K> {
+public class NoOpFencingToken implements FencingToken {
 
-  K keyFromRecord(final ConsumerRecord<byte[], byte[]> record);
-
-  Bytes bytes(final K key);
-
-  default boolean retain(final K key) {
-    return true;
+  @Override
+  public void addFencingStatement(
+      final BatchStatementBuilder builder,
+      final int partition
+  ) {
+    // do nothing
   }
-
 }

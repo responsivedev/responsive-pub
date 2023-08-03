@@ -34,10 +34,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.testcontainers.containers.CassandraContainer;
 
 @ExtendWith(ResponsiveExtension.class)
-public class RemoteKeyValueTableIntegrationTest {
+public class RemoteKeyValueSchemaIntegrationTest {
 
   private CqlSession session;
-  private RemoteKeyValueTable statements;
+  private RemoteKeyValueSchema statements;
   private String name;
   private CassandraClient client;
 
@@ -53,7 +53,7 @@ public class RemoteKeyValueTableIntegrationTest {
         .withKeyspace("responsive_clients") // NOTE: this keyspace is expected to exist
         .build();
     client = new CassandraClient(session, config);
-    statements = new CassandraKeyValueTable(client);
+    statements = new CassandraKeyValueSchema(client);
     name = info.getTestMethod().orElseThrow().getName();
     statements.create(name);
     statements.prepare(name);
