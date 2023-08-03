@@ -37,12 +37,15 @@ import org.apache.kafka.streams.state.KeyValueStore;
 public class ResponsiveStore implements KeyValueStore<Bytes, byte[]> {
 
   private final TableName name;
+  private final SchemaType schemaType;
   private KeyValueStore<Bytes, byte[]> delegate;
 
   public ResponsiveStore(
-      final TableName name
+      final TableName name,
+      final SchemaType schemaType
   ) {
     this.name = name;
+    this.schemaType = schemaType;
   }
 
   @Override
@@ -88,7 +91,7 @@ public class ResponsiveStore implements KeyValueStore<Bytes, byte[]> {
     if (context instanceof GlobalProcessorContextImpl) {
       delegate = new ResponsiveGlobalStore(name);
     } else {
-      delegate = new ResponsivePartitionedStore(name);
+      delegate = new ResponsivePartitionedStore(name, schemaType);
     }
     delegate.init(context, root);
   }

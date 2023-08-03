@@ -41,7 +41,7 @@ class AtomicWriter<K> {
   private final int partition;
 
   private final List<BatchableStatement<?>> statements;
-  private final RemoteSchema<K> table;
+  private final RemoteSchema<K> schema;
   private final KeySpec<K> keySpec;
   private final FencingToken fencingToken;
   private final int batchSize;
@@ -58,7 +58,7 @@ class AtomicWriter<K> {
     this.client = client;
     this.name = name;
     this.partition = partition;
-    this.table = remoteSchema;
+    this.schema = remoteSchema;
     this.keySpec = keySpec;
     this.fencingToken = fencingToken;
 
@@ -73,8 +73,8 @@ class AtomicWriter<K> {
   public void add(final Result<K> result) {
     if (result.isTombstone || keySpec.retain(result.key)) {
       statements.add(result.isTombstone
-          ? table.delete(name, partition, result.key)
-          : table.insert(name, partition, result.key, result.value));
+          ? schema.delete(name, partition, result.key)
+          : schema.insert(name, partition, result.key, result.value));
     }
   }
 
@@ -115,7 +115,7 @@ class AtomicWriter<K> {
   public AtomicWriteResult setOffset(final long offset) {
     final BatchStatementBuilder builder = new BatchStatementBuilder(BatchType.UNLOGGED);
     fencingToken.addFencingStatement(builder, partition);
-    builder.addStatement(table.setOffset(name, fencingToken, partition, offset));
+    builder.addStatement(schema.setOffset(name, fencingToken, partition, offset));
 
     final var result = client.execute(builder.build());
     return result.wasApplied()

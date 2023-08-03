@@ -49,6 +49,34 @@ public final class ResponsiveStores {
   }
 
   /**
+   * See for example {@link Stores#persistentKeyValueStore(String)}. This differs
+   * from {@link #keyValueStore(String)} in that it requires idempotent writes for
+   * correctness in the face of zombies, but in return has improved performance
+   * characteristics.
+   *
+   * @param name the store name
+   * @return a supplier for a key-value store with the given options
+   *         that uses Responsive's storage for its backend
+   */
+  public static KeyValueBytesStoreSupplier idempotentKeyValueStore(final String name) {
+    return new IdempotentKeyValueBytesStoreSupplier(name, false);
+  }
+
+  /**
+   * See for example {@link Stores#persistentTimestampedKeyValueStore(String)}. This differs
+   * from {@link #timestampedKeyValueStore(String)} in that it requires idempotent writes for
+   * correctness in the face of zombies, but in return has improved performance
+   * characteristics.
+   *
+   * @param name the store name
+   * @return a supplier for a timestamped key-value store with the given options
+   *         that uses Responsive's storage for its backend
+   */
+  public static KeyValueBytesStoreSupplier timestampedIdempotentKeyValueStore(final String name) {
+    return new IdempotentKeyValueBytesStoreSupplier(name, true);
+  }
+
+  /**
    * Create a {@link StoreBuilder} that can be used to build a Responsive
    * {@link KeyValueStore} and connect it via the Processor API. If using the DSL, use
    * {@link #materialized(String)} instead.

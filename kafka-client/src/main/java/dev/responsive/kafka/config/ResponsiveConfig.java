@@ -16,7 +16,6 @@
 
 package dev.responsive.kafka.config;
 
-import dev.responsive.db.CassandraClient;
 import dev.responsive.db.partitioning.Hasher;
 import dev.responsive.db.partitioning.Murmur3Hasher;
 import dev.responsive.db.partitioning.SubPartitioner;
@@ -129,7 +128,6 @@ public class ResponsiveConfig extends AbstractConfig {
   public static final String SUBPARTITION_HASHER_CONFIG = "responsive.subpartition.hasher";
   private static final String SUBPARTITION_HASHER_DOC = "Hasher to use for sub-partitioning.";
   private static final Class<?> SUBPARTITION_HASHER_DEFAULT = Murmur3Hasher.class;
-
 
   // ------------------ required StreamsConfig overrides ----------------------
 
@@ -259,7 +257,6 @@ public class ResponsiveConfig extends AbstractConfig {
   }
 
   public SubPartitioner getSubPartitioner(
-      final CassandraClient cassandraClient,
       final Admin admin,
       final TableName name,
       final String changelogTopicName

@@ -15,7 +15,7 @@ import org.apache.kafka.streams.state.TimestampedBytesStore;
  */
 public class ResponsiveTimestampedStore extends ResponsiveStore implements TimestampedBytesStore {
 
-  public ResponsiveTimestampedStore(final TableName name) {
-    super(name);
+  public ResponsiveTimestampedStore(final TableName name, final SchemaType schemaType) {
+    super(name, schemaType);
   }
 }

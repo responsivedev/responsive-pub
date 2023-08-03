@@ -24,12 +24,12 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 
-public class ResponsiveKeyValueBytesStoreSupplier implements KeyValueBytesStoreSupplier {
+public class IdempotentKeyValueBytesStoreSupplier implements KeyValueBytesStoreSupplier {
 
   private final TableName name;
   private final boolean isTimestamped;
 
-  public ResponsiveKeyValueBytesStoreSupplier(final String name, final boolean isTimestamped) {
+  public IdempotentKeyValueBytesStoreSupplier(final String name, final boolean isTimestamped) {
     this.name = new TableName(name);
     this.isTimestamped = isTimestamped;
   }
@@ -42,9 +42,9 @@ public class ResponsiveKeyValueBytesStoreSupplier implements KeyValueBytesStoreS
   @Override
   public KeyValueStore<Bytes, byte[]> get() {
     if (isTimestamped) {
-      return new ResponsiveTimestampedStore(name, SchemaType.KEY_VALUE);
+      return new ResponsiveTimestampedStore(name, SchemaType.IDEMPOTENT);
     } else {
-      return new ResponsiveStore(name, SchemaType.KEY_VALUE);
+      return new ResponsiveStore(name, SchemaType.IDEMPOTENT);
     }
   }
 
