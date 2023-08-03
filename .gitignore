@@ -226,3 +226,5 @@ typings/
 
 # Ignore Gradle build output directory
 build
+
+sindri
