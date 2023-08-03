@@ -226,3 +226,6 @@ typings/
 
 # Ignore Gradle build output directory
 build
+
+# Sindri build checked out during release
+sindri

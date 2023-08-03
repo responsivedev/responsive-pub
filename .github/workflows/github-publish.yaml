@@ -61,13 +61,76 @@ jobs:
           SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
           SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
 
-      - name: Publish Images
+      - name: Publish Operator Images
         uses: gradle/gradle-build-action@v2
         if: ${{ inputs.module == 'operator' }}
         with:
-          arguments: pushCRD pushDocker pushHelm -PdockerRegistry=${{ steps.login-ecr-public.outputs.registry }}/j8q9y0n6 -PhelmRegistry=${{ steps.login-ecr-public.outputs.registry }}/j8q9y0n6
+          arguments: operator:pushCRD operator:pushDocker operator:pushHelm -PdockerRegistry=${{ steps.login-ecr-public.outputs.registry }}/j8q9y0n6 -PhelmRegistry=${{ steps.login-ecr-public.outputs.registry }}/j8q9y0n6
         env:
           ECR_REGISTRY: ${{ steps.login-ecr-public.outputs.registry }}
+
+      - name: Publish Example Images
+        uses: gradle/gradle-build-action@v2
+        if: ${{ inputs.module == 'kafka-client' }}
+        with:
+          arguments: kafka-client-examples:simple-example:pushDocker -PdockerRegistry=${{ steps.login-ecr-public.outputs.registry }}/j8q9y0n6 -PhelmRegistry=${{ steps.login-ecr-public.outputs.registry }}/j8q9y0n6
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr-public.outputs.registry }}
+
+      - uses: actions/checkout@v3
+        with:
+          repository: responsivedev/sindri
+          path: sindri
+          ref: refs/heads/master
+          token: ${{ secrets.TOOLS_GHA_TOKEN }}
+
+      - name: Install Kind
+        uses: helm/kind-action@v1.5.0
+        with:
+            install_only: true
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: arn:aws:iam::292505934682:role/github-responsive-pub-main
+          role-session-name: github-publish-artifacts
+          aws-region: us-west-2
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Set Operator Version
+        run: |
+          echo "OPERATOR_VERSION=$(./gradlew operator:cV | grep Project.version | sed 's/Project version: //')" >> $GITHUB_ENV
+
+      - name: Set Kafka Client Version
+        run: |
+          echo "KAFKA_CLIENTS_VERSION=$(./gradlew kafka-client:cV  | grep Project.version | sed 's/Project version: //')" >> $GITHUB_ENV
+
+      - name: Run Smoke Test (Operator)
+        working-directory: sindri
+        if: ${{ inputs.module == 'operator' }}
+        run: |
+          ./scripts/update-versions -s responsiveOperator -e local -i public.ecr.aws/j8q9y0n6/responsiveinc/responsive-operator:$OPERATOR_VERSION
+          ./scripts/run-smoke-test -s release -w system-tests-pub-release
+          git checkout -- .
+          ./scripts/update-versions -u -s responsiveOperator -e local -i public.ecr.aws/j8q9y0n6/responsiveinc/responsive-operator:$OPERATOR_VERSION
+        env:
+          DD_API_KEY: ${{ secrets.DD_API_KEY }}
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+
+      - name: Run Smoke Test (Kafka Clients)
+        working-directory: sindri
+        if: ${{ inputs.module == 'kafka-client' }}
+        run: |
+            ./scripts/update-client-versions -s release -p false -i public.ecr.aws/j8q9y0n6/responsiveinc/simple-example -t $KAFKA_CLIENTS_VERSION
+            ./scripts/run-smoke-test -s release -w system-tests-pub-release
+            git checkout -- .
+            ./scripts/update-client-versions -u -s release -p true -i public.ecr.aws/j8q9y0n6/responsiveinc/simple-example -t $KAFKA_CLIENTS_VERSION
+        env:
+          DD_API_KEY: ${{ secrets.DD_API_KEY }}
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
 
       - name: Create Next Version Commit
         run: |
@@ -76,6 +139,14 @@ jobs:
           ./gradlew :${{ inputs.module }}:markNextVersion \
             -Prelease.incrementer=${{ inputs.increment }} \
             -Prelease.dryRun | grep "Creating" | git commit --allow-empty -F -
+          git push
+
+      - name: Push next platform version to Sindri
+        working-directory: sindri
+        run: |
+          git config --global user.name 'Responsive Tools'
+          git config --global user.email 'tools@responsive.dev'
+          git commit --allow-empty -am "update responsive-pub artifact versions"
           git push
 
       - name: Increment Version
