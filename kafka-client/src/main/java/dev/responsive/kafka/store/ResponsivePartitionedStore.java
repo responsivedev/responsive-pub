@@ -36,22 +36,23 @@ import java.util.List;
 import java.util.concurrent.TimeoutException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.internals.StoreQueryUtils;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> {
 
-  private static final Logger LOG = LoggerFactory.getLogger(ResponsivePartitionedStore.class);
+  private Logger log;
 
   private final TableName name;
   private final Position position;
@@ -59,6 +60,7 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
   private ResponsiveStoreRegistration registration;
 
   private boolean open;
+  private boolean initialized;
   private SubPartitioner partitioner;
   private CommitBuffer<Bytes, RemoteKeyValueSchema> buffer;
 
@@ -72,6 +74,9 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
   ) {
     this.name = name;
     this.position = Position.emptyPosition();
+    log = new LogContext(
+        String.format("store [%s]", name.kafkaName())
+    ).logger(ResponsivePartitionedStore.class);
   }
 
   @Override
@@ -94,11 +99,19 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
   @Override
   public void init(final StateStoreContext context, final StateStore root) {
     try {
-      LOG.info("Initializing state store {}", name);
-      StoreUtil.validateTopologyOptimizationConfig(context.appConfigs());
-      final ResponsiveConfig config = new ResponsiveConfig(context.appConfigs());
       this.context = asInternalProcessorContext(context);
       partition = context.taskId().partition();
+
+      if (!isActive()) {
+        log = new LogContext(
+            String.format("standby-store [%s]", name.kafkaName())
+        ).logger(ResponsivePartitionedStore.class);
+      }
+
+      log.info("Initializing state store");
+
+      StoreUtil.validateTopologyOptimizationConfig(context.appConfigs());
+      final ResponsiveConfig config = new ResponsiveConfig(context.appConfigs());
 
       final SharedClients sharedClients = new SharedClients(context.appConfigs());
       CassandraClient client = sharedClients.cassandraClient;
@@ -108,7 +121,7 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
 
       final RemoteMonitor monitor = client.awaitTable(name.cassandraName(), sharedClients.executor);
       monitor.await(Duration.ofSeconds(60));
-      LOG.info("Remote table {} is available for querying.", name.cassandraName());
+      log.info("Remote table {} is available for querying.", name.cassandraName());
 
       schema.prepare(name.cassandraName());
 
@@ -127,11 +140,11 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
           new BytesKeySpec(),
           config
       );
-      buffer.init();
 
-      open = true;
+      if (isActive()) {
+        initializeBuffer();
+      }
 
-      context.register(root, buffer);
       final long offset = buffer.offset();
       registration = new ResponsiveStoreRegistration(
           name.kafkaName(),
@@ -141,8 +154,36 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
       );
       storeRegistry = InternalConfigs.loadStoreRegistry(context.appConfigs());
       storeRegistry.registerStore(registration);
+
+      open = true;
+      context.register(
+          root,
+          new ResponsiveRestoreCallback((batch) -> buffer.restoreBatch(batch), this::isActive)
+      );
     } catch (InterruptedException | TimeoutException e) {
-      throw new ProcessorStateException("Failed to initialize store.", e);
+      throw new ProcessorStateException("Failed to initialize store " + name(), e);
+    }
+  }
+
+  private boolean isActive() {
+    return context.taskType() == TaskType.ACTIVE;
+  }
+
+  private void initializeBuffer() {
+    buffer.init();
+    initialized = true;
+    log.info("Initialized buffer");
+  }
+
+  private void maybeTransitionToActive() {
+    if (!initialized && isActive()) {
+      log.info("Transitioning from standby to active");
+
+      log = new LogContext(
+          String.format("store [%s]", name.kafkaName())
+      ).logger(ResponsivePartitionedStore.class);
+
+      initializeBuffer();
     }
   }
 
@@ -167,6 +208,7 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
 
   @Override
   public void put(final Bytes key, final byte[] value) {
+    maybeTransitionToActive();
     buffer.put(key, value);
     StoreQueryUtils.updatePosition(position, context);
   }
@@ -201,6 +243,7 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
 
   @Override
   public byte[] get(final Bytes key) {
+    maybeTransitionToActive();
     // try the buffer first, it acts as a local cache
     // but this is also necessary for correctness as
     // it is possible that the data is either uncommitted
@@ -215,11 +258,13 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
 
   @Override
   public KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
+    maybeTransitionToActive();
     throw new UnsupportedOperationException("Not yet implemented.");
   }
 
   @Override
   public KeyValueIterator<Bytes, byte[]> all() {
+    maybeTransitionToActive();
     throw new UnsupportedOperationException("Not yet implemented.");
   }
 
@@ -244,5 +289,6 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
     // the client is shared across state stores, so only the
     // buffer needs to be flushed
     flush();
+    open = false;
   }
 }
