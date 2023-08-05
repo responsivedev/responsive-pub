@@ -44,12 +44,20 @@ jobs:
         with:
           arguments: publishMavenJavaPublicationToS3Repository # publish only to S3
         if: github.ref == 'refs/heads/main'
-        
+
+      # We need this to emulate other architectures for multi-platform docker builds
+      - name: Set up QEMU for Docker
+        uses: docker/setup-qemu-action@v2
+
+      # We use the build extensions to do multi-architecture docker builds
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
       - name: Publish Images
         uses: gradle/gradle-build-action@v2
         with:
-          arguments: pushCRD pushDocker pushHelm -PdockerRegistry=${{ steps.login-ecr-public.outputs.registry }}/j8q9y0n6 -PhelmRegistry=${{ steps.login-ecr-public.outputs.registry }}/j8q9y0n6
-        if: github.ref == 'refs/heads/main'
+          arguments: pushCRD pushDockerMultiArch pushHelm -PdockerRegistry=${{ steps.login-ecr-public.outputs.registry }}/j8q9y0n6 -PhelmRegistry=${{ steps.login-ecr-public.outputs.registry }}/j8q9y0n6
+        #if: github.ref == 'refs/heads/main'
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2
