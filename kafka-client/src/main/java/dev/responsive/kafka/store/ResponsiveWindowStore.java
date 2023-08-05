@@ -67,7 +67,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
 
   @SuppressWarnings("rawtypes")
   private InternalProcessorContext context;
-  private int partition;
+  private TopicPartition topicPartition;
   private CommitBuffer<Stamped<Bytes>, RemoteWindowedSchema> buffer;
   private long observedStreamTime;
   private ResponsiveStoreRegistry storeRegistry;
@@ -131,7 +131,11 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
   public void init(final StateStoreContext context, final StateStore root) {
     try {
       this.context = asInternalProcessorContext(context);
-      partition = context.taskId().partition();
+      storeRegistry = InternalConfigs.loadStoreRegistry(context.appConfigs());
+      topicPartition =  new TopicPartition(
+          changelogFor(context, name.kafkaName(), false),
+          context.taskId().partition()
+      );
 
       if (!isActive()) {
         log = new LogContext(
@@ -154,10 +158,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       log.info("Remote table {} is available for querying.", name.cassandraName());
 
       schema.prepare(name.cassandraName());
-      final TopicPartition topicPartition =  new TopicPartition(
-          changelogFor(context, name.kafkaName(), false),
-          partition
-      );
+
       partitioner = config.getSubPartitioner(
           client, sharedClients.admin, name, topicPartition.topic());
 
@@ -173,16 +174,6 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       if (isActive()) {
         initializeBuffer();
       }
-
-      final long offset = buffer.offset();
-      registration = new ResponsiveStoreRegistration(
-          name.kafkaName(),
-          topicPartition,
-          offset == -1 ? 0 : offset,
-          buffer::flush
-      );
-      storeRegistry = InternalConfigs.loadStoreRegistry(context.appConfigs());
-      storeRegistry.registerStore(registration);
 
       open = true;
 
@@ -203,6 +194,15 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
     buffer.init();
     initialized = true;
     log.info("Initialized buffer");
+
+    final long offset = buffer.offset();
+    registration = new ResponsiveStoreRegistration(
+        name.kafkaName(),
+        topicPartition,
+        offset == -1 ? 0 : offset,
+        buffer::flush
+    );
+    storeRegistry.registerStore(registration);
   }
 
   private void maybeTransitionToActive() {
@@ -252,19 +252,21 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       return localResult.isTombstone ? null : localResult.value;
     }
 
-    final KeyValueIterator<Stamped<Bytes>, byte[]> remoteResult = schema.fetch(
+    final int partition = partitioner.partition(topicPartition.partition(), key);
+    try (final KeyValueIterator<Stamped<Bytes>, byte[]> remoteResult = schema.fetch(
         name.cassandraName(),
-        partitioner.partition(partition, key),
+        partition,
         key,
         time,
         time + 1
-    );
+    )) {
 
-    if (!remoteResult.hasNext()) {
-      return null;
+      if (!remoteResult.hasNext()) {
+        return null;
+      }
+
+      return remoteResult.next().value;
     }
-
-    return remoteResult.next().value;
   }
 
   @Override
@@ -279,7 +281,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
     final Stamped<Bytes> from = new Stamped<>(key, start);
     final Stamped<Bytes> to = new Stamped<>(key, timeTo);
 
-    final int subPartition = partitioner.partition(partition, key);
+    final int subPartition = partitioner.partition(topicPartition.partition(), key);
     return Iterators.windowed(
         new LocalRemoteKvIterator<>(
             buffer.range(from, to),
@@ -312,7 +314,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
     final Stamped<Bytes> from = new Stamped<>(key, start);
     final Stamped<Bytes> to = new Stamped<>(key, timeTo);
 
-    final int subPartition = partitioner.partition(partition, key);
+    final int subPartition = partitioner.partition(topicPartition.partition(), key);
     return Iterators.windowed(
         new LocalRemoteKvIterator<>(
             buffer.backRange(from, to),

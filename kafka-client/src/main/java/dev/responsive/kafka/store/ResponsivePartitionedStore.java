@@ -66,7 +66,7 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
 
   @SuppressWarnings("rawtypes")
   private InternalProcessorContext context;
-  private int partition;
+  private TopicPartition topicPartition;
   private RemoteKeyValueSchema schema;
 
   public ResponsivePartitionedStore(
@@ -100,7 +100,11 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
   public void init(final StateStoreContext context, final StateStore root) {
     try {
       this.context = asInternalProcessorContext(context);
-      partition = context.taskId().partition();
+      storeRegistry = InternalConfigs.loadStoreRegistry(context.appConfigs());
+      topicPartition =  new TopicPartition(
+          changelogFor(context, name.kafkaName(), false),
+          context.taskId().partition()
+      );
 
       if (!isActive()) {
         log = new LogContext(
@@ -125,10 +129,6 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
 
       schema.prepare(name.cassandraName());
 
-      final TopicPartition topicPartition =  new TopicPartition(
-          changelogFor(context, name.kafkaName(), false),
-          partition
-      );
       partitioner = config.getSubPartitioner(
           client, sharedClients.admin, name, topicPartition.topic());
 
@@ -144,16 +144,6 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
       if (isActive()) {
         initializeBuffer();
       }
-
-      final long offset = buffer.offset();
-      registration = new ResponsiveStoreRegistration(
-          name.kafkaName(),
-          topicPartition,
-          offset == -1 ? 0 : offset,
-          buffer::flush
-      );
-      storeRegistry = InternalConfigs.loadStoreRegistry(context.appConfigs());
-      storeRegistry.registerStore(registration);
 
       open = true;
       context.register(
@@ -171,6 +161,14 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
 
   private void initializeBuffer() {
     buffer.init();
+    final long offset = buffer.offset();
+    registration = new ResponsiveStoreRegistration(
+        name.kafkaName(),
+        topicPartition,
+        offset == -1 ? 0 : offset,
+        buffer::flush
+    );
+    storeRegistry.registerStore(registration);
     initialized = true;
     log.info("Initialized buffer");
   }
@@ -253,7 +251,8 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
       return result.isTombstone ? null : result.value;
     }
 
-    return schema.get(name.cassandraName(), partitioner.partition(partition, key), key);
+    final int subPartition = partitioner.partition(topicPartition.partition(), key);
+    return schema.get(name.cassandraName(), subPartition, key);
   }
 
   @Override
@@ -276,7 +275,7 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
   @Override
   public long approximateNumEntries() {
     return partitioner
-        .all(partition)
+        .all(topicPartition.partition())
         .mapToLong(p -> schema.getClient().count(name.cassandraName(), p))
         .sum();
   }
