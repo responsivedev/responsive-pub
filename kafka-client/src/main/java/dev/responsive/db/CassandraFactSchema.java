@@ -39,10 +39,10 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class CassandraIdempotentKeyValueSchema implements RemoteKeyValueSchema {
+public class CassandraFactSchema implements RemoteKeyValueSchema {
 
   private static final Logger LOG = LoggerFactory.getLogger(
-      CassandraIdempotentKeyValueSchema.class);
+      CassandraFactSchema.class);
 
   private final CassandraClient client;
 
@@ -57,7 +57,7 @@ public class CassandraIdempotentKeyValueSchema implements RemoteKeyValueSchema {
   private final ConcurrentHashMap<String, PreparedStatement> getMeta;
   private final ConcurrentHashMap<String, PreparedStatement> setOffset;
 
-  public CassandraIdempotentKeyValueSchema(final CassandraClient client) {
+  public CassandraFactSchema(final CassandraClient client) {
     this.client = client;
     get = new ConcurrentHashMap<>();
     insert = new ConcurrentHashMap<>();

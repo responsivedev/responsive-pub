@@ -49,31 +49,39 @@ public final class ResponsiveStores {
   }
 
   /**
-   * See for example {@link Stores#persistentKeyValueStore(String)}. This differs
-   * from {@link #keyValueStore(String)} in that it requires idempotent writes for
-   * correctness in the face of zombies, but in return has improved performance
-   * characteristics.
+   * See for example {@link Stores#persistentKeyValueStore(String)}. A fact store
+   * assumes that all writes for a given key will always have the same value. The
+   * implementation does not enforce this constraint, instead it uses the assumption
+   * to optimize the consistency protocol by allowing split-brain writes to go
+   * unfenced.
+   *
+   * <p>Examples of usage patterns that make good use of a fact store:
+   * <ul>
+   *   <li>A deduplication store that records whether or not a key has been seen.</li>
+   *   <li>Sensor data that reports measurements from sensors as time-series data.</li>
+   * </ul>
+   * </p>
+   *
+   * <p>Delete operations on fact tables, although supported, should be considered
+   * optimizations; your application should not depend on the data in a fact table
+   * being deleted during a split-brain situation. </p>
    *
    * @param name the store name
    * @return a supplier for a key-value store with the given options
    *         that uses Responsive's storage for its backend
    */
-  public static KeyValueBytesStoreSupplier idempotentKeyValueStore(final String name) {
-    return new IdempotentKeyValueBytesStoreSupplier(name, false);
+  public static KeyValueBytesStoreSupplier factStore(final String name) {
+    return new ResponsiveFactStoreSupplier(name, false);
   }
 
   /**
-   * See for example {@link Stores#persistentTimestampedKeyValueStore(String)}. This differs
-   * from {@link #timestampedKeyValueStore(String)} in that it requires idempotent writes for
-   * correctness in the face of zombies, but in return has improved performance
-   * characteristics.
-   *
    * @param name the store name
    * @return a supplier for a timestamped key-value store with the given options
    *         that uses Responsive's storage for its backend
+   * @see #factStore(String) {@link #timestampedKeyValueStore(String)}
    */
-  public static KeyValueBytesStoreSupplier timestampedIdempotentKeyValueStore(final String name) {
-    return new IdempotentKeyValueBytesStoreSupplier(name, true);
+  public static KeyValueBytesStoreSupplier timestampedFactStore(final String name) {
+    return new ResponsiveFactStoreSupplier(name, true);
   }
 
   /**

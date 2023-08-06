@@ -36,7 +36,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.testcontainers.containers.CassandraContainer;
 
 @ExtendWith(ResponsiveExtension.class)
-class CassandraIdempotentKeyValueSchemaIntegrationTest {
+class CassandraFactSchemaIntegrationTest {
 
   private String storeName;
   private CassandraClient client;
@@ -61,7 +61,7 @@ class CassandraIdempotentKeyValueSchemaIntegrationTest {
   @Test
   public void shouldInitializeWithCorrectMetadata() {
     // Given:
-    final RemoteKeyValueSchema schema = client.kvSchema(SchemaType.IDEMPOTENT);
+    final RemoteKeyValueSchema schema = client.kvSchema(SchemaType.FACT);
     schema.create(storeName);
     schema.prepare(storeName);
 
@@ -83,7 +83,7 @@ class CassandraIdempotentKeyValueSchemaIntegrationTest {
   @Test
   public void shouldInsertAndDelete() {
     // Given:
-    final RemoteKeyValueSchema schema = client.kvSchema(SchemaType.IDEMPOTENT);
+    final RemoteKeyValueSchema schema = client.kvSchema(SchemaType.FACT);
     schema.create(storeName);
     schema.prepare(storeName);
     schema.init(storeName, SubPartitioner.NO_SUBPARTITIONS, 1);

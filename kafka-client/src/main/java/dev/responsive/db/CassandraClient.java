@@ -45,7 +45,7 @@ public class CassandraClient {
   private final CqlSession session;
   private final ResponsiveConfig config;
   private final RemoteKeyValueSchema kvSchema;
-  private final RemoteKeyValueSchema idempotentKvSchema;
+  private final RemoteKeyValueSchema factSchema;
   private final RemoteWindowedSchema windowedSchema;
 
   /**
@@ -59,7 +59,7 @@ public class CassandraClient {
     this.config = config;
 
     this.kvSchema = new CassandraKeyValueSchema(this);
-    this.idempotentKvSchema = new CassandraIdempotentKeyValueSchema(this);
+    this.factSchema = new CassandraFactSchema(this);
     this.windowedSchema = new CassandraWindowedSchema(this);
   }
 
@@ -146,9 +146,9 @@ public class CassandraClient {
 
   public RemoteKeyValueSchema kvSchema(final SchemaType schemaType) {
     switch (schemaType) {
-      case KEY_VALUE:   return kvSchema;
-      case IDEMPOTENT:  return idempotentKvSchema;
-      default:          throw new IllegalArgumentException(schemaType.name());
+      case KEY_VALUE: return kvSchema;
+      case FACT:      return factSchema;
+      default:        throw new IllegalArgumentException(schemaType.name());
     }
   }
 

@@ -17,6 +17,17 @@
 package dev.responsive.kafka.store;
 
 public enum SchemaType {
+
+  /**
+   * A general purpose key value store that supports fencing
+   * zombie writers during a split-brain outage.
+   */
   KEY_VALUE,
-  IDEMPOTENT
+
+  /**
+   * A fact table schema expects all keys to be recorded with
+   * only single "fact" values. Examples of such tables are
+   * time-series data and duplicate detection.
+   */
+  FACT
 }

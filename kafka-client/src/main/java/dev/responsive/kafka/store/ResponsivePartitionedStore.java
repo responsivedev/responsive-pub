@@ -118,7 +118,7 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
           changelogFor(context, name.kafkaName(), false),
           partition
       );
-      partitioner = schemaType == SchemaType.IDEMPOTENT
+      partitioner = schemaType == SchemaType.FACT
           ? SubPartitioner.NO_SUBPARTITIONS
           : config.getSubPartitioner(sharedClients.admin, name, topicPartition.topic());
 
