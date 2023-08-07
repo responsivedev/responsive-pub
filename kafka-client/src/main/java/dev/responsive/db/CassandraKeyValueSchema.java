@@ -17,12 +17,15 @@
 package dev.responsive.db;
 
 import static com.datastax.oss.driver.api.querybuilder.QueryBuilder.bindMarker;
-import static dev.responsive.db.ColumnNames.DATA_KEY;
-import static dev.responsive.db.ColumnNames.DATA_VALUE;
-import static dev.responsive.db.ColumnNames.EPOCH;
-import static dev.responsive.db.ColumnNames.METADATA_KEY;
-import static dev.responsive.db.ColumnNames.OFFSET;
-import static dev.responsive.db.ColumnNames.PARTITION_KEY;
+import static dev.responsive.db.ColumnName.DATA_KEY;
+import static dev.responsive.db.ColumnName.DATA_VALUE;
+import static dev.responsive.db.ColumnName.EPOCH;
+import static dev.responsive.db.ColumnName.METADATA_KEY;
+import static dev.responsive.db.ColumnName.OFFSET;
+import static dev.responsive.db.ColumnName.PARTITION_KEY;
+import static dev.responsive.db.ColumnName.ROW_TYPE;
+import static dev.responsive.db.RowType.DATA_ROW;
+import static dev.responsive.db.RowType.METADATA_ROW;
 
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
@@ -82,6 +85,7 @@ public class CassandraKeyValueSchema implements RemoteKeyValueSchema {
         .createTable(tableName)
         .ifNotExists()
         .withPartitionKey(PARTITION_KEY.column(), DataTypes.INT)
+        .withClusteringColumn(ROW_TYPE.column(), DataTypes.TINYINT)
         .withClusteringColumn(DATA_KEY.column(), DataTypes.BLOB)
         .withColumn(DATA_VALUE.column(), DataTypes.BLOB)
         .withColumn(OFFSET.column(), DataTypes.BIGINT)
@@ -93,7 +97,7 @@ public class CassandraKeyValueSchema implements RemoteKeyValueSchema {
   /**
    * Initializes the metadata entry for {@code table} by adding a
    * row with key {@code _metadata} and sets special columns
-   * {@link ColumnNames#OFFSET} and {@link ColumnNames#EPOCH}.
+   * {@link ColumnName#OFFSET} and {@link ColumnName#EPOCH}.
    *
    * <p>Note that this method is idempotent as it uses Cassandra's
    * {@code IF NOT EXISTS} functionality.
@@ -115,6 +119,7 @@ public class CassandraKeyValueSchema implements RemoteKeyValueSchema {
       client.execute(
           QueryBuilder.insertInto(table)
               .value(PARTITION_KEY.column(), PARTITION_KEY.literal(sub))
+              .value(ROW_TYPE.column(), METADATA_ROW.literal())
               .value(DATA_KEY.column(), DATA_KEY.literal(METADATA_KEY))
               .value(OFFSET.column(), OFFSET.literal(-1L))
               .value(EPOCH.column(), EPOCH.literal(0L))
@@ -163,6 +168,7 @@ public class CassandraKeyValueSchema implements RemoteKeyValueSchema {
         QueryBuilder
             .insertInto(tableName)
             .value(PARTITION_KEY.column(), bindMarker(PARTITION_KEY.bind()))
+            .value(ROW_TYPE.column(), DATA_ROW.literal())
             .value(DATA_KEY.column(), bindMarker(DATA_KEY.bind()))
             .value(DATA_VALUE.column(), bindMarker(DATA_VALUE.bind()))
             .build()
@@ -173,6 +179,7 @@ public class CassandraKeyValueSchema implements RemoteKeyValueSchema {
             .selectFrom(tableName)
             .columns(DATA_VALUE.column())
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
+            .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
             .where(DATA_KEY.relation().isEqualTo(bindMarker(DATA_KEY.bind())))
             .build()
     ));
@@ -181,6 +188,7 @@ public class CassandraKeyValueSchema implements RemoteKeyValueSchema {
         QueryBuilder
             .selectFrom(tableName)
             .columns(DATA_KEY.column(), DATA_VALUE.column())
+            .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
             .where(DATA_KEY.relation().isGreaterThanOrEqualTo(bindMarker(FROM_BIND)))
             .where(DATA_KEY.relation().isLessThan(bindMarker(TO_BIND)))
@@ -191,6 +199,7 @@ public class CassandraKeyValueSchema implements RemoteKeyValueSchema {
         QueryBuilder
             .deleteFrom(tableName)
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
+            .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
             .where(DATA_KEY.relation().isEqualTo(bindMarker(DATA_KEY.bind())))
             .build()
     ));
@@ -201,6 +210,7 @@ public class CassandraKeyValueSchema implements RemoteKeyValueSchema {
             .column(EPOCH.column())
             .column(OFFSET.column())
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
+            .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
             .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
             .build()
     ));
@@ -209,6 +219,7 @@ public class CassandraKeyValueSchema implements RemoteKeyValueSchema {
         .update(tableName)
         .setColumn(OFFSET.column(), bindMarker(OFFSET.bind()))
         .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
+        .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
         .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
         .build()
     ));
