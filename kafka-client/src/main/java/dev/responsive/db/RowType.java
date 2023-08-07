@@ -21,8 +21,9 @@ import com.datastax.oss.driver.api.querybuilder.term.Term;
 
 public enum RowType {
 
-  METADATA_ROW((byte) 0x0),
-  DATA_ROW((byte) 0x1);
+  UNKNOWN((byte) 0x0),
+  METADATA_ROW((byte) 0x1),
+  DATA_ROW((byte) 0x2);
 
   private final byte val;
 
