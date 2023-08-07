@@ -173,15 +173,20 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
     log.info("Initialized buffer");
   }
 
-  private void maybeTransitionToActive() {
-    if (!initialized && isActive()) {
-      log.info("Transitioning from standby to active");
+  private void maybeTransitionToActive(final String caller) {
+    if (isActive()) {
+      if (!initialized) {
+        log.info("Transitioning from standby to active");
 
-      log = new LogContext(
-          String.format("store [%s]", name.kafkaName())
-      ).logger(ResponsivePartitionedStore.class);
+        log = new LogContext(
+            String.format("store [%s]", name.kafkaName())
+        ).logger(ResponsivePartitionedStore.class);
 
-      initializeBuffer();
+        initializeBuffer();
+      }
+    } else {
+      log.error("Invoked {} on store while in STANDBY", caller);
+      throw new IllegalStateException("Unexpected read/write to store in standby state: " + name());
     }
   }
 
@@ -206,7 +211,7 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
 
   @Override
   public void put(final Bytes key, final byte[] value) {
-    maybeTransitionToActive();
+    maybeTransitionToActive("put");
     buffer.put(key, value);
     StoreQueryUtils.updatePosition(position, context);
   }
@@ -241,7 +246,7 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
 
   @Override
   public byte[] get(final Bytes key) {
-    maybeTransitionToActive();
+    maybeTransitionToActive("get");
     // try the buffer first, it acts as a local cache
     // but this is also necessary for correctness as
     // it is possible that the data is either uncommitted
@@ -257,13 +262,13 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
 
   @Override
   public KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
-    maybeTransitionToActive();
+    maybeTransitionToActive("range");
     throw new UnsupportedOperationException("Not yet implemented.");
   }
 
   @Override
   public KeyValueIterator<Bytes, byte[]> all() {
-    maybeTransitionToActive();
+    maybeTransitionToActive("all");
     throw new UnsupportedOperationException("Not yet implemented.");
   }
 

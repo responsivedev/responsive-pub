@@ -205,15 +205,20 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
     storeRegistry.registerStore(registration);
   }
 
-  private void maybeTransitionToActive() {
-    if (!initialized && isActive()) {
-      log.info("Transitioning from standby to active");
+  private void maybeTransitionToActive(final String caller) {
+    if (isActive()) {
+      if (!initialized) {
+        log.info("Transitioning from standby to active");
 
-      log = new LogContext(
-          String.format("window-store [%s]", name.kafkaName())
-      ).logger(ResponsivePartitionedStore.class);
+        log = new LogContext(
+            String.format("window-store [%s]", name.kafkaName())
+        ).logger(ResponsivePartitionedStore.class);
 
-      initializeBuffer();
+        initializeBuffer();
+      }
+    } else {
+      log.error("Invoked {} on store while in STANDBY", caller);
+      throw new IllegalStateException("Unexpected read/write to store in standby state: " + name());
     }
   }
 
@@ -234,7 +239,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
 
   @Override
   public void put(final Bytes key, final byte[] value, final long windowStartTimestamp) {
-    maybeTransitionToActive();
+    maybeTransitionToActive("put");
     observedStreamTime = Math.max(observedStreamTime, windowStartTimestamp);
 
     final Stamped<Bytes> wKey = new Stamped<>(key, windowStartTimestamp);
@@ -245,7 +250,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
 
   @Override
   public byte[] fetch(final Bytes key, final long time) {
-    maybeTransitionToActive();
+    maybeTransitionToActive("fetch");
 
     final Result<Stamped<Bytes>> localResult = buffer.get(new Stamped<>(key, time));
     if (localResult != null)  {
@@ -275,7 +280,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       final long timeFrom,
       final long timeTo
   ) {
-    maybeTransitionToActive();
+    maybeTransitionToActive("fetch");
 
     final long start = Math.max(observedStreamTime - retentionPeriod, timeFrom);
     final Stamped<Bytes> from = new Stamped<>(key, start);
@@ -298,7 +303,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       final long timeFrom,
       final long timeTo
   ) {
-    maybeTransitionToActive();
+    maybeTransitionToActive("fetch");
     throw new UnsupportedOperationException("Not yet implemented.");
   }
 
@@ -308,7 +313,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       final long timeFrom,
       final long timeTo
   ) {
-    maybeTransitionToActive();
+    maybeTransitionToActive("backwardFetch");
 
     final long start = Math.max(observedStreamTime - retentionPeriod, timeFrom);
     final Stamped<Bytes> from = new Stamped<>(key, start);
@@ -331,7 +336,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       final long timeFrom,
       final long timeTo
   ) {
-    maybeTransitionToActive();
+    maybeTransitionToActive("backwardFetch");
     throw new UnsupportedOperationException("Not yet implemented");
   }
 
@@ -340,7 +345,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       final long timeFrom,
       final long timeTo
   ) {
-    maybeTransitionToActive();
+    maybeTransitionToActive("fetchAll");
     throw new UnsupportedOperationException("Not yet implemented");
   }
 
@@ -349,19 +354,19 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       final long timeFrom,
       final long timeTo
   ) {
-    maybeTransitionToActive();
+    maybeTransitionToActive("backwardFetchAll");
     throw new UnsupportedOperationException("Not yet implemented");
   }
 
   @Override
   public KeyValueIterator<Windowed<Bytes>, byte[]> all() {
-    maybeTransitionToActive();
+    maybeTransitionToActive("all");
     throw new UnsupportedOperationException("Not yet implemented");
   }
 
   @Override
   public KeyValueIterator<Windowed<Bytes>, byte[]> backwardAll() {
-    maybeTransitionToActive();
+    maybeTransitionToActive("backwardAll");
     throw new UnsupportedOperationException("Not yet implemented");
   }
 

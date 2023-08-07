@@ -54,8 +54,6 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
   private StateStoreContext context;
   private RemoteKeyValueSchema schema;
 
-  // TODO: instead of splitting this out into a separate store implementation, we should just
-  //  check whether a store is global at runtime (during init) and branch the logic from there
   public ResponsiveGlobalStore(final TableName name) {
     this.name = name;
     this.position = Position.emptyPosition();
