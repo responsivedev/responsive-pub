@@ -45,7 +45,7 @@ public class ResponsiveStoreTest {
   public void shouldCreateGlobalStoreWhenPassedGlobalStoreContext() {
     // Given:
     final StateStoreContext context = Mockito.mock(GlobalProcessorContextImpl.class);
-    final var store = new ResponsiveStore(NAME);
+    final var store = new ResponsiveStore(NAME, SchemaType.KEY_VALUE);
 
     // When:
     try {
@@ -62,7 +62,7 @@ public class ResponsiveStoreTest {
   public void shouldCreatePartitionedStoreWhenPassedStoreContext() {
     // Given:
     final StateStoreContext context = Mockito.mock(ProcessorContextImpl.class);
-    final var store = new ResponsiveStore(NAME);
+    final var store = new ResponsiveStore(NAME, SchemaType.KEY_VALUE);
 
     // When:
     try {

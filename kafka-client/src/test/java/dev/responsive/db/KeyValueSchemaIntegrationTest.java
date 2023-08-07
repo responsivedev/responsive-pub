@@ -34,10 +34,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.testcontainers.containers.CassandraContainer;
 
 @ExtendWith(ResponsiveExtension.class)
-public class RemoteKeyValueSchemaIntegrationTest {
+public class KeyValueSchemaIntegrationTest {
 
-  private CqlSession session;
-  private RemoteKeyValueSchema statements;
+  private RemoteKeyValueSchema schema;
   private String name;
   private CassandraClient client;
 
@@ -47,16 +46,17 @@ public class RemoteKeyValueSchemaIntegrationTest {
       final CassandraContainer<?> cassandra,
       @ResponsiveConfigParam final ResponsiveConfig config
   ) {
-    session = CqlSession.builder()
+    // NOTE: this keyspace is expected to exist
+    CqlSession session = CqlSession.builder()
         .addContactPoint(cassandra.getContactPoint())
         .withLocalDatacenter(cassandra.getLocalDatacenter())
         .withKeyspace("responsive_clients") // NOTE: this keyspace is expected to exist
         .build();
     client = new CassandraClient(session, config);
-    statements = new CassandraKeyValueSchema(client);
+    schema = new CassandraKeyValueSchema(client);
     name = info.getTestMethod().orElseThrow().getName();
-    statements.create(name);
-    statements.prepare(name);
+    schema.create(name);
+    schema.prepare(name);
   }
 
   @Test
@@ -64,19 +64,19 @@ public class RemoteKeyValueSchemaIntegrationTest {
     // Given:
     final String table = name;
     final List<BoundStatement> inserts = List.of(
-        statements.insert(table, 0, Bytes.wrap(new byte[]{0x0, 0x1}), new byte[]{0x1}),
-        statements.insert(table, 0, Bytes.wrap(new byte[]{0x1, 0x0}), new byte[]{0x1}),
-        statements.insert(table, 0, Bytes.wrap(new byte[]{0x2, 0x0}), new byte[]{0x1}),
-        statements.insert(table, 0, Bytes.wrap(new byte[]{0x2, 0x2}), new byte[]{0x1}),
-        statements.insert(table, 0, Bytes.wrap(new byte[]{0x1, 0x1}), new byte[]{0x1}),
-        statements.insert(table, 0, Bytes.wrap(new byte[]{0x0, 0x2}), new byte[]{0x1}),
-        statements.insert(table, 0, Bytes.wrap(new byte[]{0x2}), new byte[]{0x1}),
-        statements.insert(table, 0, Bytes.wrap(new byte[]{0x0}), new byte[]{0x1})
+        schema.insert(table, 0, Bytes.wrap(new byte[]{0x0, 0x1}), new byte[]{0x1}),
+        schema.insert(table, 0, Bytes.wrap(new byte[]{0x1, 0x0}), new byte[]{0x1}),
+        schema.insert(table, 0, Bytes.wrap(new byte[]{0x2, 0x0}), new byte[]{0x1}),
+        schema.insert(table, 0, Bytes.wrap(new byte[]{0x2, 0x2}), new byte[]{0x1}),
+        schema.insert(table, 0, Bytes.wrap(new byte[]{0x1, 0x1}), new byte[]{0x1}),
+        schema.insert(table, 0, Bytes.wrap(new byte[]{0x0, 0x2}), new byte[]{0x1}),
+        schema.insert(table, 0, Bytes.wrap(new byte[]{0x2}), new byte[]{0x1}),
+        schema.insert(table, 0, Bytes.wrap(new byte[]{0x0}), new byte[]{0x1})
     );
     inserts.forEach(client::execute);
 
     // When:
-    final KeyValueIterator<Bytes, byte[]> all = statements.all(table, 0);
+    final KeyValueIterator<Bytes, byte[]> all = schema.all(table, 0);
 
     // Then:
     Bytes old = all.next().key;
@@ -92,19 +92,19 @@ public class RemoteKeyValueSchemaIntegrationTest {
     // Given:
     final String table = name;
     final List<BoundStatement> inserts = List.of(
-        statements.insert(table, 0, Bytes.wrap(new byte[]{0x0, 0x1}), new byte[]{0x1}),
-        statements.insert(table, 0, Bytes.wrap(new byte[]{0x1, 0x0}), new byte[]{0x1}),
-        statements.insert(table, 0, Bytes.wrap(new byte[]{0x2, 0x0}), new byte[]{0x1}),
-        statements.insert(table, 0, Bytes.wrap(new byte[]{0x2, 0x2}), new byte[]{0x1}),
-        statements.insert(table, 0, Bytes.wrap(new byte[]{0x1, 0x1}), new byte[]{0x1}),
-        statements.insert(table, 0, Bytes.wrap(new byte[]{0x0, 0x2}), new byte[]{0x1}),
-        statements.insert(table, 0, Bytes.wrap(new byte[]{0x2}), new byte[]{0x1}),
-        statements.insert(table, 0, Bytes.wrap(new byte[]{0x0}), new byte[]{0x1})
+        schema.insert(table, 0, Bytes.wrap(new byte[]{0x0, 0x1}), new byte[]{0x1}),
+        schema.insert(table, 0, Bytes.wrap(new byte[]{0x1, 0x0}), new byte[]{0x1}),
+        schema.insert(table, 0, Bytes.wrap(new byte[]{0x2, 0x0}), new byte[]{0x1}),
+        schema.insert(table, 0, Bytes.wrap(new byte[]{0x2, 0x2}), new byte[]{0x1}),
+        schema.insert(table, 0, Bytes.wrap(new byte[]{0x1, 0x1}), new byte[]{0x1}),
+        schema.insert(table, 0, Bytes.wrap(new byte[]{0x0, 0x2}), new byte[]{0x1}),
+        schema.insert(table, 0, Bytes.wrap(new byte[]{0x2}), new byte[]{0x1}),
+        schema.insert(table, 0, Bytes.wrap(new byte[]{0x0}), new byte[]{0x1})
     );
     inserts.forEach(client::execute);
 
     // When:
-    final KeyValueIterator<Bytes, byte[]> range = statements.range(
+    final KeyValueIterator<Bytes, byte[]> range = schema.range(
         table,
         0,
         Bytes.wrap(new byte[]{0x0, 0x1}),
@@ -118,6 +118,20 @@ public class RemoteKeyValueSchemaIntegrationTest {
         Bytes.wrap(new byte[]{0x0, 0x1}),
         Bytes.wrap(new byte[]{0x0, 0x2})
     ));
+  }
+
+  @Test
+  public void shouldSupportDataKeyThatEqualsMetadataKey() {
+    // Given:
+    final String table = name;
+    final byte[] valBytes = new byte[]{0x1};
+    client.execute(schema.insert(table, 0, ColumnName.METADATA_KEY, valBytes));
+
+    // When:
+    final byte[] val = schema.get(name, 0, ColumnName.METADATA_KEY);
+
+    // Then:
+    MatcherAssert.assertThat(val, Matchers.is(valBytes));
   }
 
 }

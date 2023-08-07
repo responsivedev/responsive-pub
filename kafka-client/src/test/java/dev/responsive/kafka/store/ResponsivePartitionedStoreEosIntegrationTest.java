@@ -40,6 +40,7 @@ import static org.hamcrest.Matchers.lessThan;
 
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.ResponsiveStores;
+import dev.responsive.kafka.config.ResponsiveConfig;
 import dev.responsive.utils.IntegrationTestUtils;
 import dev.responsive.utils.RemoteMonitor;
 import dev.responsive.utils.ResponsiveConfigParam;

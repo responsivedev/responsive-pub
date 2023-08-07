@@ -91,7 +91,7 @@ class CommitBuffer<K, S extends RemoteSchema<K>> {
     final var admin = clients.admin;
     final var cassandraClient = clients.cassandraClient;
     final var partitioner = config.getSubPartitioner(
-        cassandraClient, admin, tableName, changelog.topic());
+        admin, tableName, changelog.topic());
     final boolean truncate = StoreUtil.shouldTruncateChangelog(
         changelog.topic(), admin, config.originals());
 

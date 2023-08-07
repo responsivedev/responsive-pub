@@ -61,11 +61,19 @@ jobs:
           SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
           SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
 
+      # We need this to emulate other architectures for multi-platform docker builds
+      - name: Set up QEMU for Docker
+        uses: docker/setup-qemu-action@v2
+
+      # We use the build extensions to do multi-architecture docker builds
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
       - name: Publish Operator Images
         uses: gradle/gradle-build-action@v2
         if: ${{ inputs.module == 'operator' }}
         with:
-          arguments: operator:pushCRD operator:pushDocker operator:pushHelm -PdockerRegistry=${{ steps.login-ecr-public.outputs.registry }}/j8q9y0n6 -PhelmRegistry=${{ steps.login-ecr-public.outputs.registry }}/j8q9y0n6
+          arguments: operator:pushCRD operator:pushDockerMultiArch operator:pushHelm -PdockerRegistry=${{ steps.login-ecr-public.outputs.registry }}/j8q9y0n6 -PhelmRegistry=${{ steps.login-ecr-public.outputs.registry }}/j8q9y0n6
         env:
           ECR_REGISTRY: ${{ steps.login-ecr-public.outputs.registry }}
 
@@ -73,7 +81,7 @@ jobs:
         uses: gradle/gradle-build-action@v2
         if: ${{ inputs.module == 'kafka-client' }}
         with:
-          arguments: kafka-client-examples:simple-example:pushDocker -PdockerRegistry=${{ steps.login-ecr-public.outputs.registry }}/j8q9y0n6 -PhelmRegistry=${{ steps.login-ecr-public.outputs.registry }}/j8q9y0n6
+          arguments: kafka-client-examples:simple-example:pushDockerMultiArch -PdockerRegistry=${{ steps.login-ecr-public.outputs.registry }}/j8q9y0n6 -PhelmRegistry=${{ steps.login-ecr-public.outputs.registry }}/j8q9y0n6
         env:
           ECR_REGISTRY: ${{ steps.login-ecr-public.outputs.registry }}
 
@@ -124,7 +132,7 @@ jobs:
         working-directory: sindri
         if: ${{ inputs.module == 'kafka-client' }}
         run: |
-            ./scripts/update-client-versions -s release -p false -i public.ecr.aws/j8q9y0n6/responsiveinc/simple-example -t $KAFKA_CLIENTS_VERSION
+            ./scripts/update-client-versions -s release -p true -i public.ecr.aws/j8q9y0n6/responsiveinc/simple-example -t $KAFKA_CLIENTS_VERSION
             ./scripts/run-smoke-test -s release -w system-tests-pub-release
             git checkout -- .
             ./scripts/update-client-versions -u -s release -p true -i public.ecr.aws/j8q9y0n6/responsiveinc/simple-example -t $KAFKA_CLIENTS_VERSION

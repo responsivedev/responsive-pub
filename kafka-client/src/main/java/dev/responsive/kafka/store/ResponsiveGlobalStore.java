@@ -92,7 +92,7 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
       client = sharedClients.cassandraClient;
 
       final RemoteMonitor monitor = client.awaitTable(name.cassandraName(), sharedClients.executor);
-      schema = client.kvSchema();
+      schema = client.kvSchema(SchemaType.KEY_VALUE);
       schema.create(name.cassandraName());
       monitor.await(Duration.ofSeconds(60));
       LOG.info("Global table {} is available for querying.", name);

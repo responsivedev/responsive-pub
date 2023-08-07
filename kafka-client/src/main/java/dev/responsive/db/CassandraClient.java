@@ -16,7 +16,7 @@
 
 package dev.responsive.db;
 
-import static dev.responsive.db.ColumnNames.PARTITION_KEY;
+import static dev.responsive.db.ColumnName.PARTITION_KEY;
 
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.cql.AsyncResultSet;
@@ -26,6 +26,7 @@ import com.datastax.oss.driver.api.core.cql.SimpleStatement;
 import com.datastax.oss.driver.api.core.cql.Statement;
 import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
 import dev.responsive.kafka.config.ResponsiveConfig;
+import dev.responsive.kafka.store.SchemaType;
 import dev.responsive.utils.RemoteMonitor;
 import java.time.Duration;
 import java.util.OptionalInt;
@@ -44,6 +45,7 @@ public class CassandraClient {
   private final CqlSession session;
   private final ResponsiveConfig config;
   private final RemoteKeyValueSchema kvSchema;
+  private final RemoteKeyValueSchema factSchema;
   private final RemoteWindowedSchema windowedSchema;
 
   /**
@@ -55,7 +57,9 @@ public class CassandraClient {
   public CassandraClient(final CqlSession session, final ResponsiveConfig config) {
     this.session = session;
     this.config = config;
+
     this.kvSchema = new CassandraKeyValueSchema(this);
+    this.factSchema = new CassandraFactSchema(this);
     this.windowedSchema = new CassandraWindowedSchema(this);
   }
 
@@ -140,8 +144,12 @@ public class CassandraClient {
     return numPartitions == 0 ? OptionalInt.empty() : OptionalInt.of(numPartitions);
   }
 
-  public RemoteKeyValueSchema kvSchema() {
-    return kvSchema;
+  public RemoteKeyValueSchema kvSchema(final SchemaType schemaType) {
+    switch (schemaType) {
+      case KEY_VALUE: return kvSchema;
+      case FACT:      return factSchema;
+      default:        throw new IllegalArgumentException(schemaType.name());
+    }
   }
 
   public RemoteWindowedSchema windowedSchema() {

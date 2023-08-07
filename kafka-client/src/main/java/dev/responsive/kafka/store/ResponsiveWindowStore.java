@@ -160,7 +160,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       schema.prepare(name.cassandraName());
 
       partitioner = config.getSubPartitioner(
-          client, sharedClients.admin, name, topicPartition.topic());
+          sharedClients.admin, name, topicPartition.topic());
 
       buffer = CommitBuffer.from(
           sharedClients,
