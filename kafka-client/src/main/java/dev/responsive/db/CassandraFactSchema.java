@@ -116,7 +116,6 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
   public MetadataRow metadata(final String table, final int partition) {
     final BoundStatement bound = getMeta.get(table)
         .bind()
-        .setByte(ROW_TYPE.column(), METADATA_ROW.val())
         .setByteBuffer(DATA_KEY.bind(), metadataKey(partition));
     final List<Row> result = client.execute(bound).all();
 
@@ -141,7 +140,6 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
     LOG.info("Setting offset for {}[{}] to {}", table, partition, offset);
     return setOffset.get(table)
         .bind()
-        .setByte(ROW_TYPE.column(), METADATA_ROW.val())
         .setByteBuffer(DATA_KEY.bind(), metadataKey(partition))
         .setLong(OFFSET.bind(), offset);
   }
