@@ -26,12 +26,13 @@ import java.time.Instant;
 import java.util.function.Function;
 import org.apache.kafka.common.utils.Bytes;
 
-public enum ColumnNames {
+public enum ColumnName {
 
   // shared partition key column
   PARTITION_KEY("partitionKey", "partitionkey"),
 
   // columns for the data tables
+  ROW_TYPE("type", "type"),
   DATA_KEY("key", "datakey", b -> bytes((Bytes) b)),
   DATA_VALUE("value", "value", b -> bytes((byte[]) b)),
   OFFSET("offset", "offset"),
@@ -56,11 +57,11 @@ public enum ColumnNames {
     return QueryBuilder.literal(Instant.ofEpochMilli(ts));
   }
 
-  ColumnNames(final String column, final String bind) {
+  ColumnName(final String column, final String bind) {
     this(column, bind, QueryBuilder::literal);
   }
 
-  ColumnNames(final String column, final String bind, final Function<Object, Literal> getLiteral) {
+  ColumnName(final String column, final String bind, final Function<Object, Literal> getLiteral) {
     this.column = column;
     this.bind = bind;
     this.getLiteral = getLiteral;

@@ -16,7 +16,7 @@
 
 package dev.responsive.db;
 
-import static dev.responsive.db.ColumnNames.PARTITION_KEY;
+import static dev.responsive.db.ColumnName.PARTITION_KEY;
 
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.cql.AsyncResultSet;

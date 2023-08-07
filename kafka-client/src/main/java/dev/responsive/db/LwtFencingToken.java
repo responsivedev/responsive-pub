@@ -17,11 +17,13 @@
 package dev.responsive.db;
 
 import static com.datastax.oss.driver.api.querybuilder.QueryBuilder.bindMarker;
-import static dev.responsive.db.ColumnNames.DATA_KEY;
-import static dev.responsive.db.ColumnNames.EPOCH;
-import static dev.responsive.db.ColumnNames.METADATA_KEY;
-import static dev.responsive.db.ColumnNames.PARTITION_KEY;
-import static dev.responsive.db.ColumnNames.WINDOW_START;
+import static dev.responsive.db.ColumnName.DATA_KEY;
+import static dev.responsive.db.ColumnName.EPOCH;
+import static dev.responsive.db.ColumnName.METADATA_KEY;
+import static dev.responsive.db.ColumnName.PARTITION_KEY;
+import static dev.responsive.db.ColumnName.ROW_TYPE;
+import static dev.responsive.db.ColumnName.WINDOW_START;
+import static dev.responsive.db.RowType.METADATA_ROW;
 
 import com.datastax.oss.driver.api.core.cql.BatchStatementBuilder;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
@@ -144,6 +146,7 @@ public class LwtFencingToken implements FencingToken {
     return table.getClient().execute(
         QueryBuilder.update(name)
             .setColumn(EPOCH.column(), EPOCH.literal(epoch))
+            .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
             .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
             .where(PARTITION_KEY.relation().isEqualTo(PARTITION_KEY.literal(partition)))
             .ifColumn(EPOCH.column()).isLessThan(EPOCH.literal(epoch))
@@ -161,6 +164,7 @@ public class LwtFencingToken implements FencingToken {
         QueryBuilder.update(name)
             .setColumn(EPOCH.column(), EPOCH.literal(epoch))
             .where(PARTITION_KEY.relation().isEqualTo(PARTITION_KEY.literal(partition)))
+            .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
             .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
             .where(WINDOW_START.relation().isEqualTo(WINDOW_START.literal(0L)))
             .ifColumn(EPOCH.column()).isLessThan(EPOCH.literal(epoch))
@@ -177,6 +181,7 @@ public class LwtFencingToken implements FencingToken {
         QueryBuilder.update(name)
             .setColumn(EPOCH.column(), EPOCH.literal(epoch))
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
+            .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
             .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
             .ifColumn(EPOCH.column()).isEqualTo(EPOCH.literal(epoch))
             .build()
@@ -192,6 +197,7 @@ public class LwtFencingToken implements FencingToken {
         QueryBuilder.update(name)
             .setColumn(EPOCH.column(), EPOCH.literal(epoch))
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
+            .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
             .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
             .where(WINDOW_START.relation().isEqualTo(WINDOW_START.literal(0L)))
             .ifColumn(EPOCH.column()).isEqualTo(EPOCH.literal(epoch))
