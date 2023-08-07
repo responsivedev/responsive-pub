@@ -20,7 +20,6 @@ import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.changelogFor;
 
 import dev.responsive.db.CassandraClient;
-import dev.responsive.db.CassandraWindowedSchema;
 import dev.responsive.db.RemoteWindowedSchema;
 import dev.responsive.db.StampedKeySpec;
 import dev.responsive.db.partitioning.SubPartitioner;
@@ -153,7 +152,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
           partition
       );
       partitioner = config.getSubPartitioner(
-          client, sharedClients.admin, name, topicPartition.topic());
+          sharedClients.admin, name, topicPartition.topic());
 
       buffer = CommitBuffer.from(
           sharedClients,

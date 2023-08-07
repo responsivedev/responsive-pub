@@ -21,7 +21,6 @@ import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils
 
 import dev.responsive.db.BytesKeySpec;
 import dev.responsive.db.CassandraClient;
-import dev.responsive.db.CassandraKeyValueSchema;
 import dev.responsive.db.RemoteKeyValueSchema;
 import dev.responsive.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.api.InternalConfigs;
@@ -54,6 +53,7 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
   private static final Logger LOG = LoggerFactory.getLogger(ResponsivePartitionedStore.class);
 
   private final TableName name;
+  private final SchemaType schemaType;
   private final Position position;
   private ResponsiveStoreRegistry storeRegistry;
   private ResponsiveStoreRegistration registration;
@@ -68,9 +68,11 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
   private RemoteKeyValueSchema schema;
 
   public ResponsivePartitionedStore(
-      final TableName name
+      final TableName name,
+      final SchemaType schemaType
   ) {
     this.name = name;
+    this.schemaType = schemaType;
     this.position = Position.emptyPosition();
   }
 
@@ -103,7 +105,7 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
       final SharedClients sharedClients = new SharedClients(context.appConfigs());
       CassandraClient client = sharedClients.cassandraClient;
 
-      schema = new CassandraKeyValueSchema(client);
+      schema = client.kvSchema(schemaType);
       schema.create(name.cassandraName());
 
       final RemoteMonitor monitor = client.awaitTable(name.cassandraName(), sharedClients.executor);
@@ -116,8 +118,9 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
           changelogFor(context, name.kafkaName(), false),
           partition
       );
-      partitioner = config.getSubPartitioner(
-          client, sharedClients.admin, name, topicPartition.topic());
+      partitioner = schemaType == SchemaType.FACT
+          ? SubPartitioner.NO_SUBPARTITIONS
+          : config.getSubPartitioner(sharedClients.admin, name, topicPartition.topic());
 
       buffer = CommitBuffer.from(
           sharedClients,
