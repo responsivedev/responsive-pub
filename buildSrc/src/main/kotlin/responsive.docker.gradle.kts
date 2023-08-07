@@ -71,24 +71,26 @@ class DockerPlugin : Plugin<Project> {
             )
         }
 
-        project.tasks.register("tagDocker", Exec::class) {
-            dependsOn("buildDocker")
-            commandLine(
-                    "docker",
-                    "tag",
-                    config.dockerImage.get(),
-                    dockerRepoBase + config.dockerImage.get()
-            )
-        }
-
-        project.tasks.register("pushDocker", Exec::class) {
-            dependsOn("tagDocker")
-            commandLine("docker", "push", dockerRepoBase + config.dockerImage.get())
-        }
-
         project.tasks.register("loadDockerKind", Exec::class) {
             dependsOn("buildDocker")
             commandLine("kind", "load", "docker-image", config.dockerImage.get())
+        }
+
+        project.tasks.register("pushDockerMultiArch", Exec::class) {
+            dependsOn("copyJars")
+            dependsOn("copyDockerDir")
+            workingDir(project.buildDir.getPath())
+            commandLine(
+                    "docker",
+                    "buildx",
+                    "build",
+                    "--platform",
+                    "linux/amd64,linux/arm64",
+                    "-t",
+                    dockerRepoBase + config.dockerImage.get(),
+                    "--push",
+                    "docker"
+            )
         }
     }
 }
