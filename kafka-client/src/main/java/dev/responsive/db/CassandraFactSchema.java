@@ -95,7 +95,7 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
    * @param kafkaPartition the partition to initialize
    */
   @Override
-  public FencingToken init(
+  public WriterFactory<Bytes> init(
       final String table,
       final SubPartitioner partitioner,
       final int kafkaPartition
@@ -109,7 +109,7 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
             .build()
     );
 
-    return new NoOpFencingToken();
+    return new FactWriterFactory<>(this);
   }
 
   @Override
@@ -133,7 +133,6 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
   @Override
   public BoundStatement setOffset(
       final String table,
-      final FencingToken token,
       final int partition,
       final long offset
   ) {

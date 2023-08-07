@@ -16,13 +16,15 @@
 
 package dev.responsive.db;
 
-import com.datastax.oss.driver.api.core.cql.BatchStatementBuilder;
+import dev.responsive.kafka.store.RemoteWriter;
 
-public interface FencingToken {
+public interface WriterFactory<K> {
 
-  void addFencingStatement(
-      final BatchStatementBuilder builder,
-      final int partition
+  RemoteWriter<K> createWriter(
+      final CassandraClient client,
+      final String name,
+      final int partition,
+      final int batchSize
   );
 
 }

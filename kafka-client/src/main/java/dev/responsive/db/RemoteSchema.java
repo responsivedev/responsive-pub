@@ -65,10 +65,10 @@ public interface RemoteSchema<K> {
    * Initializes the table by setting the metadata fields to
    * their initialized values.
    *
-   * @return a {@link FencingToken} that gives the callee access
+   * @return a {@link WriterFactory} that gives the callee access
    *         to run statements on {@code table}
    */
-  FencingToken init(
+  WriterFactory<K> init(
       final String table,
       final SubPartitioner partitioner,
       final int kafkaPartition
@@ -89,7 +89,6 @@ public interface RemoteSchema<K> {
   @CheckReturnValue
   BoundStatement setOffset(
       final String table,
-      final FencingToken token,
       final int partition,
       final long offset
   );

@@ -25,42 +25,44 @@ import static dev.responsive.db.ColumnName.ROW_TYPE;
 import static dev.responsive.db.ColumnName.WINDOW_START;
 import static dev.responsive.db.RowType.METADATA_ROW;
 
-import com.datastax.oss.driver.api.core.cql.BatchStatementBuilder;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
 import com.datastax.oss.driver.api.core.cql.ResultSet;
 import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
 import dev.responsive.db.partitioning.SubPartitioner;
+import dev.responsive.kafka.store.LwtWriter;
+import dev.responsive.kafka.store.RemoteWriter;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class LwtFencingToken implements FencingToken {
+public class LwtWriterFactory<K> implements WriterFactory<K> {
 
-  private static final Logger LOG = LoggerFactory.getLogger(LwtFencingToken.class);
+  private static final Logger LOG = LoggerFactory.getLogger(LwtWriterFactory.class);
 
   private final long epoch;
   private final PreparedStatement ensureEpoch;
+  private final RemoteSchema<K> schema;
 
-  public static LwtFencingToken reserveWindowed(
-      final RemoteSchema<?> table,
+  public static <K> LwtWriterFactory<K> reserveWindowed(
+      final RemoteSchema<K> schema,
       final String tableName,
       final SubPartitioner partitioner,
       final int kafkaPartition
   ) {
-    return reserve(table, tableName, partitioner, kafkaPartition, true);
+    return reserve(schema, tableName, partitioner, kafkaPartition, true);
   }
 
-  public static LwtFencingToken reserve(
-      final RemoteSchema<?> table,
+  public static <K> LwtWriterFactory<K> reserve(
+      final RemoteSchema<K> schema,
       final String tableName,
       final SubPartitioner partitioner,
       final int kafkaPartition
   ) {
-    return reserve(table, tableName, partitioner, kafkaPartition, false);
+    return reserve(schema, tableName, partitioner, kafkaPartition, false);
   }
 
-  private static LwtFencingToken reserve(
-      final RemoteSchema<?> table,
+  private static <K> LwtWriterFactory<K> reserve(
+      final RemoteSchema<K> schema,
       final String name,
       final SubPartitioner partitioner,
       final int kafkaPartition,
@@ -70,9 +72,9 @@ public class LwtFencingToken implements FencingToken {
     // under the first sub-partition and then "broadcast" to the other
     // partitions
     final int basePartition = partitioner.first(kafkaPartition);
-    final long epoch = table.metadata(name, basePartition).epoch + 1;
+    final long epoch = schema.metadata(name, basePartition).epoch + 1;
     return reserve(
-        table,
+        schema,
         name,
         partitioner.all(kafkaPartition).toArray(),
         kafkaPartition,
@@ -82,8 +84,8 @@ public class LwtFencingToken implements FencingToken {
   }
 
   // Visible for Testing
-  public static LwtFencingToken reserve(
-      final RemoteSchema<?> table,
+  public static <K> LwtWriterFactory<K> reserve(
+      final RemoteSchema<K> schema,
       final String name,
       final int[] partitions,
       final int kafkaPartition,
@@ -92,11 +94,11 @@ public class LwtFencingToken implements FencingToken {
   ) {
     for (final int sub : partitions) {
       final var setEpoch = windowed
-          ? reserveEpochWindowed(table, name, sub, epoch)
-          : reserveEpoch(table, name, sub, epoch);
+          ? reserveEpochWindowed(schema, name, sub, epoch)
+          : reserveEpoch(schema, name, sub, epoch);
 
       if (!setEpoch.wasApplied()) {
-        final long otherEpoch = table.metadata(name, sub).epoch;
+        final long otherEpoch = schema.metadata(name, sub).epoch;
         final var msg = String.format(
             "Could not initialize commit buffer %s[%d] - attempted to claim epoch %d, "
                 + "but was fenced by a writer that claimed epoch %d on sub partition %d",
@@ -112,27 +114,45 @@ public class LwtFencingToken implements FencingToken {
       }
     }
 
-    return new LwtFencingToken(
+    return new LwtWriterFactory<>(
+        schema,
         epoch,
         windowed
-            ? ensureEpochWindowed(table, name, epoch)
-            : ensureEpoch(table, name, epoch)
+            ? ensureEpochWindowed(schema, name, epoch)
+            : ensureEpoch(schema, name, epoch)
     );
   }
 
-  public LwtFencingToken(final long epoch, final PreparedStatement ensureEpoch) {
+  public LwtWriterFactory(
+      final RemoteSchema<K> schema,
+      final long epoch,
+      final PreparedStatement ensureEpoch
+  ) {
+    this.schema = schema;
     this.epoch = epoch;
     this.ensureEpoch = ensureEpoch;
   }
 
   @Override
-  public void addFencingStatement(final BatchStatementBuilder builder, final int partition) {
-    builder.addStatement(ensureEpoch.bind().setInt(PARTITION_KEY.bind(), partition));
+  public RemoteWriter<K> createWriter(
+      final CassandraClient client,
+      final String name,
+      final int partition,
+      final int batchSize
+  ) {
+    return new LwtWriter<>(
+       client,
+        () -> ensureEpoch.bind().setInt(PARTITION_KEY.bind(), partition),
+        schema,
+        name,
+        partition,
+        batchSize
+    );
   }
 
   @Override
   public String toString() {
-    return "LwtFencingToken{"
+    return "LwtWriterFactory{"
         + "epoch=" + epoch
         + '}';
   }

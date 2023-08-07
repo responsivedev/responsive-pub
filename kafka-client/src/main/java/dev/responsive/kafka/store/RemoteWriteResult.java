@@ -18,24 +18,24 @@ package dev.responsive.kafka.store;
 
 import com.datastax.oss.driver.api.core.cql.AsyncResultSet;
 
-public class AtomicWriteResult {
+public class RemoteWriteResult {
 
   private final int partition;
   private final boolean applied;
 
-  public static AtomicWriteResult success(final int partition) {
-    return new AtomicWriteResult(partition, true);
+  public static RemoteWriteResult success(final int partition) {
+    return new RemoteWriteResult(partition, true);
   }
 
-  public static AtomicWriteResult failure(final int partition) {
-    return new AtomicWriteResult(partition, false);
+  public static RemoteWriteResult failure(final int partition) {
+    return new RemoteWriteResult(partition, false);
   }
 
-  public static AtomicWriteResult of(final int partition, final AsyncResultSet resp) {
+  public static RemoteWriteResult of(final int partition, final AsyncResultSet resp) {
     return resp.wasApplied() ? success(partition) : failure(partition);
   }
 
-  private AtomicWriteResult(final int partition, final boolean applied) {
+  private RemoteWriteResult(final int partition, final boolean applied) {
     this.partition = partition;
     this.applied = applied;
   }

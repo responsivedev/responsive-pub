@@ -58,7 +58,7 @@ public class CommitBufferDrainTest {
     final var p2 = new TestWriter(latches, 2, 2, true, exec, tracker);
 
     // When:
-    final AtomicWriteResult result = CommitBuffer.drain(
+    final RemoteWriteResult result = CommitBuffer.drain(
         // p2 blocks until p1 completes, this tests to ensure that
         // we run p1 when p0 completes instead of when the entire
         // mini-batch of [p0, p2] completes
@@ -94,7 +94,7 @@ public class CommitBufferDrainTest {
     final var p2 = new TestWriter(latches, 2, 0, true, exec, tracker);
 
     // When:
-    final AtomicWriteResult result = CommitBuffer.drain(
+    final RemoteWriteResult result = CommitBuffer.drain(
         // 0 fails, which should allow 1 to complete and 2 to run
         List.of(p1, p0, p2),
         TestWriter::get,
@@ -112,7 +112,7 @@ public class CommitBufferDrainTest {
     exec.shutdown();
   }
 
-  static class TestWriter implements Supplier<CompletionStage<AtomicWriteResult>> {
+  static class TestWriter implements Supplier<CompletionStage<RemoteWriteResult>> {
 
     private final Map<Integer, CountDownLatch> latches;
     private final int partition;
@@ -137,7 +137,7 @@ public class CommitBufferDrainTest {
     }
 
     @Override
-    public CompletionStage<AtomicWriteResult> get() {
+    public CompletionStage<RemoteWriteResult> get() {
       return supplyAsync(
           awrSupplier(latches, partition, release, success, orderTracker), exec
       );
@@ -148,7 +148,7 @@ public class CommitBufferDrainTest {
     }
   }
 
-  private static Supplier<AtomicWriteResult> awrSupplier(
+  private static Supplier<RemoteWriteResult> awrSupplier(
       final Map<Integer, CountDownLatch> latches,
       final int partition,
       final int release,
@@ -164,10 +164,10 @@ public class CommitBufferDrainTest {
 
         if (success) {
           LOG.info("Finished execution of {}.. Releasing {}", partition, release);
-          return AtomicWriteResult.success(partition);
+          return RemoteWriteResult.success(partition);
         } else {
           LOG.info("Failed execution of {}.. Releasing {}", partition, release);
-          return AtomicWriteResult.failure(partition);
+          return RemoteWriteResult.failure(partition);
         }
       } catch (InterruptedException e) {
         LOG.info("Interrupted partition {}", partition);

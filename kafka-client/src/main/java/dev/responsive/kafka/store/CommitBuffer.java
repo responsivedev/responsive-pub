@@ -19,10 +19,10 @@ package dev.responsive.kafka.store;
 import static dev.responsive.kafka.config.ResponsiveConfig.MAX_CONCURRENT_REMOTE_WRITES_CONFIG;
 
 import dev.responsive.db.CassandraClient;
-import dev.responsive.db.FencingToken;
 import dev.responsive.db.KeySpec;
 import dev.responsive.db.MetadataRow;
 import dev.responsive.db.RemoteSchema;
+import dev.responsive.db.WriterFactory;
 import dev.responsive.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.clients.SharedClients;
 import dev.responsive.kafka.config.ResponsiveConfig;
@@ -78,7 +78,7 @@ class CommitBuffer<K, S extends RemoteSchema<K>> implements RecordBatchingStateR
   private final KeySpec<K> keySpec;
 
   private Instant lastFlush;
-  private FencingToken epoch;
+  private WriterFactory<K> writerFactory;
 
   static <K, S extends RemoteSchema<K>> CommitBuffer<K, S> from(
       final SharedClients clients,
@@ -174,11 +174,11 @@ class CommitBuffer<K, S extends RemoteSchema<K>> implements RecordBatchingStateR
   public void init() {
     lastFlush = clock.get();
 
-    this.epoch = remoteSchema.init(tableName, subPartitioner, partition);
+    this.writerFactory = remoteSchema.init(tableName, subPartitioner, partition);
 
     final int basePartition = subPartitioner.first(partition);
-    log.info("Initialized store with token {} for all subpartitions {} -> {}",
-        epoch, basePartition, basePartition + subPartitioner.getFactor() - 1);
+    log.info("Initialized store with {} for all subpartitions {} -> {}",
+        writerFactory, basePartition, basePartition + subPartitioner.getFactor() - 1);
   }
 
   public void put(final K key, final byte[] value) {
@@ -341,25 +341,33 @@ class CommitBuffer<K, S extends RemoteSchema<K>> implements RecordBatchingStateR
   }
 
   @SuppressWarnings("BooleanMethodIsAlwaysInverted")
-  private AtomicWriteResult flush(final long offset, final int batchSize) {
+  private RemoteWriteResult flush(final long offset, final int batchSize) {
     final long startNs = System.nanoTime();
-    log.info("Flushing {} records to remote (offset={}, epoch={})",
+    log.info("Flushing {} records to remote (offset={}, writer={})",
         buffer.getReader().size(),
         offset,
-        epoch
+        writerFactory
     );
 
-    final var writers = new HashMap<Integer, AtomicWriter<K>>();
-    for (Result<K> val : buffer.getReader().values()) {
-      final int subPartition = subPartitioner.partition(partition, keySpec.bytes(val.key));
-      writers
-          .computeIfAbsent(subPartition, k -> new AtomicWriter<>(
-              client, tableName, subPartition, remoteSchema, keySpec, epoch, batchSize
-          ))
-          .add(val);
+    final var writers = new HashMap<Integer, RemoteWriter<K>>();
+    for (final Result<K> result : buffer.getReader().values()) {
+      final int subPartition = subPartitioner.partition(partition, keySpec.bytes(result.key));
+      final RemoteWriter<K> writer = writers
+          .computeIfAbsent(subPartition, k -> writerFactory.createWriter(
+              client,
+              tableName,
+              subPartition,
+              batchSize
+          ));
+
+      if (result.isTombstone) {
+        writer.delete(result.key);
+      } else if (keySpec.retain(result.key)) {
+        writer.insert(result.key, result.value);
+      }
     }
 
-    var writeResult = drain(writers.values(), AtomicWriter::flush);
+    var writeResult = drain(writers.values(), RemoteWriter::flush);
     if (!writeResult.wasApplied()) {
       return writeResult;
     }
@@ -368,50 +376,50 @@ class CommitBuffer<K, S extends RemoteSchema<K>> implements RecordBatchingStateR
     // when all the flushes above have completed and only needs to be written to
     // the first subpartition
     writeResult = writers.computeIfAbsent(
-        subPartitioner.first(partition), k -> new AtomicWriter<>(
-            client, tableName, k, remoteSchema, keySpec, epoch, batchSize
-        )
+        subPartitioner.first(partition),
+        partition -> writerFactory.createWriter(client, tableName, partition, batchSize)
     ).setOffset(offset);
+
     if (!writeResult.wasApplied()) {
       return writeResult;
     }
 
-    log.info("Flushed {} records to remote in {}ms (offset={}, epoch={}, numPartitions={})",
+    log.info("Flushed {} records to remote in {}ms (offset={}, writer={}, numPartitions={})",
         buffer.getReader().size(),
         TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNs),
         offset,
-        epoch,
+        writerFactory,
         writers.size()
     );
     buffer.clear();
 
     maybeTruncateChangelog(offset);
-    return AtomicWriteResult.success(partition);
+    return RemoteWriteResult.success(partition);
   }
 
-  private AtomicWriteResult drain(
-      final Collection<AtomicWriter<K>> writers,
-      final Function<AtomicWriter<K>, CompletionStage<AtomicWriteResult>> action
+  private RemoteWriteResult drain(
+      final Collection<RemoteWriter<K>> writers,
+      final Function<RemoteWriter<K>, CompletionStage<RemoteWriteResult>> action
   ) {
     return drain(
         writers,
         action,
-        AtomicWriter::partition,
+        RemoteWriter::partition,
         partition,
         maxConcurrentWrites
     );
   }
 
   // Visible for Testing
-  static <I> AtomicWriteResult drain(
+  static <I> RemoteWriteResult drain(
       final Collection<I> writers,
-      final Function<I, CompletionStage<AtomicWriteResult>> action,
+      final Function<I, CompletionStage<RemoteWriteResult>> action,
       final Function<I, Integer> keyFunction,
       final int partition,
       final int maxConcurrentWrites
   ) {
-    final var futures = new HashMap<Integer, CompletableFuture<AtomicWriteResult>>();
-    final var result = new AtomicReference<>(AtomicWriteResult.success(partition));
+    final var futures = new HashMap<Integer, CompletableFuture<RemoteWriteResult>>();
+    final var result = new AtomicReference<>(RemoteWriteResult.success(partition));
 
     try {
       for (final I writer : writers) {
@@ -440,9 +448,9 @@ class CommitBuffer<K, S extends RemoteSchema<K>> implements RecordBatchingStateR
     return result.get();
   }
 
-  private static AtomicWriteResult setIfNotApplied(
-      final AtomicReference<AtomicWriteResult> aggResult,
-      final AtomicWriteResult awr
+  private static RemoteWriteResult setIfNotApplied(
+      final AtomicReference<RemoteWriteResult> aggResult,
+      final RemoteWriteResult awr
   ) {
     if (!awr.wasApplied()) {
       aggResult.set(awr);
@@ -497,7 +505,7 @@ class CommitBuffer<K, S extends RemoteSchema<K>> implements RecordBatchingStateR
     }
   }
 
-  private void throwFencedException(final AtomicWriteResult result, final long offset) {
+  private void throwFencedException(final RemoteWriteResult result, final long offset) {
     final MetadataRow stored = remoteSchema.metadata(tableName, result.getPartition());
     // we were fenced - the only conditional statement is the
     // offset update, so it's the only failure point
@@ -507,7 +515,7 @@ class CommitBuffer<K, S extends RemoteSchema<K>> implements RecordBatchingStateR
         tableName,
         partition,
         result.getPartition(),
-        epoch,
+        writerFactory,
         stored.epoch,
         offset,
         stored.offset

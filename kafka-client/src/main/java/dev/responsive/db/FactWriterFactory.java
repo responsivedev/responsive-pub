@@ -16,15 +16,34 @@
 
 package dev.responsive.db;
 
-import com.datastax.oss.driver.api.core.cql.BatchStatementBuilder;
+import dev.responsive.kafka.store.FactSchemaWriter;
+import dev.responsive.kafka.store.RemoteWriter;
 
-public class NoOpFencingToken implements FencingToken {
+public class FactWriterFactory<K> implements WriterFactory<K> {
+
+  private final RemoteSchema<K> schema;
+
+  public FactWriterFactory(final RemoteSchema<K> schema) {
+    this.schema = schema;
+  }
 
   @Override
-  public void addFencingStatement(
-      final BatchStatementBuilder builder,
-      final int partition
+  public RemoteWriter<K> createWriter(
+      final CassandraClient client,
+      final String name,
+      final int partition,
+      final int batchSize
   ) {
-    // do nothing
+    return new FactSchemaWriter<>(
+        client,
+        schema,
+        name,
+        partition
+    );
+  }
+
+  @Override
+  public String toString() {
+    return "FactWriterFactory{}";
   }
 }
