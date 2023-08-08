@@ -160,6 +160,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
           topicPartition,
           schema,
           new StampedKeySpec(this::withinRetention),
+          partitioner,
           config
       );
       buffer.init();

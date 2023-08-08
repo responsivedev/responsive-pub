@@ -35,9 +35,11 @@ import static org.apache.kafka.streams.StreamsConfig.PROCESSING_GUARANTEE_CONFIG
 import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.notNullValue;
 
 import com.datastax.oss.driver.api.core.CqlSession;
 import dev.responsive.db.CassandraClient;
+import dev.responsive.db.CassandraFactSchema;
 import dev.responsive.db.CassandraKeyValueSchema;
 import dev.responsive.db.RemoteKeyValueSchema;
 import dev.responsive.db.partitioning.Hasher;
@@ -69,7 +71,10 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
@@ -132,7 +137,8 @@ public class SubPartitionIntegrationTest {
     final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties);
 
     try (
-        final var streams = ResponsiveKafkaStreams.create(simpleDslTopology(), properties);
+        final var streams = ResponsiveKafkaStreams.create(
+            simpleDslTopology(ResponsiveStores.materialized(storeName)), properties);
         final var serializer = new LongSerializer();
         final var deserializer = new LongDeserializer();
     ) {
@@ -176,12 +182,74 @@ public class SubPartitionIntegrationTest {
     }
   }
 
-  private Topology simpleDslTopology() {
+  @Test
+  public void shouldIgnoreSubPartitionerOnFactSchema() throws Exception {
+    // Given:
+    final Map<String, Object> properties = getMutableProperties();
+    final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties);
+
+    try (
+        final var streams = ResponsiveKafkaStreams.create(
+            simpleDslTopology(new ResponsiveMaterialized<>(
+                Materialized.as(ResponsiveStores.factStore(storeName)),
+                false
+            )), properties);
+        final var serializer = new LongSerializer();
+        final var deserializer = new LongDeserializer();
+    ) {
+      // When:
+      // this will send one key to each virtual partition using the LongBytesHasher
+      startAppAndAwaitRunning(Duration.ofSeconds(10), streams);
+      pipeInput(
+          inputTopic(), 2, producer, System::currentTimeMillis, 0, 100L,
+          LongStream.range(0, 32).toArray());
+
+      // Then
+      awaitOutput(
+          outputTopic(),
+          0,
+          LongStream.range(0, 32)
+              .boxed()
+              .map(k -> new KeyValue<>(k, 100L))
+              .collect(Collectors.toSet()),
+          true,
+          properties);
+      final String cassandraName = new TableName(storeName).cassandraName();
+      final RemoteKeyValueSchema schema = new CassandraFactSchema(client);
+      schema.prepare(cassandraName);
+
+      final var meta0 = schema.metadata(cassandraName, 0);
+      final var meta1 = schema.metadata(cassandraName, 1);
+
+      assertThat(meta0.offset, is(notNullValue()));
+      assertThat(meta1.offset, is(notNullValue()));
+
+      // throws because it doesn't exist
+      Assertions.assertThrows(IllegalStateException.class, () -> schema.metadata(cassandraName, 2));
+
+      // these store ValueAndTimestamp, so we need to just pluck the last 8 bytes
+      final var hasher = SubPartitioner.NO_SUBPARTITIONS;
+      for (long k = 0; k < 32; k++) {
+        final var kBytes = Bytes.wrap(serializer.serialize("", k));
+        assertThat(
+            deserializer.deserialize("foo",
+                Arrays.copyOfRange(
+                    schema.get(cassandraName, hasher.partition((int) (k % 2), kBytes), kBytes),
+                    8,
+                    16)),
+            is(100L));
+      }
+    }
+  }
+
+  private Topology simpleDslTopology(
+      final Materialized<Long, Long, KeyValueStore<Bytes, byte[]>> materialized
+  ) {
     final var builder = new StreamsBuilder();
 
     final KStream<Long, Long> stream = builder.stream(inputTopic());
     stream.groupByKey()
-        .count(ResponsiveStores.materialized(storeName))
+        .count(materialized)
         .toStream()
         .to(outputTopic());
 
