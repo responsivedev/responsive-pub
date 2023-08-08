@@ -128,6 +128,7 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
           topicPartition,
           schema,
           new BytesKeySpec(),
+          partitioner,
           config
       );
       buffer.init();

@@ -86,12 +86,11 @@ class CommitBuffer<K, S extends RemoteSchema<K>> implements RecordBatchingStateR
       final TopicPartition changelog,
       final S schema,
       final KeySpec<K> keySpec,
+      final SubPartitioner partitioner,
       final ResponsiveConfig config
   ) {
     final var admin = clients.admin;
     final var cassandraClient = clients.cassandraClient;
-    final var partitioner = config.getSubPartitioner(
-        admin, tableName, changelog.topic());
     final boolean truncate = StoreUtil.shouldTruncateChangelog(
         changelog.topic(), admin, config.originals());
 
