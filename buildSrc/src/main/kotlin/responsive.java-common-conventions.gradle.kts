@@ -24,11 +24,7 @@ plugins {
 
     id("pl.allegro.tech.build.axion-release")
     id("com.adarshr.test-logger")
-
-}
-
-dependencies {
-    checkstyle("com.puppycrawl.tools:checkstyle:10.11.0")
+    id("com.diffplug.spotless")
 }
 
 java {
@@ -37,13 +33,19 @@ java {
     }
 }
 
-checkstyle {
-    version = "10.11.0"
-    maxWarnings = 0
-}
-
 repositories {
     mavenCentral()
+}
+
+spotless {
+    java {
+        target("src/*/java/**/*.java")
+        importOrder()
+        removeUnusedImports()
+
+        googleJavaFormat().reflowLongStrings()
+        formatAnnotations()
+    }
 }
 
 tasks.test {
