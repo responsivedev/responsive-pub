@@ -40,8 +40,7 @@ public class ResponsivePolicySpec {
       @JsonProperty("applicationName") final String applicationName,
       @JsonProperty("status") final PolicyStatus status,
       @JsonProperty("policyType") final PolicyType policyType,
-      @JsonProperty("demoPolicy") final Optional<DemoPolicy> demoPolicy
-  ) {
+      @JsonProperty("demoPolicy") final Optional<DemoPolicy> demoPolicy) {
     this.applicationNamespace = applicationNamespace;
     this.applicationName = applicationName;
     this.status = status;
@@ -82,5 +81,4 @@ public class ResponsivePolicySpec {
   public Optional<DemoPolicy> getDemoPolicy() {
     return demoPolicy;
   }
-
 }

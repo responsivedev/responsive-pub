@@ -53,9 +53,7 @@ public final class Visitors {
     private final Map<String, Set<String>> methods;
     private final Predicate<String> ownerFilter;
 
-    public FilterMethodCollector(
-        final Predicate<String> ownerFilter
-    ) {
+    public FilterMethodCollector(final Predicate<String> ownerFilter) {
       super(Opcodes.ASM9);
       this.ownerFilter = ownerFilter;
       this.methods = new HashMap<>();
@@ -67,8 +65,7 @@ public final class Visitors {
         final String owner,
         final String name,
         final String descriptor,
-        final boolean isInterface
-    ) {
+        final boolean isInterface) {
       if (ownerFilter.test(owner)) {
         methods.compute(
             owner,
@@ -81,19 +78,17 @@ public final class Visitors {
     }
 
     public void describe() {
-      methods.forEach((k, v) -> {
-        System.out.println(k + " -> " + v);
-      });
+      methods.forEach(
+          (k, v) -> {
+            System.out.println(k + " -> " + v);
+          });
     }
   }
 
   private static String sanitize(final String name, final String desc) {
     // the description has all the arguments in between () separated
     // by semi-colons
-    String[] args = desc.substring(
-        desc.indexOf('(') + 1,
-        desc.lastIndexOf(')')
-    ).split(";");
+    String[] args = desc.substring(desc.indexOf('(') + 1, desc.lastIndexOf(')')).split(";");
 
     // each arg contains the full package name, for simplicity we want
     // to just return the name of the class

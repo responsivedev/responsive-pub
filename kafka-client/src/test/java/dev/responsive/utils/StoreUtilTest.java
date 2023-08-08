@@ -33,39 +33,39 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class StoreUtilTest {
-  @Mock
-  private Admin admin;
+  @Mock private Admin admin;
 
   @Test
   public void shouldThrowOnEnableAllOptimizations() {
     assertThrows(
         IllegalArgumentException.class,
-        () -> StoreUtil.validateTopologyOptimizationConfig(Map.of(
-            StreamsConfig.APPLICATION_ID_CONFIG, "foo",
-            CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "foo.bar",
-            StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE
-        ))
-    );
+        () ->
+            StoreUtil.validateTopologyOptimizationConfig(
+                Map.of(
+                    StreamsConfig.APPLICATION_ID_CONFIG, "foo",
+                    CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "foo.bar",
+                    StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE)));
   }
 
   @Test
   public void shouldThrowOnEnableReuseSourceTopicOptimizations() {
     assertThrows(
         IllegalArgumentException.class,
-        () -> StoreUtil.validateTopologyOptimizationConfig(Map.of(
-            StreamsConfig.APPLICATION_ID_CONFIG, "foo",
-            CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "foo.bar",
-            StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS
-        ))
-    );
+        () ->
+            StoreUtil.validateTopologyOptimizationConfig(
+                Map.of(
+                    StreamsConfig.APPLICATION_ID_CONFIG, "foo",
+                    CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "foo.bar",
+                    StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG,
+                        StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS)));
   }
 
   @Test
   public void shouldNotThrowWhenOptimizationsOff() {
-    StoreUtil.validateTopologyOptimizationConfig(Map.of(
-        StreamsConfig.APPLICATION_ID_CONFIG, "foo",
-        CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "foo.bar")
-    );
+    StoreUtil.validateTopologyOptimizationConfig(
+        Map.of(
+            StreamsConfig.APPLICATION_ID_CONFIG, "foo",
+            CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "foo.bar"));
   }
 
   @Test
@@ -73,16 +73,12 @@ class StoreUtilTest {
     // given:
     givenTopicCleanupPolicy("compacted-changelog", TopicConfig.CLEANUP_POLICY_COMPACT);
     final TopologyDescription description = givenTopologyWithTableSource("table-source");
-    final Map<String, Object> configs = new InternalConfigs.Builder()
-        .withTopologyDescription(description)
-        .build();
+    final Map<String, Object> configs =
+        new InternalConfigs.Builder().withTopologyDescription(description).build();
 
     // when:
-    final boolean compact = StoreUtil.shouldTruncateChangelog(
-        "compacted-changelog",
-        admin,
-        configs
-    );
+    final boolean compact =
+        StoreUtil.shouldTruncateChangelog("compacted-changelog", admin, configs);
 
     // then:
     assertThat(compact, is(false));
@@ -93,16 +89,11 @@ class StoreUtilTest {
     // given:
     givenTopicCleanupPolicy("table-source", TopicConfig.CLEANUP_POLICY_DELETE);
     final TopologyDescription description = givenTopologyWithTableSource("table-source");
-    final Map<String, Object> configs = new InternalConfigs.Builder()
-        .withTopologyDescription(description)
-        .build();
+    final Map<String, Object> configs =
+        new InternalConfigs.Builder().withTopologyDescription(description).build();
 
     // when:
-    final boolean compact = StoreUtil.shouldTruncateChangelog(
-        "table-source",
-        admin,
-        configs
-    );
+    final boolean compact = StoreUtil.shouldTruncateChangelog("table-source", admin, configs);
 
     // then:
     assertThat(compact, is(false));
@@ -113,16 +104,11 @@ class StoreUtilTest {
     // given:
     givenTopicCleanupPolicy("changelog", TopicConfig.CLEANUP_POLICY_DELETE);
     final TopologyDescription description = givenTopologyWithTableSource("table-source");
-    final Map<String, Object> configs = new InternalConfigs.Builder()
-        .withTopologyDescription(description)
-        .build();
+    final Map<String, Object> configs =
+        new InternalConfigs.Builder().withTopologyDescription(description).build();
 
     // when:
-    final boolean compact = StoreUtil.shouldTruncateChangelog(
-        "changelog",
-        admin,
-        configs
-    );
+    final boolean compact = StoreUtil.shouldTruncateChangelog("changelog", admin, configs);
 
     // then:
     assertThat(compact, is(true));

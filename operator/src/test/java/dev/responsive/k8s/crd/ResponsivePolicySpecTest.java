@@ -14,13 +14,13 @@ class ResponsivePolicySpecTest {
   @Test
   public void shouldThrowOnNullName() {
     // given:
-    final var spec = new ResponsivePolicySpec(
-        "foo",
-        null,
-        PolicyStatus.POLICY_STATUS_MANAGED,
-        PolicyType.DEMO,
-        Optional.of(new DemoPolicy(10, 0, Optional.empty()))
-    );
+    final var spec =
+        new ResponsivePolicySpec(
+            "foo",
+            null,
+            PolicyStatus.POLICY_STATUS_MANAGED,
+            PolicyType.DEMO,
+            Optional.of(new DemoPolicy(10, 0, Optional.empty())));
 
     // when/then:
     assertThrows(NullPointerException.class, spec::validate);
@@ -29,13 +29,13 @@ class ResponsivePolicySpecTest {
   @Test
   public void shouldThrowOnNullNamespace() {
     // given:
-    final var spec = new ResponsivePolicySpec(
-        null,
-        "foo",
-        PolicyStatus.POLICY_STATUS_MANAGED,
-        PolicyType.DEMO,
-        Optional.of(new DemoPolicy(10, 0, Optional.empty()))
-    );
+    final var spec =
+        new ResponsivePolicySpec(
+            null,
+            "foo",
+            PolicyStatus.POLICY_STATUS_MANAGED,
+            PolicyType.DEMO,
+            Optional.of(new DemoPolicy(10, 0, Optional.empty())));
 
     // when/then:
     assertThrows(NullPointerException.class, spec::validate);
@@ -44,13 +44,13 @@ class ResponsivePolicySpecTest {
   @Test
   public void shouldThrowOnNullStatus() {
     // given:
-    final var spec = new ResponsivePolicySpec(
-        "baz",
-        "foo",
-        null,
-        PolicyType.DEMO,
-        Optional.of(new DemoPolicy(10, 0, Optional.empty()))
-    );
+    final var spec =
+        new ResponsivePolicySpec(
+            "baz",
+            "foo",
+            null,
+            PolicyType.DEMO,
+            Optional.of(new DemoPolicy(10, 0, Optional.empty())));
 
     // when/then:
     assertThrows(NullPointerException.class, spec::validate);
@@ -59,13 +59,13 @@ class ResponsivePolicySpecTest {
   @Test
   public void shouldThrowOnNullType() {
     // given:
-    final var spec = new ResponsivePolicySpec(
-        "baz",
-        "foo",
-        PolicyStatus.POLICY_STATUS_MANAGED,
-        null,
-        Optional.of(new DemoPolicy(10, 0, Optional.empty()))
-    );
+    final var spec =
+        new ResponsivePolicySpec(
+            "baz",
+            "foo",
+            PolicyStatus.POLICY_STATUS_MANAGED,
+            null,
+            Optional.of(new DemoPolicy(10, 0, Optional.empty())));
 
     // when/then:
     assertThrows(NullPointerException.class, spec::validate);
@@ -74,18 +74,18 @@ class ResponsivePolicySpecTest {
   @Test
   public void shouldThrowOnNullDiagnoserType() {
     // given:
-    final var spec = new ResponsivePolicySpec(
-        "baz",
-        "foo",
-        PolicyStatus.POLICY_STATUS_MANAGED,
-        PolicyType.DEMO,
-        Optional.of(new DemoPolicy(
-            10,
-            0,
-            Optional.of(List.of(
-                new Diagnoser(null, Optional.empty(), Optional.empty())
-            ))))
-    );
+    final var spec =
+        new ResponsivePolicySpec(
+            "baz",
+            "foo",
+            PolicyStatus.POLICY_STATUS_MANAGED,
+            PolicyType.DEMO,
+            Optional.of(
+                new DemoPolicy(
+                    10,
+                    0,
+                    Optional.of(
+                        List.of(new Diagnoser(null, Optional.empty(), Optional.empty()))))));
 
     // when/then:
     assertThrows(NullPointerException.class, spec::validate);
@@ -94,16 +94,13 @@ class ResponsivePolicySpecTest {
   @Test
   public void shouldNotThrowOnValid() {
     // given:
-    final var spec = new ResponsivePolicySpec(
-        "baz",
-        "foo",
-        PolicyStatus.POLICY_STATUS_MANAGED,
-        PolicyType.DEMO,
-        Optional.of(new DemoPolicy(
-            10,
-            0,
-            Optional.of(List.of(Diagnoser.lag()))))
-    );
+    final var spec =
+        new ResponsivePolicySpec(
+            "baz",
+            "foo",
+            PolicyStatus.POLICY_STATUS_MANAGED,
+            PolicyType.DEMO,
+            Optional.of(new DemoPolicy(10, 0, Optional.of(List.of(Diagnoser.lag())))));
 
     // when/then:
     spec.validate();

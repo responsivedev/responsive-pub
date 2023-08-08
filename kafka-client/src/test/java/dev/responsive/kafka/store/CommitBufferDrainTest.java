@@ -43,11 +43,11 @@ public class CommitBufferDrainTest {
   @Test
   public void shouldDrainWithMaxConcurrencyWhenAllSucceed() {
     // Given:
-    final var latches = Map.of(
-        0, new CountDownLatch(0),
-        1, new CountDownLatch(1),
-        2, new CountDownLatch(1)
-    );
+    final var latches =
+        Map.of(
+            0, new CountDownLatch(0),
+            1, new CountDownLatch(1),
+            2, new CountDownLatch(1));
     final ExecutorService exec = Executors.newFixedThreadPool(4);
 
     final ConcurrentLinkedDeque<Integer> tracker = new ConcurrentLinkedDeque<>();
@@ -58,21 +58,17 @@ public class CommitBufferDrainTest {
     final var p2 = new TestWriter(latches, 2, 2, true, exec, tracker);
 
     // When:
-    final AtomicWriteResult result = CommitBuffer.drain(
-        // p2 blocks until p1 completes, this tests to ensure that
-        // we run p1 when p0 completes instead of when the entire
-        // mini-batch of [p0, p2] completes
-        List.of(p0, p2, p1),
-        TestWriter::get,
-        TestWriter::partition,
-        100,
-        2
-    );
+    final AtomicWriteResult result =
+        CommitBuffer.drain(
+            // p2 blocks until p1 completes, this tests to ensure that
+            // we run p1 when p0 completes instead of when the entire
+            // mini-batch of [p0, p2] completes
+            List.of(p0, p2, p1), TestWriter::get, TestWriter::partition, 100, 2);
 
     // Then:
     assertThat(result.wasApplied(), is(true));
     assertThat(result.getPartition(), is(100));
-    assertThat(tracker.toArray(Integer[]::new), is(new Integer[]{0, 1, 2}));
+    assertThat(tracker.toArray(Integer[]::new), is(new Integer[] {0, 1, 2}));
     assertThat(interrupted, hasSize(0));
 
     exec.shutdown();
@@ -81,11 +77,11 @@ public class CommitBufferDrainTest {
   @Test
   public void shouldExecAllWritesEvenWhenEarlierWriteFails() throws InterruptedException {
     // Given:
-    final var latches = Map.of(
-        0, new CountDownLatch(0),
-        1, new CountDownLatch(1),
-        2, new CountDownLatch(1)
-    );
+    final var latches =
+        Map.of(
+            0, new CountDownLatch(0),
+            1, new CountDownLatch(1),
+            2, new CountDownLatch(1));
     final ExecutorService exec = Executors.newFixedThreadPool(4);
 
     final ConcurrentLinkedDeque<Integer> tracker = new ConcurrentLinkedDeque<>();
@@ -94,14 +90,10 @@ public class CommitBufferDrainTest {
     final var p2 = new TestWriter(latches, 2, 0, true, exec, tracker);
 
     // When:
-    final AtomicWriteResult result = CommitBuffer.drain(
-        // 0 fails, which should allow 1 to complete and 2 to run
-        List.of(p1, p0, p2),
-        TestWriter::get,
-        TestWriter::partition,
-        100,
-        2
-    );
+    final AtomicWriteResult result =
+        CommitBuffer.drain(
+            // 0 fails, which should allow 1 to complete and 2 to run
+            List.of(p1, p0, p2), TestWriter::get, TestWriter::partition, 100, 2);
 
     // Then:
     assertThat(result.wasApplied(), is(false));
@@ -138,9 +130,7 @@ public class CommitBufferDrainTest {
 
     @Override
     public CompletionStage<AtomicWriteResult> get() {
-      return supplyAsync(
-          awrSupplier(latches, partition, release, success, orderTracker), exec
-      );
+      return supplyAsync(awrSupplier(latches, partition, release, success, orderTracker), exec);
     }
 
     public int partition() {
@@ -153,8 +143,7 @@ public class CommitBufferDrainTest {
       final int partition,
       final int release,
       final boolean success,
-      final ConcurrentLinkedDeque<Integer> tracker
-  ) {
+      final ConcurrentLinkedDeque<Integer> tracker) {
     return () -> {
       try {
         LOG.info("Started execution of {}", partition);
@@ -175,6 +164,4 @@ public class CommitBufferDrainTest {
       }
     };
   }
-
-
 }

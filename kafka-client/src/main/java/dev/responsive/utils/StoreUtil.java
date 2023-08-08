@@ -39,8 +39,8 @@ public final class StoreUtil {
   private static final Logger LOG = LoggerFactory.getLogger(StoreUtil.class);
 
   public static void validateTopologyOptimizationConfig(final Map<String, Object> configs) {
-    final String optimizations = new StreamsConfig(configs)
-        .getString(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG);
+    final String optimizations =
+        new StreamsConfig(configs).getString(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG);
     if (optimizations.equals(StreamsConfig.OPTIMIZE)
         || optimizations.contains(StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS)) {
       throw new IllegalArgumentException(
@@ -49,25 +49,21 @@ public final class StoreUtil {
   }
 
   public static void validateLogConfigs(
-      final Map<String, String> config,
-      final boolean truncateChangelog
-  ) {
+      final Map<String, String> config, final boolean truncateChangelog) {
     if (truncateChangelog) {
       final String cleanupPolicy = config.get(TopicConfig.CLEANUP_POLICY_CONFIG);
       if (cleanupPolicy != null && !cleanupPolicy.equals(TopicConfig.CLEANUP_POLICY_DELETE)) {
-        throw new IllegalArgumentException(String.format(
-            "Changelogs must use %s=[%s]. Got [%s]",
-            TopicConfig.CLEANUP_POLICY_CONFIG,
-            TopicConfig.CLEANUP_POLICY_DELETE,
-            cleanupPolicy)
-        );
+        throw new IllegalArgumentException(
+            String.format(
+                "Changelogs must use %s=[%s]. Got [%s]",
+                TopicConfig.CLEANUP_POLICY_CONFIG,
+                TopicConfig.CLEANUP_POLICY_DELETE,
+                cleanupPolicy));
       }
     }
   }
 
-  /**
-   * Validate and convert the {@link Duration} to milliseconds
-   */
+  /** Validate and convert the {@link Duration} to milliseconds */
   public static long durationToMillis(final Duration duration, final String parameterName) {
     final String errorMsgPrefix =
         String.format("Cannot convert %s Duration to milliseconds", parameterName);
@@ -82,8 +78,7 @@ public final class StoreUtil {
     }
   }
 
-  private StoreUtil() {
-  }
+  private StoreUtil() {}
 
   private static Optional<Boolean> isCompacted(final String topicName, final Admin admin) {
     final ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, topicName);
@@ -100,15 +95,14 @@ public final class StoreUtil {
     }
     final Config topicConfig = topicConfigs.get(resource);
     final ConfigEntry cleanupPolicyEntry = topicConfig.get(TopicConfig.CLEANUP_POLICY_CONFIG);
-    boolean compaction = cleanupPolicyEntry != null
-        && cleanupPolicyEntry.value().contains(TopicConfig.CLEANUP_POLICY_COMPACT);
+    boolean compaction =
+        cleanupPolicyEntry != null
+            && cleanupPolicyEntry.value().contains(TopicConfig.CLEANUP_POLICY_COMPACT);
     return Optional.of(compaction);
   }
 
   private static boolean changelogIsSource(
-      final TopologyDescription description,
-      final String topicName
-  ) {
+      final TopologyDescription description, final String topicName) {
     for (final var subtopology : description.subtopologies()) {
       for (final Node node : subtopology.nodes()) {
         if (node instanceof Source) {
@@ -123,21 +117,15 @@ public final class StoreUtil {
   }
 
   public static boolean shouldTruncateChangelog(
-      final String changelogTopic,
-      final Admin admin,
-      final Map<String, Object> appConfigs
-  ) {
+      final String changelogTopic, final Admin admin, final Map<String, Object> appConfigs) {
     // TODO: this is doing a lot of admin calls - we should cache the result
     final Optional<Boolean> compacted = isCompacted(changelogTopic, admin);
-    final boolean source = changelogIsSource(
-        InternalConfigs.loadTopologyDescription(appConfigs),
-        changelogTopic
-    );
+    final boolean source =
+        changelogIsSource(InternalConfigs.loadTopologyDescription(appConfigs), changelogTopic);
     LOG.info("Changelog topic {}: compacted({}), source({})", changelogTopic, compacted, source);
     if (compacted.isEmpty()) {
-      LOG.warn("Could not find topic {}. This should not happen. Will not truncate.",
-          changelogTopic
-      );
+      LOG.warn(
+          "Could not find topic {}. This should not happen. Will not truncate.", changelogTopic);
       return false;
     }
     if (compacted.get()) {

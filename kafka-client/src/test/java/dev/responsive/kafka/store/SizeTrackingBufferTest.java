@@ -11,22 +11,24 @@ import org.apache.kafka.common.utils.Bytes;
 import org.junit.jupiter.api.Test;
 
 class SizeTrackingBufferTest {
-  private final SizeTrackingBuffer<Bytes> buffer = new SizeTrackingBuffer<>(new KeySpec<>() {
-    @Override
-    public Bytes keyFromRecord(final ConsumerRecord<byte[], byte[]> record) {
-      return Bytes.wrap(record.key());
-    }
+  private final SizeTrackingBuffer<Bytes> buffer =
+      new SizeTrackingBuffer<>(
+          new KeySpec<>() {
+            @Override
+            public Bytes keyFromRecord(final ConsumerRecord<byte[], byte[]> record) {
+              return Bytes.wrap(record.key());
+            }
 
-    @Override
-    public Bytes bytes(final Bytes key) {
-      return key;
-    }
+            @Override
+            public Bytes bytes(final Bytes key) {
+              return key;
+            }
 
-    @Override
-    public int compare(final Bytes o1, final Bytes o2) {
-      return o1.compareTo(o2);
-    }
-  });
+            @Override
+            public int compare(final Bytes o1, final Bytes o2) {
+              return o1.compareTo(o2);
+            }
+          });
 
   @Test
   public void shouldReturnSizeZeroOnEmptyBuffer() {
@@ -36,11 +38,11 @@ class SizeTrackingBufferTest {
   @Test
   public void shouldTrackSizeOnInserts() {
     // given:
-    final List<SizeCase> ops = List.of(
-        new SizeCase((byte) 1, 10, 20, 30),
-        new SizeCase((byte) 2, 8, 9, 47),
-        new SizeCase((byte) 3, 3, 7, 57)
-    );
+    final List<SizeCase> ops =
+        List.of(
+            new SizeCase((byte) 1, 10, 20, 30),
+            new SizeCase((byte) 2, 8, 9, 47),
+            new SizeCase((byte) 3, 3, 7, 57));
 
     // when/then:
     for (int i = 0; i < ops.size(); i++) {
@@ -55,11 +57,11 @@ class SizeTrackingBufferTest {
   @Test
   public void shouldTrackSizeOnInsertsWithUpdates() {
     // given:
-    final List<SizeCase> ops = List.of(
-        new SizeCase((byte) 1, 10, 20, 30),
-        new SizeCase((byte) 2, 8, 9, 47),
-        new SizeCase((byte) 2, 3, 9, 42)
-    );
+    final List<SizeCase> ops =
+        List.of(
+            new SizeCase((byte) 1, 10, 20, 30),
+            new SizeCase((byte) 2, 8, 9, 47),
+            new SizeCase((byte) 2, 3, 9, 42));
 
     // when/then:
     for (int i = 0; i < ops.size(); i++) {
@@ -108,7 +110,6 @@ class SizeTrackingBufferTest {
     // then:
     assertThat(buffer.getBytes(), is(10L));
   }
-
 
   @Test
   public void shouldTrackSizeOnClear() {

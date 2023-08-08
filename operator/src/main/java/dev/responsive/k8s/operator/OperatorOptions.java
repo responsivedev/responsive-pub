@@ -23,33 +23,37 @@ public final class OperatorOptions {
 
   private OperatorOptions() {}
 
-  public static final Option CONTROLLER_URL = Option.builder("controllerUrl")
-      .hasArg(true)
-      .required(true)
-      .desc("The URL for the controller server")
-      .numberOfArgs(1)
-      .build();
+  public static final Option CONTROLLER_URL =
+      Option.builder("controllerUrl")
+          .hasArg(true)
+          .required(true)
+          .desc("The URL for the controller server")
+          .numberOfArgs(1)
+          .build();
 
-  public static final Option ENVIRONMENT = Option.builder("environment")
-      .hasArg(true)
-      .required(false)
-      .desc("The environment this operator is running in")
-      .numberOfArgs(1)
-      .build();
+  public static final Option ENVIRONMENT =
+      Option.builder("environment")
+          .hasArg(true)
+          .required(false)
+          .desc("The environment this operator is running in")
+          .numberOfArgs(1)
+          .build();
 
-  public static final Option SECRETS_FILE = Option.builder("secretsFile")
-      .hasArg(true)
-      .required(true)
-      .desc("The path to the secrets file")
-      .numberOfArgs(1)
-      .build();
+  public static final Option SECRETS_FILE =
+      Option.builder("secretsFile")
+          .hasArg(true)
+          .required(true)
+          .desc("The path to the secrets file")
+          .numberOfArgs(1)
+          .build();
 
   public static final Option TLS_OFF =
       new Option("disableTls", "Disable TLS connection to responsive");
 
-  public static final Options OPTIONS = new Options()
-      .addOption(CONTROLLER_URL)
-      .addOption(SECRETS_FILE)
-      .addOption(TLS_OFF)
-      .addOption(ENVIRONMENT);
+  public static final Options OPTIONS =
+      new Options()
+          .addOption(CONTROLLER_URL)
+          .addOption(SECRETS_FILE)
+          .addOption(TLS_OFF)
+          .addOption(ENVIRONMENT);
 }

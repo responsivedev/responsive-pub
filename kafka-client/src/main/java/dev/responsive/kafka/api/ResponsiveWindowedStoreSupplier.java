@@ -33,8 +33,7 @@ public class ResponsiveWindowedStoreSupplier implements WindowBytesStoreSupplier
       final String name,
       final long retentionPeriod,
       final long windowSize,
-      final boolean retainDuplicates
-  ) {
+      final boolean retainDuplicates) {
     this.name = new TableName(name);
     this.retentionPeriod = retentionPeriod;
     this.windowSize = windowSize;
@@ -48,12 +47,7 @@ public class ResponsiveWindowedStoreSupplier implements WindowBytesStoreSupplier
 
   @Override
   public WindowStore<Bytes, byte[]> get() {
-    return new ResponsiveWindowStore(
-        name,
-        retentionPeriod,
-        windowSize,
-        retainDuplicates
-    );
+    return new ResponsiveWindowStore(name, retentionPeriod, windowSize, retainDuplicates);
   }
 
   // Responsive window store is not *really* segmented, so just

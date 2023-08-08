@@ -41,11 +41,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * This class polls the current end offset of the topic partitions assigned locally and
- * publishes the values as a metric. It gets the set of assigned partitions by listening
- * on ResponsiveConsumer. This class should not be assumed to be thread-safe by callers.
- * Internally, it runs asynchronous poller tasks and synchronizes access to its own shared
- * state.
+ * This class polls the current end offset of the topic partitions assigned locally and publishes
+ * the values as a metric. It gets the set of assigned partitions by listening on
+ * ResponsiveConsumer. This class should not be assumed to be thread-safe by callers. Internally, it
+ * runs asynchronous poller tasks and synchronizes access to its own shared state.
  */
 public class EndOffsetsPoller {
   private static final Logger LOG = LoggerFactory.getLogger(EndOffsetsPoller.class);
@@ -57,29 +56,25 @@ public class EndOffsetsPoller {
   private final ScheduledExecutorService executor;
   private Poller poller = null;
 
-  public EndOffsetsPoller(
-      final Map<String, ?> configs,
-      final Metrics metrics
-  ) {
+  public EndOffsetsPoller(final Map<String, ?> configs, final Metrics metrics) {
     this(
         configs,
         metrics,
-        Executors.newSingleThreadScheduledExecutor(r -> {
-          final var t = new Thread(r);
-          t.setDaemon(true);
-          t.setName("responsive-end-offsets-poller");
-          return t;
-        }),
-        new Factories() {}
-    );
+        Executors.newSingleThreadScheduledExecutor(
+            r -> {
+              final var t = new Thread(r);
+              t.setDaemon(true);
+              t.setName("responsive-end-offsets-poller");
+              return t;
+            }),
+        new Factories() {});
   }
 
   EndOffsetsPoller(
       final Map<String, ?> configs,
       final Metrics metrics,
       final ScheduledExecutorService executor,
-      final Factories factories
-  ) {
+      final Factories factories) {
     // TODO: does admin client get only committed offsets?
     this.configs = Map.copyOf(Objects.requireNonNull(configs));
     this.metrics = Objects.requireNonNull(metrics);
@@ -131,8 +126,10 @@ public class EndOffsetsPoller {
     try {
       poller.stop();
     } catch (final RuntimeException e) {
-      LOG.warn("poller stop returned an unexpected error. It will be ignored, and the poller "
-          + "task + admin client might be leaked.", e);
+      LOG.warn(
+          "poller stop returned an unexpected error. It will be ignored, and the poller "
+              + "task + admin client might be leaked.",
+          e);
     }
     poller = null;
   }
@@ -146,8 +143,7 @@ public class EndOffsetsPoller {
     private Poller(
         final Admin adminClient,
         final ScheduledExecutorService executor,
-        final Supplier<Collection<Listener>> threadMetricsSupplier
-    ) {
+        final Supplier<Collection<Listener>> threadMetricsSupplier) {
       this.adminClient = adminClient;
       this.executor = executor;
       this.threadMetricsSupplier = threadMetricsSupplier;
@@ -185,7 +181,6 @@ public class EndOffsetsPoller {
     private final Metrics metrics;
     private final Consumer<String> onClose;
 
-
     private Listener(final String threadId, final Metrics metrics, final Consumer<String> onClose) {
       this.threadId = threadId;
       this.metrics = metrics;
@@ -211,22 +206,22 @@ public class EndOffsetsPoller {
       for (final var p : assigned) {
         endOffsets.put(p, -1L);
         metrics.addMetric(
-            metricName(p),
-            (Gauge<Long>) (config, now) -> endOffsets.getOrDefault(p, -1L)
-        );
+            metricName(p), (Gauge<Long>) (config, now) -> endOffsets.getOrDefault(p, -1L));
       }
     }
 
     private void update(final Map<TopicPartition, ListOffsetsResultInfo> endOffsets) {
       for (final var entry : endOffsets.entrySet()) {
-        this.endOffsets.computeIfPresent(entry.getKey(), (k, v) -> {
-          logger.info("update end offset of {}/{} to {}",
-              k.topic(),
-              k.partition(),
-              entry.getValue().offset()
-          );
-          return entry.getValue().offset();
-        });
+        this.endOffsets.computeIfPresent(
+            entry.getKey(),
+            (k, v) -> {
+              logger.info(
+                  "update end offset of {}/{} to {}",
+                  k.topic(),
+                  k.partition(),
+                  entry.getValue().offset());
+              return entry.getValue().offset();
+            });
       }
     }
 

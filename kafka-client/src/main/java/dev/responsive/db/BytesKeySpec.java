@@ -36,5 +36,4 @@ public class BytesKeySpec implements KeySpec<Bytes> {
   public int compare(final Bytes o1, final Bytes o2) {
     return Objects.compare(o1, o2, Bytes::compareTo);
   }
-
 }

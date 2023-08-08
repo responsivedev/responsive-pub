@@ -33,5 +33,4 @@ class TableNameTest {
     // Then:
     MatcherAssert.assertThat(name.cassandraName(), Matchers.is("foo_bar_baz__qux"));
   }
-
 }

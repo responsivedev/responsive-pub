@@ -14,8 +14,7 @@ public class FlushTriggers {
     return new FlushTriggers(
         config.getInt(ResponsiveConfig.STORE_FLUSH_RECORDS_TRIGGER_CONFIG),
         config.getLong(ResponsiveConfig.STORE_FLUSH_BYTES_TRIGGER_CONFIG),
-        Duration.ofMillis(config.getLong(ResponsiveConfig.STORE_FLUSH_INTERVAL_TRIGGER_MS_CONFIG))
-    );
+        Duration.ofMillis(config.getLong(ResponsiveConfig.STORE_FLUSH_INTERVAL_TRIGGER_MS_CONFIG)));
   }
 
   static FlushTriggers ofRecords(final int records) {

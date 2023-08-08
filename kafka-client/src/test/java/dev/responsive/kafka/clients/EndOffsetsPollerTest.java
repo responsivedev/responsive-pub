@@ -62,29 +62,22 @@ class EndOffsetsPollerTest {
   private static final TopicPartition PARTITION1 = new TopicPartition("alice", 1);
   private static final TopicPartition PARTITION2 = new TopicPartition("bob", 2);
 
-  @Mock
-  private AdminClient adminClient;
-  @Mock
-  private Factories factories;
-  @Mock
-  private Metrics metrics;
-  @Mock
-  private ScheduledExecutorService executor;
-  @Mock
-  private ScheduledFuture<Object> pollFuture;
-  @Captor
-  private ArgumentCaptor<MetricName> metricNameCaptor;
-  @Captor
-  private ArgumentCaptor<MetricValueProvider<Long>> valueProviderCaptor;
-  @Captor
-  private ArgumentCaptor<Runnable> taskCaptor;
+  @Mock private AdminClient adminClient;
+  @Mock private Factories factories;
+  @Mock private Metrics metrics;
+  @Mock private ScheduledExecutorService executor;
+  @Mock private ScheduledFuture<Object> pollFuture;
+  @Captor private ArgumentCaptor<MetricName> metricNameCaptor;
+  @Captor private ArgumentCaptor<MetricValueProvider<Long>> valueProviderCaptor;
+  @Captor private ArgumentCaptor<Runnable> taskCaptor;
   private EndOffsetsPoller endOffsetsPoller;
 
   @BeforeEach
   @SuppressWarnings({"unchecked", "rawtypes"})
   public void setup() {
     lenient().when(factories.createAdminClient(anyMap())).thenReturn(adminClient);
-    lenient().when(executor.scheduleAtFixedRate(any(), anyLong(), anyLong(), any()))
+    lenient()
+        .when(executor.scheduleAtFixedRate(any(), anyLong(), anyLong(), any()))
         .thenReturn((ScheduledFuture) pollFuture);
     endOffsetsPoller = new EndOffsetsPoller(CONFIGS, metrics, executor, factories);
   }
@@ -96,12 +89,10 @@ class EndOffsetsPollerTest {
     callback.onPartitionsAssigned(List.of(PARTITION1, PARTITION2));
 
     // then:
-    verify(metrics, times(2))
-        .addMetric(metricNameCaptor.capture(), any(MetricValueProvider.class));
-    assertThat(metricNameCaptor.getAllValues(), contains(
-        metricName(THREAD_ID, PARTITION1),
-        metricName(THREAD_ID, PARTITION2))
-    );
+    verify(metrics, times(2)).addMetric(metricNameCaptor.capture(), any(MetricValueProvider.class));
+    assertThat(
+        metricNameCaptor.getAllValues(),
+        contains(metricName(THREAD_ID, PARTITION1), metricName(THREAD_ID, PARTITION2)));
   }
 
   @Test
@@ -133,10 +124,11 @@ class EndOffsetsPollerTest {
   @Test
   public void shouldPollAllEndOffsetsForThread() {
     // given:
-    final var result = completedOffsetListing(Map.of(
-        PARTITION1, new ListOffsetsResultInfo(123L, 100L, Optional.empty()),
-        PARTITION2, new ListOffsetsResultInfo(456L, 200L, Optional.empty())
-    ));
+    final var result =
+        completedOffsetListing(
+            Map.of(
+                PARTITION1, new ListOffsetsResultInfo(123L, 100L, Optional.empty()),
+                PARTITION2, new ListOffsetsResultInfo(456L, 200L, Optional.empty())));
     when(adminClient.listOffsets(anyMap())).thenReturn(result);
     final var callback = endOffsetsPoller.addForThread(THREAD_ID);
     callback.onPartitionsAssigned(List.of(PARTITION1, PARTITION2));
@@ -158,10 +150,11 @@ class EndOffsetsPollerTest {
   @Test
   public void shouldPollEndOffsetsForMultipleThreads() {
     // given:
-    final var result = completedOffsetListing(Map.of(
-        PARTITION1, new ListOffsetsResultInfo(123L, 100L, Optional.empty()),
-        PARTITION2, new ListOffsetsResultInfo(456L, 200L, Optional.empty())
-    ));
+    final var result =
+        completedOffsetListing(
+            Map.of(
+                PARTITION1, new ListOffsetsResultInfo(123L, 100L, Optional.empty()),
+                PARTITION2, new ListOffsetsResultInfo(456L, 200L, Optional.empty())));
     when(adminClient.listOffsets(anyMap())).thenReturn(result);
     final var callback = endOffsetsPoller.addForThread(THREAD_ID);
     callback.onPartitionsAssigned(List.of(PARTITION1));
@@ -183,28 +176,28 @@ class EndOffsetsPollerTest {
   }
 
   private MetricName metricName(final String thread, final TopicPartition tp) {
-    return new MetricName("end-offset", "responsive.streams", "",
+    return new MetricName(
+        "end-offset",
+        "responsive.streams",
+        "",
         Map.of(
             "thread", thread,
             "topic", tp.topic(),
-            "partition", Integer.toString(tp.partition())
-        )
-    );
+            "partition", Integer.toString(tp.partition())));
   }
 
   private ListOffsetsResult completedOffsetListing(
-      final Map<TopicPartition, ListOffsetsResultInfo> result
-  ) {
-    final Map<TopicPartition, KafkaFuture<ListOffsetsResultInfo>> futures = result.entrySet()
-        .stream()
-        .collect(Collectors.toMap(
-            Entry::getKey,
-            e -> {
-              final KafkaFutureImpl<ListOffsetsResultInfo> future = new KafkaFutureImpl<>();
-              future.complete(e.getValue());
-              return future;
-            }
-        ));
+      final Map<TopicPartition, ListOffsetsResultInfo> result) {
+    final Map<TopicPartition, KafkaFuture<ListOffsetsResultInfo>> futures =
+        result.entrySet().stream()
+            .collect(
+                Collectors.toMap(
+                    Entry::getKey,
+                    e -> {
+                      final KafkaFutureImpl<ListOffsetsResultInfo> future = new KafkaFutureImpl<>();
+                      future.complete(e.getValue());
+                      return future;
+                    }));
     return new ListOffsetsResult(futures);
   }
 }

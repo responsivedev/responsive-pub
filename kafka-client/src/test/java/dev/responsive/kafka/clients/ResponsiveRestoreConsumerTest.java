@@ -16,29 +16,28 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
-
 public class ResponsiveRestoreConsumerTest {
   private static final TopicPartition TOPIC_PARTITION1 = new TopicPartition("blue", 1);
   private static final TopicPartition TOPIC_PARTITION2 = new TopicPartition("green", 2);
   private static final TopicPartition TOPIC_PARTITION_NOT_CACHED = new TopicPartition("foo", 3);
-  @Mock
-  private Consumer<?, ?> wrapped;
+  @Mock private Consumer<?, ?> wrapped;
 
   private ResponsiveRestoreConsumer<?, ?> restoreConsumer;
 
   @BeforeEach
   public void setup() {
-    restoreConsumer = new ResponsiveRestoreConsumer<>(
-        wrapped,
-        tp -> {
-          if (tp.equals(TOPIC_PARTITION1)) {
-            return OptionalLong.of(123L);
-          }
-          if (tp.equals(TOPIC_PARTITION2)) {
-            return OptionalLong.of(456L);
-          }
-          return OptionalLong.empty();
-        });
+    restoreConsumer =
+        new ResponsiveRestoreConsumer<>(
+            wrapped,
+            tp -> {
+              if (tp.equals(TOPIC_PARTITION1)) {
+                return OptionalLong.of(123L);
+              }
+              if (tp.equals(TOPIC_PARTITION2)) {
+                return OptionalLong.of(456L);
+              }
+              return OptionalLong.empty();
+            });
   }
 
   @Test

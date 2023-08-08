@@ -35,10 +35,9 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.BooleanSupplier;
 
 /**
- * {@code CassandraClient} wraps a {@link CqlSession} with utility methods
- * specific for the Kafka Streams use case. It is expected to only work with
- * a single keyspace and that the session is already initialized to use a
- * non-default keyspace.
+ * {@code CassandraClient} wraps a {@link CqlSession} with utility methods specific for the Kafka
+ * Streams use case. It is expected to only work with a single keyspace and that the session is
+ * already initialized to use a non-default keyspace.
  */
 public class CassandraClient {
 
@@ -49,10 +48,9 @@ public class CassandraClient {
   private final RemoteWindowedSchema windowedSchema;
 
   /**
-   * @param session the Cassandra session, expected to be initialized
-   *                and set to work with the proper keyspace (this class
-   *                will not specify a keyspace in any CQL query)
-   * @param config  the responsive configuration
+   * @param session the Cassandra session, expected to be initialized and set to work with the
+   *     proper keyspace (this class will not specify a keyspace in any CQL query)
+   * @param config the responsive configuration
    */
   public CassandraClient(final CqlSession session, final ResponsiveConfig config) {
     this.session = session;
@@ -68,9 +66,8 @@ public class CassandraClient {
   }
 
   /**
-   * Executes an arbitrary statement directly with Cassandra. It
-   * is preferred to use any of the strongly typed methods if
-   * possible.
+   * Executes an arbitrary statement directly with Cassandra. It is preferred to use any of the
+   * strongly typed methods if possible.
    *
    * @param statement the statement to execute
    * @return the result returned from Cassandra
@@ -83,9 +80,7 @@ public class CassandraClient {
     return session.execute(cql);
   }
 
-  /**
-   * The async version of {@link #execute(Statement)}
-   */
+  /** The async version of {@link #execute(Statement)} */
   public CompletionStage<AsyncResultSet> executeAsync(final Statement<?> statement) {
     return session.executeAsync(statement.setIdempotent(true));
   }
@@ -95,25 +90,24 @@ public class CassandraClient {
   }
 
   /**
-   * @param tableName       wait for this table to be created
+   * @param tableName wait for this table to be created
    * @param executorService the executor service to use for waiting
-   *
-   * @return a monitor that multiple callers can listen on waiting for
-   *         {@code tableName} to be available
+   * @return a monitor that multiple callers can listen on waiting for {@code tableName} to be
+   *     available
    */
   public RemoteMonitor awaitTable(
-      final String tableName,
-      final ScheduledExecutorService executorService
-  ) {
-    final BooleanSupplier checkRemote = () -> session.getMetadata()
-        .getKeyspace(session.getKeyspace().orElseThrow())
-        .flatMap(ks -> ks.getTable(tableName))
-        .isPresent();
+      final String tableName, final ScheduledExecutorService executorService) {
+    final BooleanSupplier checkRemote =
+        () ->
+            session
+                .getMetadata()
+                .getKeyspace(session.getKeyspace().orElseThrow())
+                .flatMap(ks -> ks.getTable(tableName))
+                .isPresent();
     return new RemoteMonitor(
         executorService,
         checkRemote,
-        Duration.ofMillis(config.getLong(ResponsiveConfig.REMOTE_TABLE_CHECK_INTERVAL_MS_CONFIG))
-    );
+        Duration.ofMillis(config.getLong(ResponsiveConfig.REMOTE_TABLE_CHECK_INTERVAL_MS_CONFIG)));
   }
 
   /**
@@ -121,24 +115,22 @@ public class CassandraClient {
    *
    * @param tableName the table to count from
    * @param partition the partition to count
-   *
-   * @return the number of elements in {@code tableName} with {@code partition} as
-   *         the partition
+   * @return the number of elements in {@code tableName} with {@code partition} as the partition
    */
   public long count(final String tableName, final int partition) {
-    final ResultSet result = execute(QueryBuilder
-        .selectFrom(tableName)
-        .countAll()
-        .where(PARTITION_KEY.relation().isEqualTo(PARTITION_KEY.literal(partition)))
-        .build()
-    );
+    final ResultSet result =
+        execute(
+            QueryBuilder.selectFrom(tableName)
+                .countAll()
+                .where(PARTITION_KEY.relation().isEqualTo(PARTITION_KEY.literal(partition)))
+                .build());
 
     return result.one().getLong(0);
   }
 
   public OptionalInt numPartitions(final String tableName) {
-    final ResultSet result = execute(
-        String.format("SELECT DISTINCT %s FROM %s;", PARTITION_KEY.column(), tableName));
+    final ResultSet result =
+        execute(String.format("SELECT DISTINCT %s FROM %s;", PARTITION_KEY.column(), tableName));
 
     final int numPartitions = result.all().size();
     return numPartitions == 0 ? OptionalInt.empty() : OptionalInt.of(numPartitions);
@@ -146,9 +138,12 @@ public class CassandraClient {
 
   public RemoteKeyValueSchema kvSchema(final SchemaType schemaType) {
     switch (schemaType) {
-      case KEY_VALUE: return kvSchema;
-      case FACT:      return factSchema;
-      default:        throw new IllegalArgumentException(schemaType.name());
+      case KEY_VALUE:
+        return kvSchema;
+      case FACT:
+        return factSchema;
+      default:
+        throw new IllegalArgumentException(schemaType.name());
     }
   }
 

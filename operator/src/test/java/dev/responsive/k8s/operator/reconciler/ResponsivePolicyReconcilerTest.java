@@ -57,24 +57,15 @@ import responsive.controller.v1.controller.proto.ControllerOuterClass.PolicyStat
 
 @ExtendWith(MockitoExtension.class)
 class ResponsivePolicyReconcilerTest {
-  @Mock
-  private Context<ResponsivePolicy> ctx;
-  @Mock
-  private IndexerResourceCache<ResponsivePolicy> cache;
-  @Mock
-  private EventSourceContext<ResponsivePolicy> eventCtx;
-  @Mock
-  private ControllerConfiguration<ResponsivePolicy> controllerConfig;
-  @Mock
-  private KubernetesClient client;
-  @Mock
-  private ControllerClient controllerClient;
-  @Mock
-  private dev.responsive.k8s.operator.reconciler.PolicyPlugin plugin;
-  @Mock
-  private EventSource pluginEventSource1;
-  @Mock
-  private EventSource pluginEventSoruce2;
+  @Mock private Context<ResponsivePolicy> ctx;
+  @Mock private IndexerResourceCache<ResponsivePolicy> cache;
+  @Mock private EventSourceContext<ResponsivePolicy> eventCtx;
+  @Mock private ControllerConfiguration<ResponsivePolicy> controllerConfig;
+  @Mock private KubernetesClient client;
+  @Mock private ControllerClient controllerClient;
+  @Mock private dev.responsive.k8s.operator.reconciler.PolicyPlugin plugin;
+  @Mock private EventSource pluginEventSource1;
+  @Mock private EventSource pluginEventSoruce2;
 
   private dev.responsive.k8s.operator.reconciler.ResponsivePolicyReconciler reconciler;
   private dev.responsive.k8s.operator.reconciler.ResponsiveContext responsiveCtx;
@@ -84,31 +75,32 @@ class ResponsivePolicyReconcilerTest {
   public void setup() {
     responsiveCtx = new dev.responsive.k8s.operator.reconciler.ResponsiveContext(controllerClient);
     lenient().when(eventCtx.getControllerConfiguration()).thenReturn(controllerConfig);
-    lenient().when(controllerConfig.getEffectiveNamespaces())
+    lenient()
+        .when(controllerConfig.getEffectiveNamespaces())
         .thenReturn(ImmutableSet.of("responsive"));
     lenient().when(eventCtx.getClient()).thenReturn(client);
     lenient().when(eventCtx.getPrimaryCache()).thenReturn(cache);
-    lenient().when(plugin.prepareEventSources(eventCtx, responsiveCtx)).thenReturn(
-        ImmutableMap.of(
-            "pes1", pluginEventSource1,
-            "pes2", pluginEventSoruce2
-        )
-    );
+    lenient()
+        .when(plugin.prepareEventSources(eventCtx, responsiveCtx))
+        .thenReturn(
+            ImmutableMap.of(
+                "pes1", pluginEventSource1,
+                "pes2", pluginEventSoruce2));
     policy.setMetadata(new ObjectMeta());
     policy.getMetadata().setNamespace("foo");
     policy.getMetadata().setName("bar");
-    policy.setSpec(new ResponsivePolicySpec(
-        "ping",
-        "pong",
-        PolicyStatus.POLICY_STATUS_MANAGED,
-        ResponsivePolicySpec.PolicyType.DEMO,
-        Optional.of(new DemoPolicy(123, 7, Optional.empty()))
-    ));
-    reconciler = new dev.responsive.k8s.operator.reconciler.ResponsivePolicyReconciler(
-        "testenv",
-        responsiveCtx,
-        ImmutableMap.of(ResponsivePolicySpec.PolicyType.DEMO, plugin)
-    );
+    policy.setSpec(
+        new ResponsivePolicySpec(
+            "ping",
+            "pong",
+            PolicyStatus.POLICY_STATUS_MANAGED,
+            ResponsivePolicySpec.PolicyType.DEMO,
+            Optional.of(new DemoPolicy(123, 7, Optional.empty()))));
+    reconciler =
+        new dev.responsive.k8s.operator.reconciler.ResponsivePolicyReconciler(
+            "testenv",
+            responsiveCtx,
+            ImmutableMap.of(ResponsivePolicySpec.PolicyType.DEMO, plugin));
   }
 
   @Test
@@ -125,20 +117,22 @@ class ResponsivePolicyReconcilerTest {
   public void shouldReturnEmptyTargetStateIfControllerPollFails() {
     // given:
     final var sources = reconciler.prepareEventSources(eventCtx);
-    final var maybeSource = sources.values().stream()
-        .filter(s -> s instanceof PerResourcePollingEventSource)
-        .findFirst();
+    final var maybeSource =
+        sources.values().stream()
+            .filter(s -> s instanceof PerResourcePollingEventSource)
+            .findFirst();
     assertThat(maybeSource, not(Optional.empty()));
     final var source = (PerResourcePollingEventSource) maybeSource.get();
     final var resource = mock(ResponsivePolicy.class);
     when(resource.getMetadata()).thenReturn(new ObjectMeta());
-    when(resource.getSpec()).thenReturn(new ResponsivePolicySpec(
-        "ping",
-        "pong",
-        PolicyStatus.POLICY_STATUS_MANAGED,
-        ResponsivePolicySpec.PolicyType.DEMO,
-        Optional.of(new DemoPolicy(123, 10, Optional.empty()))
-    ));
+    when(resource.getSpec())
+        .thenReturn(
+            new ResponsivePolicySpec(
+                "ping",
+                "pong",
+                PolicyStatus.POLICY_STATUS_MANAGED,
+                ResponsivePolicySpec.PolicyType.DEMO,
+                Optional.of(new DemoPolicy(123, 10, Optional.empty()))));
     when(controllerClient.getTargetState(any())).thenThrow(new RuntimeException("oops"));
 
     // when:
@@ -179,13 +173,13 @@ class ResponsivePolicyReconcilerTest {
   @Test
   public void shouldValidatePolicy() {
     // given:
-    policy.setSpec(new ResponsivePolicySpec(
-        "foo",
-        null,
-        PolicyStatus.POLICY_STATUS_MANAGED,
-        PolicyType.DEMO,
-        Optional.of(new DemoPolicy(10, 0, Optional.empty()))
-    ));
+    policy.setSpec(
+        new ResponsivePolicySpec(
+            "foo",
+            null,
+            PolicyStatus.POLICY_STATUS_MANAGED,
+            PolicyType.DEMO,
+            Optional.of(new DemoPolicy(10, 0, Optional.empty()))));
 
     // when:
     final UpdateControl<ResponsivePolicy> result = reconciler.reconcile(policy, ctx);
@@ -193,8 +187,7 @@ class ResponsivePolicyReconcilerTest {
     // then:
     assertThat(
         result.getResource().getStatus().getMessage(),
-        startsWith("invalid responsive policy spec")
-    );
+        startsWith("invalid responsive policy spec"));
     verifyNoInteractions(plugin);
   }
 }

@@ -22,12 +22,10 @@ import io.javaoperatorsdk.operator.api.reconciler.EventSourceContext;
 import io.javaoperatorsdk.operator.processing.event.source.EventSource;
 import java.util.Map;
 
-/**
- * Interface for supporting various policy types operator-side
- */
+/** Interface for supporting various policy types operator-side */
 public interface PolicyPlugin {
-  Map<String, EventSource> prepareEventSources(EventSourceContext<ResponsivePolicy> ctx,
-                                               ResponsiveContext responsiveCtx);
+  Map<String, EventSource> prepareEventSources(
+      EventSourceContext<ResponsivePolicy> ctx, ResponsiveContext responsiveCtx);
 
   void reconcile(
       ResponsivePolicy resource, Context<ResponsivePolicy> ctx, ResponsiveContext responsiveCtx);

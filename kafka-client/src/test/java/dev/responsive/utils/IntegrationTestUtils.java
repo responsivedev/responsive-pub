@@ -32,8 +32,7 @@ import org.apache.kafka.streams.KeyValue;
 
 public final class IntegrationTestUtils {
 
-  private IntegrationTestUtils() {
-  }
+  private IntegrationTestUtils() {}
 
   public static void pipeInput(
       final String topic,
@@ -42,17 +41,10 @@ public final class IntegrationTestUtils {
       final Supplier<Long> timestamp,
       final long valFrom,
       final long valTo,
-      final long... keys
-  ) {
+      final long... keys) {
     for (final long k : keys) {
       for (long v = valFrom; v < valTo; v++) {
-        producer.send(new ProducerRecord<>(
-            topic,
-            (int) k % partitions,
-            timestamp.get(),
-            k,
-            v
-        ));
+        producer.send(new ProducerRecord<>(topic, (int) k % partitions, timestamp.get(), k, v));
       }
     }
     producer.flush();
@@ -63,12 +55,14 @@ public final class IntegrationTestUtils {
       final long from,
       final Set<KeyValue<Long, Long>> expected,
       final boolean readUncommitted,
-      final Map<String, Object> originals
-  ) throws TimeoutException {
+      final Map<String, Object> originals)
+      throws TimeoutException {
     final Map<String, Object> properties = new HashMap<>(originals);
-    properties.put(ISOLATION_LEVEL_CONFIG, readUncommitted
-        ? IsolationLevel.READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT)
-        : IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT));
+    properties.put(
+        ISOLATION_LEVEL_CONFIG,
+        readUncommitted
+            ? IsolationLevel.READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT)
+            : IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT));
 
     final var allSeen = new HashSet<>();
     final var notYetSeen = new HashSet<>(expected);
@@ -87,8 +81,14 @@ public final class IntegrationTestUtils {
         }
         if (System.nanoTime() > end) {
           throw new TimeoutException(
-              "Timed out trying to read " + expected + " events from " + output
-                  + ".\nNot yet seen: " + notYetSeen + ".\nAll seen: " + allSeen);
+              "Timed out trying to read "
+                  + expected
+                  + " events from "
+                  + output
+                  + ".\nNot yet seen: "
+                  + notYetSeen
+                  + ".\nAll seen: "
+                  + allSeen);
         }
       }
     }
@@ -99,12 +99,14 @@ public final class IntegrationTestUtils {
       final long from,
       final long numEvents,
       final boolean readUncommitted,
-      final Map<String, Object> originals
-  ) throws TimeoutException {
+      final Map<String, Object> originals)
+      throws TimeoutException {
     final Map<String, Object> properties = new HashMap<>(originals);
-    properties.put(ISOLATION_LEVEL_CONFIG, readUncommitted
-        ? IsolationLevel.READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT)
-        : IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT));
+    properties.put(
+        ISOLATION_LEVEL_CONFIG,
+        readUncommitted
+            ? IsolationLevel.READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT)
+            : IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT));
 
     try (final KafkaConsumer<Long, Long> consumer = new KafkaConsumer<>(properties)) {
       final TopicPartition output = new TopicPartition(topic, 0);
@@ -122,8 +124,12 @@ public final class IntegrationTestUtils {
         }
         if (System.nanoTime() > end) {
           throw new TimeoutException(
-              "Timed out trying to read " + numEvents + " events from " + output
-                  + ". Read " + result);
+              "Timed out trying to read "
+                  + numEvents
+                  + " events from "
+                  + output
+                  + ". Read "
+                  + result);
         }
       }
       return result;
@@ -131,9 +137,7 @@ public final class IntegrationTestUtils {
   }
 
   public static void startAppAndAwaitRunning(
-      final Duration timeout,
-      final ResponsiveKafkaStreams... streams
-  ) throws Exception {
+      final Duration timeout, final ResponsiveKafkaStreams... streams) throws Exception {
     final ReentrantLock lock = new ReentrantLock();
     final Condition onRunning = lock.newCondition();
     final AtomicBoolean[] running = new AtomicBoolean[streams.length];
@@ -142,19 +146,20 @@ public final class IntegrationTestUtils {
       running[i] = new AtomicBoolean(false);
       final int idx = i;
       final StateListener oldListener = streams[i].stateListener();
-      final StateListener listener = (newState, oldState) -> {
-        if (oldListener != null) {
-          oldListener.onChange(newState, oldState);
-        }
+      final StateListener listener =
+          (newState, oldState) -> {
+            if (oldListener != null) {
+              oldListener.onChange(newState, oldState);
+            }
 
-        lock.lock();
-        try {
-          running[idx].set(newState == State.RUNNING);
-          onRunning.signalAll();
-        } finally {
-          lock.unlock();
-        }
-      };
+            lock.lock();
+            try {
+              running[idx].set(newState == State.RUNNING);
+              onRunning.signalAll();
+            } finally {
+              lock.unlock();
+            }
+          };
       streams[i].setStateListener(listener);
     }
 

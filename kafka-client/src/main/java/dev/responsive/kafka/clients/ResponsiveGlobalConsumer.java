@@ -36,33 +36,29 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 
 /**
- * The {@code ResponsiveGlobalConsumer} is a proxy {@link KafkaConsumer} that
- * allows the Responsive code to use consumer groups for populating a
- * {@link org.apache.kafka.streams.kstream.GlobalKTable}. It does four things:
+ * The {@code ResponsiveGlobalConsumer} is a proxy {@link KafkaConsumer} that allows the Responsive
+ * code to use consumer groups for populating a {@link
+ * org.apache.kafka.streams.kstream.GlobalKTable}. It does four things:
  *
  * <ol>
- *   <li>It intercepts calls to {@link #assign(Collection)} and instead translates
- *   them to {@link #subscribe(Collection)}</li>
- *
- *   <li>It ignores calls to {@link #seek(TopicPartition, long)} so that it
- *   can properly use the committed offsets.</li>
- *
- *   <li>It allows looking up {@link #position(TopicPartition)} for partitions
- *   that this consumer does not own by proxying the Admin for those partitions.</li>
- *
- *   <li>It returns {@link ConsumerRecords} from {@link #poll(Duration)} that will
- *   return all records when calling {@link ConsumerRecords#records(TopicPartition)}
- *   instead of only the requested partition. This is necessary because of the way that
- *   the {@link org.apache.kafka.streams.processor.internals.GlobalStateManagerImpl}
- *   handles restore. Specifically, it will loop partition-by-partition and update
- *   the store for those partitions. The issue with this is that if we use {@code subscribe}
- *   in place of {@code assign} we may get events from partitions that were not
- *   specified in the {@code assign} call. These records would otherwise be dropped.</li>
+ *   <li>It intercepts calls to {@link #assign(Collection)} and instead translates them to {@link
+ *       #subscribe(Collection)}
+ *   <li>It ignores calls to {@link #seek(TopicPartition, long)} so that it can properly use the
+ *       committed offsets.
+ *   <li>It allows looking up {@link #position(TopicPartition)} for partitions that this consumer
+ *       does not own by proxying the Admin for those partitions.
+ *   <li>It returns {@link ConsumerRecords} from {@link #poll(Duration)} that will return all
+ *       records when calling {@link ConsumerRecords#records(TopicPartition)} instead of only the
+ *       requested partition. This is necessary because of the way that the {@link
+ *       org.apache.kafka.streams.processor.internals.GlobalStateManagerImpl} handles restore.
+ *       Specifically, it will loop partition-by-partition and update the store for those
+ *       partitions. The issue with this is that if we use {@code subscribe} in place of {@code
+ *       assign} we may get events from partitions that were not specified in the {@code assign}
+ *       call. These records would otherwise be dropped.
  * </ol>
  *
- * <p>This class breaks a lot of abstraction barriers, but allows us to
- * support remote {@link org.apache.kafka.streams.kstream.GlobalKTable}s without
- * forking Kafka Streams.</p>
+ * <p>This class breaks a lot of abstraction barriers, but allows us to support remote {@link
+ * org.apache.kafka.streams.kstream.GlobalKTable}s without forking Kafka Streams.
  */
 public class ResponsiveGlobalConsumer extends DelegatingConsumer<byte[], byte[]> {
 
@@ -72,8 +68,7 @@ public class ResponsiveGlobalConsumer extends DelegatingConsumer<byte[], byte[]>
   public ResponsiveGlobalConsumer(
       final Map<String, Object> config,
       final Consumer<byte[], byte[]> delegate,
-      final Admin admin
-  ) {
+      final Admin admin) {
     super(delegate);
     final ConsumerConfig consumerConfig = new ConsumerConfig(config);
     this.defaultApiTimeoutMs = consumerConfig.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
@@ -82,12 +77,7 @@ public class ResponsiveGlobalConsumer extends DelegatingConsumer<byte[], byte[]>
 
   @Override
   public void assign(final Collection<TopicPartition> partitions) {
-    subscribe(
-        partitions
-            .stream()
-            .map(TopicPartition::topic)
-            .collect(Collectors.toSet())
-    );
+    subscribe(partitions.stream().map(TopicPartition::topic).collect(Collectors.toSet()));
   }
 
   @Deprecated
@@ -102,20 +92,16 @@ public class ResponsiveGlobalConsumer extends DelegatingConsumer<byte[], byte[]>
   }
 
   @Override
-  public void seek(final TopicPartition partition, final long offset) {
-  }
+  public void seek(final TopicPartition partition, final long offset) {}
 
   @Override
-  public void seek(final TopicPartition partition, final OffsetAndMetadata offsetAndMetadata) {
-  }
+  public void seek(final TopicPartition partition, final OffsetAndMetadata offsetAndMetadata) {}
 
   @Override
-  public void seekToBeginning(final Collection<TopicPartition> partitions) {
-  }
+  public void seekToBeginning(final Collection<TopicPartition> partitions) {}
 
   @Override
-  public void seekToEnd(final Collection<TopicPartition> partitions) {
-  }
+  public void seekToEnd(final Collection<TopicPartition> partitions) {}
 
   @Override
   public long position(final TopicPartition partition) {
@@ -131,11 +117,12 @@ public class ResponsiveGlobalConsumer extends DelegatingConsumer<byte[], byte[]>
     // we may not be assigned this partition, in which case someone else
     // has it, and we should check whether they're caught up
     try {
-      final OffsetAndMetadata result = admin.listConsumerGroupOffsets(
-              groupMetadata().groupId())
-          .partitionsToOffsetAndMetadata()
-          .get(duration.toMillis(), TimeUnit.MILLISECONDS)
-          .get(partition);
+      final OffsetAndMetadata result =
+          admin
+              .listConsumerGroupOffsets(groupMetadata().groupId())
+              .partitionsToOffsetAndMetadata()
+              .get(duration.toMillis(), TimeUnit.MILLISECONDS)
+              .get(partition);
 
       // if the result is null that means the consumer group hasn't been
       // created yet - just return 0 so that we issue the poll
@@ -152,7 +139,7 @@ public class ResponsiveGlobalConsumer extends DelegatingConsumer<byte[], byte[]>
     super.close();
     admin.close();
   }
-  
+
   @Override
   public void close(final Duration timeout) {
     super.close(timeout);
@@ -160,8 +147,8 @@ public class ResponsiveGlobalConsumer extends DelegatingConsumer<byte[], byte[]>
   }
 
   /**
-   * A hack that will return all records that were polled when calling
-   * {@link #records(TopicPartition)}.
+   * A hack that will return all records that were polled when calling {@link
+   * #records(TopicPartition)}.
    */
   private static final class SingletonConsumerRecords extends ConsumerRecords<byte[], byte[]> {
 
@@ -172,8 +159,7 @@ public class ResponsiveGlobalConsumer extends DelegatingConsumer<byte[], byte[]>
     }
 
     public SingletonConsumerRecords(
-        final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> records
-    ) {
+        final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> records) {
       super(records);
     }
 

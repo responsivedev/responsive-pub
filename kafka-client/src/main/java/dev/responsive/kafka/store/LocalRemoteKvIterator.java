@@ -22,19 +22,16 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
 /**
- * This class stitches together a remote Cassandra store with a local
- * {@link CommitBuffer} of uncommitted data such that the local data
- * takes precedence over the remote store as the source of truth. This
- * class also "resolves" tombstones in the buffer so that remote data
- * that is deleted is not returned.
+ * This class stitches together a remote Cassandra store with a local {@link CommitBuffer} of
+ * uncommitted data such that the local data takes precedence over the remote store as the source of
+ * truth. This class also "resolves" tombstones in the buffer so that remote data that is deleted is
+ * not returned.
  *
- * <p>It is expected that both input iterators return data in the same
- * order (ascending).
+ * <p>It is expected that both input iterators return data in the same order (ascending).
  *
- * @implNote this class is kept package private in this package opposed
- *           to moving it into {@link dev.responsive.utils.Iterators} since
- *           it requires detailed knowledge about {@link CommitBuffer} and
- *           the way that it works
+ * @implNote this class is kept package private in this package opposed to moving it into {@link
+ *     dev.responsive.utils.Iterators} since it requires detailed knowledge about {@link
+ *     CommitBuffer} and the way that it works
  */
 class LocalRemoteKvIterator<K> implements KeyValueIterator<K, byte[]> {
 
@@ -47,8 +44,7 @@ class LocalRemoteKvIterator<K> implements KeyValueIterator<K, byte[]> {
   public LocalRemoteKvIterator(
       final KeyValueIterator<K, Result<K>> buffered,
       final KeyValueIterator<K, byte[]> remote,
-      final Comparator<K> keyComparator
-  ) {
+      final Comparator<K> keyComparator) {
     this.remote = remote;
     this.buffered = buffered;
     this.keyComparator = keyComparator;

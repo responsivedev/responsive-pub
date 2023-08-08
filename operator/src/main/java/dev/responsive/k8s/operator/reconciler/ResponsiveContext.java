@@ -21,9 +21,7 @@ import dev.responsive.k8s.crd.ResponsivePolicy;
 import io.javaoperatorsdk.operator.processing.event.source.timer.TimerEventSource;
 import java.util.Objects;
 
-/**
- * POJO encapsulating all the operator context to share w/ plugins
- */
+/** POJO encapsulating all the operator context to share w/ plugins */
 final class ResponsiveContext {
   final TimerEventSource<ResponsivePolicy> scheduler;
   final ControllerClient controllerClient;
@@ -33,9 +31,7 @@ final class ResponsiveContext {
   }
 
   ResponsiveContext(
-      final TimerEventSource<ResponsivePolicy> scheduler,
-      final ControllerClient controllerClient
-  ) {
+      final TimerEventSource<ResponsivePolicy> scheduler, final ControllerClient controllerClient) {
     this.scheduler = Objects.requireNonNull(scheduler);
     this.controllerClient = Objects.requireNonNull(controllerClient);
   }

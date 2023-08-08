@@ -24,25 +24,19 @@ import dev.responsive.db.ResponsiveRetryPolicy;
 import java.net.InetSocketAddress;
 import javax.annotation.Nullable;
 
-/**
- * This is a utility to help creating a session to connect to the remote
- * Responsive store.
- */
+/** This is a utility to help creating a session to connect to the remote Responsive store. */
 public final class SessionUtil {
 
-  private SessionUtil() {
-  }
+  private SessionUtil() {}
 
   public static CqlSession connect(
       final InetSocketAddress address,
       final String datacenter,
       final String keyspace,
       @Nullable final String clientId,
-      @Nullable final String clientSecret
-  ) {
-    final CqlSessionBuilder sessionBuilder = CqlSession.builder()
-        .addContactPoint(address)
-        .withLocalDatacenter(datacenter);
+      @Nullable final String clientSecret) {
+    final CqlSessionBuilder sessionBuilder =
+        CqlSession.builder().addContactPoint(address).withLocalDatacenter(datacenter);
 
     if (clientId != null && clientSecret != null) {
       sessionBuilder.withAuthCredentials(clientId, clientSecret);
@@ -51,13 +45,12 @@ public final class SessionUtil {
     }
 
     return sessionBuilder
-        .withConfigLoader(DriverConfigLoader
-            .programmaticBuilder()
-            .withLong(DefaultDriverOption.REQUEST_TIMEOUT, 5000)
-            .withClass(DefaultDriverOption.RETRY_POLICY_CLASS, ResponsiveRetryPolicy.class)
-            .build())
+        .withConfigLoader(
+            DriverConfigLoader.programmaticBuilder()
+                .withLong(DefaultDriverOption.REQUEST_TIMEOUT, 5000)
+                .withClass(DefaultDriverOption.RETRY_POLICY_CLASS, ResponsiveRetryPolicy.class)
+                .build())
         .withKeyspace(keyspace)
         .build();
   }
-
 }

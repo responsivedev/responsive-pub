@@ -12,14 +12,11 @@ import responsive.controller.v1.controller.proto.ControllerOuterClass.DemoPolicy
 
 final class DemoPolicyProtoFactories {
 
-  private DemoPolicyProtoFactories() {
-  }
+  private DemoPolicyProtoFactories() {}
 
   private static ProcessingRateDiagnoser processingRateDiagnoserFromK8sResource(
-      final DemoPolicy.ProcessingRateDiagnoser diagnoser
-  ) {
-    final var builder = ProcessingRateDiagnoser.newBuilder()
-        .setRate(diagnoser.getRate());
+      final DemoPolicy.ProcessingRateDiagnoser diagnoser) {
+    final var builder = ProcessingRateDiagnoser.newBuilder().setRate(diagnoser.getRate());
     if (diagnoser.getWindowMs().isPresent()) {
       builder.setWindowMs(diagnoser.getWindowMs().get());
     }
@@ -29,31 +26,30 @@ final class DemoPolicyProtoFactories {
   static Diagnoser diagnoserFromK8sResource(final DemoPolicy.Diagnoser diagnoser) {
     switch (diagnoser.getType()) {
       case LAG_SCALE_UP:
-        return Diagnoser.newBuilder()
-            .setLagScaleUp(LagDiagnoser.newBuilder().build())
-            .build();
-      case PROCESSING_RATE_SCALE_UP: {
-        return Diagnoser.newBuilder()
-            .setProcessingRateScaleUp(
-                processingRateDiagnoserFromK8sResource(
-                    diagnoser.getProcessingRateScaleUp().get()))
-            .build();
-      }
-      case PROCESSING_RATE_SCALE_DOWN: {
-        return Diagnoser.newBuilder()
-            .setProcessingRateScaleDown(
-                processingRateDiagnoserFromK8sResource(
-                    diagnoser.getProcessingRateScaleDown().get()))
-            .build();
-      }
+        return Diagnoser.newBuilder().setLagScaleUp(LagDiagnoser.newBuilder().build()).build();
+      case PROCESSING_RATE_SCALE_UP:
+        {
+          return Diagnoser.newBuilder()
+              .setProcessingRateScaleUp(
+                  processingRateDiagnoserFromK8sResource(
+                      diagnoser.getProcessingRateScaleUp().get()))
+              .build();
+        }
+      case PROCESSING_RATE_SCALE_DOWN:
+        {
+          return Diagnoser.newBuilder()
+              .setProcessingRateScaleDown(
+                  processingRateDiagnoserFromK8sResource(
+                      diagnoser.getProcessingRateScaleDown().get()))
+              .build();
+        }
       default:
         throw new IllegalStateException();
     }
   }
 
   private static List<Diagnoser> diagnosersFromK8sResource(
-      final Optional<List<DemoPolicy.Diagnoser>> diagnosers
-  ) {
+      final Optional<List<DemoPolicy.Diagnoser>> diagnosers) {
     if (diagnosers.isEmpty()) {
       return Collections.emptyList();
     }

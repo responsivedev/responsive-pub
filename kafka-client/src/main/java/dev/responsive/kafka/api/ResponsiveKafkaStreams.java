@@ -35,43 +35,22 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
   private final ScheduledExecutorService executor;
   private final Admin admin;
 
-  public static ResponsiveKafkaStreams create(
-      final Topology topology,
-      final Map<?, ?> configs
-  ) {
+  public static ResponsiveKafkaStreams create(final Topology topology, final Map<?, ?> configs) {
     return create(
-        topology,
-        configs,
-        new DefaultKafkaClientSupplier(),
-        new DefaultCassandraClientFactory()
-    );
+        topology, configs, new DefaultKafkaClientSupplier(), new DefaultCassandraClientFactory());
   }
 
   public static ResponsiveKafkaStreams create(
-      final Topology topology,
-      final Map<?, ?> configs,
-      final KafkaClientSupplier clientSupplier
-  ) {
-    return create(
-        topology,
-        configs,
-        clientSupplier,
-        new DefaultCassandraClientFactory()
-    );
+      final Topology topology, final Map<?, ?> configs, final KafkaClientSupplier clientSupplier) {
+    return create(topology, configs, clientSupplier, new DefaultCassandraClientFactory());
   }
 
   public static ResponsiveKafkaStreams create(
       final Topology topology,
       final Map<?, ?> configs,
       final KafkaClientSupplier clientSupplier,
-      final CassandraClientFactory cassandraClientFactory
-  ) {
-    return connect(
-        topology,
-        configs,
-        cassandraClientFactory,
-        clientSupplier
-    );
+      final CassandraClientFactory cassandraClientFactory) {
+    return connect(topology, configs, cassandraClientFactory, clientSupplier);
   }
 
   @SuppressWarnings("unchecked")
@@ -79,8 +58,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       final Topology topology,
       final Map<?, ?> configs,
       final CassandraClientFactory cassandraClientFactory,
-      final KafkaClientSupplier clientSupplier
-  ) {
+      final KafkaClientSupplier clientSupplier) {
     for (Map.Entry<?, ?> entry : configs.entrySet()) {
       if (!(entry.getKey() instanceof String)) {
         throw new ConfigException(
@@ -105,13 +83,11 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
             admin,
             executor,
             storeRegistry,
-            topology.describe()
-        ),
+            topology.describe()),
         responsiveClientSupplier,
         session,
         admin,
-        executor
-    );
+        executor);
   }
 
   private ResponsiveKafkaStreams(
@@ -120,8 +96,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       final ResponsiveKafkaClientSupplier clientSupplier,
       final CqlSession session,
       final Admin admin,
-      final ScheduledExecutorService executor
-  ) {
+      final ScheduledExecutorService executor) {
     super(topology, streamsConfigs, clientSupplier);
     this.session = session;
     this.admin = admin;
@@ -134,11 +109,11 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       final Admin admin,
       final ScheduledExecutorService executor,
       final ResponsiveStoreRegistry storeRegistry,
-      final TopologyDescription topologyDescription
-  ) {
+      final TopologyDescription topologyDescription) {
     final Properties propsWithOverrides = new Properties();
     propsWithOverrides.putAll(configs);
-    propsWithOverrides.putAll(new InternalConfigs.Builder()
+    propsWithOverrides.putAll(
+        new InternalConfigs.Builder()
             .withCassandraClient(cassandraClient)
             .withKafkaAdmin(admin)
             .withExecutorService(executor)
@@ -150,12 +125,10 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     // accidental user overrides
     final Integer numStandbys = (Integer) configs.get(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG);
     if (numStandbys != null && numStandbys != 0) {
-      final String errorMsg = String.format(
-          "Invalid Streams configuration value for '%s': got %d, expected '%d'",
-          StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG,
-          numStandbys,
-          NUM_STANDBYS_OVERRIDE
-      );
+      final String errorMsg =
+          String.format(
+              "Invalid Streams configuration value for '%s': got %d, expected '%d'",
+              StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, numStandbys, NUM_STANDBYS_OVERRIDE);
       LOG.error(errorMsg);
       throw new ConfigException(errorMsg);
     }
@@ -164,16 +137,12 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     final Object o = configs.get(InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS);
     if (o == null) {
       propsWithOverrides.put(
-          InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS,
-          TASK_ASSIGNOR_CLASS_OVERRIDE
-      );
+          InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS, TASK_ASSIGNOR_CLASS_OVERRIDE);
     } else if (!TASK_ASSIGNOR_CLASS_OVERRIDE.equals(o.toString())) {
-      final String errorMsg = String.format(
-          "Invalid Streams configuration value for '%s': got %s, expected '%s'",
-          InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS,
-          o,
-          TASK_ASSIGNOR_CLASS_OVERRIDE
-      );
+      final String errorMsg =
+          String.format(
+              "Invalid Streams configuration value for '%s': got %s, expected '%s'",
+              InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS, o, TASK_ASSIGNOR_CLASS_OVERRIDE);
       LOG.error(errorMsg);
       throw new ConfigException(errorMsg);
     }

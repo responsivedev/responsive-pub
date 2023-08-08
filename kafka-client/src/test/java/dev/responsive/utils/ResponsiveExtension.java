@@ -40,16 +40,17 @@ import org.junit.jupiter.api.extension.ParameterResolver;
 import org.testcontainers.containers.CassandraContainer;
 import org.testcontainers.containers.KafkaContainer;
 
-public class ResponsiveExtension implements BeforeAllCallback, AfterAllCallback,
-    ParameterResolver {
+public class ResponsiveExtension implements BeforeAllCallback, AfterAllCallback, ParameterResolver {
 
-  public static CassandraContainer<?> cassandra = new CassandraContainer<>(TestConstants.CASSANDRA)
-      .withInitScript("CassandraDockerInit.cql")
-      .withReuse(true);
-  public static KafkaContainer kafka = new KafkaContainer(TestConstants.KAFKA)
-      .withEnv("KAFKA_GROUP_MIN_SESSION_TIMEOUT_MS", "1000")
-      .withEnv("KAFKA_GROUP_MAX_SESSION_TIMEOUT_MS", "60000")
-      .withReuse(true);
+  public static CassandraContainer<?> cassandra =
+      new CassandraContainer<>(TestConstants.CASSANDRA)
+          .withInitScript("CassandraDockerInit.cql")
+          .withReuse(true);
+  public static KafkaContainer kafka =
+      new KafkaContainer(TestConstants.KAFKA)
+          .withEnv("KAFKA_GROUP_MIN_SESSION_TIMEOUT_MS", "1000")
+          .withEnv("KAFKA_GROUP_MAX_SESSION_TIMEOUT_MS", "60000")
+          .withReuse(true);
 
   public static Admin admin;
 
@@ -69,9 +70,8 @@ public class ResponsiveExtension implements BeforeAllCallback, AfterAllCallback,
 
   @Override
   public boolean supportsParameter(
-      final ParameterContext parameterContext,
-      final ExtensionContext extensionContext
-  ) throws ParameterResolutionException {
+      final ParameterContext parameterContext, final ExtensionContext extensionContext)
+      throws ParameterResolutionException {
     return parameterContext.getParameter().getType().equals(CassandraContainer.class)
         || parameterContext.getParameter().getType().equals(KafkaContainer.class)
         || parameterContext.getParameter().getType().equals(Admin.class)
@@ -80,9 +80,8 @@ public class ResponsiveExtension implements BeforeAllCallback, AfterAllCallback,
 
   @Override
   public Object resolveParameter(
-      final ParameterContext parameterContext,
-      final ExtensionContext extensionContext
-  ) throws ParameterResolutionException {
+      final ParameterContext parameterContext, final ExtensionContext extensionContext)
+      throws ParameterResolutionException {
     if (parameterContext.getParameter().getType() == CassandraContainer.class) {
       return cassandra;
     } else if (parameterContext.getParameter().getType() == KafkaContainer.class) {
@@ -90,19 +89,28 @@ public class ResponsiveExtension implements BeforeAllCallback, AfterAllCallback,
     } else if (parameterContext.getParameter().getType() == Admin.class) {
       return admin;
     } else if (isContainerConfig(parameterContext)) {
-      final Map<String, Object> map = new HashMap<>(Map.of(
-          STORAGE_HOSTNAME_CONFIG, cassandra.getContactPoint().getHostName(),
-          STORAGE_PORT_CONFIG, cassandra.getContactPoint().getPort(),
-          STORAGE_DATACENTER_CONFIG, cassandra.getLocalDatacenter(),
-          TENANT_ID_CONFIG, "responsive_clients",
-          INTERNAL_TASK_ASSIGNOR_CLASS, TASK_ASSIGNOR_CLASS_OVERRIDE,
-          BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers(),
-          STORAGE_DESIRED_NUM_PARTITION_CONFIG, -1,
-          REMOTE_TABLE_CHECK_INTERVAL_MS_CONFIG, 100
-      ));
+      final Map<String, Object> map =
+          new HashMap<>(
+              Map.of(
+                  STORAGE_HOSTNAME_CONFIG,
+                  cassandra.getContactPoint().getHostName(),
+                  STORAGE_PORT_CONFIG,
+                  cassandra.getContactPoint().getPort(),
+                  STORAGE_DATACENTER_CONFIG,
+                  cassandra.getLocalDatacenter(),
+                  TENANT_ID_CONFIG,
+                  "responsive_clients",
+                  INTERNAL_TASK_ASSIGNOR_CLASS,
+                  TASK_ASSIGNOR_CLASS_OVERRIDE,
+                  BOOTSTRAP_SERVERS_CONFIG,
+                  kafka.getBootstrapServers(),
+                  STORAGE_DESIRED_NUM_PARTITION_CONFIG,
+                  -1,
+                  REMOTE_TABLE_CHECK_INTERVAL_MS_CONFIG,
+                  100));
       if (parameterContext.getParameter().getType().equals(Map.class)) {
         return map;
-      } else  {
+      } else {
         return new ResponsiveConfig(map);
       }
     }

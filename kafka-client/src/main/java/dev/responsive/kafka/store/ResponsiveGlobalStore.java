@@ -38,9 +38,7 @@ import org.apache.kafka.streams.state.internals.StoreQueryUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * The {@code ResponsiveGlobalStore}
- */
+/** The {@code ResponsiveGlobalStore} */
 public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
 
   private static final Logger LOG = LoggerFactory.getLogger(ResponsiveGlobalStore.class);
@@ -73,8 +71,7 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
       init((StateStoreContext) context, root);
     } else {
       throw new UnsupportedOperationException(
-          "Use ResponsiveStore#init(StateStoreContext, StateStore) instead."
-      );
+          "Use ResponsiveStore#init(StateStoreContext, StateStore) instead.");
     }
   }
 
@@ -104,13 +101,15 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
 
       open = true;
 
-      context.register(root, (key, value) -> {
-        if (value == null) {
-          delete(new Bytes(key));
-        } else {
-          put(new Bytes(key), value);
-        }
-      });
+      context.register(
+          root,
+          (key, value) -> {
+            if (value == null) {
+              delete(new Bytes(key));
+            } else {
+              put(new Bytes(key), value);
+            }
+          });
     } catch (InterruptedException | TimeoutException e) {
       throw new ProcessorStateException("Failed to initialize store.", e);
     }
@@ -180,10 +179,8 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
   }
 
   @Override
-  public void flush() {
-  }
+  public void flush() {}
 
   @Override
-  public void close() {
-  }
+  public void close() {}
 }

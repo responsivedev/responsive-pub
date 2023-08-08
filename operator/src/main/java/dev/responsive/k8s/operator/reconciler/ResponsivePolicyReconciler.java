@@ -37,12 +37,10 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * Core reconciliation handler for operator
- */
+/** Core reconciliation handler for operator */
 @ControllerConfiguration
-public class ResponsivePolicyReconciler implements
-    Reconciler<ResponsivePolicy>, EventSourceInitializer<ResponsivePolicy> {
+public class ResponsivePolicyReconciler
+    implements Reconciler<ResponsivePolicy>, EventSourceInitializer<ResponsivePolicy> {
   private static final Logger LOG = LoggerFactory.getLogger(ResponsivePolicyReconciler.class);
 
   public static final String NAME_LABEL = "responsivePolicyName";
@@ -53,19 +51,17 @@ public class ResponsivePolicyReconciler implements
   private final Map<ResponsivePolicySpec.PolicyType, PolicyPlugin> plugins;
 
   public ResponsivePolicyReconciler(
-      final String environment,
-      final ControllerClient controllerClient
-  ) {
+      final String environment, final ControllerClient controllerClient) {
     this(
         environment,
         new ResponsiveContext(Objects.requireNonNull(controllerClient)),
-        ImmutableMap.of(ResponsivePolicySpec.PolicyType.DEMO, new DemoPolicyPlugin(environment))
-    );
+        ImmutableMap.of(ResponsivePolicySpec.PolicyType.DEMO, new DemoPolicyPlugin(environment)));
   }
 
-  ResponsivePolicyReconciler(final String environment,
-                             final ResponsiveContext responsiveCtx,
-                             final Map<ResponsivePolicySpec.PolicyType, PolicyPlugin> plugins) {
+  ResponsivePolicyReconciler(
+      final String environment,
+      final ResponsiveContext responsiveCtx,
+      final Map<ResponsivePolicySpec.PolicyType, PolicyPlugin> plugins) {
     this.environment = environment;
     this.responsiveCtx = Objects.requireNonNull(responsiveCtx);
     this.plugins = Objects.requireNonNull(plugins);
@@ -73,26 +69,31 @@ public class ResponsivePolicyReconciler implements
 
   @Override
   public Map<String, EventSource> prepareEventSources(EventSourceContext<ResponsivePolicy> ctx) {
-    final var poller = new PerResourcePollingEventSource<>(
-        policy -> {
-          try {
-            return ImmutableSet.of(new TargetStateWithTimestamp(
-                // TODO(rohan): this is a hack to force an event at each poll interval.
-                // we should either: 1. make the controller robust to not rely on polling
-                //                   2. poll in some less hacky way (while still using events)
-                responsiveCtx.getControllerClient()
-                    .getTargetState(ControllerProtoFactories.emptyRequest(environment, policy))));
-          } catch (final Throwable t) {
-            LOG.error("Error fetching target state", t);
-            // We return an empty target state to force reconciliation to run, since right now the
-            // controller is stateless and relies on periodic updates after it restarts
-            return ImmutableSet.of(new TargetStateWithTimestamp());
-          }
-        },
-        ctx.getPrimaryCache(),
-        10000L,
-        TargetStateWithTimestamp.class
-    );
+    final var poller =
+        new PerResourcePollingEventSource<>(
+            policy -> {
+              try {
+                return ImmutableSet.of(
+                    new TargetStateWithTimestamp(
+                        // TODO(rohan): this is a hack to force an event at each poll interval.
+                        // we should either: 1. make the controller robust to not rely on polling
+                        //                   2. poll in some less hacky way (while still using
+                        // events)
+                        responsiveCtx
+                            .getControllerClient()
+                            .getTargetState(
+                                ControllerProtoFactories.emptyRequest(environment, policy))));
+              } catch (final Throwable t) {
+                LOG.error("Error fetching target state", t);
+                // We return an empty target state to force reconciliation to run, since right now
+                // the
+                // controller is stateless and relies on periodic updates after it restarts
+                return ImmutableSet.of(new TargetStateWithTimestamp());
+              }
+            },
+            ctx.getPrimaryCache(),
+            10000L,
+            TargetStateWithTimestamp.class);
     final var builder = ImmutableMap.<String, EventSource>builder();
     builder.putAll(EventSourceInitializer.nameEventSources(poller));
     // add the plugin event sources
@@ -102,14 +103,13 @@ public class ResponsivePolicyReconciler implements
         plugins.values().stream()
             .map(p -> p.prepareEventSources(ctx, responsiveCtx))
             .flatMap(m -> m.entrySet().stream())
-            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue))
-    );
+            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)));
     return builder.build();
   }
 
   @Override
-  public UpdateControl<ResponsivePolicy> reconcile(final ResponsivePolicy resource,
-                                                   final Context<ResponsivePolicy> ctx) {
+  public UpdateControl<ResponsivePolicy> reconcile(
+      final ResponsivePolicy resource, final Context<ResponsivePolicy> ctx) {
     LOG.info("Received event for {}", resource.getFullResourceName());
     try {
       resource.getSpec().validate();
@@ -119,7 +119,8 @@ public class ResponsivePolicyReconciler implements
       resource.setStatus(new ResponsivePolicyStatus(msg));
       return UpdateControl.patchStatus(resource);
     }
-    responsiveCtx.getControllerClient()
+    responsiveCtx
+        .getControllerClient()
         .upsertPolicy(ControllerProtoFactories.upsertPolicyRequest(environment, resource));
     plugins.get(resource.getSpec().getPolicyType()).reconcile(resource, ctx, responsiveCtx);
     return UpdateControl.patchStatus(resource);

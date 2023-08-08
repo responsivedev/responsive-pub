@@ -44,14 +44,14 @@ public class KeyValueSchemaIntegrationTest {
   public void before(
       final TestInfo info,
       final CassandraContainer<?> cassandra,
-      @ResponsiveConfigParam final ResponsiveConfig config
-  ) {
+      @ResponsiveConfigParam final ResponsiveConfig config) {
     // NOTE: this keyspace is expected to exist
-    CqlSession session = CqlSession.builder()
-        .addContactPoint(cassandra.getContactPoint())
-        .withLocalDatacenter(cassandra.getLocalDatacenter())
-        .withKeyspace("responsive_clients") // NOTE: this keyspace is expected to exist
-        .build();
+    CqlSession session =
+        CqlSession.builder()
+            .addContactPoint(cassandra.getContactPoint())
+            .withLocalDatacenter(cassandra.getLocalDatacenter())
+            .withKeyspace("responsive_clients") // NOTE: this keyspace is expected to exist
+            .build();
     client = new CassandraClient(session, config);
     schema = new CassandraKeyValueSchema(client);
     name = info.getTestMethod().orElseThrow().getName();
@@ -63,16 +63,16 @@ public class KeyValueSchemaIntegrationTest {
   public void shouldReturnAllKeysInLexicalOrder() {
     // Given:
     final String table = name;
-    final List<BoundStatement> inserts = List.of(
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x0, 0x1}), new byte[]{0x1}),
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x1, 0x0}), new byte[]{0x1}),
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x2, 0x0}), new byte[]{0x1}),
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x2, 0x2}), new byte[]{0x1}),
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x1, 0x1}), new byte[]{0x1}),
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x0, 0x2}), new byte[]{0x1}),
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x2}), new byte[]{0x1}),
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x0}), new byte[]{0x1})
-    );
+    final List<BoundStatement> inserts =
+        List.of(
+            schema.insert(table, 0, Bytes.wrap(new byte[] {0x0, 0x1}), new byte[] {0x1}),
+            schema.insert(table, 0, Bytes.wrap(new byte[] {0x1, 0x0}), new byte[] {0x1}),
+            schema.insert(table, 0, Bytes.wrap(new byte[] {0x2, 0x0}), new byte[] {0x1}),
+            schema.insert(table, 0, Bytes.wrap(new byte[] {0x2, 0x2}), new byte[] {0x1}),
+            schema.insert(table, 0, Bytes.wrap(new byte[] {0x1, 0x1}), new byte[] {0x1}),
+            schema.insert(table, 0, Bytes.wrap(new byte[] {0x0, 0x2}), new byte[] {0x1}),
+            schema.insert(table, 0, Bytes.wrap(new byte[] {0x2}), new byte[] {0x1}),
+            schema.insert(table, 0, Bytes.wrap(new byte[] {0x0}), new byte[] {0x1}));
     inserts.forEach(client::execute);
 
     // When:
@@ -91,40 +91,37 @@ public class KeyValueSchemaIntegrationTest {
   public void shouldReturnRangeKeysInLexicalOrder() {
     // Given:
     final String table = name;
-    final List<BoundStatement> inserts = List.of(
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x0, 0x1}), new byte[]{0x1}),
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x1, 0x0}), new byte[]{0x1}),
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x2, 0x0}), new byte[]{0x1}),
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x2, 0x2}), new byte[]{0x1}),
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x1, 0x1}), new byte[]{0x1}),
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x0, 0x2}), new byte[]{0x1}),
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x2}), new byte[]{0x1}),
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x0}), new byte[]{0x1})
-    );
+    final List<BoundStatement> inserts =
+        List.of(
+            schema.insert(table, 0, Bytes.wrap(new byte[] {0x0, 0x1}), new byte[] {0x1}),
+            schema.insert(table, 0, Bytes.wrap(new byte[] {0x1, 0x0}), new byte[] {0x1}),
+            schema.insert(table, 0, Bytes.wrap(new byte[] {0x2, 0x0}), new byte[] {0x1}),
+            schema.insert(table, 0, Bytes.wrap(new byte[] {0x2, 0x2}), new byte[] {0x1}),
+            schema.insert(table, 0, Bytes.wrap(new byte[] {0x1, 0x1}), new byte[] {0x1}),
+            schema.insert(table, 0, Bytes.wrap(new byte[] {0x0, 0x2}), new byte[] {0x1}),
+            schema.insert(table, 0, Bytes.wrap(new byte[] {0x2}), new byte[] {0x1}),
+            schema.insert(table, 0, Bytes.wrap(new byte[] {0x0}), new byte[] {0x1}));
     inserts.forEach(client::execute);
 
     // When:
-    final KeyValueIterator<Bytes, byte[]> range = schema.range(
-        table,
-        0,
-        Bytes.wrap(new byte[]{0x0, 0x1}),
-        Bytes.wrap(new byte[]{0x0, 0x3}));
+    final KeyValueIterator<Bytes, byte[]> range =
+        schema.range(
+            table, 0, Bytes.wrap(new byte[] {0x0, 0x1}), Bytes.wrap(new byte[] {0x0, 0x3}));
 
     // Then:
     final List<Bytes> keys = new ArrayList<>();
     range.forEachRemaining(kv -> keys.add(kv.key));
     MatcherAssert.assertThat(keys, Matchers.hasSize(2));
-    MatcherAssert.assertThat(keys, Matchers.hasItems(
-        Bytes.wrap(new byte[]{0x0, 0x1}),
-        Bytes.wrap(new byte[]{0x0, 0x2})
-    ));
+    MatcherAssert.assertThat(
+        keys,
+        Matchers.hasItems(Bytes.wrap(new byte[] {0x0, 0x1}), Bytes.wrap(new byte[] {0x0, 0x2})));
   }
 
   @Test
   public void shouldSupportDataKeyThatEqualsMetadataKey() {
     // Given:
     final String table = name;
-    final byte[] valBytes = new byte[]{0x1};
+    final byte[] valBytes = new byte[] {0x1};
     client.execute(schema.insert(table, 0, ColumnName.METADATA_KEY, valBytes));
 
     // When:
@@ -133,5 +130,4 @@ public class KeyValueSchemaIntegrationTest {
     // Then:
     MatcherAssert.assertThat(val, Matchers.is(valBytes));
   }
-
 }

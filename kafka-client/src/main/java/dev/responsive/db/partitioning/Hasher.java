@@ -20,9 +20,6 @@ import java.util.function.Function;
 import org.apache.kafka.common.utils.Bytes;
 
 /**
- * An interface that can be implemented to customize the
- * hashing logic for {@link SubPartitioner}.
+ * An interface that can be implemented to customize the hashing logic for {@link SubPartitioner}.
  */
-public interface Hasher extends Function<Bytes, Integer> {
-
-}
+public interface Hasher extends Function<Bytes, Integer> {}

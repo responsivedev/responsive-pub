@@ -25,5 +25,4 @@ public class Stamped<K> {
     this.key = key;
     this.stamp = stamp;
   }
-
 }

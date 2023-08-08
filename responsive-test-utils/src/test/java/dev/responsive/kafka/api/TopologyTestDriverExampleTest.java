@@ -31,7 +31,6 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.hamcrest.MatcherAssert;
 import org.hamcrest.Matchers;
-import org.junit.jupiter.api.Test;
 
 public class TopologyTestDriverExampleTest {
 
@@ -46,12 +45,12 @@ public class TopologyTestDriverExampleTest {
     final Topology topo = topology();
     final TopologyTestDriver driver = new ResponsiveTopologyTestDriver(topo, props);
 
-    final TestInputTopic<String, String> bids = driver.createInputTopic(
-        "bids", new StringSerializer(), new StringSerializer());
-    final TestInputTopic<String, String> people = driver.createInputTopic(
-        "people", new StringSerializer(), new StringSerializer());
-    final TestOutputTopic<String, String> output = driver.createOutputTopic(
-        "output", new StringDeserializer(), new StringDeserializer());
+    final TestInputTopic<String, String> bids =
+        driver.createInputTopic("bids", new StringSerializer(), new StringSerializer());
+    final TestInputTopic<String, String> people =
+        driver.createInputTopic("people", new StringSerializer(), new StringSerializer());
+    final TestOutputTopic<String, String> output =
+        driver.createOutputTopic("output", new StringDeserializer(), new StringDeserializer());
 
     // When:
     people.pipeInput("1", "1,alice,CA");
@@ -65,11 +64,9 @@ public class TopologyTestDriverExampleTest {
 
     // Then:
     final List<String> outputs = output.readValuesToList();
-    MatcherAssert.assertThat(outputs, Matchers.contains(
-        "a,100,1,1,alice,CA",
-        "c,102,1,1,alice,CA",
-        "d,103,3,3,carol,CA"
-    ));
+    MatcherAssert.assertThat(
+        outputs,
+        Matchers.contains("a,100,1,1,alice,CA", "c,102,1,1,alice,CA", "d,103,3,3,carol,CA"));
     driver.close();
   }
 
@@ -79,10 +76,8 @@ public class TopologyTestDriverExampleTest {
     // schema for bids is key: <bid_id> value: <bid_id, amount, person_id>
     final KStream<String, String> bids = builder.stream("bids");
     // schema for people is key: <person_id> value: <person_id, name, state>
-    final KTable<String, String> people = builder.table(
-        "people",
-        ResponsiveStores.materialized("people")
-    );
+    final KTable<String, String> people =
+        builder.table("people", ResponsiveStores.materialized("people"));
 
     bids
         // person_id is 3rd column
@@ -95,5 +90,4 @@ public class TopologyTestDriverExampleTest {
 
     return builder.build();
   }
-
 }

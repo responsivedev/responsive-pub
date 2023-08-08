@@ -90,8 +90,8 @@ public class GlobalStreamThreadIntegrationTest {
       final TestInfo info,
       final KafkaContainer kafka,
       @TempDir final File tempDirA,
-      @TempDir final File tempDirB
-  ) throws Exception {
+      @TempDir final File tempDirB)
+      throws Exception {
     name = info.getTestMethod().orElseThrow().getName();
     bootstrapServers = kafka.getBootstrapServers();
     admin = Admin.create(Map.of(BOOTSTRAP_SERVERS_CONFIG, bootstrapServers));
@@ -100,9 +100,7 @@ public class GlobalStreamThreadIntegrationTest {
     this.tempDirB = tempDirB;
 
     globalTopic = name + "-" + GLOBAL_TOPIC_SUFFIX;
-    admin.createTopics(
-        List.of(new NewTopic(globalTopic, Optional.of(2), Optional.empty()))
-    );
+    admin.createTopics(List.of(new NewTopic(globalTopic, Optional.of(2), Optional.empty())));
 
     int created = 0;
     long end = System.currentTimeMillis() + 30_000;
@@ -116,17 +114,26 @@ public class GlobalStreamThreadIntegrationTest {
       throw new TimeoutException();
     }
 
-    config = Map.of(
-        CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers,
-        ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest",
-        ConsumerConfig.GROUP_ID_CONFIG, name + "-global",
-        ConsumerConfig.MAX_POLL_RECORDS_CONFIG, MAX_POLL,
-        ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class,
-        ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class,
-        ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, 100, // make tests faster
-        ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class,
-        ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class
-    );
+    config =
+        Map.of(
+            CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG,
+            bootstrapServers,
+            ConsumerConfig.AUTO_OFFSET_RESET_CONFIG,
+            "earliest",
+            ConsumerConfig.GROUP_ID_CONFIG,
+            name + "-global",
+            ConsumerConfig.MAX_POLL_RECORDS_CONFIG,
+            MAX_POLL,
+            ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
+            ByteArrayDeserializer.class,
+            ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
+            ByteArrayDeserializer.class,
+            ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG,
+            100, // make tests faster
+            ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
+            ByteArraySerializer.class,
+            ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
+            ByteArraySerializer.class);
 
     producer = new KafkaProducer<>(config);
   }
@@ -147,12 +154,9 @@ public class GlobalStreamThreadIntegrationTest {
     // restoration complete if we've restored all but the final record
     final int numRecords = MAX_POLL * 4 + 1;
     for (int i = 0; i < numRecords; i++) {
-      producer.send(new ProducerRecord<>(
-          globalTopic,
-          null,
-          new byte[]{'k', (byte) i},
-          new byte[]{'v', (byte) i})
-      );
+      producer.send(
+          new ProducerRecord<>(
+              globalTopic, null, new byte[] {'k', (byte) i}, new byte[] {'v', (byte) i}));
     }
     producer.flush();
 
@@ -162,9 +166,8 @@ public class GlobalStreamThreadIntegrationTest {
     // instead of one consumer going through the entire backlog
     final CountDownLatch restoredBatch = new CountDownLatch(2);
     final CountDownLatch finishedRestore = new CountDownLatch(4);
-    final StateRestoreListener restoreListener = new LatchRestoreListener(
-        restoredBatch,
-        finishedRestore);
+    final StateRestoreListener restoreListener =
+        new LatchRestoreListener(restoredBatch, finishedRestore);
 
     // start the stream thread
     final TestStoreSupplier storeSupplier = new TestStoreSupplier();
@@ -172,11 +175,12 @@ public class GlobalStreamThreadIntegrationTest {
     final GlobalStreamThread streamThreadB = getThread(storeSupplier, restoreListener, tempDirB);
 
     final CountDownLatch isRunning = new CountDownLatch(2);
-    final StateListener listener = (thread, newState, oldState) -> {
-      if (newState == GlobalStreamThread.State.RUNNING) {
-        isRunning.countDown();
-      }
-    };
+    final StateListener listener =
+        (thread, newState, oldState) -> {
+          if (newState == GlobalStreamThread.State.RUNNING) {
+            isRunning.countDown();
+          }
+        };
 
     streamThreadA.setStateListener(listener);
     streamThreadB.setStateListener(listener);
@@ -208,9 +212,8 @@ public class GlobalStreamThreadIntegrationTest {
     // ensure each consumer gets assigned during restore
     final CountDownLatch restoredBatch = new CountDownLatch(2);
     final CountDownLatch finishedRestore = new CountDownLatch(2);
-    final StateRestoreListener restoreListener = new LatchRestoreListener(
-        restoredBatch,
-        finishedRestore);
+    final StateRestoreListener restoreListener =
+        new LatchRestoreListener(restoredBatch, finishedRestore);
 
     // flushHappened ensures that both have called `poll` and therefore
     // have data assigned to them - otherwise we may not test that the
@@ -221,12 +224,9 @@ public class GlobalStreamThreadIntegrationTest {
 
     final int numRecords = MAX_POLL * 6;
     for (int i = 0; i < numRecords / 2; i++) {
-      producer.send(new ProducerRecord<>(
-          globalTopic,
-          null,
-          new byte[]{'k', (byte) i},
-          new byte[]{'v', (byte) i})
-      );
+      producer.send(
+          new ProducerRecord<>(
+              globalTopic, null, new byte[] {'k', (byte) i}, new byte[] {'v', (byte) i}));
     }
     producer.flush();
 
@@ -240,12 +240,9 @@ public class GlobalStreamThreadIntegrationTest {
 
     // When:
     for (int i = numRecords / 2; i < numRecords; i++) {
-      producer.send(new ProducerRecord<>(
-          globalTopic,
-          null,
-          new byte[]{'k', (byte) i},
-          new byte[]{'v', (byte) i})
-      );
+      producer.send(
+          new ProducerRecord<>(
+              globalTopic, null, new byte[] {'k', (byte) i}, new byte[] {'v', (byte) i}));
     }
     producer.flush();
 
@@ -270,32 +267,28 @@ public class GlobalStreamThreadIntegrationTest {
     final Time time = new SystemTime();
     final InternalTopologyBuilder builder = new InternalTopologyBuilder();
     builder.addGlobalStore(
-        new KeyValueStoreBuilder<>(
-            storeSupplier,
-            new ByteArraySerde(),
-            new ByteArraySerde(),
-            time
-        ).withLoggingDisabled(),
+        new KeyValueStoreBuilder<>(storeSupplier, new ByteArraySerde(), new ByteArraySerde(), time)
+            .withLoggingDisabled(),
         "global",
         null,
         null,
         null,
         globalTopic,
         "global-processor",
-        () -> new ContextualProcessor<Object, Object, Void, Void>() {
-          private KeyValueStore<Object, Object> global;
+        () ->
+            new ContextualProcessor<Object, Object, Void, Void>() {
+              private KeyValueStore<Object, Object> global;
 
-          @Override
-          public void init(final ProcessorContext<Void, Void> context) {
-            global = context.getStateStore("global");
-          }
+              @Override
+              public void init(final ProcessorContext<Void, Void> context) {
+                global = context.getStateStore("global");
+              }
 
-          @Override
-          public void process(final Record<Object, Object> record) {
-            global.put(record.key(), record.value());
-          }
-        }
-    );
+              @Override
+              public void process(final Record<Object, Object> record) {
+                global.put(record.key(), record.value());
+              }
+            });
 
     final String baseDirectoryName = tempDir.getAbsolutePath();
     final Map<String, Object> properties = new HashMap<>();
@@ -307,11 +300,12 @@ public class GlobalStreamThreadIntegrationTest {
     properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 5_000); // ensure flushes happen
     properties.put(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG, 2_000); // partial poll return quickly
 
-    final Consumer<byte[], byte[]> globalConsumer = new ResponsiveGlobalConsumer(
-        this.config,
-        new KafkaConsumer<>(this.config, new ByteArrayDeserializer(), new ByteArrayDeserializer()),
-        admin
-    );
+    final Consumer<byte[], byte[]> globalConsumer =
+        new ResponsiveGlobalConsumer(
+            this.config,
+            new KafkaConsumer<>(
+                this.config, new ByteArrayDeserializer(), new ByteArrayDeserializer()),
+            admin);
 
     final StreamsConfig config = new StreamsConfig(properties);
     final int i = new Random().nextInt(100000);
@@ -325,8 +319,7 @@ public class GlobalStreamThreadIntegrationTest {
         time,
         name + "-global-thread" + i,
         restoreListener,
-        ignored -> { }
-    );
+        ignored -> {});
   }
 
   private static class TestStoreSupplier implements KeyValueBytesStoreSupplier {
@@ -356,20 +349,24 @@ public class GlobalStreamThreadIntegrationTest {
     private final CountDownLatch finishedRestore;
 
     public LatchRestoreListener(
-        final CountDownLatch restoredFirstBatchLatch, final CountDownLatch finishedRestore
-    ) {
+        final CountDownLatch restoredFirstBatchLatch, final CountDownLatch finishedRestore) {
       this.restoredBatch = restoredFirstBatchLatch;
       this.finishedRestore = finishedRestore;
     }
 
     @Override
-    public void onRestoreStart(final TopicPartition topicPartition, final String storeName,
-        final long startingOffset, final long endingOffset) {
-    }
+    public void onRestoreStart(
+        final TopicPartition topicPartition,
+        final String storeName,
+        final long startingOffset,
+        final long endingOffset) {}
 
     @Override
-    public void onBatchRestored(final TopicPartition topicPartition, final String storeName,
-        final long batchEndOffset, final long numRestored) {
+    public void onBatchRestored(
+        final TopicPartition topicPartition,
+        final String storeName,
+        final long batchEndOffset,
+        final long numRestored) {
       restoredBatch.countDown();
       try {
         restoredBatch.await();
@@ -379,8 +376,8 @@ public class GlobalStreamThreadIntegrationTest {
     }
 
     @Override
-    public void onRestoreEnd(final TopicPartition topicPartition, final String storeName,
-        final long totalRestored) {
+    public void onRestoreEnd(
+        final TopicPartition topicPartition, final String storeName, final long totalRestored) {
       finishedRestore.countDown();
     }
   }

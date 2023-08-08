@@ -16,10 +16,6 @@
 
 package dev.responsive.kafka.store;
 
-import static dev.responsive.kafka.config.ResponsiveConfig.STORAGE_DATACENTER_CONFIG;
-import static dev.responsive.kafka.config.ResponsiveConfig.STORAGE_HOSTNAME_CONFIG;
-import static dev.responsive.kafka.config.ResponsiveConfig.STORAGE_PORT_CONFIG;
-import static dev.responsive.kafka.config.ResponsiveConfig.TENANT_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.MAX_POLL_RECORDS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG;
@@ -28,11 +24,9 @@ import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CL
 import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.APPLICATION_ID_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.APPLICATION_SERVER_CONFIG;
-import static org.apache.kafka.streams.StreamsConfig.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.COMMIT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG;
-import static org.apache.kafka.streams.StreamsConfig.InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS;
 import static org.apache.kafka.streams.StreamsConfig.NUM_STREAM_THREADS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
@@ -72,15 +66,12 @@ import org.apache.kafka.streams.kstream.StreamJoined;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
-import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.testcontainers.containers.CassandraContainer;
-import org.testcontainers.containers.KafkaContainer;
 
 @ExtendWith(ResponsiveExtension.class)
 public class ResponsiveWindowIntegrationTest {
@@ -98,18 +89,17 @@ public class ResponsiveWindowIntegrationTest {
   public void before(
       final TestInfo info,
       final Admin admin,
-      @ResponsiveConfigParam  final Map<String, Object> responsiveProps
-  ) throws InterruptedException, ExecutionException {
+      @ResponsiveConfigParam final Map<String, Object> responsiveProps)
+      throws InterruptedException, ExecutionException {
     name = info.getTestMethod().orElseThrow().getName();
     this.responsiveProps.putAll(responsiveProps);
     this.admin = admin;
-    final var result = admin.createTopics(
-        List.of(
-            new NewTopic(inputTopic(), Optional.of(1), Optional.empty()),
-            new NewTopic(otherTopic(), Optional.of(1), Optional.empty()),
-            new NewTopic(outputTopic(), Optional.of(1), Optional.empty())
-        )
-    );
+    final var result =
+        admin.createTopics(
+            List.of(
+                new NewTopic(inputTopic(), Optional.of(1), Optional.empty()),
+                new NewTopic(otherTopic(), Optional.of(1), Optional.empty()),
+                new NewTopic(outputTopic(), Optional.of(1), Optional.empty())));
     result.all().get();
   }
 
@@ -128,27 +118,24 @@ public class ResponsiveWindowIntegrationTest {
     final CountDownLatch latch1 = new CountDownLatch(2);
     final CountDownLatch latch2 = new CountDownLatch(2);
     final KStream<Long, Long> input = builder.stream(inputTopic());
-    input.groupByKey()
+    input
+        .groupByKey()
         .windowedBy(TimeWindows.ofSizeWithNoGrace(Duration.ofSeconds(5)))
         .aggregate(
             () -> 0L,
             (k, v, agg) -> agg + v,
-            ResponsiveStores.windowMaterialized(
-                name,
-                6_000,
-                5_000,
-                false
-            ))
+            ResponsiveStores.windowMaterialized(name, 6_000, 5_000, false))
         .toStream()
-        .peek((k, v) -> {
-          collect.put(k, v);
+        .peek(
+            (k, v) -> {
+              collect.put(k, v);
 
-          if (v == 3) {
-            latch1.countDown();
-          } else if (v == 1000) {
-            latch2.countDown();
-          }
-        })
+              if (v == 3) {
+                latch1.countDown();
+              } else if (v == 1000) {
+                latch2.countDown();
+              }
+            })
         // discard the window, so we don't have to serialize it
         // we're not checking the output topic anyway
         .map((k, v) -> new KeyValue<>(k.key(), v))
@@ -160,11 +147,9 @@ public class ResponsiveWindowIntegrationTest {
     final long baseTs = System.currentTimeMillis() / 60000 * 60000;
     final AtomicLong timestamp = new AtomicLong(baseTs);
     properties.put(APPLICATION_SERVER_CONFIG, "host1:1024");
-    try (
-        final ResponsiveKafkaStreams kafkaStreams =
+    try (final ResponsiveKafkaStreams kafkaStreams =
             ResponsiveKafkaStreams.create(builder.build(), properties);
-        final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties)
-    ) {
+        final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties)) {
       kafkaStreams.start();
 
       // produce two keys each having values 0-10 that are 1s apart
@@ -180,13 +165,9 @@ public class ResponsiveWindowIntegrationTest {
     // force a commit/flush so that we can test Cassandra by closing
     // the old Kafka Streams and creating a new one
     properties.put(APPLICATION_SERVER_CONFIG, "host2:1024");
-    try (
-        final ResponsiveKafkaStreams kafkaStreams = ResponsiveKafkaStreams.create(
-            builder.build(),
-            properties
-        );
-        final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties)
-    ) {
+    try (final ResponsiveKafkaStreams kafkaStreams =
+            ResponsiveKafkaStreams.create(builder.build(), properties);
+        final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties)) {
       kafkaStreams.start();
       pipeInput(producer, inputTopic(), () -> timestamp.getAndAdd(100), 3, 5, 0, 1);
 
@@ -231,27 +212,27 @@ public class ResponsiveWindowIntegrationTest {
 
     final CountDownLatch latch1 = new CountDownLatch(2);
     final CountDownLatch latch2 = new CountDownLatch(2);
-    input.join(other,
+    input
+        .join(
+            other,
             (v1, v2) -> {
               System.out.println("Joining: " + v1 + ", " + v2);
               return (v1 << Integer.SIZE) | v2;
             },
             JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofMillis(500)),
             StreamJoined.with(
-                new ResponsiveWindowedStoreSupplier(
-                    "input" + name, 1000, 1000, true),
-                new ResponsiveWindowedStoreSupplier(
-                    "other" + name, 1000, 1000, true)
-            ))
-        .peek((k, v) -> {
-          collect.computeIfAbsent(k, old -> new ArrayBlockingQueue<>(10)).add(v);
-          if (v.intValue() == 1) {
-            latch1.countDown();
-          }
-          if (v.intValue() == 100) {
-            latch2.countDown();
-          }
-        })
+                new ResponsiveWindowedStoreSupplier("input" + name, 1000, 1000, true),
+                new ResponsiveWindowedStoreSupplier("other" + name, 1000, 1000, true)))
+        .peek(
+            (k, v) -> {
+              collect.computeIfAbsent(k, old -> new ArrayBlockingQueue<>(10)).add(v);
+              if (v.intValue() == 1) {
+                latch1.countDown();
+              }
+              if (v.intValue() == 100) {
+                latch2.countDown();
+              }
+            })
         .to(outputTopic());
 
     // When:
@@ -260,12 +241,9 @@ public class ResponsiveWindowIntegrationTest {
     final long baseTs = System.currentTimeMillis() / 60000 * 60000;
     final AtomicLong timestamp = new AtomicLong(baseTs);
     properties.put(APPLICATION_SERVER_CONFIG, "host1:1024");
-    try (
-        final ResponsiveKafkaStreams kafkaStreams = ResponsiveKafkaStreams.create(
-            builder.build(), properties
-        );
-        final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties)
-    ) {
+    try (final ResponsiveKafkaStreams kafkaStreams =
+            ResponsiveKafkaStreams.create(builder.build(), properties);
+        final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties)) {
       kafkaStreams.start();
 
       // interleave events in the first window
@@ -279,11 +257,9 @@ public class ResponsiveWindowIntegrationTest {
     // force a commit/flush so that we can test Cassandra by closing
     // the old Kafka Streams and creating a new one
     properties.put(APPLICATION_SERVER_CONFIG, "host2:1024");
-    try (
-        final ResponsiveKafkaStreams kafkaStreams =
+    try (final ResponsiveKafkaStreams kafkaStreams =
             ResponsiveKafkaStreams.create(builder.build(), properties);
-        final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties)
-    ) {
+        final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties)) {
       kafkaStreams.start();
 
       // add one more event to each window
@@ -303,18 +279,19 @@ public class ResponsiveWindowIntegrationTest {
     assertThat(collect.size(), Matchers.is(2));
 
     final Queue<Long> k0 = collect.get(0L);
-    assertThat(k0, Matchers.containsInAnyOrder(
-        0L,
-        1L,
-        2L,
-        1L << Integer.SIZE,
-        1L << Integer.SIZE | 1L,
-        1L << Integer.SIZE | 2L,
-        2L << Integer.SIZE,
-        2L << Integer.SIZE | 1L,
-        2L << Integer.SIZE | 2L,
-        100L << Integer.SIZE | 100L
-    ));
+    assertThat(
+        k0,
+        Matchers.containsInAnyOrder(
+            0L,
+            1L,
+            2L,
+            1L << Integer.SIZE,
+            1L << Integer.SIZE | 1L,
+            1L << Integer.SIZE | 2L,
+            2L << Integer.SIZE,
+            2L << Integer.SIZE | 1L,
+            2L << Integer.SIZE | 2L,
+            100L << Integer.SIZE | 100L));
   }
 
   private Windowed<Long> windowed(final long k, final long startMs, final long size) {
@@ -327,17 +304,10 @@ public class ResponsiveWindowIntegrationTest {
       final Supplier<Long> timestamp,
       final long valFrom,
       final long valTo,
-      final long... keys
-  ) {
+      final long... keys) {
     for (final long k : keys) {
       for (long v = valFrom; v < valTo; v++) {
-        producer.send(new ProducerRecord<>(
-            topic,
-            0,
-            timestamp.get(),
-            k,
-            v
-        ));
+        producer.send(new ProducerRecord<>(topic, 0, timestamp.get(), k, v));
       }
     }
   }

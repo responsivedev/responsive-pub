@@ -29,5 +29,4 @@ public interface KeySpec<K> extends Comparator<K> {
   default boolean retain(final K key) {
     return true;
   }
-
 }

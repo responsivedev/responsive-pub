@@ -5,7 +5,6 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.OptionalInt;
 
 public class DemoPolicy {
   public static class ProcessingRateDiagnoser {
@@ -23,8 +22,7 @@ public class DemoPolicy {
 
     public ProcessingRateDiagnoser(
         @JsonProperty("rate") final int rate,
-        @JsonProperty("windowMs") final Optional<Integer> windowMs
-    ) {
+        @JsonProperty("windowMs") final Optional<Integer> windowMs) {
       this.rate = rate;
       this.windowMs = Objects.requireNonNull(windowMs);
     }
@@ -45,10 +43,9 @@ public class DemoPolicy {
     public Diagnoser(
         @JsonProperty("type") final Type strategy,
         @JsonProperty("processingRateScaleUp")
-        final Optional<ProcessingRateDiagnoser> processingRateScaleUp,
+            final Optional<ProcessingRateDiagnoser> processingRateScaleUp,
         @JsonProperty("processingRateScaleDown")
-        final Optional<ProcessingRateDiagnoser> processingRateScaleDown
-    ) {
+            final Optional<ProcessingRateDiagnoser> processingRateScaleDown) {
       this.type = strategy;
       this.processingRateScaleDown = Objects.requireNonNull(processingRateScaleDown);
       this.processingRateScaleUp = Objects.requireNonNull(processingRateScaleUp);
@@ -59,19 +56,12 @@ public class DemoPolicy {
     }
 
     public static Diagnoser processingRateScaleUp(final ProcessingRateDiagnoser diagnoser) {
-      return new Diagnoser(
-          Type.PROCESSING_RATE_SCALE_UP,
-          Optional.of(diagnoser),
-          Optional.empty()
-      );
+      return new Diagnoser(Type.PROCESSING_RATE_SCALE_UP, Optional.of(diagnoser), Optional.empty());
     }
 
     public static Diagnoser processingRateScaleDown(final ProcessingRateDiagnoser diagnoser) {
       return new Diagnoser(
-          Type.PROCESSING_RATE_SCALE_DOWN,
-          Optional.empty(),
-          Optional.of(diagnoser)
-      );
+          Type.PROCESSING_RATE_SCALE_DOWN, Optional.empty(), Optional.of(diagnoser));
     }
 
     public Type getType() {
@@ -109,8 +99,7 @@ public class DemoPolicy {
   public DemoPolicy(
       @JsonProperty("maxReplicas") final int maxReplicas,
       @JsonProperty("minReplicas") final int minReplicas,
-      @JsonProperty("diagnosers") final Optional<List<Diagnoser>> diagnosers
-  ) {
+      @JsonProperty("diagnosers") final Optional<List<Diagnoser>> diagnosers) {
     this.maxReplicas = maxReplicas;
     this.minReplicas = minReplicas;
     this.diagnosers = Objects.requireNonNull(diagnosers);

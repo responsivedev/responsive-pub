@@ -45,16 +45,16 @@ class CassandraFactSchemaIntegrationTest {
   public void before(
       final TestInfo info,
       @ResponsiveConfigParam final Map<String, Object> responsiveProps,
-      final CassandraContainer<?> cassandra
-  ) {
+      final CassandraContainer<?> cassandra) {
     String name = info.getTestMethod().orElseThrow().getName();
     storeName = name + "store";
 
-    final CqlSession session = CqlSession.builder()
-        .addContactPoint(cassandra.getContactPoint())
-        .withLocalDatacenter(cassandra.getLocalDatacenter())
-        .withKeyspace("responsive_clients") // NOTE: this keyspace is expected to exist
-        .build();
+    final CqlSession session =
+        CqlSession.builder()
+            .addContactPoint(cassandra.getContactPoint())
+            .withLocalDatacenter(cassandra.getLocalDatacenter())
+            .withKeyspace("responsive_clients") // NOTE: this keyspace is expected to exist
+            .build();
     client = new CassandraClient(session, new ResponsiveConfig(responsiveProps));
   }
 
@@ -88,8 +88,8 @@ class CassandraFactSchemaIntegrationTest {
     schema.prepare(storeName);
     schema.init(storeName, SubPartitioner.NO_SUBPARTITIONS, 1);
 
-    final Bytes key = Bytes.wrap(new byte[]{0});
-    final byte[] val = new byte[]{1};
+    final Bytes key = Bytes.wrap(new byte[] {0});
+    final byte[] val = new byte[] {1};
 
     // When:
     client.execute(schema.insert(storeName, 1, key, val));
@@ -101,5 +101,4 @@ class CassandraFactSchemaIntegrationTest {
     assertThat(valAt0, is(val));
     assertThat(valAt1, nullValue());
   }
-
 }

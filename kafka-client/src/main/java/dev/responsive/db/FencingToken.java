@@ -20,9 +20,5 @@ import com.datastax.oss.driver.api.core.cql.BatchStatementBuilder;
 
 public interface FencingToken {
 
-  void addFencingStatement(
-      final BatchStatementBuilder builder,
-      final int partition
-  );
-
+  void addFencingStatement(final BatchStatementBuilder builder, final int partition);
 }

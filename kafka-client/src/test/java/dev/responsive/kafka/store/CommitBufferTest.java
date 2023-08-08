@@ -74,7 +74,7 @@ public class CommitBufferTest {
   private static final KeySpec<Bytes> KEY_SPEC = new BytesKeySpec();
   private static final Bytes KEY = Bytes.wrap(ByteBuffer.allocate(4).putInt(0).array());
   private static final Bytes KEY2 = Bytes.wrap(ByteBuffer.allocate(4).putInt(1).array());
-  private static final byte[] VALUE = new byte[]{1};
+  private static final byte[] VALUE = new byte[] {1};
   private static final int KAFKA_PARTITION = 2;
   private static final FlushTriggers TRIGGERS = FlushTriggers.ALWAYS;
 
@@ -91,14 +91,14 @@ public class CommitBufferTest {
   public void before(
       final TestInfo info,
       final CassandraContainer<?> cassandra,
-      @ResponsiveConfigParam final ResponsiveConfig config
-  ) {
+      @ResponsiveConfigParam final ResponsiveConfig config) {
     name = info.getTestMethod().orElseThrow().getName();
-    session = CqlSession.builder()
-        .addContactPoint(cassandra.getContactPoint())
-        .withLocalDatacenter(cassandra.getLocalDatacenter())
-        .withKeyspace("responsive_clients") // NOTE: this keyspace is expected to exist
-        .build();
+    session =
+        CqlSession.builder()
+            .addContactPoint(cassandra.getContactPoint())
+            .withLocalDatacenter(cassandra.getLocalDatacenter())
+            .withKeyspace("responsive_clients") // NOTE: this keyspace is expected to exist
+            .build();
     client = new CassandraClient(session, config);
     schema = new CassandraKeyValueSchema(client);
     changelogTp = new TopicPartition("log", KAFKA_PARTITION);
@@ -107,8 +107,7 @@ public class CommitBufferTest {
     schema.create(name);
     schema.prepare(name);
 
-    when(admin.deleteRecords(Mockito.any()))
-        .thenReturn(new DeleteRecordsResult(Map.of()));
+    when(admin.deleteRecords(Mockito.any())).thenReturn(new DeleteRecordsResult(Map.of()));
   }
 
   private void setPartitioner(final int factor) {
@@ -126,14 +125,23 @@ public class CommitBufferTest {
     // Given:
     setPartitioner(3);
     final String tableName = name;
-    final CommitBuffer<Bytes, RemoteKeyValueSchema> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, admin, schema,
-        KEY_SPEC, true, TRIGGERS, partitioner, 1);
+    final CommitBuffer<Bytes, RemoteKeyValueSchema> buffer =
+        new CommitBuffer<>(
+            client,
+            tableName,
+            changelogTp,
+            admin,
+            schema,
+            KEY_SPEC,
+            true,
+            TRIGGERS,
+            partitioner,
+            1);
     buffer.init();
 
     // reserve epoch for partition 8 to ensure it doesn't get flushed
     // if it did it would get fenced
-    LwtFencingToken.reserve(schema, tableName, new int[]{8}, KAFKA_PARTITION, 3L, false);
+    LwtFencingToken.reserve(schema, tableName, new int[] {8}, KAFKA_PARTITION, 3L, false);
 
     final Bytes k0 = Bytes.wrap(ByteBuffer.allocate(4).putInt(0).array());
     final Bytes k1 = Bytes.wrap(ByteBuffer.allocate(4).putInt(1).array());
@@ -159,22 +167,31 @@ public class CommitBufferTest {
   public void shouldNotFlushWithExpiredEpoch() {
     // Given:
     final String tableName = name;
-    final CommitBuffer<Bytes, RemoteKeyValueSchema> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, admin, schema,
-        KEY_SPEC, true, TRIGGERS, partitioner, 1);
+    final CommitBuffer<Bytes, RemoteKeyValueSchema> buffer =
+        new CommitBuffer<>(
+            client,
+            tableName,
+            changelogTp,
+            admin,
+            schema,
+            KEY_SPEC,
+            true,
+            TRIGGERS,
+            partitioner,
+            1);
     buffer.init();
 
     LwtFencingToken.reserve(
-        schema, tableName, new int[]{KAFKA_PARTITION}, KAFKA_PARTITION, 100L, false);
+        schema, tableName, new int[] {KAFKA_PARTITION}, KAFKA_PARTITION, 100L, false);
 
     // When:
-    final TaskMigratedException e = assertThrows(
-        TaskMigratedException.class,
-        () -> {
-          buffer.put(KEY, VALUE);
-          buffer.flush(100L);
-        }
-    );
+    final TaskMigratedException e =
+        assertThrows(
+            TaskMigratedException.class,
+            () -> {
+              buffer.put(KEY, VALUE);
+              buffer.flush(100L);
+            });
 
     // Then:
     assertThat(
@@ -187,14 +204,23 @@ public class CommitBufferTest {
     // Given:
     final String tableName = name;
     setPartitioner(2);
-    final CommitBuffer<Bytes, RemoteKeyValueSchema> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, admin, schema,
-        KEY_SPEC, true, TRIGGERS, partitioner, 1);
+    final CommitBuffer<Bytes, RemoteKeyValueSchema> buffer =
+        new CommitBuffer<>(
+            client,
+            tableName,
+            changelogTp,
+            admin,
+            schema,
+            KEY_SPEC,
+            true,
+            TRIGGERS,
+            partitioner,
+            1);
     // throwaway init to initialize table
     buffer.init();
 
-    LwtFencingToken.reserve(schema, tableName, new int[]{4}, KAFKA_PARTITION, 100L, false);
-    LwtFencingToken.reserve(schema, tableName, new int[]{5}, KAFKA_PARTITION, 100L, false);
+    LwtFencingToken.reserve(schema, tableName, new int[] {4}, KAFKA_PARTITION, 100L, false);
+    LwtFencingToken.reserve(schema, tableName, new int[] {5}, KAFKA_PARTITION, 100L, false);
 
     // When:
     buffer.init();
@@ -208,9 +234,18 @@ public class CommitBufferTest {
   public void shouldTruncateTopicAfterFlushIfTruncateEnabled() {
     // Given:
     final String tableName = name;
-    final CommitBuffer<Bytes, RemoteKeyValueSchema> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, admin, schema,
-        KEY_SPEC, true, TRIGGERS, partitioner, 1);
+    final CommitBuffer<Bytes, RemoteKeyValueSchema> buffer =
+        new CommitBuffer<>(
+            client,
+            tableName,
+            changelogTp,
+            admin,
+            schema,
+            KEY_SPEC,
+            true,
+            TRIGGERS,
+            partitioner,
+            1);
     buffer.init();
     buffer.put(KEY, VALUE);
 
@@ -225,9 +260,18 @@ public class CommitBufferTest {
   public void shouldNotTruncateTopicAfterFlushIfTruncateDisabled() {
     // Given:
     final String tableName = name;
-    final CommitBuffer<Bytes, RemoteKeyValueSchema> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, admin, schema,
-        KEY_SPEC, false, TRIGGERS, partitioner, 1);
+    final CommitBuffer<Bytes, RemoteKeyValueSchema> buffer =
+        new CommitBuffer<>(
+            client,
+            tableName,
+            changelogTp,
+            admin,
+            schema,
+            KEY_SPEC,
+            false,
+            TRIGGERS,
+            partitioner,
+            1);
     buffer.init();
     buffer.put(KEY, VALUE);
 
@@ -242,21 +286,22 @@ public class CommitBufferTest {
   public void shouldOnlyFlushWhenBufferFullWithRecordsTrigger() {
     // Given:
     final String tableName = name;
-    final CommitBuffer<Bytes, RemoteKeyValueSchema> buffer = new CommitBuffer<>(
-        client,
-        tableName,
-        changelogTp,
-        admin,
-        schema,
-        KEY_SPEC,
-        false,
-        FlushTriggers.ofRecords(10),
-        partitioner,
-        1);
+    final CommitBuffer<Bytes, RemoteKeyValueSchema> buffer =
+        new CommitBuffer<>(
+            client,
+            tableName,
+            changelogTp,
+            admin,
+            schema,
+            KEY_SPEC,
+            false,
+            FlushTriggers.ofRecords(10),
+            partitioner,
+            1);
     buffer.init();
 
     for (byte i = 0; i < 9; i++) {
-      buffer.put(Bytes.wrap(new byte[]{i}), VALUE);
+      buffer.put(Bytes.wrap(new byte[] {i}), VALUE);
     }
 
     // when:
@@ -264,7 +309,7 @@ public class CommitBufferTest {
 
     // Then:
     assertThat(schema.metadata(tableName, KAFKA_PARTITION).offset, is(-1L));
-    buffer.put(Bytes.wrap(new byte[]{10}), VALUE);
+    buffer.put(Bytes.wrap(new byte[] {10}), VALUE);
     buffer.flush(10L);
     assertThat(schema.metadata(tableName, KAFKA_PARTITION).offset, is(10L));
   }
@@ -273,21 +318,22 @@ public class CommitBufferTest {
   public void shouldOnlyFlushWhenBufferFullWithBytesTrigger() {
     // Given:
     final String tableName = name;
-    final CommitBuffer<Bytes, RemoteKeyValueSchema> buffer = new CommitBuffer<>(
-        client,
-        tableName,
-        changelogTp,
-        admin,
-        schema,
-        KEY_SPEC,
-        false,
-        FlushTriggers.ofBytes(100),
-        partitioner,
-        1);
+    final CommitBuffer<Bytes, RemoteKeyValueSchema> buffer =
+        new CommitBuffer<>(
+            client,
+            tableName,
+            changelogTp,
+            admin,
+            schema,
+            KEY_SPEC,
+            false,
+            FlushTriggers.ofBytes(100),
+            partitioner,
+            1);
     buffer.init();
     final byte[] value = new byte[9];
     for (byte i = 0; i < 9; i++) {
-      buffer.put(Bytes.wrap(new byte[]{i}), value);
+      buffer.put(Bytes.wrap(new byte[] {i}), value);
     }
 
     // when:
@@ -295,7 +341,7 @@ public class CommitBufferTest {
 
     // Then:
     assertThat(schema.metadata(tableName, KAFKA_PARTITION).offset, is(-1L));
-    buffer.put(Bytes.wrap(new byte[]{10}), value);
+    buffer.put(Bytes.wrap(new byte[] {10}), value);
     buffer.flush(10L);
     assertThat(schema.metadata(tableName, KAFKA_PARTITION).offset, is(10L));
   }
@@ -306,21 +352,22 @@ public class CommitBufferTest {
     final String tableName = name;
     // just use an atomic reference as a mutable reference type
     final AtomicReference<Instant> clock = new AtomicReference<>(Instant.now());
-    final CommitBuffer<Bytes, RemoteKeyValueSchema> buffer = new CommitBuffer<>(
-        client,
-        tableName,
-        changelogTp,
-        admin,
-        schema,
-        KEY_SPEC,
-        false,
-        FlushTriggers.ofInterval(Duration.ofSeconds(30)),
-        100,
-        partitioner,
-        clock::get,
-        1);
+    final CommitBuffer<Bytes, RemoteKeyValueSchema> buffer =
+        new CommitBuffer<>(
+            client,
+            tableName,
+            changelogTp,
+            admin,
+            schema,
+            KEY_SPEC,
+            false,
+            FlushTriggers.ofInterval(Duration.ofSeconds(30)),
+            100,
+            partitioner,
+            clock::get,
+            1);
     buffer.init();
-    buffer.put(Bytes.wrap(new byte[]{18}), VALUE);
+    buffer.put(Bytes.wrap(new byte[] {18}), VALUE);
 
     // When:
     buffer.flush(1L);
@@ -337,8 +384,9 @@ public class CommitBufferTest {
     // Given:
     final String table = name;
     client.execute(schema.insert(table, KAFKA_PARTITION, KEY, VALUE));
-    final CommitBuffer<Bytes, RemoteKeyValueSchema> buffer = new CommitBuffer<>(
-        client, table, changelogTp, admin, schema, KEY_SPEC, true, TRIGGERS, partitioner, 1);
+    final CommitBuffer<Bytes, RemoteKeyValueSchema> buffer =
+        new CommitBuffer<>(
+            client, table, changelogTp, admin, schema, KEY_SPEC, true, TRIGGERS, partitioner, 1);
     buffer.init();
 
     // When:
@@ -354,13 +402,22 @@ public class CommitBufferTest {
   public void shouldRestoreRecords() {
     // Given:
     final String tableName = name;
-    final CommitBuffer<Bytes, RemoteKeyValueSchema> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, admin, schema,
-        KEY_SPEC, true, TRIGGERS, partitioner, 1);
+    final CommitBuffer<Bytes, RemoteKeyValueSchema> buffer =
+        new CommitBuffer<>(
+            client,
+            tableName,
+            changelogTp,
+            admin,
+            schema,
+            KEY_SPEC,
+            true,
+            TRIGGERS,
+            partitioner,
+            1);
     buffer.init();
 
-    final ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>(
-        changelogTp.topic(), changelogTp.partition(), 100, KEY.get(), VALUE);
+    final ConsumerRecord<byte[], byte[]> record =
+        new ConsumerRecord<>(changelogTp.topic(), changelogTp.partition(), 100, KEY.get(), VALUE);
 
     // When:
     buffer.restoreBatch(List.of(record));
@@ -375,54 +432,67 @@ public class CommitBufferTest {
   public void shouldNotRestoreRecordsWhenFencedByEpoch() {
     // Given:
     final String tableName = name;
-    final CommitBuffer<Bytes, RemoteKeyValueSchema> buffer = new CommitBuffer<>(
-        client, tableName, changelogTp, admin, schema,
-        KEY_SPEC, true, TRIGGERS, partitioner, 1);
+    final CommitBuffer<Bytes, RemoteKeyValueSchema> buffer =
+        new CommitBuffer<>(
+            client,
+            tableName,
+            changelogTp,
+            admin,
+            schema,
+            KEY_SPEC,
+            true,
+            TRIGGERS,
+            partitioner,
+            1);
     buffer.init();
     LwtFencingToken.reserve(
-        schema, tableName, new int[]{KAFKA_PARTITION}, KAFKA_PARTITION, 100L, false);
+        schema, tableName, new int[] {KAFKA_PARTITION}, KAFKA_PARTITION, 100L, false);
 
-    final ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>(
-        changelogTp.topic(), KAFKA_PARTITION, 100, KEY.get(), VALUE);
+    final ConsumerRecord<byte[], byte[]> record =
+        new ConsumerRecord<>(changelogTp.topic(), KAFKA_PARTITION, 100, KEY.get(), VALUE);
 
     // When:
-    final var e = assertThrows(
-        TaskMigratedException.class,
-        () -> buffer.restoreBatch(List.of(record)));
+    final var e =
+        assertThrows(TaskMigratedException.class, () -> buffer.restoreBatch(List.of(record)));
 
     // Then:
-    assertThat(e.getMessage(), containsString("Local Epoch: LwtFencingToken{epoch=1}, "
-        + "Persisted Epoch: 100"));
+    assertThat(
+        e.getMessage(),
+        containsString("Local Epoch: LwtFencingToken{epoch=1}, " + "Persisted Epoch: 100"));
   }
 
   @Test
   public void shouldRestoreStreamsBatchLargerThanCassandraBatch() {
     // Given:
     final String tableName = name;
-    final CommitBuffer<Bytes, RemoteKeyValueSchema> buffer = new CommitBuffer<>(
-        client,
-        tableName,
-        changelogTp,
-        admin,
-        schema,
-        KEY_SPEC,
-        true,
-        TRIGGERS,
-        3,
-        partitioner,
-        Instant::now,
-        1);
+    final CommitBuffer<Bytes, RemoteKeyValueSchema> buffer =
+        new CommitBuffer<>(
+            client,
+            tableName,
+            changelogTp,
+            admin,
+            schema,
+            KEY_SPEC,
+            true,
+            TRIGGERS,
+            3,
+            partitioner,
+            Instant::now,
+            1);
     buffer.init();
     client.execute(schema.setOffset(tableName, new NoOpFencingToken(), 100, 1));
 
-    final List<ConsumerRecord<byte[], byte[]>> records = IntStream.range(0, 5)
-        .mapToObj(i -> new ConsumerRecord<>(
-            changelogTp.topic(),
-            changelogTp.partition(),
-            101 + i,
-            Integer.toString(i).getBytes(Charset.defaultCharset()),
-            Integer.toString(i).getBytes(Charset.defaultCharset())))
-        .collect(Collectors.toList());
+    final List<ConsumerRecord<byte[], byte[]>> records =
+        IntStream.range(0, 5)
+            .mapToObj(
+                i ->
+                    new ConsumerRecord<>(
+                        changelogTp.topic(),
+                        changelogTp.partition(),
+                        101 + i,
+                        Integer.toString(i).getBytes(Charset.defaultCharset()),
+                        Integer.toString(i).getBytes(Charset.defaultCharset())))
+            .collect(Collectors.toList());
 
     // when:
     buffer.restoreBatch(records);
@@ -437,5 +507,4 @@ public class CommitBufferTest {
           is(Integer.toString(i).getBytes(Charset.defaultCharset())));
     }
   }
-
 }

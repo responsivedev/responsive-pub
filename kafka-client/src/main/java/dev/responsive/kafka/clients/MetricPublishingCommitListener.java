@@ -34,12 +34,12 @@ import org.slf4j.LoggerFactory;
 
 /**
  * This class publishes a metric that provides the current committed offset for a given
- * topic-partition. It implements ResponsiveProducer.Listener and ResponsiveConsumer.Listener
- * to listen on commit events and partition assignment changes, respectively. On a partition
- * assignment change, it adds or removes metric instances. Each metric instance returns the
- * current committed offset provided by the producer callback.
+ * topic-partition. It implements ResponsiveProducer.Listener and ResponsiveConsumer.Listener to
+ * listen on commit events and partition assignment changes, respectively. On a partition assignment
+ * change, it adds or removes metric instances. Each metric instance returns the current committed
+ * offset provided by the producer callback.
  *
- * Synchronization: All shared access goes through the "offsets" map.
+ * <p>Synchronization: All shared access goes through the "offsets" map.
  */
 public class MetricPublishingCommitListener implements ResponsiveConsumer.Listener, Closeable {
   private static final Logger LOG = LoggerFactory.getLogger(MetricPublishingCommitListener.class);
@@ -66,10 +66,7 @@ public class MetricPublishingCommitListener implements ResponsiveConsumer.Listen
   }
 
   public MetricPublishingCommitListener(
-      final Metrics metrics,
-      final String threadId,
-      final OffsetRecorder offsetRecorder
-  ) {
+      final Metrics metrics, final String threadId, final OffsetRecorder offsetRecorder) {
     this.metrics = Objects.requireNonNull(metrics);
     this.threadId = Objects.requireNonNull(threadId);
     offsetRecorder.addCommitCallback(this::commitCallback);
@@ -89,9 +86,7 @@ public class MetricPublishingCommitListener implements ResponsiveConsumer.Listen
   }
 
   private void commitCallback(
-      final Map<RecordingKey, Long> committedOffsets,
-      final Map<TopicPartition, Long> unused
-  ) {
+      final Map<RecordingKey, Long> committedOffsets, final Map<TopicPartition, Long> unused) {
     for (final var e : committedOffsets.entrySet()) {
       offsets.computeIfPresent(
           e.getKey().getPartition(),
@@ -100,39 +95,42 @@ public class MetricPublishingCommitListener implements ResponsiveConsumer.Listen
               LOG.debug("add committed offset metric for {} {}", threadId, k);
               metrics.addMetric(
                   metricName(e.getKey()),
-                  (Gauge<Long>) (config, now) ->
-                      offsets.getOrDefault(k, Optional.empty())
-                          .map(CommittedOffset::getOffset).orElse(-1L)
-              );
+                  (Gauge<Long>)
+                      (config, now) ->
+                          offsets
+                              .getOrDefault(k, Optional.empty())
+                              .map(CommittedOffset::getOffset)
+                              .orElse(-1L));
             }
             LOG.debug("record committed offset {} {}: {}", threadId, k, e.getValue());
             return Optional.of(new CommittedOffset(e.getValue(), e.getKey().getConsumerGroup()));
-          }
-      );
+          });
     }
   }
 
   @Override
   public void onPartitionsRevoked(final Collection<TopicPartition> partitions) {
-    LOG.info("Remove committed offset metrics entry for {}",
+    LOG.info(
+        "Remove committed offset metrics entry for {}",
         partitions.stream()
             .filter(offsets::containsKey)
             .map(TopicPartition::toString)
-            .collect(Collectors.joining(","))
-    );
+            .collect(Collectors.joining(",")));
     for (final var p : partitions) {
-      offsets.computeIfPresent(p, (k, v) -> {
-        v.ifPresent(offset -> metrics.removeMetric(metricName(k, offset.getConsumerGroup())));
-        return null;
-      });
+      offsets.computeIfPresent(
+          p,
+          (k, v) -> {
+            v.ifPresent(offset -> metrics.removeMetric(metricName(k, offset.getConsumerGroup())));
+            return null;
+          });
     }
   }
 
   @Override
   public void onPartitionsAssigned(final Collection<TopicPartition> partitions) {
-    LOG.info("Add committed offsets metrics entry for {}",
-        partitions.stream().map(TopicPartition::toString).collect(Collectors.joining(","))
-    );
+    LOG.info(
+        "Add committed offsets metrics entry for {}",
+        partitions.stream().map(TopicPartition::toString).collect(Collectors.joining(",")));
     for (final var p : partitions) {
       offsets.putIfAbsent(p, Optional.empty());
     }

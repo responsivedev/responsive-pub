@@ -32,8 +32,7 @@ import picocli.CommandLine.Parameters;
 @Command(
     name = "analyze",
     mixinStandardHelpOptions = true,
-    description = "analyzes a JAR file for Kafka Stream usage"
-)
+    description = "analyzes a JAR file for Kafka Stream usage")
 public class StreamsBytecodeAnalyzer implements Callable<Integer> {
 
   @Parameters(index = "0", description = "Path to JAR File")
@@ -41,9 +40,8 @@ public class StreamsBytecodeAnalyzer implements Callable<Integer> {
 
   @Override
   public Integer call() throws Exception {
-    final FilterMethodCollector methods = new FilterMethodCollector(
-        owner -> owner.contains("org/apache/kafka/streams")
-    );
+    final FilterMethodCollector methods =
+        new FilterMethodCollector(owner -> owner.contains("org/apache/kafka/streams"));
 
     try (JarFile jar = new JarFile(jarPath)) {
       Enumeration<JarEntry> entries = jar.entries();

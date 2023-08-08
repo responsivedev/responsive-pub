@@ -39,8 +39,7 @@ public enum ColumnName {
   EPOCH("epoch", "epoch"),
   WINDOW_START("windowStart", "windowstart", ts -> timestamp((long) ts));
 
-  static final Bytes METADATA_KEY
-      = Bytes.wrap("_metadata".getBytes(StandardCharsets.UTF_8));
+  static final Bytes METADATA_KEY = Bytes.wrap("_metadata".getBytes(StandardCharsets.UTF_8));
   private final String column;
   private final String bind;
   private final Function<Object, Literal> getLiteral;

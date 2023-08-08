@@ -48,12 +48,9 @@ class MetricPublishingCommitListenerTest {
   private static final TopicPartition PARTITION1 = new TopicPartition("blimp", 1);
   private static final TopicPartition PARTITION2 = new TopicPartition("airplane", 2);
 
-  @Mock
-  private Metrics metrics;
-  @Captor
-  private ArgumentCaptor<MetricName> nameCaptor;
-  @Captor
-  private ArgumentCaptor<Gauge<Long>> metricCaptor;
+  @Mock private Metrics metrics;
+  @Captor private ArgumentCaptor<MetricName> nameCaptor;
+  @Captor private ArgumentCaptor<Gauge<Long>> metricCaptor;
 
   private final OffsetRecorder offsetRecorder = new OffsetRecorder(true);
 
@@ -71,20 +68,17 @@ class MetricPublishingCommitListenerTest {
     final Listener recorderProducerListener = offsetRecorder.getProducerListener();
     recorderProducerListener.onSendOffsetsToTransaction(
         Map.of(PARTITION1, new OffsetAndMetadata(123L), PARTITION2, new OffsetAndMetadata(345L)),
-        GROUP
-    );
+        GROUP);
 
     // when:
     recorderProducerListener.onCommit();
 
     // then:
-    verify(metrics, times(2)).addMetric(
-        nameCaptor.capture(), metricCaptor.capture()
-    );
+    verify(metrics, times(2)).addMetric(nameCaptor.capture(), metricCaptor.capture());
     final var values = metricCaptor.getAllValues();
     final var names = nameCaptor.getAllValues();
-    final var nameToValue = IntStream.range(0, names.size()).boxed()
-        .collect(Collectors.toMap(names::get, values::get));
+    final var nameToValue =
+        IntStream.range(0, names.size()).boxed().collect(Collectors.toMap(names::get, values::get));
     assertThat(nameToValue.get(getName(PARTITION1)).value(null, 0), is(123L));
     assertThat(nameToValue.get(getName(PARTITION2)).value(null, 0), is(345L));
   }
@@ -96,8 +90,7 @@ class MetricPublishingCommitListenerTest {
     final Listener recorderProducerListener = offsetRecorder.getProducerListener();
     recorderProducerListener.onSendOffsetsToTransaction(
         Map.of(PARTITION1, new OffsetAndMetadata(123L), PARTITION2, new OffsetAndMetadata(345L)),
-        GROUP
-    );
+        GROUP);
     recorderProducerListener.onCommit();
 
     // when:
@@ -115,19 +108,15 @@ class MetricPublishingCommitListenerTest {
     final Listener recorderProducerListener = offsetRecorder.getProducerListener();
     recorderProducerListener.onSendOffsetsToTransaction(
         Map.of(PARTITION1, new OffsetAndMetadata(123L), PARTITION2, new OffsetAndMetadata(345L)),
-        GROUP
-    );
+        GROUP);
 
     // when:
     recorderProducerListener.onCommit();
 
     // then:
-    verify(metrics, times(2))
-        .addMetric(nameCaptor.capture(), any(Gauge.class));
+    verify(metrics, times(2)).addMetric(nameCaptor.capture(), any(Gauge.class));
     assertThat(
-        nameCaptor.getAllValues(),
-        containsInAnyOrder(getName(PARTITION1), getName(PARTITION2))
-    );
+        nameCaptor.getAllValues(), containsInAnyOrder(getName(PARTITION1), getName(PARTITION2)));
   }
 
   @Test
@@ -137,8 +126,7 @@ class MetricPublishingCommitListenerTest {
     final Listener recorderProducerListener = offsetRecorder.getProducerListener();
     recorderProducerListener.onSendOffsetsToTransaction(
         Map.of(PARTITION1, new OffsetAndMetadata(123L), PARTITION2, new OffsetAndMetadata(345L)),
-        GROUP
-    );
+        GROUP);
     recorderProducerListener.onCommit();
 
     // when:
@@ -147,20 +135,22 @@ class MetricPublishingCommitListenerTest {
     // then:
     verify(metrics, times(2)).removeMetric(nameCaptor.capture());
     assertThat(
-        nameCaptor.getAllValues(),
-        containsInAnyOrder(getName(PARTITION1), getName(PARTITION2))
-    );
+        nameCaptor.getAllValues(), containsInAnyOrder(getName(PARTITION1), getName(PARTITION2)));
   }
 
   private MetricName getName(final TopicPartition tp) {
     return new MetricName(
-        "committed-offset", "responsive.streams", "",
+        "committed-offset",
+        "responsive.streams",
+        "",
         Map.of(
-            "thread", THREAD_ID,
-            "topic", tp.topic(),
-            "partition", Integer.toString(tp.partition()),
-            "consumerGroup", GROUP
-        )
-    );
+            "thread",
+            THREAD_ID,
+            "topic",
+            tp.topic(),
+            "partition",
+            Integer.toString(tp.partition()),
+            "consumerGroup",
+            GROUP));
   }
 }

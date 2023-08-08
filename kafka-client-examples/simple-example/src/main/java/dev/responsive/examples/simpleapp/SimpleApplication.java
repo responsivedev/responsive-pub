@@ -32,9 +32,10 @@ public class SimpleApplication {
     private static final String PREFIX = "responsive.simple.app.";
     private static final String SOURCE = PREFIX + "source";
     private static final String NAME = PREFIX + "name";
-    private static final ConfigDef CONFIG_DEF = new ConfigDef()
-        .define(NAME, ConfigDef.Type.STRING, "", Importance.LOW, "test run name")
-        .define(SOURCE, ConfigDef.Type.STRING, "", ConfigDef.Importance.LOW, "source topic");
+    private static final ConfigDef CONFIG_DEF =
+        new ConfigDef()
+            .define(NAME, ConfigDef.Type.STRING, "", Importance.LOW, "test run name")
+            .define(SOURCE, ConfigDef.Type.STRING, "", ConfigDef.Importance.LOW, "source topic");
 
     private Config(final Map<?, ?> properties) {
       super(CONFIG_DEF, properties);
@@ -88,15 +89,17 @@ public class SimpleApplication {
     final KStream<byte[], byte[]> stream =
         builder.stream(source, Consumed.with(Serdes.ByteArray(), Serdes.ByteArray()));
     final AtomicLong msgCounter = new AtomicLong(0);
-    final KStream<byte[], byte[]> result = stream.mapValues((k, v) -> {
-      final var msgCount = msgCounter.incrementAndGet();
-      if (msgCount % 1000 == 0) {
-        System.out.printf("received %d %s%n", msgCount, new String(v));
-      }
-      return v;
-    });
-    final KTable<byte[], Long> counts = stream.groupByKey()
-        .count(ResponsiveStores.materialized(cfg.getString(Config.NAME)));
+    final KStream<byte[], byte[]> result =
+        stream.mapValues(
+            (k, v) -> {
+              final var msgCount = msgCounter.incrementAndGet();
+              if (msgCount % 1000 == 0) {
+                System.out.printf("received %d %s%n", msgCount, new String(v));
+              }
+              return v;
+            });
+    final KTable<byte[], Long> counts =
+        stream.groupByKey().count(ResponsiveStores.materialized(cfg.getString(Config.NAME)));
     result.to(source + "-out", Produced.with(Serdes.ByteArray(), Serdes.ByteArray()));
     counts.toStream().to(source + "-counts", Produced.with(Serdes.ByteArray(), Serdes.Long()));
     final Properties properties = new Properties();
@@ -121,9 +124,8 @@ public class SimpleApplication {
   private void maybeCreateKeyspace() {
     LOG.info("create keyspace test");
     try (final CqlSession session = cqlSession()) {
-      final CreateKeyspace createKeyspace = SchemaBuilder.createKeyspace("test")
-          .ifNotExists()
-          .withSimpleStrategy(1);
+      final CreateKeyspace createKeyspace =
+          SchemaBuilder.createKeyspace("test").ifNotExists().withSimpleStrategy(1);
       session.execute(createKeyspace.build());
     }
   }

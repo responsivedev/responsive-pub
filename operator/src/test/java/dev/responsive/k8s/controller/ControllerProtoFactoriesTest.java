@@ -43,22 +43,23 @@ class ControllerProtoFactoriesTest {
 
   @BeforeEach
   public void setup() {
-    final var spec = new ResponsivePolicySpec(
-        "gouda",
-        "cheddar",
-        PolicyStatus.POLICY_STATUS_MANAGED,
-        ResponsivePolicySpec.PolicyType.DEMO,
-        Optional.of(new dev.responsive.k8s.crd.DemoPolicy(
-            123, 7, Optional.empty()))
-    );
+    final var spec =
+        new ResponsivePolicySpec(
+            "gouda",
+            "cheddar",
+            PolicyStatus.POLICY_STATUS_MANAGED,
+            ResponsivePolicySpec.PolicyType.DEMO,
+            Optional.of(new dev.responsive.k8s.crd.DemoPolicy(123, 7, Optional.empty())));
     demoPolicy.setSpec(spec);
     final var demoMetadata = new ObjectMeta();
     demoMetadata.setNamespace("orange");
     demoMetadata.setName("banana");
     demoPolicy.setMetadata(demoMetadata);
-    demoApplicationState = ApplicationState.newBuilder()
-        .setDemoState(ControllerOuterClass.DemoApplicationState.newBuilder().setReplicas(3).build())
-        .build();
+    demoApplicationState =
+        ApplicationState.newBuilder()
+            .setDemoState(
+                ControllerOuterClass.DemoApplicationState.newBuilder().setReplicas(3).build())
+            .build();
   }
 
   @Test
@@ -81,9 +82,8 @@ class ControllerProtoFactoriesTest {
         "cheddar",
         PolicyStatus.POLICY_STATUS_MANAGED,
         ResponsivePolicySpec.PolicyType.DEMO,
-        Optional.of(new dev.responsive.k8s.crd.DemoPolicy(
-            123, 7, Optional.of(List.of(diagnoser))))
-    );
+        Optional.of(
+            new dev.responsive.k8s.crd.DemoPolicy(123, 7, Optional.of(List.of(diagnoser)))));
   }
 
   @Test
@@ -96,57 +96,60 @@ class ControllerProtoFactoriesTest {
 
     // then:
     final DemoPolicy created = request.getPolicy().getDemoPolicy();
-    assertThat(created.getDiagnoserList(), contains(
-        DemoPolicy.Diagnoser.newBuilder()
-            .setLagScaleUp(LagDiagnoser.newBuilder().build())
-            .build()
-    ));
+    assertThat(
+        created.getDiagnoserList(),
+        contains(
+            DemoPolicy.Diagnoser.newBuilder()
+                .setLagScaleUp(LagDiagnoser.newBuilder().build())
+                .build()));
   }
 
   @Test
   public void shouldCreateUpsertPolicyRequestForDemoPolicyWithRateScaleUpDiagnoser() {
     // given:
     demoPolicy.setSpec(
-        specWithDiagnoser(Diagnoser.processingRateScaleUp(
-            new ProcessingRateDiagnoser(10, Optional.of(123))))
-    );
+        specWithDiagnoser(
+            Diagnoser.processingRateScaleUp(new ProcessingRateDiagnoser(10, Optional.of(123)))));
 
     // when:
     final var request = ControllerProtoFactories.upsertPolicyRequest(TESTENV, demoPolicy);
 
     // then:
     final DemoPolicy created = request.getPolicy().getDemoPolicy();
-    assertThat(created.getDiagnoserList(), contains(
-        DemoPolicy.Diagnoser.newBuilder()
-            .setProcessingRateScaleUp(DemoPolicy.ProcessingRateDiagnoser.newBuilder()
-                .setRate(10)
-                .setWindowMs(123)
-                .build())
-            .build()
-    ));
+    assertThat(
+        created.getDiagnoserList(),
+        contains(
+            DemoPolicy.Diagnoser.newBuilder()
+                .setProcessingRateScaleUp(
+                    DemoPolicy.ProcessingRateDiagnoser.newBuilder()
+                        .setRate(10)
+                        .setWindowMs(123)
+                        .build())
+                .build()));
   }
 
   @Test
   public void shouldCreateUpsertPolicyRequestForDemoPolicyWithRateScaleDownDiagnoser() {
     // given:
     demoPolicy.setSpec(
-        specWithDiagnoser(Diagnoser.processingRateScaleDown(
-            new ProcessingRateDiagnoser(10, Optional.of(123))))
-    );
+        specWithDiagnoser(
+            Diagnoser.processingRateScaleDown(new ProcessingRateDiagnoser(10, Optional.of(123)))));
 
     // when:
     final var request = ControllerProtoFactories.upsertPolicyRequest(TESTENV, demoPolicy);
 
     // then:
     final DemoPolicy created = request.getPolicy().getDemoPolicy();
-    assertThat(created.getDiagnoserList(), contains(
-        DemoPolicy.Diagnoser.newBuilder()
-            .setProcessingRateScaleDown(DemoPolicy.ProcessingRateDiagnoser.newBuilder()
-                .setRate(10)
-                .setWindowMs(123)
-                .build())
-            .build()
-    ));
+    assertThat(
+        created.getDiagnoserList(),
+        contains(
+            DemoPolicy.Diagnoser.newBuilder()
+                .setProcessingRateScaleDown(
+                    DemoPolicy.ProcessingRateDiagnoser.newBuilder()
+                        .setRate(10)
+                        .setWindowMs(123)
+                        .build())
+                .build()));
   }
 
   @Test
@@ -161,8 +164,8 @@ class ControllerProtoFactoriesTest {
   @Test
   public void shouldCreateCurrentStateRequestForDeployment() {
     // when:
-    final var request
-        = ControllerProtoFactories.currentStateRequest(TESTENV, demoPolicy, demoApplicationState);
+    final var request =
+        ControllerProtoFactories.currentStateRequest(TESTENV, demoPolicy, demoApplicationState);
 
     // Then:
     assertThat(request.getApplicationId(), is("testenv/gouda/cheddar"));
@@ -173,8 +176,8 @@ class ControllerProtoFactoriesTest {
   @Test
   public void shouldSetAppIdInCurrentStateRequestWhenEnvEmpty() {
     // when:
-    final var request
-        = ControllerProtoFactories.currentStateRequest("", demoPolicy, demoApplicationState);
+    final var request =
+        ControllerProtoFactories.currentStateRequest("", demoPolicy, demoApplicationState);
 
     // Then:
     assertThat(request.getApplicationId(), is("gouda/cheddar"));

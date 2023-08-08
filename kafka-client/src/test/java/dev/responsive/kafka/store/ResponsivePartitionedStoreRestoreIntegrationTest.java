@@ -123,22 +123,22 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
   public void before(
       final TestInfo info,
       final Admin admin,
-      @ResponsiveConfigParam final Map<String, Object> responsiveProps
-  ) throws InterruptedException, ExecutionException {
+      @ResponsiveConfigParam final Map<String, Object> responsiveProps)
+      throws InterruptedException, ExecutionException {
     name = info.getTestMethod().orElseThrow().getName();
     this.responsiveProps.putAll(responsiveProps);
 
     this.admin = admin;
-    final var result = admin.createTopics(
-        List.of(
-            new NewTopic(inputTopic(), Optional.of(1), Optional.empty()),
-            new NewTopic(inputTblTopic(), Optional.of(1), Optional.empty())
-                .configs(Map.of(
-                    TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)),
-            new NewTopic(outputTopic(), Optional.of(1), Optional.empty()),
-            new NewTopic(outputJoined(), Optional.of(1), Optional.empty())
-        )
-    );
+    final var result =
+        admin.createTopics(
+            List.of(
+                new NewTopic(inputTopic(), Optional.of(1), Optional.empty()),
+                new NewTopic(inputTblTopic(), Optional.of(1), Optional.empty())
+                    .configs(
+                        Map.of(
+                            TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)),
+                new NewTopic(outputTopic(), Optional.of(1), Optional.empty()),
+                new NewTopic(outputJoined(), Optional.of(1), Optional.empty())));
     result.all().get();
   }
 
@@ -155,8 +155,8 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
     final CassandraClientFactory defaultFactory = new DefaultCassandraClientFactory();
     final TopicPartition input = new TopicPartition(inputTopic(), 0);
 
-    try (final ResponsiveKafkaStreams streams
-             = buildAggregatorApp(properties, defaultClientSupplier, defaultFactory)) {
+    try (final ResponsiveKafkaStreams streams =
+        buildAggregatorApp(properties, defaultClientSupplier, defaultFactory)) {
       IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(30), streams);
       // Send some data through
       pipeInput(inputTopic(), 1, producer, System::currentTimeMillis, 0, 10, 0);
@@ -165,18 +165,15 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
 
       // Make sure changelog is even w/ cassandra
       final ResponsiveConfig config = new ResponsiveConfig(properties);
-      final CassandraClient cassandraClient = defaultFactory.createCassandraClient(
-          defaultFactory.createCqlSession(config),
-          config
-      );
+      final CassandraClient cassandraClient =
+          defaultFactory.createCassandraClient(defaultFactory.createCqlSession(config), config);
       final RemoteKeyValueSchema statements = new CassandraKeyValueSchema(cassandraClient);
       statements.prepare(aggName());
       final long cassandraOffset = statements.metadata(aggName(), 0).offset;
       assertThat(cassandraOffset, greaterThan(0L));
-      final TopicPartition changelog
-          = new TopicPartition(name + "-" + aggName() + "-changelog", 0);
-      final List<ConsumerRecord<Long, Long>> changelogRecords
-          = slurpPartition(changelog, properties);
+      final TopicPartition changelog = new TopicPartition(name + "-" + aggName() + "-changelog", 0);
+      final List<ConsumerRecord<Long, Long>> changelogRecords =
+          slurpPartition(changelog, properties);
       final long last = changelogRecords.get(changelogRecords.size() - 1).offset();
       assertThat(cassandraOffset, equalTo(last));
     }
@@ -191,8 +188,8 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
     final TopicPartition inputTbl = new TopicPartition(inputTblTopic(), 0);
     final TopicPartition input = new TopicPartition(inputTopic(), 0);
 
-    try (final ResponsiveKafkaStreams streams
-             = buildAggregatorApp(properties, defaultClientSupplier, defaultFactory)) {
+    try (final ResponsiveKafkaStreams streams =
+        buildAggregatorApp(properties, defaultClientSupplier, defaultFactory)) {
       IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(10), streams);
       // Send some data through
       pipeInput(inputTblTopic(), 1, producer, System::currentTimeMillis, 0, 10, 0, 1, 2, 3);
@@ -203,10 +200,10 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
     }
 
     // restart with fault injecting cassandra client
-    final FaultInjectingCassandraClientSupplier cassandraFaultInjector
-        = new FaultInjectingCassandraClientSupplier();
-    try (final ResponsiveKafkaStreams streams
-             = buildAggregatorApp(properties, defaultClientSupplier, cassandraFaultInjector)) {
+    final FaultInjectingCassandraClientSupplier cassandraFaultInjector =
+        new FaultInjectingCassandraClientSupplier();
+    try (final ResponsiveKafkaStreams streams =
+        buildAggregatorApp(properties, defaultClientSupplier, cassandraFaultInjector)) {
       IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(10), streams);
 
       // Inject a fault into cassandra client so it fails the next flush
@@ -222,24 +219,26 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
 
     // Make sure changelog is ahead of cassandra
     final ResponsiveConfig config = new ResponsiveConfig(properties);
-    final CassandraClient cassandraClient = defaultFactory.createCassandraClient(
-        defaultFactory.createCqlSession(config),
-        config);
+    final CassandraClient cassandraClient =
+        defaultFactory.createCassandraClient(defaultFactory.createCqlSession(config), config);
     final RemoteKeyValueSchema statements = new CassandraKeyValueSchema(cassandraClient);
     statements.prepare(aggName());
     final long cassandraOffset = statements.metadata(aggName(), 0).offset;
     assertThat(cassandraOffset, greaterThan(0L));
     final TopicPartition changelog = new TopicPartition(name + "-" + aggName() + "-changelog", 0);
-    final long changelogOffset = admin.listOffsets(Map.of(changelog, OffsetSpec.latest())).all()
-        .get()
-        .get(changelog)
-        .offset();
+    final long changelogOffset =
+        admin
+            .listOffsets(Map.of(changelog, OffsetSpec.latest()))
+            .all()
+            .get()
+            .get(changelog)
+            .offset();
     assertThat(cassandraOffset, lessThan(changelogOffset));
 
     // Restart with restore recorder
     final TestKafkaClientSupplier recordingClientSupplier = new TestKafkaClientSupplier();
-    try (final ResponsiveKafkaStreams streams
-             = buildAggregatorApp(properties, recordingClientSupplier, defaultFactory)) {
+    try (final ResponsiveKafkaStreams streams =
+        buildAggregatorApp(properties, recordingClientSupplier, defaultFactory)) {
       IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(30), streams);
       // Send some more data through and check output
       pipeInput(inputTopic(), 1, producer, System::currentTimeMillis, 20, 30, 0);
@@ -255,7 +254,7 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
     assertThat(recordingClientSupplier.restoreRecords.keySet(), hasItem(changelog));
     assertThat(recordingClientSupplier.restoreRecords.get(changelog), not(empty()));
     // Assert that we never restored from an offset earlier than committed to Cassandra
-    for (final ConsumerRecord<?, ?> r :  recordingClientSupplier.restoreRecords.get(changelog)) {
+    for (final ConsumerRecord<?, ?> r : recordingClientSupplier.restoreRecords.get(changelog)) {
       assertThat(r.offset(), greaterThanOrEqualTo(cassandraOffset));
     }
     // Assert that our source table is never truncated and the changelog table is
@@ -264,22 +263,17 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
   }
 
   private Optional<ConsumerRecord<Long, Long>> readLastOutputRecord(
-      final Map<String, Object> properties
-  ) {
-    final List<ConsumerRecord<Long, Long>> all
-        = slurpPartition(new TopicPartition(outputTopic(), 0), properties);
+      final Map<String, Object> properties) {
+    final List<ConsumerRecord<Long, Long>> all =
+        slurpPartition(new TopicPartition(outputTopic(), 0), properties);
     return all.size() == 0 ? Optional.empty() : Optional.of(all.get(all.size() - 1));
   }
 
   private List<ConsumerRecord<Long, Long>> slurpPartition(
-      final TopicPartition partition,
-      final Map<String, Object> originals
-  ) {
+      final TopicPartition partition, final Map<String, Object> originals) {
     final Map<String, Object> properties = new HashMap<>(originals);
     properties.put(
-        ISOLATION_LEVEL_CONFIG,
-        IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT)
-    );
+        ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT));
     final List<ConsumerRecord<Long, Long>> allRecords = new LinkedList<>();
     try (final KafkaConsumer<Long, Long> consumer = new KafkaConsumer<>(properties)) {
       final long end = consumer.endOffsets(List.of(partition)).get(partition);
@@ -298,25 +292,25 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
   private ResponsiveKafkaStreams buildAggregatorApp(
       final Map<String, Object> originals,
       final KafkaClientSupplier clientSupplier,
-      final CassandraClientFactory cassandraClientFactory
-  ) {
+      final CassandraClientFactory cassandraClientFactory) {
     final Map<String, Object> properties = new HashMap<>(originals);
 
     final StreamsBuilder builder = new StreamsBuilder();
 
     final KStream<Long, Long> input = builder.stream(inputTopic());
-    final KTable<Long, Long> inputTbl = builder.table(
-        inputTblTopic(),
-        Materialized.as(ResponsiveStores.keyValueStore(name + "inputTbl"))
-    );
+    final KTable<Long, Long> inputTbl =
+        builder.table(
+            inputTblTopic(), Materialized.as(ResponsiveStores.keyValueStore(name + "inputTbl")));
     input
         .groupByKey()
         .aggregate(
             () -> 0L,
             (k, v, va) -> v + va,
-            (Materialized) Materialized.as(ResponsiveStores.keyValueStore(aggName()))
-                .withLoggingEnabled(
-                    Map.of(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE)))
+            (Materialized)
+                Materialized.as(ResponsiveStores.keyValueStore(aggName()))
+                    .withLoggingEnabled(
+                        Map.of(
+                            TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE)))
         .toStream()
         .to(outputTopic());
     input.join(inputTbl, Long::sum);
@@ -324,11 +318,7 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
     final Properties builderProperties = new Properties();
     builderProperties.putAll(properties);
     return ResponsiveKafkaStreams.create(
-        builder.build(builderProperties),
-        properties,
-        clientSupplier,
-        cassandraClientFactory
-    );
+        builder.build(builderProperties), properties, clientSupplier, cassandraClientFactory);
   }
 
   private String aggName() {
@@ -371,28 +361,29 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
     public CqlSession createCqlSession(ResponsiveConfig config) {
       final CqlSession wrapped = wrappedFactory.createCqlSession(config);
       final var spy = spy(wrapped);
-      doAnswer(a -> {
-        final Fault fault = this.fault.get();
-        if (fault != null && a.getArgument(0) instanceof BatchStatement) {
-          fault.fire();
-        }
-        return wrapped.execute((Statement<?>) a.getArgument(0));
-      }).when(spy).execute(any(Statement.class));
+      doAnswer(
+              a -> {
+                final Fault fault = this.fault.get();
+                if (fault != null && a.getArgument(0) instanceof BatchStatement) {
+                  fault.fire();
+                }
+                return wrapped.execute((Statement<?>) a.getArgument(0));
+              })
+          .when(spy)
+          .execute(any(Statement.class));
       return spy;
     }
 
     @Override
     public CassandraClient createCassandraClient(
-        CqlSession session,
-        final ResponsiveConfig responsiveConfigs
-    ) {
+        CqlSession session, final ResponsiveConfig responsiveConfigs) {
       return wrappedFactory.createCassandraClient(session, responsiveConfigs);
     }
   }
 
   private static class TestKafkaClientSupplier extends DefaultKafkaClientSupplier {
-    private final Map<TopicPartition, Collection<ConsumerRecord<byte[], byte[]>>> restoreRecords
-        = new ConcurrentHashMap<>();
+    private final Map<TopicPartition, Collection<ConsumerRecord<byte[], byte[]>>> restoreRecords =
+        new ConcurrentHashMap<>();
 
     @Override
     public Consumer<byte[], byte[]> getRestoreConsumer(final Map<String, Object> config) {
@@ -405,8 +396,7 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
 
     public RestoreRecordRecordingConsumer(
         final Map<String, Object> configs,
-        final Map<TopicPartition, Collection<ConsumerRecord<byte[], byte[]>>> recorded
-    ) {
+        final Map<TopicPartition, Collection<ConsumerRecord<byte[], byte[]>>> recorded) {
       super(configs, new ByteArrayDeserializer(), new ByteArrayDeserializer());
       this.recorded = recorded;
     }
@@ -462,34 +452,26 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
 
   private long endOffset(final TopicPartition topic)
       throws ExecutionException, InterruptedException {
-    return admin.listOffsets(Map.of(topic, OffsetSpec.latest())).all().get()
-        .get(topic)
-        .offset();
+    return admin.listOffsets(Map.of(topic, OffsetSpec.latest())).all().get().get(topic).offset();
   }
 
   private long firstOffset(final TopicPartition topic)
       throws ExecutionException, InterruptedException {
-    return admin.listOffsets(Map.of(topic, OffsetSpec.earliest())).all().get()
-        .get(topic)
-        .offset();
+    return admin.listOffsets(Map.of(topic, OffsetSpec.earliest())).all().get().get(topic).offset();
   }
 
-  private void waitTillFullyConsumed(
-      final TopicPartition partition,
-      final Duration timeout
-  ) throws ExecutionException, InterruptedException, TimeoutException {
+  private void waitTillFullyConsumed(final TopicPartition partition, final Duration timeout)
+      throws ExecutionException, InterruptedException, TimeoutException {
     waitTillConsumedPast(partition, endOffset(partition), timeout);
   }
 
   private void waitTillConsumedPast(
-      final TopicPartition partition,
-      final long offset,
-      final Duration timeout
-  ) throws ExecutionException, InterruptedException, TimeoutException {
+      final TopicPartition partition, final long offset, final Duration timeout)
+      throws ExecutionException, InterruptedException, TimeoutException {
     final Instant start = Instant.now();
     while (Instant.now().isBefore(start.plus(timeout))) {
-      final Map<String, Map<TopicPartition, OffsetAndMetadata>> listing
-          = admin.listConsumerGroupOffsets(name).all().get();
+      final Map<String, Map<TopicPartition, OffsetAndMetadata>> listing =
+          admin.listConsumerGroupOffsets(name).all().get();
       if (listing.get(name).containsKey(partition)) {
         final long committed = listing.get(name).get(partition).offset();
         if (committed >= offset) {

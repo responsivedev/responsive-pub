@@ -8,7 +8,5 @@ public interface CassandraClientFactory {
   CqlSession createCqlSession(ResponsiveConfig config);
 
   CassandraClient createCassandraClient(
-      CqlSession session,
-      final ResponsiveConfig responsiveConfigs
-  );
+      CqlSession session, final ResponsiveConfig responsiveConfigs);
 }

@@ -30,10 +30,7 @@ public class MetadataRow {
 
   @Override
   public String toString() {
-    return "MetadataRow{"
-        + "offset=" + offset
-        + ", epoch=" + epoch
-        + '}';
+    return "MetadataRow{" + "offset=" + offset + ", epoch=" + epoch + '}';
   }
 
   @Override

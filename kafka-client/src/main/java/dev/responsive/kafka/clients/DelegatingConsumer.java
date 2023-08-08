@@ -110,8 +110,8 @@ public abstract class DelegatingConsumer<K, V> implements Consumer<K, V> {
   }
 
   @Override
-  public void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets,
-      final Duration timeout) {
+  public void commitSync(
+      final Map<TopicPartition, OffsetAndMetadata> offsets, final Duration timeout) {
     delegate.commitSync(offsets, timeout);
   }
 
@@ -126,8 +126,8 @@ public abstract class DelegatingConsumer<K, V> implements Consumer<K, V> {
   }
 
   @Override
-  public void commitAsync(final Map<TopicPartition, OffsetAndMetadata> offsets,
-      final OffsetCommitCallback callback) {
+  public void commitAsync(
+      final Map<TopicPartition, OffsetAndMetadata> offsets, final OffsetCommitCallback callback) {
     delegate.commitAsync(offsets, callback);
   }
 
@@ -179,8 +179,8 @@ public abstract class DelegatingConsumer<K, V> implements Consumer<K, V> {
   }
 
   @Override
-  public Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions,
-      final Duration timeout) {
+  public Map<TopicPartition, OffsetAndMetadata> committed(
+      final Set<TopicPartition> partitions, final Duration timeout) {
     return delegate.committed(partitions, timeout);
   }
 
@@ -242,8 +242,8 @@ public abstract class DelegatingConsumer<K, V> implements Consumer<K, V> {
   }
 
   @Override
-  public Map<TopicPartition, Long> beginningOffsets(final Collection<TopicPartition> partitions,
-      final Duration timeout) {
+  public Map<TopicPartition, Long> beginningOffsets(
+      final Collection<TopicPartition> partitions, final Duration timeout) {
     return delegate.beginningOffsets(partitions, timeout);
   }
 
@@ -253,8 +253,8 @@ public abstract class DelegatingConsumer<K, V> implements Consumer<K, V> {
   }
 
   @Override
-  public Map<TopicPartition, Long> endOffsets(final Collection<TopicPartition> partitions,
-      final Duration timeout) {
+  public Map<TopicPartition, Long> endOffsets(
+      final Collection<TopicPartition> partitions, final Duration timeout) {
     return delegate.endOffsets(partitions, timeout);
   }
 

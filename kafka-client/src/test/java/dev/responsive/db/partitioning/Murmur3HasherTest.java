@@ -28,8 +28,6 @@ class Murmur3HasherTest {
     assertThat(
         "changing the salt from 31 to another number is backwards incompatible!",
         Murmur3Hasher.SALT,
-        is(31)
-    );
+        is(31));
   }
-
 }

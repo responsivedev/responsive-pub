@@ -40,7 +40,6 @@ import static org.hamcrest.Matchers.lessThan;
 
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.ResponsiveStores;
-import dev.responsive.kafka.config.ResponsiveConfig;
 import dev.responsive.utils.IntegrationTestUtils;
 import dev.responsive.utils.RemoteMonitor;
 import dev.responsive.utils.ResponsiveConfigParam;
@@ -85,8 +84,8 @@ import org.slf4j.LoggerFactory;
 @ExtendWith(ResponsiveExtension.class)
 public class ResponsivePartitionedStoreEosIntegrationTest {
 
-  private static final Logger LOG
-      = LoggerFactory.getLogger(ResponsivePartitionedStoreEosIntegrationTest.class);
+  private static final Logger LOG =
+      LoggerFactory.getLogger(ResponsivePartitionedStoreEosIntegrationTest.class);
 
   private static final int MAX_POLL_MS = 5000;
   private static final String INPUT_TOPIC = "input";
@@ -103,8 +102,7 @@ public class ResponsivePartitionedStoreEosIntegrationTest {
   public void before(
       final TestInfo info,
       final Admin admin,
-      @ResponsiveConfigParam final Map<String, Object> responsiveProps
-  ) {
+      @ResponsiveConfigParam final Map<String, Object> responsiveProps) {
     name = info.getTestMethod().orElseThrow().getName();
     executor = new ScheduledThreadPoolExecutor(2);
 
@@ -114,9 +112,7 @@ public class ResponsivePartitionedStoreEosIntegrationTest {
     admin.createTopics(
         List.of(
             new NewTopic(INPUT_TOPIC, Optional.of(2), Optional.empty()),
-            new NewTopic(OUTPUT_TOPIC, Optional.of(1), Optional.empty())
-        )
-    );
+            new NewTopic(OUTPUT_TOPIC, Optional.of(1), Optional.empty())));
   }
 
   @AfterEach
@@ -132,10 +128,8 @@ public class ResponsivePartitionedStoreEosIntegrationTest {
     final SharedState state = new SharedState();
 
     // When:
-    try (
-        final ResponsiveKafkaStreams streamsA = buildStreams(properties, "a", state);
-        final ResponsiveKafkaStreams streamsB = buildStreams(properties, "b", state);
-    ) {
+    try (final ResponsiveKafkaStreams streamsA = buildStreams(properties, "a", state);
+        final ResponsiveKafkaStreams streamsB = buildStreams(properties, "b", state); ) {
       IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(10), streamsA, streamsB);
 
       // committed data first, then second set of uncommitted data
@@ -165,13 +159,15 @@ public class ResponsivePartitionedStoreEosIntegrationTest {
           .await(Duration.ofSeconds(20));
 
       // wait for a rebalance
-      new RemoteMonitor(executor,
-          // if either streams has 2 topic partitions assigned to it
-          // then a rebalance has happened
-          () -> streamsA.metadataForAllStreamsClients()
-              .stream().anyMatch(sm -> sm.topicPartitions().size() == 2)
-              || streamsB.metadataForAllStreamsClients()
-              .stream().anyMatch(sm -> sm.topicPartitions().size() == 2))
+      new RemoteMonitor(
+              executor,
+              // if either streams has 2 topic partitions assigned to it
+              // then a rebalance has happened
+              () ->
+                  streamsA.metadataForAllStreamsClients().stream()
+                          .anyMatch(sm -> sm.topicPartitions().size() == 2)
+                      || streamsB.metadataForAllStreamsClients().stream()
+                          .anyMatch(sm -> sm.topicPartitions().size() == 2))
           .await(Duration.ofSeconds(30));
 
       // 20 more values beyond the first read are now committed (10
@@ -188,23 +184,22 @@ public class ResponsivePartitionedStoreEosIntegrationTest {
       // correct result (max) and ensure that the values are always increasing
       // because we're summing positive values - if the values decrease that
       // would indicate we read uncommitted values
-      final long[] max = new long[]{0, 0};
-      final long[] prev = new long[]{-1L, -1L};
+      final long[] max = new long[] {0, 0};
+      final long[] prev = new long[] {-1L, -1L};
       for (final KeyValue<Long, Long> kv : readC) {
         max[kv.key.intValue()] = Math.max(kv.value, max[kv.key.intValue()]);
 
         assertThat(prev[kv.key.intValue()], lessThan(kv.value));
         prev[kv.key.intValue()] = kv.value;
       }
-      assertThat(max, equalTo(new long[]{190, 190}));
+      assertThat(max, equalTo(new long[] {190, 190}));
 
       // for the uncommitted values, we are asserting that the failure
       // which happened at offset 10-15 caused duplicate uncommitted writes
       // to the output topic
-      final Map<KeyValue<Long, Long>, Integer> dupes = readU
-          .stream()
-          .collect(Collectors.toMap(kv -> kv, kv -> 1, Integer::sum));
-      for (final long val : new long[]{55, 66, 78, 91, 105}) {
+      final Map<KeyValue<Long, Long>, Integer> dupes =
+          readU.stream().collect(Collectors.toMap(kv -> kv, kv -> 1, Integer::sum));
+      for (final long val : new long[] {55, 66, 78, 91, 105}) {
         assertThat(dupes.get(new KeyValue<>(0L, val)), is(2));
       }
     }
@@ -240,18 +235,13 @@ public class ResponsivePartitionedStoreEosIntegrationTest {
 
   private StoreBuilder<KeyValueStore<Long, Long>> storeSupplier() {
     return ResponsiveStores.keyValueStoreBuilder(
-        ResponsiveStores.keyValueStore(STORE_NAME),
-        Serdes.Long(),
-        Serdes.Long()
-    ).withLoggingEnabled(
-        Map.of(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE));
+            ResponsiveStores.keyValueStore(STORE_NAME), Serdes.Long(), Serdes.Long())
+        .withLoggingEnabled(
+            Map.of(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE));
   }
 
   private ResponsiveKafkaStreams buildStreams(
-      final Map<String, Object> originals,
-      final String instance,
-      final SharedState state
-  ) {
+      final Map<String, Object> originals, final String instance, final SharedState state) {
     final Map<String, Object> properties = new HashMap<>(originals);
     properties.put(APPLICATION_SERVER_CONFIG, instance + ":1024");
 
@@ -259,9 +249,7 @@ public class ResponsivePartitionedStoreEosIntegrationTest {
     builder.addStateStore(storeSupplier());
 
     final KStream<Long, Long> input = builder.stream(INPUT_TOPIC);
-    input
-        .process(() -> new TestProcessor(instance, state), STORE_NAME)
-        .to(OUTPUT_TOPIC);
+    input.process(() -> new TestProcessor(instance, state), STORE_NAME).to(OUTPUT_TOPIC);
 
     return ResponsiveKafkaStreams.create(builder.build(), properties);
   }
@@ -348,5 +336,4 @@ public class ResponsivePartitionedStoreEosIntegrationTest {
       }
     }
   }
-
 }

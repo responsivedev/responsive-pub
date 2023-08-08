@@ -26,35 +26,27 @@ import java.util.function.BooleanSupplier;
 import javax.annotation.concurrent.GuardedBy;
 
 /**
- * {@code RemoteMonitor} is a synchronization barrier similar to
- * a {@link Condition} variable that allows multiple watchers to
- * wait on a condition that requires polling on the status of an
- * external resource. This is useful to avoid making the same RPC
- * from multiple callers.
+ * {@code RemoteMonitor} is a synchronization barrier similar to a {@link Condition} variable that
+ * allows multiple watchers to wait on a condition that requires polling on the status of an
+ * external resource. This is useful to avoid making the same RPC from multiple callers.
  */
 public class RemoteMonitor {
 
   private final ReentrantLock lock = new ReentrantLock();
   private final Condition satisfied = lock.newCondition();
 
-  @GuardedBy("lock")
-  private boolean isSatisfied = false;
+  @GuardedBy("lock") private boolean isSatisfied = false;
 
-  public RemoteMonitor(
-      final ScheduledExecutorService executor,
-      final BooleanSupplier condition
-  ) {
+  public RemoteMonitor(final ScheduledExecutorService executor, final BooleanSupplier condition) {
     this(executor, condition, Duration.ofSeconds(1));
   }
 
   public RemoteMonitor(
       final ScheduledExecutorService executor,
       final BooleanSupplier condition,
-      final Duration checkRate
-  ) {
+      final Duration checkRate) {
     executor.scheduleAtFixedRate(
-        () -> signalWhenDone(condition), 0, checkRate.toMillis(), TimeUnit.MILLISECONDS
-    );
+        () -> signalWhenDone(condition), 0, checkRate.toMillis(), TimeUnit.MILLISECONDS);
   }
 
   public void await(final Duration timeout) throws TimeoutException, InterruptedException {

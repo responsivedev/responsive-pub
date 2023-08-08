@@ -20,8 +20,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
 /**
- * This specifies additional functions required for reading from
- * a key-value store.
+ * This specifies additional functions required for reading from a key-value store.
  *
  * @see RemoteSchema
  */

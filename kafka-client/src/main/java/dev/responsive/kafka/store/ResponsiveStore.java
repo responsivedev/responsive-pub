@@ -40,10 +40,7 @@ public class ResponsiveStore implements KeyValueStore<Bytes, byte[]> {
   private final SchemaType schemaType;
   private KeyValueStore<Bytes, byte[]> delegate;
 
-  public ResponsiveStore(
-      final TableName name,
-      final SchemaType schemaType
-  ) {
+  public ResponsiveStore(final TableName name, final SchemaType schemaType) {
     this.name = name;
     this.schemaType = schemaType;
   }
@@ -81,8 +78,7 @@ public class ResponsiveStore implements KeyValueStore<Bytes, byte[]> {
       init((StateStoreContext) context, root);
     } else {
       throw new UnsupportedOperationException(
-          "Use ResponsiveStore#init(StateStoreContext, StateStore) instead."
-      );
+          "Use ResponsiveStore#init(StateStoreContext, StateStore) instead.");
     }
   }
 
@@ -121,10 +117,7 @@ public class ResponsiveStore implements KeyValueStore<Bytes, byte[]> {
   @Override
   @Evolving
   public <R> QueryResult<R> query(
-      final Query<R> query,
-      final PositionBound positionBound,
-      final QueryConfig config
-  ) {
+      final Query<R> query, final PositionBound positionBound, final QueryConfig config) {
     return delegate.query(query, positionBound, config);
   }
 
@@ -161,9 +154,7 @@ public class ResponsiveStore implements KeyValueStore<Bytes, byte[]> {
 
   @Override
   public <S extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefixScan(
-      final P prefix,
-      final S prefixKeySerializer
-  ) {
+      final P prefix, final S prefixKeySerializer) {
     return delegate.prefixScan(prefix, prefixKeySerializer);
   }
 

@@ -33,8 +33,8 @@ class TargetStateWithTimestamp {
     this(Instant.now(), Optional.empty());
   }
 
-  TargetStateWithTimestamp(final Instant timestamp,
-                           final Optional<ControllerOuterClass.ApplicationState> targetState) {
+  TargetStateWithTimestamp(
+      final Instant timestamp, final Optional<ControllerOuterClass.ApplicationState> targetState) {
     this.timestamp = Objects.requireNonNull(timestamp);
     this.targetState = Objects.requireNonNull(targetState);
   }
@@ -68,8 +68,10 @@ class TargetStateWithTimestamp {
   @Override
   public String toString() {
     return "TargetStateWithTimestamp{"
-        + "timestamp=" + timestamp
-        + ", targetState=" + targetState
+        + "timestamp="
+        + timestamp
+        + ", targetState="
+        + targetState
         + '}';
   }
 }

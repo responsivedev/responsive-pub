@@ -44,10 +44,10 @@ class SubPartitionerTest {
     final var partitioner = new SubPartitioner(2, SINGLE_BYTE_HASHER);
 
     // When:
-    final int zero = partitioner.partition(0, Bytes.wrap(new byte[]{0}));
-    final int one = partitioner.partition(0, Bytes.wrap(new byte[]{1}));
-    final int two = partitioner.partition(1, Bytes.wrap(new byte[]{2}));
-    final int three = partitioner.partition(1, Bytes.wrap(new byte[]{3}));
+    final int zero = partitioner.partition(0, Bytes.wrap(new byte[] {0}));
+    final int one = partitioner.partition(0, Bytes.wrap(new byte[] {1}));
+    final int two = partitioner.partition(1, Bytes.wrap(new byte[] {2}));
+    final int three = partitioner.partition(1, Bytes.wrap(new byte[] {3}));
 
     // Then:
     assertThat(zero, is(0));
@@ -76,14 +76,14 @@ class SubPartitionerTest {
     final int desiredPartitions = 127;
 
     // When:
-    final SubPartitioner subPartitioner = SubPartitioner.create(
-        actualRemoteCount,
-        kafkaPartitions,
-        desiredPartitions,
-        NAME,
-        CHANGELOG_TOPIC_NAME,
-        SINGLE_BYTE_HASHER
-    );
+    final SubPartitioner subPartitioner =
+        SubPartitioner.create(
+            actualRemoteCount,
+            kafkaPartitions,
+            desiredPartitions,
+            NAME,
+            CHANGELOG_TOPIC_NAME,
+            SINGLE_BYTE_HASHER);
 
     // Then:
     assertThat(subPartitioner.getFactor(), is(4));
@@ -97,14 +97,14 @@ class SubPartitionerTest {
     final int desiredPartitions = -1;
 
     // When:
-    final SubPartitioner subPartitioner = SubPartitioner.create(
-        actualRemoteCount,
-        kafkaPartitions,
-        desiredPartitions,
-        NAME,
-        CHANGELOG_TOPIC_NAME,
-        SINGLE_BYTE_HASHER
-    );
+    final SubPartitioner subPartitioner =
+        SubPartitioner.create(
+            actualRemoteCount,
+            kafkaPartitions,
+            desiredPartitions,
+            NAME,
+            CHANGELOG_TOPIC_NAME,
+            SINGLE_BYTE_HASHER);
 
     // Then:
     assertThat(subPartitioner.getFactor(), is(1));
@@ -118,27 +118,25 @@ class SubPartitionerTest {
     final int desiredPartitions = 127;
 
     // Expect:
-    final ConfigException error = Assertions.assertThrows(
-        ConfigException.class,
-        () -> SubPartitioner.create(
-            actualRemoteCount,
-            kafkaPartitions,
-            desiredPartitions,
-            NAME,
-            CHANGELOG_TOPIC_NAME,
-            SINGLE_BYTE_HASHER
-        )
-    );
+    final ConfigException error =
+        Assertions.assertThrows(
+            ConfigException.class,
+            () ->
+                SubPartitioner.create(
+                    actualRemoteCount,
+                    kafkaPartitions,
+                    desiredPartitions,
+                    NAME,
+                    CHANGELOG_TOPIC_NAME,
+                    SINGLE_BYTE_HASHER));
 
     // Then:
     assertThat(
         error.getMessage(),
         Matchers.allOf(
-            containsString("was configured to 127, which given 32 partitions in "
-            + "kafka topic changelog would result in 128 remote partitions"),
-            containsString("already initialized with 100 partitions")
-        )
-    );
+            containsString(
+                "was configured to 127, which given 32 partitions in "
+                    + "kafka topic changelog would result in 128 remote partitions"),
+            containsString("already initialized with 100 partitions")));
   }
-
 }

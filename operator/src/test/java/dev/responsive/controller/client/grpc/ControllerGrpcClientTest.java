@@ -58,29 +58,30 @@ import responsive.controller.v1.controller.proto.ControllerGrpc;
 import responsive.controller.v1.controller.proto.ControllerOuterClass;
 import responsive.platform.auth.ApiKeyHeaders;
 
-
 @ExtendWith(MockitoExtension.class)
 class ControllerGrpcClientTest {
   private static final String TARGET = "controller:1234";
 
-  @Rule
-  public final GrpcCleanupRule grpcCleanup = new GrpcCleanupRule();
+  @Rule public final GrpcCleanupRule grpcCleanup = new GrpcCleanupRule();
 
-  private final ServerInterceptor mockServerInterceptor = mock(ServerInterceptor.class, delegatesTo(
-      new ServerInterceptor() {
-        @Override
-        public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
-            ServerCall<ReqT, RespT> call, Metadata headers,
-            ServerCallHandler<ReqT, RespT> next) {
-          return next.startCall(call, headers);
-        }
-      }));
+  private final ServerInterceptor mockServerInterceptor =
+      mock(
+          ServerInterceptor.class,
+          delegatesTo(
+              new ServerInterceptor() {
+                @Override
+                public <ReqT, RespT> ServerCall.Listener<ReqT> interceptCall(
+                    ServerCall<ReqT, RespT> call,
+                    Metadata headers,
+                    ServerCallHandler<ReqT, RespT> next) {
+                  return next.startCall(call, headers);
+                }
+              }));
 
-  @Mock
-  private ManagedChannel channel;
+  @Mock private ManagedChannel channel;
 
-  @Mock
-  private ControllerGrpc.ControllerBlockingStub stub;
+  @Mock private ControllerGrpc.ControllerBlockingStub stub;
+
   @Mock
   private dev.responsive.controller.client.grpc.ControllerGrpcClient.GrpcFactories grpcFactories;
 
@@ -94,23 +95,19 @@ class ControllerGrpcClientTest {
 
   @BeforeEach
   public void setup() {
-    when(grpcFactories.createChannel(any(), any(),
-        clientInterceptorArgumentCaptor.capture())).thenReturn(channel);
+    when(grpcFactories.createChannel(any(), any(), clientInterceptorArgumentCaptor.capture()))
+        .thenReturn(channel);
     when(grpcFactories.createBlockingStub(any())).thenReturn(stub);
     lenient().when(stub.withDeadlineAfter(anyLong(), any())).thenReturn(stub);
-    client = new dev.responsive.controller.client.grpc.ControllerGrpcClient(
-        TARGET,
-        apiKey,
-        secret,
-        false,
-        grpcFactories
-    );
+    client =
+        new dev.responsive.controller.client.grpc.ControllerGrpcClient(
+            TARGET, apiKey, secret, false, grpcFactories);
   }
 
   @Test
   public void shouldConnectCorrectly() {
-    verify(grpcFactories).createChannel(eq(TARGET), any(TlsChannelCredentials.class),
-        any(ClientInterceptor.class));
+    verify(grpcFactories)
+        .createChannel(eq(TARGET), any(TlsChannelCredentials.class), any(ClientInterceptor.class));
     verify(grpcFactories).createBlockingStub(channel);
   }
 
@@ -123,16 +120,21 @@ class ControllerGrpcClientTest {
     // Generate a unique in-process server name.
     String serverName = InProcessServerBuilder.generateName();
     // Create a server, add service, start, and register for automatic graceful shutdown.
-    grpcCleanup.register(InProcessServerBuilder.forName(serverName).directExecutor()
-        .addService(ServerInterceptors.intercept(new GreeterGrpc.GreeterImplBase() {
-        }, mockServerInterceptor))
-        .build().start());
+    grpcCleanup.register(
+        InProcessServerBuilder.forName(serverName)
+            .directExecutor()
+            .addService(
+                ServerInterceptors.intercept(
+                    new GreeterGrpc.GreeterImplBase() {}, mockServerInterceptor))
+            .build()
+            .start());
     // Create a client channel and register for automatic graceful shutdown.
-    ManagedChannel channel = grpcCleanup.register(
-        InProcessChannelBuilder.forName(serverName).directExecutor().build());
+    ManagedChannel channel =
+        grpcCleanup.register(InProcessChannelBuilder.forName(serverName).directExecutor().build());
 
-    GreeterGrpc.GreeterBlockingStub blockingStub = GreeterGrpc.newBlockingStub(
-        ClientInterceptors.intercept(channel, clientInterceptorArgumentCaptor.getValue()));
+    GreeterGrpc.GreeterBlockingStub blockingStub =
+        GreeterGrpc.newBlockingStub(
+            ClientInterceptors.intercept(channel, clientInterceptorArgumentCaptor.getValue()));
 
     ArgumentCaptor<Metadata> metadataCaptor = ArgumentCaptor.forClass(Metadata.class);
 
@@ -143,29 +145,35 @@ class ControllerGrpcClientTest {
       // expected because the method is not implemented at server side
     }
 
-    verify(mockServerInterceptor).interceptCall(
-        ArgumentMatchers.<ServerCall<HelloRequest, HelloReply>>any(),
-        metadataCaptor.capture(),
-        ArgumentMatchers.<ServerCallHandler<HelloRequest, HelloReply>>any());
+    verify(mockServerInterceptor)
+        .interceptCall(
+            ArgumentMatchers.<ServerCall<HelloRequest, HelloReply>>any(),
+            metadataCaptor.capture(),
+            ArgumentMatchers.<ServerCallHandler<HelloRequest, HelloReply>>any());
 
-    final String receivedApiKey = metadataCaptor.getValue().get(Metadata.Key.of(
-        ApiKeyHeaders.API_KEY_METADATA_KEY,
-        Metadata.ASCII_STRING_MARSHALLER));
+    final String receivedApiKey =
+        metadataCaptor
+            .getValue()
+            .get(
+                Metadata.Key.of(
+                    ApiKeyHeaders.API_KEY_METADATA_KEY, Metadata.ASCII_STRING_MARSHALLER));
     assertEquals(apiKey, receivedApiKey);
 
-    final String receivedSecret = metadataCaptor.getValue().get(Metadata.Key.of(
-        ApiKeyHeaders.SECRET_METADATA_KEY,
-        Metadata.ASCII_STRING_MARSHALLER));
+    final String receivedSecret =
+        metadataCaptor
+            .getValue()
+            .get(
+                Metadata.Key.of(
+                    ApiKeyHeaders.SECRET_METADATA_KEY, Metadata.ASCII_STRING_MARSHALLER));
     assertEquals(secret, receivedSecret);
   }
-
 
   @Test
   public void shouldSendUpsertPolicyRequest() {
     // given:
     final var req = ControllerOuterClass.UpsertPolicyRequest.newBuilder().build();
-    when(stub.upsertPolicy(any())).thenReturn(
-        ControllerOuterClass.SimpleResponse.newBuilder().build());
+    when(stub.upsertPolicy(any()))
+        .thenReturn(ControllerOuterClass.SimpleResponse.newBuilder().build());
 
     // when:
     client.upsertPolicy(req);
@@ -178,10 +186,8 @@ class ControllerGrpcClientTest {
   public void shouldHandleUpsertPolicyRequestError() {
     // given:
     final var req = ControllerOuterClass.UpsertPolicyRequest.newBuilder().build();
-    when(stub.upsertPolicy(any())).thenReturn(ControllerOuterClass.SimpleResponse.newBuilder()
-        .setError("oops")
-        .build()
-    );
+    when(stub.upsertPolicy(any()))
+        .thenReturn(ControllerOuterClass.SimpleResponse.newBuilder().setError("oops").build());
 
     // when/then:
     assertThrows(RuntimeException.class, () -> client.upsertPolicy(req));
@@ -191,8 +197,8 @@ class ControllerGrpcClientTest {
   public void shouldSendCurrentStatusRequest() {
     // given:
     final var req = ControllerOuterClass.CurrentStateRequest.newBuilder().build();
-    when(stub.currentState(any())).thenReturn(
-        ControllerOuterClass.SimpleResponse.newBuilder().build());
+    when(stub.currentState(any()))
+        .thenReturn(ControllerOuterClass.SimpleResponse.newBuilder().build());
 
     // when:
     client.currentState(req);
@@ -205,10 +211,8 @@ class ControllerGrpcClientTest {
   public void shouldHandleCurrentStatusRequestError() {
     // given:
     final var req = ControllerOuterClass.CurrentStateRequest.newBuilder().build();
-    when(stub.currentState(any())).thenReturn(ControllerOuterClass.SimpleResponse.newBuilder()
-        .setError("oops")
-        .build()
-    );
+    when(stub.currentState(any()))
+        .thenReturn(ControllerOuterClass.SimpleResponse.newBuilder().setError("oops").build());
 
     // when/then:
     assertThrows(RuntimeException.class, () -> client.currentState(req));
@@ -219,11 +223,9 @@ class ControllerGrpcClientTest {
     // given:
     final var req = ControllerOuterClass.EmptyRequest.newBuilder().build();
     final var state = ControllerOuterClass.ApplicationState.newBuilder().build();
-    when(stub.getTargetState(any())).thenReturn(
-        ControllerOuterClass.GetTargetStateResponse.newBuilder()
-            .setState(state)
-            .build()
-    );
+    when(stub.getTargetState(any()))
+        .thenReturn(
+            ControllerOuterClass.GetTargetStateResponse.newBuilder().setState(state).build());
 
     // when:
     final var returnedState = client.getTargetState(req);
@@ -237,11 +239,9 @@ class ControllerGrpcClientTest {
   public void shouldHandleTargetStatusRequestError() {
     // given:
     final var req = ControllerOuterClass.EmptyRequest.newBuilder().build();
-    when(stub.getTargetState(any())).thenReturn(
-        ControllerOuterClass.GetTargetStateResponse.newBuilder()
-            .setError("oops")
-            .build()
-    );
+    when(stub.getTargetState(any()))
+        .thenReturn(
+            ControllerOuterClass.GetTargetStateResponse.newBuilder().setError("oops").build());
 
     // when:
     assertThrows(RuntimeException.class, () -> client.getTargetState(req));

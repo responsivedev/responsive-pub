@@ -13,8 +13,7 @@ public class Main {
     try (InputStream input = new FileInputStream(args[0])) {
       final Properties properties = new Properties();
       properties.load(input);
-      rawCfg = properties.keySet().stream()
-          .collect(Collectors.toMap(k -> k, properties::get));
+      rawCfg = properties.keySet().stream().collect(Collectors.toMap(k -> k, properties::get));
     }
     final SimpleApplication application = new SimpleApplication(rawCfg);
     Runtime.getRuntime().addShutdownHook(new Thread(application::stop));

@@ -41,16 +41,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class ResponsiveConsumerTest {
   private static final TopicPartition PARTITION = new TopicPartition("baguette", 1);
-  @Mock
-  private Consumer<?, ?> wrapped;
-  @Mock
-  private ConsumerRebalanceListener providedRebalanceListener;
-  @Mock
-  private ResponsiveConsumer.Listener listener1;
-  @Mock
-  private ResponsiveConsumer.Listener listener2;
-  @Captor
-  private ArgumentCaptor<ConsumerRebalanceListener> rebalanceListenerCaptor;
+  @Mock private Consumer<?, ?> wrapped;
+  @Mock private ConsumerRebalanceListener providedRebalanceListener;
+  @Mock private ResponsiveConsumer.Listener listener1;
+  @Mock private ResponsiveConsumer.Listener listener2;
+  @Captor private ArgumentCaptor<ConsumerRebalanceListener> rebalanceListenerCaptor;
 
   private ResponsiveConsumer<?, ?> consumer;
 
@@ -216,8 +211,7 @@ class ResponsiveConsumerTest {
     assertThrows(UnsupportedOperationException.class, () -> consumer.commitAsync());
     assertThrows(UnsupportedOperationException.class, () -> consumer.commitAsync((c, e) -> {}));
     assertThrows(
-        UnsupportedOperationException.class, () -> consumer.commitAsync(Map.of(), (c, e) -> {})
-    );
+        UnsupportedOperationException.class, () -> consumer.commitAsync(Map.of(), (c, e) -> {}));
   }
 
   @Test

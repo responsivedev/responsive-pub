@@ -50,53 +50,34 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class ResponsiveKafkaClientSupplierTest {
-  private static final Map<String, Object> CONFIGS = Map.of(
-      ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, BytesDeserializer.class,
-      ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, BytesDeserializer.class,
-      ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, BytesSerializer.class,
-      ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, BytesSerializer.class,
-      StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2,
-      StreamsConfig.APPLICATION_ID_CONFIG, "appid",
-      StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092"
-  );
-  private static final Map<String, Object> PRODUCER_CONFIGS = configsWithOverrides(
+  private static final Map<String, Object> CONFIGS =
       Map.of(
-          ProducerConfig.CLIENT_ID_CONFIG, "foo-StreamThread-0-producer"
-      )
-  );
+          ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, BytesDeserializer.class,
+          ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, BytesDeserializer.class,
+          ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, BytesSerializer.class,
+          ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, BytesSerializer.class,
+          StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2,
+          StreamsConfig.APPLICATION_ID_CONFIG, "appid",
+          StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+  private static final Map<String, Object> PRODUCER_CONFIGS =
+      configsWithOverrides(Map.of(ProducerConfig.CLIENT_ID_CONFIG, "foo-StreamThread-0-producer"));
 
-  private static final Map<String, Object> CONSUMER_CONFIGS = configsWithOverrides(
-      Map.of(
-          ProducerConfig.CLIENT_ID_CONFIG, "foo-StreamThread-0-consumer"
-      )
-  );
+  private static final Map<String, Object> CONSUMER_CONFIGS =
+      configsWithOverrides(Map.of(ProducerConfig.CLIENT_ID_CONFIG, "foo-StreamThread-0-consumer"));
 
-  @Mock
-  private Factories factories;
-  @Mock
-  private Metrics metrics;
-  @Mock
-  private EndOffsetsPoller.Listener consumerEndOffsetsPollListener;
-  @Mock
-  private EndOffsetsPoller endOffsetsPoller;
-  @Mock
-  private KafkaClientSupplier wrapped;
-  @Mock
-  private Producer<byte[], byte[]> wrappedProducer;
-  @Mock
-  private Consumer<byte[], byte[]> wrappedConsumer;
-  @Mock
-  private ResponsiveProducer<byte[], byte[]> responsiveProducer;
-  @Mock
-  private ResponsiveConsumer<byte[], byte[]> responsiveConsumer;
-  @Mock
-  private MetricPublishingCommitListener commitMetricListener;
-  @Mock
-  private ResponsiveProducer.Listener commitMetricProducerListener;
-  @Captor
-  private ArgumentCaptor<List<ResponsiveProducer.Listener>> producerListenerCaptor;
-  @Captor
-  private ArgumentCaptor<List<ResponsiveConsumer.Listener>> consumerListenerCaptor;
+  @Mock private Factories factories;
+  @Mock private Metrics metrics;
+  @Mock private EndOffsetsPoller.Listener consumerEndOffsetsPollListener;
+  @Mock private EndOffsetsPoller endOffsetsPoller;
+  @Mock private KafkaClientSupplier wrapped;
+  @Mock private Producer<byte[], byte[]> wrappedProducer;
+  @Mock private Consumer<byte[], byte[]> wrappedConsumer;
+  @Mock private ResponsiveProducer<byte[], byte[]> responsiveProducer;
+  @Mock private ResponsiveConsumer<byte[], byte[]> responsiveConsumer;
+  @Mock private MetricPublishingCommitListener commitMetricListener;
+  @Mock private ResponsiveProducer.Listener commitMetricProducerListener;
+  @Captor private ArgumentCaptor<List<ResponsiveProducer.Listener>> producerListenerCaptor;
+  @Captor private ArgumentCaptor<List<ResponsiveConsumer.Listener>> consumerListenerCaptor;
   private final OffsetRecorder offsetRecorder = new OffsetRecorder(true);
   private ResponsiveKafkaClientSupplier supplier;
 
@@ -110,13 +91,18 @@ class ResponsiveKafkaClientSupplierTest {
     lenient().when(endOffsetsPoller.addForThread(any())).thenReturn(consumerEndOffsetsPollListener);
     lenient().when(wrapped.getConsumer(any())).thenReturn(wrappedConsumer);
     lenient().when(wrapped.getProducer(any())).thenReturn(wrappedProducer);
-    lenient().when(
-        factories.createResponsiveProducer(any(), (ResponsiveProducer<byte[], byte[]>) any(), any())
-    ).thenReturn(responsiveProducer);
-    lenient().when(
-        factories.createResponsiveConsumer(any(), (ResponsiveConsumer<byte[], byte[]>) any(), any())
-    ).thenReturn(responsiveConsumer);
-    lenient().when(factories.createMetricsPublishingCommitListener(any(), any(), any()))
+    lenient()
+        .when(
+            factories.createResponsiveProducer(
+                any(), (ResponsiveProducer<byte[], byte[]>) any(), any()))
+        .thenReturn(responsiveProducer);
+    lenient()
+        .when(
+            factories.createResponsiveConsumer(
+                any(), (ResponsiveConsumer<byte[], byte[]>) any(), any()))
+        .thenReturn(responsiveConsumer);
+    lenient()
+        .when(factories.createMetricsPublishingCommitListener(any(), any(), any()))
         .thenReturn(commitMetricListener);
     lenient().when(factories.createOffsetRecorder(anyBoolean())).thenReturn(offsetRecorder);
 
@@ -126,11 +112,12 @@ class ResponsiveKafkaClientSupplierTest {
   @Test
   public void shouldWrapProducerIfAlos() {
     // given:
-    final var config = configsWithOverrides(
-        PRODUCER_CONFIGS,
-        Map.of(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.AT_LEAST_ONCE));
-    final var supplier
-        = new ResponsiveKafkaClientSupplier(factories, wrapped, config, storeRegistry);
+    final var config =
+        configsWithOverrides(
+            PRODUCER_CONFIGS,
+            Map.of(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.AT_LEAST_ONCE));
+    final var supplier =
+        new ResponsiveKafkaClientSupplier(factories, wrapped, config, storeRegistry);
 
     // when:
     final var producer = supplier.getProducer(config);
@@ -142,11 +129,12 @@ class ResponsiveKafkaClientSupplierTest {
   @Test
   public void shouldWrapConsumerIfAlos() {
     // given:
-    final var config = configsWithOverrides(
-        CONSUMER_CONFIGS,
-        Map.of(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.AT_LEAST_ONCE));
-    final var supplier
-        = new ResponsiveKafkaClientSupplier(factories, wrapped, config, storeRegistry);
+    final var config =
+        configsWithOverrides(
+            CONSUMER_CONFIGS,
+            Map.of(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.AT_LEAST_ONCE));
+    final var supplier =
+        new ResponsiveKafkaClientSupplier(factories, wrapped, config, storeRegistry);
 
     // when:
     final var consumer = supplier.getConsumer(config);
@@ -172,9 +160,7 @@ class ResponsiveKafkaClientSupplierTest {
     // then:
     verify(factories).createResponsiveProducer(any(), any(), producerListenerCaptor.capture());
     assertThat(
-        producerListenerCaptor.getValue(),
-        Matchers.hasItem(offsetRecorder.getProducerListener())
-    );
+        producerListenerCaptor.getValue(), Matchers.hasItem(offsetRecorder.getProducerListener()));
     verify(factories)
         .createMetricsPublishingCommitListener(metrics, "StreamThread-0", offsetRecorder);
   }
@@ -198,10 +184,10 @@ class ResponsiveKafkaClientSupplierTest {
 
     // when:
     supplier.getConsumer(CONSUMER_CONFIGS);
-    supplier.getConsumer(configsWithOverrides(
-        CONSUMER_CONFIGS,
-        Map.of(ConsumerConfig.CLIENT_ID_CONFIG, "foo-StreamThread-1-consumer")
-    ));
+    supplier.getConsumer(
+        configsWithOverrides(
+            CONSUMER_CONFIGS,
+            Map.of(ConsumerConfig.CLIENT_ID_CONFIG, "foo-StreamThread-1-consumer")));
 
     // then:
     verify(factories, times(1))
@@ -240,8 +226,7 @@ class ResponsiveKafkaClientSupplierTest {
   }
 
   private static Map<String, Object> configsWithOverrides(
-      final Map<String, Object> configs,
-      final Map<String, Object> overrides) {
+      final Map<String, Object> configs, final Map<String, Object> overrides) {
     final var intermediate = new HashMap<String, Object>();
     intermediate.putAll(configs);
     intermediate.putAll(overrides);

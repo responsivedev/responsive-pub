@@ -30,10 +30,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
-/**
- * {@code AtomicWriter} writes data atomically using
- * LWTs to the remote store.
- */
+/** {@code AtomicWriter} writes data atomically using LWTs to the remote store. */
 class AtomicWriter<K> {
 
   private final CassandraClient client;
@@ -53,8 +50,7 @@ class AtomicWriter<K> {
       final RemoteSchema<K> remoteSchema,
       final KeySpec<K> keySpec,
       final FencingToken fencingToken,
-      final int batchSize
-  ) {
+      final int batchSize) {
     this.client = client;
     this.name = name;
     this.partition = partition;
@@ -72,9 +68,10 @@ class AtomicWriter<K> {
 
   public void add(final Result<K> result) {
     if (result.isTombstone || keySpec.retain(result.key)) {
-      statements.add(result.isTombstone
-          ? schema.delete(name, partition, result.key)
-          : schema.insert(name, partition, result.key, result.value));
+      statements.add(
+          result.isTombstone
+              ? schema.delete(name, partition, result.key)
+              : schema.insert(name, partition, result.key, result.value));
     }
   }
 
@@ -104,8 +101,7 @@ class AtomicWriter<K> {
   }
 
   private CompletionStage<AtomicWriteResult> executeAsync(final Statement<?> statement) {
-    return client.executeAsync(statement)
-        .thenApply(resp -> AtomicWriteResult.of(partition, resp));
+    return client.executeAsync(statement).thenApply(resp -> AtomicWriteResult.of(partition, resp));
   }
 
   public int partition() {

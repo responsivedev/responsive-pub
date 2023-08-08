@@ -27,10 +27,7 @@ public class ResponsiveStoreBuilder<T extends StateStore> implements StoreBuilde
   private final StoreBuilder<T> delegate;
   private final boolean truncateChangelog;
 
-  public ResponsiveStoreBuilder(
-      final StoreBuilder<T> delegate,
-      final boolean truncateChangelog
-  ) {
+  public ResponsiveStoreBuilder(final StoreBuilder<T> delegate, final boolean truncateChangelog) {
     this.delegate = delegate;
     this.truncateChangelog = truncateChangelog;
   }

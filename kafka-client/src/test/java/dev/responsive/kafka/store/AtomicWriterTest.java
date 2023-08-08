@@ -58,32 +58,27 @@ class AtomicWriterTest {
   private static final long OFFSET = 123L;
   private static final KeySpec<Bytes> KEY_SPEC = new BytesKeySpec();
 
-  @Mock
-  private FencingToken epoch;
-  @Mock
-  private CassandraClient client;
-  @Mock
-  private AsyncResultSet asyncResultSet;
-  @Captor
-  private ArgumentCaptor<Statement<?>> statementCaptor;
+  @Mock private FencingToken epoch;
+  @Mock private CassandraClient client;
+  @Mock private AsyncResultSet asyncResultSet;
+  @Captor private ArgumentCaptor<Statement<?>> statementCaptor;
 
   @BeforeEach
   public void beforeEach() {
-    doAnswer(iom -> {
-      iom.getArgument(0, BatchStatementBuilder.class).addStatement(
-          capturingStatement("fencingStatement", iom.getArguments())
-      );
-      return null;
-    }).when(epoch).addFencingStatement(any(), anyInt());
-    when(client.executeAsync(any()))
-        .thenReturn(CompletableFuture.completedFuture(asyncResultSet));
+    doAnswer(
+            iom -> {
+              iom.getArgument(0, BatchStatementBuilder.class)
+                  .addStatement(capturingStatement("fencingStatement", iom.getArguments()));
+              return null;
+            })
+        .when(epoch)
+        .addFencingStatement(any(), anyInt());
+    when(client.executeAsync(any())).thenReturn(CompletableFuture.completedFuture(asyncResultSet));
     when(asyncResultSet.wasApplied()).thenReturn(true);
   }
 
   private static ArgumentCapturingStatement capturingStatement(
-      final String method,
-      final Object[] args
-  ) {
+      final String method, final Object[] args) {
     final var mock = mock(ArgumentCapturingStatement.class);
     when(mock.callingMethod()).thenReturn(method);
     when(mock.args()).thenReturn(args);
@@ -92,22 +87,15 @@ class AtomicWriterTest {
 
   @Test
   public void shouldFlushInBatches() {
-    final var writer = new AtomicWriter<>(
-        client,
-        "foo",
-        0,
-        new TestRemoteSchema(client),
-        KEY_SPEC,
-        epoch,
-        2
-    );
+    final var writer =
+        new AtomicWriter<>(client, "foo", 0, new TestRemoteSchema(client), KEY_SPEC, epoch, 2);
 
     // When:
-    writer.addAll(List.of(
-        Result.value(Bytes.wrap(new byte[]{0}), new byte[]{0}),
-        Result.tombstone(Bytes.wrap(new byte[]{1})),
-        Result.value(Bytes.wrap(new byte[]{2}), new byte[]{2})
-    ));
+    writer.addAll(
+        List.of(
+            Result.value(Bytes.wrap(new byte[] {0}), new byte[] {0}),
+            Result.tombstone(Bytes.wrap(new byte[] {1})),
+            Result.value(Bytes.wrap(new byte[] {2}), new byte[] {2})));
     writer.flush();
 
     // Then:
@@ -139,22 +127,15 @@ class AtomicWriterTest {
   @Test
   public void shouldIssueSecondBatchEvenIfFirstWasNotApplied() {
     when(asyncResultSet.wasApplied()).thenReturn(false);
-    final var writer = new AtomicWriter<>(
-        client,
-        "foo",
-        0,
-        new TestRemoteSchema(client),
-        KEY_SPEC,
-        epoch,
-        2
-    );
+    final var writer =
+        new AtomicWriter<>(client, "foo", 0, new TestRemoteSchema(client), KEY_SPEC, epoch, 2);
 
     // When:
-    writer.addAll(List.of(
-        Result.value(Bytes.wrap(new byte[]{0}), new byte[]{0}),
-        Result.tombstone(Bytes.wrap(new byte[]{1})),
-        Result.value(Bytes.wrap(new byte[]{2}), new byte[]{2})
-    ));
+    writer.addAll(
+        List.of(
+            Result.value(Bytes.wrap(new byte[] {0}), new byte[] {0}),
+            Result.tombstone(Bytes.wrap(new byte[] {1})),
+            Result.value(Bytes.wrap(new byte[] {2}), new byte[] {2})));
     writer.flush();
 
     // Then:
@@ -169,21 +150,13 @@ class AtomicWriterTest {
 
     @Override
     public BoundStatement insert(
-        final String tableName,
-        final int partition,
-        final Bytes key,
-        final byte[] value
-    ) {
-      return capturingStatement("insertData", new Object[]{tableName, partition, key, value});
+        final String tableName, final int partition, final Bytes key, final byte[] value) {
+      return capturingStatement("insertData", new Object[] {tableName, partition, key, value});
     }
 
     @Override
-    public BoundStatement delete(
-        final String tableName,
-        final int partition,
-        final Bytes key
-    ) {
-      return capturingStatement("deleteData", new Object[]{tableName, partition, key});
+    public BoundStatement delete(final String tableName, final int partition, final Bytes key) {
+      return capturingStatement("deleteData", new Object[] {tableName, partition, key});
     }
   }
 
@@ -192,7 +165,5 @@ class AtomicWriterTest {
     String callingMethod();
 
     Object[] args();
-
   }
-
 }

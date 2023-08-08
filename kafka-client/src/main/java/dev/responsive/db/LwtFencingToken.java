@@ -45,8 +45,7 @@ public class LwtFencingToken implements FencingToken {
       final RemoteSchema<?> table,
       final String tableName,
       final SubPartitioner partitioner,
-      final int kafkaPartition
-  ) {
+      final int kafkaPartition) {
     return reserve(table, tableName, partitioner, kafkaPartition, true);
   }
 
@@ -54,8 +53,7 @@ public class LwtFencingToken implements FencingToken {
       final RemoteSchema<?> table,
       final String tableName,
       final SubPartitioner partitioner,
-      final int kafkaPartition
-  ) {
+      final int kafkaPartition) {
     return reserve(table, tableName, partitioner, kafkaPartition, false);
   }
 
@@ -64,21 +62,14 @@ public class LwtFencingToken implements FencingToken {
       final String name,
       final SubPartitioner partitioner,
       final int kafkaPartition,
-      final boolean windowed
-  ) {
+      final boolean windowed) {
     // attempt to reserve an epoch - all epoch reservations will be done
     // under the first sub-partition and then "broadcast" to the other
     // partitions
     final int basePartition = partitioner.first(kafkaPartition);
     final long epoch = table.metadata(name, basePartition).epoch + 1;
     return reserve(
-        table,
-        name,
-        partitioner.all(kafkaPartition).toArray(),
-        kafkaPartition,
-        epoch,
-        windowed
-    );
+        table, name, partitioner.all(kafkaPartition).toArray(), kafkaPartition, epoch, windowed);
   }
 
   // Visible for Testing
@@ -88,24 +79,20 @@ public class LwtFencingToken implements FencingToken {
       final int[] partitions,
       final int kafkaPartition,
       final long epoch,
-      final boolean windowed
-  ) {
+      final boolean windowed) {
     for (final int sub : partitions) {
-      final var setEpoch = windowed
-          ? reserveEpochWindowed(table, name, sub, epoch)
-          : reserveEpoch(table, name, sub, epoch);
+      final var setEpoch =
+          windowed
+              ? reserveEpochWindowed(table, name, sub, epoch)
+              : reserveEpoch(table, name, sub, epoch);
 
       if (!setEpoch.wasApplied()) {
         final long otherEpoch = table.metadata(name, sub).epoch;
-        final var msg = String.format(
-            "Could not initialize commit buffer %s[%d] - attempted to claim epoch %d, "
-                + "but was fenced by a writer that claimed epoch %d on sub partition %d",
-            name,
-            kafkaPartition,
-            epoch,
-            otherEpoch,
-            sub
-        );
+        final var msg =
+            String.format(
+                "Could not initialize commit buffer %s[%d] - attempted to claim epoch %d, "
+                    + "but was fenced by a writer that claimed epoch %d on sub partition %d",
+                name, kafkaPartition, epoch, otherEpoch, sub);
         final var e = new TaskMigratedException(msg);
         LOG.warn(msg, e);
         throw e;
@@ -114,10 +101,7 @@ public class LwtFencingToken implements FencingToken {
 
     return new LwtFencingToken(
         epoch,
-        windowed
-            ? ensureEpochWindowed(table, name, epoch)
-            : ensureEpoch(table, name, epoch)
-    );
+        windowed ? ensureEpochWindowed(table, name, epoch) : ensureEpoch(table, name, epoch));
   }
 
   public LwtFencingToken(final long epoch, final PreparedStatement ensureEpoch) {
@@ -132,76 +116,68 @@ public class LwtFencingToken implements FencingToken {
 
   @Override
   public String toString() {
-    return "LwtFencingToken{"
-        + "epoch=" + epoch
-        + '}';
+    return "LwtFencingToken{" + "epoch=" + epoch + '}';
   }
 
   private static ResultSet reserveEpoch(
-      final RemoteSchema<?> table,
-      final String name,
-      final int partition,
-      final long epoch
-  ) {
-    return table.getClient().execute(
-        QueryBuilder.update(name)
-            .setColumn(EPOCH.column(), EPOCH.literal(epoch))
-            .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
-            .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
-            .where(PARTITION_KEY.relation().isEqualTo(PARTITION_KEY.literal(partition)))
-            .ifColumn(EPOCH.column()).isLessThan(EPOCH.literal(epoch))
-            .build()
-    );
+      final RemoteSchema<?> table, final String name, final int partition, final long epoch) {
+    return table
+        .getClient()
+        .execute(
+            QueryBuilder.update(name)
+                .setColumn(EPOCH.column(), EPOCH.literal(epoch))
+                .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
+                .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
+                .where(PARTITION_KEY.relation().isEqualTo(PARTITION_KEY.literal(partition)))
+                .ifColumn(EPOCH.column())
+                .isLessThan(EPOCH.literal(epoch))
+                .build());
   }
 
   private static ResultSet reserveEpochWindowed(
-      final RemoteSchema<?> table,
-      final String name,
-      final int partition,
-      final long epoch
-  ) {
-    return table.getClient().execute(
-        QueryBuilder.update(name)
-            .setColumn(EPOCH.column(), EPOCH.literal(epoch))
-            .where(PARTITION_KEY.relation().isEqualTo(PARTITION_KEY.literal(partition)))
-            .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
-            .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
-            .where(WINDOW_START.relation().isEqualTo(WINDOW_START.literal(0L)))
-            .ifColumn(EPOCH.column()).isLessThan(EPOCH.literal(epoch))
-            .build()
-    );
+      final RemoteSchema<?> table, final String name, final int partition, final long epoch) {
+    return table
+        .getClient()
+        .execute(
+            QueryBuilder.update(name)
+                .setColumn(EPOCH.column(), EPOCH.literal(epoch))
+                .where(PARTITION_KEY.relation().isEqualTo(PARTITION_KEY.literal(partition)))
+                .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
+                .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
+                .where(WINDOW_START.relation().isEqualTo(WINDOW_START.literal(0L)))
+                .ifColumn(EPOCH.column())
+                .isLessThan(EPOCH.literal(epoch))
+                .build());
   }
 
   private static PreparedStatement ensureEpoch(
-      final RemoteSchema<?> table,
-      final String name,
-      final long epoch
-  ) {
-    return table.getClient().prepare(
-        QueryBuilder.update(name)
-            .setColumn(EPOCH.column(), EPOCH.literal(epoch))
-            .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
-            .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
-            .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
-            .ifColumn(EPOCH.column()).isEqualTo(EPOCH.literal(epoch))
-            .build()
-    );
+      final RemoteSchema<?> table, final String name, final long epoch) {
+    return table
+        .getClient()
+        .prepare(
+            QueryBuilder.update(name)
+                .setColumn(EPOCH.column(), EPOCH.literal(epoch))
+                .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
+                .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
+                .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
+                .ifColumn(EPOCH.column())
+                .isEqualTo(EPOCH.literal(epoch))
+                .build());
   }
 
   private static PreparedStatement ensureEpochWindowed(
-      final RemoteSchema<?> table,
-      final String name,
-      final long epoch
-  ) {
-    return table.getClient().prepare(
-        QueryBuilder.update(name)
-            .setColumn(EPOCH.column(), EPOCH.literal(epoch))
-            .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
-            .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
-            .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
-            .where(WINDOW_START.relation().isEqualTo(WINDOW_START.literal(0L)))
-            .ifColumn(EPOCH.column()).isEqualTo(EPOCH.literal(epoch))
-            .build()
-    );
+      final RemoteSchema<?> table, final String name, final long epoch) {
+    return table
+        .getClient()
+        .prepare(
+            QueryBuilder.update(name)
+                .setColumn(EPOCH.column(), EPOCH.literal(epoch))
+                .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
+                .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
+                .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
+                .where(WINDOW_START.relation().isEqualTo(WINDOW_START.literal(0L)))
+                .ifColumn(EPOCH.column())
+                .isEqualTo(EPOCH.literal(epoch))
+                .build());
   }
 }

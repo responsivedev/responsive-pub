@@ -21,10 +21,7 @@ import com.datastax.oss.driver.api.core.cql.BatchStatementBuilder;
 public class NoOpFencingToken implements FencingToken {
 
   @Override
-  public void addFencingStatement(
-      final BatchStatementBuilder builder,
-      final int partition
-  ) {
+  public void addFencingStatement(final BatchStatementBuilder builder, final int partition) {
     // do nothing
   }
 }

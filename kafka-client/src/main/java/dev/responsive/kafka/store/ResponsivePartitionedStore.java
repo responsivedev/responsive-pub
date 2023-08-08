@@ -64,13 +64,11 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
 
   @SuppressWarnings("rawtypes")
   private InternalProcessorContext context;
+
   private int partition;
   private RemoteKeyValueSchema schema;
 
-  public ResponsivePartitionedStore(
-      final TableName name,
-      final SchemaType schemaType
-  ) {
+  public ResponsivePartitionedStore(final TableName name, final SchemaType schemaType) {
     this.name = name;
     this.schemaType = schemaType;
     this.position = Position.emptyPosition();
@@ -88,8 +86,7 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
       init((StateStoreContext) context, root);
     } else {
       throw new UnsupportedOperationException(
-          "Use ResponsiveStore#init(StateStoreContext, StateStore) instead."
-      );
+          "Use ResponsiveStore#init(StateStoreContext, StateStore) instead.");
     }
   }
 
@@ -114,35 +111,25 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
 
       schema.prepare(name.cassandraName());
 
-      final TopicPartition topicPartition =  new TopicPartition(
-          changelogFor(context, name.kafkaName(), false),
-          partition
-      );
-      partitioner = schemaType == SchemaType.FACT
-          ? SubPartitioner.NO_SUBPARTITIONS
-          : config.getSubPartitioner(sharedClients.admin, name, topicPartition.topic());
+      final TopicPartition topicPartition =
+          new TopicPartition(changelogFor(context, name.kafkaName(), false), partition);
+      partitioner =
+          schemaType == SchemaType.FACT
+              ? SubPartitioner.NO_SUBPARTITIONS
+              : config.getSubPartitioner(sharedClients.admin, name, topicPartition.topic());
 
-      buffer = CommitBuffer.from(
-          sharedClients,
-          name,
-          topicPartition,
-          schema,
-          new BytesKeySpec(),
-          partitioner,
-          config
-      );
+      buffer =
+          CommitBuffer.from(
+              sharedClients, name, topicPartition, schema, new BytesKeySpec(), partitioner, config);
       buffer.init();
 
       open = true;
 
       context.register(root, buffer);
       final long offset = buffer.offset();
-      registration = new ResponsiveStoreRegistration(
-          name.kafkaName(),
-          topicPartition,
-          offset == -1 ? 0 : offset,
-          buffer::flush
-      );
+      registration =
+          new ResponsiveStoreRegistration(
+              name.kafkaName(), topicPartition, offset == -1 ? 0 : offset, buffer::flush);
       storeRegistry = InternalConfigs.loadStoreRegistry(context.appConfigs());
       storeRegistry.registerStore(registration);
     } catch (InterruptedException | TimeoutException e) {
@@ -151,8 +138,7 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
   }
 
   @Override
-  public void flush() {
-  }
+  public void flush() {}
 
   @Override
   public boolean isOpen() {

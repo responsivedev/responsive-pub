@@ -21,58 +21,27 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
 /**
- * This specifies additional functions required for reading from
- * a windowed store.
+ * This specifies additional functions required for reading from a windowed store.
  *
  * @see RemoteSchema
  */
 public interface RemoteWindowedSchema extends RemoteSchema<Stamped<Bytes>> {
 
   KeyValueIterator<Stamped<Bytes>, byte[]> fetch(
-      String tableName,
-      int partition,
-      Bytes key,
-      long timeFrom,
-      long timeTo
-  );
+      String tableName, int partition, Bytes key, long timeFrom, long timeTo);
 
   KeyValueIterator<Stamped<Bytes>, byte[]> backFetch(
-      String tableName,
-      int partition,
-      Bytes key,
-      long timeFrom,
-      long timeTo
-  );
+      String tableName, int partition, Bytes key, long timeFrom, long timeTo);
 
   KeyValueIterator<Stamped<Bytes>, byte[]> fetchRange(
-      String tableName,
-      int partition,
-      Bytes fromKey,
-      Bytes toKey,
-      long timeFrom,
-      long timeTo
-  );
+      String tableName, int partition, Bytes fromKey, Bytes toKey, long timeFrom, long timeTo);
 
   KeyValueIterator<Stamped<Bytes>, byte[]> backFetchRange(
-      String tableName,
-      int partition,
-      Bytes fromKey,
-      Bytes toKey,
-      long timeFrom,
-      long timeTo
-  );
+      String tableName, int partition, Bytes fromKey, Bytes toKey, long timeFrom, long timeTo);
 
   KeyValueIterator<Stamped<Bytes>, byte[]> fetchAll(
-      String tableName,
-      int partition,
-      long timeFrom,
-      long timeTo
-  );
+      String tableName, int partition, long timeFrom, long timeTo);
 
   KeyValueIterator<Stamped<Bytes>, byte[]> backFetchAll(
-      String tableName,
-      int partition,
-      long timeFrom,
-      long timeTo
-  );
+      String tableName, int partition, long timeFrom, long timeTo);
 }

@@ -49,13 +49,12 @@ import org.slf4j.LoggerFactory;
 
 /**
  * An implementation of KafkaClientSupplier for Responsive applications. The supplier returns
- * wrapped kafka producers/consumers that are instrumented to work with the responsive platform
- * by, for example, emitting metrics useful for debug and scaling.
+ * wrapped kafka producers/consumers that are instrumented to work with the responsive platform by,
+ * for example, emitting metrics useful for debug and scaling.
  *
- * <p>
- * Synchronization: This class is read/written during client initialization and close (via the
- * close callbacks on the returned clients). As these calls are not on the performance path we
- * rely on coarse-grained locks around sections reading/writing shared state.
+ * <p>Synchronization: This class is read/written during client initialization and close (via the
+ * close callbacks on the returned clients). As these calls are not on the performance path we rely
+ * on coarse-grained locks around sections reading/writing shared state.
  */
 public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier {
   private static final Logger LOG = LoggerFactory.getLogger(ResponsiveKafkaClientSupplier.class);
@@ -70,16 +69,14 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
   private boolean eos = false;
 
   public ResponsiveKafkaClientSupplier(
-      final Map<String, ?> configs,
-      final ResponsiveStoreRegistry storeRegistry) {
+      final Map<String, ?> configs, final ResponsiveStoreRegistry storeRegistry) {
     this(new Factories() {}, new DefaultKafkaClientSupplier(), configs, storeRegistry);
   }
 
   public ResponsiveKafkaClientSupplier(
       final KafkaClientSupplier clientSupplier,
       final Map<String, ?> configs,
-      final ResponsiveStoreRegistry storeRegistry
-  ) {
+      final ResponsiveStoreRegistry storeRegistry) {
     this(new Factories() {}, clientSupplier, configs, storeRegistry);
   }
 
@@ -87,8 +84,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
       final Factories factories,
       final KafkaClientSupplier wrapped,
       final Map<String, ?> configs,
-      final ResponsiveStoreRegistry storeRegistry
-  ) {
+      final ResponsiveStoreRegistry storeRegistry) {
     this.factories = factories;
     this.wrapped = wrapped;
     this.storeRegistry = storeRegistry;
@@ -107,22 +103,21 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
         "Configuring the client supplier. Got configs: {}",
         configs.entrySet().stream()
             .map(e -> e.getKey() + ":" + e.getValue())
-            .collect(Collectors.joining("\n"))
-    );
+            .collect(Collectors.joining("\n")));
     final StreamsConfig streamsConfig = new StreamsConfig(configs);
     verifyNotEosV1(streamsConfig);
-    eos = !(AT_LEAST_ONCE.equals(
-        streamsConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)));
+    eos =
+        !(AT_LEAST_ONCE.equals(streamsConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)));
     final JmxReporter jmxReporter = new JmxReporter();
     jmxReporter.configure(configs);
-    final MetricsContext metricsContext
-        = new KafkaMetricsContext("dev.responsive", new HashMap<>());
-    metrics = factories.createMetrics(
-        new MetricConfig(),
-        Collections.singletonList(jmxReporter),
-        Time.SYSTEM,
-        metricsContext
-    );
+    final MetricsContext metricsContext =
+        new KafkaMetricsContext("dev.responsive", new HashMap<>());
+    metrics =
+        factories.createMetrics(
+            new MetricConfig(),
+            Collections.singletonList(jmxReporter),
+            Time.SYSTEM,
+            metricsContext);
     endOffsetsPoller = factories.createEndOffsetPoller(configs, metrics);
     configured = true;
     applicationId = (String) configs.get(StreamsConfig.APPLICATION_ID_CONFIG);
@@ -140,24 +135,14 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
     }
     LOG.info("Creating responsive producer");
     final String tid = threadIdFromProducerConfig(config);
-    final ListenersForThread tc = sharedListeners.getAndMaybeInitListenersForThread(
-        eos,
-        tid,
-        metrics,
-        endOffsetsPoller,
-        storeRegistry,
-        factories
-    );
+    final ListenersForThread tc =
+        sharedListeners.getAndMaybeInitListenersForThread(
+            eos, tid, metrics, endOffsetsPoller, storeRegistry, factories);
     return factories.createResponsiveProducer(
         (String) config.get(CommonClientConfigs.CLIENT_ID_CONFIG),
         wrapped.getProducer(config),
         Collections.unmodifiableList(
-            Arrays.asList(
-                tc.offsetRecorder.getProducerListener(),
-                new CloseListener(tid)
-            )
-        )
-    );
+            Arrays.asList(tc.offsetRecorder.getProducerListener(), new CloseListener(tid))));
   }
 
   @Override
@@ -167,14 +152,9 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
     }
     LOG.info("Creating responsive consumer");
     final String tid = threadIdFromConsumerConfig(config);
-    final ListenersForThread tc = sharedListeners.getAndMaybeInitListenersForThread(
-        eos,
-        tid,
-        metrics,
-        endOffsetsPoller,
-        storeRegistry,
-        factories
-    );
+    final ListenersForThread tc =
+        sharedListeners.getAndMaybeInitListenersForThread(
+            eos, tid, metrics, endOffsetsPoller, storeRegistry, factories);
     // TODO: the end offsets poller call is kind of heavy for a synchronized block
     return factories.createResponsiveConsumer(
         (String) config.get(CommonClientConfigs.CLIENT_ID_CONFIG),
@@ -183,17 +163,13 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
             tc.committedOffsetMetricListener,
             tc.offsetRecorder.getConsumerListener(),
             tc.endOffsetsPollerListener,
-            new CloseListener(tid)
-        )
-    );
+            new CloseListener(tid)));
   }
 
   @Override
   public Consumer<byte[], byte[]> getRestoreConsumer(final Map<String, Object> config) {
     return new ResponsiveRestoreConsumer<>(
-        wrapped.getRestoreConsumer(config),
-        storeRegistry::getCommittedOffset
-    );
+        wrapped.getRestoreConsumer(config), storeRegistry::getCommittedOffset);
   }
 
   @Override
@@ -203,10 +179,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
     config.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, true);
 
     return new ResponsiveGlobalConsumer(
-        config,
-        wrapped.getGlobalConsumer(config),
-        getAdmin(config)
-    );
+        config, wrapped.getGlobalConsumer(config), getAdmin(config));
   }
 
   private String threadIdFromProducerConfig(final Map<String, Object> config) {
@@ -245,8 +218,8 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
   }
 
   private static class SharedListeners {
-    private final Map<String, ReferenceCounted<ListenersForThread>> threadListeners
-        = new HashMap<>();
+    private final Map<String, ReferenceCounted<ListenersForThread>> threadListeners =
+        new HashMap<>();
 
     private synchronized ListenersForThread getAndMaybeInitListenersForThread(
         final boolean eos,
@@ -254,24 +227,23 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
         final Metrics metrics,
         final EndOffsetsPoller endOffsetsPoller,
         final ResponsiveStoreRegistry storeRegistry,
-        final Factories factories
-    ) {
+        final Factories factories) {
       if (threadListeners.containsKey(threadId)) {
         final var tl = threadListeners.get(threadId);
         tl.ref();
         return tl.getVal();
       }
       final var offsetRecorder = factories.createOffsetRecorder(eos);
-      final var tl = new ReferenceCounted<>(
-          String.format("ListenersForThread(%s)", threadId),
-          new ListenersForThread(
-              threadId,
-              offsetRecorder,
-              factories.createMetricsPublishingCommitListener(metrics, threadId, offsetRecorder),
-              new StoreCommitListener(storeRegistry, offsetRecorder),
-              endOffsetsPoller.addForThread(threadId)
-          )
-      );
+      final var tl =
+          new ReferenceCounted<>(
+              String.format("ListenersForThread(%s)", threadId),
+              new ListenersForThread(
+                  threadId,
+                  offsetRecorder,
+                  factories.createMetricsPublishingCommitListener(
+                      metrics, threadId, offsetRecorder),
+                  new StoreCommitListener(storeRegistry, offsetRecorder),
+                  endOffsetsPoller.addForThread(threadId)));
       threadListeners.put(threadId, tl);
       return tl.getVal();
     }
@@ -347,9 +319,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
 
   interface Factories {
     default EndOffsetsPoller createEndOffsetPoller(
-        final Map<String, ?> config,
-        final Metrics metrics
-    ) {
+        final Map<String, ?> config, final Metrics metrics) {
       return new EndOffsetsPoller(config, metrics);
     }
 
@@ -357,16 +327,14 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
         final MetricConfig config,
         final List<MetricsReporter> reporters,
         final Time time,
-        final MetricsContext ctx
-    ) {
+        final MetricsContext ctx) {
       return new Metrics(config, reporters, time, ctx);
     }
 
     default <K, V> ResponsiveProducer<K, V> createResponsiveProducer(
         final String clientId,
         final Producer<K, V> wrapped,
-        final List<ResponsiveProducer.Listener> listeners
-    ) {
+        final List<ResponsiveProducer.Listener> listeners) {
       return new ResponsiveProducer<>(clientId, wrapped, listeners);
     }
 
@@ -382,10 +350,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
     }
 
     default MetricPublishingCommitListener createMetricsPublishingCommitListener(
-        final Metrics metrics,
-        final String threadId,
-        final OffsetRecorder offsetRecorder
-    ) {
+        final Metrics metrics, final String threadId, final OffsetRecorder offsetRecorder) {
       return new MetricPublishingCommitListener(metrics, threadId, offsetRecorder);
     }
   }

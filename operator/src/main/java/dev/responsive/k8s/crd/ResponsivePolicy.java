@@ -28,5 +28,4 @@ import io.fabric8.kubernetes.model.annotation.Version;
 @Plural("responsivepolicies")
 @Singular("responsivepolicy")
 public class ResponsivePolicy extends CustomResource<ResponsivePolicySpec, ResponsivePolicyStatus>
-    implements Namespaced {
-}
+    implements Namespaced {}

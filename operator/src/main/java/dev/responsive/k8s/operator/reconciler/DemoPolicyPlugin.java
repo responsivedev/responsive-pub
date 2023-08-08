@@ -47,54 +47,48 @@ public class DemoPolicyPlugin implements PolicyPlugin {
 
   @Override
   public Map<String, EventSource> prepareEventSources(
-      final EventSourceContext<ResponsivePolicy> ctx,
-      final ResponsiveContext responsiveCtx
-  ) {
+      final EventSourceContext<ResponsivePolicy> ctx, final ResponsiveContext responsiveCtx) {
     // TODO(rohan): switch this over to monitoring a statefulset instead
 
-    final var deploymentEvents = new InformerEventSource<>(
-        InformerConfiguration.from(Deployment.class, ctx)
-            .withLabelSelector(ResponsivePolicyReconciler.NAME_LABEL)
-            .withSecondaryToPrimaryMapper(DemoPolicyPlugin::toPrimaryMapper)
-            .withPrimaryToSecondaryMapper(DemoPolicyPlugin::toApplicationMapper)
-            .build(),
-        ctx
-    );
+    final var deploymentEvents =
+        new InformerEventSource<>(
+            InformerConfiguration.from(Deployment.class, ctx)
+                .withLabelSelector(ResponsivePolicyReconciler.NAME_LABEL)
+                .withSecondaryToPrimaryMapper(DemoPolicyPlugin::toPrimaryMapper)
+                .withPrimaryToSecondaryMapper(DemoPolicyPlugin::toApplicationMapper)
+                .build(),
+            ctx);
 
-    final var statefulSetEvents = new InformerEventSource<>(
-        InformerConfiguration.from(StatefulSet.class, ctx)
-            .withLabelSelector(ResponsivePolicyReconciler.NAME_LABEL)
-            .withSecondaryToPrimaryMapper(DemoPolicyPlugin::toPrimaryMapper)
-            .withPrimaryToSecondaryMapper(DemoPolicyPlugin::toApplicationMapper)
-            .build(),
-        ctx
-    );
+    final var statefulSetEvents =
+        new InformerEventSource<>(
+            InformerConfiguration.from(StatefulSet.class, ctx)
+                .withLabelSelector(ResponsivePolicyReconciler.NAME_LABEL)
+                .withSecondaryToPrimaryMapper(DemoPolicyPlugin::toPrimaryMapper)
+                .withPrimaryToSecondaryMapper(DemoPolicyPlugin::toApplicationMapper)
+                .build(),
+            ctx);
 
     return EventSourceInitializer.nameEventSources(deploymentEvents, statefulSetEvents);
   }
-
 
   @Override
   public void reconcile(
       final ResponsivePolicy policy,
       final Context<ResponsivePolicy> ctx,
-      final ResponsiveContext responsiveCtx
-  ) {
+      final ResponsiveContext responsiveCtx) {
     final var appNamespace = policy.getSpec().getApplicationNamespace();
     final var appName = policy.getSpec().getApplicationName();
     final var managedApp = ManagedApplication.build(ctx, policy);
 
     LOG.info("Found type {} for app {}/{}", managedApp.appType(), appNamespace, appName);
 
-    responsiveCtx.getControllerClient().currentState(
-        ControllerProtoFactories.currentStateRequest(
-            environment,
-            policy,
-            currentStateFromApplication(managedApp))
-    );
+    responsiveCtx
+        .getControllerClient()
+        .currentState(
+            ControllerProtoFactories.currentStateRequest(
+                environment, policy, currentStateFromApplication(managedApp)));
 
-    final var maybeTargetState =
-        ctx.getSecondaryResource(TargetStateWithTimestamp.class);
+    final var maybeTargetState = ctx.getSecondaryResource(TargetStateWithTimestamp.class);
     if (maybeTargetState.isEmpty()) {
       LOG.warn("No target state present in ctx. This should not happen");
       return;
@@ -115,8 +109,7 @@ public class DemoPolicyPlugin implements PolicyPlugin {
           appNamespace,
           appName,
           managedApp.getReplicas(),
-          targetReplicas
-      );
+          targetReplicas);
 
       // TODO(rohan): I don't think this is patching the way I expect. Review the patch APIs
       //              make sure its safe to assume the patch was applied if this succeeds
@@ -137,23 +130,21 @@ public class DemoPolicyPlugin implements PolicyPlugin {
 
   private static Set<ResourceID> toPrimaryMapper(final HasMetadata hasMetadata) {
     if (!hasMetadata.getMetadata().getLabels().containsKey(ResponsivePolicyReconciler.NAME_LABEL)
-        || !hasMetadata.getMetadata().getLabels()
-        .containsKey(ResponsivePolicyReconciler.NAMESPACE_LABEL)) {
+        || !hasMetadata
+            .getMetadata()
+            .getLabels()
+            .containsKey(ResponsivePolicyReconciler.NAMESPACE_LABEL)) {
       return Collections.emptySet();
     }
     return ImmutableSet.of(
         new ResourceID(
             hasMetadata.getMetadata().getLabels().get(ResponsivePolicyReconciler.NAME_LABEL),
-            hasMetadata.getMetadata().getLabels().get(ResponsivePolicyReconciler.NAMESPACE_LABEL)
-        )
-    );
+            hasMetadata.getMetadata().getLabels().get(ResponsivePolicyReconciler.NAMESPACE_LABEL)));
   }
 
   private static Set<ResourceID> toApplicationMapper(final ResponsivePolicy policy) {
     return ImmutableSet.of(
         new ResourceID(
-            policy.getSpec().getApplicationName(),
-            policy.getSpec().getApplicationNamespace())
-    );
+            policy.getSpec().getApplicationName(), policy.getSpec().getApplicationNamespace()));
   }
 }

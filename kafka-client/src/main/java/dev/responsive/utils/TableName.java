@@ -20,16 +20,14 @@ import java.util.Objects;
 import java.util.regex.Pattern;
 
 /**
- * {@code TableName} represents the name for a table and all variations
- * of it - some characters that are valid for Kafka names are not valid
- * as Cassandra table names.
+ * {@code TableName} represents the name for a table and all variations of it - some characters that
+ * are valid for Kafka names are not valid as Cassandra table names.
  */
 public class TableName {
 
   // cassandra names are case-insensitive and can only contain
   // alphanumeric and underscore characters
-  private static final Pattern INVALID_CASSANDRA_CHARS =
-      Pattern.compile("[^a-zA-Z0-9_]");
+  private static final Pattern INVALID_CASSANDRA_CHARS = Pattern.compile("[^a-zA-Z0-9_]");
 
   private final String kafkaName;
   private final String cassandraName;
@@ -37,10 +35,7 @@ public class TableName {
   public TableName(final String kafkaName) {
     this.kafkaName = kafkaName;
     final var escaped = kafkaName.replaceAll("_", "__"); // escape existing underscores
-    cassandraName = INVALID_CASSANDRA_CHARS
-        .matcher(escaped)
-        .replaceAll("_")
-        .toLowerCase();
+    cassandraName = INVALID_CASSANDRA_CHARS.matcher(escaped).replaceAll("_").toLowerCase();
   }
 
   public String kafkaName() {

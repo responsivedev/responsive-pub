@@ -24,8 +24,7 @@ import responsive.controller.v1.controller.proto.ControllerOuterClass.Applicatio
 
 public final class ControllerProtoFactories {
   public static ControllerOuterClass.UpsertPolicyRequest upsertPolicyRequest(
-      final String environment,
-      final ResponsivePolicy policy) {
+      final String environment, final ResponsivePolicy policy) {
     return ControllerOuterClass.UpsertPolicyRequest.newBuilder()
         .setPolicy(ControllerProtoFactories.policyFromK8sResource(policy.getSpec()))
         // TODO(rohan): dont just use a namespaced (w/ /) name
@@ -34,10 +33,7 @@ public final class ControllerProtoFactories {
   }
 
   public static ControllerOuterClass.CurrentStateRequest currentStateRequest(
-      final String environment,
-      final ResponsivePolicy policy,
-      final ApplicationState state
-  ) {
+      final String environment, final ResponsivePolicy policy, final ApplicationState state) {
     return ControllerOuterClass.CurrentStateRequest.newBuilder()
         .setApplicationId(getFullApplicationName(environment, policy))
         .setState(state)
@@ -45,9 +41,7 @@ public final class ControllerProtoFactories {
   }
 
   public static ControllerOuterClass.EmptyRequest emptyRequest(
-      final String environment,
-      final ResponsivePolicy policy
-  ) {
+      final String environment, final ResponsivePolicy policy) {
     return ControllerOuterClass.EmptyRequest.newBuilder()
         .setApplicationId(getFullApplicationName(environment, policy))
         .build();
@@ -58,8 +52,8 @@ public final class ControllerProtoFactories {
     switch (policySpec.getPolicyType()) {
       case DEMO:
         assert policySpec.getDemoPolicy().isPresent();
-        builder.setDemoPolicy(DemoPolicyProtoFactories.demoPolicyFromK8sResource(
-            policySpec.getDemoPolicy().get()));
+        builder.setDemoPolicy(
+            DemoPolicyProtoFactories.demoPolicyFromK8sResource(policySpec.getDemoPolicy().get()));
         break;
       default:
         throw new IllegalStateException("Unexpected type: " + policySpec.getPolicyType());
@@ -69,12 +63,11 @@ public final class ControllerProtoFactories {
   }
 
   private static String getFullApplicationName(
-      final String environment,
-      final ResponsivePolicy policy
-  ) {
+      final String environment, final ResponsivePolicy policy) {
     final String prefix = environment.isEmpty() ? "" : environment + "/";
     return prefix
         + policy.getSpec().getApplicationNamespace()
-        + "/" + policy.getSpec().getApplicationName();
+        + "/"
+        + policy.getSpec().getApplicationName();
   }
 }

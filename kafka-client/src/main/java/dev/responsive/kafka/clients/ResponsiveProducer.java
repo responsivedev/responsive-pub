@@ -44,32 +44,23 @@ public class ResponsiveProducer<K, V> implements Producer<K, V> {
   private final Logger logger;
 
   public interface Listener {
-    default void onCommit() {
-    }
+    default void onCommit() {}
 
-    default void onAbort() {
-    }
+    default void onAbort() {}
 
-    default void onSendCompleted(final RecordMetadata recordMetadata) {
-    }
+    default void onSendCompleted(final RecordMetadata recordMetadata) {}
 
     default void onSendOffsetsToTransaction(
-        final Map<TopicPartition, OffsetAndMetadata> offsets,
-        final String consumerGroupId
-    ) {
-    }
+        final Map<TopicPartition, OffsetAndMetadata> offsets, final String consumerGroupId) {}
 
-    default void onClose() {
-    }
+    default void onClose() {}
   }
 
   public ResponsiveProducer(
-      final String clientid,
-      final Producer<K, V> wrapped,
-      final List<Listener> listeners
-  ) {
-    this.logger = LoggerFactory.getLogger(
-        ResponsiveProducer.class.getName() + "." + Objects.requireNonNull(clientid));
+      final String clientid, final Producer<K, V> wrapped, final List<Listener> listeners) {
+    this.logger =
+        LoggerFactory.getLogger(
+            ResponsiveProducer.class.getName() + "." + Objects.requireNonNull(clientid));
     this.wrapped = Objects.requireNonNull(wrapped);
     this.listeners = Objects.requireNonNull(listeners);
   }
@@ -87,9 +78,8 @@ public class ResponsiveProducer<K, V> implements Producer<K, V> {
   @Override
   @SuppressWarnings("deprecation")
   public void sendOffsetsToTransaction(
-      final Map<TopicPartition, OffsetAndMetadata> offsets,
-      final String consumerGroupId
-  ) throws ProducerFencedException {
+      final Map<TopicPartition, OffsetAndMetadata> offsets, final String consumerGroupId)
+      throws ProducerFencedException {
     wrapped.sendOffsetsToTransaction(offsets, consumerGroupId);
     for (final var l : listeners) {
       l.onSendOffsetsToTransaction(offsets, consumerGroupId);
@@ -99,8 +89,8 @@ public class ResponsiveProducer<K, V> implements Producer<K, V> {
   @Override
   public void sendOffsetsToTransaction(
       final Map<TopicPartition, OffsetAndMetadata> offsets,
-      final ConsumerGroupMetadata groupMetadata
-  ) throws ProducerFencedException {
+      final ConsumerGroupMetadata groupMetadata)
+      throws ProducerFencedException {
     wrapped.sendOffsetsToTransaction(offsets, groupMetadata);
     for (final var l : listeners) {
       l.onSendOffsetsToTransaction(offsets, groupMetadata.groupId());
@@ -127,8 +117,7 @@ public class ResponsiveProducer<K, V> implements Producer<K, V> {
   @Override
   public Future<RecordMetadata> send(final ProducerRecord<K, V> record, final Callback callback) {
     return new RecordingFuture(
-        wrapped.send(record, new RecordingCallback(callback, listeners)), listeners
-    );
+        wrapped.send(record, new RecordingCallback(callback, listeners)), listeners);
   }
 
   @Override

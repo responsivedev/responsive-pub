@@ -40,26 +40,25 @@ public class ControllerGrpcClient implements ControllerClient {
   private final ControllerGrpc.ControllerBlockingStub stub;
 
   public ControllerGrpcClient(
-      final String target,
-      final String apiKey,
-      final String secret,
-      final boolean disableTls
-  ) {
+      final String target, final String apiKey, final String secret, final boolean disableTls) {
     this(target, apiKey, secret, disableTls, new GrpcFactories() {});
   }
 
   @VisibleForTesting
-  ControllerGrpcClient(final String target,
-                       final String apiKey,
-                       final String secret,
-                       final boolean disableTls,
-                       final GrpcFactories grpcFactories) {
+  ControllerGrpcClient(
+      final String target,
+      final String apiKey,
+      final String secret,
+      final boolean disableTls,
+      final GrpcFactories grpcFactories) {
 
     final Metadata metadata = new Metadata();
-    metadata.put(Metadata.Key.of(
-        ApiKeyHeaders.API_KEY_METADATA_KEY, Metadata.ASCII_STRING_MARSHALLER), apiKey);
-    metadata.put(Metadata.Key.of(
-        ApiKeyHeaders.SECRET_METADATA_KEY, Metadata.ASCII_STRING_MARSHALLER), secret);
+    metadata.put(
+        Metadata.Key.of(ApiKeyHeaders.API_KEY_METADATA_KEY, Metadata.ASCII_STRING_MARSHALLER),
+        apiKey);
+    metadata.put(
+        Metadata.Key.of(ApiKeyHeaders.SECRET_METADATA_KEY, Metadata.ASCII_STRING_MARSHALLER),
+        secret);
 
     final ChannelCredentials credentials;
     if (disableTls) {
@@ -69,33 +68,28 @@ public class ControllerGrpcClient implements ControllerClient {
       LOG.info("use TLS to connect to controller");
       credentials = TlsChannelCredentials.create();
     }
-    channel = grpcFactories.createChannel(
-        target,
-        credentials,
-        MetadataUtils.newAttachHeadersInterceptor(metadata)
-    );
+    channel =
+        grpcFactories.createChannel(
+            target, credentials, MetadataUtils.newAttachHeadersInterceptor(metadata));
     stub = grpcFactories.createBlockingStub(channel);
   }
 
   @Override
   public void upsertPolicy(final ControllerOuterClass.UpsertPolicyRequest request) {
-    final var rsp = stub.withDeadlineAfter(5, TimeUnit.SECONDS)
-        .upsertPolicy(request);
+    final var rsp = stub.withDeadlineAfter(5, TimeUnit.SECONDS).upsertPolicy(request);
     throwOnError(rsp);
   }
 
   @Override
   public void currentState(final ControllerOuterClass.CurrentStateRequest request) {
-    final var rsp = stub.withDeadlineAfter(5, TimeUnit.SECONDS)
-        .currentState(request);
+    final var rsp = stub.withDeadlineAfter(5, TimeUnit.SECONDS).currentState(request);
     throwOnError(rsp);
   }
 
   @Override
   public ControllerOuterClass.ApplicationState getTargetState(
       final ControllerOuterClass.EmptyRequest request) {
-    final var rsp = stub.withDeadlineAfter(5, TimeUnit.SECONDS)
-        .getTargetState(request);
+    final var rsp = stub.withDeadlineAfter(5, TimeUnit.SECONDS).getTargetState(request);
     if (!rsp.getError().equals("")) {
       throw new RuntimeException(rsp.getError());
     }
@@ -110,12 +104,12 @@ public class ControllerGrpcClient implements ControllerClient {
   }
 
   interface GrpcFactories {
-    default ManagedChannel createChannel(final String target, final ChannelCredentials credentials,
-                                         ClientInterceptor addHeadersInterceptor) {
+    default ManagedChannel createChannel(
+        final String target,
+        final ChannelCredentials credentials,
+        ClientInterceptor addHeadersInterceptor) {
 
-      return Grpc.newChannelBuilder(target, credentials)
-              .intercept(addHeadersInterceptor)
-              .build();
+      return Grpc.newChannelBuilder(target, credentials).intercept(addHeadersInterceptor).build();
     }
 
     default ControllerGrpc.ControllerBlockingStub createBlockingStub(final ManagedChannel channel) {

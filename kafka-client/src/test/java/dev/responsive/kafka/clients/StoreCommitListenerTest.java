@@ -23,28 +23,16 @@ class StoreCommitListenerTest {
   private static final TopicPartition PARTITION1 = new TopicPartition("yogi", 1);
   private static final TopicPartition PARTITION2 = new TopicPartition("booboo", 2);
 
-  @Mock
-  private Consumer<Long> store1Flush;
-  @Mock
-  private Consumer<Long> store2Flush;
+  @Mock private Consumer<Long> store1Flush;
+  @Mock private Consumer<Long> store2Flush;
   private final ResponsiveStoreRegistry registry = new ResponsiveStoreRegistry();
   private final OffsetRecorder offsetRecorder = new OffsetRecorder(true);
   private StoreCommitListener commitListener;
 
   @BeforeEach
   public void setup() {
-    registry.registerStore(new ResponsiveStoreRegistration(
-        "store1",
-        PARTITION1,
-        0,
-        store1Flush
-    ));
-    registry.registerStore(new ResponsiveStoreRegistration(
-        "store2",
-        PARTITION2,
-        0,
-        store2Flush
-    ));
+    registry.registerStore(new ResponsiveStoreRegistration("store1", PARTITION1, 0, store1Flush));
+    registry.registerStore(new ResponsiveStoreRegistration("store2", PARTITION2, 0, store2Flush));
     commitListener = new StoreCommitListener(registry, offsetRecorder);
   }
 
@@ -69,24 +57,20 @@ class StoreCommitListenerTest {
   }
 
   private void sendCommittedOffsets(final Map<TopicPartition, Long> offsets) {
-    offsetRecorder.getProducerListener().onSendOffsetsToTransaction(
-        offsets.entrySet().stream()
-            .collect(Collectors.toMap(Entry::getKey, e -> new OffsetAndMetadata(e.getValue()))),
-        "group"
-    );
+    offsetRecorder
+        .getProducerListener()
+        .onSendOffsetsToTransaction(
+            offsets.entrySet().stream()
+                .collect(Collectors.toMap(Entry::getKey, e -> new OffsetAndMetadata(e.getValue()))),
+            "group");
     offsetRecorder.getProducerListener().onCommit();
   }
 
   private void sendWrittenOffsets(final Map<TopicPartition, Long> offsets) {
     for (final var e : offsets.entrySet()) {
-      offsetRecorder.getProducerListener().onSendCompleted(new RecordMetadata(
-          e.getKey(),
-          e.getValue(),
-          0,
-          0,
-          0,
-          0
-      ));
+      offsetRecorder
+          .getProducerListener()
+          .onSendCompleted(new RecordMetadata(e.getKey(), e.getValue(), 0, 0, 0, 0));
     }
     offsetRecorder.getProducerListener().onCommit();
   }

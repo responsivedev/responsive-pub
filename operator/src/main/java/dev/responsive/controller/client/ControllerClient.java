@@ -22,9 +22,8 @@ import responsive.controller.v1.controller.proto.ControllerOuterClass.EmptyReque
 import responsive.controller.v1.controller.proto.ControllerOuterClass.UpsertPolicyRequest;
 
 /**
- * Client for sending requests to the controller. The client
- * must initiate all requests with the controller in order to
- * satisfy standard network configurations.
+ * Client for sending requests to the controller. The client must initiate all requests with the
+ * controller in order to satisfy standard network configurations.
  */
 public interface ControllerClient {
 

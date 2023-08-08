@@ -52,14 +52,10 @@ public class ResponsiveProducerTest {
   private static final TopicPartition PARTITION1 = new TopicPartition("polar", 1);
   private static final TopicPartition PARTITION2 = new TopicPartition("panda", 2);
 
-  @Mock
-  private Producer<String, String> wrapped;
-  @Mock
-  private Listener listener1;
-  @Mock
-  private Listener listener2;
-  @Captor
-  private ArgumentCaptor<Callback> callbackCaptor;
+  @Mock private Producer<String, String> wrapped;
+  @Mock private Listener listener1;
+  @Mock private Listener listener2;
+  @Captor private ArgumentCaptor<Callback> callbackCaptor;
   private ResponsiveProducer<String, String> producer;
 
   @BeforeEach
@@ -83,19 +79,14 @@ public class ResponsiveProducerTest {
     final var record = new ProducerRecord<String, String>(PARTITION1.topic(), "val");
     final var recordRef = new AtomicReference<RecordMetadata>();
     final var exceptionRef = new AtomicReference<Exception>();
-    producer.send(record, (rm, e) -> {
-      recordRef.set(rm);
-      exceptionRef.set(e);
-    });
+    producer.send(
+        record,
+        (rm, e) -> {
+          recordRef.set(rm);
+          exceptionRef.set(e);
+        });
     verify(wrapped).send(same(record), callbackCaptor.capture());
-    final RecordMetadata recordMetadata = new RecordMetadata(
-        PARTITION1,
-        123L,
-        0,
-        0,
-        0,
-        0
-    );
+    final RecordMetadata recordMetadata = new RecordMetadata(PARTITION1, 123L, 0, 0, 0, 0);
 
     // when:
     callbackCaptor.getValue().onCompletion(recordMetadata, null);
@@ -118,14 +109,7 @@ public class ResponsiveProducerTest {
     // given:
     final var future = mockFuture();
     when(wrapped.send(any())).thenReturn(future);
-    final RecordMetadata recordMetadata = new RecordMetadata(
-        PARTITION1,
-        123L,
-        0,
-        0,
-        0,
-        0
-    );
+    final RecordMetadata recordMetadata = new RecordMetadata(PARTITION1, 123L, 0, 0, 0, 0);
     when(future.get()).thenReturn(recordMetadata);
     final var returnedFuture = producer.send(new ProducerRecord<>(PARTITION1.topic(), "val"));
 
@@ -144,16 +128,14 @@ public class ResponsiveProducerTest {
     producer.sendOffsetsToTransaction(
         Map.of(
             PARTITION1, new OffsetAndMetadata(10),
-            PARTITION2, new OffsetAndMetadata(11)
-        ),
-        "foo"
-    );
+            PARTITION2, new OffsetAndMetadata(11)),
+        "foo");
 
     // then:
-    final var expected = Map.of(
-        PARTITION1, new OffsetAndMetadata(10L),
-        PARTITION2, new OffsetAndMetadata(11L)
-    );
+    final var expected =
+        Map.of(
+            PARTITION1, new OffsetAndMetadata(10L),
+            PARTITION2, new OffsetAndMetadata(11L));
     verify(listener1).onSendOffsetsToTransaction(expected, "foo");
     verify(listener2).onSendOffsetsToTransaction(expected, "foo");
   }

@@ -61,8 +61,8 @@ import org.slf4j.LoggerFactory;
 @ExtendWith(ResponsiveExtension.class)
 public class ResponsiveGlobalStoreIntegrationTest {
 
-  private static final Logger LOG
-      = LoggerFactory.getLogger(ResponsivePartitionedStoreEosIntegrationTest.class);
+  private static final Logger LOG =
+      LoggerFactory.getLogger(ResponsivePartitionedStoreEosIntegrationTest.class);
 
   private static final int MAX_POLL_MS = 5000;
   private static final String INPUT_TOPIC = "input";
@@ -79,8 +79,7 @@ public class ResponsiveGlobalStoreIntegrationTest {
   public void before(
       final TestInfo info,
       final Admin admin,
-      @ResponsiveConfigParam final Map<String, Object> responsiveProps
-  ) {
+      @ResponsiveConfigParam final Map<String, Object> responsiveProps) {
     name = info.getTestMethod().orElseThrow().getName();
     this.responsiveProps.putAll(responsiveProps);
 
@@ -89,9 +88,7 @@ public class ResponsiveGlobalStoreIntegrationTest {
         List.of(
             new NewTopic(INPUT_TOPIC, Optional.of(2), Optional.empty()),
             new NewTopic(GLOBAL_TOPIC, Optional.of(2), Optional.empty()),
-            new NewTopic(OUTPUT_TOPIC, Optional.of(1), Optional.empty())
-        )
-    );
+            new NewTopic(OUTPUT_TOPIC, Optional.of(1), Optional.empty())));
   }
 
   @AfterEach
@@ -105,9 +102,7 @@ public class ResponsiveGlobalStoreIntegrationTest {
     final Map<String, Object> properties = getMutableProperties();
     final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties);
 
-    try (
-        final var streams = buildStreams(properties)
-    ) {
+    try (final var streams = buildStreams(properties)) {
       // When:
       pipeInput(GLOBAL_TOPIC, 2, producer, System::currentTimeMillis, 0, 3, 0, 1);
       IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(10), streams);
@@ -143,21 +138,15 @@ public class ResponsiveGlobalStoreIntegrationTest {
     return properties;
   }
 
-  private ResponsiveKafkaStreams buildStreams(
-      final Map<String, Object> properties
-  ) {
+  private ResponsiveKafkaStreams buildStreams(final Map<String, Object> properties) {
     final StreamsBuilder builder = new StreamsBuilder();
 
-    final GlobalKTable<Long, Long> globalTable = builder.globalTable(
-        GLOBAL_TOPIC,
-        ResponsiveStores.materialized(STORE_NAME)
-    );
+    final GlobalKTable<Long, Long> globalTable =
+        builder.globalTable(GLOBAL_TOPIC, ResponsiveStores.materialized(STORE_NAME));
 
     final KStream<Long, Long> stream = builder.stream(INPUT_TOPIC);
-    stream.join(globalTable, (k, v) -> k, Long::sum)
-        .to(OUTPUT_TOPIC);
+    stream.join(globalTable, (k, v) -> k, Long::sum).to(OUTPUT_TOPIC);
 
     return ResponsiveKafkaStreams.create(builder.build(), properties);
   }
-
 }

@@ -32,19 +32,14 @@ public class LocalRemoteKvIteratorTest {
   @Test
   public void shouldReturnUniqueKeysLexicographicallyFromTwoSources() {
     // Given:
-    final byte[] val = new byte[]{0x0};
-    final Bytes k1 = Bytes.wrap(new byte[]{0x0});
-    final Bytes k2 = Bytes.wrap(new byte[]{0x1});
-    final Bytes k3 = Bytes.wrap(new byte[]{0x2});
+    final byte[] val = new byte[] {0x0};
+    final Bytes k1 = Bytes.wrap(new byte[] {0x0});
+    final Bytes k2 = Bytes.wrap(new byte[] {0x1});
+    final Bytes k3 = Bytes.wrap(new byte[] {0x2});
 
-    final TestKvIterator<Result<Bytes>> buffered = new TestKvIterator<>(
-        List.of(k2),
-        List.of(Result.value(k2, val))
-    );
-    final TestKvIterator<byte[]> remote = new TestKvIterator<>(
-        List.of(k1, k3),
-        List.of(val, val)
-    );
+    final TestKvIterator<Result<Bytes>> buffered =
+        new TestKvIterator<>(List.of(k2), List.of(Result.value(k2, val)));
+    final TestKvIterator<byte[]> remote = new TestKvIterator<>(List.of(k1, k3), List.of(val, val));
 
     // When:
     final List<Bytes> flushed = new ArrayList<>();
@@ -59,20 +54,17 @@ public class LocalRemoteKvIteratorTest {
   @Test
   public void shouldReturnLocalOnConflictingKeys() {
     // Given:
-    final byte[] valLocal = new byte[]{0x0};
-    final byte[] valRemote = new byte[]{0x1};
+    final byte[] valLocal = new byte[] {0x0};
+    final byte[] valRemote = new byte[] {0x1};
 
-    final Bytes k1 = Bytes.wrap(new byte[]{0x0});
-    final Bytes k2 = Bytes.wrap(new byte[]{0x1});
+    final Bytes k1 = Bytes.wrap(new byte[] {0x0});
+    final Bytes k2 = Bytes.wrap(new byte[] {0x1});
 
-    final TestKvIterator<Result<Bytes>> buffered = new TestKvIterator<>(
-        List.of(k1, k2),
-        List.of(Result.value(k1, valLocal), Result.value(k2, valLocal))
-    );
-    final TestKvIterator<byte[]> remote = new TestKvIterator<>(
-        List.of(k1, k2),
-        List.of(valRemote, valRemote)
-    );
+    final TestKvIterator<Result<Bytes>> buffered =
+        new TestKvIterator<>(
+            List.of(k1, k2), List.of(Result.value(k1, valLocal), Result.value(k2, valLocal)));
+    final TestKvIterator<byte[]> remote =
+        new TestKvIterator<>(List.of(k1, k2), List.of(valRemote, valRemote));
 
     // When:
     final List<byte[]> flushed = new ArrayList<>();
@@ -87,19 +79,14 @@ public class LocalRemoteKvIteratorTest {
   @Test
   public void shouldIgnoreTombstoneWithNoRemoteMatch() {
     // Given:
-    final byte[] valRemote = new byte[]{0x1};
+    final byte[] valRemote = new byte[] {0x1};
 
-    final Bytes k1 = Bytes.wrap(new byte[]{0x0});
-    final Bytes k2 = Bytes.wrap(new byte[]{0x1});
+    final Bytes k1 = Bytes.wrap(new byte[] {0x0});
+    final Bytes k2 = Bytes.wrap(new byte[] {0x1});
 
-    final TestKvIterator<Result<Bytes>> buffered = new TestKvIterator<>(
-        List.of(k1),
-        List.of(Result.tombstone(k1))
-    );
-    final TestKvIterator<byte[]> remote = new TestKvIterator<>(
-        List.of(k2),
-        List.of(valRemote)
-    );
+    final TestKvIterator<Result<Bytes>> buffered =
+        new TestKvIterator<>(List.of(k1), List.of(Result.tombstone(k1)));
+    final TestKvIterator<byte[]> remote = new TestKvIterator<>(List.of(k2), List.of(valRemote));
 
     // When:
     final List<Bytes> flushed = new ArrayList<>();
@@ -114,19 +101,15 @@ public class LocalRemoteKvIteratorTest {
   @Test
   public void shouldIgnoreRemoteValueWithLocalTombstone() {
     // Given:
-    final byte[] valRemote = new byte[]{0x1};
+    final byte[] valRemote = new byte[] {0x1};
 
-    final Bytes k1 = Bytes.wrap(new byte[]{0x0});
-    final Bytes k2 = Bytes.wrap(new byte[]{0x1});
+    final Bytes k1 = Bytes.wrap(new byte[] {0x0});
+    final Bytes k2 = Bytes.wrap(new byte[] {0x1});
 
-    final TestKvIterator<Result<Bytes>> buffered = new TestKvIterator<>(
-        List.of(k1),
-        List.of(Result.tombstone(k1))
-    );
-    final TestKvIterator<byte[]> remote = new TestKvIterator<>(
-        List.of(k1, k2),
-        List.of(valRemote, valRemote)
-    );
+    final TestKvIterator<Result<Bytes>> buffered =
+        new TestKvIterator<>(List.of(k1), List.of(Result.tombstone(k1)));
+    final TestKvIterator<byte[]> remote =
+        new TestKvIterator<>(List.of(k1, k2), List.of(valRemote, valRemote));
 
     // When:
     final List<Bytes> flushed = new ArrayList<>();
@@ -141,15 +124,15 @@ public class LocalRemoteKvIteratorTest {
   @Test
   public void shouldIterateLocalOnlyWithTombstones() {
     // Given:
-    final byte[] val = new byte[]{0x0};
-    final Bytes k1 = Bytes.wrap(new byte[]{0x0});
-    final Bytes k2 = Bytes.wrap(new byte[]{0x1});
-    final Bytes k3 = Bytes.wrap(new byte[]{0x2});
+    final byte[] val = new byte[] {0x0};
+    final Bytes k1 = Bytes.wrap(new byte[] {0x0});
+    final Bytes k2 = Bytes.wrap(new byte[] {0x1});
+    final Bytes k3 = Bytes.wrap(new byte[] {0x2});
 
-    final TestKvIterator<Result<Bytes>> buffered = new TestKvIterator<>(
-        List.of(k1, k2, k3),
-        List.of(Result.value(k1, val), Result.tombstone(k2), Result.value(k3, val))
-    );
+    final TestKvIterator<Result<Bytes>> buffered =
+        new TestKvIterator<>(
+            List.of(k1, k2, k3),
+            List.of(Result.value(k1, val), Result.tombstone(k2), Result.value(k3, val)));
     final TestKvIterator<byte[]> remote = new TestKvIterator<>(List.of(), List.of());
 
     // When:
@@ -165,16 +148,14 @@ public class LocalRemoteKvIteratorTest {
   @Test
   public void shouldIterateRemoteOnly() {
     // Given:
-    final byte[] val = new byte[]{0x0};
-    final Bytes k1 = Bytes.wrap(new byte[]{0x0});
-    final Bytes k2 = Bytes.wrap(new byte[]{0x1});
-    final Bytes k3 = Bytes.wrap(new byte[]{0x2});
+    final byte[] val = new byte[] {0x0};
+    final Bytes k1 = Bytes.wrap(new byte[] {0x0});
+    final Bytes k2 = Bytes.wrap(new byte[] {0x1});
+    final Bytes k3 = Bytes.wrap(new byte[] {0x2});
 
     final TestKvIterator<Result<Bytes>> buffered = new TestKvIterator<>(List.of(), List.of());
-    final TestKvIterator<byte[]> remote = new TestKvIterator<>(
-        List.of(k1, k2, k3),
-        List.of(val, val, val)
-    );
+    final TestKvIterator<byte[]> remote =
+        new TestKvIterator<>(List.of(k1, k2, k3), List.of(val, val, val));
 
     // When:
     final List<Bytes> flushed = new ArrayList<>();
@@ -201,8 +182,7 @@ public class LocalRemoteKvIteratorTest {
     }
 
     @Override
-    public void close() {
-    }
+    public void close() {}
 
     @Override
     public Bytes peekNextKey() {
@@ -219,5 +199,4 @@ public class LocalRemoteKvIteratorTest {
       return new KeyValue<>(keys.get(idx), val.get(idx++));
     }
   }
-
 }

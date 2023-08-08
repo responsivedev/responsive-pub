@@ -35,22 +35,20 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class CassandraClientTest {
 
-  @Mock
-  private CqlSession session;
-  @Captor
-  private ArgumentCaptor<Statement<?>> statementCaptor;
+  @Mock private CqlSession session;
+  @Captor private ArgumentCaptor<Statement<?>> statementCaptor;
 
   @Test
   public void allStatementsShouldBeIdempotent() {
     // Given:
-    final CassandraClient client = new CassandraClient(
-        session,
-        new ResponsiveConfig(Map.of(
-            ResponsiveConfig.TENANT_ID_CONFIG, "ignored",
-            ResponsiveConfig.STORAGE_HOSTNAME_CONFIG, "ignored",
-            ResponsiveConfig.STORAGE_PORT_CONFIG, 0
-        ))
-    );
+    final CassandraClient client =
+        new CassandraClient(
+            session,
+            new ResponsiveConfig(
+                Map.of(
+                    ResponsiveConfig.TENANT_ID_CONFIG, "ignored",
+                    ResponsiveConfig.STORAGE_HOSTNAME_CONFIG, "ignored",
+                    ResponsiveConfig.STORAGE_PORT_CONFIG, 0)));
     when(session.execute(statementCaptor.capture())).thenReturn(null);
 
     // When:
@@ -60,5 +58,4 @@ class CassandraClientTest {
     final Statement<?> value = statementCaptor.getValue();
     assertThat(value.isIdempotent(), Matchers.is(true));
   }
-
 }

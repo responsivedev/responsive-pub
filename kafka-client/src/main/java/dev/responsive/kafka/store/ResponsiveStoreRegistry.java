@@ -22,8 +22,7 @@ public class ResponsiveStoreRegistry {
   }
 
   public synchronized List<ResponsiveStoreRegistration> getRegisteredStoresForChangelog(
-      final TopicPartition topicPartition
-  ) {
+      final TopicPartition topicPartition) {
     return stores.stream()
         .filter(s -> s.getChangelogTopicPartition().equals(topicPartition))
         .collect(Collectors.toList());
@@ -41,16 +40,19 @@ public class ResponsiveStoreRegistry {
   private void validateSingleMaterialization(final ResponsiveStoreRegistration registration) {
     final String topic = registration.getChangelogTopicPartition().topic();
     final String name = registration.getName();
-    final Optional<ResponsiveStoreRegistration> conflicting = stores.stream()
-        .filter(si -> si.getChangelogTopicPartition().topic().equals(topic)
-            && !si.getName().equals(name))
-        .findFirst();
+    final Optional<ResponsiveStoreRegistration> conflicting =
+        stores.stream()
+            .filter(
+                si ->
+                    si.getChangelogTopicPartition().topic().equals(topic)
+                        && !si.getName().equals(name))
+            .findFirst();
     if (conflicting.isPresent()) {
-      final var err = new IllegalStateException(String.format(
-          "Found two stores that materialize the same changelog topic (%s): %s, %s",
-          topic,
-          name, conflicting.get().getName()
-      ));
+      final var err =
+          new IllegalStateException(
+              String.format(
+                  "Found two stores that materialize the same changelog topic (%s): %s, %s",
+                  topic, name, conflicting.get().getName()));
       LOGGER.error("found conflicting materialization", err);
       throw err;
     }

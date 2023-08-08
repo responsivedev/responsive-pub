@@ -16,7 +16,6 @@
 
 package dev.responsive.kafka.clients;
 
-
 import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
@@ -48,16 +47,14 @@ public class ResponsiveConsumer<K, V> extends DelegatingConsumer<K, V> {
     public RebalanceListener(
         final ConsumerRebalanceListener wrappedRebalanceListener,
         final List<Listener> listeners,
-        final Logger logger
-    ) {
+        final Logger logger) {
       this(Optional.of(wrappedRebalanceListener), listeners, logger);
     }
 
     private RebalanceListener(
         final Optional<ConsumerRebalanceListener> wrappedRebalanceListener,
         final List<Listener> listeners,
-        final Logger logger
-    ) {
+        final Logger logger) {
       this.wrappedRebalanceListener = wrappedRebalanceListener;
       this.listeners = listeners;
       this.logger = logger;
@@ -89,13 +86,11 @@ public class ResponsiveConsumer<K, V> extends DelegatingConsumer<K, V> {
   }
 
   public ResponsiveConsumer(
-      final String clientId,
-      final Consumer<K, V> delegate,
-      final List<Listener> listeners
-  ) {
+      final String clientId, final Consumer<K, V> delegate, final List<Listener> listeners) {
     super(delegate);
-    this.logger = LoggerFactory.getLogger(
-        ResponsiveConsumer.class.getName() + "." + Objects.requireNonNull(clientId));
+    this.logger =
+        LoggerFactory.getLogger(
+            ResponsiveConsumer.class.getName() + "." + Objects.requireNonNull(clientId));
     this.listeners = Objects.requireNonNull(listeners);
   }
 
@@ -153,8 +148,7 @@ public class ResponsiveConsumer<K, V> extends DelegatingConsumer<K, V> {
   }
 
   @Override
-  public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets,
-                         Duration timeout) {
+  public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets, Duration timeout) {
     delegate.commitSync(offsets, timeout);
     listeners.forEach(l -> l.onCommit(offsets));
   }
@@ -170,8 +164,8 @@ public class ResponsiveConsumer<K, V> extends DelegatingConsumer<K, V> {
   }
 
   @Override
-  public void commitAsync(Map<TopicPartition, OffsetAndMetadata> offsets,
-                          OffsetCommitCallback callback) {
+  public void commitAsync(
+      Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
     throw new UnsupportedOperationException("ResponsiveConsumer only supports commitSync");
   }
 
@@ -188,19 +182,14 @@ public class ResponsiveConsumer<K, V> extends DelegatingConsumer<K, V> {
   }
 
   interface Listener {
-    default void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-    }
+    default void onPartitionsRevoked(Collection<TopicPartition> partitions) {}
 
-    default void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-    }
+    default void onPartitionsAssigned(Collection<TopicPartition> partitions) {}
 
-    default void onPartitionsLost(Collection<TopicPartition> partitions) {
-    }
+    default void onPartitionsLost(Collection<TopicPartition> partitions) {}
 
-    default void onCommit(final Map<TopicPartition, OffsetAndMetadata> offsets) {
-    }
+    default void onCommit(final Map<TopicPartition, OffsetAndMetadata> offsets) {}
 
-    default void onClose() {
-    }
+    default void onClose() {}
   }
 }

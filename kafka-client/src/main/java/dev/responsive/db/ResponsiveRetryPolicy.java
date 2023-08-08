@@ -32,7 +32,6 @@ import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.CumulativeCount;
 import org.apache.kafka.common.utils.Time;
@@ -49,39 +48,28 @@ public class ResponsiveRetryPolicy extends DefaultRetryPolicy {
   private final Metrics metrics;
   private final Sensor writeTimeouts;
 
-  public ResponsiveRetryPolicy(
-      final DriverContext context,
-      final String profileName
-  ) {
+  public ResponsiveRetryPolicy(final DriverContext context, final String profileName) {
     super(context, profileName);
     this.logPrefix = (context != null ? context.getSessionName() : null) + "|" + profileName;
-    this.metrics = new Metrics(
-        new MetricConfig(),
-        List.of(new JmxReporter()),
-        Time.SYSTEM,
-        new KafkaMetricsContext("dev.responsive", new HashMap<>())
-    );
+    this.metrics =
+        new Metrics(
+            new MetricConfig(),
+            List.of(new JmxReporter()),
+            Time.SYSTEM,
+            new KafkaMetricsContext("dev.responsive", new HashMap<>()));
     this.writeTimeouts = registerWriteTimeoutSensor(metrics, context, profileName);
   }
 
   private Sensor registerWriteTimeoutSensor(
-      final Metrics metrics,
-      final DriverContext context,
-      final String profile
-  ) {
+      final Metrics metrics, final DriverContext context, final String profile) {
     final var sensor = metrics.sensor("write-timeouts-total");
     sensor.add(
         new MetricName(
             "write-timeouts-total",
             METRICS_GROUP,
             "total write timeouts",
-            Map.of(
-                "profile", profile,
-                "session", context == null ? "" : context.getSessionName()
-            )
-        ),
-        new CumulativeCount()
-    );
+            Map.of("profile", profile, "session", context == null ? "" : context.getSessionName())),
+        new CumulativeCount());
     return sensor;
   }
 
@@ -92,8 +80,7 @@ public class ResponsiveRetryPolicy extends DefaultRetryPolicy {
       @NonNull final WriteType writeType,
       final int blockFor,
       final int received,
-      final int retryCount
-  ) {
+      final int retryCount) {
     return () -> {
       writeTimeouts.record();
 
@@ -101,17 +88,16 @@ public class ResponsiveRetryPolicy extends DefaultRetryPolicy {
       // are retry-able, not just BATCH LOG writes because all BATCH UNLOGGED
       // writes that our client issues go to only a single partition - we also
       // up the retry rate from 1 retry to 3 retries
-      RetryDecision decision = (retryCount < 3)
-          ? RetryDecision.RETRY_SAME
-          : RetryDecision.RETHROW;
+      RetryDecision decision = (retryCount < 3) ? RetryDecision.RETRY_SAME : RetryDecision.RETHROW;
 
       if (decision == RetryDecision.RETRY_SAME && LOG.isTraceEnabled()) {
         LOG.trace(
             RETRYING_ON_WRITE_TIMEOUT, logPrefix, cl, writeType, blockFor, received, retryCount);
       } else if (decision.equals(RetryDecision.RETHROW)) {
-        final var msg = "[{}] Rethrowing write timeout error due to too many retries "
-            + "(consistency: {}, write type: {}, required acknowledgments: {}, "
-            + "received acknowledgments: {}, retries: {})";
+        final var msg =
+            "[{}] Rethrowing write timeout error due to too many retries "
+                + "(consistency: {}, write type: {}, required acknowledgments: {}, "
+                + "received acknowledgments: {}, retries: {})";
         LOG.error(msg, logPrefix, cl, writeType, blockFor, received, retryCount);
       }
 

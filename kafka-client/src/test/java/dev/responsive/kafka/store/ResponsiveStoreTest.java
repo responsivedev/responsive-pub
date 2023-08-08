@@ -38,8 +38,7 @@ public class ResponsiveStoreTest {
 
   private static final TableName NAME = new TableName("foo");
 
-  @Mock
-  private StateStore root;
+  @Mock private StateStore root;
 
   @Test
   public void shouldCreateGlobalStoreWhenPassedGlobalStoreContext() {
@@ -74,5 +73,4 @@ public class ResponsiveStoreTest {
     // Then:
     assertThat(store.getDelegate(), instanceOf(ResponsivePartitionedStore.class));
   }
-
 }

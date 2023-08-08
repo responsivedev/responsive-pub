@@ -102,8 +102,7 @@ public class SubPartitionIntegrationTest {
       final TestInfo info,
       final Admin admin,
       @ResponsiveConfigParam final Map<String, Object> responsiveProps,
-      final CassandraContainer<?> cassandra
-  ) {
+      final CassandraContainer<?> cassandra) {
     name = info.getTestMethod().orElseThrow().getName();
     storeName = name + "store";
 
@@ -113,15 +112,14 @@ public class SubPartitionIntegrationTest {
     admin.createTopics(
         List.of(
             new NewTopic(inputTopic(), Optional.of(2), Optional.empty()),
-            new NewTopic(outputTopic(), Optional.of(1), Optional.empty())
-        )
-    );
+            new NewTopic(outputTopic(), Optional.of(1), Optional.empty())));
 
-    final CqlSession session = CqlSession.builder()
-        .addContactPoint(cassandra.getContactPoint())
-        .withLocalDatacenter(cassandra.getLocalDatacenter())
-        .withKeyspace("responsive_clients") // NOTE: this keyspace is expected to exist
-        .build();
+    final CqlSession session =
+        CqlSession.builder()
+            .addContactPoint(cassandra.getContactPoint())
+            .withLocalDatacenter(cassandra.getLocalDatacenter())
+            .withKeyspace("responsive_clients") // NOTE: this keyspace is expected to exist
+            .build();
     client = new CassandraClient(session, new ResponsiveConfig(responsiveProps));
   }
 
@@ -136,17 +134,21 @@ public class SubPartitionIntegrationTest {
     final Map<String, Object> properties = getMutableProperties();
     final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties);
 
-    try (
-        final var streams = ResponsiveKafkaStreams.create(
-            simpleDslTopology(ResponsiveStores.materialized(storeName)), properties);
+    try (final var streams =
+            ResponsiveKafkaStreams.create(
+                simpleDslTopology(ResponsiveStores.materialized(storeName)), properties);
         final var serializer = new LongSerializer();
-        final var deserializer = new LongDeserializer();
-    ) {
+        final var deserializer = new LongDeserializer(); ) {
       // When:
       // this will send one key to each virtual partition using the LongBytesHasher
       startAppAndAwaitRunning(Duration.ofSeconds(10), streams);
       pipeInput(
-          inputTopic(), 2, producer, System::currentTimeMillis, 0, 100L,
+          inputTopic(),
+          2,
+          producer,
+          System::currentTimeMillis,
+          0,
+          100L,
           LongStream.range(0, 32).toArray());
 
       // Then
@@ -172,7 +174,8 @@ public class SubPartitionIntegrationTest {
       for (long k = 0; k < 32; k++) {
         final var kBytes = Bytes.wrap(serializer.serialize("", k));
         assertThat(
-            deserializer.deserialize("foo",
+            deserializer.deserialize(
+                "foo",
                 Arrays.copyOfRange(
                     statements.get(cassandraName, hasher.partition((int) (k % 2), kBytes), kBytes),
                     8,
@@ -188,20 +191,24 @@ public class SubPartitionIntegrationTest {
     final Map<String, Object> properties = getMutableProperties();
     final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties);
 
-    try (
-        final var streams = ResponsiveKafkaStreams.create(
-            simpleDslTopology(new ResponsiveMaterialized<>(
-                Materialized.as(ResponsiveStores.factStore(storeName)),
-                false
-            )), properties);
+    try (final var streams =
+            ResponsiveKafkaStreams.create(
+                simpleDslTopology(
+                    new ResponsiveMaterialized<>(
+                        Materialized.as(ResponsiveStores.factStore(storeName)), false)),
+                properties);
         final var serializer = new LongSerializer();
-        final var deserializer = new LongDeserializer();
-    ) {
+        final var deserializer = new LongDeserializer(); ) {
       // When:
       // this will send one key to each virtual partition using the LongBytesHasher
       startAppAndAwaitRunning(Duration.ofSeconds(10), streams);
       pipeInput(
-          inputTopic(), 2, producer, System::currentTimeMillis, 0, 100L,
+          inputTopic(),
+          2,
+          producer,
+          System::currentTimeMillis,
+          0,
+          100L,
           LongStream.range(0, 32).toArray());
 
       // Then
@@ -232,7 +239,8 @@ public class SubPartitionIntegrationTest {
       for (long k = 0; k < 32; k++) {
         final var kBytes = Bytes.wrap(serializer.serialize("", k));
         assertThat(
-            deserializer.deserialize("foo",
+            deserializer.deserialize(
+                "foo",
                 Arrays.copyOfRange(
                     schema.get(cassandraName, hasher.partition((int) (k % 2), kBytes), kBytes),
                     8,
@@ -243,15 +251,11 @@ public class SubPartitionIntegrationTest {
   }
 
   private Topology simpleDslTopology(
-      final Materialized<Long, Long, KeyValueStore<Bytes, byte[]>> materialized
-  ) {
+      final Materialized<Long, Long, KeyValueStore<Bytes, byte[]>> materialized) {
     final var builder = new StreamsBuilder();
 
     final KStream<Long, Long> stream = builder.stream(inputTopic());
-    stream.groupByKey()
-        .count(materialized)
-        .toStream()
-        .to(outputTopic());
+    stream.groupByKey().count(materialized).toStream().to(outputTopic());
 
     return builder.build();
   }

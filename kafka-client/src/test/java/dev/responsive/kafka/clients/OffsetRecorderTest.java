@@ -24,73 +24,79 @@ class OffsetRecorderTest {
 
   @BeforeEach
   public void setup() {
-    eosRecorder.addCommitCallback((c, w) -> {
-      committedOffsets = c;
-      writtenOffsets = w;
-    });
-    alosRecorder.addCommitCallback((c, w) -> {
-      committedOffsets = c;
-      writtenOffsets = w;
-    });
+    eosRecorder.addCommitCallback(
+        (c, w) -> {
+          committedOffsets = c;
+          writtenOffsets = w;
+        });
+    alosRecorder.addCommitCallback(
+        (c, w) -> {
+          committedOffsets = c;
+          writtenOffsets = w;
+        });
   }
 
   @Test
   public void shouldRecordTransactionalOffsets() {
     // given:
-    eosRecorder.getProducerListener().onSendOffsetsToTransaction(
-        Map.of(
-            TOPIC_PARTITION1, new OffsetAndMetadata(123L),
-            TOPIC_PARTITION2, new OffsetAndMetadata(456L)
-        ),
-        "group"
-    );
+    eosRecorder
+        .getProducerListener()
+        .onSendOffsetsToTransaction(
+            Map.of(
+                TOPIC_PARTITION1, new OffsetAndMetadata(123L),
+                TOPIC_PARTITION2, new OffsetAndMetadata(456L)),
+            "group");
 
     // when:
     eosRecorder.getProducerListener().onCommit();
 
     // then:
-    assertThat(getCommittedOffsetsSentToCallback(), is(Map.of(
-        new RecordingKey(TOPIC_PARTITION1, "group"), 123L,
-        new RecordingKey(TOPIC_PARTITION2, "group"), 456L
-    )));
+    assertThat(
+        getCommittedOffsetsSentToCallback(),
+        is(
+            Map.of(
+                new RecordingKey(TOPIC_PARTITION1, "group"), 123L,
+                new RecordingKey(TOPIC_PARTITION2, "group"), 456L)));
   }
 
   @Test
   public void shouldRecordProducedOffsets() {
     // given:
-    eosRecorder.getProducerListener().onSendCompleted(
-        new RecordMetadata(TOPIC_PARTITION1, 123L, 0, 0, 0, 0)
-    );
-    eosRecorder.getProducerListener().onSendCompleted(
-        new RecordMetadata(TOPIC_PARTITION2, 456L, 0, 0, 0, 0)
-    );
+    eosRecorder
+        .getProducerListener()
+        .onSendCompleted(new RecordMetadata(TOPIC_PARTITION1, 123L, 0, 0, 0, 0));
+    eosRecorder
+        .getProducerListener()
+        .onSendCompleted(new RecordMetadata(TOPIC_PARTITION2, 456L, 0, 0, 0, 0));
 
     // when:
     eosRecorder.getProducerListener().onCommit();
 
     // then:
-    assertThat(getWrittenOffsetsSentToCallback(), is(Map.of(
-        TOPIC_PARTITION1, 123L,
-        TOPIC_PARTITION2, 456L
-    )));
+    assertThat(
+        getWrittenOffsetsSentToCallback(),
+        is(
+            Map.of(
+                TOPIC_PARTITION1, 123L,
+                TOPIC_PARTITION2, 456L)));
   }
 
   @Test
   public void shouldResetOffsetsOnAbort() {
     // given:
-    eosRecorder.getProducerListener().onSendOffsetsToTransaction(
-        Map.of(
-            TOPIC_PARTITION1, new OffsetAndMetadata(123L),
-            TOPIC_PARTITION2, new OffsetAndMetadata(456L)
-        ),
-        "group"
-    );
-    eosRecorder.getProducerListener().onSendCompleted(
-        new RecordMetadata(TOPIC_PARTITION1, 123L, 0, 0, 0, 0)
-    );
-    eosRecorder.getProducerListener().onSendCompleted(
-        new RecordMetadata(TOPIC_PARTITION2, 456L, 0, 0, 0, 0)
-    );
+    eosRecorder
+        .getProducerListener()
+        .onSendOffsetsToTransaction(
+            Map.of(
+                TOPIC_PARTITION1, new OffsetAndMetadata(123L),
+                TOPIC_PARTITION2, new OffsetAndMetadata(456L)),
+            "group");
+    eosRecorder
+        .getProducerListener()
+        .onSendCompleted(new RecordMetadata(TOPIC_PARTITION1, 123L, 0, 0, 0, 0));
+    eosRecorder
+        .getProducerListener()
+        .onSendCompleted(new RecordMetadata(TOPIC_PARTITION2, 456L, 0, 0, 0, 0));
 
     // when:
     eosRecorder.getProducerListener().onAbort();
@@ -104,34 +110,33 @@ class OffsetRecorderTest {
   @Test
   public void shouldRecordOffsetsCommittedByConsumer() {
     // when:
-    alosRecorder.getConsumerListener().onCommit(
-        Map.of(
-            TOPIC_PARTITION1, new OffsetAndMetadata(123L),
-            TOPIC_PARTITION2, new OffsetAndMetadata(456L)
-        )
-    );
+    alosRecorder
+        .getConsumerListener()
+        .onCommit(
+            Map.of(
+                TOPIC_PARTITION1, new OffsetAndMetadata(123L),
+                TOPIC_PARTITION2, new OffsetAndMetadata(456L)));
 
     // then:
-    assertThat(getCommittedOffsetsSentToCallback(), is(Map.of(
-        new RecordingKey(TOPIC_PARTITION1, ""), 123L,
-        new RecordingKey(TOPIC_PARTITION2, ""), 456L
-    )));
+    assertThat(
+        getCommittedOffsetsSentToCallback(),
+        is(
+            Map.of(
+                new RecordingKey(TOPIC_PARTITION1, ""), 123L,
+                new RecordingKey(TOPIC_PARTITION2, ""), 456L)));
   }
 
   @Test
   public void shouldThrowIfCommitFromConsumerOnEos() {
     assertThrows(
-        IllegalStateException.class,
-        () -> eosRecorder.getConsumerListener().onCommit(Map.of())
-    );
+        IllegalStateException.class, () -> eosRecorder.getConsumerListener().onCommit(Map.of()));
   }
 
   @Test
   public void shouldThrowIfTransactionalOffsetsSentOnAlos() {
     assertThrows(
         IllegalStateException.class,
-        () -> alosRecorder.getProducerListener().onSendOffsetsToTransaction(Map.of(), "")
-    );
+        () -> alosRecorder.getProducerListener().onSendOffsetsToTransaction(Map.of(), ""));
   }
 
   private Map<RecordingKey, Long> getCommittedOffsetsSentToCallback() {

@@ -44,8 +44,7 @@ import org.slf4j.LoggerFactory;
 
 public class CassandraFactSchema implements RemoteKeyValueSchema {
 
-  private static final Logger LOG = LoggerFactory.getLogger(
-      CassandraFactSchema.class);
+  private static final Logger LOG = LoggerFactory.getLogger(CassandraFactSchema.class);
 
   private final CassandraClient client;
 
@@ -72,57 +71,51 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
   @Override
   public void create(final String tableName) {
     LOG.info("Creating data table {} in remote store.", tableName);
-    client.execute(SchemaBuilder
-        .createTable(tableName)
-        .ifNotExists()
-        .withPartitionKey(ROW_TYPE.column(), DataTypes.TINYINT)
-        .withPartitionKey(DATA_KEY.column(), DataTypes.BLOB)
-        .withColumn(DATA_VALUE.column(), DataTypes.BLOB)
-        .withColumn(OFFSET.column(), DataTypes.BIGINT)
-        .build()
-    );
+    client.execute(
+        SchemaBuilder.createTable(tableName)
+            .ifNotExists()
+            .withPartitionKey(ROW_TYPE.column(), DataTypes.TINYINT)
+            .withPartitionKey(DATA_KEY.column(), DataTypes.BLOB)
+            .withColumn(DATA_VALUE.column(), DataTypes.BLOB)
+            .withColumn(OFFSET.column(), DataTypes.BIGINT)
+            .build());
   }
 
   /**
-   * Initializes the metadata entry for {@code table} by adding a
-   * row with key {@code _metadata} and sets special columns
-   * {@link ColumnName#OFFSET} and no {@link ColumnName#EPOCH}.
+   * Initializes the metadata entry for {@code table} by adding a row with key {@code _metadata} and
+   * sets special columns {@link ColumnName#OFFSET} and no {@link ColumnName#EPOCH}.
    *
-   * <p>Note that this method is idempotent as it uses Cassandra's
-   * {@code IF NOT EXISTS} functionality.
+   * <p>Note that this method is idempotent as it uses Cassandra's {@code IF NOT EXISTS}
+   * functionality.
    *
-   * @param table          the table that is initialized
+   * @param table the table that is initialized
    * @param kafkaPartition the partition to initialize
    */
   @Override
   public FencingToken init(
-      final String table,
-      final SubPartitioner partitioner,
-      final int kafkaPartition
-  ) {
+      final String table, final SubPartitioner partitioner, final int kafkaPartition) {
     client.execute(
         QueryBuilder.insertInto(table)
             .value(ROW_TYPE.column(), QueryBuilder.literal(METADATA_ROW.val()))
             .value(DATA_KEY.column(), QueryBuilder.literal(metadataKey(kafkaPartition)))
             .value(OFFSET.column(), OFFSET.literal(-1L))
             .ifNotExists()
-            .build()
-    );
+            .build());
 
     return new NoOpFencingToken();
   }
 
   @Override
   public MetadataRow metadata(final String table, final int partition) {
-    final BoundStatement bound = getMeta.get(table)
-        .bind()
-        .setByteBuffer(DATA_KEY.bind(), metadataKey(partition));
+    final BoundStatement bound =
+        getMeta.get(table).bind().setByteBuffer(DATA_KEY.bind(), metadataKey(partition));
     final List<Row> result = client.execute(bound).all();
 
     if (result.size() != 1) {
-      throw new IllegalStateException(String.format(
-          "Expected exactly one offset row for %s[%s] but got %d",
-          table, partition, result.size()));
+      throw new IllegalStateException(
+          String.format(
+              "Expected exactly one offset row for %s[%s] but got %d",
+              table, partition, result.size()));
     } else {
       final long offset = result.get(0).getLong(OFFSET.column());
       LOG.info("Got offset for {}[{}]: {}", table, partition, offset);
@@ -132,13 +125,10 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
 
   @Override
   public BoundStatement setOffset(
-      final String table,
-      final FencingToken token,
-      final int partition,
-      final long offset
-  ) {
+      final String table, final FencingToken token, final int partition, final long offset) {
     LOG.info("Setting offset for {}[{}] to {}", table, partition, offset);
-    return setOffset.get(table)
+    return setOffset
+        .get(table)
         .bind()
         .setByteBuffer(DATA_KEY.bind(), metadataKey(partition))
         .setLong(OFFSET.bind(), offset);
@@ -146,48 +136,54 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
 
   @Override
   public void prepare(final String tableName) {
-    insert.computeIfAbsent(tableName, k -> client.prepare(
-        QueryBuilder
-            .insertInto(tableName)
-            .value(ROW_TYPE.column(), DATA_ROW.literal())
-            .value(DATA_KEY.column(), bindMarker(DATA_KEY.bind()))
-            .value(DATA_VALUE.column(), bindMarker(DATA_VALUE.bind()))
-            .build()
-    ));
+    insert.computeIfAbsent(
+        tableName,
+        k ->
+            client.prepare(
+                QueryBuilder.insertInto(tableName)
+                    .value(ROW_TYPE.column(), DATA_ROW.literal())
+                    .value(DATA_KEY.column(), bindMarker(DATA_KEY.bind()))
+                    .value(DATA_VALUE.column(), bindMarker(DATA_VALUE.bind()))
+                    .build()));
 
-    get.computeIfAbsent(tableName, k -> client.prepare(
-        QueryBuilder
-            .selectFrom(tableName)
-            .columns(DATA_VALUE.column())
-            .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
-            .where(DATA_KEY.relation().isEqualTo(bindMarker(DATA_KEY.bind())))
-            .build()
-    ));
+    get.computeIfAbsent(
+        tableName,
+        k ->
+            client.prepare(
+                QueryBuilder.selectFrom(tableName)
+                    .columns(DATA_VALUE.column())
+                    .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
+                    .where(DATA_KEY.relation().isEqualTo(bindMarker(DATA_KEY.bind())))
+                    .build()));
 
-    delete.computeIfAbsent(tableName, k -> client.prepare(
-        QueryBuilder
-            .deleteFrom(tableName)
-            .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
-            .where(DATA_KEY.relation().isEqualTo(bindMarker(DATA_KEY.bind())))
-            .build()
-    ));
+    delete.computeIfAbsent(
+        tableName,
+        k ->
+            client.prepare(
+                QueryBuilder.deleteFrom(tableName)
+                    .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
+                    .where(DATA_KEY.relation().isEqualTo(bindMarker(DATA_KEY.bind())))
+                    .build()));
 
-    getMeta.computeIfAbsent(tableName, k -> client.prepare(
-        QueryBuilder
-            .selectFrom(tableName)
-            .column(OFFSET.column())
-            .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
-            .where(DATA_KEY.relation().isEqualTo(bindMarker(DATA_KEY.bind())))
-            .build()
-    ));
+    getMeta.computeIfAbsent(
+        tableName,
+        k ->
+            client.prepare(
+                QueryBuilder.selectFrom(tableName)
+                    .column(OFFSET.column())
+                    .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
+                    .where(DATA_KEY.relation().isEqualTo(bindMarker(DATA_KEY.bind())))
+                    .build()));
 
-    setOffset.computeIfAbsent(tableName, k -> client.prepare(QueryBuilder
-        .update(tableName)
-        .setColumn(OFFSET.column(), bindMarker(OFFSET.bind()))
-        .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
-        .where(DATA_KEY.relation().isEqualTo(bindMarker(DATA_KEY.bind())))
-        .build()
-    ));
+    setOffset.computeIfAbsent(
+        tableName,
+        k ->
+            client.prepare(
+                QueryBuilder.update(tableName)
+                    .setColumn(OFFSET.column(), bindMarker(OFFSET.bind()))
+                    .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
+                    .where(DATA_KEY.relation().isEqualTo(bindMarker(DATA_KEY.bind())))
+                    .build()));
   }
 
   @Override
@@ -196,69 +192,52 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
   }
 
   /**
-   * @param table         the table to delete from
-   * @param partitionKey  the partitioning key
-   * @param key           the data key
-   *
-   * @return a statement that, when executed, will delete the row
-   *         matching {@code partitionKey} and {@code key} in the
-   *         {@code table}
+   * @param table the table to delete from
+   * @param partitionKey the partitioning key
+   * @param key the data key
+   * @return a statement that, when executed, will delete the row matching {@code partitionKey} and
+   *     {@code key} in the {@code table}
    */
   @Override
   @CheckReturnValue
-  public BoundStatement delete(
-      final String table,
-      final int partitionKey,
-      final Bytes key
-  ) {
-    return delete.get(table)
-        .bind()
-        .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()));
+  public BoundStatement delete(final String table, final int partitionKey, final Bytes key) {
+    return delete.get(table).bind().setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()));
   }
 
-
   /**
-   * Inserts data into {@code table}. Note that this will overwrite
-   * any existing entry in the table with the same key.
+   * Inserts data into {@code table}. Note that this will overwrite any existing entry in the table
+   * with the same key.
    *
-   * @param table         the table to insert into
-   * @param partitionKey  the partitioning key
-   * @param key           the data key
-   * @param value         the data value
-   *
-   * @return a statement that, when executed, will insert the row
-   *         matching {@code partitionKey} and {@code key} in the
-   *         {@code table} with value {@code value}
+   * @param table the table to insert into
+   * @param partitionKey the partitioning key
+   * @param key the data key
+   * @param value the data value
+   * @return a statement that, when executed, will insert the row matching {@code partitionKey} and
+   *     {@code key} in the {@code table} with value {@code value}
    */
   @Override
   @CheckReturnValue
   public BoundStatement insert(
-      final String table,
-      final int partitionKey,
-      final Bytes key,
-      final byte[] value
-  ) {
-    return insert.get(table)
+      final String table, final int partitionKey, final Bytes key, final byte[] value) {
+    return insert
+        .get(table)
         .bind()
         .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
         .setByteBuffer(DATA_VALUE.bind(), ByteBuffer.wrap(value));
   }
 
   /**
-   * Retrieves the value of the given {@code partitionKey} and {@code key}
-   * from {@code table}.
+   * Retrieves the value of the given {@code partitionKey} and {@code key} from {@code table}.
    *
    * @param tableName the table to retrieve from
    * @param partition the partition
-   * @param key       the data key
-   *
+   * @param key the data key
    * @return the value previously set
    */
   @Override
   public byte[] get(final String tableName, final int partition, final Bytes key) {
-    final BoundStatement get = this.get.get(tableName)
-        .bind()
-        .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()));
+    final BoundStatement get =
+        this.get.get(tableName).bind().setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()));
 
     final List<Row> result = client.execute(get).all();
     if (result.size() > 1) {
@@ -273,19 +252,12 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
 
   @Override
   public KeyValueIterator<Bytes, byte[]> range(
-      final String tableName,
-      final int partition,
-      final Bytes from,
-      final Bytes to
-  ) {
+      final String tableName, final int partition, final Bytes from, final Bytes to) {
     throw new UnsupportedOperationException("range scans are not supported on Idempotent schemas.");
   }
 
   @Override
-  public KeyValueIterator<Bytes, byte[]> all(
-      final String tableName,
-      final int partition
-  ) {
+  public KeyValueIterator<Bytes, byte[]> all(final String tableName, final int partition) {
     throw new UnsupportedOperationException("all is not supported on Idempotent schemas");
   }
 
@@ -295,5 +267,4 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
     key.putInt(partition);
     return key.position(0);
   }
-
 }

@@ -12,9 +12,7 @@ public class ResponsiveMaterialized<K, V, S extends StateStore> extends Material
   private final boolean truncateChangelog;
 
   public ResponsiveMaterialized(
-      final Materialized<K, V, S> materialized,
-      final boolean truncateChangelog
-  ) {
+      final Materialized<K, V, S> materialized, final boolean truncateChangelog) {
     super(materialized);
     this.truncateChangelog = truncateChangelog;
     if (truncateChangelog) {

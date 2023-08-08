@@ -16,8 +16,7 @@ public final class ResponsiveStoreRegistration {
       final String name,
       final TopicPartition changelogTopicPartition,
       final long committedOffset,
-      final Consumer<Long> onCommit
-  ) {
+      final Consumer<Long> onCommit) {
     this.name = Objects.requireNonNull(name);
     this.changelogTopicPartition = Objects.requireNonNull(changelogTopicPartition);
     this.committedOffset = committedOffset;

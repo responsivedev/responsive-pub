@@ -57,16 +57,21 @@ public class OperatorMain {
     }
 
     final String target = cmd.getOptionValue(OperatorOptions.CONTROLLER_URL);
-    final String environment = cmd.hasOption(OperatorOptions.ENVIRONMENT)
-        ? cmd.getOptionValue(OperatorOptions.ENVIRONMENT) : "";
+    final String environment =
+        cmd.hasOption(OperatorOptions.ENVIRONMENT)
+            ? cmd.getOptionValue(OperatorOptions.ENVIRONMENT)
+            : "";
     final String secretFilePath = cmd.getOptionValue(OperatorOptions.SECRETS_FILE);
     final boolean tlsOff = cmd.hasOption(OperatorOptions.TLS_OFF);
     final Properties config = load(secretFilePath);
 
     if (!(config.containsKey(API_KEY_CONFIG) && config.containsKey(SECRET_CONFIG))) {
-      LOG.error("Couldn't find API Key or secret properties in config file {}. "
-              + "We expect both {} and {} properties to be present", secretFilePath,
-              API_KEY_CONFIG, SECRET_CONFIG);
+      LOG.error(
+          "Couldn't find API Key or secret properties in config file {}. "
+              + "We expect both {} and {} properties to be present",
+          secretFilePath,
+          API_KEY_CONFIG,
+          SECRET_CONFIG);
       System.exit(1);
     }
 
@@ -75,12 +80,9 @@ public class OperatorMain {
 
     final Operator operator = new Operator();
     Serialization.jsonMapper().registerModule(new Jdk8Module());
-    operator.register(new ResponsivePolicyReconciler(environment, new ControllerGrpcClient(
-        target,
-        apiKey,
-        secret,
-        tlsOff
-    )));
+    operator.register(
+        new ResponsivePolicyReconciler(
+            environment, new ControllerGrpcClient(target, apiKey, secret, tlsOff)));
     operator.start();
   }
 

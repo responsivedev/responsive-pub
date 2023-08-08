@@ -25,7 +25,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import dev.responsive.kafka.clients.ResponsiveGlobalConsumer;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -55,23 +54,20 @@ import org.mockito.quality.Strictness;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class ResponsiveGlobalConsumerTest {
 
-  @Mock
-  private Consumer<byte[], byte[]> delegate;
-  @Mock
-  private Admin admin;
+  @Mock private Consumer<byte[], byte[]> delegate;
+  @Mock private Admin admin;
 
   private ResponsiveGlobalConsumer consumer;
 
   @BeforeEach
   public void before() {
-    consumer = new ResponsiveGlobalConsumer(
-        Map.of(
-            ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class,
-            ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class
-        ),
-        delegate,
-        admin
-    );
+    consumer =
+        new ResponsiveGlobalConsumer(
+            Map.of(
+                ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class,
+                ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class),
+            delegate,
+            admin);
   }
 
   @Test
@@ -99,17 +95,17 @@ class ResponsiveGlobalConsumerTest {
   @Test
   public void shouldReturnAllRecordsForTopicOnPollResultOnSingleTopicPartition() {
     // Given:
-    final byte[] b = new byte[]{};
+    final byte[] b = new byte[] {};
     final ConsumerRecord<byte[], byte[]> fooRecord0 = new ConsumerRecord<>("foo", 0, 0, b, b);
     final ConsumerRecord<byte[], byte[]> fooRecord1 = new ConsumerRecord<>("foo", 0, 0, b, b);
     final ConsumerRecord<byte[], byte[]> barRecord = new ConsumerRecord<>("bar", 1, 0, b, b);
-    when(delegate.poll(any(Duration.class))).thenReturn(new ConsumerRecords<>(
-        Map.of(
-            new TopicPartition("foo", 0), List.of(fooRecord0),
-            new TopicPartition("foo", 1), List.of(fooRecord1),
-            new TopicPartition("bar", 1), List.of(barRecord)
-        )
-    ));
+    when(delegate.poll(any(Duration.class)))
+        .thenReturn(
+            new ConsumerRecords<>(
+                Map.of(
+                    new TopicPartition("foo", 0), List.of(fooRecord0),
+                    new TopicPartition("foo", 1), List.of(fooRecord1),
+                    new TopicPartition("bar", 1), List.of(barRecord))));
 
     // When:
     final ConsumerRecords<byte[], byte[]> result = consumer.poll(Duration.ZERO);
@@ -143,10 +139,10 @@ class ResponsiveGlobalConsumerTest {
     when(delegate.groupMetadata()).thenReturn(new ConsumerGroupMetadata("group.id"));
     when(delegate.assignment()).thenReturn(Set.of(assignedPartition));
     when(res.partitionsToOffsetAndMetadata())
-        .thenReturn(KafkaFuture.completedFuture(
-            Map.of(otherPartition, new OffsetAndMetadata(101L, "meta"))));
-    when(admin.listConsumerGroupOffsets(any(String.class)))
-        .thenReturn(res);
+        .thenReturn(
+            KafkaFuture.completedFuture(
+                Map.of(otherPartition, new OffsetAndMetadata(101L, "meta"))));
+    when(admin.listConsumerGroupOffsets(any(String.class))).thenReturn(res);
 
     // When:
     final long position = consumer.position(otherPartition, Duration.ZERO);

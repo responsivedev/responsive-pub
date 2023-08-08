@@ -27,21 +27,18 @@ import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
-/**
- * Utility class for creating iterators.
- */
+/** Utility class for creating iterators. */
 public final class Iterators {
 
   private Iterators() {}
 
   /**
-   * Returns an iterator that caches the last value returned by
-   * a delegate so that {@code peek()} can check the next key
-   * without exhausting the iterator.
+   * Returns an iterator that caches the last value returned by a delegate so that {@code peek()}
+   * can check the next key without exhausting the iterator.
    *
    * @param delegate the delegate
-   * @return a new iterator of the same type as delegate that
-   *         supports {@link PeekingIterator#peek()}
+   * @return a new iterator of the same type as delegate that supports {@link
+   *     PeekingIterator#peek()}
    */
   public static <T> PeekingIterator<T> peeking(final Iterator<T> delegate) {
     if (delegate instanceof PeekingIterator) {
@@ -51,51 +48,36 @@ public final class Iterators {
     return new PeekingIterator<>(delegate);
   }
 
-  public static <T> Iterator<T> filter(
-      final Iterator<T> delegate,
-      final Predicate<T> filter
-  ) {
+  public static <T> Iterator<T> filter(final Iterator<T> delegate, final Predicate<T> filter) {
     return new FilterIterator<>(delegate, filter);
   }
 
   public static <K, V> KeyValueIterator<K, V> filterKv(
-      final KeyValueIterator<K, V> delegate,
-      final Predicate<K> filter
-  ) {
+      final KeyValueIterator<K, V> delegate, final Predicate<K> filter) {
     return new KvFilterIterator<>(delegate, filter);
   }
 
   /**
-   * Transforms the delegate iterator into a {@link KeyValueIterator}
-   * by applying the transformation method {@code extract(T)} passed
-   * in.
+   * Transforms the delegate iterator into a {@link KeyValueIterator} by applying the transformation
+   * method {@code extract(T)} passed in.
    */
   public static <T, K, V> KeyValueIterator<K, V> kv(
-      final Iterator<T> delegate,
-      final Function<T, KeyValue<K, V>> extract
-  ) {
+      final Iterator<T> delegate, final Function<T, KeyValue<K, V>> extract) {
     return new TransformIterator<>(delegate, extract);
   }
 
   /**
-   * Wraps a {@link KeyValueIterator} that already returns what the
-   * {@link WindowStoreIterator} requires but using {@link Stamped}
-   * instead of {@code Long}.
+   * Wraps a {@link KeyValueIterator} that already returns what the {@link WindowStoreIterator}
+   * requires but using {@link Stamped} instead of {@code Long}.
    */
   public static <K, V> WindowStoreIterator<V> windowed(
-      final KeyValueIterator<Stamped<K>, V> delegate
-  ) {
+      final KeyValueIterator<Stamped<K>, V> delegate) {
     return new WindowIterator<>(delegate);
   }
 
-  /**
-   * Returns an iterator that contains window ends instead of just
-   * the stamped start timestamp.
-   */
+  /** Returns an iterator that contains window ends instead of just the stamped start timestamp. */
   public static <K, V> KeyValueIterator<Windowed<K>, V> windowedKey(
-      final KeyValueIterator<Stamped<K>, V> delegate,
-      final long windowSize
-  ) {
+      final KeyValueIterator<Stamped<K>, V> delegate, final long windowSize) {
     return new WindowKeyIterator<>(delegate, windowSize);
   }
 
@@ -140,9 +122,7 @@ public final class Iterators {
     private final Function<T, KeyValue<K, V>> extract;
 
     private TransformIterator(
-        final Iterator<T> delegate,
-        final Function<T, KeyValue<K, V>> extract
-    ) {
+        final Iterator<T> delegate, final Function<T, KeyValue<K, V>> extract) {
       if (delegate instanceof KeyValueIterator) {
         throw new IllegalArgumentException("TransformIterator should not wrap KeyValueIterators");
       }
@@ -152,8 +132,7 @@ public final class Iterators {
     }
 
     @Override
-    public void close() {
-    }
+    public void close() {}
 
     @Override
     public K peekNextKey() {
@@ -206,10 +185,7 @@ public final class Iterators {
     private final KeyValueIterator<K, V> delegate;
     private final Predicate<K> filter;
 
-    private KvFilterIterator(
-        final KeyValueIterator<K, V> delegate,
-        final Predicate<K> filter
-    ) {
+    private KvFilterIterator(final KeyValueIterator<K, V> delegate, final Predicate<K> filter) {
       this.delegate = delegate;
       this.filter = filter;
     }
@@ -290,9 +266,7 @@ public final class Iterators {
     private final long windowSize;
 
     private WindowKeyIterator(
-        final KeyValueIterator<Stamped<K>, V> delegate,
-        final long windowSize
-    ) {
+        final KeyValueIterator<Stamped<K>, V> delegate, final long windowSize) {
       this.delegate = delegate;
       this.windowSize = windowSize;
     }
@@ -315,17 +289,11 @@ public final class Iterators {
     @Override
     public KeyValue<Windowed<K>, V> next() {
       final KeyValue<Stamped<K>, V> next = delegate.next();
-      return new KeyValue<>(
-          fromStamp(next.key),
-          next.value
-      );
+      return new KeyValue<>(fromStamp(next.key), next.value);
     }
 
     private Windowed<K> fromStamp(final Stamped<K> stamped) {
-      return new Windowed<>(
-          stamped.key,
-          new TimeWindow(stamped.stamp, endTs(stamped.stamp))
-      );
+      return new Windowed<>(stamped.key, new TimeWindow(stamped.stamp, endTs(stamped.stamp)));
     }
 
     private long endTs(final long stamp) {

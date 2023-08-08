@@ -11,7 +11,6 @@ import javax.security.auth.spi.LoginModule;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-
 public class PropertiesFileLoginModule implements LoginModule {
   private static final Logger LOG = LoggerFactory.getLogger(PropertiesFileLoginModule.class);
 
@@ -24,8 +23,7 @@ public class PropertiesFileLoginModule implements LoginModule {
       final Subject subject,
       final CallbackHandler callbackHandler,
       final Map<String, ?> sharedState,
-      final Map<String, ?> options
-  ) {
+      final Map<String, ?> options) {
     final String propertiesPath = (String) options.get(PROPERTIES_FILE);
     if (propertiesPath == null) {
       LOG.info("no properties file specified in JAAS config");
