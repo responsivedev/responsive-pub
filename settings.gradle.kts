@@ -18,6 +18,7 @@ rootProject.name = "responsive-pub"
 
 plugins {
     id("org.gradle.toolchains.foojay-resolver-convention") version "0.5.0"
+    id("com.gradle.enterprise") version "3.13.4"
 }
 
 include("kafka-client")
@@ -27,6 +28,16 @@ include("operator")
 include("tools")
 
 include("responsive-test-utils")
+
+gradleEnterprise {
+    if (System.getenv("CI") != null) {
+        buildScan {
+            publishAlways()
+            termsOfServiceUrl = "https://gradle.com/terms-of-service"
+            termsOfServiceAgree = "yes"
+        }
+    }
+}
 
 dependencyResolutionManagement {
 
