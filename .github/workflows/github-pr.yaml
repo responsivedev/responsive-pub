@@ -27,10 +27,11 @@ jobs:
           role-session-name: github-pr-builder
           aws-region: us-west-2
 
-      - name: Build & Test
+      - name: Setup Gradle
         uses: gradle/gradle-build-action@v2
-        with:
-          arguments: build kafka-client-examples:simple-example:buildDocker
+
+      - name: Build & Test
+        run: ./gradlew build kafka-client-examples:simple-example:buildDocker
 
       - uses: actions/checkout@v3
         with:
