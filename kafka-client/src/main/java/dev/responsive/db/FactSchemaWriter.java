@@ -18,7 +18,6 @@ package dev.responsive.db;
 
 import com.datastax.oss.driver.api.core.cql.Statement;
 import dev.responsive.kafka.store.RemoteWriteResult;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;

@@ -17,7 +17,6 @@
 package dev.responsive.db;
 
 import dev.responsive.kafka.store.RemoteWriteResult;
-
 import java.util.concurrent.CompletionStage;
 
 public interface RemoteWriter<K> {
