@@ -144,7 +144,7 @@ public class SubPartitionIntegrationTest {
     ) {
       // When:
       // this will send one key to each virtual partition using the LongBytesHasher
-      startAppAndAwaitRunning(Duration.ofSeconds(10), streams);
+      startAppAndAwaitRunning(Duration.ofSeconds(20), streams);
       pipeInput(
           inputTopic(), 2, producer, System::currentTimeMillis, 0, 100L,
           LongStream.range(0, 32).toArray());

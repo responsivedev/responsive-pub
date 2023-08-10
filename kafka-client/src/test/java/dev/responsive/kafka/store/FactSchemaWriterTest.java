@@ -16,6 +16,13 @@
 
 package dev.responsive.kafka.store;
 
+import static org.hamcrest.Matchers.instanceOf;
+import static org.hamcrest.Matchers.not;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
 import com.datastax.oss.driver.api.core.cql.AsyncResultSet;
 import com.datastax.oss.driver.api.core.cql.BatchStatement;
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
@@ -23,6 +30,9 @@ import com.datastax.oss.driver.api.core.cql.Statement;
 import dev.responsive.db.CassandraClient;
 import dev.responsive.db.FactSchemaWriter;
 import dev.responsive.db.RemoteSchema;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import org.apache.kafka.common.utils.Bytes;
 import org.hamcrest.MatcherAssert;
 import org.junit.jupiter.api.Test;
@@ -32,17 +42,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
-
-import static org.hamcrest.Matchers.instanceOf;
-import static org.hamcrest.Matchers.not;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
-
 @ExtendWith(MockitoExtension.class)
 class FactSchemaWriterTest {
 
@@ -50,14 +49,17 @@ class FactSchemaWriterTest {
   @Mock private RemoteSchema<Bytes> schema;
   @Mock private AsyncResultSet result;
 
-  private final ArgumentCaptor<Statement<?>> statementCaptor = ArgumentCaptor.forClass(Statement.class);
+  private final ArgumentCaptor<Statement<?>> statementCaptor =
+      ArgumentCaptor.forClass(Statement.class);
 
   @Test
   public void shouldNotUseBatchesOnFlush() {
     // Given:
-    when(schema.insert(any(), anyInt(), any(), any())).thenReturn(mock(BoundStatement.class));
+    when(schema.insert(any(), anyInt(), any(), any()))
+        .thenReturn(mock(BoundStatement.class));
     when(result.wasApplied()).thenReturn(true);
-    when(client.executeAsync(statementCaptor.capture())).thenReturn(CompletableFuture.completedFuture(result));
+    when(client.executeAsync(statementCaptor.capture()))
+        .thenReturn(CompletableFuture.completedFuture(result));
 
     // When:
     final FactSchemaWriter<Bytes> writer = new FactSchemaWriter<>(
