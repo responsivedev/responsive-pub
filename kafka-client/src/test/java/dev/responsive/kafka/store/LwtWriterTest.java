@@ -19,24 +19,21 @@ package dev.responsive.kafka.store;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.datastax.oss.driver.api.core.cql.AsyncResultSet;
-import com.datastax.oss.driver.api.core.cql.BatchStatementBuilder;
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.Statement;
 import com.datastax.oss.driver.internal.core.cql.DefaultBatchStatement;
 import dev.responsive.db.BytesKeySpec;
 import dev.responsive.db.CassandraClient;
 import dev.responsive.db.CassandraKeyValueSchema;
-import dev.responsive.db.FencingToken;
 import dev.responsive.db.KeySpec;
-import dev.responsive.model.Result;
+import dev.responsive.db.LwtWriter;
+import dev.responsive.db.WriterFactory;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -53,13 +50,13 @@ import org.mockito.quality.Strictness;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
-class AtomicWriterTest {
+class LwtWriterTest {
 
   private static final long OFFSET = 123L;
   private static final KeySpec<Bytes> KEY_SPEC = new BytesKeySpec();
 
   @Mock
-  private FencingToken epoch;
+  private WriterFactory<Bytes> writerFactory;
   @Mock
   private CassandraClient client;
   @Mock
@@ -69,12 +66,6 @@ class AtomicWriterTest {
 
   @BeforeEach
   public void beforeEach() {
-    doAnswer(iom -> {
-      iom.getArgument(0, BatchStatementBuilder.class).addStatement(
-          capturingStatement("fencingStatement", iom.getArguments())
-      );
-      return null;
-    }).when(epoch).addFencingStatement(any(), anyInt());
     when(client.executeAsync(any()))
         .thenReturn(CompletableFuture.completedFuture(asyncResultSet));
     when(asyncResultSet.wasApplied()).thenReturn(true);
@@ -92,22 +83,19 @@ class AtomicWriterTest {
 
   @Test
   public void shouldFlushInBatches() {
-    final var writer = new AtomicWriter<>(
+    final var writer = new LwtWriter<>(
         client,
+        () -> capturingStatement("fencingStatement", new Object[]{}),
+        new TestRemoteSchema(client),
         "foo",
         0,
-        new TestRemoteSchema(client),
-        KEY_SPEC,
-        epoch,
         2
     );
 
     // When:
-    writer.addAll(List.of(
-        Result.value(Bytes.wrap(new byte[]{0}), new byte[]{0}),
-        Result.tombstone(Bytes.wrap(new byte[]{1})),
-        Result.value(Bytes.wrap(new byte[]{2}), new byte[]{2})
-    ));
+    writer.insert(Bytes.wrap(new byte[]{0}), new byte[]{0});
+    writer.delete(Bytes.wrap(new byte[]{1}));
+    writer.insert(Bytes.wrap(new byte[]{2}), new byte[]{2});
     writer.flush();
 
     // Then:
@@ -132,29 +120,25 @@ class AtomicWriterTest {
 
     assertThat(statements2.size(), is(2));
     assertThat(statements2.get(0).callingMethod(), is("fencingStatement"));
-    assertThat(statements2.get(0).args()[1], is(0)); // check it was for partition 0
     assertThat(statements2.get(1).callingMethod(), is("insertData"));
   }
 
   @Test
   public void shouldIssueSecondBatchEvenIfFirstWasNotApplied() {
     when(asyncResultSet.wasApplied()).thenReturn(false);
-    final var writer = new AtomicWriter<>(
+    final var writer = new LwtWriter<>(
         client,
+        () -> capturingStatement("fencingStatement", new Object[]{}),
+        new TestRemoteSchema(client),
         "foo",
         0,
-        new TestRemoteSchema(client),
-        KEY_SPEC,
-        epoch,
         2
     );
 
     // When:
-    writer.addAll(List.of(
-        Result.value(Bytes.wrap(new byte[]{0}), new byte[]{0}),
-        Result.tombstone(Bytes.wrap(new byte[]{1})),
-        Result.value(Bytes.wrap(new byte[]{2}), new byte[]{2})
-    ));
+    writer.insert(Bytes.wrap(new byte[]{0}), new byte[]{0});
+    writer.delete(Bytes.wrap(new byte[]{1}));
+    writer.insert(Bytes.wrap(new byte[]{2}), new byte[]{2});
     writer.flush();
 
     // Then:

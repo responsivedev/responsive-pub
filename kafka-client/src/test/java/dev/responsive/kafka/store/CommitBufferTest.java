@@ -32,9 +32,8 @@ import dev.responsive.db.BytesKeySpec;
 import dev.responsive.db.CassandraClient;
 import dev.responsive.db.CassandraKeyValueSchema;
 import dev.responsive.db.KeySpec;
-import dev.responsive.db.LwtFencingToken;
+import dev.responsive.db.LwtWriterFactory;
 import dev.responsive.db.MetadataRow;
-import dev.responsive.db.NoOpFencingToken;
 import dev.responsive.db.RemoteKeyValueSchema;
 import dev.responsive.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.config.ResponsiveConfig;
@@ -133,7 +132,7 @@ public class CommitBufferTest {
 
     // reserve epoch for partition 8 to ensure it doesn't get flushed
     // if it did it would get fenced
-    LwtFencingToken.reserve(schema, tableName, new int[]{8}, KAFKA_PARTITION, 3L, false);
+    LwtWriterFactory.reserve(schema, tableName, new int[]{8}, KAFKA_PARTITION, 3L, false);
 
     final Bytes k0 = Bytes.wrap(ByteBuffer.allocate(4).putInt(0).array());
     final Bytes k1 = Bytes.wrap(ByteBuffer.allocate(4).putInt(1).array());
@@ -164,7 +163,7 @@ public class CommitBufferTest {
         KEY_SPEC, true, TRIGGERS, partitioner, 1);
     buffer.init();
 
-    LwtFencingToken.reserve(
+    LwtWriterFactory.reserve(
         schema, tableName, new int[]{KAFKA_PARTITION}, KAFKA_PARTITION, 100L, false);
 
     // When:
@@ -179,7 +178,7 @@ public class CommitBufferTest {
     // Then:
     assertThat(
         e.getMessage(),
-        Matchers.containsString("Local Epoch: LwtFencingToken{epoch=1}, Persisted Epoch: 100"));
+        Matchers.containsString("Local Epoch: LwtWriterFactory{epoch=1}, Persisted Epoch: 100"));
   }
 
   @Test
@@ -193,8 +192,8 @@ public class CommitBufferTest {
     // throwaway init to initialize table
     buffer.init();
 
-    LwtFencingToken.reserve(schema, tableName, new int[]{4}, KAFKA_PARTITION, 100L, false);
-    LwtFencingToken.reserve(schema, tableName, new int[]{5}, KAFKA_PARTITION, 100L, false);
+    LwtWriterFactory.reserve(schema, tableName, new int[]{4}, KAFKA_PARTITION, 100L, false);
+    LwtWriterFactory.reserve(schema, tableName, new int[]{5}, KAFKA_PARTITION, 100L, false);
 
     // When:
     buffer.init();
@@ -379,7 +378,7 @@ public class CommitBufferTest {
         client, tableName, changelogTp, admin, schema,
         KEY_SPEC, true, TRIGGERS, partitioner, 1);
     buffer.init();
-    LwtFencingToken.reserve(
+    LwtWriterFactory.reserve(
         schema, tableName, new int[]{KAFKA_PARTITION}, KAFKA_PARTITION, 100L, false);
 
     final ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>(
@@ -391,7 +390,7 @@ public class CommitBufferTest {
         () -> buffer.restoreBatch(List.of(record)));
 
     // Then:
-    assertThat(e.getMessage(), containsString("Local Epoch: LwtFencingToken{epoch=1}, "
+    assertThat(e.getMessage(), containsString("Local Epoch: LwtWriterFactory{epoch=1}, "
         + "Persisted Epoch: 100"));
   }
 
@@ -413,7 +412,7 @@ public class CommitBufferTest {
         Instant::now,
         1);
     buffer.init();
-    client.execute(schema.setOffset(tableName, new NoOpFencingToken(), 100, 1));
+    client.execute(schema.setOffset(tableName, 100, 1));
 
     final List<ConsumerRecord<byte[], byte[]>> records = IntStream.range(0, 5)
         .mapToObj(i -> new ConsumerRecord<>(

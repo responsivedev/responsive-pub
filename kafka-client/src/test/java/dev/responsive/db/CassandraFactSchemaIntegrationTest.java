@@ -68,12 +68,12 @@ class CassandraFactSchemaIntegrationTest {
     // When:
     final var token = schema.init(storeName, SubPartitioner.NO_SUBPARTITIONS, 1);
     schema.init(storeName, SubPartitioner.NO_SUBPARTITIONS, 2);
-    client.execute(schema.setOffset(storeName, new NoOpFencingToken(), 2, 10));
+    client.execute(schema.setOffset(storeName, 2, 10));
     final MetadataRow metadata1 = schema.metadata(storeName, 1);
     final MetadataRow metadata2 = schema.metadata(storeName, 2);
 
     // Then:
-    assertThat(token, instanceOf(NoOpFencingToken.class));
+    assertThat(token, instanceOf(FactWriterFactory.class));
     assertThat(metadata1.offset, is(-1L));
     assertThat(metadata1.epoch, is(-1L));
     assertThat(metadata2.offset, is(10L));

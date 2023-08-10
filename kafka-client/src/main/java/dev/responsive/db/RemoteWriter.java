@@ -16,15 +16,18 @@
 
 package dev.responsive.db;
 
-import com.datastax.oss.driver.api.core.cql.BatchStatementBuilder;
+import dev.responsive.kafka.store.RemoteWriteResult;
+import java.util.concurrent.CompletionStage;
 
-public class NoOpFencingToken implements FencingToken {
+public interface RemoteWriter<K> {
 
-  @Override
-  public void addFencingStatement(
-      final BatchStatementBuilder builder,
-      final int partition
-  ) {
-    // do nothing
-  }
+  void insert(final K key, final byte[] value);
+
+  void delete(final K key);
+
+  CompletionStage<RemoteWriteResult> flush();
+
+  RemoteWriteResult setOffset(final long offset);
+
+  int partition();
 }

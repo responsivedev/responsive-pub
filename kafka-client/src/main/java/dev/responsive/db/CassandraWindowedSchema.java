@@ -120,7 +120,7 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
   }
 
   @Override
-  public FencingToken init(
+  public WriterFactory<Stamped<Bytes>> init(
       final String table,
       final SubPartitioner partitioner,
       final int kafkaPartition
@@ -138,7 +138,7 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
               .build()
       );
     });
-    return LwtFencingToken.reserveWindowed(this, table, partitioner, kafkaPartition);
+    return LwtWriterFactory.reserveWindowed(this, table, partitioner, kafkaPartition);
   }
 
   @Override
@@ -163,7 +163,6 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
   @Override
   public BoundStatement setOffset(
       final String table,
-      final FencingToken token,
       final int partition,
       final long offset
   ) {
