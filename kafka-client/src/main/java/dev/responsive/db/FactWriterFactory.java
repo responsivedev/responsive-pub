@@ -16,9 +16,6 @@
 
 package dev.responsive.db;
 
-import dev.responsive.kafka.store.FactSchemaWriter;
-import dev.responsive.kafka.store.RemoteWriter;
-
 public class FactWriterFactory<K> implements WriterFactory<K> {
 
   private final RemoteSchema<K> schema;

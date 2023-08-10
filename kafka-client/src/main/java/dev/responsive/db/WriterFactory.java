@@ -16,8 +16,6 @@
 
 package dev.responsive.db;
 
-import dev.responsive.kafka.store.RemoteWriter;
-
 public interface WriterFactory<K> {
 
   RemoteWriter<K> createWriter(

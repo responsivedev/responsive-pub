@@ -14,45 +14,36 @@
  * limitations under the License.
  */
 
-package dev.responsive.kafka.store;
+package dev.responsive.db;
 
-import com.datastax.oss.driver.api.core.cql.BatchStatementBuilder;
-import com.datastax.oss.driver.api.core.cql.BatchType;
-import com.datastax.oss.driver.api.core.cql.BatchableStatement;
 import com.datastax.oss.driver.api.core.cql.Statement;
-import dev.responsive.db.CassandraClient;
-import dev.responsive.db.RemoteSchema;
+import dev.responsive.kafka.store.RemoteWriteResult;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
-import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
-public class LwtWriter<K> implements RemoteWriter<K> {
+public class FactSchemaWriter<K> implements RemoteWriter<K> {
 
   private final CassandraClient client;
-  private final Supplier<BatchableStatement<?>> fencingStatementFactory;
   private final RemoteSchema<K> schema;
   private final String name;
   private final int partition;
-  private final int batchSize;
 
-  private final List<BatchableStatement<?>> statements;
+  private final List<Statement<?>> statements;
 
-  public LwtWriter(
+  public FactSchemaWriter(
       final CassandraClient client,
-      final Supplier<BatchableStatement<?>> fencingStatementFactory,
       final RemoteSchema<K> schema,
       final String name,
-      final int partition,
-      final int batchSize
+      final int partition
   ) {
     this.client = client;
-    this.fencingStatementFactory = fencingStatementFactory;
     this.schema = schema;
     this.name = name;
     this.partition = partition;
-    this.batchSize = batchSize;
 
     statements = new ArrayList<>();
   }
@@ -69,19 +60,19 @@ public class LwtWriter<K> implements RemoteWriter<K> {
 
   @Override
   public CompletionStage<RemoteWriteResult> flush() {
+    final List<CompletionStage<RemoteWriteResult>> results = statements.stream()
+        .map(this::executeAsync)
+        .collect(Collectors.toList());
+
+    // if any of them failed, the result should be a failure, otherwise they will
+    // all have the same result anyway, so we can return just a success(partition)
+    //
+    // it's safe to run these in parallel w/o a guaranteed ordering because commit
+    // buffer only maintains the latest value per key, and we only flush that, also
+    // fact schema expects immutable values
     var result = CompletableFuture.completedStage(RemoteWriteResult.success(partition));
-
-    final var it = statements.iterator();
-    while (it.hasNext()) {
-      final var builder = new BatchStatementBuilder(BatchType.UNLOGGED);
-      builder.setIdempotence(true);
-      builder.addStatement(fencingStatementFactory.get());
-
-      for (int i = 0; i < batchSize && it.hasNext(); i++) {
-        builder.addStatement(it.next());
-      }
-
-      result = result.thenCompose(awr -> executeAsync(builder.build()));
+    for (final CompletionStage<RemoteWriteResult> future : results) {
+      result = result.thenCombine(future, (one, two) -> !one.wasApplied() ? one : two);
     }
 
     return result;
@@ -89,11 +80,7 @@ public class LwtWriter<K> implements RemoteWriter<K> {
 
   @Override
   public RemoteWriteResult setOffset(final long offset) {
-    final BatchStatementBuilder builder = new BatchStatementBuilder(BatchType.UNLOGGED);
-    builder.addStatement(fencingStatementFactory.get());
-    builder.addStatement(schema.setOffset(name, partition, offset));
-
-    final var result = client.execute(builder.build());
+    final var result = client.execute(schema.setOffset(name, partition, offset));
     return result.wasApplied()
         ? RemoteWriteResult.success(partition)
         : RemoteWriteResult.failure(partition);

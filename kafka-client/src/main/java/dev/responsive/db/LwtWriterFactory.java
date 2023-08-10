@@ -29,8 +29,6 @@ import com.datastax.oss.driver.api.core.cql.PreparedStatement;
 import com.datastax.oss.driver.api.core.cql.ResultSet;
 import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
 import dev.responsive.db.partitioning.SubPartitioner;
-import dev.responsive.kafka.store.LwtWriter;
-import dev.responsive.kafka.store.RemoteWriter;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

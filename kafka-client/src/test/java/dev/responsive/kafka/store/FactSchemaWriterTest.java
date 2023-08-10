@@ -21,6 +21,7 @@ import com.datastax.oss.driver.api.core.cql.BatchStatement;
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.Statement;
 import dev.responsive.db.CassandraClient;
+import dev.responsive.db.FactSchemaWriter;
 import dev.responsive.db.RemoteSchema;
 import org.apache.kafka.common.utils.Bytes;
 import org.hamcrest.MatcherAssert;
@@ -32,7 +33,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 

@@ -14,7 +14,9 @@
  * limitations under the License.
  */
 
-package dev.responsive.kafka.store;
+package dev.responsive.db;
+
+import dev.responsive.kafka.store.RemoteWriteResult;
 
 import java.util.concurrent.CompletionStage;
 
