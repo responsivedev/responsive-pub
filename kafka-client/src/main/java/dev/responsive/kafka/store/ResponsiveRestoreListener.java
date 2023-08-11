@@ -51,15 +51,15 @@ public class ResponsiveRestoreListener implements StateRestoreListener {
       final long startingOffset,
       final long endingOffset
   ) {
+    LOG.info("Beginning restoration from offset {} to {} for partition {} of state store {}",
+             startingOffset, endingOffset, topicPartition, storeName);
+
     if (userListener != null) {
       userListener.onRestoreStart(
           topicPartition,
           storeName,
           startingOffset,
           endingOffset);
-    } else {
-      LOG.info("Beginning restoration from offset {} to {} for partition {} of state store {}",
-               startingOffset, endingOffset, topicPartition, storeName);
     }
   }
 
@@ -70,15 +70,15 @@ public class ResponsiveRestoreListener implements StateRestoreListener {
       final long batchEndOffset,
       final long numRestored
   ) {
+    LOG.debug("Restored {} more records up to offset {} for partition {} of state store {}",
+              numRestored, batchEndOffset, topicPartition, storeName);
+
     if (userListener != null) {
       userListener.onBatchRestored(
           topicPartition,
           storeName,
           batchEndOffset,
           numRestored);
-    } else {
-      LOG.trace("Restored {} more records up to offset {} for partition {} of state store {}",
-                numRestored, batchEndOffset, topicPartition, storeName);
     }
   }
 
@@ -88,14 +88,14 @@ public class ResponsiveRestoreListener implements StateRestoreListener {
       final String storeName,
       final long totalRestored
   ) {
+    LOG.info("Finished restoration of {} total records for partition {} of state store {}",
+             totalRestored, topicPartition, storeName);
+    
     if (userListener != null) {
       userListener.onRestoreEnd(
           topicPartition,
           storeName,
           totalRestored);
-    } else {
-      LOG.info("Finished restoration of {} total records for partition {} of state store {}",
-               totalRestored, topicPartition, storeName);
     }
   }
 
