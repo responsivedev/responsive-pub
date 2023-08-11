@@ -2,25 +2,39 @@ package dev.responsive.kafka.api;
 
 import static dev.responsive.kafka.config.ResponsiveConfig.NUM_STANDBYS_OVERRIDE;
 import static dev.responsive.kafka.config.ResponsiveConfig.TASK_ASSIGNOR_CLASS_OVERRIDE;
+import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
 
 import com.datastax.oss.driver.api.core.CqlSession;
 import dev.responsive.db.CassandraClient;
 import dev.responsive.kafka.clients.ResponsiveKafkaClientSupplier;
 import dev.responsive.kafka.config.ResponsiveConfig;
+import dev.responsive.kafka.store.ResponsiveRestoreListener;
 import dev.responsive.kafka.store.ResponsiveStoreRegistry;
 import java.time.Duration;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.metrics.JmxReporter;
+import org.apache.kafka.common.metrics.KafkaMetricsContext;
+import org.apache.kafka.common.metrics.MetricConfig;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyDescription;
+import org.apache.kafka.streams.processor.StateRestoreListener;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.ClientUtils;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,6 +44,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
   private static final Logger LOG = LoggerFactory.getLogger(ResponsiveKafkaStreams.class);
 
   private StateListener stateListener;
+  private final ResponsiveRestoreListener restoreListener;
 
   private final CqlSession session;
   private final ScheduledExecutorService executor;
@@ -87,13 +102,21 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
             entry.getKey().toString(), entry.getValue(), "Key must be a string.");
       }
     }
+    final ResponsiveConfig responsiveConfigs = new ResponsiveConfig(configs);
+    final StreamsConfig streamsConfig = quietReadOnlystreamsConfig(configs);
+    final Metrics metrics = createMetrics(streamsConfig);
 
     final ResponsiveStoreRegistry storeRegistry = new ResponsiveStoreRegistry();
-    final ResponsiveConfig responsiveConfigs = new ResponsiveConfig(configs);
+    final ResponsiveRestoreListener restoreListener = new ResponsiveRestoreListener(metrics);
 
     final CqlSession session = cassandraClientFactory.createCqlSession(responsiveConfigs);
     final ResponsiveKafkaClientSupplier responsiveClientSupplier =
-        new ResponsiveKafkaClientSupplier(clientSupplier, (Map<String, ?>) configs, storeRegistry);
+        new ResponsiveKafkaClientSupplier(
+            clientSupplier,
+            streamsConfig,
+            storeRegistry,
+            metrics
+        );
 
     final Admin admin = responsiveClientSupplier.getAdmin((Map<String, Object>) configs);
     final ScheduledExecutorService executor = new ScheduledThreadPoolExecutor(2);
@@ -110,7 +133,8 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
         responsiveClientSupplier,
         session,
         admin,
-        executor
+        executor,
+        restoreListener
     );
   }
 
@@ -120,14 +144,45 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       final ResponsiveKafkaClientSupplier clientSupplier,
       final CqlSession session,
       final Admin admin,
-      final ScheduledExecutorService executor
+      final ScheduledExecutorService executor,
+      final ResponsiveRestoreListener restoreListener
   ) {
     super(topology, streamsConfigs, clientSupplier);
     this.session = session;
     this.admin = admin;
     this.executor = executor;
+    this.restoreListener = restoreListener;
+
+    super.setGlobalStateRestoreListener(restoreListener);
   }
 
+  private static Metrics createMetrics(final StreamsConfig config) {
+    final MetricConfig metricConfig = new MetricConfig()
+        .samples(config.getInt(StreamsConfig.METRICS_NUM_SAMPLES_CONFIG))
+        .recordLevel(Sensor.RecordingLevel.forName(
+            config.getString(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG)))
+        .timeWindow(
+            config.getLong(StreamsConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS);
+
+    final JmxReporter jmxReporter = new JmxReporter();
+    jmxReporter.configure(config.originals());
+    return new Metrics(
+        metricConfig,
+        Collections.singletonList(jmxReporter),
+        Time.SYSTEM,
+        new KafkaMetricsContext("dev.responsive", new HashMap<>())
+    );
+  }
+
+  // TODO: extend StreamsConfig ourselves to avoid depending on internal AK utils
+  public static StreamsConfig quietReadOnlystreamsConfig(final Map<?, ?> configs) {
+    // use a "quiet" StreamsConfig to avoid excessive repeat logging
+    return new ClientUtils.QuietStreamsConfig(configs);
+  }
+
+  // TODO: move to ResponsiveStreamsConfig and define clear boundary between "real" config object
+  //  containing the InternalConfig/SharedClients, and dummy quiet StreamsConfig for accessing
+  //  pure Streams properties
   private static StreamsConfig verifiedStreamsConfigs(
       final Map<?, ?> configs,
       final CassandraClient cassandraClient,
@@ -178,7 +233,17 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       throw new ConfigException(errorMsg);
     }
 
-    return new StreamsConfig(propsWithOverrides);
+    final StreamsConfig streamsConfig = new StreamsConfig(propsWithOverrides);
+    verifyNotEosV1(streamsConfig);
+
+    return streamsConfig;
+  }
+
+  @SuppressWarnings("deprecation")
+  private static void verifyNotEosV1(final StreamsConfig streamsConfig) {
+    if (EXACTLY_ONCE.equals(streamsConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
+      throw new IllegalStateException("Responsive driver can only be used with ALOS/EOS-V2");
+    }
   }
 
   @Override
@@ -189,6 +254,23 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
 
   public StateListener stateListener() {
     return stateListener;
+  }
+
+  /**
+   * Sets a global state restore listener -- note that this is "global" in the sense that
+   * it is set at the client-level and will be invoked for all stores in this topology, not that
+   * it will be invoked for global state stores. This will only be invoked for ACTIVE task types,
+   * ie not for global or standby tasks.
+   *
+   * @param listener The listener triggered when a {@link StateStore} is being restored.
+   */
+  @Override
+  public void setGlobalStateRestoreListener(final StateRestoreListener listener) {
+    restoreListener.registerUserRestoreListener(listener);
+  }
+
+  public StateRestoreListener userStateRestoreListener() {
+    return restoreListener.userListener();
   }
 
   private void closeClients() {

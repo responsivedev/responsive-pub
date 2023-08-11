@@ -17,7 +17,6 @@
 package dev.responsive.kafka.clients;
 
 import static org.apache.kafka.streams.StreamsConfig.AT_LEAST_ONCE;
-import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
 
 import dev.responsive.kafka.store.ResponsiveStoreRegistry;
 import java.io.Closeable;
@@ -28,22 +27,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.Producer;
-import org.apache.kafka.common.metrics.JmxReporter;
-import org.apache.kafka.common.metrics.KafkaMetricsContext;
-import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.metrics.MetricsContext;
-import org.apache.kafka.common.metrics.MetricsReporter;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -63,69 +54,37 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
   private final KafkaClientSupplier wrapped;
   private final ResponsiveStoreRegistry storeRegistry;
   private final Factories factories;
-  private boolean configured = false;
-  private Metrics metrics;
-  private EndOffsetsPoller endOffsetsPoller;
-  private String applicationId;
-  private boolean eos = false;
-
-  public ResponsiveKafkaClientSupplier(
-      final Map<String, ?> configs,
-      final ResponsiveStoreRegistry storeRegistry) {
-    this(new Factories() {}, new DefaultKafkaClientSupplier(), configs, storeRegistry);
-  }
+  private final Metrics metrics;
+  private final EndOffsetsPoller endOffsetsPoller;
+  private final String applicationId;
+  private final boolean eos;
 
   public ResponsiveKafkaClientSupplier(
       final KafkaClientSupplier clientSupplier,
-      final Map<String, ?> configs,
-      final ResponsiveStoreRegistry storeRegistry
+      final StreamsConfig configs,
+      final ResponsiveStoreRegistry storeRegistry,
+      final Metrics metrics
   ) {
-    this(new Factories() {}, clientSupplier, configs, storeRegistry);
+    this(new Factories() {}, clientSupplier, configs, storeRegistry, metrics);
   }
 
   ResponsiveKafkaClientSupplier(
       final Factories factories,
       final KafkaClientSupplier wrapped,
-      final Map<String, ?> configs,
-      final ResponsiveStoreRegistry storeRegistry
+      final StreamsConfig configs,
+      final ResponsiveStoreRegistry storeRegistry,
+      final Metrics metrics
   ) {
     this.factories = factories;
     this.wrapped = wrapped;
     this.storeRegistry = storeRegistry;
-    configure(configs);
-  }
+    this.metrics = metrics;
 
-  @SuppressWarnings("deprecation")
-  private void verifyNotEosV1(final StreamsConfig streamsConfig) {
-    if (EXACTLY_ONCE.equals(streamsConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
-      throw new IllegalStateException("Responsive driver can only be used with ALOS/EOS-V2");
-    }
-  }
-
-  private void configure(final Map<String, ?> configs) {
-    LOG.trace(
-        "Configuring the client supplier. Got configs: {}",
-        configs.entrySet().stream()
-            .map(e -> e.getKey() + ":" + e.getValue())
-            .collect(Collectors.joining("\n"))
-    );
-    final StreamsConfig streamsConfig = new StreamsConfig(configs);
-    verifyNotEosV1(streamsConfig);
     eos = !(AT_LEAST_ONCE.equals(
-        streamsConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)));
-    final JmxReporter jmxReporter = new JmxReporter();
-    jmxReporter.configure(configs);
-    final MetricsContext metricsContext
-        = new KafkaMetricsContext("dev.responsive", new HashMap<>());
-    metrics = factories.createMetrics(
-        new MetricConfig(),
-        Collections.singletonList(jmxReporter),
-        Time.SYSTEM,
-        metricsContext
-    );
-    endOffsetsPoller = factories.createEndOffsetPoller(configs, metrics);
-    configured = true;
-    applicationId = (String) configs.get(StreamsConfig.APPLICATION_ID_CONFIG);
+        configs.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)));
+
+    endOffsetsPoller = factories.createEndOffsetPoller(configs.originals(), metrics);
+    applicationId = configs.getString(StreamsConfig.APPLICATION_ID_CONFIG);
   }
 
   @Override
@@ -135,9 +94,6 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
 
   @Override
   public Producer<byte[], byte[]> getProducer(final Map<String, Object> config) {
-    if (!configured) {
-      throw new IllegalStateException("must be configured before supplying clients");
-    }
     LOG.info("Creating responsive producer");
     final String tid = threadIdFromProducerConfig(config);
     final ListenersForThread tc = sharedListeners.getAndMaybeInitListenersForThread(
@@ -162,10 +118,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
 
   @Override
   public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
-    if (!configured) {
-      throw new IllegalStateException("must be configured before supplying clients");
-    }
-    LOG.info("Creating responsive consumer");
+    LOG.info("Creating responsive main consumer");
     final String tid = threadIdFromConsumerConfig(config);
     final ListenersForThread tc = sharedListeners.getAndMaybeInitListenersForThread(
         eos,
@@ -190,6 +143,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
 
   @Override
   public Consumer<byte[], byte[]> getRestoreConsumer(final Map<String, Object> config) {
+    LOG.info("Creating responsive restore consumer");
     return new ResponsiveRestoreConsumer<>(
         wrapped.getRestoreConsumer(config),
         storeRegistry::getCommittedOffset
@@ -198,6 +152,8 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
 
   @Override
   public Consumer<byte[], byte[]> getGlobalConsumer(final Map<String, Object> config) {
+    LOG.info("Creating responsive global consumer");
+
     config.put(ConsumerConfig.GROUP_ID_CONFIG, applicationId + "-global");
     config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
     config.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, true);
@@ -351,15 +307,6 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
         final Metrics metrics
     ) {
       return new EndOffsetsPoller(config, metrics);
-    }
-
-    default Metrics createMetrics(
-        final MetricConfig config,
-        final List<MetricsReporter> reporters,
-        final Time time,
-        final MetricsContext ctx
-    ) {
-      return new Metrics(config, reporters, time, ctx);
     }
 
     default <K, V> ResponsiveProducer<K, V> createResponsiveProducer(
