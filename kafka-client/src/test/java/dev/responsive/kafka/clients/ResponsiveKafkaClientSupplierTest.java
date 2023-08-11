@@ -105,7 +105,6 @@ class ResponsiveKafkaClientSupplierTest {
   @BeforeEach
   @SuppressWarnings("unchecked")
   public void setup() {
-    when(factories.createMetrics(any(), any(), any(), any())).thenReturn(metrics);
     when(factories.createEndOffsetPoller(any(), any())).thenReturn(endOffsetsPoller);
     lenient().when(endOffsetsPoller.addForThread(any())).thenReturn(consumerEndOffsetsPollListener);
     lenient().when(wrapped.getConsumer(any())).thenReturn(wrappedConsumer);
@@ -120,7 +119,13 @@ class ResponsiveKafkaClientSupplierTest {
         .thenReturn(commitMetricListener);
     lenient().when(factories.createOffsetRecorder(anyBoolean())).thenReturn(offsetRecorder);
 
-    supplier = new ResponsiveKafkaClientSupplier(factories, wrapped, CONFIGS, storeRegistry);
+    supplier = new ResponsiveKafkaClientSupplier(
+        factories,
+        wrapped,
+        new StreamsConfig(CONFIGS),
+        storeRegistry,
+        metrics
+    );
   }
 
   @Test
@@ -129,8 +134,13 @@ class ResponsiveKafkaClientSupplierTest {
     final var config = configsWithOverrides(
         PRODUCER_CONFIGS,
         Map.of(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.AT_LEAST_ONCE));
-    final var supplier
-        = new ResponsiveKafkaClientSupplier(factories, wrapped, config, storeRegistry);
+    final var supplier = new ResponsiveKafkaClientSupplier(
+        factories,
+        wrapped,
+        new StreamsConfig(config),
+        storeRegistry,
+        metrics
+    );
 
     // when:
     final var producer = supplier.getProducer(config);
@@ -145,8 +155,13 @@ class ResponsiveKafkaClientSupplierTest {
     final var config = configsWithOverrides(
         CONSUMER_CONFIGS,
         Map.of(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.AT_LEAST_ONCE));
-    final var supplier
-        = new ResponsiveKafkaClientSupplier(factories, wrapped, config, storeRegistry);
+    final var supplier = new ResponsiveKafkaClientSupplier(
+        factories,
+        wrapped,
+        new StreamsConfig(config),
+        storeRegistry,
+        metrics
+    );
 
     // when:
     final var consumer = supplier.getConsumer(config);
