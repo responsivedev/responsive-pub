@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package dev.responsive.kafka.store;
 
 import org.apache.kafka.common.TopicPartition;
@@ -90,7 +91,7 @@ public class ResponsiveRestoreListener implements StateRestoreListener {
   ) {
     LOG.info("Finished restoration of {} total records for partition {} of state store {}",
              totalRestored, topicPartition, storeName);
-    
+
     if (userListener != null) {
       userListener.onRestoreEnd(
           topicPartition,

@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package dev.responsive.kafka.store;
 
 import com.datastax.oss.driver.shaded.guava.common.annotations.VisibleForTesting;
