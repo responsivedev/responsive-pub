@@ -57,6 +57,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
 import org.apache.kafka.clients.admin.Admin;
@@ -88,7 +89,6 @@ public class SubPartitionIntegrationTest {
 
   private static final String INPUT_TOPIC = "input";
   private static final String OUTPUT_TOPIC = "output";
-  private static final String STORE_NAME = "store-Name"; // use non-valid cassandr67TY89U0PIKAT
 
   private final Map<String, Object> responsiveProps = new HashMap<>();
 
@@ -103,7 +103,7 @@ public class SubPartitionIntegrationTest {
       final Admin admin,
       @ResponsiveConfigParam final Map<String, Object> responsiveProps,
       final CassandraContainer<?> cassandra
-  ) {
+  ) throws ExecutionException, InterruptedException {
     name = info.getTestMethod().orElseThrow().getName();
     storeName = name + "store";
 
@@ -115,7 +115,7 @@ public class SubPartitionIntegrationTest {
             new NewTopic(inputTopic(), Optional.of(2), Optional.empty()),
             new NewTopic(outputTopic(), Optional.of(1), Optional.empty())
         )
-    );
+    ).all().get();
 
     final CqlSession session = CqlSession.builder()
         .addContactPoint(cassandra.getContactPoint())
