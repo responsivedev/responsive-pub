@@ -16,10 +16,7 @@
 
 package dev.responsive.kafka.store;
 
-import static dev.responsive.kafka.config.ResponsiveConfig.STORAGE_DATACENTER_CONFIG;
-import static dev.responsive.kafka.config.ResponsiveConfig.STORAGE_HOSTNAME_CONFIG;
-import static dev.responsive.kafka.config.ResponsiveConfig.STORAGE_PORT_CONFIG;
-import static dev.responsive.kafka.config.ResponsiveConfig.TENANT_ID_CONFIG;
+
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.MAX_POLL_RECORDS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG;
@@ -28,15 +25,14 @@ import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CL
 import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.APPLICATION_ID_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.APPLICATION_SERVER_CONFIG;
-import static org.apache.kafka.streams.StreamsConfig.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.COMMIT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG;
-import static org.apache.kafka.streams.StreamsConfig.InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS;
 import static org.apache.kafka.streams.StreamsConfig.NUM_STREAM_THREADS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.ResponsiveStores;
@@ -63,6 +59,7 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serdes.LongSerde;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -72,15 +69,14 @@ import org.apache.kafka.streams.kstream.StreamJoined;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
-import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
+import org.apache.kafka.streams.state.Stores;
 import org.hamcrest.Matchers;
+import org.junit.Ignore;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.testcontainers.containers.CassandraContainer;
-import org.testcontainers.containers.KafkaContainer;
 
 @ExtendWith(ResponsiveExtension.class)
 public class ResponsiveWindowIntegrationTest {
@@ -118,7 +114,30 @@ public class ResponsiveWindowIntegrationTest {
     admin.deleteTopics(List.of(inputTopic(), otherTopic(), outputTopic()));
   }
 
+  // Remember to re-enable the tests below when the window stores are ready and we can remove this
   @Test
+  public void shouldThrowUnsupportedOperationException() {
+    final Duration windowSize = Duration.ofMillis(6_000L);
+
+    assertThrows(
+        UnsupportedOperationException.class,
+        () -> ResponsiveStores.windowStoreBuilder(
+            Stores.inMemoryWindowStore(name, windowSize, windowSize, false),
+            Serdes.String(), Serdes.String()
+        )
+    );
+
+    assertThrows(
+        UnsupportedOperationException.class,
+        () -> ResponsiveStores.windowStoreSupplier(name, windowSize, windowSize, false)
+    );
+
+    assertThrows(
+        UnsupportedOperationException.class,
+        () -> ResponsiveStores.windowMaterialized(name, 6_000, 5_000, false)
+    );
+  }
+
   public void shouldComputeWindowedAggregateWithRetention() throws InterruptedException {
     // Given:
     final Map<String, Object> properties = getMutableProperties();
@@ -219,7 +238,6 @@ public class ResponsiveWindowIntegrationTest {
     assertThat(collect, Matchers.hasEntry(windowed(1, baseTs + 15_000, 5000), 1000L));
   }
 
-  @Test
   public void shouldComputeWindowedJoinUsingRanges() throws InterruptedException {
     // Given:
     final Map<String, Object> properties = getMutableProperties();
@@ -231,17 +249,18 @@ public class ResponsiveWindowIntegrationTest {
 
     final CountDownLatch latch1 = new CountDownLatch(2);
     final CountDownLatch latch2 = new CountDownLatch(2);
+    final Duration windowSize = Duration.ofMillis(1000);
     input.join(other,
             (v1, v2) -> {
               System.out.println("Joining: " + v1 + ", " + v2);
               return (v1 << Integer.SIZE) | v2;
             },
-            JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofMillis(500)),
+            JoinWindows.ofTimeDifferenceWithNoGrace(windowSize.dividedBy(2)),
             StreamJoined.with(
-                new ResponsiveWindowedStoreSupplier(
-                    "input" + name, 1000, 1000, true),
-                new ResponsiveWindowedStoreSupplier(
-                    "other" + name, 1000, 1000, true)
+                ResponsiveStores.windowStoreSupplier(
+                    "input" + name, windowSize, windowSize, true),
+                ResponsiveStores.windowStoreSupplier(
+                    "other" + name, windowSize, windowSize, true)
             ))
         .peek((k, v) -> {
           collect.computeIfAbsent(k, old -> new ArrayBlockingQueue<>(10)).add(v);
