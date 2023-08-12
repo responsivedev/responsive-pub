@@ -30,5 +30,5 @@ import io.fabric8.kubernetes.model.annotation.Version;
 public class ResponsivePolicy extends CustomResource<ResponsivePolicySpec, ResponsivePolicyStatus>
     implements Namespaced {
 
-  private static final long serialVersionUID = 0;
+  private static final long serialVersionUID = -5262281408693235064L;
 }
