@@ -37,7 +37,7 @@ import org.apache.kafka.common.TopicPartition;
 
 public abstract class DelegatingConsumer<K, V> implements Consumer<K, V> {
 
-  protected final Consumer<K, V> delegate;
+  private final Consumer<K, V> delegate;
 
   public DelegatingConsumer(final Consumer<K, V> delegate) {
     this.delegate = delegate;

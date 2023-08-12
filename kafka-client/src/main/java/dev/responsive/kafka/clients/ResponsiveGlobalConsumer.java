@@ -97,7 +97,7 @@ public class ResponsiveGlobalConsumer extends DelegatingConsumer<byte[], byte[]>
 
   @Override
   public ConsumerRecords<byte[], byte[]> poll(final Duration timeout) {
-    final ConsumerRecords<byte[], byte[]> poll = delegate.poll(timeout);
+    final ConsumerRecords<byte[], byte[]> poll = super.poll(timeout);
     return SingletonConsumerRecords.of(poll);
   }
 
@@ -125,7 +125,7 @@ public class ResponsiveGlobalConsumer extends DelegatingConsumer<byte[], byte[]>
   @Override
   public long position(final TopicPartition partition, final Duration duration) {
     if (assignment().contains(partition)) {
-      return delegate.position(partition, duration);
+      return super.position(partition, duration);
     }
 
     // we may not be assigned this partition, in which case someone else

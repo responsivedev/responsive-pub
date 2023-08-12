@@ -22,8 +22,8 @@ import static org.hamcrest.Matchers.instanceOf;
 import dev.responsive.kafka.api.ResponsiveKeyValueParams;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
-import org.apache.kafka.streams.processor.internals.GlobalProcessorContextImpl;
-import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -37,19 +37,22 @@ import org.mockito.quality.Strictness;
 public class ResponsiveStoreTest {
 
   private static final String NAME = "foo";
+  private final ResponsiveStore store =
+      new ResponsiveStore(ResponsiveKeyValueParams.keyValue(NAME));
 
   @Mock
   private StateStore root;
+  @Mock
+  private InternalProcessorContext<?, ?> context;
 
   @Test
-  public void shouldCreateGlobalStoreWhenPassedGlobalStoreContext() {
+  public void shouldCreateGlobalStore() {
     // Given:
-    final StateStoreContext context = Mockito.mock(GlobalProcessorContextImpl.class);
-    final var store = new ResponsiveStore(ResponsiveKeyValueParams.keyValue(NAME));
+    Mockito.when(context.taskType()).thenReturn(TaskType.GLOBAL);
 
     // When:
     try {
-      store.init(context, root);
+      store.init((StateStoreContext) context, root);
     } catch (final Exception ignored) {
       // delegate initialization will fail with mocks, but still be properly set
     }
@@ -61,12 +64,11 @@ public class ResponsiveStoreTest {
   @Test
   public void shouldCreatePartitionedStoreWhenPassedStoreContext() {
     // Given:
-    final StateStoreContext context = Mockito.mock(ProcessorContextImpl.class);
-    final var store = new ResponsiveStore(ResponsiveKeyValueParams.keyValue(NAME));
+    Mockito.when(context.taskType()).thenReturn(TaskType.ACTIVE);
 
     // When:
     try {
-      store.init(context, root);
+      store.init((StateStoreContext) context, root);
     } catch (final Exception ignored) {
       // delegate initialization will fail with mocks, but still be properly set
     }

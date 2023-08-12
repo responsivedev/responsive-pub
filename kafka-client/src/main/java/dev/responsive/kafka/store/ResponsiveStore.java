@@ -16,6 +16,8 @@
 
 package dev.responsive.kafka.store;
 
+import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
+
 import dev.responsive.kafka.api.ResponsiveKeyValueParams;
 import java.util.List;
 import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
@@ -25,7 +27,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
-import org.apache.kafka.streams.processor.internals.GlobalProcessorContextImpl;
+import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
@@ -83,7 +85,7 @@ public class ResponsiveStore implements KeyValueStore<Bytes, byte[]> {
 
   @Override
   public void init(final StateStoreContext context, final StateStore root) {
-    if (context instanceof GlobalProcessorContextImpl) {
+    if (asInternalProcessorContext(context).taskType() == TaskType.GLOBAL) {
       delegate = new ResponsiveGlobalStore(params.name());
     } else {
       delegate = new ResponsivePartitionedStore(params);
