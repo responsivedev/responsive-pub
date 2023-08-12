@@ -26,13 +26,13 @@ class ResponsiveStoreRegistryTest {
 
   @Test
   public void shouldGetCommittedOffsetFromRegisteredStore() {
-    assertThat(registry.getCommittedOffset(TOPIC_PARTITION), is(OptionalLong.of(123L)));
+    assertThat(registry.startOffset(TOPIC_PARTITION), is(OptionalLong.of(123L)));
   }
 
   @Test
   public void shouldReturnEmptyCommittedOffsetFromNotRegisteredStore() {
     assertThat(
-        registry.getCommittedOffset(new TopicPartition("foo", 1)),
+        registry.startOffset(new TopicPartition("foo", 1)),
         is(OptionalLong.empty())
     );
   }
@@ -43,7 +43,7 @@ class ResponsiveStoreRegistryTest {
     registry.deregisterStore(REGISTRATION);
 
     // when:
-    final OptionalLong offset = registry.getCommittedOffset(TOPIC_PARTITION);
+    final OptionalLong offset = registry.startOffset(TOPIC_PARTITION);
 
     // then:
     assertThat(offset, is(OptionalLong.empty()));

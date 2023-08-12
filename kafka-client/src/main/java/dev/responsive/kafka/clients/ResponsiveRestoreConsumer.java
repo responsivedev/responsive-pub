@@ -1,5 +1,6 @@
 package dev.responsive.kafka.clients;
 
+import dev.responsive.kafka.store.ResponsiveRestoreListener;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
@@ -48,17 +49,24 @@ public class ResponsiveRestoreConsumer<K, V> extends DelegatingConsumer<K, V> {
 
   private final Function<TopicPartition, OptionalLong> startOffsets;
   private final Set<TopicPartition> uninitializedOffsets = new HashSet<>();
+  private final ResponsiveRestoreListener restoreListener;
+  private final Set<TopicPartition> pausedChangelogPartitions = new HashSet<>();
 
   public ResponsiveRestoreConsumer(
       final String clientId,
       final Consumer<K, V> delegate,
-      final Function<TopicPartition, OptionalLong> startOffsets
+      final Function<TopicPartition, OptionalLong> startOffsets,
+      final ResponsiveRestoreListener restoreListener
   ) {
     super(delegate);
+
     this.startOffsets = Objects.requireNonNull(startOffsets);
+    this.restoreListener = Objects.requireNonNull(restoreListener);
     this.log = new LogContext(
         String.format("responsive-restore-consumer [%s]", Objects.requireNonNull(clientId))
     ).logger(ResponsiveConsumer.class);
+
+    restoreListener.addRestoreConsumer(this);
   }
 
   private Set<TopicPartition> initializeOffsets(final Collection<TopicPartition> partitions) {
@@ -86,12 +94,15 @@ public class ResponsiveRestoreConsumer<K, V> extends DelegatingConsumer<K, V> {
     // clear any now-unassigned changelogs
     uninitializedOffsets.retainAll(partitions);
 
+    pausedChangelogPartitions.retainAll(partitions);
+
     super.assign(partitions);
   }
 
   @Override
   public void unsubscribe() {
     uninitializedOffsets.clear();
+    pausedChangelogPartitions.clear();
     super.unsubscribe();
   }
 
@@ -137,4 +148,56 @@ public class ResponsiveRestoreConsumer<K, V> extends DelegatingConsumer<K, V> {
       uninitializedOffsets.removeAll(withUncachedPosition);
     }
   }
+
+  @Override
+  public void pause(final Collection<TopicPartition> partitions) {
+    final Set<TopicPartition> toPause = new HashSet<>(pausedChangelogPartitions);
+    toPause.addAll(partitions);
+    super.pause(toPause);
+  }
+
+  @Override
+  public void resume(final Collection<TopicPartition> partitions) {
+    final Set<TopicPartition> toResume = new HashSet<>(partitions);
+    toResume.removeAll(pausedChangelogPartitions);
+    super.resume(toResume);
+  }
+
+  @Override
+  public void close() {
+    restoreListener.removeRestoreConsumer(this);
+    super.close();
+  }
+
+  @Override
+  public void close(final Duration timeout) {
+    restoreListener.removeRestoreConsumer(this);
+    super.close(timeout);
+  }
+
+  /**
+   * Mark this changelog partition as a (potential) standby to block restoration.
+   * <p>
+   * This method is invoked on all changelogs during changelog registration, which begins with a
+   * {@link #seek}. If the changelog is actually from an active task, it will be removed from this
+   * set and resumed immediately afterward when the changelog registration completes.
+   * See {@link #markChangelogAsActive(TopicPartition)} for more details
+   */
+  public void markChangelogAsStandby(final TopicPartition partition) {
+    pausedChangelogPartitions.add(partition);
+  }
+
+  /**
+   * Mark this changelog partition as active to allow restoration to proceed.
+   * <p>
+   * This method is invoked on active task changelogs only, at the end of the changelog registration
+   * process. It is called from {@link ResponsiveRestoreListener#onRestoreStart} which is itself
+   * invoked only for active tasks, allowing us to differentiate between active and standby
+   * restoration.
+   * See {@link #markChangelogAsStandby(TopicPartition)} for more details
+   */
+  public void markChangelogAsActive(final TopicPartition partition) {
+    pausedChangelogPartitions.remove(partition);
+  }
+
 }

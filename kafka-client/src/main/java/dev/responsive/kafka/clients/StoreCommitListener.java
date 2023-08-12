@@ -22,8 +22,8 @@ public class StoreCommitListener {
       final Map<RecordingKey, Long> committedOffsets,
       final Map<TopicPartition, Long> writtenOffsets
   ) {
-    // TODO: this is kind of inefficient (iterates over stores a lot). Not a huge deal
-    //       as we only run this on each commit. Can fix by indexing stores in registry
+    // TODO: we're technically iterating over zombie instances of this state store, which
+    //  should be excluded as they are technically blocked from committing
     for (final var e : committedOffsets.entrySet()) {
       final TopicPartition p = e.getKey().getPartition();
       for (final ResponsiveStoreRegistration storeRegistration

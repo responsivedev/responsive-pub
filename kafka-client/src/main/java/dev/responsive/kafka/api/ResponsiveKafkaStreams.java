@@ -115,6 +115,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
             clientSupplier,
             streamsConfig,
             storeRegistry,
+            restoreListener,
             metrics
         );
 

@@ -18,6 +18,7 @@ package dev.responsive.kafka.clients;
 
 import static org.apache.kafka.streams.StreamsConfig.AT_LEAST_ONCE;
 
+import dev.responsive.kafka.store.ResponsiveRestoreListener;
 import dev.responsive.kafka.store.ResponsiveStoreRegistry;
 import java.io.Closeable;
 import java.io.IOException;
@@ -53,6 +54,8 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
   private final SharedListeners sharedListeners = new SharedListeners();
   private final KafkaClientSupplier wrapped;
   private final ResponsiveStoreRegistry storeRegistry;
+  private final ResponsiveRestoreListener restoreListener;
+
   private final Factories factories;
   private final Metrics metrics;
   private final EndOffsetsPoller endOffsetsPoller;
@@ -63,9 +66,10 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
       final KafkaClientSupplier clientSupplier,
       final StreamsConfig configs,
       final ResponsiveStoreRegistry storeRegistry,
+      final ResponsiveRestoreListener restoreListener,
       final Metrics metrics
   ) {
-    this(new Factories() {}, clientSupplier, configs, storeRegistry, metrics);
+    this(new Factories() {}, clientSupplier, configs, storeRegistry, restoreListener, metrics);
   }
 
   ResponsiveKafkaClientSupplier(
@@ -73,11 +77,13 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
       final KafkaClientSupplier wrapped,
       final StreamsConfig configs,
       final ResponsiveStoreRegistry storeRegistry,
+      final ResponsiveRestoreListener restoreListener,
       final Metrics metrics
   ) {
     this.factories = factories;
     this.wrapped = wrapped;
     this.storeRegistry = storeRegistry;
+    this.restoreListener = restoreListener;
     this.metrics = metrics;
 
     eos = !(AT_LEAST_ONCE.equals(
@@ -149,7 +155,8 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
     return new ResponsiveRestoreConsumer<>(
         clientId,
         wrapped.getRestoreConsumer(config),
-        storeRegistry::getCommittedOffset
+        storeRegistry::startOffset,
+        restoreListener
     );
   }
 

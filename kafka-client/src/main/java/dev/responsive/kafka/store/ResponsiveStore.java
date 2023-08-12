@@ -90,6 +90,7 @@ public class ResponsiveStore implements KeyValueStore<Bytes, byte[]> {
     } else {
       delegate = new ResponsivePartitionedStore(params);
     }
+
     delegate.init(context, root);
   }
 

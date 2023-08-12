@@ -16,6 +16,9 @@
 
 package dev.responsive.kafka.store;
 
+import dev.responsive.kafka.clients.ResponsiveRestoreConsumer;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.streams.processor.StateRestoreListener;
@@ -23,6 +26,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
+ * A listener that can be registered by users to monitor the progress of state store restoration.
+ * The listener callbacks are invoked on individual state store changelogs as they progress
+ * through active restoration -- none of them will ever be called for standby tasks.
+ * <p>
  * Note: this is a global object which is shared across all StreamThreads and state stores in
  * this Streams application.
  */
@@ -30,6 +37,7 @@ public class ResponsiveRestoreListener implements StateRestoreListener {
   private static final Logger LOG = LoggerFactory.getLogger(ResponsiveRestoreListener.class);
 
   private final Metrics metrics;
+  private final Set<ResponsiveRestoreConsumer<?, ?>> restoreConsumers = new LinkedHashSet<>();
 
   private StateRestoreListener userListener;
 
@@ -45,6 +53,16 @@ public class ResponsiveRestoreListener implements StateRestoreListener {
     return userListener;
   }
 
+  public synchronized void addRestoreConsumer(final ResponsiveRestoreConsumer<?, ?> restoreConsumer) {
+    restoreConsumers.add(restoreConsumer);
+  }
+
+  public synchronized void removeRestoreConsumer(final ResponsiveRestoreConsumer<?, ?> restoreConsumer) {
+    restoreConsumers.remove(restoreConsumer);
+  }
+
+  // TODO: once we split up the global ResponsiveStoreRegistry by StreamThread, we can use that
+  //  to direct the call to the correct restore consumer
   @Override
   public synchronized void onRestoreStart(
       final TopicPartition topicPartition,
@@ -54,6 +72,10 @@ public class ResponsiveRestoreListener implements StateRestoreListener {
   ) {
     LOG.info("Beginning restoration from offset {} to {} for partition {} of state store {}",
              startingOffset, endingOffset, topicPartition, storeName);
+
+    // Leverage the listener to indicate which changelogs are active, as these callbacks
+    // are never invoked for the state stores of standby tasks
+    restoreConsumers.forEach(rc -> rc.markChangelogAsActive(topicPartition));
 
     if (userListener != null) {
       userListener.onRestoreStart(
