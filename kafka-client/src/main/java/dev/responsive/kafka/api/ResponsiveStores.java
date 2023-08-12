@@ -269,9 +269,10 @@ public final class ResponsiveStores {
         new ResponsiveWindowedStoreSupplier(name, retentionMs, windowSize, retainDuplicates)
     );
 
-    final ResponsiveMaterialized<K, V, WindowStore<Bytes, byte[]>> ret = new ResponsiveMaterialized<>(
-        materialized,
-        false
+    final ResponsiveMaterialized<K, V, WindowStore<Bytes, byte[]>> ret =
+        new ResponsiveMaterialized<>(
+            materialized,
+            false
     );
     throw new UnsupportedOperationException(
         "Window store implementation is incomplete, please contact the Responsive team if you "
