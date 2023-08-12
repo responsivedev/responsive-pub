@@ -161,12 +161,15 @@ public final class ResponsiveStores {
       throw new IllegalArgumentException("Retention period cannot be less than window size");
     }
 
-    return new ResponsiveWindowedStoreSupplier(
+    final WindowBytesStoreSupplier ret = new ResponsiveWindowedStoreSupplier(
         name,
         retentionMs,
         windowSizeMs,
         retainDuplicates
     );
+    throw new UnsupportedOperationException(
+        "Window store implementation is incomplete, please contact the Responsive team if you "
+            + "require this feature");
   }
 
   /**
@@ -187,10 +190,13 @@ public final class ResponsiveStores {
       final Serde<K> keySerde,
       final Serde<V> valueSerde
   ) {
-    return new ResponsiveStoreBuilder<>(
+    final StoreBuilder<WindowStore<K, V>> ret = new ResponsiveStoreBuilder<>(
         Stores.windowStoreBuilder(storeSupplier, keySerde, valueSerde),
         false
     );
+    throw new UnsupportedOperationException(
+        "Window store implementation is incomplete, please contact the Responsive team if you "
+            + "require this feature");
   }
 
   /**
@@ -211,13 +217,16 @@ public final class ResponsiveStores {
       final Serde<K> keySerde,
       final Serde<V> valueSerde
   ) {
-    return new ResponsiveStoreBuilder<>(
+    final StoreBuilder<TimestampedWindowStore<K, V>> ret = new ResponsiveStoreBuilder<>(
         Stores.timestampedWindowStoreBuilder(
             storeSupplier,
             keySerde,
             valueSerde),
         false
     );
+    throw new UnsupportedOperationException(
+        "Window store implementation is incomplete, please contact the Responsive team if you "
+            + "require this feature");
   }
 
   /**
@@ -260,10 +269,14 @@ public final class ResponsiveStores {
         new ResponsiveWindowedStoreSupplier(name, retentionMs, windowSize, retainDuplicates)
     );
 
-    return new ResponsiveMaterialized<>(
-        materialized,
-        false
+    final ResponsiveMaterialized<K, V, WindowStore<Bytes, byte[]>> ret =
+        new ResponsiveMaterialized<>(
+            materialized,
+            false
     );
+    throw new UnsupportedOperationException(
+        "Window store implementation is incomplete, please contact the Responsive team if you "
+            + "require this feature");
   }
 
 
