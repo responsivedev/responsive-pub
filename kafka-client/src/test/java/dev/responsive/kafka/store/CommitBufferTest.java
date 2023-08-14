@@ -127,7 +127,7 @@ public class CommitBufferTest {
     final String tableName = name;
     final CommitBuffer<Bytes, RemoteKeyValueSchema> buffer = new CommitBuffer<>(
         client, tableName, changelogTp, admin, schema,
-        KEY_SPEC, true, TRIGGERS, partitioner, 1);
+        KEY_SPEC, true, TRIGGERS, partitioner);
     buffer.init();
 
     // reserve epoch for partition 8 to ensure it doesn't get flushed
@@ -160,7 +160,7 @@ public class CommitBufferTest {
     final String tableName = name;
     final CommitBuffer<Bytes, RemoteKeyValueSchema> buffer = new CommitBuffer<>(
         client, tableName, changelogTp, admin, schema,
-        KEY_SPEC, true, TRIGGERS, partitioner, 1);
+        KEY_SPEC, true, TRIGGERS, partitioner);
     buffer.init();
 
     LwtWriterFactory.reserve(
@@ -188,7 +188,7 @@ public class CommitBufferTest {
     setPartitioner(2);
     final CommitBuffer<Bytes, RemoteKeyValueSchema> buffer = new CommitBuffer<>(
         client, tableName, changelogTp, admin, schema,
-        KEY_SPEC, true, TRIGGERS, partitioner, 1);
+        KEY_SPEC, true, TRIGGERS, partitioner);
     // throwaway init to initialize table
     buffer.init();
 
@@ -209,7 +209,7 @@ public class CommitBufferTest {
     final String tableName = name;
     final CommitBuffer<Bytes, RemoteKeyValueSchema> buffer = new CommitBuffer<>(
         client, tableName, changelogTp, admin, schema,
-        KEY_SPEC, true, TRIGGERS, partitioner, 1);
+        KEY_SPEC, true, TRIGGERS, partitioner);
     buffer.init();
     buffer.put(KEY, VALUE);
 
@@ -226,7 +226,7 @@ public class CommitBufferTest {
     final String tableName = name;
     final CommitBuffer<Bytes, RemoteKeyValueSchema> buffer = new CommitBuffer<>(
         client, tableName, changelogTp, admin, schema,
-        KEY_SPEC, false, TRIGGERS, partitioner, 1);
+        KEY_SPEC, false, TRIGGERS, partitioner);
     buffer.init();
     buffer.put(KEY, VALUE);
 
@@ -250,8 +250,8 @@ public class CommitBufferTest {
         KEY_SPEC,
         false,
         FlushTriggers.ofRecords(10),
-        partitioner,
-        1);
+        partitioner
+    );
     buffer.init();
 
     for (byte i = 0; i < 9; i++) {
@@ -281,8 +281,8 @@ public class CommitBufferTest {
         KEY_SPEC,
         false,
         FlushTriggers.ofBytes(100),
-        partitioner,
-        1);
+        partitioner
+    );
     buffer.init();
     final byte[] value = new byte[9];
     for (byte i = 0; i < 9; i++) {
@@ -316,8 +316,8 @@ public class CommitBufferTest {
         FlushTriggers.ofInterval(Duration.ofSeconds(30)),
         100,
         partitioner,
-        clock::get,
-        1);
+        clock::get
+    );
     buffer.init();
     buffer.put(Bytes.wrap(new byte[]{18}), VALUE);
 
@@ -337,7 +337,7 @@ public class CommitBufferTest {
     final String table = name;
     client.execute(schema.insert(table, KAFKA_PARTITION, KEY, VALUE));
     final CommitBuffer<Bytes, RemoteKeyValueSchema> buffer = new CommitBuffer<>(
-        client, table, changelogTp, admin, schema, KEY_SPEC, true, TRIGGERS, partitioner, 1);
+        client, table, changelogTp, admin, schema, KEY_SPEC, true, TRIGGERS, partitioner);
     buffer.init();
 
     // When:
@@ -355,7 +355,7 @@ public class CommitBufferTest {
     final String tableName = name;
     final CommitBuffer<Bytes, RemoteKeyValueSchema> buffer = new CommitBuffer<>(
         client, tableName, changelogTp, admin, schema,
-        KEY_SPEC, true, TRIGGERS, partitioner, 1);
+        KEY_SPEC, true, TRIGGERS, partitioner);
     buffer.init();
 
     final ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>(
@@ -376,7 +376,7 @@ public class CommitBufferTest {
     final String tableName = name;
     final CommitBuffer<Bytes, RemoteKeyValueSchema> buffer = new CommitBuffer<>(
         client, tableName, changelogTp, admin, schema,
-        KEY_SPEC, true, TRIGGERS, partitioner, 1);
+        KEY_SPEC, true, TRIGGERS, partitioner);
     buffer.init();
     LwtWriterFactory.reserve(
         schema, tableName, new int[]{KAFKA_PARTITION}, KAFKA_PARTITION, 100L, false);
@@ -409,8 +409,8 @@ public class CommitBufferTest {
         TRIGGERS,
         3,
         partitioner,
-        Instant::now,
-        1);
+        Instant::now
+    );
     buffer.init();
     client.execute(schema.setOffset(tableName, 100, 1));
 
