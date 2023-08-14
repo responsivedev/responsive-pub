@@ -115,12 +115,12 @@ public class ResponsiveConfig extends AbstractConfig {
       = Duration.ofSeconds(30).toMillis();
 
   // TODO: consider if we want this as a local, global or per-store configuration
-  public static final String MAX_CONCURRENT_REQUESTS_CONFIG = "responsive.max.concurrent.writes";
-  private static final String MAX_CONCURRENT_REQUESTS_DOC = "The maximum number of writes "
+  public static final String MAX_CONCURRENT_REQUESTS_CONFIG = "responsive.max.concurrent.requests";
+  private static final String MAX_CONCURRENT_REQUESTS_DOC = "The maximum number of requests"
       + "that will every be concurrently issued to the remote store. Increasing this value will "
       + "reduce the time that it takes to flush data to the remote store, but potentially increase "
-      + "the latency of each individual write and any other concurrent reads from other threads. "
-      + "This configuration is 'local': in practice, the number of concurrent writes from all "
+      + "the latency of each individual request and any other concurrent reads from other threads. "
+      + "This configuration is 'local': in practice, the number of concurrent requests from all "
       + "applications to the remote store is this number * the number of stream threads running "
       + "across all nodes.";
   // set a conservative default here, it's better to have the user experience be
