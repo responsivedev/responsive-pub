@@ -27,7 +27,7 @@ message PolicyState {
   responsive.controller.v1.controller.proto.ApplicationPolicy policy = 5;
   responsive.controller.v1.controller.proto.ApplicationState current_state = 6;
   Action ongoing_action = 7;
-
+  int64 last_eval_time = 8;
 }
 
 message Action {
