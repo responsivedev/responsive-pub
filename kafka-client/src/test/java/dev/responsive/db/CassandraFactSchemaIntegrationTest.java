@@ -17,6 +17,7 @@
 package dev.responsive.db;
 
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.nullValue;
@@ -27,7 +28,9 @@ import dev.responsive.kafka.config.ResponsiveConfig;
 import dev.responsive.kafka.store.SchemaType;
 import dev.responsive.utils.ResponsiveConfigParam;
 import dev.responsive.utils.ResponsiveExtension;
+import java.time.Duration;
 import java.util.Map;
+import java.util.Optional;
 import org.apache.kafka.common.utils.Bytes;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -40,6 +43,7 @@ class CassandraFactSchemaIntegrationTest {
 
   private String storeName;
   private CassandraClient client;
+  private CqlSession session;
 
   @BeforeEach
   public void before(
@@ -50,7 +54,7 @@ class CassandraFactSchemaIntegrationTest {
     String name = info.getTestMethod().orElseThrow().getName();
     storeName = name + "store";
 
-    final CqlSession session = CqlSession.builder()
+    session = CqlSession.builder()
         .addContactPoint(cassandra.getContactPoint())
         .withLocalDatacenter(cassandra.getLocalDatacenter())
         .withKeyspace("responsive_clients") // NOTE: this keyspace is expected to exist
@@ -62,7 +66,7 @@ class CassandraFactSchemaIntegrationTest {
   public void shouldInitializeWithCorrectMetadata() {
     // Given:
     final RemoteKeyValueSchema schema = client.kvSchema(SchemaType.FACT);
-    schema.create(storeName);
+    client.execute(schema.create(storeName, Optional.empty()));
     schema.prepare(storeName);
 
     // When:
@@ -80,11 +84,57 @@ class CassandraFactSchemaIntegrationTest {
     assertThat(metadata2.epoch, is(-1L));
   }
 
+  @SuppressWarnings("OptionalGetWithoutIsPresent")
+  @Test
+  public void shouldSetTtlAndCorrectTwcsOptions() {
+    // Given:
+    final RemoteKeyValueSchema schema = client.kvSchema(SchemaType.FACT);
+    final var ttl = Duration.ofDays(30);
+
+    // When:
+    client.execute(schema.create(storeName, Optional.of(ttl)));
+
+    // Then:
+    final var table = session.getMetadata()
+        .getKeyspace(session.getKeyspace().get())
+        .get()
+        .getTable(storeName)
+        .get();
+    final String describe = table.describe(false);
+    assertThat(describe,
+        containsString(
+            "'class':'org.apache.cassandra.db.compaction.TimeWindowCompactionStrategy',"
+                + "'compaction_window_size':'" + (ttl.toMinutes() / 20) + "',"
+                + "'compaction_window_unit':'MINUTES'")
+    );
+    assertThat(describe, containsString("default_time_to_live = " + (int) ttl.toSeconds()));
+  }
+
+  @SuppressWarnings("OptionalGetWithoutIsPresent")
+  @Test
+  public void shouldUseTwcsWithoutTtl() {
+    // Given:
+    final RemoteKeyValueSchema schema = client.kvSchema(SchemaType.FACT);
+
+    // When:
+    client.execute(schema.create(storeName, Optional.empty()));
+
+    // Then:
+    final var table = session.getMetadata()
+        .getKeyspace(session.getKeyspace().get())
+        .get()
+        .getTable(storeName)
+        .get();
+    final String describe = table.describe(false);
+    assertThat(describe,
+        containsString("'org.apache.cassandra.db.compaction.TimeWindowCompactionStrategy'"));
+  }
+
   @Test
   public void shouldInsertAndDelete() {
     // Given:
     final RemoteKeyValueSchema schema = client.kvSchema(SchemaType.FACT);
-    schema.create(storeName);
+    client.execute(schema.create(storeName, Optional.empty()));
     schema.prepare(storeName);
     schema.init(storeName, SubPartitioner.NO_SUBPARTITIONS, 1);
 

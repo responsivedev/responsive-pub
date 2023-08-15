@@ -27,6 +27,20 @@ import org.apache.kafka.streams.state.WindowStore;
 public final class ResponsiveStores {
 
   /**
+   * See for example {@link Stores#inMemoryKeyValueStore(String)}. This method should be
+   * preferred over {@link #keyValueStore(String)} and {@link #timestampedKeyValueStore(String)}
+   * as it provides additional options such as TTL support and will always compile
+   * when new features are added to {@code ResponsiveKeyValueParams}.
+   *
+   * @param params parameters for creation of the key value store
+   * @return a supplier for a key-value store with the given options
+   *         that uses Responsive's storage for its backend
+   */
+  public static KeyValueBytesStoreSupplier keyValueStore(final ResponsiveKeyValueParams params) {
+    return new ResponsiveKeyValueBytesStoreSupplier(params);
+  }
+
+  /**
    * See for example {@link Stores#inMemoryKeyValueStore(String)}
    *
    * @param name the store name
@@ -34,7 +48,7 @@ public final class ResponsiveStores {
    *         that uses Responsive's storage for its backend
    */
   public static KeyValueBytesStoreSupplier keyValueStore(final String name) {
-    return new ResponsiveKeyValueBytesStoreSupplier(name, false);
+    return keyValueStore(ResponsiveKeyValueParams.keyValue(name));
   }
 
   /**
@@ -45,7 +59,7 @@ public final class ResponsiveStores {
    *         that uses Responsive's storage for its backend
    */
   public static KeyValueBytesStoreSupplier timestampedKeyValueStore(final String name) {
-    return new ResponsiveKeyValueBytesStoreSupplier(name, true);
+    return keyValueStore(ResponsiveKeyValueParams.timestamped(name));
   }
 
   /**
@@ -71,7 +85,7 @@ public final class ResponsiveStores {
    *         that uses Responsive's storage for its backend
    */
   public static KeyValueBytesStoreSupplier factStore(final String name) {
-    return new ResponsiveFactStoreSupplier(name, false);
+    return keyValueStore(ResponsiveKeyValueParams.fact(name));
   }
 
   /**
@@ -81,13 +95,13 @@ public final class ResponsiveStores {
    * @see #factStore(String) {@link #timestampedKeyValueStore(String)}
    */
   public static KeyValueBytesStoreSupplier timestampedFactStore(final String name) {
-    return new ResponsiveFactStoreSupplier(name, true);
+    return keyValueStore(ResponsiveKeyValueParams.timestampedFact(name));
   }
 
   /**
    * Create a {@link StoreBuilder} that can be used to build a Responsive
    * {@link KeyValueStore} and connect it via the Processor API. If using the DSL, use
-   * {@link #materialized(String)} instead.
+   * {@link #materialized(ResponsiveKeyValueParams)} instead.
    * <p>
    * See {@link Stores#keyValueStoreBuilder(KeyValueBytesStoreSupplier, Serde, Serde)}
    *
@@ -126,7 +140,6 @@ public final class ResponsiveStores {
       final Serde<K> keySerde,
       final Serde<V> valueSerde
   ) {
-
     return new ResponsiveStoreBuilder<>(
         Stores.timestampedKeyValueStoreBuilder(
             storeSupplier,
@@ -234,17 +247,14 @@ public final class ResponsiveStores {
    * and materialized in the DSL. If using the low-level Processor API, use
    * {@link #keyValueStoreBuilder} instead.
    *
-   * @param name the store name
+   * @param params the store parameters
    * @return a Materialized configuration that can be used to build a key value store with the
    *         given options that uses Responsive's storage for its backend
    */
   public static <K, V> Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized(
-      final String name
+      final ResponsiveKeyValueParams params
   ) {
-    final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized =
-        Materialized.as(new ResponsiveKeyValueBytesStoreSupplier(name, true));
-
-    return new ResponsiveMaterialized<>(materialized, false);
+    return new ResponsiveMaterialized<>(Materialized.as(keyValueStore(params)), false);
   }
 
   /**
@@ -265,6 +275,7 @@ public final class ResponsiveStores {
       final long windowSize,
       final boolean retainDuplicates
   ) {
+    // TODO: create a ResponsiveWindowedParams class instead of using individual parameters here
     final Materialized<K, V, WindowStore<Bytes, byte[]>> materialized = Materialized.as(
         new ResponsiveWindowedStoreSupplier(name, retentionMs, windowSize, retainDuplicates)
     );

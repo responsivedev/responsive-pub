@@ -29,6 +29,7 @@ import static org.apache.kafka.streams.StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_C
 import static org.apache.kafka.streams.StreamsConfig.NUM_STREAM_THREADS_CONFIG;
 
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
+import dev.responsive.kafka.api.ResponsiveKeyValueParams;
 import dev.responsive.kafka.api.ResponsiveStores;
 import dev.responsive.utils.IntegrationTestUtils;
 import dev.responsive.utils.ResponsiveConfigParam;
@@ -150,7 +151,7 @@ public class ResponsiveGlobalStoreIntegrationTest {
 
     final GlobalKTable<Long, Long> globalTable = builder.globalTable(
         GLOBAL_TOPIC,
-        ResponsiveStores.materialized(STORE_NAME)
+        ResponsiveStores.materialized(ResponsiveKeyValueParams.timestamped(STORE_NAME))
     );
 
     final KStream<Long, Long> stream = builder.stream(INPUT_TOPIC);

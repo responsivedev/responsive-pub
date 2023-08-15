@@ -4,6 +4,7 @@ import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
 import com.datastax.oss.driver.api.querybuilder.schema.CreateKeyspace;
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
+import dev.responsive.kafka.api.ResponsiveKeyValueParams;
 import dev.responsive.kafka.api.ResponsiveStores;
 import java.net.InetSocketAddress;
 import java.util.List;
@@ -96,7 +97,8 @@ public class SimpleApplication {
       return v;
     });
     final KTable<byte[], Long> counts = stream.groupByKey()
-        .count(ResponsiveStores.materialized(cfg.getString(Config.NAME)));
+        .count(ResponsiveStores.materialized(
+            ResponsiveKeyValueParams.timestamped(cfg.getString(Config.NAME))));
     result.to(source + "-out", Produced.with(Serdes.ByteArray(), Serdes.ByteArray()));
     counts.toStream().to(source + "-counts", Produced.with(Serdes.ByteArray(), Serdes.Long()));
     final Properties properties = new Properties();

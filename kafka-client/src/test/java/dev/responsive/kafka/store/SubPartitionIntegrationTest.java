@@ -45,6 +45,7 @@ import dev.responsive.db.RemoteKeyValueSchema;
 import dev.responsive.db.partitioning.Hasher;
 import dev.responsive.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
+import dev.responsive.kafka.api.ResponsiveKeyValueParams;
 import dev.responsive.kafka.api.ResponsiveStores;
 import dev.responsive.kafka.config.ResponsiveConfig;
 import dev.responsive.utils.ResponsiveConfigParam;
@@ -138,7 +139,8 @@ public class SubPartitionIntegrationTest {
 
     try (
         final var streams = ResponsiveKafkaStreams.create(
-            simpleDslTopology(ResponsiveStores.materialized(storeName)), properties);
+            simpleDslTopology(ResponsiveStores.materialized(
+                ResponsiveKeyValueParams.timestamped(storeName))), properties);
         final var serializer = new LongSerializer();
         final var deserializer = new LongDeserializer();
     ) {

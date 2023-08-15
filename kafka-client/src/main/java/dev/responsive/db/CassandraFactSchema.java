@@ -28,13 +28,18 @@ import static dev.responsive.db.RowType.METADATA_ROW;
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
 import com.datastax.oss.driver.api.core.cql.Row;
+import com.datastax.oss.driver.api.core.cql.SimpleStatement;
 import com.datastax.oss.driver.api.core.type.DataTypes;
 import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
 import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
+import com.datastax.oss.driver.api.querybuilder.schema.CreateTable;
+import com.datastax.oss.driver.api.querybuilder.schema.compaction.TimeWindowCompactionStrategy;
 import dev.responsive.db.partitioning.SubPartitioner;
 import java.nio.ByteBuffer;
+import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import javax.annotation.CheckReturnValue;
 import org.apache.kafka.common.utils.Bytes;
@@ -70,17 +75,31 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
   }
 
   @Override
-  public void create(final String tableName) {
-    LOG.info("Creating data table {} in remote store.", tableName);
-    client.execute(SchemaBuilder
+  @CheckReturnValue
+  public SimpleStatement create(final String tableName, Optional<Duration> ttl) {
+    LOG.info("Creating fact data table {} in remote store.", tableName);
+    final CreateTable createTable = SchemaBuilder
         .createTable(tableName)
         .ifNotExists()
         .withPartitionKey(ROW_TYPE.column(), DataTypes.TINYINT)
         .withPartitionKey(DATA_KEY.column(), DataTypes.BLOB)
         .withColumn(DATA_VALUE.column(), DataTypes.BLOB)
-        .withColumn(OFFSET.column(), DataTypes.BIGINT)
-        .build()
-    );
+        .withColumn(OFFSET.column(), DataTypes.BIGINT);
+
+    if (ttl.isPresent()) {
+      final int ttlSeconds = Math.toIntExact(ttl.get().getSeconds());
+      // 20 is a magic number recommended by scylla for the number of buckets
+      final Duration compactionWindow = Duration.ofSeconds(ttlSeconds / 20);
+      return createTable.withDefaultTimeToLiveSeconds(ttlSeconds)
+          .withCompaction(
+              SchemaBuilder.timeWindowCompactionStrategy()
+                  .withCompactionWindow(
+                      compactionWindow.toMinutes(),
+                      TimeWindowCompactionStrategy.CompactionWindowUnit.MINUTES)
+          ).build();
+    } else {
+      return createTable.withCompaction(SchemaBuilder.timeWindowCompactionStrategy()).build();
+    }
   }
 
   /**
@@ -210,6 +229,7 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
       final int partitionKey,
       final Bytes key
   ) {
+    // TODO: consider throwing an exception here as TWCS doesn't work well with deletes
     return delete.get(table)
         .bind()
         .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()));
