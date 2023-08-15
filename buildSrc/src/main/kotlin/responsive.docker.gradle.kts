@@ -42,8 +42,12 @@ class DockerPlugin : Plugin<Project> {
             dockerRepoBase = config.dockerRepoBase.get()
         }
 
+        project.tasks.getByName("build") {
+            mustRunAfter("clean")
+        }
+
         project.tasks.register("copyJars", Copy::class) {
-            dependsOn("build")
+            dependsOn("clean", "build")
             into(project.buildDir.getPath() + "/docker/libs")
             from(project.getConfigurations().getByName("runtimeClasspath"))
             from(project.buildDir.getPath() + "/libs")
@@ -51,6 +55,7 @@ class DockerPlugin : Plugin<Project> {
         }
 
         project.tasks.register("copyDockerDir", Copy::class) {
+            dependsOn("clean")
             into(project.buildDir.getPath() + "/docker")
             from(project.projectDir.getPath() + "/docker")
             include("**/*")

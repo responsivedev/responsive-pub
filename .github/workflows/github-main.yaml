@@ -87,6 +87,7 @@ jobs:
           sindri/scripts/update-client-versions -s master -p true -i public.ecr.aws/j8q9y0n6/responsiveinc/simple-example -t `./gradlew kafka-client:cV  | grep "Project version" | sed 's/Project version: //'`
           sindri/scripts/run-smoke-test -s master -w system-tests-pub
         env:
+            DD_SERVICE: "https://us5.datadoghq.com/"
             DD_API_KEY: ${{ secrets.DD_API_KEY }}
             PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
 
