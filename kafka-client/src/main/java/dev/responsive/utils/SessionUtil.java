@@ -16,10 +16,17 @@
 
 package dev.responsive.utils;
 
+import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.REQUEST_THROTTLER_CLASS;
+import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.REQUEST_THROTTLER_MAX_CONCURRENT_REQUESTS;
+import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.REQUEST_THROTTLER_MAX_QUEUE_SIZE;
+import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.REQUEST_TIMEOUT;
+import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.RETRY_POLICY_CLASS;
+
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.CqlSessionBuilder;
 import com.datastax.oss.driver.api.core.config.DefaultDriverOption;
 import com.datastax.oss.driver.api.core.config.DriverConfigLoader;
+import com.datastax.oss.driver.internal.core.session.throttling.ConcurrencyLimitingRequestThrottler;
 import dev.responsive.db.ResponsiveRetryPolicy;
 import java.net.InetSocketAddress;
 import javax.annotation.Nullable;
@@ -38,7 +45,8 @@ public final class SessionUtil {
       final String datacenter,
       final String keyspace,
       @Nullable final String clientId,
-      @Nullable final String clientSecret
+      @Nullable final String clientSecret,
+      final int maxConcurrentRequests
   ) {
     final CqlSessionBuilder sessionBuilder = CqlSession.builder()
         .addContactPoint(address)
@@ -53,8 +61,15 @@ public final class SessionUtil {
     return sessionBuilder
         .withConfigLoader(DriverConfigLoader
             .programmaticBuilder()
-            .withLong(DefaultDriverOption.REQUEST_TIMEOUT, 5000)
-            .withClass(DefaultDriverOption.RETRY_POLICY_CLASS, ResponsiveRetryPolicy.class)
+            .withLong(REQUEST_TIMEOUT, 5000)
+            .withClass(RETRY_POLICY_CLASS, ResponsiveRetryPolicy.class)
+            .withClass(REQUEST_THROTTLER_CLASS, ConcurrencyLimitingRequestThrottler.class)
+            // we just set this to MAX_VALUE as it will be implicitly limited by the
+            // number of stream threads * the max number of records being flushed -
+            // we do not want to throw an exception if the queue is full as this will
+            // cause a rebalance
+            .withInt(REQUEST_THROTTLER_MAX_QUEUE_SIZE, Integer.MAX_VALUE)
+            .withInt(REQUEST_THROTTLER_MAX_CONCURRENT_REQUESTS, maxConcurrentRequests)
             .build())
         .withKeyspace(keyspace)
         .build();

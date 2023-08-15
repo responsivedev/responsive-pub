@@ -115,15 +115,18 @@ public class ResponsiveConfig extends AbstractConfig {
       = Duration.ofSeconds(30).toMillis();
 
   // TODO: consider if we want this as a local, global or per-store configuration
-  public static final String MAX_CONCURRENT_REMOTE_WRITES_CONFIG = "responsive.max.concurrent.writes";
-  private static final String MAX_CONCURRENT_REMOTE_WRITES_DOC = "The maximum number of writes "
+  public static final String MAX_CONCURRENT_REQUESTS_CONFIG = "responsive.max.concurrent.requests";
+  private static final String MAX_CONCURRENT_REQUESTS_DOC = "The maximum number of requests"
       + "that will every be concurrently issued to the remote store. Increasing this value will "
       + "reduce the time that it takes to flush data to the remote store, but potentially increase "
-      + "the latency of each individual write and any other concurrent reads from other threads. "
-      + "This configuration is 'local': in practice, the number of concurrent writes from all "
+      + "the latency of each individual request and any other concurrent reads from other threads. "
+      + "This configuration is 'local': in practice, the number of concurrent requests from all "
       + "applications to the remote store is this number * the number of stream threads running "
       + "across all nodes.";
-  public static final int MAX_CONCURRENT_REMOTE_WRITES_DEFAULT = 32;
+  // set a conservative default here, it's better to have the user experience be
+  // one that doesn't error out and instead allow them to tune this up if they
+  // are not getting the throughput that they need
+  public static final int MAX_CONCURRENT_REQUESTS_DEFAULT = 128;
 
   public static final String SUBPARTITION_HASHER_CONFIG = "responsive.subpartition.hasher";
   private static final String SUBPARTITION_HASHER_DOC = "Hasher to use for sub-partitioning.";
@@ -200,11 +203,11 @@ public class ResponsiveConfig extends AbstractConfig {
           Importance.MEDIUM,
           STORAGE_DESIRED_NUM_PARTITIONS_DOC
       ).define(
-          MAX_CONCURRENT_REMOTE_WRITES_CONFIG,
+          MAX_CONCURRENT_REQUESTS_CONFIG,
           Type.INT,
-          MAX_CONCURRENT_REMOTE_WRITES_DEFAULT,
+          MAX_CONCURRENT_REQUESTS_DEFAULT,
           Importance.MEDIUM,
-          MAX_CONCURRENT_REMOTE_WRITES_DOC
+          MAX_CONCURRENT_REQUESTS_DOC
       ).define(
           STORE_FLUSH_BYTES_TRIGGER_CONFIG,
           Type.LONG,

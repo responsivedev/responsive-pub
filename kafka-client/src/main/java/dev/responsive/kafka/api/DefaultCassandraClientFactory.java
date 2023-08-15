@@ -2,6 +2,7 @@ package dev.responsive.kafka.api;
 
 import static dev.responsive.kafka.config.ResponsiveConfig.CLIENT_ID_CONFIG;
 import static dev.responsive.kafka.config.ResponsiveConfig.CLIENT_SECRET_CONFIG;
+import static dev.responsive.kafka.config.ResponsiveConfig.MAX_CONCURRENT_REQUESTS_CONFIG;
 import static dev.responsive.kafka.config.ResponsiveConfig.STORAGE_DATACENTER_CONFIG;
 import static dev.responsive.kafka.config.ResponsiveConfig.STORAGE_HOSTNAME_CONFIG;
 import static dev.responsive.kafka.config.ResponsiveConfig.STORAGE_PORT_CONFIG;
@@ -25,12 +26,15 @@ public class DefaultCassandraClientFactory implements CassandraClientFactory {
     final String clientId = config.getString(CLIENT_ID_CONFIG);
     final Password clientSecret = config.getPassword(CLIENT_SECRET_CONFIG);
     final String tenant = config.getString(TENANT_ID_CONFIG);
+    final int maxConcurrency = config.getInt(MAX_CONCURRENT_REQUESTS_CONFIG);
+
     return SessionUtil.connect(
         address,
         datacenter,
         tenant,
         clientId,
-        clientSecret == null ? null : clientSecret.value()
+        clientSecret == null ? null : clientSecret.value(),
+        maxConcurrency
     );
   }
 

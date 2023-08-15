@@ -16,8 +16,6 @@
 
 package dev.responsive.kafka.store;
 
-import static dev.responsive.kafka.config.ResponsiveConfig.MAX_CONCURRENT_REMOTE_WRITES_CONFIG;
-
 import dev.responsive.db.CassandraClient;
 import dev.responsive.db.KeySpec;
 import dev.responsive.db.MetadataRow;
@@ -39,11 +37,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import org.apache.kafka.clients.admin.Admin;
@@ -75,7 +70,6 @@ class CommitBuffer<K, S extends RemoteSchema<K>> implements RecordBatchingStateR
   private final int maxBatchSize;
   private final SubPartitioner subPartitioner;
   private final Supplier<Instant> clock;
-  private final int maxConcurrentWrites;
   private final KeySpec<K> keySpec;
 
   private Instant lastFlush;
@@ -104,8 +98,7 @@ class CommitBuffer<K, S extends RemoteSchema<K>> implements RecordBatchingStateR
         keySpec,
         truncate,
         FlushTriggers.fromConfig(config),
-        partitioner,
-        config.getInt(MAX_CONCURRENT_REMOTE_WRITES_CONFIG)
+        partitioner
     );
   }
 
@@ -118,8 +111,7 @@ class CommitBuffer<K, S extends RemoteSchema<K>> implements RecordBatchingStateR
       final KeySpec<K> keySpec,
       final boolean truncateChangelog,
       final FlushTriggers flushTriggers,
-      final SubPartitioner subPartitioner,
-      final int maxConcurrentWrites
+      final SubPartitioner subPartitioner
   ) {
     this(
         client,
@@ -132,8 +124,7 @@ class CommitBuffer<K, S extends RemoteSchema<K>> implements RecordBatchingStateR
         flushTriggers,
         MAX_BATCH_SIZE,
         subPartitioner,
-        Instant::now,
-        maxConcurrentWrites
+        Instant::now
     );
   }
 
@@ -148,8 +139,7 @@ class CommitBuffer<K, S extends RemoteSchema<K>> implements RecordBatchingStateR
       final FlushTriggers flushTriggers,
       final int maxBatchSize,
       final SubPartitioner subPartitioner,
-      final Supplier<Instant> clock,
-      final int maxConcurrentWrites
+      final Supplier<Instant> clock
   ) {
     this.client = client;
     this.tableName = tableName;
@@ -165,7 +155,6 @@ class CommitBuffer<K, S extends RemoteSchema<K>> implements RecordBatchingStateR
     this.maxBatchSize = maxBatchSize;
     this.subPartitioner = subPartitioner;
     this.clock = clock;
-    this.maxConcurrentWrites = maxConcurrentWrites;
 
     final String logPrefix = String.format("commit-buffer-%s[%d] ", tableName, partition);
     final LogContext logContext = new LogContext(logPrefix);
@@ -368,7 +357,7 @@ class CommitBuffer<K, S extends RemoteSchema<K>> implements RecordBatchingStateR
       }
     }
 
-    var writeResult = drain(writers.values(), RemoteWriter::flush);
+    var writeResult = drain(writers.values());
     if (!writeResult.wasApplied()) {
       return writeResult;
     }
@@ -398,65 +387,18 @@ class CommitBuffer<K, S extends RemoteSchema<K>> implements RecordBatchingStateR
     return RemoteWriteResult.success(partition);
   }
 
-  private RemoteWriteResult drain(
-      final Collection<RemoteWriter<K>> writers,
-      final Function<RemoteWriter<K>, CompletionStage<RemoteWriteResult>> action
-  ) {
-    return drain(
-        writers,
-        action,
-        RemoteWriter::partition,
-        partition,
-        maxConcurrentWrites
-    );
-  }
-
-  // Visible for Testing
-  static <I> RemoteWriteResult drain(
-      final Collection<I> writers,
-      final Function<I, CompletionStage<RemoteWriteResult>> action,
-      final Function<I, Integer> keyFunction,
-      final int partition,
-      final int maxConcurrentWrites
-  ) {
-    final var futures = new HashMap<Integer, CompletableFuture<RemoteWriteResult>>();
-    final var result = new AtomicReference<>(RemoteWriteResult.success(partition));
+  private RemoteWriteResult drain(final Collection<RemoteWriter<K>> writers) {
+    var result = CompletableFuture.completedStage(RemoteWriteResult.success(partition));
+    for (final RemoteWriter<K> writer : writers) {
+      result = result.thenCombine(writer.flush(), (one, two) -> !one.wasApplied() ? one : two);
+    }
 
     try {
-      for (final I writer : writers) {
-        if (futures.size() >= maxConcurrentWrites) {
-          CompletableFuture.anyOf(futures.values().toArray(CompletableFuture[]::new)).get();
-          futures.values().removeIf(CompletableFuture::isDone);
-        }
-
-        final int subPartition = keyFunction.apply(writer);
-        final var writeFuture = action
-            .apply(writer)
-            .thenApply(r -> setIfNotApplied(result, r))
-            .toCompletableFuture();
-        futures.put(subPartition, writeFuture);
-      }
-
-      // drain any remaining
-      for (final var future : futures.values()) {
-        future.get();
-      }
-    } catch (ExecutionException | InterruptedException e) {
-      throw new ProcessorStateException(
+      return result.toCompletableFuture().get();
+    } catch (InterruptedException | ExecutionException e) {
+      throw new RuntimeException(
           "Failed while flushing partition " + partition + " to remote", e);
     }
-
-    return result.get();
-  }
-
-  private static RemoteWriteResult setIfNotApplied(
-      final AtomicReference<RemoteWriteResult> aggResult,
-      final RemoteWriteResult awr
-  ) {
-    if (!awr.wasApplied()) {
-      aggResult.set(awr);
-    }
-    return awr;
   }
 
   private void maybeTruncateChangelog(final long offset) {
