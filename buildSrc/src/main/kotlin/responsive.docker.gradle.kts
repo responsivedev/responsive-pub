@@ -42,6 +42,10 @@ class DockerPlugin : Plugin<Project> {
             dockerRepoBase = config.dockerRepoBase.get()
         }
 
+        project.tasks.getByName("build") {
+            mustRunAfter("clean")
+        }
+
         project.tasks.register("copyJars", Copy::class) {
             dependsOn("clean", "build")
             into(project.buildDir.getPath() + "/docker/libs")
