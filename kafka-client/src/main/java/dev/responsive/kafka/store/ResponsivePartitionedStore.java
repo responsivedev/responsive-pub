@@ -24,6 +24,7 @@ import dev.responsive.db.CassandraClient;
 import dev.responsive.db.RemoteKeyValueSchema;
 import dev.responsive.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.api.InternalConfigs;
+import dev.responsive.kafka.api.ResponsiveKeyValueParams;
 import dev.responsive.kafka.clients.SharedClients;
 import dev.responsive.kafka.config.ResponsiveConfig;
 import dev.responsive.model.Result;
@@ -53,8 +54,8 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
   private static final Logger LOG = LoggerFactory.getLogger(ResponsivePartitionedStore.class);
 
   private final TableName name;
-  private final SchemaType schemaType;
   private final Position position;
+  private final ResponsiveKeyValueParams params;
   private ResponsiveStoreRegistry storeRegistry;
   private ResponsiveStoreRegistration registration;
 
@@ -67,12 +68,9 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
   private int partition;
   private RemoteKeyValueSchema schema;
 
-  public ResponsivePartitionedStore(
-      final TableName name,
-      final SchemaType schemaType
-  ) {
-    this.name = name;
-    this.schemaType = schemaType;
+  public ResponsivePartitionedStore(final ResponsiveKeyValueParams params) {
+    this.params = params;
+    this.name = params.name();
     this.position = Position.emptyPosition();
   }
 
@@ -105,8 +103,8 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
       final SharedClients sharedClients = new SharedClients(context.appConfigs());
       CassandraClient client = sharedClients.cassandraClient;
 
-      schema = client.kvSchema(schemaType);
-      schema.create(name.cassandraName());
+      schema = client.kvSchema(params.schemaType());
+      client.execute(schema.create(params.name().cassandraName(), params.timeToLive()));
 
       final RemoteMonitor monitor = client.awaitTable(name.cassandraName(), sharedClients.executor);
       monitor.await(Duration.ofSeconds(60));
@@ -118,7 +116,7 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
           changelogFor(context, name.kafkaName(), false),
           partition
       );
-      partitioner = schemaType == SchemaType.FACT
+      partitioner = params.schemaType() == SchemaType.FACT
           ? SubPartitioner.NO_SUBPARTITIONS
           : config.getSubPartitioner(sharedClients.admin, name, topicPartition.topic());
 

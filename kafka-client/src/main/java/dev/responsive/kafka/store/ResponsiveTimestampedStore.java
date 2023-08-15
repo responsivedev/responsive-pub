@@ -1,5 +1,6 @@
 package dev.responsive.kafka.store;
 
+import dev.responsive.kafka.api.ResponsiveKeyValueParams;
 import dev.responsive.utils.TableName;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 
@@ -15,7 +16,7 @@ import org.apache.kafka.streams.state.TimestampedBytesStore;
  */
 public class ResponsiveTimestampedStore extends ResponsiveStore implements TimestampedBytesStore {
 
-  public ResponsiveTimestampedStore(final TableName name, final SchemaType schemaType) {
-    super(name, schemaType);
+  public ResponsiveTimestampedStore(final ResponsiveKeyValueParams params) {
+    super(params);
   }
 }

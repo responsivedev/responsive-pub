@@ -32,16 +32,20 @@ import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
 import com.datastax.oss.driver.api.core.cql.ResultSet;
 import com.datastax.oss.driver.api.core.cql.Row;
+import com.datastax.oss.driver.api.core.cql.SimpleStatement;
 import com.datastax.oss.driver.api.core.metadata.schema.ClusteringOrder;
 import com.datastax.oss.driver.api.core.type.DataTypes;
 import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
 import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
+import com.datastax.oss.driver.api.querybuilder.schema.CreateTable;
 import dev.responsive.db.partitioning.SubPartitioner;
 import dev.responsive.model.Stamped;
 import dev.responsive.utils.Iterators;
 import java.nio.ByteBuffer;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import javax.annotation.CheckReturnValue;
 import org.apache.kafka.common.utils.Bytes;
@@ -91,7 +95,7 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
   }
 
   @Override
-  public void create(final String tableName) {
+  public SimpleStatement create(final String tableName, Optional<Duration> ttl) {
     // TODO: explore better data models for fetchRange/fetchAll
     // Cassandra does not support filtering on a composite key column if
     // the previous columns in the composite are not equality filters
@@ -105,7 +109,7 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
     // too small in cardinality) we just filter the results to match the
     // time bounds
     LOG.info("Creating windowed data table {} in remote store.", tableName);
-    client.execute(SchemaBuilder
+    final CreateTable createTable = SchemaBuilder
         .createTable(tableName)
         .ifNotExists()
         .withPartitionKey(PARTITION_KEY.column(), DataTypes.INT)
@@ -114,9 +118,11 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
         .withClusteringColumn(WINDOW_START.column(), DataTypes.TIMESTAMP)
         .withColumn(DATA_VALUE.column(), DataTypes.BLOB)
         .withColumn(OFFSET.column(), DataTypes.BIGINT)
-        .withColumn(EPOCH.column(), DataTypes.BIGINT)
-        .build()
-    );
+        .withColumn(EPOCH.column(), DataTypes.BIGINT);
+
+    return ttl.isPresent()
+        ? createTable.withDefaultTimeToLiveSeconds(Math.toIntExact(ttl.get().getSeconds())).build()
+        : createTable.build();
   }
 
   @Override

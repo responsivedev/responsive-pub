@@ -45,6 +45,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -103,7 +104,7 @@ public class CommitBufferTest {
     changelogTp = new TopicPartition("log", KAFKA_PARTITION);
     partitioner = SubPartitioner.NO_SUBPARTITIONS;
 
-    schema.create(name);
+    client.execute(schema.create(name, Optional.empty()));
     schema.prepare(name);
 
     when(admin.deleteRecords(Mockito.any()))

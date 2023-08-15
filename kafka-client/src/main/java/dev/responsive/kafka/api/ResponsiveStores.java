@@ -2,6 +2,7 @@ package dev.responsive.kafka.api;
 
 import dev.responsive.kafka.store.ResponsiveMaterialized;
 import dev.responsive.kafka.store.ResponsiveStoreBuilder;
+import dev.responsive.kafka.store.SchemaType;
 import dev.responsive.utils.StoreUtil;
 import java.time.Duration;
 import org.apache.kafka.common.serialization.Serde;
@@ -26,6 +27,10 @@ import org.apache.kafka.streams.state.WindowStore;
  */
 public final class ResponsiveStores {
 
+  public static KeyValueBytesStoreSupplier keyValueStore(final ResponsiveKeyValueParams params) {
+    return new ResponsiveKeyValueBytesStoreSupplier(params);
+  }
+
   /**
    * See for example {@link Stores#inMemoryKeyValueStore(String)}
    *
@@ -34,7 +39,7 @@ public final class ResponsiveStores {
    *         that uses Responsive's storage for its backend
    */
   public static KeyValueBytesStoreSupplier keyValueStore(final String name) {
-    return new ResponsiveKeyValueBytesStoreSupplier(name, false);
+    return keyValueStore(ResponsiveKeyValueParams.keyValue(name));
   }
 
   /**
@@ -45,7 +50,7 @@ public final class ResponsiveStores {
    *         that uses Responsive's storage for its backend
    */
   public static KeyValueBytesStoreSupplier timestampedKeyValueStore(final String name) {
-    return new ResponsiveKeyValueBytesStoreSupplier(name, true);
+    return keyValueStore(ResponsiveKeyValueParams.timestamped(name));
   }
 
   /**
@@ -71,7 +76,7 @@ public final class ResponsiveStores {
    *         that uses Responsive's storage for its backend
    */
   public static KeyValueBytesStoreSupplier factStore(final String name) {
-    return new ResponsiveFactStoreSupplier(name, false);
+    return keyValueStore(ResponsiveKeyValueParams.fact(name));
   }
 
   /**
@@ -81,7 +86,7 @@ public final class ResponsiveStores {
    * @see #factStore(String) {@link #timestampedKeyValueStore(String)}
    */
   public static KeyValueBytesStoreSupplier timestampedFactStore(final String name) {
-    return new ResponsiveFactStoreSupplier(name, true);
+    return keyValueStore(ResponsiveKeyValueParams.timestampedFact(name));
   }
 
   /**
@@ -126,7 +131,6 @@ public final class ResponsiveStores {
       final Serde<K> keySerde,
       final Serde<V> valueSerde
   ) {
-
     return new ResponsiveStoreBuilder<>(
         Stores.timestampedKeyValueStoreBuilder(
             storeSupplier,
@@ -241,10 +245,7 @@ public final class ResponsiveStores {
   public static <K, V> Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized(
       final String name
   ) {
-    final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized =
-        Materialized.as(new ResponsiveKeyValueBytesStoreSupplier(name, true));
-
-    return new ResponsiveMaterialized<>(materialized, false);
+    return new ResponsiveMaterialized<>(Materialized.as(timestampedKeyValueStore(name)), false);
   }
 
   /**

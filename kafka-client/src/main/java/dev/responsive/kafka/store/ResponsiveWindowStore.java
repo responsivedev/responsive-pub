@@ -32,6 +32,7 @@ import dev.responsive.utils.Iterators;
 import dev.responsive.utils.RemoteMonitor;
 import dev.responsive.utils.TableName;
 import java.time.Duration;
+import java.util.Optional;
 import java.util.concurrent.TimeoutException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Bytes;
@@ -139,7 +140,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       client = sharedClients.cassandraClient;
 
       schema = client.windowedSchema();
-      schema.create(name.cassandraName());
+      client.execute(schema.create(name.cassandraName(), Optional.empty()));
 
       final RemoteMonitor monitor = client.awaitTable(name.cassandraName(), sharedClients.executor);
       monitor.await(Duration.ofSeconds(60));

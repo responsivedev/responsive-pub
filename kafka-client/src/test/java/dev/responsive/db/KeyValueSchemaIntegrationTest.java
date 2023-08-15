@@ -23,6 +23,7 @@ import dev.responsive.utils.ResponsiveConfigParam;
 import dev.responsive.utils.ResponsiveExtension;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.hamcrest.MatcherAssert;
@@ -55,7 +56,7 @@ public class KeyValueSchemaIntegrationTest {
     client = new CassandraClient(session, config);
     schema = new CassandraKeyValueSchema(client);
     name = info.getTestMethod().orElseThrow().getName();
-    schema.create(name);
+    client.execute(schema.create(name, Optional.empty()));
     schema.prepare(name);
   }
 

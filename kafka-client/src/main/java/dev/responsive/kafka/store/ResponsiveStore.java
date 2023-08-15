@@ -16,7 +16,7 @@
 
 package dev.responsive.kafka.store;
 
-import dev.responsive.utils.TableName;
+import dev.responsive.kafka.api.ResponsiveKeyValueParams;
 import java.util.List;
 import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
 import org.apache.kafka.common.serialization.Serializer;
@@ -36,16 +36,11 @@ import org.apache.kafka.streams.state.KeyValueStore;
 
 public class ResponsiveStore implements KeyValueStore<Bytes, byte[]> {
 
-  private final TableName name;
-  private final SchemaType schemaType;
+  private final ResponsiveKeyValueParams params;
   private KeyValueStore<Bytes, byte[]> delegate;
 
-  public ResponsiveStore(
-      final TableName name,
-      final SchemaType schemaType
-  ) {
-    this.name = name;
-    this.schemaType = schemaType;
+  public ResponsiveStore(final ResponsiveKeyValueParams params) {
+    this.params = params;
   }
 
   @Override
@@ -71,7 +66,7 @@ public class ResponsiveStore implements KeyValueStore<Bytes, byte[]> {
   @Override
   public String name() {
     // used before initialization
-    return name.kafkaName();
+    return params.name().kafkaName();
   }
 
   @Override
@@ -89,9 +84,9 @@ public class ResponsiveStore implements KeyValueStore<Bytes, byte[]> {
   @Override
   public void init(final StateStoreContext context, final StateStore root) {
     if (context instanceof GlobalProcessorContextImpl) {
-      delegate = new ResponsiveGlobalStore(name);
+      delegate = new ResponsiveGlobalStore(params.name());
     } else {
-      delegate = new ResponsivePartitionedStore(name, schemaType);
+      delegate = new ResponsivePartitionedStore(params);
     }
     delegate.init(context, root);
   }

@@ -19,7 +19,7 @@ package dev.responsive.kafka.store;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.instanceOf;
 
-import dev.responsive.utils.TableName;
+import dev.responsive.kafka.api.ResponsiveKeyValueParams;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.GlobalProcessorContextImpl;
@@ -36,7 +36,7 @@ import org.mockito.quality.Strictness;
 @MockitoSettings(strictness = Strictness.LENIENT)
 public class ResponsiveStoreTest {
 
-  private static final TableName NAME = new TableName("foo");
+  private static final String NAME = "foo";
 
   @Mock
   private StateStore root;
@@ -45,7 +45,7 @@ public class ResponsiveStoreTest {
   public void shouldCreateGlobalStoreWhenPassedGlobalStoreContext() {
     // Given:
     final StateStoreContext context = Mockito.mock(GlobalProcessorContextImpl.class);
-    final var store = new ResponsiveStore(NAME, SchemaType.KEY_VALUE);
+    final var store = new ResponsiveStore(ResponsiveKeyValueParams.keyValue(NAME));
 
     // When:
     try {
@@ -62,7 +62,7 @@ public class ResponsiveStoreTest {
   public void shouldCreatePartitionedStoreWhenPassedStoreContext() {
     // Given:
     final StateStoreContext context = Mockito.mock(ProcessorContextImpl.class);
-    final var store = new ResponsiveStore(NAME, SchemaType.KEY_VALUE);
+    final var store = new ResponsiveStore(ResponsiveKeyValueParams.keyValue(NAME));
 
     // When:
     try {

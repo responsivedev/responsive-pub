@@ -18,38 +18,35 @@ package dev.responsive.kafka.api;
 
 import dev.responsive.kafka.store.ResponsiveStore;
 import dev.responsive.kafka.store.ResponsiveTimestampedStore;
-import dev.responsive.kafka.store.SchemaType;
-import dev.responsive.utils.TableName;
+import java.util.Locale;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 
 public class ResponsiveKeyValueBytesStoreSupplier implements KeyValueBytesStoreSupplier {
 
-  private final TableName name;
-  private final boolean isTimestamped;
+  private final ResponsiveKeyValueParams params;
 
-  public ResponsiveKeyValueBytesStoreSupplier(final String name, final boolean isTimestamped) {
-    this.name = new TableName(name);
-    this.isTimestamped = isTimestamped;
+  public ResponsiveKeyValueBytesStoreSupplier(final ResponsiveKeyValueParams params) {
+    this.params = params;
   }
 
   @Override
   public String name() {
-    return name.kafkaName();
+    return params.name().kafkaName();
   }
 
   @Override
   public KeyValueStore<Bytes, byte[]> get() {
-    if (isTimestamped) {
-      return new ResponsiveTimestampedStore(name, SchemaType.KEY_VALUE);
+    if (params.isTimestamped()) {
+      return new ResponsiveTimestampedStore(params);
     } else {
-      return new ResponsiveStore(name, SchemaType.KEY_VALUE);
+      return new ResponsiveStore(params);
     }
   }
 
   @Override
   public String metricsScope() {
-    return "responsive";
+    return "responsive-" + params.schemaType().name().toLowerCase(Locale.ROOT);
   }
 }
