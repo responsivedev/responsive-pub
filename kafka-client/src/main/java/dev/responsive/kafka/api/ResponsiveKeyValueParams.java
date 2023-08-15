@@ -26,8 +26,8 @@ public final class ResponsiveKeyValueParams {
 
   private final TableName name;
   private final SchemaType schemaType;
+  private final boolean timestamped;
 
-  private boolean timestamped;
   @Nullable private Duration timeToLive;
 
   private ResponsiveKeyValueParams(
@@ -40,14 +40,6 @@ public final class ResponsiveKeyValueParams {
     this.schemaType = schemaType;
   }
 
-  public static ResponsiveKeyValueParams fact(final String name) {
-    return new ResponsiveKeyValueParams(name, false, SchemaType.FACT);
-  }
-
-  public static ResponsiveKeyValueParams timestampedFact(final String name) {
-    return new ResponsiveKeyValueParams(name, true, SchemaType.FACT);
-  }
-
   public static ResponsiveKeyValueParams keyValue(final String name) {
     return new ResponsiveKeyValueParams(name, false, SchemaType.KEY_VALUE);
   }
@@ -56,17 +48,18 @@ public final class ResponsiveKeyValueParams {
     return new ResponsiveKeyValueParams(name, true, SchemaType.KEY_VALUE);
   }
 
-  public ResponsiveKeyValueParams timestamped() {
-    this.timestamped = true;
-    return this;
+  public static ResponsiveKeyValueParams fact(final String name) {
+    return new ResponsiveKeyValueParams(name, false, SchemaType.FACT);
+  }
+
+  public static ResponsiveKeyValueParams timestampedFact(final String name) {
+    return new ResponsiveKeyValueParams(name, true, SchemaType.FACT);
   }
 
   public ResponsiveKeyValueParams withTimeToLive(final Duration timeToLive) {
     this.timeToLive = timeToLive;
     return this;
   }
-
-
 
   public TableName name() {
     return name;

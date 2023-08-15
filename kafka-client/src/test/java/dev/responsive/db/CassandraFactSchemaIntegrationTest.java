@@ -103,9 +103,9 @@ class CassandraFactSchemaIntegrationTest {
     final String describe = table.describe(false);
     assertThat(describe,
         containsString(
-            "'class':'org.apache.cassandra.db.compaction.TimeWindowCompactionStrategy'," +
-                "'compaction_window_size':'" + (ttl.toMinutes() / 20) + "'," +
-                "'compaction_window_unit':'MINUTES'")
+            "'class':'org.apache.cassandra.db.compaction.TimeWindowCompactionStrategy',"
+                + "'compaction_window_size':'" + (ttl.toMinutes() / 20) + "',"
+                + "'compaction_window_unit':'MINUTES'")
     );
     assertThat(describe, containsString("default_time_to_live = " + (int) ttl.toSeconds()));
   }

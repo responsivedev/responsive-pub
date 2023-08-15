@@ -31,7 +31,6 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.hamcrest.MatcherAssert;
 import org.hamcrest.Matchers;
-import org.junit.jupiter.api.Test;
 
 public class TopologyTestDriverExampleTest {
 
@@ -81,7 +80,7 @@ public class TopologyTestDriverExampleTest {
     // schema for people is key: <person_id> value: <person_id, name, state>
     final KTable<String, String> people = builder.table(
         "people",
-        ResponsiveStores.materialized("people")
+        ResponsiveStores.materialized(ResponsiveKeyValueParams.timestamped("people"))
     );
 
     bids

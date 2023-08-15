@@ -2,7 +2,6 @@ package dev.responsive.kafka.api;
 
 import dev.responsive.kafka.store.ResponsiveMaterialized;
 import dev.responsive.kafka.store.ResponsiveStoreBuilder;
-import dev.responsive.kafka.store.SchemaType;
 import dev.responsive.utils.StoreUtil;
 import java.time.Duration;
 import org.apache.kafka.common.serialization.Serde;
@@ -27,6 +26,16 @@ import org.apache.kafka.streams.state.WindowStore;
  */
 public final class ResponsiveStores {
 
+  /**
+   * See for example {@link Stores#inMemoryKeyValueStore(String)}. This method should be
+   * preferred over {@link #keyValueStore(String)} and {@link #timestampedKeyValueStore(String)}
+   * as it provides additional options such as TTL support and will always compile
+   * when new features are added to {@code ResponsiveKeyValueParams}.
+   *
+   * @param params parameters for creation of the key value store
+   * @return a supplier for a key-value store with the given options
+   *         that uses Responsive's storage for its backend
+   */
   public static KeyValueBytesStoreSupplier keyValueStore(final ResponsiveKeyValueParams params) {
     return new ResponsiveKeyValueBytesStoreSupplier(params);
   }
@@ -92,7 +101,7 @@ public final class ResponsiveStores {
   /**
    * Create a {@link StoreBuilder} that can be used to build a Responsive
    * {@link KeyValueStore} and connect it via the Processor API. If using the DSL, use
-   * {@link #materialized(String)} instead.
+   * {@link #materialized(ResponsiveKeyValueParams)} instead.
    * <p>
    * See {@link Stores#keyValueStoreBuilder(KeyValueBytesStoreSupplier, Serde, Serde)}
    *
@@ -238,14 +247,14 @@ public final class ResponsiveStores {
    * and materialized in the DSL. If using the low-level Processor API, use
    * {@link #keyValueStoreBuilder} instead.
    *
-   * @param name the store name
+   * @param params the store parameters
    * @return a Materialized configuration that can be used to build a key value store with the
    *         given options that uses Responsive's storage for its backend
    */
   public static <K, V> Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized(
-      final String name
+      final ResponsiveKeyValueParams params
   ) {
-    return new ResponsiveMaterialized<>(Materialized.as(timestampedKeyValueStore(name)), false);
+    return new ResponsiveMaterialized<>(Materialized.as(keyValueStore(params)), false);
   }
 
   /**
@@ -266,6 +275,7 @@ public final class ResponsiveStores {
       final long windowSize,
       final boolean retainDuplicates
   ) {
+    // TODO: create a ResponsiveWindowedParams class instead of using individual parameters here
     final Materialized<K, V, WindowStore<Bytes, byte[]>> materialized = Materialized.as(
         new ResponsiveWindowedStoreSupplier(name, retentionMs, windowSize, retainDuplicates)
     );
