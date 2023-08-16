@@ -42,8 +42,6 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
-import org.apache.kafka.streams.processor.internals.RecordCollector;
-import org.apache.kafka.streams.processor.internals.RecordCollector.Supplier;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStore;
@@ -71,7 +69,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
   private int partition;
   private CommitBuffer<Stamped<Bytes>, RemoteWindowedSchema> buffer;
   private long observedStreamTime;
-  private ResponsiveStoreRegistry registry;
+  private ResponsiveStoreRegistry storeRegistry;
   private ResponsiveStoreRegistration registration;
   private SubPartitioner partitioner;
 
@@ -147,7 +145,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       LOG.info("Remote table {} is available for querying.", name.cassandraName());
 
       schema.prepare(name.cassandraName());
-      registry = InternalConfigs.loadStoreRegistry(context.appConfigs());
+      storeRegistry = InternalConfigs.loadStoreRegistry(context.appConfigs());
       final TopicPartition topicPartition =  new TopicPartition(
           changelogFor(context, name.kafkaName(), false),
           partition
@@ -173,7 +171,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
           offset == -1 ? 0 : offset,
           buffer::flush
       );
-      registry.registerStore(registration);
+      storeRegistry.registerStore(registration);
 
       open = true;
 
@@ -196,10 +194,6 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
   @Override
   public boolean isOpen() {
     return open;
-  }
-
-  private Supplier asRecordCollector(final StateStoreContext context) {
-    return ((RecordCollector.Supplier) context);
   }
 
   @Override
@@ -326,6 +320,10 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
 
   @Override
   public void close() {
+    // no need to flush the buffer here, will happen through the kafka client commit as usual
+    if (storeRegistry != null) {
+      storeRegistry.deregisterStore(registration);
+    }
   }
 
   @Override

@@ -31,19 +31,19 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.hamcrest.MatcherAssert;
 import org.hamcrest.Matchers;
+import org.junit.jupiter.api.Test;
 
 public class TopologyTestDriverExampleTest {
 
-  // TODO: re-enable this test once ResponsiveTopologyTestDriver is fully implemented
-  // @Test
+  @Test
   public void shouldRunWithoutResponsiveConnection() {
     // Given:
     final Properties props = new Properties();
     props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
     props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
 
-    final Topology topo = topology();
-    final TopologyTestDriver driver = new ResponsiveTopologyTestDriver(topo, props);
+    final Topology topology = topology();
+    final TopologyTestDriver driver = new ResponsiveTopologyTestDriver(topology, props);
 
     final TestInputTopic<String, String> bids = driver.createInputTopic(
         "bids", new StringSerializer(), new StringSerializer());
@@ -72,7 +72,7 @@ public class TopologyTestDriverExampleTest {
     driver.close();
   }
 
-  Topology topology() {
+  private Topology topology() {
     final StreamsBuilder builder = new StreamsBuilder();
 
     // schema for bids is key: <bid_id> value: <bid_id, amount, person_id>

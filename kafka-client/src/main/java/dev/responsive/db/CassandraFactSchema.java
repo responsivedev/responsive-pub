@@ -209,7 +209,7 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
   }
 
   @Override
-  public CassandraClient getClient() {
+  public CassandraClient cassandraClient() {
     return client;
   }
 

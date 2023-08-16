@@ -234,17 +234,15 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
   public long approximateNumEntries() {
     return partitioner
         .all(partition)
-        .mapToLong(p -> schema.getClient().count(name.cassandraName(), p))
+        .mapToLong(p -> schema.cassandraClient().count(name.cassandraName(), p))
         .sum();
   }
 
   @Override
   public void close() {
+    // no need to flush the buffer here, will happen through the kafka client commit as usual
     if (storeRegistry != null) {
       storeRegistry.deregisterStore(registration);
     }
-    // the client is shared across state stores, so only the
-    // buffer needs to be flushed
-    flush();
   }
 }
