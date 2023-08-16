@@ -26,13 +26,16 @@ import dev.responsive.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.store.RemoteWriteResult;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import org.apache.kafka.common.utils.Time;
 
 public abstract class TTDSchema<K> implements RemoteSchema<K> {
 
   private final CassandraClientStub client;
+  protected final Time time;
 
   public TTDSchema(final CassandraClientStub client) {
     this.client = client;
+    this.time = client.time();
   }
 
   /**

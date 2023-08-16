@@ -36,7 +36,7 @@ public class TTDKeyValueSchema extends TTDSchema<Bytes> implements RemoteKeyValu
 
   @Override
   public SimpleStatement create(final String tableName, final Optional<Duration> ttl) {
-    tableNameToStore.put(tableName, new KVStoreStub(ttl.orElse(null)));
+    tableNameToStore.put(tableName, new KVStoreStub(ttl.orElse(null), time));
     return null;
   }
 

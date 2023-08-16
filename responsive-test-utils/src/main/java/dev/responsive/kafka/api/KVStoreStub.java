@@ -17,29 +17,35 @@
 package dev.responsive.kafka.api;
 
 import java.time.Duration;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
 public class KVStoreStub {
 
-  private final Map<Bytes, byte[]> records = new HashMap<>();
-  private Duration ttl;
+  private final Map<Bytes, Record> records = new LinkedHashMap<>();
 
-  public KVStoreStub(final Duration ttl) {
+  private final Duration ttl; // null if ttl not enabled
+  private final Time time;
+
+  public KVStoreStub(final Duration ttl, final Time time) {
     this.ttl = ttl;
-    if (ttl != null) {
-      throw new UnsupportedOperationException("ttl not yet implemented for TTD");
-    }
+    this.time = time;
   }
 
   public long count() {
+    expireRecords();
     return records.size();
   }
 
   public void put(final Bytes key, final byte[] value) {
-    records.put(key, value);
+    expireRecords();
+    if (records.containsKey(key)) {
+      delete(key); // reset the order for ttl
+    }
+    records.put(key, new Record(value));
   }
 
   public void delete(final Bytes key) {
@@ -47,14 +53,50 @@ public class KVStoreStub {
   }
 
   public byte[] get(final Bytes key) {
-    return records.get(key);
+    expireRecords();
+    final Record record = records.get(key);
+    if (record != null) {
+      return record.value;
+    } else {
+      return null;
+    }
   }
 
   public KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
+    expireRecords();
     throw new UnsupportedOperationException("Not yet implemented.");
   }
 
   public KeyValueIterator<Bytes, byte[]> all() {
+    expireRecords();
     throw new UnsupportedOperationException("Not yet implemented.");
   }
+
+  private void expireRecords() {
+    final long now = time.milliseconds();
+    final var iter = records.entrySet().iterator();
+    while (iter.hasNext()) {
+      final var entry = iter.next();
+      if (entry.getValue().expirationDateMs < now) {
+         iter.remove();
+      } else {
+        break;
+      }
+    }
+  }
+
+  private class Record {
+    final byte[] value;
+    final long expirationDateMs;
+
+    public Record(final byte[] value) {
+      this.value = value;
+      if (ttl != null) {
+        expirationDateMs = time.milliseconds() + ttl.toMillis();
+      } else {
+        expirationDateMs = Long.MAX_VALUE;
+      }
+    }
+  }
+
 }

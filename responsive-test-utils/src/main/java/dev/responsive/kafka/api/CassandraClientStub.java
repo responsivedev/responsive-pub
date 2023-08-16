@@ -31,17 +31,25 @@ import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ScheduledExecutorService;
+import org.apache.kafka.common.utils.Time;
 
 // TODO: use mock return values instead of null here and in the TTD schemas
 public class CassandraClientStub extends CassandraClient {
+  private final Time time;
 
   private final TTDKeyValueSchema kvSchema;
   private final TTDWindowedSchema windowedSchema;
 
-  public CassandraClientStub(final Properties props) {
+  public CassandraClientStub(final Properties props, final Time time) {
     super(new ResponsiveConfig(props));
+    this.time = time;
+
     kvSchema = new TTDKeyValueSchema(this);
     windowedSchema = new TTDWindowedSchema(this);
+  }
+
+  public Time time() {
+    return time;
   }
 
   @Override
