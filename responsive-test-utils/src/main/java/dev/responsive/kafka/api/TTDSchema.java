@@ -101,7 +101,7 @@ public abstract class TTDSchema<K> implements RemoteSchema<K> {
     @SuppressWarnings("ResultOfMethodCallIgnored")
     @Override
     public RemoteWriteResult setOffset(final long offset) {
-      schema.setOffset(tableName, partition,offset);
+      schema.setOffset(tableName, partition, offset);
       return RemoteWriteResult.success(partition);
     }
 

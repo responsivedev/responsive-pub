@@ -105,6 +105,7 @@ public class ResponsiveTopologyTestDriver extends TopologyTestDriver {
 
   private static class TTDMockAdmin extends MockAdminClient {
     private static final Node BROKER = new Node(0, "dummyHost-1", 1234);
+
     public TTDMockAdmin() {
       super(Collections.singletonList(BROKER), BROKER);
     }
@@ -115,8 +116,9 @@ public class ResponsiveTopologyTestDriver extends TopologyTestDriver {
         addTopic(
             true,
             topic,
-            Collections.singletonList(
-                new TopicPartitionInfo(0, BROKER, Collections.emptyList(), Collections.emptyList())),
+            Collections.singletonList(new TopicPartitionInfo(
+                0, BROKER, Collections.emptyList(), Collections.emptyList())
+            ),
             Collections.emptyMap()
         );
       }

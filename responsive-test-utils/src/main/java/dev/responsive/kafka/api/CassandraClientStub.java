@@ -32,6 +32,7 @@ import java.util.Properties;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ScheduledExecutorService;
 
+// TODO: use mock return values instead of null here and in the TTD schemas
 public class CassandraClientStub extends CassandraClient {
 
   private final TTDKeyValueSchema kvSchema;
