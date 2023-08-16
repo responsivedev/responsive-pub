@@ -97,6 +97,6 @@ public interface RemoteSchema<K> {
       final long offset
   );
 
-  CassandraClient getClient();
+  CassandraClient cassandraClient();
 
 }

@@ -161,7 +161,7 @@ public class LwtWriterFactory<K> implements WriterFactory<K> {
       final int partition,
       final long epoch
   ) {
-    return table.getClient().execute(
+    return table.cassandraClient().execute(
         QueryBuilder.update(name)
             .setColumn(EPOCH.column(), EPOCH.literal(epoch))
             .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
@@ -178,7 +178,7 @@ public class LwtWriterFactory<K> implements WriterFactory<K> {
       final int partition,
       final long epoch
   ) {
-    return table.getClient().execute(
+    return table.cassandraClient().execute(
         QueryBuilder.update(name)
             .setColumn(EPOCH.column(), EPOCH.literal(epoch))
             .where(PARTITION_KEY.relation().isEqualTo(PARTITION_KEY.literal(partition)))
@@ -195,7 +195,7 @@ public class LwtWriterFactory<K> implements WriterFactory<K> {
       final String name,
       final long epoch
   ) {
-    return table.getClient().prepare(
+    return table.cassandraClient().prepare(
         QueryBuilder.update(name)
             .setColumn(EPOCH.column(), EPOCH.literal(epoch))
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
@@ -211,7 +211,7 @@ public class LwtWriterFactory<K> implements WriterFactory<K> {
       final String name,
       final long epoch
   ) {
-    return table.getClient().prepare(
+    return table.cassandraClient().prepare(
         QueryBuilder.update(name)
             .setColumn(EPOCH.column(), EPOCH.literal(epoch))
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))

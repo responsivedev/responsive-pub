@@ -285,7 +285,7 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
   }
 
   @Override
-  public CassandraClient getClient() {
+  public CassandraClient cassandraClient() {
     return client;
   }
 

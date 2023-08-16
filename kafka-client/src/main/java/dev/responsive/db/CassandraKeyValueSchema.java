@@ -232,7 +232,7 @@ public class CassandraKeyValueSchema implements RemoteKeyValueSchema {
   }
 
   @Override
-  public CassandraClient getClient() {
+  public CassandraClient cassandraClient() {
     return client;
   }
 
