@@ -17,7 +17,8 @@
 package dev.responsive.kafka.api;
 
 import dev.responsive.kafka.config.ResponsiveConfig;
-import dev.responsive.kafka.store.ResponsiveStoreRegistry;
+import dev.responsive.kafka.store.CassandraClientStub;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.Collections;
@@ -27,12 +28,19 @@ import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartitionInfo;
+import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyDescription;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.test.TestRecord;
 
 public class ResponsiveTopologyTestDriver extends TopologyTestDriver {
+
+  private final CassandraClientStub client;
 
   /**
    * Create a new test diver instance.
@@ -81,26 +89,76 @@ public class ResponsiveTopologyTestDriver extends TopologyTestDriver {
       final Properties config,
       final Instant initialWallClockTime
   ) {
-    super(topology, testDriverProps(config, topology.describe()), initialWallClockTime);
+    this(
+        topology,
+        config,
+        initialWallClockTime,
+        new CassandraClientStub(baseProps(config), mockTime(initialWallClockTime))
+    );
+  }
+
+  /**
+   * Advances the internal mock time used for Responsive-specific features such as ttl, as well
+   * as the mock time used for various Kafka Streams functionality such as wall-clock punctuators.
+   * See {@link TopologyTestDriver#advanceWallClockTime(Duration)} for more details.
+   *
+   * @param advance the amount of time to advance wall-clock time
+   */
+  @Override
+  public void advanceWallClockTime(final Duration advance) {
+    client.advanceWallClockTime(advance);
+    super.advanceWallClockTime(advance);
+  }
+
+  private ResponsiveTopologyTestDriver(
+      final Topology topology,
+      final Properties config,
+      final Instant initialWallClockTime,
+      final CassandraClientStub cassandraClientStub
+  ) {
+    super(
+        topology,
+        testDriverProps(config, topology.describe(), cassandraClientStub),
+        initialWallClockTime
+    );
+    this.client = cassandraClientStub;
   }
 
   private static Properties testDriverProps(
-      final Properties baseProps,
-      final TopologyDescription topologyDescription
+      final Properties userProps,
+      final TopologyDescription topologyDescription,
+      final CassandraClientStub client
   ) {
-    final Properties props = new Properties();
-    props.putAll(baseProps);
-    props.put(ResponsiveConfig.TENANT_ID_CONFIG, "topology-test-driver");
-
+    final Properties props = baseProps(userProps);
     props.putAll(new InternalConfigs.Builder()
-        .withCassandraClient(new CassandraClientStub(props))
+        .withCassandraClient(client)
         .withKafkaAdmin(new TTDMockAdmin())
         .withExecutorService(new ScheduledThreadPoolExecutor(1))
-        .withStoreRegistry(new ResponsiveStoreRegistry())
+        .withStoreRegistry(client.storeRegistry())
         .withTopologyDescription(topologyDescription)
         .build()
     );
     return props;
+  }
+
+  @SuppressWarnings("deprecation")
+  private static Properties baseProps(final Properties userProps) {
+    final Properties props = new Properties();
+    props.put(ResponsiveConfig.TENANT_ID_CONFIG, "topology-test-driver");
+    props.put(ResponsiveConfig.STORE_FLUSH_INTERVAL_TRIGGER_MS_CONFIG, 0);
+    props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+    props.putAll(userProps);
+    return props;
+  }
+
+  private static MockTime mockTime(final Instant initialWallClockTime) {
+    final MockTime mockTime = new MockTime(0L, 0L, 0L);
+    final long initialWallClockTimeMs = initialWallClockTime == null
+        ? System.currentTimeMillis()
+        : initialWallClockTime.toEpochMilli();
+
+    mockTime.setCurrentTimeMs(initialWallClockTimeMs);
+    return mockTime;
   }
 
   private static class TTDMockAdmin extends MockAdminClient {
@@ -119,7 +177,8 @@ public class ResponsiveTopologyTestDriver extends TopologyTestDriver {
             Collections.singletonList(new TopicPartitionInfo(
                 0, BROKER, Collections.emptyList(), Collections.emptyList())
             ),
-            Collections.emptyMap()
+            Collections.singletonMap(
+                TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)
         );
       }
       return super.describeTopics(topicNames);

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package dev.responsive.kafka.api;
+package dev.responsive.kafka.store;
 
 import dev.responsive.model.Stamped;
 import java.util.Comparator;

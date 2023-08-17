@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package dev.responsive.kafka.api;
+package dev.responsive.kafka.store;
 
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.db.CassandraClient;
@@ -23,16 +23,18 @@ import dev.responsive.db.RemoteSchema;
 import dev.responsive.db.RemoteWriter;
 import dev.responsive.db.WriterFactory;
 import dev.responsive.db.partitioning.SubPartitioner;
-import dev.responsive.kafka.store.RemoteWriteResult;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import org.apache.kafka.common.utils.Time;
 
 public abstract class TTDSchema<K> implements RemoteSchema<K> {
 
   private final CassandraClientStub client;
+  protected final Time time;
 
   public TTDSchema(final CassandraClientStub client) {
     this.client = client;
+    this.time = client.time();
   }
 
   /**

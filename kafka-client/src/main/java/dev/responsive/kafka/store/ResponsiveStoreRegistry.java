@@ -54,6 +54,10 @@ public class ResponsiveStoreRegistry {
     stores.remove(registration);
   }
 
+  public synchronized List<ResponsiveStoreRegistration> stores() {
+    return stores;
+  }
+
   private void validateSingleMaterialization(final ResponsiveStoreRegistration registration) {
     final String topic = registration.getChangelogTopicPartition().topic();
     final String name = registration.getName();
