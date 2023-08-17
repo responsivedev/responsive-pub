@@ -90,8 +90,7 @@ public class ResponsiveTopologyTestDriverTest {
     people.pipeInput("2", "2,bob,OR");   // time = 5
     driver.advanceWallClockTime(Duration.ofMillis(5));
     people.pipeInput("3", "3,carol,CA"); // time = 10
-
-
+    
     bids.pipeInput("a", "a,100,1");      // time = 10
     bids.pipeInput("b", "b,101,2");      // time = 10
 

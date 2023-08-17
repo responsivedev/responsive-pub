@@ -85,8 +85,8 @@ public class KVStoreStub {
     while (iter.hasNext()) {
       final var entry = iter.next();
       if (entry.getValue() < now) {
-         iter.remove();
-         records.remove(entry.getKey());
+        iter.remove();
+        records.remove(entry.getKey());
       } else {
         break;
       }
