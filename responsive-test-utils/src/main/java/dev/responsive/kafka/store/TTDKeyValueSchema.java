@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package dev.responsive.kafka.api;
+package dev.responsive.kafka.store;
 
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.SimpleStatement;

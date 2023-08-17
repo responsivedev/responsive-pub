@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package dev.responsive.kafka.api;
+package dev.responsive.kafka.store;
 
 import com.datastax.oss.driver.api.core.cql.AsyncResultSet;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
@@ -25,8 +25,8 @@ import dev.responsive.db.CassandraClient;
 import dev.responsive.db.RemoteKeyValueSchema;
 import dev.responsive.db.RemoteWindowedSchema;
 import dev.responsive.kafka.config.ResponsiveConfig;
-import dev.responsive.kafka.store.SchemaType;
 import dev.responsive.utils.RemoteMonitor;
+import java.time.Duration;
 import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.concurrent.CompletionStage;
@@ -36,6 +36,7 @@ import org.apache.kafka.common.utils.Time;
 // TODO: use mock return values instead of null here and in the TTD schemas
 public class CassandraClientStub extends CassandraClient {
   private final Time time;
+  private final ResponsiveStoreRegistry storeRegistry = new ResponsiveStoreRegistry();
 
   private final TTDKeyValueSchema kvSchema;
   private final TTDWindowedSchema windowedSchema;
@@ -50,6 +51,19 @@ public class CassandraClientStub extends CassandraClient {
 
   public Time time() {
     return time;
+  }
+
+  public ResponsiveStoreRegistry storeRegistry() {
+    return storeRegistry;
+  }
+
+  public void advanceWallClockTime(final Duration advance) {
+    flush();
+    time.sleep(advance.toMillis());
+  }
+
+  private void flush() {
+    storeRegistry.stores().forEach(s -> s.getOnCommit().accept(0L));
   }
 
   @Override

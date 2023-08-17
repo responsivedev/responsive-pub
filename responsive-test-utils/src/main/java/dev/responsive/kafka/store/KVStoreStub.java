@@ -14,18 +14,23 @@
  * limitations under the License.
  */
 
-package dev.responsive.kafka.api;
+package dev.responsive.kafka.store;
 
+import dev.responsive.utils.Iterators;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.NavigableMap;
+import java.util.TreeMap;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
 public class KVStoreStub {
 
-  private final Map<Bytes, Record> records = new LinkedHashMap<>();
+  private final NavigableMap<Bytes, byte[]> records = new TreeMap<>();
+  private final Map<Bytes, Long> expiryTimes = new LinkedHashMap<>();
 
   private final Duration ttl; // null if ttl not enabled
   private final Time time;
@@ -45,7 +50,8 @@ public class KVStoreStub {
     if (records.containsKey(key)) {
       delete(key); // reset the order for ttl
     }
-    records.put(key, new Record(value));
+    records.put(key, value);
+    expiryTimes.put(key, expirationDateMs());
   }
 
   public void delete(final Bytes key) {
@@ -54,48 +60,44 @@ public class KVStoreStub {
 
   public byte[] get(final Bytes key) {
     expireRecords();
-    final Record record = records.get(key);
-    if (record != null) {
-      return record.value;
-    } else {
-      return null;
-    }
+    return records.get(key);
   }
 
   public KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
     expireRecords();
-    throw new UnsupportedOperationException("Not yet implemented.");
+    return Iterators.kv(
+        records.subMap(from, to).entrySet().iterator(),
+        e -> new KeyValue<>(e.getKey(), e.getValue())
+    );
   }
 
   public KeyValueIterator<Bytes, byte[]> all() {
     expireRecords();
-    throw new UnsupportedOperationException("Not yet implemented.");
+    return Iterators.kv(
+        records.entrySet().iterator(),
+        e -> new KeyValue<>(e.getKey(), e.getValue())
+    );
   }
 
   private void expireRecords() {
     final long now = time.milliseconds();
-    final var iter = records.entrySet().iterator();
+    final var iter = expiryTimes.entrySet().iterator();
     while (iter.hasNext()) {
       final var entry = iter.next();
-      if (entry.getValue().expirationDateMs < now) {
+      if (entry.getValue() < now) {
          iter.remove();
+         records.remove(entry.getKey());
       } else {
         break;
       }
     }
   }
 
-  private class Record {
-    final byte[] value;
-    final long expirationDateMs;
-
-    public Record(final byte[] value) {
-      this.value = value;
-      if (ttl != null) {
-        expirationDateMs = time.milliseconds() + ttl.toMillis();
-      } else {
-        expirationDateMs = Long.MAX_VALUE;
-      }
+  private long expirationDateMs() {
+    if (ttl != null) {
+      return time.milliseconds() + ttl.toMillis();
+    } else {
+      return Long.MAX_VALUE;
     }
   }
 
