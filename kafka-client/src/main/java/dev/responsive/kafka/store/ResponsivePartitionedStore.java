@@ -104,7 +104,7 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
       CassandraClient client = sharedClients.cassandraClient;
 
       schema = client.kvSchema(params.schemaType());
-      client.execute(schema.create(params.name().cassandraName(), params.timeToLive()));
+      schema.create(params.name().cassandraName(), params.timeToLive());
 
       final RemoteMonitor monitor = client.awaitTable(name.cassandraName(), sharedClients.executor);
       monitor.await(Duration.ofSeconds(60));

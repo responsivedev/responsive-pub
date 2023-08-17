@@ -32,12 +32,12 @@ import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
 import com.datastax.oss.driver.api.core.cql.ResultSet;
 import com.datastax.oss.driver.api.core.cql.Row;
-import com.datastax.oss.driver.api.core.cql.SimpleStatement;
 import com.datastax.oss.driver.api.core.metadata.schema.ClusteringOrder;
 import com.datastax.oss.driver.api.core.type.DataTypes;
 import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
 import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
 import com.datastax.oss.driver.api.querybuilder.schema.CreateTable;
+import com.datastax.oss.driver.api.querybuilder.schema.CreateTableWithOptions;
 import dev.responsive.db.partitioning.SubPartitioner;
 import dev.responsive.model.Stamped;
 import dev.responsive.utils.Iterators;
@@ -95,7 +95,7 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
   }
 
   @Override
-  public SimpleStatement create(final String tableName, Optional<Duration> ttl) {
+  public void create(final String tableName, Optional<Duration> ttl) {
     // TODO: explore better data models for fetchRange/fetchAll
     // Cassandra does not support filtering on a composite key column if
     // the previous columns in the composite are not equality filters
@@ -109,7 +109,7 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
     // too small in cardinality) we just filter the results to match the
     // time bounds
     LOG.info("Creating windowed data table {} in remote store.", tableName);
-    final CreateTable createTable = SchemaBuilder
+    CreateTableWithOptions createTable = SchemaBuilder
         .createTable(tableName)
         .ifNotExists()
         .withPartitionKey(PARTITION_KEY.column(), DataTypes.INT)
@@ -120,9 +120,11 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
         .withColumn(OFFSET.column(), DataTypes.BIGINT)
         .withColumn(EPOCH.column(), DataTypes.BIGINT);
 
-    return ttl.isPresent()
-        ? createTable.withDefaultTimeToLiveSeconds(Math.toIntExact(ttl.get().getSeconds())).build()
-        : createTable.build();
+    createTable = ttl.isPresent()
+        ? createTable.withDefaultTimeToLiveSeconds(Math.toIntExact(ttl.get().getSeconds()))
+        : createTable;
+
+    client.execute(createTable.build());
   }
 
   @Override

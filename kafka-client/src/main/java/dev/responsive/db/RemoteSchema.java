@@ -17,7 +17,6 @@
 package dev.responsive.db;
 
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
-import com.datastax.oss.driver.api.core.cql.SimpleStatement;
 import dev.responsive.db.partitioning.SubPartitioner;
 import java.time.Duration;
 import java.util.Optional;
@@ -34,7 +33,7 @@ public interface RemoteSchema<K> {
    * desired schema.
    */
   @CheckReturnValue
-  SimpleStatement create(String tableName, Optional<Duration> ttl);
+  void create(String tableName, Optional<Duration> ttl);
 
   /**
    * Prepares statements with this schema for the table with

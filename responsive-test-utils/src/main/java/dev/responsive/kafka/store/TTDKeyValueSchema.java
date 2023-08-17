@@ -17,7 +17,6 @@
 package dev.responsive.kafka.store;
 
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
-import com.datastax.oss.driver.api.core.cql.SimpleStatement;
 import dev.responsive.db.RemoteKeyValueSchema;
 import java.time.Duration;
 import java.util.HashMap;
@@ -35,9 +34,8 @@ public class TTDKeyValueSchema extends TTDSchema<Bytes> implements RemoteKeyValu
   }
 
   @Override
-  public SimpleStatement create(final String tableName, final Optional<Duration> ttl) {
+  public void create(final String tableName, final Optional<Duration> ttl) {
     tableNameToStore.put(tableName, new KVStoreStub(ttl.orElse(null), time));
-    return null;
   }
 
   @Override

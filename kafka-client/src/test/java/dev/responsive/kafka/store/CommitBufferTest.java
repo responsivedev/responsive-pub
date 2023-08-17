@@ -104,7 +104,7 @@ public class CommitBufferTest {
     changelogTp = new TopicPartition("log", KAFKA_PARTITION);
     partitioner = SubPartitioner.NO_SUBPARTITIONS;
 
-    client.execute(schema.create(name, Optional.empty()));
+    schema.create(name, Optional.empty());
     schema.prepare(name);
 
     when(admin.deleteRecords(Mockito.any()))
