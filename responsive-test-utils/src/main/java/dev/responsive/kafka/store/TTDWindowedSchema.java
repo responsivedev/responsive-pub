@@ -37,7 +37,6 @@ public class TTDWindowedSchema extends TTDSchema<Stamped<Bytes>> implements Remo
   @Override
   public void create(final String tableName, final Optional<Duration> ttl) {
     tableNameToStore.put(tableName, new WindowStoreStub());
-    return null;
   }
 
   @Override
