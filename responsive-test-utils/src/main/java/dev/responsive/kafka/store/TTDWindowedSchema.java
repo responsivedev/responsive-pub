@@ -17,7 +17,6 @@
 package dev.responsive.kafka.store;
 
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
-import com.datastax.oss.driver.api.core.cql.SimpleStatement;
 import dev.responsive.db.RemoteWindowedSchema;
 import dev.responsive.model.Stamped;
 import java.time.Duration;
@@ -36,9 +35,8 @@ public class TTDWindowedSchema extends TTDSchema<Stamped<Bytes>> implements Remo
   }
 
   @Override
-  public SimpleStatement create(final String tableName, final Optional<Duration> ttl) {
+  public void create(final String tableName, final Optional<Duration> ttl) {
     tableNameToStore.put(tableName, new WindowStoreStub());
-    return null;
   }
 
   @Override

@@ -138,7 +138,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       client = sharedClients.cassandraClient;
 
       schema = client.windowedSchema();
-      client.execute(schema.create(name.cassandraName(), Optional.empty()));
+      schema.create(name.cassandraName(), Optional.empty());
 
       final RemoteMonitor monitor = client.awaitTable(name.cassandraName(), sharedClients.executor);
       monitor.await(Duration.ofSeconds(60));

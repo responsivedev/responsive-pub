@@ -19,20 +19,17 @@ package dev.responsive.db;
 import static com.datastax.oss.driver.api.querybuilder.QueryBuilder.bindMarker;
 import static dev.responsive.db.ColumnName.DATA_KEY;
 import static dev.responsive.db.ColumnName.DATA_VALUE;
-import static dev.responsive.db.ColumnName.METADATA_KEY;
 import static dev.responsive.db.ColumnName.OFFSET;
+import static dev.responsive.db.ColumnName.PARTITION_KEY;
 import static dev.responsive.db.ColumnName.ROW_TYPE;
-import static dev.responsive.db.RowType.DATA_ROW;
-import static dev.responsive.db.RowType.METADATA_ROW;
 
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
 import com.datastax.oss.driver.api.core.cql.Row;
-import com.datastax.oss.driver.api.core.cql.SimpleStatement;
 import com.datastax.oss.driver.api.core.type.DataTypes;
 import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
 import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
-import com.datastax.oss.driver.api.querybuilder.schema.CreateTable;
+import com.datastax.oss.driver.api.querybuilder.schema.CreateTableWithOptions;
 import com.datastax.oss.driver.api.querybuilder.schema.compaction.TimeWindowCompactionStrategy;
 import dev.responsive.db.partitioning.SubPartitioner;
 import java.nio.ByteBuffer;
@@ -75,31 +72,50 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
   }
 
   @Override
-  @CheckReturnValue
-  public SimpleStatement create(final String tableName, Optional<Duration> ttl) {
+  public void create(final String tableName, Optional<Duration> ttl) {
     LOG.info("Creating fact data table {} in remote store.", tableName);
-    final CreateTable createTable = SchemaBuilder
-        .createTable(tableName)
-        .ifNotExists()
-        .withPartitionKey(ROW_TYPE.column(), DataTypes.TINYINT)
-        .withPartitionKey(DATA_KEY.column(), DataTypes.BLOB)
-        .withColumn(DATA_VALUE.column(), DataTypes.BLOB)
-        .withColumn(OFFSET.column(), DataTypes.BIGINT);
 
+    final CreateTableWithOptions createTable;
     if (ttl.isPresent()) {
       final int ttlSeconds = Math.toIntExact(ttl.get().getSeconds());
       // 20 is a magic number recommended by scylla for the number of buckets
       final Duration compactionWindow = Duration.ofSeconds(ttlSeconds / 20);
-      return createTable.withDefaultTimeToLiveSeconds(ttlSeconds)
+      createTable = createTable(tableName).withDefaultTimeToLiveSeconds(ttlSeconds)
           .withCompaction(
               SchemaBuilder.timeWindowCompactionStrategy()
                   .withCompactionWindow(
                       compactionWindow.toMinutes(),
                       TimeWindowCompactionStrategy.CompactionWindowUnit.MINUTES)
-          ).build();
+          );
     } else {
-      return createTable.withCompaction(SchemaBuilder.timeWindowCompactionStrategy()).build();
+      createTable = createTable(tableName)
+          .withCompaction(SchemaBuilder.timeWindowCompactionStrategy());
     }
+
+    // separate metadata from the main table for the fact schema, this is acceptable
+    // because we don't use the metadata at all for fencing operations and writes to
+    // it do not need to be atomic (transactional with the original table). we cannot
+    // effectively use the same table (as we do with the normal KeyValueSchema) because
+    // TWCS cannot properly compact files if there are any overwrites, which there are
+    // for the metadata columns
+    final CreateTableWithOptions createMetadataTable = SchemaBuilder
+        .createTable(metadataTable(tableName))
+        .ifNotExists()
+        .withPartitionKey(ROW_TYPE.column(), DataTypes.TINYINT)
+        .withPartitionKey(PARTITION_KEY.column(), DataTypes.INT)
+        .withColumn(OFFSET.column(), DataTypes.BIGINT);
+
+    client.execute(createTable.build());
+    client.execute(createMetadataTable.build());
+  }
+
+  private CreateTableWithOptions createTable(final String tableName) {
+    return SchemaBuilder
+        .createTable(tableName)
+        .ifNotExists()
+        .withPartitionKey(ROW_TYPE.column(), DataTypes.TINYINT)
+        .withPartitionKey(DATA_KEY.column(), DataTypes.BLOB)
+        .withColumn(DATA_VALUE.column(), DataTypes.BLOB);
   }
 
   /**
@@ -120,9 +136,9 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
       final int kafkaPartition
   ) {
     client.execute(
-        QueryBuilder.insertInto(table)
-            .value(ROW_TYPE.column(), QueryBuilder.literal(METADATA_ROW.val()))
-            .value(DATA_KEY.column(), QueryBuilder.literal(metadataKey(kafkaPartition)))
+        QueryBuilder.insertInto(metadataTable(table))
+            .value(ROW_TYPE.column(), RowType.METADATA_ROW.literal())
+            .value(PARTITION_KEY.column(), PARTITION_KEY.literal(kafkaPartition))
             .value(OFFSET.column(), OFFSET.literal(-1L))
             .ifNotExists()
             .build()
@@ -133,9 +149,9 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
 
   @Override
   public MetadataRow metadata(final String table, final int partition) {
-    final BoundStatement bound = getMeta.get(table)
+    final BoundStatement bound = getMeta.get(metadataTable(table))
         .bind()
-        .setByteBuffer(DATA_KEY.bind(), metadataKey(partition));
+        .setInt(PARTITION_KEY.bind(), partition);
     final List<Row> result = client.execute(bound).all();
 
     if (result.size() != 1) {
@@ -155,10 +171,11 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
       final int partition,
       final long offset
   ) {
-    LOG.info("Setting offset for {}[{}] to {}", table, partition, offset);
-    return setOffset.get(table)
+    LOG.info("Setting offset in metadata table {} for {}[{}] to {}",
+        metadataTable(table), table, partition, offset);
+    return setOffset.get(metadataTable(table))
         .bind()
-        .setByteBuffer(DATA_KEY.bind(), metadataKey(partition))
+        .setInt(PARTITION_KEY.bind(), partition)
         .setLong(OFFSET.bind(), offset);
   }
 
@@ -167,7 +184,7 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
     insert.computeIfAbsent(tableName, k -> client.prepare(
         QueryBuilder
             .insertInto(tableName)
-            .value(ROW_TYPE.column(), DATA_ROW.literal())
+            .value(ROW_TYPE.column(), RowType.DATA_ROW.literal())
             .value(DATA_KEY.column(), bindMarker(DATA_KEY.bind()))
             .value(DATA_VALUE.column(), bindMarker(DATA_VALUE.bind()))
             .build()
@@ -177,7 +194,7 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
         QueryBuilder
             .selectFrom(tableName)
             .columns(DATA_VALUE.column())
-            .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
+            .where(ROW_TYPE.relation().isEqualTo(RowType.DATA_ROW.literal()))
             .where(DATA_KEY.relation().isEqualTo(bindMarker(DATA_KEY.bind())))
             .build()
     ));
@@ -185,25 +202,25 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
     delete.computeIfAbsent(tableName, k -> client.prepare(
         QueryBuilder
             .deleteFrom(tableName)
-            .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
+            .where(ROW_TYPE.relation().isEqualTo(RowType.DATA_ROW.literal()))
             .where(DATA_KEY.relation().isEqualTo(bindMarker(DATA_KEY.bind())))
             .build()
     ));
 
-    getMeta.computeIfAbsent(tableName, k -> client.prepare(
+    getMeta.computeIfAbsent(metadataTable(tableName), k -> client.prepare(
         QueryBuilder
-            .selectFrom(tableName)
+            .selectFrom(metadataTable(tableName))
             .column(OFFSET.column())
-            .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
-            .where(DATA_KEY.relation().isEqualTo(bindMarker(DATA_KEY.bind())))
+            .where(ROW_TYPE.relation().isEqualTo(RowType.METADATA_ROW.literal()))
+            .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
             .build()
     ));
 
-    setOffset.computeIfAbsent(tableName, k -> client.prepare(QueryBuilder
-        .update(tableName)
+    setOffset.computeIfAbsent(metadataTable(tableName), k -> client.prepare(QueryBuilder
+        .update(metadataTable(tableName))
         .setColumn(OFFSET.column(), bindMarker(OFFSET.bind()))
-        .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
-        .where(DATA_KEY.relation().isEqualTo(bindMarker(DATA_KEY.bind())))
+        .where(ROW_TYPE.relation().isEqualTo(RowType.METADATA_ROW.literal()))
+        .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
         .build()
     ));
   }
@@ -308,11 +325,8 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
     throw new UnsupportedOperationException("all is not supported on Idempotent schemas");
   }
 
-  private static ByteBuffer metadataKey(final int partition) {
-    final ByteBuffer key = ByteBuffer.wrap(new byte[METADATA_KEY.get().length + Integer.BYTES]);
-    key.put(METADATA_KEY.get());
-    key.putInt(partition);
-    return key.position(0);
+  private static String metadataTable(final String tableName) {
+    return tableName + "_md";
   }
 
 }

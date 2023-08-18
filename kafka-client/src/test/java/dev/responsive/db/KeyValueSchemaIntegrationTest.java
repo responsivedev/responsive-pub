@@ -56,7 +56,7 @@ public class KeyValueSchemaIntegrationTest {
     client = new CassandraClient(session, config);
     schema = new CassandraKeyValueSchema(client);
     name = info.getTestMethod().orElseThrow().getName();
-    client.execute(schema.create(name, Optional.empty()));
+    schema.create(name, Optional.empty());
     schema.prepare(name);
   }
 
