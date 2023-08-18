@@ -21,6 +21,7 @@ import static dev.responsive.db.ColumnName.DATA_KEY;
 import static dev.responsive.db.ColumnName.DATA_VALUE;
 import static dev.responsive.db.ColumnName.EPOCH;
 import static dev.responsive.db.ColumnName.METADATA_KEY;
+import static dev.responsive.db.ColumnName.METADATA_TS;
 import static dev.responsive.db.ColumnName.OFFSET;
 import static dev.responsive.db.ColumnName.PARTITION_KEY;
 import static dev.responsive.db.ColumnName.ROW_TYPE;
@@ -38,7 +39,6 @@ import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
 import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
 import com.datastax.oss.driver.api.querybuilder.schema.CreateTableWithOptions;
 import dev.responsive.db.partitioning.SubPartitioner;
-import dev.responsive.model.Stamped;
 import dev.responsive.utils.Iterators;
 import java.nio.ByteBuffer;
 import java.time.Duration;
@@ -60,7 +60,6 @@ public class CassandraKeyValueSchema implements RemoteKeyValueSchema {
 
   private static final String FROM_BIND = "fk";
   private static final String TO_BIND = "tk";
-  private static final long METADATA_TS = -1L;
 
   private final CassandraClient client;
 
@@ -103,10 +102,10 @@ public class CassandraKeyValueSchema implements RemoteKeyValueSchema {
         .withPartitionKey(PARTITION_KEY.column(), DataTypes.INT)
         .withClusteringColumn(ROW_TYPE.column(), DataTypes.TINYINT)
         .withClusteringColumn(DATA_KEY.column(), DataTypes.BLOB)
-        .withClusteringColumn(TIMESTAMP.column(), DataTypes.TIMESTAMP)
         .withColumn(DATA_VALUE.column(), DataTypes.BLOB)
         .withColumn(OFFSET.column(), DataTypes.BIGINT)
-        .withColumn(EPOCH.column(), DataTypes.BIGINT);
+        .withColumn(EPOCH.column(), DataTypes.BIGINT)
+        .withColumn(TIMESTAMP.column(), DataTypes.TIMESTAMP);
   }
 
   /**
@@ -198,6 +197,8 @@ public class CassandraKeyValueSchema implements RemoteKeyValueSchema {
             .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
             .where(DATA_KEY.relation().isEqualTo(bindMarker(DATA_KEY.bind())))
             .where(TIMESTAMP.relation().isGreaterThanOrEqualTo(bindMarker(TIMESTAMP.bind())))
+            // ALLOW FILTERING is OK b/c the query only scans one partition
+            .allowFiltering()
             .build()
     ));
 
@@ -209,6 +210,9 @@ public class CassandraKeyValueSchema implements RemoteKeyValueSchema {
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
             .where(DATA_KEY.relation().isGreaterThanOrEqualTo(bindMarker(FROM_BIND)))
             .where(DATA_KEY.relation().isLessThan(bindMarker(TO_BIND)))
+            .where(TIMESTAMP.relation().isGreaterThanOrEqualTo(bindMarker(TIMESTAMP.bind())))
+            // ALLOW FILTERING is OK b/c the query only scans one partition
+            .allowFiltering()
             .build()
     ));
 
@@ -238,7 +242,6 @@ public class CassandraKeyValueSchema implements RemoteKeyValueSchema {
         .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
         .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
         .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
-        .where(TIMESTAMP.relation().isEqualTo(TIMESTAMP.literal(METADATA_TS)))
         .build()
     ));
   }
@@ -357,17 +360,11 @@ public class CassandraKeyValueSchema implements RemoteKeyValueSchema {
         .bind()
         .setInt(PARTITION_KEY.bind(), partition)
         .setByteBuffer(FROM_BIND, ByteBuffer.wrap(from.get()))
-        .setByteBuffer(TO_BIND, ByteBuffer.wrap(to.get()));
+        .setByteBuffer(TO_BIND, ByteBuffer.wrap(to.get()))
+        .setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(minValidTs));
 
-    // we need to post-filter for timestamps because cassandra doesn't
-    // support ranges unless all prior primary keys relations are equalities
     final ResultSet result = client.execute(range);
-    return Iterators.mapKeys(
-        Iterators.filterKv(
-            Iterators.kv(result.iterator(), CassandraKeyValueSchema::tsRows),
-            k -> k.stamp >= minValidTs),
-        k -> k.key
-    );
+    return Iterators.kv(result.iterator(), CassandraKeyValueSchema::rows);
   }
 
   /**
@@ -392,31 +389,18 @@ public class CassandraKeyValueSchema implements RemoteKeyValueSchema {
         .selectFrom(tableName)
         .columns(DATA_KEY.column(), DATA_VALUE.column(), TIMESTAMP.column())
         .where(PARTITION_KEY.relation().isEqualTo(PARTITION_KEY.literal(partition)))
+        .where(TIMESTAMP.relation().isGreaterThanOrEqualTo(TIMESTAMP.literal(minValidTs)))
+        // since all() scans all the data anyway, allowing filtering is no worse
+        .allowFiltering()
         .build()
     );
 
-    // we need to post-filter for timestamps because cassandra doesn't
-    // support ranges unless all prior primary keys relations are equalities
-    return Iterators.mapKeys(
-        Iterators.filterKv(
-            Iterators.kv(result.iterator(), CassandraKeyValueSchema::tsRows),
-            k -> k.stamp >= minValidTs),
-        k -> k.key
-    );
+    return Iterators.kv(result.iterator(), CassandraKeyValueSchema::rows);
   }
 
   protected static KeyValue<Bytes, byte[]> rows(final Row row) {
     return new KeyValue<>(
         Bytes.wrap(row.getByteBuffer(DATA_KEY.column()).array()),
-        row.getByteBuffer(DATA_VALUE.column()).array()
-    );
-  }
-
-  protected static KeyValue<Stamped<Bytes>, byte[]> tsRows(final Row row) {
-    return new KeyValue<>(
-        new Stamped<>(
-            Bytes.wrap(row.getByteBuffer(DATA_KEY.column()).array()),
-            row.getInstant(TIMESTAMP.column()).toEpochMilli()),
         row.getByteBuffer(DATA_VALUE.column()).array()
     );
   }

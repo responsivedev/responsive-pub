@@ -118,7 +118,7 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
         .ifNotExists()
         .withPartitionKey(ROW_TYPE.column(), DataTypes.TINYINT)
         .withPartitionKey(DATA_KEY.column(), DataTypes.BLOB)
-        .withClusteringColumn(TIMESTAMP.column(), DataTypes.TIMESTAMP)
+        .withColumn(TIMESTAMP.column(), DataTypes.TIMESTAMP)
         .withColumn(DATA_VALUE.column(), DataTypes.BLOB);
   }
 
@@ -202,6 +202,9 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
             .where(ROW_TYPE.relation().isEqualTo(RowType.DATA_ROW.literal()))
             .where(DATA_KEY.relation().isEqualTo(bindMarker(DATA_KEY.bind())))
             .where(TIMESTAMP.relation().isGreaterThanOrEqualTo(bindMarker(TIMESTAMP.bind())))
+            // ALLOW FILTERING is OK b/c the query only scans one partition (it actually  only
+            // returns a single value)
+            .allowFiltering()
             .build()
     ));
 

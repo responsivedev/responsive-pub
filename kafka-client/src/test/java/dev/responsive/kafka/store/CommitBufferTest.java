@@ -53,6 +53,8 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DeleteRecordsResult;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.hamcrest.Matchers;
@@ -282,7 +284,7 @@ public class CommitBufferTest {
         schema,
         KEY_SPEC,
         false,
-        FlushTriggers.ofBytes(100),
+        FlushTriggers.ofBytes(170),
         partitioner
     );
     buffer.init();
@@ -361,7 +363,18 @@ public class CommitBufferTest {
     buffer.init();
 
     final ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>(
-        changelogTp.topic(), changelogTp.partition(), 100, KEY.get(), VALUE);
+        changelogTp.topic(),
+        changelogTp.partition(),
+        100,
+        CURRENT_TS,
+        TimestampType.CREATE_TIME,
+        KEY.get().length,
+        VALUE.length,
+        KEY.get(),
+        VALUE,
+        new RecordHeaders(),
+        Optional.empty()
+    );
 
     // When:
     buffer.restoreBatch(List.of(record));
@@ -384,7 +397,18 @@ public class CommitBufferTest {
         schema, tableName, new int[]{KAFKA_PARTITION}, KAFKA_PARTITION, 100L, false);
 
     final ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>(
-        changelogTp.topic(), KAFKA_PARTITION, 100, KEY.get(), VALUE);
+        changelogTp.topic(),
+        KAFKA_PARTITION,
+        100,
+        CURRENT_TS,
+        TimestampType.CREATE_TIME,
+        KEY.get().length,
+        VALUE.length,
+        KEY.get(),
+        VALUE,
+        new RecordHeaders(),
+        Optional.empty()
+    );
 
     // When:
     final var e = assertThrows(
@@ -420,9 +444,15 @@ public class CommitBufferTest {
         .mapToObj(i -> new ConsumerRecord<>(
             changelogTp.topic(),
             changelogTp.partition(),
-            101 + i,
+            101L + i,
+            CURRENT_TS,
+            TimestampType.CREATE_TIME,
+            8,
+            8,
             Integer.toString(i).getBytes(Charset.defaultCharset()),
-            Integer.toString(i).getBytes(Charset.defaultCharset())))
+            Integer.toString(i).getBytes(Charset.defaultCharset()),
+            new RecordHeaders(),
+            Optional.empty()))
         .collect(Collectors.toList());
 
     // when:
