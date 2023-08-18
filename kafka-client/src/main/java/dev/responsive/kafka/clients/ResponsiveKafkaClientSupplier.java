@@ -118,7 +118,8 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
 
   @Override
   public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
-    LOG.info("Creating responsive main consumer");
+    final String clientId = (String) config.get(CommonClientConfigs.CLIENT_ID_CONFIG);
+    LOG.info("Creating responsive main consumer: {}", clientId);
     final String tid = threadIdFromConsumerConfig(config);
     final ListenersForThread tc = sharedListeners.getAndMaybeInitListenersForThread(
         eos,
@@ -130,7 +131,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
     );
     // TODO: the end offsets poller call is kind of heavy for a synchronized block
     return factories.createResponsiveConsumer(
-        (String) config.get(CommonClientConfigs.CLIENT_ID_CONFIG),
+        clientId,
         wrapped.getConsumer(config),
         List.of(
             tc.committedOffsetMetricListener,
@@ -143,8 +144,10 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
 
   @Override
   public Consumer<byte[], byte[]> getRestoreConsumer(final Map<String, Object> config) {
-    LOG.info("Creating responsive restore consumer");
+    final String clientId = (String) config.get(CommonClientConfigs.CLIENT_ID_CONFIG);
+    LOG.info("Creating responsive restore consumer: {}", clientId);
     return new ResponsiveRestoreConsumer<>(
+        clientId,
         wrapped.getRestoreConsumer(config),
         storeRegistry::getCommittedOffset
     );

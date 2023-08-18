@@ -27,6 +27,7 @@ import static dev.responsive.db.ColumnName.ROW_TYPE;
 import static dev.responsive.db.ColumnName.WINDOW_START;
 import static dev.responsive.db.RowType.DATA_ROW;
 import static dev.responsive.db.RowType.METADATA_ROW;
+import static dev.responsive.kafka.store.ResponsiveStoreRegistration.NO_COMMITTED_OFFSET;
 
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
@@ -143,7 +144,7 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
               .value(ROW_TYPE.column(), METADATA_ROW.literal())
               .value(DATA_KEY.column(), DATA_KEY.literal(ColumnName.METADATA_KEY))
               .value(WINDOW_START.column(), WINDOW_START.literal(0L))
-              .value(OFFSET.column(), OFFSET.literal(-1L))
+              .value(OFFSET.column(), OFFSET.literal(NO_COMMITTED_OFFSET))
               .value(EPOCH.column(), EPOCH.literal(0L))
               .ifNotExists()
               .build()

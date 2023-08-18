@@ -20,39 +20,49 @@ import com.datastax.oss.driver.shaded.guava.common.annotations.VisibleForTesting
 import java.util.Objects;
 import java.util.function.Consumer;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.LogContext;
+import org.slf4j.Logger;
 
 public final class ResponsiveStoreRegistration {
+  public static final long NO_COMMITTED_OFFSET = -1L; // buffer is initialized but no prior offset
+
+  private final Logger log;
+  private final String storeName;
   private final TopicPartition changelogTopicPartition;
-  private final long committedOffset;
-  private final String name;
   private final Consumer<Long> onCommit;
+
+  private final long startOffset; // stored offset during init, ie where restore should start
 
   @VisibleForTesting
   public ResponsiveStoreRegistration(
-      final String name,
+      final String storeName,
       final TopicPartition changelogTopicPartition,
-      final long committedOffset,
+      final long startOffset,
       final Consumer<Long> onCommit
   ) {
-    this.name = Objects.requireNonNull(name);
+    this.storeName = Objects.requireNonNull(storeName);
     this.changelogTopicPartition = Objects.requireNonNull(changelogTopicPartition);
-    this.committedOffset = committedOffset;
+    this.startOffset = startOffset;
     this.onCommit = Objects.requireNonNull(onCommit);
+    this.log = new LogContext(
+        String.format("changelog [%s]", changelogTopicPartition)
+    ).logger(ResponsiveStoreRegistration.class);
+    log.debug("Created store registration with stored offset={}", startOffset);
   }
 
-  public long getCommittedOffset() {
-    return committedOffset;
+  public long startOffset() {
+    return startOffset;
   }
 
-  public TopicPartition getChangelogTopicPartition() {
+  public TopicPartition changelogTopicPartition() {
     return changelogTopicPartition;
   }
 
-  public String getName() {
-    return name;
+  public String storeName() {
+    return storeName;
   }
 
-  public Consumer<Long> getOnCommit() {
+  public Consumer<Long> onCommit() {
     return onCommit;
   }
 }

@@ -22,6 +22,7 @@ import static dev.responsive.db.ColumnName.DATA_VALUE;
 import static dev.responsive.db.ColumnName.OFFSET;
 import static dev.responsive.db.ColumnName.PARTITION_KEY;
 import static dev.responsive.db.ColumnName.ROW_TYPE;
+import static dev.responsive.kafka.store.ResponsiveStoreRegistration.NO_COMMITTED_OFFSET;
 
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
@@ -139,7 +140,7 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
         QueryBuilder.insertInto(metadataTable(table))
             .value(ROW_TYPE.column(), RowType.METADATA_ROW.literal())
             .value(PARTITION_KEY.column(), PARTITION_KEY.literal(kafkaPartition))
-            .value(OFFSET.column(), OFFSET.literal(-1L))
+            .value(OFFSET.column(), OFFSET.literal(NO_COMMITTED_OFFSET))
             .ifNotExists()
             .build()
     );
