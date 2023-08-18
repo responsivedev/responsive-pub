@@ -39,8 +39,8 @@ import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.lessThan;
 
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
+import dev.responsive.kafka.api.ResponsiveKeyValueParams;
 import dev.responsive.kafka.api.ResponsiveStores;
-import dev.responsive.kafka.config.ResponsiveConfig;
 import dev.responsive.utils.IntegrationTestUtils;
 import dev.responsive.utils.RemoteMonitor;
 import dev.responsive.utils.ResponsiveConfigParam;
@@ -48,6 +48,7 @@ import dev.responsive.utils.ResponsiveExtension;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ScheduledExecutorService;
@@ -76,9 +77,10 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -91,7 +93,6 @@ public class ResponsivePartitionedStoreEosIntegrationTest {
   private static final int MAX_POLL_MS = 5000;
   private static final String INPUT_TOPIC = "input";
   private static final String OUTPUT_TOPIC = "output";
-  private static final String STORE_NAME = "store-Name"; // use non-valid cassandra chars (-)
 
   private final Map<String, Object> responsiveProps = new HashMap<>();
 
@@ -105,7 +106,9 @@ public class ResponsivePartitionedStoreEosIntegrationTest {
       final Admin admin,
       @ResponsiveConfigParam final Map<String, Object> responsiveProps
   ) {
-    name = info.getTestMethod().orElseThrow().getName();
+    // add displayName to name to account for parameterized tests
+    name = info.getTestMethod().orElseThrow().getName()
+        + info.getDisplayName().substring("[X] ".length()).toLowerCase(Locale.ROOT);
     executor = new ScheduledThreadPoolExecutor(2);
 
     this.responsiveProps.putAll(responsiveProps);
@@ -113,19 +116,29 @@ public class ResponsivePartitionedStoreEosIntegrationTest {
     this.admin = admin;
     admin.createTopics(
         List.of(
-            new NewTopic(INPUT_TOPIC, Optional.of(2), Optional.empty()),
-            new NewTopic(OUTPUT_TOPIC, Optional.of(1), Optional.empty())
+            new NewTopic(inputTopic(), Optional.of(2), Optional.empty()),
+            new NewTopic(outputTopic(), Optional.of(1), Optional.empty())
         )
     );
   }
 
   @AfterEach
   public void after() {
-    admin.deleteTopics(List.of(INPUT_TOPIC, OUTPUT_TOPIC));
+    admin.deleteTopics(List.of(inputTopic(), outputTopic()));
   }
 
-  @Test
-  public void shouldMaintainStateOnEosFailOverAndFenceOldClient() throws Exception {
+  private String inputTopic() {
+    return name + "." + INPUT_TOPIC;
+  }
+
+  private String outputTopic() {
+    return name + "." + OUTPUT_TOPIC;
+  }
+
+  @ParameterizedTest
+  @EnumSource(SchemaType.class)
+  public void shouldMaintainStateOnEosFailOverAndFenceOldClient(final SchemaType type)
+      throws Exception {
     // Given:
     final Map<String, Object> properties = getMutableProperties();
     final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties);
@@ -133,14 +146,14 @@ public class ResponsivePartitionedStoreEosIntegrationTest {
 
     // When:
     try (
-        final ResponsiveKafkaStreams streamsA = buildStreams(properties, "a", state);
-        final ResponsiveKafkaStreams streamsB = buildStreams(properties, "b", state);
+        final ResponsiveKafkaStreams streamsA = buildStreams(properties, "a", state, type);
+        final ResponsiveKafkaStreams streamsB = buildStreams(properties, "b", state, type);
     ) {
       IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(10), streamsA, streamsB);
 
       // committed data first, then second set of uncommitted data
-      pipeInput(INPUT_TOPIC, 2, producer, System::currentTimeMillis, 0, 10, 0, 1);
-      pipeInput(INPUT_TOPIC, 2, producer, System::currentTimeMillis, 10, 15, 0, 1);
+      pipeInput(inputTopic(), 2, producer, System::currentTimeMillis, 0, 10, 0, 1);
+      pipeInput(inputTopic(), 2, producer, System::currentTimeMillis, 10, 15, 0, 1);
 
       new RemoteMonitor(executor, () -> state.numCommits.get() == 2, Duration.ofMillis(100))
           .await(Duration.ofSeconds(5));
@@ -149,7 +162,7 @@ public class ResponsivePartitionedStoreEosIntegrationTest {
       // an additional 10 values are uncommitted (5 for each partition)
       // this statement below just blocks until we've read 30 uncommitted
       // records before causing one of the tasks to stall
-      readOutput(OUTPUT_TOPIC, 0, 30, true, properties);
+      readOutput(outputTopic(), 0, 30, true, properties);
 
       state.stall.set(Stall.INJECTED);
 
@@ -157,7 +170,7 @@ public class ResponsivePartitionedStoreEosIntegrationTest {
       // topic-partitions should be assigned to the first client, at
       // which point 5 of the writes should be aborted and reprocessed
       // by the new client
-      pipeInput(INPUT_TOPIC, 2, producer, System::currentTimeMillis, 15, 20, 0, 1);
+      pipeInput(inputTopic(), 2, producer, System::currentTimeMillis, 15, 20, 0, 1);
 
       // the stall only happens on process, so this needs to be after the
       // previous pipeInput call
@@ -177,8 +190,8 @@ public class ResponsivePartitionedStoreEosIntegrationTest {
       // 20 more values beyond the first read are now committed (10
       // for each partition), but 5 should never have been committed
       // so there should be more uncommitted reads in total
-      final List<KeyValue<Long, Long>> readC = readOutput(OUTPUT_TOPIC, 0, 40, false, properties);
-      final List<KeyValue<Long, Long>> readU = readOutput(OUTPUT_TOPIC, 0, 45, true, properties);
+      final List<KeyValue<Long, Long>> readC = readOutput(outputTopic(), 0, 40, false, properties);
+      final List<KeyValue<Long, Long>> readU = readOutput(outputTopic(), 0, 45, true, properties);
 
       // now we release the stalled consumer
       state.stall.set(Stall.RELEASED);
@@ -238,9 +251,13 @@ public class ResponsivePartitionedStoreEosIntegrationTest {
     return properties;
   }
 
-  private StoreBuilder<KeyValueStore<Long, Long>> storeSupplier() {
+  private StoreBuilder<KeyValueStore<Long, Long>> storeSupplier(SchemaType type) {
     return ResponsiveStores.keyValueStoreBuilder(
-        ResponsiveStores.keyValueStore(STORE_NAME),
+        ResponsiveStores.keyValueStore(
+            type == SchemaType.FACT
+                ? ResponsiveKeyValueParams.fact(name)
+                : ResponsiveKeyValueParams.keyValue(name)
+            ),
         Serdes.Long(),
         Serdes.Long()
     ).withLoggingEnabled(
@@ -250,18 +267,19 @@ public class ResponsivePartitionedStoreEosIntegrationTest {
   private ResponsiveKafkaStreams buildStreams(
       final Map<String, Object> originals,
       final String instance,
-      final SharedState state
+      final SharedState state,
+      final SchemaType type
   ) {
     final Map<String, Object> properties = new HashMap<>(originals);
     properties.put(APPLICATION_SERVER_CONFIG, instance + ":1024");
 
     final StreamsBuilder builder = new StreamsBuilder();
-    builder.addStateStore(storeSupplier());
+    builder.addStateStore(storeSupplier(type));
 
-    final KStream<Long, Long> input = builder.stream(INPUT_TOPIC);
+    final KStream<Long, Long> input = builder.stream(inputTopic());
     input
-        .process(() -> new TestProcessor(instance, state), STORE_NAME)
-        .to(OUTPUT_TOPIC);
+        .process(() -> new TestProcessor(instance, state, name), name)
+        .to(outputTopic());
 
     return ResponsiveKafkaStreams.create(builder.build(), properties);
   }
@@ -284,18 +302,20 @@ public class ResponsivePartitionedStoreEosIntegrationTest {
 
     private final String instance;
     private final SharedState state;
+    private final String name;
     private ProcessorContext<Long, Long> context;
     private KeyValueStore<Long, Long> store;
 
-    public TestProcessor(final String instance, final SharedState state) {
+    public TestProcessor(final String instance, final SharedState state, String name) {
       this.instance = instance;
       this.state = state;
+      this.name = name;
     }
 
     @Override
     public void init(final ProcessorContext<Long, Long> context) {
       this.context = context;
-      this.store = context.getStateStore(STORE_NAME);
+      this.store = context.getStateStore(name);
     }
 
     @Override

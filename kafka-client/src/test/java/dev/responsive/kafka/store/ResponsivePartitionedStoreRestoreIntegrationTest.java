@@ -55,6 +55,7 @@ import dev.responsive.db.RemoteKeyValueSchema;
 import dev.responsive.kafka.api.CassandraClientFactory;
 import dev.responsive.kafka.api.DefaultCassandraClientFactory;
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
+import dev.responsive.kafka.api.ResponsiveKeyValueParams;
 import dev.responsive.kafka.api.ResponsiveStores;
 import dev.responsive.kafka.config.ResponsiveConfig;
 import dev.responsive.utils.IntegrationTestUtils;
@@ -101,9 +102,10 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 @ExtendWith(ResponsiveExtension.class)
 public class ResponsivePartitionedStoreRestoreIntegrationTest {
@@ -125,7 +127,10 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
       final Admin admin,
       @ResponsiveConfigParam final Map<String, Object> responsiveProps
   ) throws InterruptedException, ExecutionException {
-    name = info.getTestMethod().orElseThrow().getName();
+    // add displayName to name to account for parameterized tests
+    name = info.getTestMethod().orElseThrow().getName()
+        + info.getDisplayName().substring("[X] ".length()).toLowerCase(Locale.ROOT)
+        .replace("_", ""); // keep valid cassandra chars to keep testing code easier
     this.responsiveProps.putAll(responsiveProps);
 
     this.admin = admin;
@@ -147,8 +152,9 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
     admin.deleteTopics(List.of(inputTopic(), inputTblTopic(), outputTopic(), outputJoined()));
   }
 
-  @Test
-  public void shouldFlushStoresBeforeClose() throws Exception {
+  @ParameterizedTest
+  @EnumSource(SchemaType.class)
+  public void shouldFlushStoresBeforeClose(final SchemaType type) throws Exception {
     final Map<String, Object> properties = getMutableProperties();
     final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties);
     final KafkaClientSupplier defaultClientSupplier = new DefaultKafkaClientSupplier();
@@ -156,7 +162,7 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
     final TopicPartition input = new TopicPartition(inputTopic(), 0);
 
     try (final ResponsiveKafkaStreams streams
-             = buildAggregatorApp(properties, defaultClientSupplier, defaultFactory)) {
+             = buildAggregatorApp(properties, defaultClientSupplier, defaultFactory, type)) {
       IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(30), streams);
       // Send some data through
       pipeInput(inputTopic(), 1, producer, System::currentTimeMillis, 0, 10, 0);
@@ -169,7 +175,7 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
           defaultFactory.createCqlSession(config),
           config
       );
-      final RemoteKeyValueSchema statements = new CassandraKeyValueSchema(cassandraClient);
+      final RemoteKeyValueSchema statements = cassandraClient.kvSchema(type);
       statements.prepare(aggName());
       final long cassandraOffset = statements.metadata(aggName(), 0).offset;
       assertThat(cassandraOffset, greaterThan(0L));
@@ -182,8 +188,9 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
     }
   }
 
-  @Test
-  public void shouldRestoreUnflushedChangelog() throws Exception {
+  @ParameterizedTest
+  @EnumSource(SchemaType.class)
+  public void shouldRestoreUnflushedChangelog(final SchemaType type) throws Exception {
     final Map<String, Object> properties = getMutableProperties();
     final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties);
     final KafkaClientSupplier defaultClientSupplier = new DefaultKafkaClientSupplier();
@@ -192,7 +199,7 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
     final TopicPartition input = new TopicPartition(inputTopic(), 0);
 
     try (final ResponsiveKafkaStreams streams
-             = buildAggregatorApp(properties, defaultClientSupplier, defaultFactory)) {
+             = buildAggregatorApp(properties, defaultClientSupplier, defaultFactory, type)) {
       IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(10), streams);
       // Send some data through
       pipeInput(inputTblTopic(), 1, producer, System::currentTimeMillis, 0, 10, 0, 1, 2, 3);
@@ -206,7 +213,8 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
     final FaultInjectingCassandraClientSupplier cassandraFaultInjector
         = new FaultInjectingCassandraClientSupplier();
     try (final ResponsiveKafkaStreams streams
-             = buildAggregatorApp(properties, defaultClientSupplier, cassandraFaultInjector)) {
+             = buildAggregatorApp(
+                 properties, defaultClientSupplier, cassandraFaultInjector, type)) {
       IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(10), streams);
 
       // Inject a fault into cassandra client so it fails the next flush
@@ -225,7 +233,7 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
     final CassandraClient cassandraClient = defaultFactory.createCassandraClient(
         defaultFactory.createCqlSession(config),
         config);
-    final RemoteKeyValueSchema statements = new CassandraKeyValueSchema(cassandraClient);
+    final RemoteKeyValueSchema statements = cassandraClient.kvSchema(type);
     statements.prepare(aggName());
     final long cassandraOffset = statements.metadata(aggName(), 0).offset;
     assertThat(cassandraOffset, greaterThan(0L));
@@ -239,7 +247,7 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
     // Restart with restore recorder
     final TestKafkaClientSupplier recordingClientSupplier = new TestKafkaClientSupplier();
     try (final ResponsiveKafkaStreams streams
-             = buildAggregatorApp(properties, recordingClientSupplier, defaultFactory)) {
+             = buildAggregatorApp(properties, recordingClientSupplier, defaultFactory, type)) {
       IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(30), streams);
       // Send some more data through and check output
       pipeInput(inputTopic(), 1, producer, System::currentTimeMillis, 20, 30, 0);
@@ -298,24 +306,36 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
   private ResponsiveKafkaStreams buildAggregatorApp(
       final Map<String, Object> originals,
       final KafkaClientSupplier clientSupplier,
-      final CassandraClientFactory cassandraClientFactory
-  ) {
+      final CassandraClientFactory cassandraClientFactory,
+      SchemaType type) {
     final Map<String, Object> properties = new HashMap<>(originals);
 
     final StreamsBuilder builder = new StreamsBuilder();
 
     final KStream<Long, Long> input = builder.stream(inputTopic());
+    final String inputTableName = name + "inputTbl";
     final KTable<Long, Long> inputTbl = builder.table(
         inputTblTopic(),
-        Materialized.as(ResponsiveStores.keyValueStore(name + "inputTbl"))
+        Materialized.as(
+            ResponsiveStores.keyValueStore(
+                type == SchemaType.FACT
+                    ? ResponsiveKeyValueParams.fact(inputTableName)
+                    : ResponsiveKeyValueParams.keyValue(inputTableName)
+            )
+        )
     );
     input
         .groupByKey()
         .aggregate(
             () -> 0L,
             (k, v, va) -> v + va,
-            (Materialized) Materialized.as(ResponsiveStores.keyValueStore(aggName()))
-                .withLoggingEnabled(
+            (Materialized) Materialized.as(
+                    ResponsiveStores.keyValueStore(
+                            type == SchemaType.FACT
+                                ? ResponsiveKeyValueParams.fact(aggName())
+                                : ResponsiveKeyValueParams.keyValue(aggName())
+                    )
+                ).withLoggingEnabled(
                     Map.of(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE)))
         .toStream()
         .to(outputTopic());
@@ -332,7 +352,7 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
   }
 
   private String aggName() {
-    return name + "testagg";
+    return name + "agg";
   }
 
   private String inputTopic() {

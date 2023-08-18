@@ -18,6 +18,7 @@ package dev.responsive.db;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.containsStringIgnoringCase;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.nullValue;
@@ -66,7 +67,7 @@ class CassandraFactSchemaIntegrationTest {
   public void shouldInitializeWithCorrectMetadata() {
     // Given:
     final RemoteKeyValueSchema schema = client.kvSchema(SchemaType.FACT);
-    client.execute(schema.create(storeName, Optional.empty()));
+    schema.create(storeName, Optional.empty());
     schema.prepare(storeName);
 
     // When:
@@ -82,6 +83,14 @@ class CassandraFactSchemaIntegrationTest {
     assertThat(metadata1.epoch, is(-1L));
     assertThat(metadata2.offset, is(10L));
     assertThat(metadata2.epoch, is(-1L));
+
+    // ensure it uses a separate table for metadata
+    final var table = session.getMetadata()
+        .getKeyspace(session.getKeyspace().get())
+        .get()
+        .getTable(storeName + "_md")
+        .get();
+    assertThat(table.describe(false), containsStringIgnoringCase(storeName + "_md"));
   }
 
   @SuppressWarnings("OptionalGetWithoutIsPresent")
@@ -92,7 +101,7 @@ class CassandraFactSchemaIntegrationTest {
     final var ttl = Duration.ofDays(30);
 
     // When:
-    client.execute(schema.create(storeName, Optional.of(ttl)));
+    schema.create(storeName, Optional.of(ttl));
 
     // Then:
     final var table = session.getMetadata()
@@ -117,7 +126,7 @@ class CassandraFactSchemaIntegrationTest {
     final RemoteKeyValueSchema schema = client.kvSchema(SchemaType.FACT);
 
     // When:
-    client.execute(schema.create(storeName, Optional.empty()));
+    schema.create(storeName, Optional.empty());
 
     // Then:
     final var table = session.getMetadata()
@@ -134,7 +143,7 @@ class CassandraFactSchemaIntegrationTest {
   public void shouldInsertAndDelete() {
     // Given:
     final RemoteKeyValueSchema schema = client.kvSchema(SchemaType.FACT);
-    client.execute(schema.create(storeName, Optional.empty()));
+    schema.create(storeName, Optional.empty());
     schema.prepare(storeName);
     schema.init(storeName, SubPartitioner.NO_SUBPARTITIONS, 1);
 
