@@ -21,6 +21,7 @@ import static dev.responsive.db.ColumnName.DATA_KEY;
 import static dev.responsive.db.ColumnName.DATA_VALUE;
 import static dev.responsive.db.ColumnName.OFFSET;
 import static dev.responsive.db.ColumnName.PARTITION_KEY;
+import static dev.responsive.db.ColumnName.ROW_TYPE;
 
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
@@ -100,6 +101,7 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
     final CreateTableWithOptions createMetadataTable = SchemaBuilder
         .createTable(metadataTable(tableName))
         .ifNotExists()
+        .withPartitionKey(ROW_TYPE.column(), DataTypes.TINYINT)
         .withPartitionKey(PARTITION_KEY.column(), DataTypes.INT)
         .withColumn(OFFSET.column(), DataTypes.BIGINT);
 
@@ -111,6 +113,7 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
     return SchemaBuilder
         .createTable(tableName)
         .ifNotExists()
+        .withPartitionKey(ROW_TYPE.column(), DataTypes.TINYINT)
         .withPartitionKey(DATA_KEY.column(), DataTypes.BLOB)
         .withColumn(DATA_VALUE.column(), DataTypes.BLOB);
   }
@@ -134,6 +137,7 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
   ) {
     client.execute(
         QueryBuilder.insertInto(metadataTable(table))
+            .value(ROW_TYPE.column(), RowType.METADATA_ROW.literal())
             .value(PARTITION_KEY.column(), PARTITION_KEY.literal(kafkaPartition))
             .value(OFFSET.column(), OFFSET.literal(-1L))
             .ifNotExists()
@@ -180,6 +184,7 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
     insert.computeIfAbsent(tableName, k -> client.prepare(
         QueryBuilder
             .insertInto(tableName)
+            .value(ROW_TYPE.column(), RowType.DATA_ROW.literal())
             .value(DATA_KEY.column(), bindMarker(DATA_KEY.bind()))
             .value(DATA_VALUE.column(), bindMarker(DATA_VALUE.bind()))
             .build()
@@ -189,6 +194,7 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
         QueryBuilder
             .selectFrom(tableName)
             .columns(DATA_VALUE.column())
+            .where(ROW_TYPE.relation().isEqualTo(RowType.DATA_ROW.literal()))
             .where(DATA_KEY.relation().isEqualTo(bindMarker(DATA_KEY.bind())))
             .build()
     ));
@@ -196,6 +202,7 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
     delete.computeIfAbsent(tableName, k -> client.prepare(
         QueryBuilder
             .deleteFrom(tableName)
+            .where(ROW_TYPE.relation().isEqualTo(RowType.DATA_ROW.literal()))
             .where(DATA_KEY.relation().isEqualTo(bindMarker(DATA_KEY.bind())))
             .build()
     ));
@@ -204,6 +211,7 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
         QueryBuilder
             .selectFrom(metadataTable(tableName))
             .column(OFFSET.column())
+            .where(ROW_TYPE.relation().isEqualTo(RowType.METADATA_ROW.literal()))
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
             .build()
     ));
@@ -211,6 +219,7 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
     setOffset.computeIfAbsent(metadataTable(tableName), k -> client.prepare(QueryBuilder
         .update(metadataTable(tableName))
         .setColumn(OFFSET.column(), bindMarker(OFFSET.bind()))
+        .where(ROW_TYPE.relation().isEqualTo(RowType.METADATA_ROW.literal()))
         .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
         .build()
     ));
