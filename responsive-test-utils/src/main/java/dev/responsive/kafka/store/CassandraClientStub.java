@@ -63,7 +63,7 @@ public class CassandraClientStub extends CassandraClient {
   }
 
   private void flush() {
-    storeRegistry.stores().forEach(s -> s.getOnCommit().accept(0L));
+    storeRegistry.stores().forEach(s -> s.onCommit().accept(0L));
   }
 
   @Override
