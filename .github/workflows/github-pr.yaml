@@ -20,6 +20,19 @@ jobs:
           java-version: '11'
           distribution: 'temurin'
 
+      - name: Configure AWS Credentials for Public ECR Login
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: arn:aws:iam::292505934682:role/github-responsivedev-org
+          role-session-name: github-publish-artifacts
+          aws-region: us-east-1
+
+      - name: Login to Amazon ECR Public
+        id: login-ecr-public
+        uses: aws-actions/amazon-ecr-login@v1
+        with:
+          registry-type: public
+
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
@@ -31,7 +44,7 @@ jobs:
         uses: gradle/gradle-build-action@v2
 
       - name: Build & Test
-        run: ./gradlew build kafka-client-examples:simple-example:buildDocker
+        run: ./gradlew build buildDocker
 
       - uses: actions/checkout@v3
         with:
@@ -55,6 +68,7 @@ jobs:
 
       - name: Run Smoke Test
         run: |
+          sindri/scripts/update-versions -u -s responsiveOperator -e local -i responsive-operator:`./gradlew operator:cV | grep Project.version | sed 's/Project version: //'`
           sindri/scripts/update-client-versions -s master -p false -i simple-example -t `./gradlew kafka-client:cV  | grep "Project version" | sed 's/Project version: //'`
           sindri/scripts/run-smoke-test -l -w system-tests-pub-${GITHUB_HEAD_REF} -s master
         env:
