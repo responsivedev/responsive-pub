@@ -32,6 +32,7 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.internals.GlobalProcessorContextImpl;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -45,6 +46,7 @@ import org.slf4j.LoggerFactory;
 public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
 
   private static final Logger LOG = LoggerFactory.getLogger(ResponsiveGlobalStore.class);
+  private static final long ALL_VALID_TS = -1L; // Global stores don't support TTL
 
   private CassandraClient client;
   private final TableName name;
@@ -52,7 +54,7 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
 
   private boolean open;
   private int partition;
-  private StateStoreContext context;
+  private GlobalProcessorContextImpl context;
   private RemoteKeyValueSchema schema;
 
   public ResponsiveGlobalStore(final TableName name) {
@@ -81,7 +83,7 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
   public void init(final StateStoreContext context, final StateStore root) {
     try {
       LOG.info("Initializing global state store {}", name);
-      this.context = context;
+      this.context = (GlobalProcessorContextImpl) context;
       // this is bad, but the assumption is that global tables are small
       // and can fit in a single partition - all writers will write using
       // the same partition key. we should consider using ALLOW FILTERING
@@ -127,7 +129,7 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
 
   @Override
   public void put(final Bytes key, final byte[] value) {
-    client.execute(schema.insert(name.cassandraName(), partition, key, value));
+    client.execute(schema.insert(name.cassandraName(), partition, key, value, context.timestamp()));
     StoreQueryUtils.updatePosition(position, context);
   }
 
@@ -155,17 +157,17 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
 
   @Override
   public byte[] get(final Bytes key) {
-    return schema.get(name.cassandraName(), partition, key);
+    return schema.get(name.cassandraName(), partition, key, ALL_VALID_TS);
   }
 
   @Override
   public KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
-    return schema.range(name.cassandraName(), partition, from, to);
+    return schema.range(name.cassandraName(), partition, from, to, ALL_VALID_TS);
   }
 
   @Override
   public KeyValueIterator<Bytes, byte[]> all() {
-    return schema.all(name.cassandraName(), partition);
+    return schema.all(name.cassandraName(), partition, ALL_VALID_TS);
   }
 
   @Override

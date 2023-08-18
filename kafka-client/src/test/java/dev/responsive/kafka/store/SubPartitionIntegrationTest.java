@@ -87,6 +87,7 @@ import org.testcontainers.containers.CassandraContainer;
 public class SubPartitionIntegrationTest {
 
   private static final int FLUSH_THRESHOLD = 1;
+  private static final long MIN_VALID_TS = 0L;
 
   private static final String INPUT_TOPIC = "input";
   private static final String OUTPUT_TOPIC = "output";
@@ -162,8 +163,8 @@ public class SubPartitionIntegrationTest {
           true,
           properties);
       final String cassandraName = new TableName(storeName).cassandraName();
-      final RemoteKeyValueSchema statements = new CassandraKeyValueSchema(client);
-      statements.prepare(cassandraName);
+      final RemoteKeyValueSchema schema = new CassandraKeyValueSchema(client);
+      schema.prepare(cassandraName);
 
       assertThat(client.numPartitions(cassandraName), is(OptionalInt.of(32)));
       assertThat(client.count(cassandraName, 0), is(2L));
@@ -176,7 +177,8 @@ public class SubPartitionIntegrationTest {
         assertThat(
             deserializer.deserialize("foo",
                 Arrays.copyOfRange(
-                    statements.get(cassandraName, hasher.partition((int) (k % 2), kBytes), kBytes),
+                    schema.get(cassandraName, hasher.partition((int) (k % 2), kBytes), kBytes,
+                        MIN_VALID_TS),
                     8,
                     16)),
             is(100L));
@@ -236,7 +238,11 @@ public class SubPartitionIntegrationTest {
         assertThat(
             deserializer.deserialize("foo",
                 Arrays.copyOfRange(
-                    schema.get(cassandraName, hasher.partition((int) (k % 2), kBytes), kBytes),
+                    schema.get(
+                        cassandraName,
+                        hasher.partition((int) (k % 2), kBytes),
+                        kBytes,
+                        MIN_VALID_TS),
                     8,
                     16)),
             is(100L));

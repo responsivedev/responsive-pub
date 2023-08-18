@@ -29,6 +29,8 @@ import org.junit.jupiter.api.Test;
 
 public class LocalRemoteKvIteratorTest {
 
+  private static final long TIMESTAMP = 100L;
+
   @Test
   public void shouldReturnUniqueKeysLexicographicallyFromTwoSources() {
     // Given:
@@ -39,7 +41,7 @@ public class LocalRemoteKvIteratorTest {
 
     final TestKvIterator<Result<Bytes>> buffered = new TestKvIterator<>(
         List.of(k2),
-        List.of(Result.value(k2, val))
+        List.of(Result.value(k2, val, TIMESTAMP))
     );
     final TestKvIterator<byte[]> remote = new TestKvIterator<>(
         List.of(k1, k3),
@@ -67,7 +69,7 @@ public class LocalRemoteKvIteratorTest {
 
     final TestKvIterator<Result<Bytes>> buffered = new TestKvIterator<>(
         List.of(k1, k2),
-        List.of(Result.value(k1, valLocal), Result.value(k2, valLocal))
+        List.of(Result.value(k1, valLocal, TIMESTAMP), Result.value(k2, valLocal, TIMESTAMP))
     );
     final TestKvIterator<byte[]> remote = new TestKvIterator<>(
         List.of(k1, k2),
@@ -94,7 +96,7 @@ public class LocalRemoteKvIteratorTest {
 
     final TestKvIterator<Result<Bytes>> buffered = new TestKvIterator<>(
         List.of(k1),
-        List.of(Result.tombstone(k1))
+        List.of(Result.tombstone(k1, TIMESTAMP))
     );
     final TestKvIterator<byte[]> remote = new TestKvIterator<>(
         List.of(k2),
@@ -121,7 +123,7 @@ public class LocalRemoteKvIteratorTest {
 
     final TestKvIterator<Result<Bytes>> buffered = new TestKvIterator<>(
         List.of(k1),
-        List.of(Result.tombstone(k1))
+        List.of(Result.tombstone(k1, TIMESTAMP))
     );
     final TestKvIterator<byte[]> remote = new TestKvIterator<>(
         List.of(k1, k2),
@@ -148,7 +150,10 @@ public class LocalRemoteKvIteratorTest {
 
     final TestKvIterator<Result<Bytes>> buffered = new TestKvIterator<>(
         List.of(k1, k2, k3),
-        List.of(Result.value(k1, val), Result.tombstone(k2), Result.value(k3, val))
+        List.of(
+            Result.value(k1, val, TIMESTAMP),
+            Result.tombstone(k2, TIMESTAMP),
+            Result.value(k3, val, TIMESTAMP))
     );
     final TestKvIterator<byte[]> remote = new TestKvIterator<>(List.of(), List.of());
 

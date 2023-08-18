@@ -73,10 +73,11 @@ import org.testcontainers.containers.CassandraContainer;
 public class CommitBufferTest {
   private static final KeySpec<Bytes> KEY_SPEC = new BytesKeySpec();
   private static final Bytes KEY = Bytes.wrap(ByteBuffer.allocate(4).putInt(0).array());
-  private static final Bytes KEY2 = Bytes.wrap(ByteBuffer.allocate(4).putInt(1).array());
   private static final byte[] VALUE = new byte[]{1};
   private static final int KAFKA_PARTITION = 2;
   private static final FlushTriggers TRIGGERS = FlushTriggers.ALWAYS;
+  private static final long CURRENT_TS = 100L;
+  private static final long MIN_VALID_TS = 0L;
 
   private CqlSession session;
   private CassandraClient client;
@@ -143,13 +144,13 @@ public class CommitBufferTest {
     // key 1 -> subpartition 2 * 3 + 1 % 3 =  7
     // nothing in subpartition 8, should not be flushed - if it did
     // then an error would be thrown with invalid epoch
-    buffer.put(k0, VALUE);
-    buffer.put(k1, VALUE);
+    buffer.put(k0, VALUE, CURRENT_TS);
+    buffer.put(k1, VALUE, CURRENT_TS);
     buffer.flush(100L);
 
     // Then:
-    assertThat(schema.get(tableName, 6, k0), is(VALUE));
-    assertThat(schema.get(tableName, 7, k1), is(VALUE));
+    assertThat(schema.get(tableName, 6, k0, MIN_VALID_TS), is(VALUE));
+    assertThat(schema.get(tableName, 7, k1, MIN_VALID_TS), is(VALUE));
     assertThat(schema.metadata(tableName, 6), is(new MetadataRow(100L, 1L)));
     assertThat(schema.metadata(tableName, 7), is(new MetadataRow(-1L, 1L)));
     assertThat(schema.metadata(tableName, 8), is(new MetadataRow(-1L, 3L)));
@@ -171,7 +172,7 @@ public class CommitBufferTest {
     final TaskMigratedException e = assertThrows(
         TaskMigratedException.class,
         () -> {
-          buffer.put(KEY, VALUE);
+          buffer.put(KEY, VALUE, CURRENT_TS);
           buffer.flush(100L);
         }
     );
@@ -212,7 +213,7 @@ public class CommitBufferTest {
         client, tableName, changelogTp, admin, schema,
         KEY_SPEC, true, TRIGGERS, partitioner);
     buffer.init();
-    buffer.put(KEY, VALUE);
+    buffer.put(KEY, VALUE, CURRENT_TS);
 
     // when:
     buffer.flush(100L);
@@ -229,7 +230,7 @@ public class CommitBufferTest {
         client, tableName, changelogTp, admin, schema,
         KEY_SPEC, false, TRIGGERS, partitioner);
     buffer.init();
-    buffer.put(KEY, VALUE);
+    buffer.put(KEY, VALUE, CURRENT_TS);
 
     // when:
     buffer.flush(100L);
@@ -256,7 +257,7 @@ public class CommitBufferTest {
     buffer.init();
 
     for (byte i = 0; i < 9; i++) {
-      buffer.put(Bytes.wrap(new byte[]{i}), VALUE);
+      buffer.put(Bytes.wrap(new byte[]{i}), VALUE, CURRENT_TS);
     }
 
     // when:
@@ -264,7 +265,7 @@ public class CommitBufferTest {
 
     // Then:
     assertThat(schema.metadata(tableName, KAFKA_PARTITION).offset, is(-1L));
-    buffer.put(Bytes.wrap(new byte[]{10}), VALUE);
+    buffer.put(Bytes.wrap(new byte[]{10}), VALUE, CURRENT_TS);
     buffer.flush(10L);
     assertThat(schema.metadata(tableName, KAFKA_PARTITION).offset, is(10L));
   }
@@ -287,7 +288,7 @@ public class CommitBufferTest {
     buffer.init();
     final byte[] value = new byte[9];
     for (byte i = 0; i < 9; i++) {
-      buffer.put(Bytes.wrap(new byte[]{i}), value);
+      buffer.put(Bytes.wrap(new byte[]{i}), value, CURRENT_TS);
     }
 
     // when:
@@ -295,7 +296,7 @@ public class CommitBufferTest {
 
     // Then:
     assertThat(schema.metadata(tableName, KAFKA_PARTITION).offset, is(-1L));
-    buffer.put(Bytes.wrap(new byte[]{10}), value);
+    buffer.put(Bytes.wrap(new byte[]{10}), value, CURRENT_TS);
     buffer.flush(10L);
     assertThat(schema.metadata(tableName, KAFKA_PARTITION).offset, is(10L));
   }
@@ -320,7 +321,7 @@ public class CommitBufferTest {
         clock::get
     );
     buffer.init();
-    buffer.put(Bytes.wrap(new byte[]{18}), VALUE);
+    buffer.put(Bytes.wrap(new byte[]{18}), VALUE, CURRENT_TS);
 
     // When:
     buffer.flush(1L);
@@ -336,17 +337,17 @@ public class CommitBufferTest {
   public void shouldDeleteRowInCassandraWithTombstone() {
     // Given:
     final String table = name;
-    client.execute(schema.insert(table, KAFKA_PARTITION, KEY, VALUE));
+    client.execute(schema.insert(table, KAFKA_PARTITION, KEY, VALUE, CURRENT_TS));
     final CommitBuffer<Bytes, RemoteKeyValueSchema> buffer = new CommitBuffer<>(
         client, table, changelogTp, admin, schema, KEY_SPEC, true, TRIGGERS, partitioner);
     buffer.init();
 
     // When:
-    buffer.tombstone(KEY);
+    buffer.tombstone(KEY, CURRENT_TS);
     buffer.flush(100L);
 
     // Then:
-    final byte[] value = schema.get(table, KAFKA_PARTITION, KEY);
+    final byte[] value = schema.get(table, KAFKA_PARTITION, KEY, CURRENT_TS);
     assertThat(value, nullValue());
   }
 
@@ -367,7 +368,7 @@ public class CommitBufferTest {
 
     // Then:
     assertThat(schema.metadata(tableName, KAFKA_PARTITION).offset, is(100L));
-    final byte[] value = schema.get(tableName, KAFKA_PARTITION, KEY);
+    final byte[] value = schema.get(tableName, KAFKA_PARTITION, KEY, MIN_VALID_TS);
     assertThat(value, is(VALUE));
   }
 
@@ -433,7 +434,8 @@ public class CommitBufferTest {
           schema.get(
               tableName,
               KAFKA_PARTITION,
-              Bytes.wrap(Integer.toString(i).getBytes(Charset.defaultCharset()))),
+              Bytes.wrap(Integer.toString(i).getBytes(Charset.defaultCharset())),
+              MIN_VALID_TS),
           is(Integer.toString(i).getBytes(Charset.defaultCharset())));
     }
   }

@@ -21,7 +21,7 @@ import java.util.concurrent.CompletionStage;
 
 public interface RemoteWriter<K> {
 
-  void insert(final K key, final byte[] value);
+  void insert(final K key, final byte[] value, long timestamp);
 
   void delete(final K key);
 

@@ -41,6 +41,8 @@ public class SizeTrackingBuffer<K> {
   }
 
   private long sizeOf(final K key, final Result<K> value) {
-    return extractor.bytes(key).get().length + (value.isTombstone ? 0 : value.value.length);
+    return extractor.bytes(key).get().length
+        + (value.isTombstone ? 0 : value.value.length)
+        + Long.BYTES; // timestamp size
   }
 }

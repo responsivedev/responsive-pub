@@ -42,6 +42,9 @@ import org.testcontainers.containers.CassandraContainer;
 @ExtendWith(ResponsiveExtension.class)
 class CassandraFactSchemaIntegrationTest {
 
+  private static final long CURRENT_TIME = 100L;
+  private static final long MIN_VALID_TS = 0L;
+
   private String storeName;
   private CassandraClient client;
   private CqlSession session;
@@ -151,14 +154,35 @@ class CassandraFactSchemaIntegrationTest {
     final byte[] val = new byte[]{1};
 
     // When:
-    client.execute(schema.insert(storeName, 1, key, val));
-    final byte[] valAt0 = schema.get(storeName, 1, key);
+    client.execute(schema.insert(storeName, 1, key, val, CURRENT_TIME));
+    final byte[] valAt0 = schema.get(storeName, 1, key, MIN_VALID_TS);
     client.execute(schema.delete(storeName, 1, key));
-    final byte[] valAt1 = schema.get(storeName, 1, key);
+    final byte[] valAt1 = schema.get(storeName, 1, key, MIN_VALID_TS);
 
     // Then
     assertThat(valAt0, is(val));
     assertThat(valAt1, nullValue());
+  }
+
+  @Test
+  public void shouldRespectSemanticTTL() {
+    // Given:
+    final RemoteKeyValueSchema schema = client.kvSchema(SchemaType.FACT);
+    schema.create(storeName, Optional.empty());
+    schema.prepare(storeName);
+    schema.init(storeName, SubPartitioner.NO_SUBPARTITIONS, 1);
+
+    final Bytes key = Bytes.wrap(new byte[]{0});
+    final byte[] val = new byte[]{1};
+
+    // When:
+    client.execute(schema.insert(storeName, 1, key, val, CURRENT_TIME));
+    final byte[] valid = schema.get(storeName, 1, key, MIN_VALID_TS);
+    final byte[] expired = schema.get(storeName, 1, key, CURRENT_TIME + 100L);
+
+    // Then
+    assertThat(valid, is(val));
+    assertThat(expired, nullValue());
   }
 
 }

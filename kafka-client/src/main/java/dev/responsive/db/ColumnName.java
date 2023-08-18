@@ -37,7 +37,8 @@ public enum ColumnName {
   DATA_VALUE("value", "value", b -> bytes((byte[]) b)),
   OFFSET("offset", "offset"),
   EPOCH("epoch", "epoch"),
-  WINDOW_START("windowStart", "windowstart", ts -> timestamp((long) ts));
+  WINDOW_START("windowStart", "windowstart", ts -> timestamp((long) ts)),
+  TIMESTAMP("ts", "ts", ts -> timestamp((long) ts));
 
   static final Bytes METADATA_KEY
       = Bytes.wrap("_metadata".getBytes(StandardCharsets.UTF_8));

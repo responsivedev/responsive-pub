@@ -27,9 +27,15 @@ import org.apache.kafka.streams.state.KeyValueIterator;
  */
 public interface RemoteKeyValueSchema extends RemoteSchema<Bytes> {
 
-  byte[] get(String tableName, int partition, Bytes key);
+  byte[] get(String tableName, int partition, Bytes key, long minValidTs);
 
-  KeyValueIterator<Bytes, byte[]> range(String tableName, int partition, Bytes from, Bytes to);
+  KeyValueIterator<Bytes, byte[]> range(
+      String tableName,
+      int partition,
+      Bytes from,
+      Bytes to,
+      long minValidTs
+  );
 
-  KeyValueIterator<Bytes, byte[]> all(String tableName, int partition);
+  KeyValueIterator<Bytes, byte[]> all(String tableName, int partition, long minValidTs);
 }

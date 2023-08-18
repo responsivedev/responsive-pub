@@ -169,7 +169,7 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
 
   @Override
   public void put(final Bytes key, final byte[] value) {
-    buffer.put(key, value);
+    buffer.put(key, value, context.timestamp());
     StoreQueryUtils.updatePosition(position, context);
   }
 
@@ -197,7 +197,7 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
   public byte[] delete(final Bytes key) {
     // single writer prevents races (see putIfAbsent)
     final byte[] old = get(key);
-    buffer.tombstone(key);
+    buffer.tombstone(key, context.timestamp());
     return old;
   }
 
@@ -212,7 +212,12 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
       return result.isTombstone ? null : result.value;
     }
 
-    return schema.get(name.cassandraName(), partitioner.partition(partition, key), key);
+    final long minValidTs = params
+        .timeToLive()
+        .map(ttl -> context.timestamp() - ttl.toMillis())
+        .orElse(-1L);
+
+    return schema.get(name.cassandraName(), partitioner.partition(partition, key), key, minValidTs);
   }
 
   @Override

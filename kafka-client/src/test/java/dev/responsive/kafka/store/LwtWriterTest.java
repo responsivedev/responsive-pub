@@ -28,10 +28,8 @@ import com.datastax.oss.driver.api.core.cql.AsyncResultSet;
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.Statement;
 import com.datastax.oss.driver.internal.core.cql.DefaultBatchStatement;
-import dev.responsive.db.BytesKeySpec;
 import dev.responsive.db.CassandraClient;
 import dev.responsive.db.CassandraKeyValueSchema;
-import dev.responsive.db.KeySpec;
 import dev.responsive.db.LwtWriter;
 import dev.responsive.db.WriterFactory;
 import java.util.ArrayList;
@@ -52,8 +50,7 @@ import org.mockito.quality.Strictness;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class LwtWriterTest {
 
-  private static final long OFFSET = 123L;
-  private static final KeySpec<Bytes> KEY_SPEC = new BytesKeySpec();
+  private static final long CURRENT_TS = 100L;
 
   @Mock
   private WriterFactory<Bytes> writerFactory;
@@ -93,9 +90,9 @@ class LwtWriterTest {
     );
 
     // When:
-    writer.insert(Bytes.wrap(new byte[]{0}), new byte[]{0});
+    writer.insert(Bytes.wrap(new byte[]{0}), new byte[]{0}, CURRENT_TS);
     writer.delete(Bytes.wrap(new byte[]{1}));
-    writer.insert(Bytes.wrap(new byte[]{2}), new byte[]{2});
+    writer.insert(Bytes.wrap(new byte[]{2}), new byte[]{2}, CURRENT_TS);
     writer.flush();
 
     // Then:
@@ -136,9 +133,9 @@ class LwtWriterTest {
     );
 
     // When:
-    writer.insert(Bytes.wrap(new byte[]{0}), new byte[]{0});
+    writer.insert(Bytes.wrap(new byte[]{0}), new byte[]{0}, CURRENT_TS);
     writer.delete(Bytes.wrap(new byte[]{1}));
-    writer.insert(Bytes.wrap(new byte[]{2}), new byte[]{2});
+    writer.insert(Bytes.wrap(new byte[]{2}), new byte[]{2}, CURRENT_TS);
     writer.flush();
 
     // Then:
@@ -156,8 +153,8 @@ class LwtWriterTest {
         final String tableName,
         final int partition,
         final Bytes key,
-        final byte[] value
-    ) {
+        final byte[] value,
+        long timestamp) {
       return capturingStatement("insertData", new Object[]{tableName, partition, key, value});
     }
 

@@ -49,11 +49,12 @@ public interface RemoteSchema<K> {
       final String table,
       final int partitionKey,
       final K key,
-      final byte[] value
+      final byte[] value,
+      long timestamp
   );
 
   /**
-   * Generates a statement that can delete data into the table
+   * Generates a statement that can delete data from the table
    * specified.
    */
   @CheckReturnValue

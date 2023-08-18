@@ -22,6 +22,7 @@ import static dev.responsive.db.ColumnName.DATA_VALUE;
 import static dev.responsive.db.ColumnName.OFFSET;
 import static dev.responsive.db.ColumnName.PARTITION_KEY;
 import static dev.responsive.db.ColumnName.ROW_TYPE;
+import static dev.responsive.db.ColumnName.TIMESTAMP;
 import static dev.responsive.kafka.store.ResponsiveStoreRegistration.NO_COMMITTED_OFFSET;
 
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
@@ -35,6 +36,7 @@ import com.datastax.oss.driver.api.querybuilder.schema.compaction.TimeWindowComp
 import dev.responsive.db.partitioning.SubPartitioner;
 import java.nio.ByteBuffer;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -116,6 +118,7 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
         .ifNotExists()
         .withPartitionKey(ROW_TYPE.column(), DataTypes.TINYINT)
         .withPartitionKey(DATA_KEY.column(), DataTypes.BLOB)
+        .withClusteringColumn(TIMESTAMP.column(), DataTypes.TIMESTAMP)
         .withColumn(DATA_VALUE.column(), DataTypes.BLOB);
   }
 
@@ -187,6 +190,7 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
             .insertInto(tableName)
             .value(ROW_TYPE.column(), RowType.DATA_ROW.literal())
             .value(DATA_KEY.column(), bindMarker(DATA_KEY.bind()))
+            .value(TIMESTAMP.column(), bindMarker(TIMESTAMP.bind()))
             .value(DATA_VALUE.column(), bindMarker(DATA_VALUE.bind()))
             .build()
     ));
@@ -197,6 +201,7 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
             .columns(DATA_VALUE.column())
             .where(ROW_TYPE.relation().isEqualTo(RowType.DATA_ROW.literal()))
             .where(DATA_KEY.relation().isEqualTo(bindMarker(DATA_KEY.bind())))
+            .where(TIMESTAMP.relation().isGreaterThanOrEqualTo(bindMarker(TIMESTAMP.bind())))
             .build()
     ));
 
@@ -258,14 +263,14 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
    * Inserts data into {@code table}. Note that this will overwrite
    * any existing entry in the table with the same key.
    *
-   * @param table         the table to insert into
-   * @param partitionKey  the partitioning key
-   * @param key           the data key
-   * @param value         the data value
-   *
+   * @param table        the table to insert into
+   * @param partitionKey the partitioning key
+   * @param key          the data key
+   * @param value        the data value
+   * @param timestamp    the event time of the data
    * @return a statement that, when executed, will insert the row
-   *         matching {@code partitionKey} and {@code key} in the
-   *         {@code table} with value {@code value}
+   * matching {@code partitionKey} and {@code key} in the
+   * {@code table} with value {@code value}
    */
   @Override
   @CheckReturnValue
@@ -273,29 +278,32 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
       final String table,
       final int partitionKey,
       final Bytes key,
-      final byte[] value
+      final byte[] value,
+      long timestamp
   ) {
     return insert.get(table)
         .bind()
         .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
-        .setByteBuffer(DATA_VALUE.bind(), ByteBuffer.wrap(value));
+        .setByteBuffer(DATA_VALUE.bind(), ByteBuffer.wrap(value))
+        .setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(timestamp));
   }
 
   /**
    * Retrieves the value of the given {@code partitionKey} and {@code key}
    * from {@code table}.
    *
-   * @param tableName the table to retrieve from
-   * @param partition the partition
-   * @param key       the data key
-   *
+   * @param tableName  the table to retrieve from
+   * @param partition  the partition
+   * @param key        the data key
+   * @param minValidTs the minimum valid timestamp to apply semantic TTL
    * @return the value previously set
    */
   @Override
-  public byte[] get(final String tableName, final int partition, final Bytes key) {
+  public byte[] get(final String tableName, final int partition, final Bytes key, long minValidTs) {
     final BoundStatement get = this.get.get(tableName)
         .bind()
-        .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()));
+        .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
+        .setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(minValidTs));
 
     final List<Row> result = client.execute(get).all();
     if (result.size() > 1) {
@@ -313,16 +321,16 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
       final String tableName,
       final int partition,
       final Bytes from,
-      final Bytes to
-  ) {
+      final Bytes to,
+      long minValidTs) {
     throw new UnsupportedOperationException("range scans are not supported on Idempotent schemas.");
   }
 
   @Override
   public KeyValueIterator<Bytes, byte[]> all(
       final String tableName,
-      final int partition
-  ) {
+      final int partition,
+      long minValidTs) {
     throw new UnsupportedOperationException("all is not supported on Idempotent schemas");
   }
 

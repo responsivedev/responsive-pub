@@ -171,12 +171,12 @@ class CommitBuffer<K, S extends RemoteSchema<K>> implements RecordBatchingStateR
         writerFactory, basePartition, basePartition + subPartitioner.getFactor() - 1);
   }
 
-  public void put(final K key, final byte[] value) {
-    buffer.put(key, Result.value(key, value));
+  public void put(final K key, final byte[] value, long timestamp) {
+    buffer.put(key, Result.value(key, value, timestamp));
   }
 
-  public void tombstone(final K key) {
-    buffer.put(key, Result.tombstone(key));
+  public void tombstone(final K key, long timestamp) {
+    buffer.put(key, Result.tombstone(key, timestamp));
   }
 
   public Result<K> get(final K key) {
@@ -353,7 +353,7 @@ class CommitBuffer<K, S extends RemoteSchema<K>> implements RecordBatchingStateR
       if (result.isTombstone) {
         writer.delete(result.key);
       } else if (keySpec.retain(result.key)) {
-        writer.insert(result.key, result.value);
+        writer.insert(result.key, result.value, result.timestamp);
       }
     }
 
@@ -434,9 +434,9 @@ class CommitBuffer<K, S extends RemoteSchema<K>> implements RecordBatchingStateR
     for (ConsumerRecord<byte[], byte[]> record : records) {
       consumedOffset = record.offset();
       if (record.value() == null) {
-        tombstone(keySpec.keyFromRecord(record));
+        tombstone(keySpec.keyFromRecord(record), record.timestamp());
       } else {
-        put(keySpec.keyFromRecord(record), record.value());
+        put(keySpec.keyFromRecord(record), record.value(), record.timestamp());
       }
     }
 
