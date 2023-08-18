@@ -68,6 +68,7 @@ jobs:
 
       - name: Run Smoke Test
         run: |
+          sindri/scripts/update-versions -u -s responsiveOperator -e local -i responsive-operator:`./gradlew operator:cV | grep Project.version | sed 's/Project version: //'`
           sindri/scripts/update-client-versions -s master -p false -i simple-example -t `./gradlew kafka-client:cV  | grep "Project version" | sed 's/Project version: //'`
           sindri/scripts/run-smoke-test -l -w system-tests-pub-${GITHUB_HEAD_REF} -s master
         env:
