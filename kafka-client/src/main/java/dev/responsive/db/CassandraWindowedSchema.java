@@ -38,6 +38,7 @@ import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
 import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
 import com.datastax.oss.driver.api.querybuilder.schema.CreateTable;
 import com.datastax.oss.driver.api.querybuilder.schema.CreateTableWithOptions;
+import com.datastax.oss.driver.api.querybuilder.schema.RelationOptions;
 import dev.responsive.db.partitioning.SubPartitioner;
 import dev.responsive.model.Stamped;
 import dev.responsive.utils.Iterators;
@@ -95,7 +96,7 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
   }
 
   @Override
-  public void create(final String tableName, Optional<Duration> ttl) {
+  public void create(final String name, Optional<Duration> ttl) {
     // TODO: explore better data models for fetchRange/fetchAll
     // Cassandra does not support filtering on a composite key column if
     // the previous columns in the composite are not equality filters
@@ -108,8 +109,16 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
     // this would also help us avoid having a partitioning key that is
     // too small in cardinality) we just filter the results to match the
     // time bounds
-    LOG.info("Creating windowed data table {} in remote store.", tableName);
-    CreateTableWithOptions createTable = SchemaBuilder
+    LOG.info("Creating windowed data table {} in remote store.", name);
+    final CreateTableWithOptions createTable = ttl.isPresent()
+        ? createTable(name).withDefaultTimeToLiveSeconds(Math.toIntExact(ttl.get().getSeconds()))
+        : createTable(name);
+
+    client.execute(createTable.build());
+  }
+
+  private CreateTableWithOptions createTable(final String tableName) {
+    return SchemaBuilder
         .createTable(tableName)
         .ifNotExists()
         .withPartitionKey(PARTITION_KEY.column(), DataTypes.INT)
@@ -119,12 +128,6 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
         .withColumn(DATA_VALUE.column(), DataTypes.BLOB)
         .withColumn(OFFSET.column(), DataTypes.BIGINT)
         .withColumn(EPOCH.column(), DataTypes.BIGINT);
-
-    createTable = ttl.isPresent()
-        ? createTable.withDefaultTimeToLiveSeconds(Math.toIntExact(ttl.get().getSeconds()))
-        : createTable;
-
-    client.execute(createTable.build());
   }
 
   @Override

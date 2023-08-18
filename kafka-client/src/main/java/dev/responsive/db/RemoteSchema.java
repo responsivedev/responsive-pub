@@ -32,7 +32,6 @@ public interface RemoteSchema<K> {
    * Creates a table with the supplied {@code tableName} with the
    * desired schema.
    */
-  @CheckReturnValue
   void create(String tableName, Optional<Duration> ttl);
 
   /**

@@ -19,7 +19,6 @@ package dev.responsive.db;
 import static com.datastax.oss.driver.api.querybuilder.QueryBuilder.bindMarker;
 import static dev.responsive.db.ColumnName.DATA_KEY;
 import static dev.responsive.db.ColumnName.DATA_VALUE;
-import static dev.responsive.db.ColumnName.METADATA_KEY;
 import static dev.responsive.db.ColumnName.OFFSET;
 import static dev.responsive.db.ColumnName.PARTITION_KEY;
 
@@ -72,20 +71,15 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
   }
 
   @Override
-  @CheckReturnValue
   public void create(final String tableName, Optional<Duration> ttl) {
     LOG.info("Creating fact data table {} in remote store.", tableName);
-    CreateTableWithOptions createTable = SchemaBuilder
-        .createTable(tableName)
-        .ifNotExists()
-        .withPartitionKey(DATA_KEY.column(), DataTypes.BLOB)
-        .withColumn(DATA_VALUE.column(), DataTypes.BLOB);
 
+    final CreateTableWithOptions createTable;
     if (ttl.isPresent()) {
       final int ttlSeconds = Math.toIntExact(ttl.get().getSeconds());
       // 20 is a magic number recommended by scylla for the number of buckets
       final Duration compactionWindow = Duration.ofSeconds(ttlSeconds / 20);
-      createTable = createTable.withDefaultTimeToLiveSeconds(ttlSeconds)
+      createTable = createTable(tableName).withDefaultTimeToLiveSeconds(ttlSeconds)
           .withCompaction(
               SchemaBuilder.timeWindowCompactionStrategy()
                   .withCompactionWindow(
@@ -93,7 +87,8 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
                       TimeWindowCompactionStrategy.CompactionWindowUnit.MINUTES)
           );
     } else {
-      createTable = createTable.withCompaction(SchemaBuilder.timeWindowCompactionStrategy());
+      createTable = createTable(tableName)
+          .withCompaction(SchemaBuilder.timeWindowCompactionStrategy());
     }
 
     // separate metadata from the main table for the fact schema, this is acceptable
@@ -110,6 +105,14 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
 
     client.execute(createTable.build());
     client.execute(createMetadataTable.build());
+  }
+
+  private CreateTableWithOptions createTable(final String tableName) {
+    return SchemaBuilder
+        .createTable(tableName)
+        .ifNotExists()
+        .withPartitionKey(DATA_KEY.column(), DataTypes.BLOB)
+        .withColumn(DATA_VALUE.column(), DataTypes.BLOB);
   }
 
   /**
@@ -313,8 +316,7 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
     throw new UnsupportedOperationException("all is not supported on Idempotent schemas");
   }
 
-  // Visible for Testing
-  static String metadataTable(final String tableName) {
+  private static String metadataTable(final String tableName) {
     return tableName + "_md";
   }
 

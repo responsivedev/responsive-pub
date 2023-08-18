@@ -88,11 +88,9 @@ class CassandraFactSchemaIntegrationTest {
     final var table = session.getMetadata()
         .getKeyspace(session.getKeyspace().get())
         .get()
-        .getTable(CassandraFactSchema.metadataTable(storeName))
+        .getTable(storeName + "_md")
         .get();
-    assertThat(
-        table.describe(false),
-        containsStringIgnoringCase(CassandraFactSchema.metadataTable(storeName)));
+    assertThat(table.describe(false), containsStringIgnoringCase(storeName + "_md"));
   }
 
   @SuppressWarnings("OptionalGetWithoutIsPresent")

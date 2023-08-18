@@ -34,7 +34,6 @@ import com.datastax.oss.driver.api.core.cql.Row;
 import com.datastax.oss.driver.api.core.type.DataTypes;
 import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
 import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
-import com.datastax.oss.driver.api.querybuilder.schema.CreateTable;
 import com.datastax.oss.driver.api.querybuilder.schema.CreateTableWithOptions;
 import dev.responsive.db.partitioning.SubPartitioner;
 import dev.responsive.utils.Iterators;
@@ -83,10 +82,17 @@ public class CassandraKeyValueSchema implements RemoteKeyValueSchema {
   }
 
   @Override
-  @CheckReturnValue
-  public void create(final String tableName, Optional<Duration> ttl) {
-    LOG.info("Creating data table {} in remote store.", tableName);
-    CreateTableWithOptions createTable = SchemaBuilder
+  public void create(final String name, Optional<Duration> ttl) {
+    LOG.info("Creating data table {} in remote store.", name);
+    final CreateTableWithOptions createTable = ttl.isPresent()
+        ? createTable(name).withDefaultTimeToLiveSeconds(Math.toIntExact(ttl.get().getSeconds()))
+        : createTable(name);
+
+    client.execute(createTable.build());
+  }
+
+  private CreateTableWithOptions createTable(final String tableName) {
+    return SchemaBuilder
         .createTable(tableName)
         .ifNotExists()
         .withPartitionKey(PARTITION_KEY.column(), DataTypes.INT)
@@ -95,12 +101,6 @@ public class CassandraKeyValueSchema implements RemoteKeyValueSchema {
         .withColumn(DATA_VALUE.column(), DataTypes.BLOB)
         .withColumn(OFFSET.column(), DataTypes.BIGINT)
         .withColumn(EPOCH.column(), DataTypes.BIGINT);
-
-    createTable = ttl.isPresent()
-        ? createTable.withDefaultTimeToLiveSeconds(Math.toIntExact(ttl.get().getSeconds()))
-        : createTable;
-
-    client.execute(createTable.build());
   }
 
   /**
