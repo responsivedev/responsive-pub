@@ -75,17 +75,11 @@ class ResponsiveConsumerTest {
   }
 
   @Test
-  public void shouldNotifyWhenNoListenerProvided() {
-    // given:
-    consumer.subscribe(List.of("baguette", "pita"));
-    final var rebalanceListener = verifyAndGetCapturedRebalanceListener();
-
-    // when:
-    rebalanceListener.onPartitionsAssigned(List.of(PARTITION));
-
-    // then:
-    verify(listener1).onPartitionsAssigned(List.of(PARTITION));
-    verify(listener2).onPartitionsAssigned(List.of(PARTITION));
+  public void shouldThrowWhenNoListenerProvided() {
+    assertThrows(
+        IllegalStateException.class,
+        () -> consumer.subscribe(List.of("baguette", "pita"))
+    );
   }
 
   @Test
