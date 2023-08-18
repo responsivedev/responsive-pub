@@ -23,6 +23,7 @@ import static dev.responsive.db.ColumnName.OFFSET;
 import static dev.responsive.db.ColumnName.PARTITION_KEY;
 import static dev.responsive.db.ColumnName.ROW_TYPE;
 import static dev.responsive.kafka.store.ResponsiveStoreRegistration.NO_COMMITTED_OFFSET;
+
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
 import com.datastax.oss.driver.api.core.cql.Row;
