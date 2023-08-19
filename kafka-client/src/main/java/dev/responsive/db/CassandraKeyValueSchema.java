@@ -293,7 +293,7 @@ public class CassandraKeyValueSchema implements RemoteKeyValueSchema {
       final int partitionKey,
       final Bytes key,
       final byte[] value,
-      long timestamp
+      final long timestamp
   ) {
     return insert.get(table)
         .bind()

@@ -16,6 +16,8 @@
 
 package dev.responsive.model;
 
+import dev.responsive.db.KeySpec;
+
 public class Result<K> {
 
   public final K key;
@@ -36,5 +38,11 @@ public class Result<K> {
     this.value = value;
     this.isTombstone = isTombstone;
     this.timestamp = timestamp;
+  }
+
+  public int size(final KeySpec<K> extractor) {
+    return extractor.bytes(key).get().length
+        + (isTombstone ? 0 : value.length)
+        + Long.BYTES; // timestamp size
   }
 }

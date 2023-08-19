@@ -24,10 +24,10 @@ public class SizeTrackingBuffer<K> {
   }
 
   public void put(final K key, final Result<K> value) {
-    bytes += sizeOf(key, value);
+    bytes += value.size(extractor);
     final Result<K> old = buffer.put(key, value);
     if (old != null) {
-      bytes -= sizeOf(key, old);
+      bytes -= old.size(extractor);
     }
   }
 
@@ -38,11 +38,5 @@ public class SizeTrackingBuffer<K> {
 
   public NavigableMap<K, Result<K>> getReader() {
     return reader;
-  }
-
-  private long sizeOf(final K key, final Result<K> value) {
-    return extractor.bytes(key).get().length
-        + (value.isTombstone ? 0 : value.value.length)
-        + Long.BYTES; // timestamp size
   }
 }

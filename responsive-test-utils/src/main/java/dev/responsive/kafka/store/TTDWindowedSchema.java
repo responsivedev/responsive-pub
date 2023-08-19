@@ -50,7 +50,8 @@ public class TTDWindowedSchema extends TTDSchema<Stamped<Bytes>> implements Remo
       final int partitionKey,
       final Stamped<Bytes> key,
       final byte[] value,
-      long timestamp) {
+      final long timestamp
+  ) {
     tableNameToStore.get(tableName).put(key, value);
     return null;
   }

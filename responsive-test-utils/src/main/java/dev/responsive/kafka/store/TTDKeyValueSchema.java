@@ -49,7 +49,7 @@ public class TTDKeyValueSchema extends TTDSchema<Bytes> implements RemoteKeyValu
       final int partitionKey,
       final Bytes key,
       final byte[] value,
-      long timestamp
+      final long timestamp
   ) {
     tableNameToStore.get(tableName).put(key, value);
     return null;

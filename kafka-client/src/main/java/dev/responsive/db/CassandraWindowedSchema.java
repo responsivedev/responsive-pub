@@ -313,7 +313,8 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
       final int partitionKey,
       final Stamped<Bytes> key,
       final byte[] value,
-      long timestamp) {
+      final long timestamp
+  ) {
     return insert.get(table)
         .bind()
         .setInt(PARTITION_KEY.bind(), partitionKey)

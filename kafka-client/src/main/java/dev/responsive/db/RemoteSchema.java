@@ -50,7 +50,7 @@ public interface RemoteSchema<K> {
       final int partitionKey,
       final K key,
       final byte[] value,
-      long timestamp
+      final long timestamp
   );
 
   /**
