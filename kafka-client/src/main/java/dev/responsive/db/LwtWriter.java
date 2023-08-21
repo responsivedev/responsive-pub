@@ -57,8 +57,8 @@ public class LwtWriter<K> implements RemoteWriter<K> {
   }
 
   @Override
-  public void insert(final K key, final byte[] value, long timestamp) {
-    statements.add(schema.insert(name, partition, key, value, timestamp));
+  public void insert(final K key, final byte[] value, long epochMillis) {
+    statements.add(schema.insert(name, partition, key, value, epochMillis));
   }
 
   @Override

@@ -301,7 +301,7 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
    * @param partitionKey the partitioning key
    * @param key          the data key
    * @param value        the data value
-   * @param timestamp    the timestamp of the event
+   * @param epochMillis    the timestamp of the event
    * @return a statement that, when executed, will insert the row
    * matching {@code partitionKey} and {@code key} in the
    * {@code table} with value {@code value}
@@ -313,7 +313,7 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
       final int partitionKey,
       final Stamped<Bytes> key,
       final byte[] value,
-      final long timestamp
+      final long epochMillis
   ) {
     return insert.get(table)
         .bind()

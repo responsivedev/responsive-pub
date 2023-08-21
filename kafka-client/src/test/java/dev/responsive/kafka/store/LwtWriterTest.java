@@ -154,7 +154,7 @@ class LwtWriterTest {
         final int partition,
         final Bytes key,
         final byte[] value,
-        long timestamp) {
+        long epochMillis) {
       return capturingStatement("insertData", new Object[]{tableName, partition, key, value});
     }
 

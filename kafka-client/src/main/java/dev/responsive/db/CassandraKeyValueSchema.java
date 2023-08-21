@@ -108,17 +108,6 @@ public class CassandraKeyValueSchema implements RemoteKeyValueSchema {
         .withColumn(TIMESTAMP.column(), DataTypes.TIMESTAMP);
   }
 
-  /**
-   * Initializes the metadata entry for {@code table} by adding a
-   * row with key {@code _metadata} and sets special columns
-   * {@link ColumnName#OFFSET} and {@link ColumnName#EPOCH}.
-   *
-   * <p>Note that this method is idempotent as it uses Cassandra's
-   * {@code IF NOT EXISTS} functionality.
-   *
-   * @param table          the table that is initialized
-   * @param kafkaPartition the partition to initialize
-   */
   @Override
   public WriterFactory<Bytes> init(
       final String table,
@@ -251,15 +240,6 @@ public class CassandraKeyValueSchema implements RemoteKeyValueSchema {
     return client;
   }
 
-  /**
-   * @param table         the table to delete from
-   * @param partitionKey  the partitioning key
-   * @param key           the data key
-   *
-   * @return a statement that, when executed, will delete the row
-   *         matching {@code partitionKey} and {@code key} in the
-   *         {@code table}
-   */
   @Override
   @CheckReturnValue
   public BoundStatement delete(
@@ -273,19 +253,6 @@ public class CassandraKeyValueSchema implements RemoteKeyValueSchema {
         .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()));
   }
 
-  /**
-   * Inserts data into {@code table}. Note that this will overwrite
-   * any existing entry in the table with the same key.
-   *
-   * @param table        the table to insert into
-   * @param partitionKey the partitioning key
-   * @param key          the data key
-   * @param value        the data value
-   * @param timestamp    the event time of the inserted value
-   * @return a statement that, when executed, will insert the row
-   * matching {@code partitionKey} and {@code key} in the
-   * {@code table} with value {@code value}
-   */
   @Override
   @CheckReturnValue
   public BoundStatement insert(
@@ -293,26 +260,16 @@ public class CassandraKeyValueSchema implements RemoteKeyValueSchema {
       final int partitionKey,
       final Bytes key,
       final byte[] value,
-      final long timestamp
+      final long epochMillis
   ) {
     return insert.get(table)
         .bind()
         .setInt(PARTITION_KEY.bind(), partitionKey)
         .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
-        .setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(timestamp))
+        .setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(epochMillis))
         .setByteBuffer(DATA_VALUE.bind(), ByteBuffer.wrap(value));
   }
 
-  /**
-   * Retrieves the value of the given {@code partitionKey} and {@code key}
-   * from {@code table}.
-   *
-   * @param tableName  the table to retrieve from
-   * @param partition  the partition
-   * @param key        the data key
-   * @param minValidTs the minimum timestamp to return
-   * @return the value previously set
-   */
   @Override
   public byte[] get(final String tableName, final int partition, final Bytes key, long minValidTs) {
     final BoundStatement get = this.get.get(tableName)
@@ -332,22 +289,6 @@ public class CassandraKeyValueSchema implements RemoteKeyValueSchema {
     }
   }
 
-  /**
-   * Retrieves a range of key value pairs from the given {@code partitionKey} and
-   * {@code table} such that the keys (compared lexicographically) fall within the
-   * range of {@code from} to {@code to}.
-   *
-   * <p>Note that the returned iterator returns values from the remote server
-   * as it's iterated (data fetching is handling by the underlying Cassandra
-   * session).
-   *
-   * @param tableName  the table to retrieve from
-   * @param partition  the partition
-   * @param from       the starting key (inclusive)
-   * @param to         the ending key (exclusive)
-   * @param minValidTs the minimum timestamp to return
-   * @return an iterator of all key-value pairs in the range
-   */
   @Override
   public KeyValueIterator<Bytes, byte[]> range(
       final String tableName,
@@ -367,19 +308,6 @@ public class CassandraKeyValueSchema implements RemoteKeyValueSchema {
     return Iterators.kv(result.iterator(), CassandraKeyValueSchema::rows);
   }
 
-  /**
-   * Retrieves all key value pairs from the given {@code partitionKey} and
-   * {@code table} such that the keys are sorted lexicographically
-   *
-   * <p>Note that the returned iterator returns values from the remote server
-   * as it's iterated (data fetching is handling by the underlying Cassandra
-   * session).
-   *
-   * @param tableName  the table to retrieve from
-   * @param partition  the partition
-   * @param minValidTs the minimum valid timestamp to return
-   * @return an iterator of all key-value pairs
-   */
   @Override
   public KeyValueIterator<Bytes, byte[]> all(
       final String tableName,

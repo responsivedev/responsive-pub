@@ -85,8 +85,8 @@ public abstract class TTDSchema<K> implements RemoteSchema<K> {
 
     @SuppressWarnings("ResultOfMethodCallIgnored")
     @Override
-    public void insert(final K key, final byte[] value, long timestamp) {
-      schema.insert(tableName, partition, key, value, timestamp);
+    public void insert(final K key, final byte[] value, long epochMillis) {
+      schema.insert(tableName, partition, key, value, epochMillis);
     }
 
     @SuppressWarnings("ResultOfMethodCallIgnored")
