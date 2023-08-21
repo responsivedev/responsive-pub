@@ -41,20 +41,37 @@ public interface RemoteSchema<K> {
   void prepare(final String tableName);
 
   /**
-   * Generates a statement that can insert data into the table
-   * specified.
+   * Inserts data into {@code table}. Note that this will overwrite
+   * any existing entry in the table with the same key.
+   *
+   * @param table         the table to insert into
+   * @param partitionKey  the partitioning key
+   * @param key           the data key
+   * @param value         the data value
+   * @param epochMillis   the event time with which this event
+   *                      was inserted in epochMillis
+   *
+   * @return a statement that, when executed, will insert the row
+   * matching {@code partitionKey} and {@code key} in the
+   * {@code table} with value {@code value}
    */
   @CheckReturnValue
   BoundStatement insert(
       final String table,
       final int partitionKey,
       final K key,
-      final byte[] value
+      final byte[] value,
+      final long epochMillis
   );
 
   /**
-   * Generates a statement that can delete data into the table
-   * specified.
+   * @param table         the table to delete from
+   * @param partitionKey  the partitioning key
+   * @param key           the data key
+   *
+   * @return a statement that, when executed, will delete the row
+   *         matching {@code partitionKey} and {@code key} in the
+   *         {@code table}
    */
   @CheckReturnValue
   BoundStatement delete(

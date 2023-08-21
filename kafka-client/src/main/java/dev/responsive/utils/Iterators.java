@@ -99,6 +99,13 @@ public final class Iterators {
     return new WindowKeyIterator<>(delegate, windowSize);
   }
 
+  public static <I, O, V> KeyValueIterator<O, V> mapKeys(
+      final KeyValueIterator<I, V> delegate,
+      final Function<I, O> mapper
+  ) {
+    return new KeyMappingIterator<>(delegate, mapper);
+  }
+
   private static class PeekingIterator<T> implements Iterator<T> {
 
     private final Iterator<T> delegate;
@@ -281,6 +288,42 @@ public final class Iterators {
         return delegate.next();
       }
       throw new NoSuchElementException();
+    }
+  }
+
+  private static class KeyMappingIterator<I, O, V> implements KeyValueIterator<O, V> {
+
+    private final KeyValueIterator<I, V> delegate;
+    private final Function<I, O> mapper;
+
+    private KeyMappingIterator(final KeyValueIterator<I, V> delegate, final Function<I, O> mapper) {
+      this.delegate = delegate;
+      this.mapper = mapper;
+    }
+
+    @Override
+    public boolean hasNext() {
+      return delegate.hasNext();
+    }
+
+    @Override
+    public KeyValue<O, V> next() {
+      if (hasNext()) {
+        final var next = delegate.next();
+        return new KeyValue<>(mapper.apply(next.key), next.value);
+      }
+      throw new NoSuchElementException();
+    }
+
+    @Override
+    public void close() {
+      delegate.close();
+    }
+
+    @Override
+    public O peekNextKey() {
+      final var next = delegate.peekNextKey();
+      return mapper.apply(next);
     }
   }
 

@@ -20,6 +20,7 @@ import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -45,6 +46,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class FactSchemaWriterTest {
 
+  private static final long CURRENT_TS = 100L;
+
   @Mock private CassandraClient client;
   @Mock private RemoteSchema<Bytes> schema;
   @Mock private AsyncResultSet result;
@@ -55,7 +58,7 @@ class FactSchemaWriterTest {
   @Test
   public void shouldNotUseBatchesOnFlush() {
     // Given:
-    when(schema.insert(any(), anyInt(), any(), any()))
+    when(schema.insert(any(), anyInt(), any(), any(), anyLong()))
         .thenReturn(mock(BoundStatement.class));
     when(result.wasApplied()).thenReturn(true);
     when(client.executeAsync(statementCaptor.capture()))
@@ -68,7 +71,7 @@ class FactSchemaWriterTest {
         "foo",
         0
     );
-    writer.insert(Bytes.wrap(new byte[]{0}), new byte[]{1});
+    writer.insert(Bytes.wrap(new byte[]{0}), new byte[]{1}, CURRENT_TS);
     writer.flush();
 
     // Then:
@@ -82,7 +85,8 @@ class FactSchemaWriterTest {
   @Timeout(5)
   public void shouldIssueInsertsInParallel() throws ExecutionException, InterruptedException {
     // Given:
-    when(schema.insert(any(), anyInt(), any(), any())).thenReturn(mock(BoundStatement.class));
+    when(schema.insert(any(), anyInt(), any(), any(), anyLong()))
+        .thenReturn(mock(BoundStatement.class));
     when(result.wasApplied()).thenReturn(true);
 
     final var latch = new CountDownLatch(1);
@@ -108,8 +112,8 @@ class FactSchemaWriterTest {
         0
     );
 
-    writer.insert(Bytes.wrap(new byte[]{0}), new byte[]{1});
-    writer.insert(Bytes.wrap(new byte[]{0}), new byte[]{1});
+    writer.insert(Bytes.wrap(new byte[]{0}), new byte[]{1}, CURRENT_TS);
+    writer.insert(Bytes.wrap(new byte[]{0}), new byte[]{1}, CURRENT_TS);
     writer.flush().toCompletableFuture().get();
 
     // Then:

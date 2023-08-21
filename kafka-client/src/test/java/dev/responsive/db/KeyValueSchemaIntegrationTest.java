@@ -37,6 +37,9 @@ import org.testcontainers.containers.CassandraContainer;
 @ExtendWith(ResponsiveExtension.class)
 public class KeyValueSchemaIntegrationTest {
 
+  private static final long CURRENT_TS = 100L;
+  private static final long MIN_VALID_TS = 0L;
+
   private RemoteKeyValueSchema schema;
   private String name;
   private CassandraClient client;
@@ -65,19 +68,19 @@ public class KeyValueSchemaIntegrationTest {
     // Given:
     final String table = name;
     final List<BoundStatement> inserts = List.of(
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x0, 0x1}), new byte[]{0x1}),
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x1, 0x0}), new byte[]{0x1}),
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x2, 0x0}), new byte[]{0x1}),
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x2, 0x2}), new byte[]{0x1}),
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x1, 0x1}), new byte[]{0x1}),
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x0, 0x2}), new byte[]{0x1}),
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x2}), new byte[]{0x1}),
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x0}), new byte[]{0x1})
+        schema.insert(table, 0, Bytes.wrap(new byte[]{0x0, 0x1}), new byte[]{0x1}, CURRENT_TS),
+        schema.insert(table, 0, Bytes.wrap(new byte[]{0x1, 0x0}), new byte[]{0x1}, CURRENT_TS),
+        schema.insert(table, 0, Bytes.wrap(new byte[]{0x2, 0x0}), new byte[]{0x1}, CURRENT_TS),
+        schema.insert(table, 0, Bytes.wrap(new byte[]{0x2, 0x2}), new byte[]{0x1}, CURRENT_TS),
+        schema.insert(table, 0, Bytes.wrap(new byte[]{0x1, 0x1}), new byte[]{0x1}, CURRENT_TS),
+        schema.insert(table, 0, Bytes.wrap(new byte[]{0x0, 0x2}), new byte[]{0x1}, CURRENT_TS),
+        schema.insert(table, 0, Bytes.wrap(new byte[]{0x2}), new byte[]{0x1}, CURRENT_TS),
+        schema.insert(table, 0, Bytes.wrap(new byte[]{0x0}), new byte[]{0x1}, CURRENT_TS)
     );
     inserts.forEach(client::execute);
 
     // When:
-    final KeyValueIterator<Bytes, byte[]> all = schema.all(table, 0);
+    final KeyValueIterator<Bytes, byte[]> all = schema.all(table, 0, MIN_VALID_TS);
 
     // Then:
     Bytes old = all.next().key;
@@ -93,14 +96,14 @@ public class KeyValueSchemaIntegrationTest {
     // Given:
     final String table = name;
     final List<BoundStatement> inserts = List.of(
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x0, 0x1}), new byte[]{0x1}),
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x1, 0x0}), new byte[]{0x1}),
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x2, 0x0}), new byte[]{0x1}),
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x2, 0x2}), new byte[]{0x1}),
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x1, 0x1}), new byte[]{0x1}),
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x0, 0x2}), new byte[]{0x1}),
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x2}), new byte[]{0x1}),
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x0}), new byte[]{0x1})
+        schema.insert(table, 0, Bytes.wrap(new byte[]{0x0, 0x1}), new byte[]{0x1}, CURRENT_TS),
+        schema.insert(table, 0, Bytes.wrap(new byte[]{0x1, 0x0}), new byte[]{0x1}, CURRENT_TS),
+        schema.insert(table, 0, Bytes.wrap(new byte[]{0x2, 0x0}), new byte[]{0x1}, CURRENT_TS),
+        schema.insert(table, 0, Bytes.wrap(new byte[]{0x2, 0x2}), new byte[]{0x1}, CURRENT_TS),
+        schema.insert(table, 0, Bytes.wrap(new byte[]{0x1, 0x1}), new byte[]{0x1}, CURRENT_TS),
+        schema.insert(table, 0, Bytes.wrap(new byte[]{0x0, 0x2}), new byte[]{0x1}, CURRENT_TS),
+        schema.insert(table, 0, Bytes.wrap(new byte[]{0x2}), new byte[]{0x1}, CURRENT_TS),
+        schema.insert(table, 0, Bytes.wrap(new byte[]{0x0}), new byte[]{0x1}, CURRENT_TS)
     );
     inserts.forEach(client::execute);
 
@@ -109,7 +112,8 @@ public class KeyValueSchemaIntegrationTest {
         table,
         0,
         Bytes.wrap(new byte[]{0x0, 0x1}),
-        Bytes.wrap(new byte[]{0x0, 0x3}));
+        Bytes.wrap(new byte[]{0x0, 0x3}),
+        MIN_VALID_TS);
 
     // Then:
     final List<Bytes> keys = new ArrayList<>();
@@ -122,14 +126,92 @@ public class KeyValueSchemaIntegrationTest {
   }
 
   @Test
+  public void shouldRespectSemanticTtlForLookups() {
+    // Given:
+    final String table = name;
+    client.execute(
+        schema.insert(table, 0, Bytes.wrap(new byte[]{0x0, 0x1}), new byte[]{0x1}, CURRENT_TS));
+
+    // When:
+    final byte[] valid = schema.get(table, 0, Bytes.wrap(new byte[]{0x0, 0x1}), MIN_VALID_TS);
+    final byte[] expired = schema.get(table, 0, Bytes.wrap(new byte[]{0x0, 0x1}), CURRENT_TS + 1);
+
+    // Then:
+    MatcherAssert.assertThat(valid, Matchers.is(new byte[]{0x1}));
+    MatcherAssert.assertThat(expired, Matchers.nullValue());
+  }
+
+  @Test
+  public void shouldRespectSemanticTtlForRangeQueries() {
+    // Given:
+    final String table = name;
+    final List<BoundStatement> inserts = List.of(
+        schema.insert(table, 0, Bytes.wrap(new byte[]{0x0, 0x0}), new byte[]{0x1}, CURRENT_TS + 10),
+        // expired
+        schema.insert(table, 0, Bytes.wrap(new byte[]{0x0, 0x1}), new byte[]{0x1}, CURRENT_TS),
+        schema.insert(table, 0, Bytes.wrap(new byte[]{0x0, 0x2}), new byte[]{0x1}, CURRENT_TS + 20),
+        // not expired, but out of range
+        schema.insert(table, 0, Bytes.wrap(new byte[]{0x1, 0x0}), new byte[]{0x1}, CURRENT_TS + 20)
+    );
+    inserts.forEach(client::execute);
+
+    // When:
+    final KeyValueIterator<Bytes, byte[]> range = schema.range(
+        table,
+        0,
+        Bytes.wrap(new byte[]{0x0, 0x0}),
+        Bytes.wrap(new byte[]{0x0, 0x3}),
+        CURRENT_TS + 5
+    );
+
+    // Then:
+    final List<Bytes> keys = new ArrayList<>();
+    range.forEachRemaining(kv -> keys.add(kv.key));
+    MatcherAssert.assertThat(keys, Matchers.hasSize(2));
+    MatcherAssert.assertThat(keys, Matchers.hasItems(
+        Bytes.wrap(new byte[]{0x0, 0x0}),
+        Bytes.wrap(new byte[]{0x0, 0x2})
+    ));
+  }
+
+  @Test
+  public void shouldRespectSemanticTtlForAllQueries() {
+    // Given:
+    final String table = name;
+    final List<BoundStatement> inserts = List.of(
+        schema.insert(table, 0, Bytes.wrap(new byte[]{0x0, 0x0}), new byte[]{0x1}, CURRENT_TS + 10),
+        // expired
+        schema.insert(table, 0, Bytes.wrap(new byte[]{0x0, 0x1}), new byte[]{0x1}, CURRENT_TS),
+        schema.insert(table, 0, Bytes.wrap(new byte[]{0x0, 0x2}), new byte[]{0x1}, CURRENT_TS + 20)
+    );
+    inserts.forEach(client::execute);
+
+    // When:
+    final KeyValueIterator<Bytes, byte[]> range = schema.all(
+        table,
+        0,
+        CURRENT_TS + 5
+    );
+
+    // Then:
+    final List<Bytes> keys = new ArrayList<>();
+    range.forEachRemaining(kv -> keys.add(kv.key));
+    MatcherAssert.assertThat(keys, Matchers.hasSize(2));
+    MatcherAssert.assertThat(keys, Matchers.hasItems(
+        Bytes.wrap(new byte[]{0x0, 0x0}),
+        Bytes.wrap(new byte[]{0x0, 0x2})
+    ));
+  }
+
+  @Test
   public void shouldSupportDataKeyThatEqualsMetadataKey() {
     // Given:
     final String table = name;
     final byte[] valBytes = new byte[]{0x1};
-    client.execute(schema.insert(table, 0, ColumnName.METADATA_KEY, valBytes));
+    client.execute(schema.insert(table, 0, ColumnName.METADATA_KEY, valBytes, CURRENT_TS));
 
     // When:
-    final byte[] val = schema.get(name, 0, ColumnName.METADATA_KEY);
+    final byte[] val = schema.get(name, 0, ColumnName.METADATA_KEY, MIN_VALID_TS);
 
     // Then:
     MatcherAssert.assertThat(val, Matchers.is(valBytes));

@@ -37,10 +37,12 @@ public enum ColumnName {
   DATA_VALUE("value", "value", b -> bytes((byte[]) b)),
   OFFSET("offset", "offset"),
   EPOCH("epoch", "epoch"),
-  WINDOW_START("windowStart", "windowstart", ts -> timestamp((long) ts));
+  WINDOW_START("windowStart", "windowstart", ts -> timestamp((long) ts)),
+  TIMESTAMP("ts", "ts", ts -> timestamp((long) ts));
 
   static final Bytes METADATA_KEY
       = Bytes.wrap("_metadata".getBytes(StandardCharsets.UTF_8));
+  static final long METADATA_TS = -1L;
   private final String column;
   private final String bind;
   private final Function<Object, Literal> getLiteral;

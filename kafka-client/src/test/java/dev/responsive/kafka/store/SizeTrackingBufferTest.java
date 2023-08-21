@@ -11,6 +11,9 @@ import org.apache.kafka.common.utils.Bytes;
 import org.junit.jupiter.api.Test;
 
 class SizeTrackingBufferTest {
+
+  private static final long TIMESTAMP = 100L;
+
   private final SizeTrackingBuffer<Bytes> buffer = new SizeTrackingBuffer<>(new KeySpec<>() {
     @Override
     public Bytes keyFromRecord(final ConsumerRecord<byte[], byte[]> record) {
@@ -37,9 +40,9 @@ class SizeTrackingBufferTest {
   public void shouldTrackSizeOnInserts() {
     // given:
     final List<SizeCase> ops = List.of(
-        new SizeCase((byte) 1, 10, 20, 30),
-        new SizeCase((byte) 2, 8, 9, 47),
-        new SizeCase((byte) 3, 3, 7, 57)
+        new SizeCase((byte) 1, 10, 20, 38),
+        new SizeCase((byte) 2, 8, 9, 63),
+        new SizeCase((byte) 3, 3, 7, 81)
     );
 
     // when/then:
@@ -47,7 +50,7 @@ class SizeTrackingBufferTest {
       final var op = ops.get(i);
       final Bytes k = Bytes.wrap(bytes(op.key, op.keySize));
       final byte[] v = bytes((byte) i, op.recordSize);
-      buffer.put(k, Result.value(k, v));
+      buffer.put(k, Result.value(k, v, TIMESTAMP));
       assertThat(buffer.getBytes(), is(op.expectedTotal));
     }
   }
@@ -56,9 +59,9 @@ class SizeTrackingBufferTest {
   public void shouldTrackSizeOnInsertsWithUpdates() {
     // given:
     final List<SizeCase> ops = List.of(
-        new SizeCase((byte) 1, 10, 20, 30),
-        new SizeCase((byte) 2, 8, 9, 47),
-        new SizeCase((byte) 2, 3, 9, 42)
+        new SizeCase((byte) 1, 10, 20, 38),
+        new SizeCase((byte) 2, 8, 9, 63),
+        new SizeCase((byte) 2, 3, 9, 58)
     );
 
     // when/then:
@@ -66,7 +69,7 @@ class SizeTrackingBufferTest {
       final var op = ops.get(i);
       final Bytes k = Bytes.wrap(bytes(op.key, op.keySize));
       final byte[] v = bytes((byte) i, op.recordSize);
-      buffer.put(k, Result.value(k, v));
+      buffer.put(k, Result.value(k, v, TIMESTAMP));
       assertThat(buffer.getBytes(), is(op.expectedTotal));
     }
   }
@@ -77,36 +80,36 @@ class SizeTrackingBufferTest {
     final Bytes k1 = Bytes.wrap(bytes((byte) 1, 10));
 
     // when:
-    buffer.put(k1, Result.tombstone(k1));
+    buffer.put(k1, Result.tombstone(k1, TIMESTAMP));
 
     // then:
-    assertThat(buffer.getBytes(), is(10L));
+    assertThat(buffer.getBytes(), is(18L));
   }
 
   @Test
   public void shouldTrackSizeOnUpdateTombstone() {
     // given:
     final Bytes k1 = Bytes.wrap(bytes((byte) 1, 10));
-    buffer.put(k1, Result.tombstone(k1));
+    buffer.put(k1, Result.tombstone(k1, TIMESTAMP));
 
     when:
-    buffer.put(k1, Result.value(k1, bytes((byte) 2, 15)));
+    buffer.put(k1, Result.value(k1, bytes((byte) 2, 15), TIMESTAMP));
 
     // then:
-    assertThat(buffer.getBytes(), is(25L));
+    assertThat(buffer.getBytes(), is(33L));
   }
 
   @Test
   public void shouldTrackSizeOnUpdateFromTombstone() {
     // given:
     final Bytes k1 = Bytes.wrap(bytes((byte) 1, 10));
-    buffer.put(k1, Result.value(k1, bytes((byte) 2, 15)));
+    buffer.put(k1, Result.value(k1, bytes((byte) 2, 15), TIMESTAMP));
 
     when:
-    buffer.put(k1, Result.tombstone(k1));
+    buffer.put(k1, Result.tombstone(k1, TIMESTAMP));
 
     // then:
-    assertThat(buffer.getBytes(), is(10L));
+    assertThat(buffer.getBytes(), is(18L));
   }
 
 
@@ -114,10 +117,10 @@ class SizeTrackingBufferTest {
   public void shouldTrackSizeOnClear() {
     // given:
     final Bytes k1 = Bytes.wrap(bytes((byte) 1, 10));
-    buffer.put(k1, Result.value(k1, bytes((byte) 1, 15)));
+    buffer.put(k1, Result.value(k1, bytes((byte) 1, 15), TIMESTAMP));
     final Bytes k2 = Bytes.wrap(bytes((byte) 2, 10));
-    buffer.put(k2, Result.value(k2, bytes((byte) 2, 15)));
-    assertThat(buffer.getBytes(), is(50L));
+    buffer.put(k2, Result.value(k2, bytes((byte) 2, 15), TIMESTAMP));
+    assertThat(buffer.getBytes(), is(66L));
 
     // when:
     buffer.clear();

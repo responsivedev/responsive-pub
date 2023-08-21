@@ -37,9 +37,7 @@ import com.datastax.oss.driver.api.core.metadata.schema.ClusteringOrder;
 import com.datastax.oss.driver.api.core.type.DataTypes;
 import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
 import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
-import com.datastax.oss.driver.api.querybuilder.schema.CreateTable;
 import com.datastax.oss.driver.api.querybuilder.schema.CreateTableWithOptions;
-import com.datastax.oss.driver.api.querybuilder.schema.RelationOptions;
 import dev.responsive.db.partitioning.SubPartitioner;
 import dev.responsive.model.Stamped;
 import dev.responsive.utils.Iterators;
@@ -299,14 +297,14 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
    * Inserts data into {@code table}. Note that this will overwrite
    * any existing entry in the table with the same key.
    *
-   * @param table         the table to insert into
-   * @param partitionKey  the partitioning key
-   * @param key           the data key
-   * @param value         the data value
-   *
+   * @param table        the table to insert into
+   * @param partitionKey the partitioning key
+   * @param key          the data key
+   * @param value        the data value
+   * @param epochMillis    the timestamp of the event
    * @return a statement that, when executed, will insert the row
-   *         matching {@code partitionKey} and {@code key} in the
-   *         {@code table} with value {@code value}
+   * matching {@code partitionKey} and {@code key} in the
+   * {@code table} with value {@code value}
    */
   @Override
   @CheckReturnValue
@@ -314,7 +312,8 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
       final String table,
       final int partitionKey,
       final Stamped<Bytes> key,
-      final byte[] value
+      final byte[] value,
+      final long epochMillis
   ) {
     return insert.get(table)
         .bind()

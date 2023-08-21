@@ -16,23 +16,33 @@
 
 package dev.responsive.model;
 
+import dev.responsive.db.KeySpec;
+
 public class Result<K> {
 
   public final K key;
   public final byte[] value;
   public final boolean isTombstone;
+  public final long timestamp;
 
-  public static <K> Result<K> value(final K key, final byte[] value) {
-    return new Result<>(key, value, false);
+  public static <K> Result<K> value(final K key, final byte[] value, long timestamp) {
+    return new Result<>(key, value, false, timestamp);
   }
 
-  public static <K> Result<K> tombstone(final K key) {
-    return new Result<>(key, null, true);
+  public static <K> Result<K> tombstone(final K key, long timestamp) {
+    return new Result<>(key, null, true, timestamp);
   }
 
-  private Result(final K key, final byte[] value, final boolean isTombstone) {
+  private Result(final K key, final byte[] value, final boolean isTombstone, long timestamp) {
     this.key = key;
     this.value = value;
     this.isTombstone = isTombstone;
+    this.timestamp = timestamp;
+  }
+
+  public int size(final KeySpec<K> extractor) {
+    return extractor.bytes(key).get().length
+        + (isTombstone ? 0 : value.length)
+        + Long.BYTES; // timestamp size
   }
 }

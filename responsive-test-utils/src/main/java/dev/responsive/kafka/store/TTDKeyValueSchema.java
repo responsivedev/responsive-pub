@@ -48,7 +48,8 @@ public class TTDKeyValueSchema extends TTDSchema<Bytes> implements RemoteKeyValu
       final String tableName,
       final int partitionKey,
       final Bytes key,
-      final byte[] value
+      final byte[] value,
+      final long epochMillis
   ) {
     tableNameToStore.get(tableName).put(key, value);
     return null;
@@ -61,7 +62,7 @@ public class TTDKeyValueSchema extends TTDSchema<Bytes> implements RemoteKeyValu
   }
 
   @Override
-  public byte[] get(final String tableName, final int partition, final Bytes key) {
+  public byte[] get(final String tableName, final int partition, final Bytes key, long minValidTs) {
     return tableNameToStore.get(tableName).get(key);
   }
 
@@ -70,13 +71,14 @@ public class TTDKeyValueSchema extends TTDSchema<Bytes> implements RemoteKeyValu
       final String tableName,
       final int partition,
       Bytes from,
-      final Bytes to
-  ) {
+      final Bytes to,
+      long minValidTs) {
     return tableNameToStore.get(tableName).range(from, to);
   }
 
   @Override
-  public KeyValueIterator<Bytes, byte[]> all(final String tableName, final int partition) {
+  public KeyValueIterator<Bytes, byte[]> all(final String tableName, final int partition,
+                                             long minValidTs) {
     return tableNameToStore.get(tableName).all();
   }
 }
