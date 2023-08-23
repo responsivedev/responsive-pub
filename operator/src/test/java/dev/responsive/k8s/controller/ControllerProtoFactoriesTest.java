@@ -20,43 +20,40 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.is;
 
-import dev.responsive.k8s.crd.DemoPolicy.Diagnoser;
-import dev.responsive.k8s.crd.DemoPolicy.ProcessingRateDiagnoser;
 import dev.responsive.k8s.crd.ResponsivePolicy;
 import dev.responsive.k8s.crd.ResponsivePolicySpec;
+import dev.responsive.k8s.crd.kafkastreams.DemoPolicySpec;
+import dev.responsive.k8s.crd.kafkastreams.DiagnoserSpec;
+import dev.responsive.k8s.crd.kafkastreams.RateBasedDiagnoserSpec;
 import io.fabric8.kubernetes.api.model.ObjectMeta;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import responsive.controller.v1.controller.proto.ControllerOuterClass;
-import responsive.controller.v1.controller.proto.ControllerOuterClass.ApplicationState;
-import responsive.controller.v1.controller.proto.ControllerOuterClass.DemoPolicy;
-import responsive.controller.v1.controller.proto.ControllerOuterClass.DemoPolicy.LagDiagnoser;
-import responsive.controller.v1.controller.proto.ControllerOuterClass.PolicyStatus;
 
 class ControllerProtoFactoriesTest {
   private static final String TESTENV = "testenv";
 
   private final ResponsivePolicy demoPolicy = new ResponsivePolicy();
-  private ApplicationState demoApplicationState;
+  private ControllerOuterClass.ApplicationState demoApplicationState;
 
   @BeforeEach
   public void setup() {
     final var spec = new ResponsivePolicySpec(
         "gouda",
         "cheddar",
-        PolicyStatus.POLICY_STATUS_MANAGED,
+        ControllerOuterClass.PolicyStatus.POLICY_STATUS_MANAGED,
         ResponsivePolicySpec.PolicyType.DEMO,
-        Optional.of(new dev.responsive.k8s.crd.DemoPolicy(
-            123, 7, Optional.empty()))
+        Optional.of(new DemoPolicySpec(
+            123, 7, 1, Optional.empty()))
     );
     demoPolicy.setSpec(spec);
     final var demoMetadata = new ObjectMeta();
     demoMetadata.setNamespace("orange");
     demoMetadata.setName("banana");
     demoPolicy.setMetadata(demoMetadata);
-    demoApplicationState = ApplicationState.newBuilder()
+    demoApplicationState = ControllerOuterClass.ApplicationState.newBuilder()
         .setDemoState(ControllerOuterClass.DemoApplicationState.newBuilder().setReplicas(3).build())
         .build();
   }
@@ -69,36 +66,41 @@ class ControllerProtoFactoriesTest {
     // then:
     assertThat(request.getApplicationId(), is("testenv/gouda/cheddar"));
     assertThat(request.getPolicy().hasDemoPolicy(), is(true));
-    assertThat(request.getPolicy().getStatus(), is(PolicyStatus.POLICY_STATUS_MANAGED));
-    final DemoPolicy demoPolicy = request.getPolicy().getDemoPolicy();
+    assertThat(
+        request.getPolicy().getStatus(),
+        is(ControllerOuterClass.PolicyStatus.POLICY_STATUS_MANAGED)
+    );
+    final ControllerOuterClass.DemoPolicySpec demoPolicy = request.getPolicy().getDemoPolicy();
     assertThat(demoPolicy.getMaxReplicas(), is(123));
     assertThat(demoPolicy.getMinReplicas(), is(7));
   }
 
-  private ResponsivePolicySpec specWithDiagnoser(final Diagnoser diagnoser) {
+  private ResponsivePolicySpec specWithDiagnoser(
+      final DiagnoserSpec diagnoserSpec) {
     return new ResponsivePolicySpec(
         "gouda",
         "cheddar",
-        PolicyStatus.POLICY_STATUS_MANAGED,
+        ControllerOuterClass.PolicyStatus.POLICY_STATUS_MANAGED,
         ResponsivePolicySpec.PolicyType.DEMO,
-        Optional.of(new dev.responsive.k8s.crd.DemoPolicy(
-            123, 7, Optional.of(List.of(diagnoser))))
+        Optional.of(new DemoPolicySpec(
+            123, 7, 1, Optional.of(List.of(diagnoserSpec))))
     );
   }
 
   @Test
   public void shouldCreateUpsertPolicyRequestForDemoPolicyWithLagDiagnoser() {
     // given:
-    demoPolicy.setSpec(specWithDiagnoser(Diagnoser.lag()));
+    demoPolicy.setSpec(specWithDiagnoser(DiagnoserSpec.lag()));
 
     // when:
     final var request = ControllerProtoFactories.upsertPolicyRequest(TESTENV, demoPolicy);
 
     // then:
-    final DemoPolicy created = request.getPolicy().getDemoPolicy();
+    final ControllerOuterClass.DemoPolicySpec created = request.getPolicy().getDemoPolicy();
     assertThat(created.getDiagnoserList(), contains(
-        DemoPolicy.Diagnoser.newBuilder()
-            .setLagScaleUp(LagDiagnoser.newBuilder().build())
+        ControllerOuterClass.DemoPolicySpec.DiagnoserSpec.newBuilder()
+            .setLagScaleUp(
+                ControllerOuterClass.DemoPolicySpec.LagDiagnoserSpec.newBuilder().build())
             .build()
     ));
   }
@@ -107,18 +109,20 @@ class ControllerProtoFactoriesTest {
   public void shouldCreateUpsertPolicyRequestForDemoPolicyWithRateScaleUpDiagnoser() {
     // given:
     demoPolicy.setSpec(
-        specWithDiagnoser(Diagnoser.processingRateScaleUp(
-            new ProcessingRateDiagnoser(10, Optional.of(123))))
+        specWithDiagnoser(
+            DiagnoserSpec.processingRateScaleUp(
+                new RateBasedDiagnoserSpec(10, Optional.of(123))))
     );
 
     // when:
     final var request = ControllerProtoFactories.upsertPolicyRequest(TESTENV, demoPolicy);
 
     // then:
-    final DemoPolicy created = request.getPolicy().getDemoPolicy();
+    final ControllerOuterClass.DemoPolicySpec created = request.getPolicy().getDemoPolicy();
     assertThat(created.getDiagnoserList(), contains(
-        DemoPolicy.Diagnoser.newBuilder()
-            .setProcessingRateScaleUp(DemoPolicy.ProcessingRateDiagnoser.newBuilder()
+        ControllerOuterClass.DemoPolicySpec.DiagnoserSpec.newBuilder()
+            .setProcessingRateScaleUp(ControllerOuterClass.DemoPolicySpec.RateBasedDiagnoserSpec
+                .newBuilder()
                 .setRate(10)
                 .setWindowMs(123)
                 .build())
@@ -130,18 +134,20 @@ class ControllerProtoFactoriesTest {
   public void shouldCreateUpsertPolicyRequestForDemoPolicyWithRateScaleDownDiagnoser() {
     // given:
     demoPolicy.setSpec(
-        specWithDiagnoser(Diagnoser.processingRateScaleDown(
-            new ProcessingRateDiagnoser(10, Optional.of(123))))
+        specWithDiagnoser(
+            DiagnoserSpec.processingRateScaleDown(
+                new RateBasedDiagnoserSpec(10, Optional.of(123))))
     );
 
     // when:
     final var request = ControllerProtoFactories.upsertPolicyRequest(TESTENV, demoPolicy);
 
     // then:
-    final DemoPolicy created = request.getPolicy().getDemoPolicy();
+    final ControllerOuterClass.DemoPolicySpec created = request.getPolicy().getDemoPolicy();
     assertThat(created.getDiagnoserList(), contains(
-        DemoPolicy.Diagnoser.newBuilder()
-            .setProcessingRateScaleDown(DemoPolicy.ProcessingRateDiagnoser.newBuilder()
+        ControllerOuterClass.DemoPolicySpec.DiagnoserSpec.newBuilder()
+            .setProcessingRateScaleDown(ControllerOuterClass.DemoPolicySpec.RateBasedDiagnoserSpec
+                .newBuilder()
                 .setRate(10)
                 .setWindowMs(123)
                 .build())

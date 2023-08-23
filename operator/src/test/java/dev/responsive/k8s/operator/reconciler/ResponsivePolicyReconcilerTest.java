@@ -34,10 +34,10 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import dev.responsive.controller.client.ControllerClient;
 import dev.responsive.k8s.controller.ControllerProtoFactories;
-import dev.responsive.k8s.crd.DemoPolicy;
 import dev.responsive.k8s.crd.ResponsivePolicy;
 import dev.responsive.k8s.crd.ResponsivePolicySpec;
 import dev.responsive.k8s.crd.ResponsivePolicySpec.PolicyType;
+import dev.responsive.k8s.crd.kafkastreams.DemoPolicySpec;
 import io.fabric8.kubernetes.api.model.ObjectMeta;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.javaoperatorsdk.operator.api.config.ControllerConfiguration;
@@ -102,7 +102,7 @@ class ResponsivePolicyReconcilerTest {
         "pong",
         PolicyStatus.POLICY_STATUS_MANAGED,
         ResponsivePolicySpec.PolicyType.DEMO,
-        Optional.of(new DemoPolicy(123, 7, Optional.empty()))
+        Optional.of(new DemoPolicySpec(123, 7, 1, Optional.empty()))
     ));
     reconciler = new dev.responsive.k8s.operator.reconciler.ResponsivePolicyReconciler(
         "testenv",
@@ -137,7 +137,7 @@ class ResponsivePolicyReconcilerTest {
         "pong",
         PolicyStatus.POLICY_STATUS_MANAGED,
         ResponsivePolicySpec.PolicyType.DEMO,
-        Optional.of(new DemoPolicy(123, 10, Optional.empty()))
+        Optional.of(new DemoPolicySpec(123, 10, 1, Optional.empty()))
     ));
     when(controllerClient.getTargetState(any())).thenThrow(new RuntimeException("oops"));
 
@@ -184,7 +184,7 @@ class ResponsivePolicyReconcilerTest {
         null,
         PolicyStatus.POLICY_STATUS_MANAGED,
         PolicyType.DEMO,
-        Optional.of(new DemoPolicy(10, 0, Optional.empty()))
+        Optional.of(new DemoPolicySpec(10, 0, 1, Optional.empty()))
     ));
 
     // when:
