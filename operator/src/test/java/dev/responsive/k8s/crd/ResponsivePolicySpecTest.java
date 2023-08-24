@@ -107,6 +107,8 @@ class ResponsivePolicySpecTest {
                 new DiagnoserSpec(
                     null,
                     Optional.empty(),
+                    Optional.empty(),
+                    Optional.empty(),
                     Optional.empty()
                 )
             ))))
