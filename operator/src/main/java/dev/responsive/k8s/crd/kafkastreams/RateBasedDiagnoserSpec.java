@@ -1,5 +1,6 @@
 package dev.responsive.k8s.crd.kafkastreams;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.Objects;
 import java.util.Optional;
@@ -17,6 +18,7 @@ public class RateBasedDiagnoserSpec {
     return windowMs;
   }
 
+  @JsonCreator
   public RateBasedDiagnoserSpec(
       @JsonProperty("rate") final int rate,
       @JsonProperty("windowMs") final Optional<Integer> windowMs

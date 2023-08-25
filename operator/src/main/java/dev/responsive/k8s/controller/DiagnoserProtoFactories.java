@@ -4,16 +4,17 @@ import dev.responsive.k8s.crd.kafkastreams.DiagnoserSpec;
 import dev.responsive.k8s.crd.kafkastreams.MeanSojournTimeDiagnoserSpec;
 import dev.responsive.k8s.crd.kafkastreams.RateBasedDiagnoserSpec;
 import responsive.controller.v1.controller.proto.ControllerOuterClass;
-import responsive.controller.v1.controller.proto.ControllerOuterClass.DemoPolicySpec.FixedReplicaScaleUpStrategySpec;
-import responsive.controller.v1.controller.proto.ControllerOuterClass.DemoPolicySpec.RateBasedScaleUpStrategySpec;
-import responsive.controller.v1.controller.proto.ControllerOuterClass.DemoPolicySpec.ScaleToMaxStrategySpec;
+import responsive.controller.v1.controller.proto.ControllerOuterClass.KafkaStreamsPolicySpec.FixedReplicaScaleUpStrategySpec;
+import responsive.controller.v1.controller.proto.ControllerOuterClass.KafkaStreamsPolicySpec.RateBasedScaleUpStrategySpec;
+import responsive.controller.v1.controller.proto.ControllerOuterClass.KafkaStreamsPolicySpec.ScaleToMaxStrategySpec;
 
 public class DiagnoserProtoFactories {
-  private static ControllerOuterClass.DemoPolicySpec.RateBasedDiagnoserSpec
+  private static ControllerOuterClass.KafkaStreamsPolicySpec.RateBasedDiagnoserSpec
       rateBasedDiagnoserFromK8sResource(
           final RateBasedDiagnoserSpec diagnoser
   ) {
-    final var builder = ControllerOuterClass.DemoPolicySpec.RateBasedDiagnoserSpec.newBuilder()
+    final var builder = ControllerOuterClass.KafkaStreamsPolicySpec.RateBasedDiagnoserSpec
+        .newBuilder()
         .setRate(diagnoser.getRate());
     if (diagnoser.getWindowMs().isPresent()) {
       builder.setWindowMs(diagnoser.getWindowMs().get());
@@ -21,11 +22,11 @@ public class DiagnoserProtoFactories {
     return builder.build();
   }
 
-  private static ControllerOuterClass.DemoPolicySpec.MeanSojournTimeDiagnoserSpec
+  private static ControllerOuterClass.KafkaStreamsPolicySpec.MeanSojournTimeDiagnoserSpec
       meanSojournTimeDiagnoserFromK8sResource(
           final MeanSojournTimeDiagnoserSpec diagnoser
   ) {
-    final var builder = ControllerOuterClass.DemoPolicySpec.MeanSojournTimeDiagnoserSpec
+    final var builder = ControllerOuterClass.KafkaStreamsPolicySpec.MeanSojournTimeDiagnoserSpec
         .newBuilder()
         .setMaxMeanSojournTimeSeconds(diagnoser.getMaxMeanSojournTime());
     final var type = diagnoser.getScaleUpStrategy().getType();
@@ -51,30 +52,30 @@ public class DiagnoserProtoFactories {
     return builder.build();
   }
 
-  static ControllerOuterClass.DemoPolicySpec.DiagnoserSpec
+  static ControllerOuterClass.KafkaStreamsPolicySpec.DiagnoserSpec
       diagnoserFromK8sResource(final DiagnoserSpec diagnoserSpec) {
     switch (diagnoserSpec.getType()) {
       case LAG_SCALE_UP:
-        return ControllerOuterClass.DemoPolicySpec.DiagnoserSpec.newBuilder()
-            .setLagScaleUp(ControllerOuterClass.DemoPolicySpec.LagDiagnoserSpec
+        return ControllerOuterClass.KafkaStreamsPolicySpec.DiagnoserSpec.newBuilder()
+            .setLagScaleUp(ControllerOuterClass.KafkaStreamsPolicySpec.LagDiagnoserSpec
                 .newBuilder().build())
             .build();
       case PROCESSING_RATE_SCALE_UP: {
-        return ControllerOuterClass.DemoPolicySpec.DiagnoserSpec.newBuilder()
+        return ControllerOuterClass.KafkaStreamsPolicySpec.DiagnoserSpec.newBuilder()
             .setProcessingRateScaleUp(
                 rateBasedDiagnoserFromK8sResource(
                     diagnoserSpec.getProcessingRateScaleUp().get()))
             .build();
       }
       case PROCESSING_RATE_SCALE_DOWN: {
-        return ControllerOuterClass.DemoPolicySpec.DiagnoserSpec.newBuilder()
+        return ControllerOuterClass.KafkaStreamsPolicySpec.DiagnoserSpec.newBuilder()
             .setProcessingRateScaleDown(
                 rateBasedDiagnoserFromK8sResource(
                     diagnoserSpec.getProcessingRateScaleDown().get()))
             .build();
       }
       case ARRIVAL_RATE_SCALE_UP: {
-        return ControllerOuterClass.DemoPolicySpec.DiagnoserSpec.newBuilder()
+        return ControllerOuterClass.KafkaStreamsPolicySpec.DiagnoserSpec.newBuilder()
             .setArrivalRateScaleUp(
                 rateBasedDiagnoserFromK8sResource(
                     diagnoserSpec.getArrivalRateScaleUp().get()))
@@ -82,7 +83,7 @@ public class DiagnoserProtoFactories {
 
       }
       case MEAN_SOJOURN_TIME: {
-        return ControllerOuterClass.DemoPolicySpec.DiagnoserSpec.newBuilder()
+        return ControllerOuterClass.KafkaStreamsPolicySpec.DiagnoserSpec.newBuilder()
             .setMeanSojournTime(
                 meanSojournTimeDiagnoserFromK8sResource(
                     diagnoserSpec.getMeanSojournTime().get()))

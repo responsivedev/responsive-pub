@@ -51,11 +51,11 @@ message GetTargetStateResponse {
 // TODO(rohan): move these to a common proto file. this file is just the grpc api
 message ApplicationState {
   oneof state {
-    DemoApplicationState demo_state = 1;
+    KafkaStreamsApplicationState kafka_streams_state = 1;
   }
 }
 
-message DemoApplicationState {
+message KafkaStreamsApplicationState {
   int32 replicas = 1;
 }
 
@@ -76,11 +76,11 @@ enum PolicyStatus {
 message ApplicationPolicySpec {
   PolicyStatus status = 1;
   oneof policy {
-    DemoPolicySpec demo_policy = 2;
+    KafkaStreamsPolicySpec kafka_streams_policy = 2;
   }
 }
 
-message DemoPolicySpec {
+message KafkaStreamsPolicySpec {
   message FixedReplicaScaleUpStrategySpec {
     // should this be a higher-level object?
     int32 replicas = 1;

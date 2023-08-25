@@ -69,7 +69,7 @@ import responsive.controller.v1.controller.proto.ControllerOuterClass;
 import responsive.controller.v1.controller.proto.ControllerOuterClass.PolicyStatus;
 
 @ExtendWith(MockitoExtension.class)
-class DemoPolicyPluginTest {
+class KafkaStreamsPolicyPluginTest {
   @Mock
   private EventSourceContext<ResponsivePolicy> esCtx;
   @Mock
@@ -105,14 +105,14 @@ class DemoPolicyPluginTest {
   @Mock
   private ControllerClient controllerClient;
 
-  private final dev.responsive.k8s.operator.reconciler.DemoPolicyPlugin
-      plugin = new dev.responsive.k8s.operator.reconciler.DemoPolicyPlugin("testenv");
+  private final KafkaStreamsPolicyPlugin
+      plugin = new KafkaStreamsPolicyPlugin("testenv");
   private final Deployment deployment = new Deployment();
   private final StatefulSet statefulSet = new StatefulSet();
   private final ResponsivePolicy policy = new ResponsivePolicy();
   private final ControllerOuterClass.ApplicationState targetState =
       ControllerOuterClass.ApplicationState.newBuilder()
-          .setDemoState(ControllerOuterClass.DemoApplicationState.newBuilder()
+          .setKafkaStreamsState(ControllerOuterClass.KafkaStreamsApplicationState.newBuilder()
               .setReplicas(5)
               .build())
           .build();
@@ -153,7 +153,8 @@ class DemoPolicyPluginTest {
             "baz",
             PolicyStatus.POLICY_STATUS_MANAGED,
             ResponsivePolicySpec.PolicyType.DEMO,
-            Optional.of(new DemoPolicySpec(123, 7, 1, Optional.empty()))
+            Optional.of(new DemoPolicySpec(123, 7, 1, Optional.empty())),
+            Optional.empty()
         )
     );
 
@@ -270,8 +271,8 @@ class DemoPolicyPluginTest {
                 "testenv",
                 policy,
                 ControllerOuterClass.ApplicationState.newBuilder()
-                    .setDemoState(
-                        ControllerOuterClass.DemoApplicationState.newBuilder()
+                    .setKafkaStreamsState(
+                        ControllerOuterClass.KafkaStreamsApplicationState.newBuilder()
                             .setReplicas(3)
                             .build())
                     .build()

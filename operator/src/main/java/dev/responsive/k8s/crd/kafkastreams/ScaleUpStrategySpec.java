@@ -1,5 +1,7 @@
 package dev.responsive.k8s.crd.kafkastreams;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -13,9 +15,10 @@ public class ScaleUpStrategySpec {
   private Type type;
   private Optional<FixedReplicaScaleUpStrategySpec> fixedReplica;
 
+  @JsonCreator
   public ScaleUpStrategySpec(
-      final Type type,
-      final Optional<FixedReplicaScaleUpStrategySpec> fixedReplica
+      final @JsonProperty("type") Type type,
+      final @JsonProperty("fixedReplica") Optional<FixedReplicaScaleUpStrategySpec> fixedReplica
   ) {
     this.type = Objects.requireNonNull(type);
     this.fixedReplica = Objects.requireNonNull(fixedReplica);
