@@ -81,6 +81,18 @@ message ApplicationPolicySpec {
 }
 
 message DemoPolicySpec {
+  message FixedReplicaScaleUpStrategySpec {
+    // should this be a higher-level object?
+    int32 replicas = 1;
+  }
+
+  message RateBasedScaleUpStrategySpec {
+    int32 max_scale_replicas = 1;
+  }
+
+  message ScaleToMaxStrategySpec {
+  }
+
   message RateBasedDiagnoserSpec {
     int32 rate = 1;
     optional int32 window_ms = 2;
@@ -89,17 +101,35 @@ message DemoPolicySpec {
   message LagDiagnoserSpec {
   }
 
+  message MeanSojournTimeDiagnoserSpec {
+    int32 max_mean_sojourn_time_seconds = 1;
+
+    oneof scale_up_strategy {
+      FixedReplicaScaleUpStrategySpec fixed_replicas = 2;
+      RateBasedScaleUpStrategySpec rate_based = 3;
+      ScaleToMaxStrategySpec scale_to_max = 4;
+    }
+  }
+
+  message ThreadSaturationDiagnoserSpec {
+    double threshold = 1;
+  }
+
   message DiagnoserSpec {
     oneof diagnoser {
       RateBasedDiagnoserSpec processing_rate_scale_up = 1;
       RateBasedDiagnoserSpec processing_rate_scale_down = 2;
+      RateBasedDiagnoserSpec arrival_rate_scale_up = 6;
       LagDiagnoserSpec lag_scale_up = 3;
+      MeanSojournTimeDiagnoserSpec mean_sojourn_time = 4;
+      ThreadSaturationDiagnoserSpec thread_saturation = 5;
     }
   }
 
   // Constraints
   int32 max_replicas = 1;
   int32 min_replicas = 2;
+  int32 max_scale_up_replicas = 4;
 
   // Diagnosers
   repeated DiagnoserSpec diagnoser = 3;

@@ -27,12 +27,16 @@ public class DiagnoserSpec {
   public enum Type {
     PROCESSING_RATE_SCALE_UP,
     PROCESSING_RATE_SCALE_DOWN,
-    LAG_SCALE_UP
+    ARRIVAL_RATE_SCALE_UP,
+    LAG_SCALE_UP,
+    MEAN_SOJOURN_TIME
   }
 
   private final Type type;
   private final Optional<RateBasedDiagnoserSpec> processingRateScaleUp;
   private final Optional<RateBasedDiagnoserSpec> processingRateScaleDown;
+  private final Optional<RateBasedDiagnoserSpec> arrivalRateScaleUp;
+  private final Optional<MeanSojournTimeDiagnoserSpec> meanSojournTime;
 
   @JsonCreator
   public DiagnoserSpec(
@@ -40,21 +44,29 @@ public class DiagnoserSpec {
       @JsonProperty("processingRateScaleUp")
       final Optional<RateBasedDiagnoserSpec> processingRateScaleUp,
       @JsonProperty("processingRateScaleDown")
-      final Optional<RateBasedDiagnoserSpec> processingRateScaleDown
+      final Optional<RateBasedDiagnoserSpec> processingRateScaleDown,
+      @JsonProperty("arrivalRateScaleUp")
+      final Optional<RateBasedDiagnoserSpec> arrivalRateScaleUp,
+      @JsonProperty("meanSojournTime")
+      final Optional<MeanSojournTimeDiagnoserSpec> meanSojournTime
   ) {
     this.type = strategy;
     this.processingRateScaleDown = Objects.requireNonNull(processingRateScaleDown);
     this.processingRateScaleUp = Objects.requireNonNull(processingRateScaleUp);
+    this.arrivalRateScaleUp = Objects.requireNonNull(arrivalRateScaleUp);
+    this.meanSojournTime = Objects.requireNonNull(meanSojournTime);
   }
 
   public static DiagnoserSpec lag() {
-    return new DiagnoserSpec(Type.LAG_SCALE_UP, empty(), empty());
+    return new DiagnoserSpec(Type.LAG_SCALE_UP, empty(), empty(), empty(), empty());
   }
 
   public static DiagnoserSpec processingRateScaleUp(final RateBasedDiagnoserSpec diagnoser) {
     return new DiagnoserSpec(
         Type.PROCESSING_RATE_SCALE_UP,
         Optional.of(diagnoser),
+        empty(),
+        empty(),
         empty()
     );
   }
@@ -62,6 +74,28 @@ public class DiagnoserSpec {
   public static DiagnoserSpec processingRateScaleDown(final RateBasedDiagnoserSpec diagnoser) {
     return new DiagnoserSpec(
         Type.PROCESSING_RATE_SCALE_DOWN,
+        empty(),
+        Optional.of(diagnoser),
+        empty(),
+        empty()
+    );
+  }
+
+  public static DiagnoserSpec arrivalRateScaleUp(final RateBasedDiagnoserSpec diagnoser) {
+    return new DiagnoserSpec(
+        Type.ARRIVAL_RATE_SCALE_UP,
+        empty(),
+        empty(),
+        Optional.of(diagnoser),
+        empty()
+    );
+  }
+
+  public static DiagnoserSpec meanSojournTime(final MeanSojournTimeDiagnoserSpec diagnoser) {
+    return new DiagnoserSpec(
+        Type.MEAN_SOJOURN_TIME,
+        empty(),
+        empty(),
         empty(),
         Optional.of(diagnoser)
     );
@@ -79,6 +113,14 @@ public class DiagnoserSpec {
     return processingRateScaleDown;
   }
 
+  public Optional<MeanSojournTimeDiagnoserSpec> getMeanSojournTime() {
+    return meanSojournTime;
+  }
+
+  public Optional<RateBasedDiagnoserSpec> getArrivalRateScaleUp() {
+    return arrivalRateScaleUp;
+  }
+
   public void validate() {
     Objects.requireNonNull(type);
     switch (type) {
@@ -87,6 +129,9 @@ public class DiagnoserSpec {
         break;
       case PROCESSING_RATE_SCALE_DOWN:
         CrdUtils.validatePresent(processingRateScaleDown, "processingRateScaleDown");
+        break;
+      case MEAN_SOJOURN_TIME:
+        CrdUtils.validatePresent(meanSojournTime, "meanSojournTime");
         break;
       default:
         break;

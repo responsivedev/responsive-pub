@@ -24,7 +24,10 @@ import dev.responsive.k8s.crd.ResponsivePolicy;
 import dev.responsive.k8s.crd.ResponsivePolicySpec;
 import dev.responsive.k8s.crd.kafkastreams.DemoPolicySpec;
 import dev.responsive.k8s.crd.kafkastreams.DiagnoserSpec;
+import dev.responsive.k8s.crd.kafkastreams.FixedReplicaScaleUpStrategySpec;
+import dev.responsive.k8s.crd.kafkastreams.MeanSojournTimeDiagnoserSpec;
 import dev.responsive.k8s.crd.kafkastreams.RateBasedDiagnoserSpec;
+import dev.responsive.k8s.crd.kafkastreams.ScaleUpStrategySpec;
 import io.fabric8.kubernetes.api.model.ObjectMeta;
 import java.util.List;
 import java.util.Optional;
@@ -162,6 +165,73 @@ class ControllerProtoFactoriesTest {
 
     // then:
     assertThat(request.getApplicationId(), is("gouda/cheddar"));
+  }
+
+  @Test
+  public void shouldCreateUpsertPolicyRequestWithMeanSojournTimeDiagnoserWithFixedReplicaScaling() {
+    // given:
+    demoPolicy.setSpec(
+        specWithDiagnoser(DiagnoserSpec.meanSojournTime(
+            new MeanSojournTimeDiagnoserSpec(
+                123,
+                ScaleUpStrategySpec.fixedReplica(new FixedReplicaScaleUpStrategySpec(3))
+            )
+        ))
+    );
+
+    // when:
+    final var request = ControllerProtoFactories.upsertPolicyRequest("", demoPolicy);
+
+    // then:
+    final var diagnoser = request.getPolicy().getDemoPolicy().getDiagnoserList().get(0);
+    assertThat(diagnoser.hasMeanSojournTime(), is(true));
+    assertThat(diagnoser.getMeanSojournTime().getMaxMeanSojournTimeSeconds(), is(123));
+    assertThat(diagnoser.getMeanSojournTime().hasFixedReplicas(), is(true));
+    assertThat(diagnoser.getMeanSojournTime().getFixedReplicas().getReplicas(), is(3));
+  }
+
+  @Test
+  public void shouldCreateUpsertPolicyRequestWithMeanSojournTimeDiagnoserWithRateBasedStrategy() {
+    // given:
+    demoPolicy.setSpec(
+        specWithDiagnoser(DiagnoserSpec.meanSojournTime(
+            new MeanSojournTimeDiagnoserSpec(
+                123,
+                ScaleUpStrategySpec.rateBased()
+            )
+        ))
+    );
+
+    // when:
+    final var request = ControllerProtoFactories.upsertPolicyRequest("", demoPolicy);
+
+    // then:
+    final var diagnoser = request.getPolicy().getDemoPolicy().getDiagnoserList().get(0);
+    assertThat(diagnoser.hasMeanSojournTime(), is(true));
+    assertThat(diagnoser.getMeanSojournTime().getMaxMeanSojournTimeSeconds(), is(123));
+    assertThat(diagnoser.getMeanSojournTime().hasRateBased(), is(true));
+  }
+
+  @Test
+  public void shouldCreateUpsertPolicyRequestWithMeanSojournTimeDiagnoserWithScaleToMaxStrategy() {
+    // given:
+    demoPolicy.setSpec(
+        specWithDiagnoser(DiagnoserSpec.meanSojournTime(
+            new MeanSojournTimeDiagnoserSpec(
+                123,
+                ScaleUpStrategySpec.scaleToMax()
+            )
+        ))
+    );
+
+    // when:
+    final var request = ControllerProtoFactories.upsertPolicyRequest("", demoPolicy);
+
+    // then:
+    final var diagnoser = request.getPolicy().getDemoPolicy().getDiagnoserList().get(0);
+    assertThat(diagnoser.hasMeanSojournTime(), is(true));
+    assertThat(diagnoser.getMeanSojournTime().getMaxMeanSojournTimeSeconds(), is(123));
+    assertThat(diagnoser.getMeanSojournTime().hasScaleToMax(), is(true));
   }
 
   @Test
