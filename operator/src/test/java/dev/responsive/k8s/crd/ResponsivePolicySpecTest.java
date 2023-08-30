@@ -2,8 +2,9 @@ package dev.responsive.k8s.crd;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import dev.responsive.k8s.crd.DemoPolicy.Diagnoser;
 import dev.responsive.k8s.crd.ResponsivePolicySpec.PolicyType;
+import dev.responsive.k8s.crd.kafkastreams.DemoPolicySpec;
+import dev.responsive.k8s.crd.kafkastreams.DiagnoserSpec;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -19,7 +20,12 @@ class ResponsivePolicySpecTest {
         null,
         PolicyStatus.POLICY_STATUS_MANAGED,
         PolicyType.DEMO,
-        Optional.of(new DemoPolicy(10, 0, Optional.empty()))
+        Optional.of(new DemoPolicySpec(
+            10,
+            0,
+            1,
+            Optional.empty()
+        ))
     );
 
     // when/then:
@@ -34,7 +40,12 @@ class ResponsivePolicySpecTest {
         "foo",
         PolicyStatus.POLICY_STATUS_MANAGED,
         PolicyType.DEMO,
-        Optional.of(new DemoPolicy(10, 0, Optional.empty()))
+        Optional.of(new DemoPolicySpec(
+            10,
+            0,
+            1,
+            Optional.empty()
+        ))
     );
 
     // when/then:
@@ -49,7 +60,12 @@ class ResponsivePolicySpecTest {
         "foo",
         null,
         PolicyType.DEMO,
-        Optional.of(new DemoPolicy(10, 0, Optional.empty()))
+        Optional.of(new DemoPolicySpec(
+            10,
+            0,
+            1,
+            Optional.empty()
+        ))
     );
 
     // when/then:
@@ -64,7 +80,11 @@ class ResponsivePolicySpecTest {
         "foo",
         PolicyStatus.POLICY_STATUS_MANAGED,
         null,
-        Optional.of(new DemoPolicy(10, 0, Optional.empty()))
+        Optional.of(new DemoPolicySpec(
+            10,
+            0,
+            1,
+            Optional.empty()))
     );
 
     // when/then:
@@ -79,11 +99,16 @@ class ResponsivePolicySpecTest {
         "foo",
         PolicyStatus.POLICY_STATUS_MANAGED,
         PolicyType.DEMO,
-        Optional.of(new DemoPolicy(
+        Optional.of(new DemoPolicySpec(
             10,
             0,
+            1,
             Optional.of(List.of(
-                new Diagnoser(null, Optional.empty(), Optional.empty())
+                new DiagnoserSpec(
+                    null,
+                    Optional.empty(),
+                    Optional.empty()
+                )
             ))))
     );
 
@@ -99,10 +124,11 @@ class ResponsivePolicySpecTest {
         "foo",
         PolicyStatus.POLICY_STATUS_MANAGED,
         PolicyType.DEMO,
-        Optional.of(new DemoPolicy(
+        Optional.of(new DemoPolicySpec(
             10,
             0,
-            Optional.of(List.of(Diagnoser.lag()))))
+            1,
+            Optional.of(List.of(DiagnoserSpec.lag()))))
     );
 
     // when/then:

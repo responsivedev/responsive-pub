@@ -19,7 +19,7 @@ package dev.responsive.k8s.controller;
 import dev.responsive.k8s.crd.ResponsivePolicy;
 import dev.responsive.k8s.crd.ResponsivePolicySpec;
 import responsive.controller.v1.controller.proto.ControllerOuterClass;
-import responsive.controller.v1.controller.proto.ControllerOuterClass.ApplicationPolicy;
+import responsive.controller.v1.controller.proto.ControllerOuterClass.ApplicationPolicySpec;
 import responsive.controller.v1.controller.proto.ControllerOuterClass.ApplicationState;
 
 public final class ControllerProtoFactories {
@@ -53,8 +53,9 @@ public final class ControllerProtoFactories {
         .build();
   }
 
-  private static ApplicationPolicy policyFromK8sResource(final ResponsivePolicySpec policySpec) {
-    final var builder = ApplicationPolicy.newBuilder();
+  private static ApplicationPolicySpec policyFromK8sResource(
+      final ResponsivePolicySpec policySpec) {
+    final var builder = ApplicationPolicySpec.newBuilder();
     switch (policySpec.getPolicyType()) {
       case DEMO:
         assert policySpec.getDemoPolicy().isPresent();

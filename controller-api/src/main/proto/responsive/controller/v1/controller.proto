@@ -24,7 +24,7 @@ message PostMetricsRequest {
 message UpsertPolicyRequest {
   string application_id = 1;
   int64 timestamp_ms = 2;
-  ApplicationPolicy policy = 3;
+  ApplicationPolicySpec policy = 3;
 }
 
 message CurrentStateRequest {
@@ -73,32 +73,34 @@ enum PolicyStatus {
 
 // TODO(rohan): move this to a a common location where we specify the policy
 //              also, see if we can combine with the CRD somehow
-message ApplicationPolicy {
+message ApplicationPolicySpec {
   PolicyStatus status = 1;
   oneof policy {
-    DemoPolicy demo_policy = 2;
+    DemoPolicySpec demo_policy = 2;
   }
 }
 
-message DemoPolicy {
-  message ProcessingRateDiagnoser {
+message DemoPolicySpec {
+  message RateBasedDiagnoserSpec {
     int32 rate = 1;
     optional int32 window_ms = 2;
   }
 
-  message LagDiagnoser {
+  message LagDiagnoserSpec {
   }
 
-  message Diagnoser {
+  message DiagnoserSpec {
     oneof diagnoser {
-      ProcessingRateDiagnoser processing_rate_scale_up = 1;
-      ProcessingRateDiagnoser processing_rate_scale_down = 2;
-      LagDiagnoser lag_scale_up = 3;
+      RateBasedDiagnoserSpec processing_rate_scale_up = 1;
+      RateBasedDiagnoserSpec processing_rate_scale_down = 2;
+      LagDiagnoserSpec lag_scale_up = 3;
     }
   }
 
-  // TODO: change to snake case
-  int32 maxReplicas = 1;
+  // Constraints
+  int32 max_replicas = 1;
   int32 min_replicas = 2;
-  repeated Diagnoser diagnoser = 3;
+
+  // Diagnosers
+  repeated DiagnoserSpec diagnoser = 3;
 }

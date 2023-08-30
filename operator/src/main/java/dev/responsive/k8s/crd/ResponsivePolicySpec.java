@@ -18,6 +18,7 @@ package dev.responsive.k8s.crd;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import dev.responsive.k8s.crd.kafkastreams.DemoPolicySpec;
 import java.util.Objects;
 import java.util.Optional;
 import responsive.controller.v1.controller.proto.ControllerOuterClass.PolicyStatus;
@@ -28,7 +29,7 @@ public class ResponsivePolicySpec {
   // TODO: dont use the protobuf enum type in the k8s crd definition
   private final PolicyStatus status;
   private final ResponsivePolicySpec.PolicyType policyType;
-  private final Optional<DemoPolicy> demoPolicy;
+  private final Optional<DemoPolicySpec> demoPolicy;
 
   public enum PolicyType {
     DEMO
@@ -40,7 +41,7 @@ public class ResponsivePolicySpec {
       @JsonProperty("applicationName") final String applicationName,
       @JsonProperty("status") final PolicyStatus status,
       @JsonProperty("policyType") final PolicyType policyType,
-      @JsonProperty("demoPolicy") final Optional<DemoPolicy> demoPolicy
+      @JsonProperty("demoPolicy") final Optional<DemoPolicySpec> demoPolicy
   ) {
     this.applicationNamespace = applicationNamespace;
     this.applicationName = applicationName;
@@ -79,7 +80,7 @@ public class ResponsivePolicySpec {
     return policyType;
   }
 
-  public Optional<DemoPolicy> getDemoPolicy() {
+  public Optional<DemoPolicySpec> getDemoPolicy() {
     return demoPolicy;
   }
 

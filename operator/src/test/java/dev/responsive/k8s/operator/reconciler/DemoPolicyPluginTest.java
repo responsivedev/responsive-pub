@@ -30,9 +30,9 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import dev.responsive.controller.client.ControllerClient;
 import dev.responsive.k8s.controller.ControllerProtoFactories;
-import dev.responsive.k8s.crd.DemoPolicy;
 import dev.responsive.k8s.crd.ResponsivePolicy;
 import dev.responsive.k8s.crd.ResponsivePolicySpec;
+import dev.responsive.k8s.crd.kafkastreams.DemoPolicySpec;
 import io.fabric8.kubernetes.api.model.HasMetadata;
 import io.fabric8.kubernetes.api.model.ObjectMeta;
 import io.fabric8.kubernetes.api.model.apps.Deployment;
@@ -153,7 +153,7 @@ class DemoPolicyPluginTest {
             "baz",
             PolicyStatus.POLICY_STATUS_MANAGED,
             ResponsivePolicySpec.PolicyType.DEMO,
-            Optional.of(new DemoPolicy(123, 7, Optional.empty()))
+            Optional.of(new DemoPolicySpec(123, 7, 1, Optional.empty()))
         )
     );
 
