@@ -16,7 +16,7 @@
 
 package dev.responsive.kafka.api;
 
-import dev.responsive.kafka.store.SchemaType;
+import dev.responsive.kafka.store.SchemaTypes.KVSchema;
 import dev.responsive.utils.TableName;
 import java.time.Duration;
 import java.util.Optional;
@@ -25,7 +25,7 @@ import javax.annotation.Nullable;
 public final class ResponsiveKeyValueParams {
 
   private final TableName name;
-  private final SchemaType schemaType;
+  private final KVSchema schema;
   private final boolean timestamped;
 
   @Nullable private Duration timeToLive;
@@ -33,27 +33,27 @@ public final class ResponsiveKeyValueParams {
   private ResponsiveKeyValueParams(
       final String name,
       final boolean timestamped,
-      final SchemaType schemaType
+      final KVSchema schema
   ) {
     this.name = new TableName(name);
     this.timestamped = timestamped;
-    this.schemaType = schemaType;
+    this.schema = schema;
   }
 
   public static ResponsiveKeyValueParams keyValue(final String name) {
-    return new ResponsiveKeyValueParams(name, false, SchemaType.KEY_VALUE);
+    return new ResponsiveKeyValueParams(name, false, KVSchema.KEY_VALUE);
   }
 
   public static ResponsiveKeyValueParams timestamped(final String name) {
-    return new ResponsiveKeyValueParams(name, true, SchemaType.KEY_VALUE);
+    return new ResponsiveKeyValueParams(name, true, KVSchema.KEY_VALUE);
   }
 
   public static ResponsiveKeyValueParams fact(final String name) {
-    return new ResponsiveKeyValueParams(name, false, SchemaType.FACT);
+    return new ResponsiveKeyValueParams(name, false, KVSchema.FACT);
   }
 
   public static ResponsiveKeyValueParams timestampedFact(final String name) {
-    return new ResponsiveKeyValueParams(name, true, SchemaType.FACT);
+    return new ResponsiveKeyValueParams(name, true, KVSchema.FACT);
   }
 
   public ResponsiveKeyValueParams withTimeToLive(final Duration timeToLive) {
@@ -69,8 +69,8 @@ public final class ResponsiveKeyValueParams {
     return timestamped;
   }
 
-  public SchemaType schemaType() {
-    return schemaType;
+  public KVSchema kvSchema() {
+    return schema;
   }
 
   public Optional<Duration> timeToLive() {

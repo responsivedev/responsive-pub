@@ -37,7 +37,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.ResponsiveStores;
 import dev.responsive.kafka.api.ResponsiveWindowParams;
-import dev.responsive.kafka.api.ResponsiveWindowedStoreSupplier;
 import dev.responsive.kafka.config.ResponsiveConfig;
 import dev.responsive.utils.ResponsiveConfigParam;
 import dev.responsive.utils.ResponsiveExtension;

@@ -202,19 +202,12 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       return localResult.isTombstone ? null : localResult.value;
     }
 
-    final KeyValueIterator<Stamped<Bytes>, byte[]> remoteResult = schema.fetch(
+    return schema.fetch(
         name.cassandraName(),
         partitioner.partition(partition, key),
         key,
-        time,
-        time + 1
+        time
     );
-
-    if (!remoteResult.hasNext()) {
-      return null;
-    }
-
-    return remoteResult.next().value;
   }
 
   @Override

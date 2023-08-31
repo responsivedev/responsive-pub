@@ -18,7 +18,7 @@ package dev.responsive.kafka.api;
 
 import static dev.responsive.utils.StoreUtil.durationToMillis;
 
-import dev.responsive.kafka.store.SchemaType;
+import dev.responsive.kafka.store.SchemaTypes.WindowSchema;
 import dev.responsive.utils.TableName;
 import java.time.Duration;
 
@@ -27,7 +27,7 @@ public final class ResponsiveWindowParams {
   private static final int DEFAULT_NUM_SEGMENTS = 4096;
 
   private final TableName name;
-  private final SchemaType schemaType;
+  private final WindowSchema schemaType;
   private final long windowSizeMs;
   private final long gracePeriodMs;
   private final boolean retainDuplicates;
@@ -36,7 +36,7 @@ public final class ResponsiveWindowParams {
 
   private ResponsiveWindowParams(
       final String name,
-      final SchemaType schemaType,
+      final WindowSchema schemaType,
       final Duration windowSize,
       final Duration gracePeriod,
       final int numSegments,
@@ -56,7 +56,7 @@ public final class ResponsiveWindowParams {
       final Duration gracePeriod
   ) {
     return new ResponsiveWindowParams(
-        name, SchemaType.WINDOW, windowSize, gracePeriod, DEFAULT_NUM_SEGMENTS, false
+        name, WindowSchema.WINDOW, windowSize, gracePeriod, DEFAULT_NUM_SEGMENTS, false
     );
   }
 
@@ -66,7 +66,7 @@ public final class ResponsiveWindowParams {
       final Duration gracePeriod
   ) {
     final ResponsiveWindowParams ret = new ResponsiveWindowParams(
-            name, SchemaType.STREAM, windowSize, gracePeriod, DEFAULT_NUM_SEGMENTS, true
+            name, WindowSchema.STREAM, windowSize, gracePeriod, DEFAULT_NUM_SEGMENTS, true
     );
 
     throw new UnsupportedOperationException("Window stores for stream-stream joins have not yet "
@@ -78,7 +78,7 @@ public final class ResponsiveWindowParams {
     return this;
   }
 
-  public SchemaType schemaType() {
+  public WindowSchema schemaType() {
     return schemaType;
   }
 

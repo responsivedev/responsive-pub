@@ -18,7 +18,6 @@ package dev.responsive.kafka.api;
 
 import dev.responsive.kafka.store.ResponsiveMaterialized;
 import dev.responsive.kafka.store.ResponsiveStoreBuilder;
-import dev.responsive.utils.StoreUtil;
 import java.time.Duration;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
