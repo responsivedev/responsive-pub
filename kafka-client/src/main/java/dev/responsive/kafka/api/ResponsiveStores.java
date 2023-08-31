@@ -177,7 +177,8 @@ public final class ResponsiveStores {
    *         that uses Responsive's storage for its backend
    */
   public static WindowBytesStoreSupplier windowStoreSupplier(final ResponsiveWindowParams params) {
-    return new ResponsiveWindowedStoreSupplier(params, false);
+    final var ret = new ResponsiveWindowedStoreSupplier(params);
+    throw new UnsupportedOperationException("Not yet implemented");
   }
 
   /**
@@ -197,23 +198,24 @@ public final class ResponsiveStores {
       final Duration windowSize,
       final boolean retainDuplicates
   ) {
-    final long retentionMs = StoreUtil.durationToMillis(retentionPeriod, "retentionPeriod");
-    final long windowSizeMs = StoreUtil.durationToMillis(windowSize, "windowSize");
-    if (windowSizeMs < 0) {
-      throw new IllegalArgumentException("Window size cannot be zero");
-    } else if (retentionMs < windowSizeMs) {
+    final Duration gracePeriod = retentionPeriod.minus(windowSize);
+    if (windowSize.isNegative() || windowSize.isZero()) {
+      throw new IllegalArgumentException("Window size cannot be negative or zero");
+    } else if (gracePeriod.isNegative()) {
       throw new IllegalArgumentException("Retention period cannot be less than window size");
     }
 
-    final WindowBytesStoreSupplier ret = new ResponsiveWindowedStoreSupplier(
-        name,
-        retentionMs,
-        windowSizeMs,
-        retainDuplicates
-    );
-    throw new UnsupportedOperationException(
-        "Window store implementation is incomplete, please contact the Responsive team if you "
-            + "require this feature");
+    final ResponsiveWindowedStoreSupplier ret;
+    if (!retainDuplicates) {
+      ret = new ResponsiveWindowedStoreSupplier(
+          ResponsiveWindowParams.window(name, windowSize, gracePeriod)
+      );
+    } else {
+      ret = new ResponsiveWindowedStoreSupplier(
+          ResponsiveWindowParams.streamStreamJoin(name, windowSize, gracePeriod)
+      );
+    }
+    throw new UnsupportedOperationException("Not yet implemented");
   }
 
   /**
@@ -293,22 +295,15 @@ public final class ResponsiveStores {
    * and materialized in the DSL for most operators. If using the low-level Processor API,
    * use {@link #windowStoreBuilder}
    *
-   * @param name the store name
-   * @param retentionMs the retention period in milliseconds
-   * @param windowSize the window size in milliseconds
-   * @param retainDuplicates whether to retain duplicates. Should be false for most operators
+   * @param params the store parameters
    * @return a Materialized configuration that can be used to build a key value store with the
    *         given options that uses Responsive's storage for its backend
    */
   public static <K, V> Materialized<K, V, WindowStore<Bytes, byte[]>> windowMaterialized(
-      final String name,
-      final long retentionMs,
-      final long windowSize,
-      final boolean retainDuplicates
+      final ResponsiveWindowParams params
   ) {
-    // TODO: create a ResponsiveWindowedParams class instead of using individual parameters here
     final Materialized<K, V, WindowStore<Bytes, byte[]>> materialized = Materialized.as(
-        new ResponsiveWindowedStoreSupplier(name, retentionMs, windowSize, retainDuplicates)
+        new ResponsiveWindowedStoreSupplier(params)
     );
 
     final ResponsiveMaterialized<K, V, WindowStore<Bytes, byte[]>> ret =
@@ -320,7 +315,6 @@ public final class ResponsiveStores {
         "Window store implementation is incomplete, please contact the Responsive team if you "
             + "require this feature");
   }
-
 
   private ResponsiveStores() { }
 }

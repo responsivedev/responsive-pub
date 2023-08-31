@@ -36,6 +36,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.ResponsiveStores;
+import dev.responsive.kafka.api.ResponsiveWindowParams;
 import dev.responsive.kafka.api.ResponsiveWindowedStoreSupplier;
 import dev.responsive.kafka.config.ResponsiveConfig;
 import dev.responsive.utils.ResponsiveConfigParam;
@@ -71,7 +72,6 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.state.Stores;
 import org.hamcrest.Matchers;
-import org.junit.Ignore;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -134,8 +134,11 @@ public class ResponsiveWindowIntegrationTest {
 
     assertThrows(
         UnsupportedOperationException.class,
-        () -> ResponsiveStores.windowMaterialized(name, 6_000, 5_000, false)
-    );
+        () -> ResponsiveStores.windowMaterialized(ResponsiveWindowParams.window(
+            name,
+            Duration.ofMillis(5_000),
+            Duration.ofMillis(1_000))
+    ));
   }
 
   public void shouldComputeWindowedAggregateWithRetention() throws InterruptedException {
@@ -153,10 +156,10 @@ public class ResponsiveWindowIntegrationTest {
             () -> 0L,
             (k, v, agg) -> agg + v,
             ResponsiveStores.windowMaterialized(
-                name,
-                6_000,
-                5_000,
-                false
+                ResponsiveWindowParams.window(
+                    name,
+                    Duration.ofMillis(5_000),
+                    Duration.ofMillis(1_000))
             ))
         .toStream()
         .peek((k, v) -> {

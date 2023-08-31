@@ -17,40 +17,28 @@
 package dev.responsive.kafka.api;
 
 import dev.responsive.kafka.store.ResponsiveWindowStore;
-import dev.responsive.utils.TableName;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 
 public class ResponsiveWindowedStoreSupplier implements WindowBytesStoreSupplier {
 
-  private final TableName name;
-  private final long retentionPeriod;
-  private final long windowSize;
-  private final boolean retainDuplicates;
+  private final ResponsiveWindowParams params;
   private final long segmentIntervalMs;
 
   public ResponsiveWindowedStoreSupplier(final ResponsiveWindowParams params) {
-    this.name = params.name();
-    this.retentionPeriod = params.retentionPeriod();
-    this.windowSize = params.windowSize();
-    this.retainDuplicates = params.retainDuplicates();
-    this.segmentIntervalMs = retentionPeriod / params.numSegments();
+    this.params = params;
+    this.segmentIntervalMs = params.retentionPeriod() / params.numSegments();
   }
 
   @Override
   public String name() {
-    return name.kafkaName();
+    return params.name().kafkaName();
   }
 
   @Override
   public WindowStore<Bytes, byte[]> get() {
-    return new ResponsiveWindowStore(
-        name,
-        retentionPeriod,
-        windowSize,
-        retainDuplicates
-    );
+    return new ResponsiveWindowStore(params);
   }
 
   @Override
@@ -60,17 +48,17 @@ public class ResponsiveWindowedStoreSupplier implements WindowBytesStoreSupplier
 
   @Override
   public long windowSize() {
-    return windowSize;
+    return params.windowSize();
   }
 
   @Override
   public boolean retainDuplicates() {
-    return retainDuplicates;
+    return params.retainDuplicates();
   }
 
   @Override
   public long retentionPeriod() {
-    return retentionPeriod;
+    return params.retentionPeriod();
   }
 
   @Override
