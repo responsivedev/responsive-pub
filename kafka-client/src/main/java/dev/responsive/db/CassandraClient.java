@@ -152,7 +152,11 @@ public class CassandraClient {
     }
   }
 
-  public RemoteWindowedSchema windowedSchema() {
-    return windowedSchema;
+  public RemoteWindowedSchema windowedSchema(final SchemaType schemaType) {
+    switch (schemaType) {
+      case WINDOW:    return windowedSchema;
+      case STREAM:    throw new UnsupportedOperationException("Not yet implemented");
+      default:        throw new IllegalArgumentException(schemaType.name());
+    }
   }
 }

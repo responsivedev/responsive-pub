@@ -168,6 +168,21 @@ public final class ResponsiveStores {
   /**
    * See for example {@link Stores#inMemoryWindowStore(String, Duration, Duration, boolean)}
    *
+   * @param params the {@link ResponsiveWindowParams} for this store
+   *        use {@link ResponsiveWindowParams#window(String, Duration, Duration)} for windowed
+   *               aggregations in the DSL or PAPI stores with update semantics
+   *        use {@link ResponsiveWindowParams#streamStreamJoin(String, Duration, Duration)}
+   *               for stream-stream joins in the DSL  or PAPI stores with duplicates semantics
+   * @return a supplier for a window store with the given options
+   *         that uses Responsive's storage for its backend
+   */
+  public static WindowBytesStoreSupplier windowStoreSupplier(final ResponsiveWindowParams params) {
+    return new ResponsiveWindowedStoreSupplier(params, false);
+  }
+
+  /**
+   * See for example {@link Stores#inMemoryWindowStore(String, Duration, Duration, boolean)}
+   *
    * @param name the store name
    * @param retentionPeriod the retention period, must be greater than or equal to window size
    * @param windowSize the window size, must be greater than 0

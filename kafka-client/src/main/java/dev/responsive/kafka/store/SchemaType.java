@@ -29,5 +29,23 @@ public enum SchemaType {
    * only single "fact" values. Examples of such tables are
    * time-series data and duplicate detection.
    */
-  FACT
+  FACT,
+
+  /**
+   * A general purpose window store that supports fencing
+   * zombie writers during a split-brain outage. Follows
+   * regular update/overwrite semantics with exactly one
+   * value per window per key.
+   */
+  WINDOW,
+
+  /**
+   * A window-like store that holds individual events corresponding
+   * to a specific timestamp, rather than multi-event per-window
+   * partial aggregates like a typical window store. Allows duplicate
+   * events for a given key and timestamp rather than enforcing
+   * update/overwrite semantics.
+   * Mainly used for stream-stream joins in the DSL.
+   */
+  STREAM
 }

@@ -28,17 +28,14 @@ public class ResponsiveWindowedStoreSupplier implements WindowBytesStoreSupplier
   private final long retentionPeriod;
   private final long windowSize;
   private final boolean retainDuplicates;
+  private final long segmentIntervalMs;
 
-  public ResponsiveWindowedStoreSupplier(
-      final String name,
-      final long retentionPeriod,
-      final long windowSize,
-      final boolean retainDuplicates
-  ) {
-    this.name = new TableName(name);
-    this.retentionPeriod = retentionPeriod;
-    this.windowSize = windowSize;
-    this.retainDuplicates = retainDuplicates;
+  public ResponsiveWindowedStoreSupplier(final ResponsiveWindowParams params) {
+    this.name = params.name();
+    this.retentionPeriod = params.retentionPeriod();
+    this.windowSize = params.windowSize();
+    this.retainDuplicates = params.retainDuplicates();
+    this.segmentIntervalMs = retentionPeriod / params.numSegments();
   }
 
   @Override
@@ -56,12 +53,9 @@ public class ResponsiveWindowedStoreSupplier implements WindowBytesStoreSupplier
     );
   }
 
-  // Responsive window store is not *really* segmented, so just
-  // say size is 1 ms this is what InMemoryWindowBytesStoreSupplier
-  // does in Kafka Streams
   @Override
   public long segmentIntervalMs() {
-    return 1;
+    return segmentIntervalMs;
   }
 
   @Override

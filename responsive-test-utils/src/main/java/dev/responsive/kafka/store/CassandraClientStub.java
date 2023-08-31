@@ -113,7 +113,7 @@ public class CassandraClientStub extends CassandraClient {
   }
 
   @Override
-  public RemoteWindowedSchema windowedSchema() {
+  public RemoteWindowedSchema windowedSchema(final SchemaType schemaType) {
     return windowedSchema;
   }
 
