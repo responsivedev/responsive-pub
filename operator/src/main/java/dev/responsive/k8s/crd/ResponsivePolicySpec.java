@@ -19,6 +19,7 @@ package dev.responsive.k8s.crd;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import dev.responsive.k8s.crd.kafkastreams.DemoPolicySpec;
+import dev.responsive.k8s.crd.kafkastreams.KafkaStreamsPolicySpec;
 import java.util.Objects;
 import java.util.Optional;
 import responsive.controller.v1.controller.proto.ControllerOuterClass.PolicyStatus;
@@ -30,9 +31,11 @@ public class ResponsivePolicySpec {
   private final PolicyStatus status;
   private final ResponsivePolicySpec.PolicyType policyType;
   private final Optional<DemoPolicySpec> demoPolicy;
+  private final Optional<KafkaStreamsPolicySpec> kafkaStreamsPolicy;
 
   public enum PolicyType {
-    DEMO
+    DEMO,
+    KAFKA_STREAMS
   }
 
   @JsonCreator
@@ -41,13 +44,22 @@ public class ResponsivePolicySpec {
       @JsonProperty("applicationName") final String applicationName,
       @JsonProperty("status") final PolicyStatus status,
       @JsonProperty("policyType") final PolicyType policyType,
-      @JsonProperty("demoPolicy") final Optional<DemoPolicySpec> demoPolicy
+      @JsonProperty("demoPolicy") final Optional<DemoPolicySpec> demoPolicy,
+      @JsonProperty("kafkaStreamsPolicy")
+      final Optional<KafkaStreamsPolicySpec> kafkaStreamsPolicy
   ) {
     this.applicationNamespace = applicationNamespace;
     this.applicationName = applicationName;
     this.status = status;
-    this.policyType = policyType;
-    this.demoPolicy = Objects.requireNonNull(demoPolicy);
+    this.demoPolicy = Optional.empty();
+    if (Objects.equals(policyType, PolicyType.DEMO)) {
+      this.policyType = PolicyType.KAFKA_STREAMS;
+      this.kafkaStreamsPolicy
+          = Optional.of(toKafkaStreamsPolicy(Objects.requireNonNull(demoPolicy).get()));
+    } else {
+      this.policyType = policyType;
+      this.kafkaStreamsPolicy = Objects.requireNonNull(kafkaStreamsPolicy);
+    }
   }
 
   public void validate() {
@@ -56,8 +68,8 @@ public class ResponsivePolicySpec {
     Objects.requireNonNull(status, "status");
     Objects.requireNonNull(policyType, "policyType");
     switch (policyType) {
-      case DEMO:
-        CrdUtils.validatePresent(demoPolicy, "demoPolicy").validate();
+      case KAFKA_STREAMS:
+        CrdUtils.validatePresent(kafkaStreamsPolicy, "kafkaStreamsPolicy").validate();
         break;
       default:
         break;
@@ -80,8 +92,20 @@ public class ResponsivePolicySpec {
     return policyType;
   }
 
+  public Optional<KafkaStreamsPolicySpec> getKafkaStreamsPolicy() {
+    return kafkaStreamsPolicy;
+  }
+
   public Optional<DemoPolicySpec> getDemoPolicy() {
     return demoPolicy;
   }
 
+  private static KafkaStreamsPolicySpec toKafkaStreamsPolicy(final DemoPolicySpec demoPolicy) {
+    return new KafkaStreamsPolicySpec(
+        demoPolicy.getMaxReplicas(),
+        demoPolicy.getMinReplicas(),
+        demoPolicy.getMaxScaleUpReplicas(),
+        demoPolicy.getDiagnosers()
+    );
+  }
 }

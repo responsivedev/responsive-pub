@@ -36,12 +36,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import responsive.controller.v1.controller.proto.ControllerOuterClass;
 
-public class DemoPolicyPlugin implements PolicyPlugin {
-  private static final Logger LOG = LoggerFactory.getLogger(DemoPolicyPlugin.class);
+public class KafkaStreamsPolicyPlugin implements PolicyPlugin {
+  private static final Logger LOG = LoggerFactory.getLogger(KafkaStreamsPolicyPlugin.class);
 
   private final String environment;
 
-  public DemoPolicyPlugin(final String environment) {
+  public KafkaStreamsPolicyPlugin(final String environment) {
     this.environment = environment;
   }
 
@@ -50,13 +50,11 @@ public class DemoPolicyPlugin implements PolicyPlugin {
       final EventSourceContext<ResponsivePolicy> ctx,
       final ResponsiveContext responsiveCtx
   ) {
-    // TODO(rohan): switch this over to monitoring a statefulset instead
-
     final var deploymentEvents = new InformerEventSource<>(
         InformerConfiguration.from(Deployment.class, ctx)
             .withLabelSelector(ResponsivePolicyReconciler.NAME_LABEL)
-            .withSecondaryToPrimaryMapper(DemoPolicyPlugin::toPrimaryMapper)
-            .withPrimaryToSecondaryMapper(DemoPolicyPlugin::toApplicationMapper)
+            .withSecondaryToPrimaryMapper(KafkaStreamsPolicyPlugin::toPrimaryMapper)
+            .withPrimaryToSecondaryMapper(KafkaStreamsPolicyPlugin::toApplicationMapper)
             .build(),
         ctx
     );
@@ -64,8 +62,8 @@ public class DemoPolicyPlugin implements PolicyPlugin {
     final var statefulSetEvents = new InformerEventSource<>(
         InformerConfiguration.from(StatefulSet.class, ctx)
             .withLabelSelector(ResponsivePolicyReconciler.NAME_LABEL)
-            .withSecondaryToPrimaryMapper(DemoPolicyPlugin::toPrimaryMapper)
-            .withPrimaryToSecondaryMapper(DemoPolicyPlugin::toApplicationMapper)
+            .withSecondaryToPrimaryMapper(KafkaStreamsPolicyPlugin::toPrimaryMapper)
+            .withPrimaryToSecondaryMapper(KafkaStreamsPolicyPlugin::toApplicationMapper)
             .build(),
         ctx
     );
@@ -108,7 +106,8 @@ public class DemoPolicyPlugin implements PolicyPlugin {
           "we were not able to get a target state from controller, so don't try to reconcile one");
       return;
     }
-    final var targetReplicas = targetState.getTargetState().get().getDemoState().getReplicas();
+    final var targetReplicas = targetState.getTargetState().get().getKafkaStreamsState()
+        .getReplicas();
     if (targetReplicas != managedApp.getReplicas()) {
       LOG.info(
           "Scaling {}/{} from {} to {}",
@@ -129,8 +128,8 @@ public class DemoPolicyPlugin implements PolicyPlugin {
     // TODO(rohan): need to include some indicator of whether or not deployment is stable
     //              (e.g. provisioned replicas are fully up or not)
     return ControllerOuterClass.ApplicationState.newBuilder()
-        .setDemoState(
-            ControllerOuterClass.DemoApplicationState.newBuilder()
+        .setKafkaStreamsState(
+            ControllerOuterClass.KafkaStreamsApplicationState.newBuilder()
                 .setReplicas(application.getReplicas()))
         .build();
   }

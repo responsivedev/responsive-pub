@@ -102,12 +102,13 @@ class ResponsivePolicyReconcilerTest {
         "pong",
         PolicyStatus.POLICY_STATUS_MANAGED,
         ResponsivePolicySpec.PolicyType.DEMO,
-        Optional.of(new DemoPolicySpec(123, 7, 1, Optional.empty()))
+        Optional.of(new DemoPolicySpec(123, 7, 1, Optional.empty())),
+        Optional.empty()
     ));
     reconciler = new dev.responsive.k8s.operator.reconciler.ResponsivePolicyReconciler(
         "testenv",
         responsiveCtx,
-        ImmutableMap.of(ResponsivePolicySpec.PolicyType.DEMO, plugin)
+        ImmutableMap.of(PolicyType.KAFKA_STREAMS, plugin)
     );
   }
 
@@ -137,7 +138,8 @@ class ResponsivePolicyReconcilerTest {
         "pong",
         PolicyStatus.POLICY_STATUS_MANAGED,
         ResponsivePolicySpec.PolicyType.DEMO,
-        Optional.of(new DemoPolicySpec(123, 10, 1, Optional.empty()))
+        Optional.of(new DemoPolicySpec(123, 10, 1, Optional.empty())),
+        Optional.empty()
     ));
     when(controllerClient.getTargetState(any())).thenThrow(new RuntimeException("oops"));
 
@@ -184,7 +186,8 @@ class ResponsivePolicyReconcilerTest {
         null,
         PolicyStatus.POLICY_STATUS_MANAGED,
         PolicyType.DEMO,
-        Optional.of(new DemoPolicySpec(10, 0, 1, Optional.empty()))
+        Optional.of(new DemoPolicySpec(10, 0, 1, Optional.empty())),
+        Optional.empty()
     ));
 
     // when:

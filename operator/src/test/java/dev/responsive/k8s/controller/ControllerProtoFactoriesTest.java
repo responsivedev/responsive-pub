@@ -38,8 +38,8 @@ import responsive.controller.v1.controller.proto.ControllerOuterClass;
 class ControllerProtoFactoriesTest {
   private static final String TESTENV = "testenv";
 
-  private final ResponsivePolicy demoPolicy = new ResponsivePolicy();
-  private ControllerOuterClass.ApplicationState demoApplicationState;
+  private final ResponsivePolicy kafkaStreamsPolicy = new ResponsivePolicy();
+  private ControllerOuterClass.ApplicationState kafkaStreamsApplicationState;
 
   @BeforeEach
   public void setup() {
@@ -49,33 +49,36 @@ class ControllerProtoFactoriesTest {
         ControllerOuterClass.PolicyStatus.POLICY_STATUS_MANAGED,
         ResponsivePolicySpec.PolicyType.DEMO,
         Optional.of(new DemoPolicySpec(
-            123, 7, 1, Optional.empty()))
+            123, 7, 1, Optional.empty())),
+        Optional.empty()
     );
-    demoPolicy.setSpec(spec);
-    final var demoMetadata = new ObjectMeta();
-    demoMetadata.setNamespace("orange");
-    demoMetadata.setName("banana");
-    demoPolicy.setMetadata(demoMetadata);
-    demoApplicationState = ControllerOuterClass.ApplicationState.newBuilder()
-        .setDemoState(ControllerOuterClass.DemoApplicationState.newBuilder().setReplicas(3).build())
+    kafkaStreamsPolicy.setSpec(spec);
+    final var kafkaStreamsMetadata = new ObjectMeta();
+    kafkaStreamsMetadata.setNamespace("orange");
+    kafkaStreamsMetadata.setName("banana");
+    kafkaStreamsPolicy.setMetadata(kafkaStreamsMetadata);
+    kafkaStreamsApplicationState = ControllerOuterClass.ApplicationState.newBuilder()
+        .setKafkaStreamsState(
+            ControllerOuterClass.KafkaStreamsApplicationState.newBuilder().setReplicas(3).build())
         .build();
   }
 
   @Test
-  public void shouldCreateUpsertPolicyRequestForDemoPolicy() {
+  public void shouldCreateUpsertPolicyRequestForKafkaStreamsPolicy() {
     // when:
-    final var request = ControllerProtoFactories.upsertPolicyRequest(TESTENV, demoPolicy);
+    final var request = ControllerProtoFactories.upsertPolicyRequest(TESTENV, kafkaStreamsPolicy);
 
     // then:
     assertThat(request.getApplicationId(), is("testenv/gouda/cheddar"));
-    assertThat(request.getPolicy().hasDemoPolicy(), is(true));
+    assertThat(request.getPolicy().hasKafkaStreamsPolicy(), is(true));
     assertThat(
         request.getPolicy().getStatus(),
         is(ControllerOuterClass.PolicyStatus.POLICY_STATUS_MANAGED)
     );
-    final ControllerOuterClass.DemoPolicySpec demoPolicy = request.getPolicy().getDemoPolicy();
-    assertThat(demoPolicy.getMaxReplicas(), is(123));
-    assertThat(demoPolicy.getMinReplicas(), is(7));
+    final ControllerOuterClass.KafkaStreamsPolicySpec kafkaStreamsPolicy
+        = request.getPolicy().getKafkaStreamsPolicy();
+    assertThat(kafkaStreamsPolicy.getMaxReplicas(), is(123));
+    assertThat(kafkaStreamsPolicy.getMinReplicas(), is(7));
   }
 
   private ResponsivePolicySpec specWithDiagnoser(
@@ -86,46 +89,49 @@ class ControllerProtoFactoriesTest {
         ControllerOuterClass.PolicyStatus.POLICY_STATUS_MANAGED,
         ResponsivePolicySpec.PolicyType.DEMO,
         Optional.of(new DemoPolicySpec(
-            123, 7, 1, Optional.of(List.of(diagnoserSpec))))
+            123, 7, 1, Optional.of(List.of(diagnoserSpec)))),
+        Optional.empty()
     );
   }
 
   @Test
-  public void shouldCreateUpsertPolicyRequestForDemoPolicyWithLagDiagnoser() {
+  public void shouldCreateUpsertPolicyRequestForKafkaStreamsPolicyWithLagDiagnoser() {
     // given:
-    demoPolicy.setSpec(specWithDiagnoser(DiagnoserSpec.lag()));
+    kafkaStreamsPolicy.setSpec(specWithDiagnoser(DiagnoserSpec.lag()));
 
     // when:
-    final var request = ControllerProtoFactories.upsertPolicyRequest(TESTENV, demoPolicy);
+    final var request = ControllerProtoFactories.upsertPolicyRequest(TESTENV, kafkaStreamsPolicy);
 
     // then:
-    final ControllerOuterClass.DemoPolicySpec created = request.getPolicy().getDemoPolicy();
+    final ControllerOuterClass.KafkaStreamsPolicySpec created
+        = request.getPolicy().getKafkaStreamsPolicy();
     assertThat(created.getDiagnoserList(), contains(
-        ControllerOuterClass.DemoPolicySpec.DiagnoserSpec.newBuilder()
+        ControllerOuterClass.KafkaStreamsPolicySpec.DiagnoserSpec.newBuilder()
             .setLagScaleUp(
-                ControllerOuterClass.DemoPolicySpec.LagDiagnoserSpec.newBuilder().build())
+                ControllerOuterClass.KafkaStreamsPolicySpec.LagDiagnoserSpec.newBuilder().build())
             .build()
     ));
   }
 
   @Test
-  public void shouldCreateUpsertPolicyRequestForDemoPolicyWithRateScaleUpDiagnoser() {
+  public void shouldCreateUpsertPolicyRequestForKafkaStreamsPolicyWithRateScaleUpDiagnoser() {
     // given:
-    demoPolicy.setSpec(
+    kafkaStreamsPolicy.setSpec(
         specWithDiagnoser(
             DiagnoserSpec.processingRateScaleUp(
                 new RateBasedDiagnoserSpec(10, Optional.of(123))))
     );
 
     // when:
-    final var request = ControllerProtoFactories.upsertPolicyRequest(TESTENV, demoPolicy);
+    final var request = ControllerProtoFactories.upsertPolicyRequest(TESTENV, kafkaStreamsPolicy);
 
     // then:
-    final ControllerOuterClass.DemoPolicySpec created = request.getPolicy().getDemoPolicy();
+    final ControllerOuterClass.KafkaStreamsPolicySpec created
+        = request.getPolicy().getKafkaStreamsPolicy();
     assertThat(created.getDiagnoserList(), contains(
-        ControllerOuterClass.DemoPolicySpec.DiagnoserSpec.newBuilder()
-            .setProcessingRateScaleUp(ControllerOuterClass.DemoPolicySpec.RateBasedDiagnoserSpec
-                .newBuilder()
+        ControllerOuterClass.KafkaStreamsPolicySpec.DiagnoserSpec.newBuilder()
+            .setProcessingRateScaleUp(
+                ControllerOuterClass.KafkaStreamsPolicySpec.RateBasedDiagnoserSpec.newBuilder()
                 .setRate(10)
                 .setWindowMs(123)
                 .build())
@@ -134,23 +140,24 @@ class ControllerProtoFactoriesTest {
   }
 
   @Test
-  public void shouldCreateUpsertPolicyRequestForDemoPolicyWithRateScaleDownDiagnoser() {
+  public void shouldCreateUpsertPolicyRequestForKafkaStreamsPolicyWithRateScaleDownDiagnoser() {
     // given:
-    demoPolicy.setSpec(
+    kafkaStreamsPolicy.setSpec(
         specWithDiagnoser(
             DiagnoserSpec.processingRateScaleDown(
                 new RateBasedDiagnoserSpec(10, Optional.of(123))))
     );
 
     // when:
-    final var request = ControllerProtoFactories.upsertPolicyRequest(TESTENV, demoPolicy);
+    final var request = ControllerProtoFactories.upsertPolicyRequest(TESTENV, kafkaStreamsPolicy);
 
     // then:
-    final ControllerOuterClass.DemoPolicySpec created = request.getPolicy().getDemoPolicy();
+    final ControllerOuterClass.KafkaStreamsPolicySpec created
+        = request.getPolicy().getKafkaStreamsPolicy();
     assertThat(created.getDiagnoserList(), contains(
-        ControllerOuterClass.DemoPolicySpec.DiagnoserSpec.newBuilder()
-            .setProcessingRateScaleDown(ControllerOuterClass.DemoPolicySpec.RateBasedDiagnoserSpec
-                .newBuilder()
+        ControllerOuterClass.KafkaStreamsPolicySpec.DiagnoserSpec.newBuilder()
+            .setProcessingRateScaleDown(
+                ControllerOuterClass.KafkaStreamsPolicySpec.RateBasedDiagnoserSpec.newBuilder()
                 .setRate(10)
                 .setWindowMs(123)
                 .build())
@@ -161,7 +168,8 @@ class ControllerProtoFactoriesTest {
   @Test
   public void shouldCreateUpsertPolicyRequestWithApplicationIdWhenEnvEmpty() {
     // when:
-    final var request = ControllerProtoFactories.upsertPolicyRequest("", demoPolicy);
+    final var request
+        = ControllerProtoFactories.upsertPolicyRequest("", kafkaStreamsPolicy);
 
     // then:
     assertThat(request.getApplicationId(), is("gouda/cheddar"));
@@ -170,7 +178,7 @@ class ControllerProtoFactoriesTest {
   @Test
   public void shouldCreateUpsertPolicyRequestWithMeanSojournTimeDiagnoserWithFixedReplicaScaling() {
     // given:
-    demoPolicy.setSpec(
+    kafkaStreamsPolicy.setSpec(
         specWithDiagnoser(DiagnoserSpec.meanSojournTime(
             new MeanSojournTimeDiagnoserSpec(
                 123,
@@ -180,10 +188,11 @@ class ControllerProtoFactoriesTest {
     );
 
     // when:
-    final var request = ControllerProtoFactories.upsertPolicyRequest("", demoPolicy);
+    final var request
+        = ControllerProtoFactories.upsertPolicyRequest("", kafkaStreamsPolicy);
 
     // then:
-    final var diagnoser = request.getPolicy().getDemoPolicy().getDiagnoserList().get(0);
+    final var diagnoser = request.getPolicy().getKafkaStreamsPolicy().getDiagnoserList().get(0);
     assertThat(diagnoser.hasMeanSojournTime(), is(true));
     assertThat(diagnoser.getMeanSojournTime().getMaxMeanSojournTimeSeconds(), is(123));
     assertThat(diagnoser.getMeanSojournTime().hasFixedReplicas(), is(true));
@@ -193,7 +202,7 @@ class ControllerProtoFactoriesTest {
   @Test
   public void shouldCreateUpsertPolicyRequestWithMeanSojournTimeDiagnoserWithRateBasedStrategy() {
     // given:
-    demoPolicy.setSpec(
+    kafkaStreamsPolicy.setSpec(
         specWithDiagnoser(DiagnoserSpec.meanSojournTime(
             new MeanSojournTimeDiagnoserSpec(
                 123,
@@ -203,10 +212,11 @@ class ControllerProtoFactoriesTest {
     );
 
     // when:
-    final var request = ControllerProtoFactories.upsertPolicyRequest("", demoPolicy);
+    final var request
+        = ControllerProtoFactories.upsertPolicyRequest("", kafkaStreamsPolicy);
 
     // then:
-    final var diagnoser = request.getPolicy().getDemoPolicy().getDiagnoserList().get(0);
+    final var diagnoser = request.getPolicy().getKafkaStreamsPolicy().getDiagnoserList().get(0);
     assertThat(diagnoser.hasMeanSojournTime(), is(true));
     assertThat(diagnoser.getMeanSojournTime().getMaxMeanSojournTimeSeconds(), is(123));
     assertThat(diagnoser.getMeanSojournTime().hasRateBased(), is(true));
@@ -215,7 +225,7 @@ class ControllerProtoFactoriesTest {
   @Test
   public void shouldCreateUpsertPolicyRequestWithMeanSojournTimeDiagnoserWithScaleToMaxStrategy() {
     // given:
-    demoPolicy.setSpec(
+    kafkaStreamsPolicy.setSpec(
         specWithDiagnoser(DiagnoserSpec.meanSojournTime(
             new MeanSojournTimeDiagnoserSpec(
                 123,
@@ -225,10 +235,11 @@ class ControllerProtoFactoriesTest {
     );
 
     // when:
-    final var request = ControllerProtoFactories.upsertPolicyRequest("", demoPolicy);
+    final var request
+        = ControllerProtoFactories.upsertPolicyRequest("", kafkaStreamsPolicy);
 
     // then:
-    final var diagnoser = request.getPolicy().getDemoPolicy().getDiagnoserList().get(0);
+    final var diagnoser = request.getPolicy().getKafkaStreamsPolicy().getDiagnoserList().get(0);
     assertThat(diagnoser.hasMeanSojournTime(), is(true));
     assertThat(diagnoser.getMeanSojournTime().getMaxMeanSojournTimeSeconds(), is(123));
     assertThat(diagnoser.getMeanSojournTime().hasScaleToMax(), is(true));
@@ -237,20 +248,20 @@ class ControllerProtoFactoriesTest {
   @Test
   public void shouldCreateCurrentStateRequestForDeployment() {
     // when:
-    final var request
-        = ControllerProtoFactories.currentStateRequest(TESTENV, demoPolicy, demoApplicationState);
+    final var request = ControllerProtoFactories.currentStateRequest(
+        TESTENV, kafkaStreamsPolicy, kafkaStreamsApplicationState);
 
     // Then:
     assertThat(request.getApplicationId(), is("testenv/gouda/cheddar"));
-    assertThat(request.getState().hasDemoState(), is(true));
-    assertThat(request.getState().getDemoState().getReplicas(), is(3));
+    assertThat(request.getState().hasKafkaStreamsState(), is(true));
+    assertThat(request.getState().getKafkaStreamsState().getReplicas(), is(3));
   }
 
   @Test
   public void shouldSetAppIdInCurrentStateRequestWhenEnvEmpty() {
     // when:
-    final var request
-        = ControllerProtoFactories.currentStateRequest("", demoPolicy, demoApplicationState);
+    final var request = ControllerProtoFactories.currentStateRequest(
+        "", kafkaStreamsPolicy, kafkaStreamsApplicationState);
 
     // Then:
     assertThat(request.getApplicationId(), is("gouda/cheddar"));
@@ -258,14 +269,14 @@ class ControllerProtoFactoriesTest {
 
   @Test
   public void shouldCreateEmptyRequest() {
-    final var request = ControllerProtoFactories.emptyRequest(TESTENV, demoPolicy);
+    final var request = ControllerProtoFactories.emptyRequest(TESTENV, kafkaStreamsPolicy);
 
     assertThat(request.getApplicationId(), is("testenv/gouda/cheddar"));
   }
 
   @Test
   public void shouldCreateEmptyRequestWhenEnvEmpty() {
-    final var request = ControllerProtoFactories.emptyRequest("", demoPolicy);
+    final var request = ControllerProtoFactories.emptyRequest("", kafkaStreamsPolicy);
 
     assertThat(request.getApplicationId(), is("gouda/cheddar"));
   }

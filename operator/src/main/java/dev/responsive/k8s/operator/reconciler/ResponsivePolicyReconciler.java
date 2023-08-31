@@ -22,6 +22,7 @@ import dev.responsive.controller.client.ControllerClient;
 import dev.responsive.k8s.controller.ControllerProtoFactories;
 import dev.responsive.k8s.crd.ResponsivePolicy;
 import dev.responsive.k8s.crd.ResponsivePolicySpec;
+import dev.responsive.k8s.crd.ResponsivePolicySpec.PolicyType;
 import dev.responsive.k8s.crd.ResponsivePolicyStatus;
 import io.javaoperatorsdk.operator.api.reconciler.Context;
 import io.javaoperatorsdk.operator.api.reconciler.ControllerConfiguration;
@@ -59,7 +60,9 @@ public class ResponsivePolicyReconciler implements
     this(
         environment,
         new ResponsiveContext(Objects.requireNonNull(controllerClient)),
-        ImmutableMap.of(ResponsivePolicySpec.PolicyType.DEMO, new DemoPolicyPlugin(environment))
+        ImmutableMap.of(
+            PolicyType.KAFKA_STREAMS, new KafkaStreamsPolicyPlugin(environment)
+        )
     );
   }
 

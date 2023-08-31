@@ -57,10 +57,10 @@ public final class ControllerProtoFactories {
       final ResponsivePolicySpec policySpec) {
     final var builder = ApplicationPolicySpec.newBuilder();
     switch (policySpec.getPolicyType()) {
-      case DEMO:
-        assert policySpec.getDemoPolicy().isPresent();
-        builder.setDemoPolicy(DemoPolicyProtoFactories.demoPolicyFromK8sResource(
-            policySpec.getDemoPolicy().get()));
+      case KAFKA_STREAMS:
+        assert policySpec.getKafkaStreamsPolicy().isPresent();
+        builder.setKafkaStreamsPolicy(KafkaStreamsPolicyProtoFactories
+            .kafkaStreamsPolicyFromK8sResource(policySpec.getKafkaStreamsPolicy().get()));
         break;
       default:
         throw new IllegalStateException("Unexpected type: " + policySpec.getPolicyType());
