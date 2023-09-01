@@ -29,10 +29,15 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KafkaStreams.StateListener;
 import org.apache.kafka.streams.KeyValue;
+import org.junit.jupiter.api.TestInfo;
 
 public final class IntegrationTestUtils {
 
-  private IntegrationTestUtils() {
+  public static String getCassandraValidName(final TestInfo info) {
+    // add displayName to name to account for parameterized tests
+    return info.getTestMethod().orElseThrow().getName().toLowerCase(Locale.ROOT)
+        + info.getDisplayName().substring("[X] ".length()).toLowerCase(Locale.ROOT)
+        .replace("_", ""); // keep only valid cassandra chars to keep testing code easier
   }
 
   public static void pipeInput(
@@ -175,4 +180,8 @@ public final class IntegrationTestUtils {
       lock.unlock();
     }
   }
+
+  private IntegrationTestUtils() {
+  }
+
 }
