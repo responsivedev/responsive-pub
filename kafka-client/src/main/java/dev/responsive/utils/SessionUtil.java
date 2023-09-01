@@ -24,7 +24,6 @@ import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.RETRY_
 
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.CqlSessionBuilder;
-import com.datastax.oss.driver.api.core.config.DefaultDriverOption;
 import com.datastax.oss.driver.api.core.config.DriverConfigLoader;
 import com.datastax.oss.driver.internal.core.session.throttling.ConcurrencyLimitingRequestThrottler;
 import dev.responsive.db.ResponsiveRetryPolicy;

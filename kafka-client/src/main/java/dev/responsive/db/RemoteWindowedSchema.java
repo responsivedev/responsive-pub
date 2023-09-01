@@ -28,6 +28,13 @@ import org.apache.kafka.streams.state.KeyValueIterator;
  */
 public interface RemoteWindowedSchema extends RemoteSchema<Stamped<Bytes>> {
 
+  byte[] fetch(
+      String tableName,
+      int partition,
+      Bytes key,
+      long windowStart
+  );
+
   KeyValueIterator<Stamped<Bytes>, byte[]> fetch(
       String tableName,
       int partition,

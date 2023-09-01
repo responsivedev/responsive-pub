@@ -26,7 +26,7 @@ import static org.hamcrest.Matchers.nullValue;
 import com.datastax.oss.driver.api.core.CqlSession;
 import dev.responsive.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.config.ResponsiveConfig;
-import dev.responsive.kafka.store.SchemaType;
+import dev.responsive.kafka.store.SchemaTypes.KVSchema;
 import dev.responsive.utils.ResponsiveConfigParam;
 import dev.responsive.utils.ResponsiveExtension;
 import java.time.Duration;
@@ -69,7 +69,7 @@ class CassandraFactSchemaIntegrationTest {
   @Test
   public void shouldInitializeWithCorrectMetadata() {
     // Given:
-    final RemoteKeyValueSchema schema = client.kvSchema(SchemaType.FACT);
+    final RemoteKeyValueSchema schema = client.kvSchema(KVSchema.FACT);
     schema.create(storeName, Optional.empty());
     schema.prepare(storeName);
 
@@ -100,7 +100,7 @@ class CassandraFactSchemaIntegrationTest {
   @Test
   public void shouldSetTtlAndCorrectTwcsOptions() {
     // Given:
-    final RemoteKeyValueSchema schema = client.kvSchema(SchemaType.FACT);
+    final RemoteKeyValueSchema schema = client.kvSchema(KVSchema.FACT);
     final var ttl = Duration.ofDays(30);
 
     // When:
@@ -126,7 +126,7 @@ class CassandraFactSchemaIntegrationTest {
   @Test
   public void shouldUseTwcsWithoutTtl() {
     // Given:
-    final RemoteKeyValueSchema schema = client.kvSchema(SchemaType.FACT);
+    final RemoteKeyValueSchema schema = client.kvSchema(KVSchema.FACT);
 
     // When:
     schema.create(storeName, Optional.empty());
@@ -145,7 +145,7 @@ class CassandraFactSchemaIntegrationTest {
   @Test
   public void shouldInsertAndDelete() {
     // Given:
-    final RemoteKeyValueSchema schema = client.kvSchema(SchemaType.FACT);
+    final RemoteKeyValueSchema schema = client.kvSchema(KVSchema.FACT);
     schema.create(storeName, Optional.empty());
     schema.prepare(storeName);
     schema.init(storeName, SubPartitioner.NO_SUBPARTITIONS, 1);
@@ -167,7 +167,7 @@ class CassandraFactSchemaIntegrationTest {
   @Test
   public void shouldRespectSemanticTTL() {
     // Given:
-    final RemoteKeyValueSchema schema = client.kvSchema(SchemaType.FACT);
+    final RemoteKeyValueSchema schema = client.kvSchema(KVSchema.FACT);
     schema.create(storeName, Optional.empty());
     schema.prepare(storeName);
     schema.init(storeName, SubPartitioner.NO_SUBPARTITIONS, 1);

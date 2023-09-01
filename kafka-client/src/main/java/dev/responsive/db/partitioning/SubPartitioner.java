@@ -24,7 +24,6 @@ import java.util.stream.IntStream;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.state.internals.Murmur3;
 
 /**
  * {@code SubPartitioner} allows sub-partitioning a partition
