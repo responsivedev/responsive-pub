@@ -1,6 +1,9 @@
 package dev.responsive.examples.simpleapp;
 
+import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.REQUEST_TIMEOUT;
+
 import com.datastax.oss.driver.api.core.CqlSession;
+import com.datastax.oss.driver.api.core.config.DriverConfigLoader;
 import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
 import com.datastax.oss.driver.api.querybuilder.schema.CreateKeyspace;
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
@@ -134,6 +137,9 @@ public class SimpleApplication {
     return CqlSession.builder()
         .addContactPoint(new InetSocketAddress("scylla-svc", 9042))
         .withLocalDatacenter("datacenter1")
+        .withConfigLoader(DriverConfigLoader.programmaticBuilder()
+            .withLong(REQUEST_TIMEOUT, 10000)
+            .build())
         .build();
   }
 }
