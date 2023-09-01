@@ -41,6 +41,7 @@ import static org.hamcrest.Matchers.lessThan;
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.ResponsiveKeyValueParams;
 import dev.responsive.kafka.api.ResponsiveStores;
+import dev.responsive.kafka.store.SchemaTypes.KVSchema;
 import dev.responsive.utils.IntegrationTestUtils;
 import dev.responsive.utils.RemoteMonitor;
 import dev.responsive.utils.ResponsiveConfigParam;
@@ -136,8 +137,8 @@ public class ResponsivePartitionedStoreEosIntegrationTest {
   }
 
   @ParameterizedTest
-  @EnumSource(SchemaType.class)
-  public void shouldMaintainStateOnEosFailOverAndFenceOldClient(final SchemaType type)
+  @EnumSource(KVSchema.class)
+  public void shouldMaintainStateOnEosFailOverAndFenceOldClient(final KVSchema type)
       throws Exception {
     // Given:
     final Map<String, Object> properties = getMutableProperties();
@@ -251,10 +252,10 @@ public class ResponsivePartitionedStoreEosIntegrationTest {
     return properties;
   }
 
-  private StoreBuilder<KeyValueStore<Long, Long>> storeSupplier(SchemaType type) {
+  private StoreBuilder<KeyValueStore<Long, Long>> storeSupplier(KVSchema type) {
     return ResponsiveStores.keyValueStoreBuilder(
         ResponsiveStores.keyValueStore(
-            type == SchemaType.FACT
+            type == KVSchema.FACT
                 ? ResponsiveKeyValueParams.fact(name)
                 : ResponsiveKeyValueParams.keyValue(name)
             ),
@@ -268,7 +269,7 @@ public class ResponsivePartitionedStoreEosIntegrationTest {
       final Map<String, Object> originals,
       final String instance,
       final SharedState state,
-      final SchemaType type
+      final KVSchema type
   ) {
     final Map<String, Object> properties = new HashMap<>(originals);
     properties.put(APPLICATION_SERVER_CONFIG, instance + ":1024");

@@ -67,11 +67,21 @@ public class TTDWindowedSchema extends TTDSchema<Stamped<Bytes>> implements Remo
   }
 
   @Override
+  public byte[] fetch(
+      String tableName,
+      int partition,
+      Bytes key,
+      long windowStart
+  ) {
+    return tableNameToStore.get(tableName).fetch(key, windowStart);
+  }
+
+  @Override
   public KeyValueIterator<Stamped<Bytes>, byte[]> fetch(
       final String tableName,
       final int partition,
       final Bytes key,
-      long timeFrom,
+      final long timeFrom,
       final long timeTo
   ) {
     return tableNameToStore.get(tableName).fetch(key, timeFrom, timeTo);
