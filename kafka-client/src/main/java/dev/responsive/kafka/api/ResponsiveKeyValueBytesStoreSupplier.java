@@ -47,6 +47,6 @@ public class ResponsiveKeyValueBytesStoreSupplier implements KeyValueBytesStoreS
 
   @Override
   public String metricsScope() {
-    return "responsive-" + params.schemaType().name().toLowerCase(Locale.ROOT);
+    return "responsive-" + params.kvSchema().name().toLowerCase(Locale.ROOT);
   }
 }

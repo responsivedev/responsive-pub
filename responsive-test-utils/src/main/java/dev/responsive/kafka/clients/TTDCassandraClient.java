@@ -26,7 +26,8 @@ import dev.responsive.db.RemoteKeyValueSchema;
 import dev.responsive.db.RemoteWindowedSchema;
 import dev.responsive.kafka.config.ResponsiveConfig;
 import dev.responsive.kafka.store.ResponsiveStoreRegistry;
-import dev.responsive.kafka.store.SchemaType;
+import dev.responsive.kafka.store.SchemaTypes.KVSchema;
+import dev.responsive.kafka.store.SchemaTypes.WindowSchema;
 import dev.responsive.kafka.store.TTDKeyValueSchema;
 import dev.responsive.kafka.store.TTDWindowedSchema;
 import dev.responsive.utils.RemoteMonitor;
@@ -117,12 +118,12 @@ public class TTDCassandraClient extends CassandraClient {
   }
 
   @Override
-  public RemoteKeyValueSchema kvSchema(final SchemaType schemaType) {
+  public RemoteKeyValueSchema kvSchema(final KVSchema schemaType) {
     return kvSchema;
   }
 
   @Override
-  public RemoteWindowedSchema windowedSchema() {
+  public RemoteWindowedSchema windowedSchema(final WindowSchema schemaType) {
     return windowedSchema;
   }
 
