@@ -24,13 +24,12 @@ import com.datastax.oss.driver.api.core.cql.Statement;
 import dev.responsive.db.CassandraClient;
 import dev.responsive.db.RemoteKeyValueSchema;
 import dev.responsive.db.RemoteWindowedSchema;
+import dev.responsive.kafka.api.ResponsiveKeyValueParams;
+import dev.responsive.kafka.api.ResponsiveWindowParams;
 import dev.responsive.kafka.config.ResponsiveConfig;
-import dev.responsive.kafka.store.SchemaTypes.KVSchema;
-import dev.responsive.kafka.store.SchemaTypes.WindowSchema;
 import dev.responsive.utils.RemoteMonitor;
 import java.time.Duration;
 import java.util.OptionalInt;
-import java.util.Properties;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ScheduledExecutorService;
 import org.apache.kafka.common.utils.Time;
@@ -43,8 +42,8 @@ public class CassandraClientStub extends CassandraClient {
   private final TTDKeyValueSchema kvSchema;
   private final TTDWindowedSchema windowedSchema;
 
-  public CassandraClientStub(final Properties props, final Time time) {
-    super(new ResponsiveConfig(props));
+  public CassandraClientStub(final ResponsiveConfig config, final Time time) {
+    super(config);
     this.time = time;
 
     kvSchema = new TTDKeyValueSchema(this);
@@ -110,12 +109,12 @@ public class CassandraClientStub extends CassandraClient {
   }
 
   @Override
-  public RemoteKeyValueSchema kvSchema(final KVSchema schemaType) {
+  public RemoteKeyValueSchema prepareKVTableSchema(final ResponsiveKeyValueParams params) {
     return kvSchema;
   }
 
   @Override
-  public RemoteWindowedSchema windowedSchema(final WindowSchema schemaType) {
+  public RemoteWindowedSchema prepareWindowedTableSchema(final ResponsiveWindowParams params) {
     return windowedSchema;
   }
 

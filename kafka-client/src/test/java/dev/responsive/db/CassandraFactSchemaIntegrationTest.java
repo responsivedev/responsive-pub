@@ -25,13 +25,12 @@ import static org.hamcrest.Matchers.nullValue;
 
 import com.datastax.oss.driver.api.core.CqlSession;
 import dev.responsive.db.partitioning.SubPartitioner;
+import dev.responsive.kafka.api.ResponsiveKeyValueParams;
 import dev.responsive.kafka.config.ResponsiveConfig;
-import dev.responsive.kafka.store.SchemaTypes.KVSchema;
 import dev.responsive.utils.ResponsiveConfigParam;
 import dev.responsive.utils.ResponsiveExtension;
 import java.time.Duration;
 import java.util.Map;
-import java.util.Optional;
 import org.apache.kafka.common.utils.Bytes;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -46,6 +45,7 @@ class CassandraFactSchemaIntegrationTest {
   private static final long MIN_VALID_TS = 0L;
 
   private String storeName;
+  private ResponsiveKeyValueParams params;
   private CassandraClient client;
   private CqlSession session;
 
@@ -63,15 +63,14 @@ class CassandraFactSchemaIntegrationTest {
         .withLocalDatacenter(cassandra.getLocalDatacenter())
         .withKeyspace("responsive_clients") // NOTE: this keyspace is expected to exist
         .build();
-    client = new CassandraClient(session, new ResponsiveConfig(responsiveProps));
+    client = new CassandraClient(session, ResponsiveConfig.quietConfig(responsiveProps));
   }
 
   @Test
-  public void shouldInitializeWithCorrectMetadata() {
+  public void shouldInitializeWithCorrectMetadata() throws Exception {
     // Given:
-    final RemoteKeyValueSchema schema = client.kvSchema(KVSchema.FACT);
-    schema.create(storeName, Optional.empty());
-    schema.prepare(storeName);
+    params = ResponsiveKeyValueParams.fact(storeName);
+    final RemoteKeyValueSchema schema = client.prepareKVTableSchema(params);
 
     // When:
     final var token = schema.init(storeName, SubPartitioner.NO_SUBPARTITIONS, 1);
@@ -98,13 +97,13 @@ class CassandraFactSchemaIntegrationTest {
 
   @SuppressWarnings("OptionalGetWithoutIsPresent")
   @Test
-  public void shouldSetTtlAndCorrectTwcsOptions() {
+  public void shouldSetTtlAndCorrectTwcsOptions() throws Exception {
     // Given:
-    final RemoteKeyValueSchema schema = client.kvSchema(KVSchema.FACT);
     final var ttl = Duration.ofDays(30);
+    params = ResponsiveKeyValueParams.fact(storeName).withTimeToLive(ttl);
 
     // When:
-    schema.create(storeName, Optional.of(ttl));
+    client.prepareKVTableSchema(params);
 
     // Then:
     final var table = session.getMetadata()
@@ -124,12 +123,12 @@ class CassandraFactSchemaIntegrationTest {
 
   @SuppressWarnings("OptionalGetWithoutIsPresent")
   @Test
-  public void shouldUseTwcsWithoutTtl() {
+  public void shouldUseTwcsWithoutTtl() throws Exception {
     // Given:
-    final RemoteKeyValueSchema schema = client.kvSchema(KVSchema.FACT);
+    params = ResponsiveKeyValueParams.fact(storeName);
 
     // When:
-    schema.create(storeName, Optional.empty());
+    client.prepareKVTableSchema(params);
 
     // Then:
     final var table = session.getMetadata()
@@ -143,11 +142,11 @@ class CassandraFactSchemaIntegrationTest {
   }
 
   @Test
-  public void shouldInsertAndDelete() {
+  public void shouldInsertAndDelete() throws Exception {
     // Given:
-    final RemoteKeyValueSchema schema = client.kvSchema(KVSchema.FACT);
-    schema.create(storeName, Optional.empty());
-    schema.prepare(storeName);
+    params = ResponsiveKeyValueParams.fact(storeName);
+    final RemoteKeyValueSchema schema = client.prepareKVTableSchema(params);
+
     schema.init(storeName, SubPartitioner.NO_SUBPARTITIONS, 1);
 
     final Bytes key = Bytes.wrap(new byte[]{0});
@@ -165,11 +164,10 @@ class CassandraFactSchemaIntegrationTest {
   }
 
   @Test
-  public void shouldRespectSemanticTTL() {
+  public void shouldRespectSemanticTTL() throws Exception {
     // Given:
-    final RemoteKeyValueSchema schema = client.kvSchema(KVSchema.FACT);
-    schema.create(storeName, Optional.empty());
-    schema.prepare(storeName);
+    params = ResponsiveKeyValueParams.fact(storeName);
+    final RemoteKeyValueSchema schema = client.prepareKVTableSchema(params);
     schema.init(storeName, SubPartitioner.NO_SUBPARTITIONS, 1);
 
     final Bytes key = Bytes.wrap(new byte[]{0});

@@ -170,13 +170,13 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
       waitTillFullyConsumed(input, Duration.ofSeconds(120));
 
       // Make sure changelog is even w/ cassandra
-      final ResponsiveConfig config = new ResponsiveConfig(properties);
+      final ResponsiveConfig config = ResponsiveConfig.quietConfig(properties);
       final CassandraClient cassandraClient = defaultFactory.createCassandraClient(
           defaultFactory.createCqlSession(config),
           config
       );
-      final RemoteKeyValueSchema statements = cassandraClient.kvSchema(type);
-      statements.prepare(aggName());
+      final RemoteKeyValueSchema statements =
+          cassandraClient.prepareKVTableSchema(params(type, name));
       final long cassandraOffset = statements.metadata(aggName(), 0).offset;
       assertThat(cassandraOffset, greaterThan(0L));
       final TopicPartition changelog
@@ -229,12 +229,13 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
     }
 
     // Make sure changelog is ahead of cassandra
-    final ResponsiveConfig config = new ResponsiveConfig(properties);
+    final ResponsiveConfig config = ResponsiveConfig.quietConfig(properties);
     final CassandraClient cassandraClient = defaultFactory.createCassandraClient(
         defaultFactory.createCqlSession(config),
         config);
-    final RemoteKeyValueSchema statements = cassandraClient.kvSchema(type);
-    statements.prepare(aggName());
+    final RemoteKeyValueSchema statements =
+        cassandraClient.prepareKVTableSchema(params(type, name));
+
     final long cassandraOffset = statements.metadata(aggName(), 0).offset;
     assertThat(cassandraOffset, greaterThan(0L));
     final TopicPartition changelog = new TopicPartition(name + "-" + aggName() + "-changelog", 0);
@@ -478,6 +479,14 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
     properties.put(ResponsiveConfig.STORE_FLUSH_RECORDS_TRIGGER_CONFIG, 0);
 
     return properties;
+  }
+
+  private ResponsiveKeyValueParams params(final KVSchema type, final String name) {
+    switch (type) {
+      case KEY_VALUE:  return ResponsiveKeyValueParams.keyValue(name);
+      case FACT:       return ResponsiveKeyValueParams.fact(name);
+      default:         throw new IllegalArgumentException();
+    }
   }
 
   private long endOffset(final TopicPartition topic)
