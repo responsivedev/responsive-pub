@@ -189,9 +189,17 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
   public void put(final Bytes key, final byte[] value, final long windowStartTimestamp) {
     observedStreamTime = Math.max(observedStreamTime, windowStartTimestamp);
 
-    final Stamped<Bytes> wKey = new Stamped<>(key, windowStartTimestamp);
+    final Stamped<Bytes> windowedKey = new Stamped<>(key, windowStartTimestamp);
 
-    buffer.put(wKey, value, context.timestamp());
+    putInternal(windowedKey, value);
+  }
+
+  private void putInternal(final Stamped<Bytes> windowedKey, final byte[] value) {
+    if (value != null) {
+      buffer.put(windowedKey, value, context.timestamp());
+    } else {
+      buffer.tombstone(windowedKey, context.timestamp());
+    }
     StoreQueryUtils.updatePosition(position, context);
   }
 
