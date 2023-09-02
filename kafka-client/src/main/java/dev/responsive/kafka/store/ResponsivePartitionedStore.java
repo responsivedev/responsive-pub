@@ -170,7 +170,7 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
 
   @Override
   public void put(final Bytes key, final byte[] value) {
-    putIfAbsent(key, value);
+    putInternal(key, value);
   }
 
   @Override
