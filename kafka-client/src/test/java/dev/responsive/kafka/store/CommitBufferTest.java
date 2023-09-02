@@ -39,7 +39,6 @@ import dev.responsive.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.config.ResponsiveConfig;
 import dev.responsive.utils.ResponsiveConfigParam;
 import dev.responsive.utils.ResponsiveExtension;
-import dev.responsive.utils.TableName;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.time.Duration;
