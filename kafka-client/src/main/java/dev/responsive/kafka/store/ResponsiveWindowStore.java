@@ -118,7 +118,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       log.info("Initializing state store");
       context = asInternalProcessorContext(storeContext);
 
-      final ResponsiveConfig config = ResponsiveConfig.quietConfig(storeContext.appConfigs());
+      final ResponsiveConfig config = ResponsiveConfig.responsiveConfig(storeContext.appConfigs());
       final SharedClients sharedClients = loadSharedClients(storeContext.appConfigs());
       final CassandraClient client = sharedClients.cassandraClient;
 

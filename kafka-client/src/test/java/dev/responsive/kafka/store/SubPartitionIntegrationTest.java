@@ -19,7 +19,7 @@ package dev.responsive.kafka.store;
 import static dev.responsive.kafka.config.ResponsiveConfig.STORAGE_DESIRED_NUM_PARTITION_CONFIG;
 import static dev.responsive.kafka.config.ResponsiveConfig.STORE_FLUSH_RECORDS_TRIGGER_CONFIG;
 import static dev.responsive.kafka.config.ResponsiveConfig.SUBPARTITION_HASHER_CONFIG;
-import static dev.responsive.kafka.config.ResponsiveConfig.quietConfig;
+import static dev.responsive.kafka.config.ResponsiveConfig.responsiveConfig;
 import static dev.responsive.utils.IntegrationTestUtils.awaitOutput;
 import static dev.responsive.utils.IntegrationTestUtils.pipeInput;
 import static dev.responsive.utils.IntegrationTestUtils.startAppAndAwaitRunning;
@@ -124,7 +124,7 @@ public class SubPartitionIntegrationTest {
         .withLocalDatacenter(cassandra.getLocalDatacenter())
         .withKeyspace("responsive_clients") // NOTE: this keyspace is expected to exist
         .build();
-    client = new CassandraClient(session, quietConfig(responsiveProps));
+    client = new CassandraClient(session, responsiveConfig(responsiveProps));
   }
 
   @AfterEach

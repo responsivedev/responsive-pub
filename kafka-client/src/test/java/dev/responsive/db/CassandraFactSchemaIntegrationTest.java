@@ -63,7 +63,7 @@ class CassandraFactSchemaIntegrationTest {
         .withLocalDatacenter(cassandra.getLocalDatacenter())
         .withKeyspace("responsive_clients") // NOTE: this keyspace is expected to exist
         .build();
-    client = new CassandraClient(session, ResponsiveConfig.quietConfig(responsiveProps));
+    client = new CassandraClient(session, ResponsiveConfig.responsiveConfig(responsiveProps));
   }
 
   @Test

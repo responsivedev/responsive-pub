@@ -168,7 +168,7 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
       waitTillFullyConsumed(input, Duration.ofSeconds(120));
 
       // Make sure changelog is even w/ cassandra
-      final ResponsiveConfig config = ResponsiveConfig.quietConfig(properties);
+      final ResponsiveConfig config = ResponsiveConfig.responsiveConfig(properties);
       final CassandraClient cassandraClient = defaultFactory.createCassandraClient(
           defaultFactory.createCqlSession(config),
           config
@@ -227,7 +227,7 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
     }
 
     // Make sure changelog is ahead of cassandra
-    final ResponsiveConfig config = ResponsiveConfig.quietConfig(properties);
+    final ResponsiveConfig config = ResponsiveConfig.responsiveConfig(properties);
     final CassandraClient cassandraClient = defaultFactory.createCassandraClient(
         defaultFactory.createCqlSession(config),
         config);

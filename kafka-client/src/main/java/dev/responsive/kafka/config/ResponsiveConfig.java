@@ -235,22 +235,22 @@ public class ResponsiveConfig extends AbstractConfig {
       );
 
   /**
-   * This should generally be used only once per app to avoid excessive logging. Prefer
-   * {@link #quietConfig(Map)} whenever you need to construct a {@code ResponsiveConfig}
-   * mid-application, for example during state store init.
-   */
-  public static ResponsiveConfig loggedConfig(final Map<?, ?> originals) {
-    return new ResponsiveConfig(originals, true);
-  }
-
-  /**
    * This should generally be used over the {@link #loggedConfig(Map)} override in all
    * cases outside the initial {@link dev.responsive.kafka.api.ResponsiveKafkaStreams#create}.
    * Prefer this API whenever you need to construct a {@code ResponsiveConfig} mid-application,
    * for example during state store init.
    */
-  public static ResponsiveConfig quietConfig(final Map<?, ?> originals) {
+  public static ResponsiveConfig responsiveConfig(final Map<?, ?> originals) {
     return new ResponsiveConfig(originals, false);
+  }
+
+  /**
+   * This should generally be used only once per app to avoid excessive logging. Prefer
+   * {@link #responsiveConfig(Map)} whenever you need to construct a {@code ResponsiveConfig}
+   * mid-application, for example during state store init.
+   */
+  public static ResponsiveConfig loggedConfig(final Map<?, ?> originals) {
+    return new ResponsiveConfig(originals, true);
   }
 
   private ResponsiveConfig(final Map<?, ?> originals, final boolean doLog) {
