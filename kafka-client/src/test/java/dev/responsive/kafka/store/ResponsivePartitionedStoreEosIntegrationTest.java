@@ -16,6 +16,8 @@
 
 package dev.responsive.kafka.store;
 
+import static dev.responsive.utils.IntegrationTestUtils.createTopicsAndWait;
+import static dev.responsive.utils.IntegrationTestUtils.getCassandraValidName;
 import static dev.responsive.utils.IntegrationTestUtils.pipeInput;
 import static dev.responsive.utils.IntegrationTestUtils.readOutput;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
@@ -108,19 +110,13 @@ public class ResponsivePartitionedStoreEosIntegrationTest {
       @ResponsiveConfigParam final Map<String, Object> responsiveProps
   ) {
     // add displayName to name to account for parameterized tests
-    name = info.getTestMethod().orElseThrow().getName()
-        + info.getDisplayName().substring("[X] ".length()).toLowerCase(Locale.ROOT);
+    name = getCassandraValidName(info);
     executor = new ScheduledThreadPoolExecutor(2);
 
     this.responsiveProps.putAll(responsiveProps);
 
     this.admin = admin;
-    admin.createTopics(
-        List.of(
-            new NewTopic(inputTopic(), Optional.of(2), Optional.empty()),
-            new NewTopic(outputTopic(), Optional.of(1), Optional.empty())
-        )
-    );
+    createTopicsAndWait(admin, Map.of(inputTopic(), 2, outputTopic(), 1));
   }
 
   @AfterEach
