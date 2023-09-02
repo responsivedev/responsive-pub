@@ -29,6 +29,7 @@ import dev.responsive.kafka.api.ResponsiveWindowParams;
 import dev.responsive.kafka.config.ResponsiveConfig;
 import dev.responsive.utils.RemoteMonitor;
 import java.time.Duration;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ScheduledExecutorService;
@@ -110,11 +111,15 @@ public class CassandraClientStub extends CassandraClient {
 
   @Override
   public RemoteKeyValueSchema prepareKVTableSchema(final ResponsiveKeyValueParams params) {
+    kvSchema.create(params.name().cassandraName(), params.timeToLive());
+    kvSchema.prepare(params.name().cassandraName());
     return kvSchema;
   }
 
   @Override
   public RemoteWindowedSchema prepareWindowedTableSchema(final ResponsiveWindowParams params) {
+    windowedSchema.create(params.name().cassandraName(), Optional.empty());
+    windowedSchema.prepare(params.name().cassandraName());
     return windowedSchema;
   }
 
