@@ -25,13 +25,12 @@ import static org.hamcrest.Matchers.nullValue;
 
 import com.datastax.oss.driver.api.core.CqlSession;
 import dev.responsive.db.partitioning.SubPartitioner;
+import dev.responsive.kafka.api.ResponsiveKeyValueParams;
 import dev.responsive.kafka.config.ResponsiveConfig;
-import dev.responsive.kafka.store.SchemaTypes.KVSchema;
 import dev.responsive.utils.ResponsiveConfigParam;
 import dev.responsive.utils.ResponsiveExtension;
 import java.time.Duration;
 import java.util.Map;
-import java.util.Optional;
 import org.apache.kafka.common.utils.Bytes;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -45,7 +44,8 @@ class CassandraFactSchemaIntegrationTest {
   private static final long CURRENT_TIME = 100L;
   private static final long MIN_VALID_TS = 0L;
 
-  private String storeName;
+  private String storeName; // ie the "kafkaName", NOT the "cassandraName"
+  private ResponsiveKeyValueParams params;
   private CassandraClient client;
   private CqlSession session;
 
@@ -63,22 +63,22 @@ class CassandraFactSchemaIntegrationTest {
         .withLocalDatacenter(cassandra.getLocalDatacenter())
         .withKeyspace("responsive_clients") // NOTE: this keyspace is expected to exist
         .build();
-    client = new CassandraClient(session, new ResponsiveConfig(responsiveProps));
+    client = new CassandraClient(session, ResponsiveConfig.responsiveConfig(responsiveProps));
   }
 
   @Test
-  public void shouldInitializeWithCorrectMetadata() {
+  public void shouldInitializeWithCorrectMetadata() throws Exception {
     // Given:
-    final RemoteKeyValueSchema schema = client.kvSchema(KVSchema.FACT);
-    schema.create(storeName, Optional.empty());
-    schema.prepare(storeName);
+    params = ResponsiveKeyValueParams.fact(storeName);
+    final String tableName = params.name().cassandraName();
+    final RemoteKeyValueSchema schema = client.prepareKVTableSchema(params);
 
     // When:
-    final var token = schema.init(storeName, SubPartitioner.NO_SUBPARTITIONS, 1);
-    schema.init(storeName, SubPartitioner.NO_SUBPARTITIONS, 2);
-    client.execute(schema.setOffset(storeName, 2, 10));
-    final MetadataRow metadata1 = schema.metadata(storeName, 1);
-    final MetadataRow metadata2 = schema.metadata(storeName, 2);
+    final var token = schema.init(tableName, SubPartitioner.NO_SUBPARTITIONS, 1);
+    schema.init(tableName, SubPartitioner.NO_SUBPARTITIONS, 2);
+    client.execute(schema.setOffset(tableName, 2, 10));
+    final MetadataRow metadata1 = schema.metadata(tableName, 1);
+    final MetadataRow metadata2 = schema.metadata(tableName, 2);
 
     // Then:
     assertThat(token, instanceOf(FactWriterFactory.class));
@@ -91,26 +91,27 @@ class CassandraFactSchemaIntegrationTest {
     final var table = session.getMetadata()
         .getKeyspace(session.getKeyspace().get())
         .get()
-        .getTable(storeName + "_md")
+        .getTable(tableName + "_md")
         .get();
-    assertThat(table.describe(false), containsStringIgnoringCase(storeName + "_md"));
+    assertThat(table.describe(false), containsStringIgnoringCase(tableName + "_md"));
   }
 
   @SuppressWarnings("OptionalGetWithoutIsPresent")
   @Test
-  public void shouldSetTtlAndCorrectTwcsOptions() {
+  public void shouldSetTtlAndCorrectTwcsOptions() throws Exception {
     // Given:
-    final RemoteKeyValueSchema schema = client.kvSchema(KVSchema.FACT);
     final var ttl = Duration.ofDays(30);
+    params = ResponsiveKeyValueParams.fact(storeName).withTimeToLive(ttl);
+    final String tableName = params.name().cassandraName();
 
     // When:
-    schema.create(storeName, Optional.of(ttl));
+    client.prepareKVTableSchema(params);
 
     // Then:
     final var table = session.getMetadata()
         .getKeyspace(session.getKeyspace().get())
         .get()
-        .getTable(storeName)
+        .getTable(tableName)
         .get();
     final String describe = table.describe(false);
     assertThat(describe,
@@ -124,18 +125,19 @@ class CassandraFactSchemaIntegrationTest {
 
   @SuppressWarnings("OptionalGetWithoutIsPresent")
   @Test
-  public void shouldUseTwcsWithoutTtl() {
+  public void shouldUseTwcsWithoutTtl() throws Exception {
     // Given:
-    final RemoteKeyValueSchema schema = client.kvSchema(KVSchema.FACT);
+    params = ResponsiveKeyValueParams.fact(storeName);
+    final String tableName = params.name().cassandraName();
 
     // When:
-    schema.create(storeName, Optional.empty());
+    client.prepareKVTableSchema(params);
 
     // Then:
     final var table = session.getMetadata()
         .getKeyspace(session.getKeyspace().get())
         .get()
-        .getTable(storeName)
+        .getTable(tableName)
         .get();
     final String describe = table.describe(false);
     assertThat(describe,
@@ -143,21 +145,22 @@ class CassandraFactSchemaIntegrationTest {
   }
 
   @Test
-  public void shouldInsertAndDelete() {
+  public void shouldInsertAndDelete() throws Exception {
     // Given:
-    final RemoteKeyValueSchema schema = client.kvSchema(KVSchema.FACT);
-    schema.create(storeName, Optional.empty());
-    schema.prepare(storeName);
-    schema.init(storeName, SubPartitioner.NO_SUBPARTITIONS, 1);
+    params = ResponsiveKeyValueParams.fact(storeName);
+    final RemoteKeyValueSchema schema = client.prepareKVTableSchema(params);
+    final String tableName = params.name().cassandraName();
+
+    schema.init(tableName, SubPartitioner.NO_SUBPARTITIONS, 1);
 
     final Bytes key = Bytes.wrap(new byte[]{0});
     final byte[] val = new byte[]{1};
 
     // When:
-    client.execute(schema.insert(storeName, 1, key, val, CURRENT_TIME));
-    final byte[] valAt0 = schema.get(storeName, 1, key, MIN_VALID_TS);
-    client.execute(schema.delete(storeName, 1, key));
-    final byte[] valAt1 = schema.get(storeName, 1, key, MIN_VALID_TS);
+    client.execute(schema.insert(tableName, 1, key, val, CURRENT_TIME));
+    final byte[] valAt0 = schema.get(tableName, 1, key, MIN_VALID_TS);
+    client.execute(schema.delete(tableName, 1, key));
+    final byte[] valAt1 = schema.get(tableName, 1, key, MIN_VALID_TS);
 
     // Then
     assertThat(valAt0, is(val));
@@ -165,20 +168,21 @@ class CassandraFactSchemaIntegrationTest {
   }
 
   @Test
-  public void shouldRespectSemanticTTL() {
+  public void shouldRespectSemanticTTL() throws Exception {
     // Given:
-    final RemoteKeyValueSchema schema = client.kvSchema(KVSchema.FACT);
-    schema.create(storeName, Optional.empty());
-    schema.prepare(storeName);
-    schema.init(storeName, SubPartitioner.NO_SUBPARTITIONS, 1);
+    params = ResponsiveKeyValueParams.fact(storeName);
+    final String tableName = params.name().cassandraName();
+
+    final RemoteKeyValueSchema schema = client.prepareKVTableSchema(params);
+    schema.init(tableName, SubPartitioner.NO_SUBPARTITIONS, 1);
 
     final Bytes key = Bytes.wrap(new byte[]{0});
     final byte[] val = new byte[]{1};
 
     // When:
-    client.execute(schema.insert(storeName, 1, key, val, CURRENT_TIME));
-    final byte[] valid = schema.get(storeName, 1, key, MIN_VALID_TS);
-    final byte[] expired = schema.get(storeName, 1, key, CURRENT_TIME + 100L);
+    client.execute(schema.insert(tableName, 1, key, val, CURRENT_TIME));
+    final byte[] valid = schema.get(tableName, 1, key, MIN_VALID_TS);
+    final byte[] expired = schema.get(tableName, 1, key, CURRENT_TIME + 100L);
 
     // Then
     assertThat(valid, is(val));

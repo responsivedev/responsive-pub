@@ -54,17 +54,11 @@ import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.KStream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 @ExtendWith(ResponsiveExtension.class)
 public class ResponsiveGlobalStoreIntegrationTest {
-
-  private static final Logger LOG
-      = LoggerFactory.getLogger(ResponsivePartitionedStoreEosIntegrationTest.class);
 
   private static final String INPUT_TOPIC = "input";
   private static final String GLOBAL_TOPIC = "global";

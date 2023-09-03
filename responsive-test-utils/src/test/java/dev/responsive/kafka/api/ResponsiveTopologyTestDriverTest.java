@@ -16,7 +16,8 @@
 
 package dev.responsive.kafka.api;
 
-import dev.responsive.kafka.store.SchemaType;
+import dev.responsive.kafka.store.SchemaTypes;
+import dev.responsive.kafka.store.SchemaTypes.KVSchema;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -34,21 +35,20 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.hamcrest.MatcherAssert;
 import org.hamcrest.Matchers;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 public class ResponsiveTopologyTestDriverTest {
 
-  private static ResponsiveKeyValueParams paramsForType(final SchemaType type) {
-    return type == SchemaType.KEY_VALUE
+  private static ResponsiveKeyValueParams paramsForType(final KVSchema type) {
+    return type == KVSchema.KEY_VALUE
         ? ResponsiveKeyValueParams.keyValue("people")
         : ResponsiveKeyValueParams.fact("people");
   }
 
   @ParameterizedTest
-  @EnumSource(SchemaType.class)
-  public void shouldRunAllKVStoreTypesWithoutResponsiveConnection(final SchemaType type) {
+  @EnumSource(SchemaTypes.KVSchema.class)
+  public void shouldRunAllKVStoreTypesWithoutResponsiveConnection(final KVSchema type) {
     // Given:
     final TopologyTestDriver driver = setupDriver(paramsForType(type));
 
@@ -80,8 +80,8 @@ public class ResponsiveTopologyTestDriverTest {
   }
 
   @ParameterizedTest
-  @EnumSource(SchemaType.class)
-  public void shouldRunAllKVStoresWithTtlWithoutResponsiveConnection(final SchemaType type) {
+  @EnumSource(SchemaTypes.KVSchema.class)
+  public void shouldRunAllKVStoreTypesWithTTLWithoutResponsiveConnection(final KVSchema type) {
     // Given:
     final Duration ttl = Duration.ofMillis(15);
     final TopologyTestDriver driver = setupDriver(

@@ -22,7 +22,6 @@ import dev.responsive.kafka.config.ResponsiveConfig;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Properties;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
@@ -128,7 +127,6 @@ public class ResponsiveTopologyTestDriver extends TopologyTestDriver {
     props.putAll(new InternalConfigs.Builder()
         .withCassandraClient(client)
         .withKafkaAdmin(client.mockAdmin())
-        .withExecutorService(new ScheduledThreadPoolExecutor(1))
         .withStoreRegistry(client.storeRegistry())
         .withTopologyDescription(topologyDescription)
         .build()
