@@ -17,6 +17,7 @@
 package dev.responsive.kafka.api;
 
 import dev.responsive.kafka.store.ResponsiveWindowStore;
+import java.util.Locale;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
@@ -63,6 +64,6 @@ public class ResponsiveWindowedStoreSupplier implements WindowBytesStoreSupplier
 
   @Override
   public String metricsScope() {
-    return "responsive-window";
+    return "responsive-" + params.schemaType().name().toLowerCase(Locale.ROOT);
   }
 }

@@ -38,9 +38,10 @@ import org.slf4j.LoggerFactory;
 public final class StoreUtil {
   private static final Logger LOG = LoggerFactory.getLogger(StoreUtil.class);
 
-  public static void validateTopologyOptimizationConfig(final Map<String, Object> configs) {
-    final String optimizations = new StreamsConfig(configs)
-        .getString(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG);
+
+
+  public static void validateTopologyOptimizationConfig(final StreamsConfig config) {
+    final String optimizations = config.getString(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG);
     if (optimizations.equals(StreamsConfig.OPTIMIZE)
         || optimizations.contains(StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS)) {
       throw new IllegalArgumentException(

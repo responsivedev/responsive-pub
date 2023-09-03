@@ -86,7 +86,7 @@ public class ResponsiveStore implements KeyValueStore<Bytes, byte[]> {
   @Override
   public void init(final StateStoreContext context, final StateStore root) {
     if (asInternalProcessorContext(context).taskType() == TaskType.GLOBAL) {
-      delegate = new ResponsiveGlobalStore(params.name());
+      delegate = new ResponsiveGlobalStore(params);
     } else {
       delegate = new ResponsivePartitionedStore(params);
     }

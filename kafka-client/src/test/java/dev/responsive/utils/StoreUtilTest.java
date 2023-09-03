@@ -40,32 +40,32 @@ class StoreUtilTest {
   public void shouldThrowOnEnableAllOptimizations() {
     assertThrows(
         IllegalArgumentException.class,
-        () -> StoreUtil.validateTopologyOptimizationConfig(Map.of(
+        () -> StoreUtil.validateTopologyOptimizationConfig(new StreamsConfig(Map.of(
             StreamsConfig.APPLICATION_ID_CONFIG, "foo",
             CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "foo.bar",
             StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE
         ))
-    );
+    ));
   }
 
   @Test
   public void shouldThrowOnEnableReuseSourceTopicOptimizations() {
     assertThrows(
         IllegalArgumentException.class,
-        () -> StoreUtil.validateTopologyOptimizationConfig(Map.of(
+        () -> StoreUtil.validateTopologyOptimizationConfig(new StreamsConfig(Map.of(
             StreamsConfig.APPLICATION_ID_CONFIG, "foo",
             CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "foo.bar",
             StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS
         ))
-    );
+    ));
   }
 
   @Test
   public void shouldNotThrowWhenOptimizationsOff() {
-    StoreUtil.validateTopologyOptimizationConfig(Map.of(
+    StoreUtil.validateTopologyOptimizationConfig(new StreamsConfig(Map.of(
         StreamsConfig.APPLICATION_ID_CONFIG, "foo",
         CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "foo.bar")
-    );
+    ));
   }
 
   @Test
