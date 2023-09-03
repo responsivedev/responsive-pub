@@ -16,6 +16,7 @@
 
 package dev.responsive.kafka.store;
 
+import static dev.responsive.kafka.clients.SharedClients.loadSharedClients;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.changelogFor;
 
@@ -30,13 +31,11 @@ import dev.responsive.kafka.config.ResponsiveConfig;
 import dev.responsive.model.Result;
 import dev.responsive.model.Stamped;
 import dev.responsive.utils.Iterators;
-import dev.responsive.utils.RemoteMonitor;
 import dev.responsive.utils.TableName;
-import java.time.Duration;
-import java.util.Optional;
 import java.util.concurrent.TimeoutException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -49,31 +48,29 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.StoreQueryUtils;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
 
-  private static final Logger LOG = LoggerFactory.getLogger(ResponsiveWindowStore.class);
-
-  private CassandraClient client;
-  private RemoteWindowedSchema schema;
+  private final Logger log;
 
   private final ResponsiveWindowParams params;
   private final TableName name;
+  private final Position position; // TODO(IQ): update the position during restoration
   private final long windowSize;
-  private final Position position;
   private final long retentionPeriod;
-
-  private boolean open;
 
   @SuppressWarnings("rawtypes")
   private InternalProcessorContext context;
-  private int partition;
+  private TopicPartition partition;
+
   private CommitBuffer<Stamped<Bytes>, RemoteWindowedSchema> buffer;
-  private long observedStreamTime;
+  private RemoteWindowedSchema schema;
   private ResponsiveStoreRegistry storeRegistry;
   private ResponsiveStoreRegistration registration;
   private SubPartitioner partitioner;
+
+  private boolean open;
+  private long observedStreamTime;
 
   public ResponsiveWindowStore(final ResponsiveWindowParams params) {
     this.params = params;
@@ -93,6 +90,9 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
     this.retentionPeriod = params.retentionPeriod();
     this.windowSize = params.windowSize();
     this.position = Position.emptyPosition();
+    log = new LogContext(
+        String.format("window-store [%s]", name.kafkaName())
+    ).logger(ResponsiveWindowStore.class);
   }
 
   @Override
@@ -113,39 +113,29 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
   }
 
   @Override
-  public void init(final StateStoreContext context, final StateStore root) {
+  public void init(final StateStoreContext storeContext, final StateStore root) {
     try {
-      LOG.info("Initializing state store {}", name);
+      log.info("Initializing state store");
+      context = asInternalProcessorContext(storeContext);
 
-      this.context = asInternalProcessorContext(context);
+      final ResponsiveConfig config = ResponsiveConfig.responsiveConfig(storeContext.appConfigs());
+      final SharedClients sharedClients = loadSharedClients(storeContext.appConfigs());
+      final CassandraClient client = sharedClients.cassandraClient;
 
-      final ResponsiveConfig config = new ResponsiveConfig(context.appConfigs());
-
-      partition = context.taskId().partition();
-
-      final SharedClients sharedClients = new SharedClients(context.appConfigs());
-      client = sharedClients.cassandraClient;
-
-      schema = client.windowedSchema(params.schemaType());
-      schema.create(params.name().cassandraName(), Optional.empty());
-
-      final RemoteMonitor monitor = client.awaitTable(name.cassandraName(), sharedClients.executor);
-      monitor.await(Duration.ofSeconds(60));
-      LOG.info("Remote table {} is available for querying.", name.cassandraName());
-
-      schema.prepare(name.cassandraName());
       storeRegistry = InternalConfigs.loadStoreRegistry(context.appConfigs());
-      final TopicPartition topicPartition =  new TopicPartition(
-          changelogFor(context, name.kafkaName(), false),
-          partition
+      partition =  new TopicPartition(
+          changelogFor(storeContext, name.kafkaName(), false),
+          context.taskId().partition()
       );
-      partitioner = config.getSubPartitioner(
-          sharedClients.admin, name, topicPartition.topic());
+      partitioner = config.getSubPartitioner(sharedClients.admin, name, partition.topic());
+
+      schema = client.prepareWindowedTableSchema(params);
+      log.info("Remote table {} is available for querying.", name.cassandraName());
 
       buffer = CommitBuffer.from(
           sharedClients,
           name,
-          topicPartition,
+          partition,
           schema,
           new StampedKeySpec(this::withinRetention),
           partitioner,
@@ -153,18 +143,18 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       );
       buffer.init();
 
+      open = true;
+
       final long offset = buffer.offset();
       registration = new ResponsiveStoreRegistration(
           name.kafkaName(),
-          topicPartition,
+          partition,
           offset == -1 ? 0 : offset,
           buffer::flush
       );
       storeRegistry.registerStore(registration);
 
-      open = true;
-
-      context.register(root, buffer);
+      storeContext.register(root, buffer);
     } catch (InterruptedException | TimeoutException e) {
       throw new ProcessorStateException("Failed to initialize store.", e);
     }
@@ -212,7 +202,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
 
     return schema.fetch(
         name.cassandraName(),
-        partitioner.partition(partition, key),
+        partitioner.partition(partition.partition(), key),
         key,
         time
     );
@@ -228,7 +218,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
     final Stamped<Bytes> from = new Stamped<>(key, start);
     final Stamped<Bytes> to = new Stamped<>(key, timeTo);
 
-    final int subPartition = partitioner.partition(partition, key);
+    final int subPartition = partitioner.partition(partition.partition(), key);
     return Iterators.windowed(
         new LocalRemoteKvIterator<>(
             buffer.range(from, to),
@@ -258,7 +248,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
     final Stamped<Bytes> from = new Stamped<>(key, start);
     final Stamped<Bytes> to = new Stamped<>(key, timeTo);
 
-    final int subPartition = partitioner.partition(partition, key);
+    final int subPartition = partitioner.partition(partition.partition(), key);
     return Iterators.windowed(
         new LocalRemoteKvIterator<>(
             buffer.backRange(from, to),
