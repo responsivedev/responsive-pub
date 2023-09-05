@@ -1,7 +1,7 @@
 package dev.responsive.k8s.controller;
 
 import dev.responsive.k8s.crd.kafkastreams.DiagnoserSpec;
-import dev.responsive.k8s.crd.kafkastreams.MeanSojournTimeDiagnoserSpec;
+import dev.responsive.k8s.crd.kafkastreams.ExpectedLatencyDiagnoserSpec;
 import dev.responsive.k8s.crd.kafkastreams.RateBasedDiagnoserSpec;
 import responsive.controller.v1.controller.proto.ControllerOuterClass;
 import responsive.controller.v1.controller.proto.ControllerOuterClass.KafkaStreamsPolicySpec.FixedReplicaScaleUpStrategySpec;
@@ -22,13 +22,18 @@ public class DiagnoserProtoFactories {
     return builder.build();
   }
 
-  private static ControllerOuterClass.KafkaStreamsPolicySpec.MeanSojournTimeDiagnoserSpec
-      meanSojournTimeDiagnoserFromK8sResource(
-          final MeanSojournTimeDiagnoserSpec diagnoser
+  private static ControllerOuterClass.KafkaStreamsPolicySpec.ExpectedLatencyDiagnoserSpec
+      expectedLatencyDiagnoserFromK8sResource(
+          final ExpectedLatencyDiagnoserSpec diagnoser
   ) {
-    final var builder = ControllerOuterClass.KafkaStreamsPolicySpec.MeanSojournTimeDiagnoserSpec
+    final var builder = ControllerOuterClass.KafkaStreamsPolicySpec.ExpectedLatencyDiagnoserSpec
         .newBuilder()
-        .setMaxMeanSojournTimeSeconds(diagnoser.getMaxMeanSojournTime());
+        .setMaxExpectedLatencySeconds(diagnoser.getMaxExpectedLatencySeconds())
+        .setWindowSeconds(diagnoser.getWindowSeconds())
+        .setProjectionSeconds(diagnoser.getProjectionSeconds())
+        .setGraceSeconds(diagnoser.getGraceSeconds())
+        .setStaggerSeconds(diagnoser.getStaggerSeconds())
+        .setScaleDownBufferSeconds(diagnoser.getScaleDownBufferSeconds());
     final var type = diagnoser.getScaleUpStrategy().getType();
     switch (type) {
       case RATE_BASED: {
@@ -84,9 +89,9 @@ public class DiagnoserProtoFactories {
       }
       case MEAN_SOJOURN_TIME: {
         return ControllerOuterClass.KafkaStreamsPolicySpec.DiagnoserSpec.newBuilder()
-            .setMeanSojournTime(
-                meanSojournTimeDiagnoserFromK8sResource(
-                    diagnoserSpec.getMeanSojournTime().get()))
+            .setExpectedLatency(
+                expectedLatencyDiagnoserFromK8sResource(
+                    diagnoserSpec.getExpectedLatency().get()))
             .build();
       }
       default:
