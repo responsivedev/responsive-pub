@@ -2,24 +2,25 @@ package dev.responsive.k8s.crd.kafkastreams;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.util.Optional;
 
 public class ExpectedLatencyDiagnoserSpec {
   private final int maxExpectedLatencySeconds;
-  private final int windowSeconds;
-  private final int projectionSeconds;
-  private final int scaleDownBufferSeconds;
-  private final int graceSeconds;
-  private final int staggerSeconds;
+  private final Optional<Integer> windowSeconds;
+  private final Optional<Integer> projectionSeconds;
+  private final Optional<Integer> scaleDownBufferSeconds;
+  private final Optional<Integer> graceSeconds;
+  private final Optional<Integer> staggerSeconds;
   private final ScaleUpStrategySpec scaleUpStrategy;
 
   @JsonCreator
   public ExpectedLatencyDiagnoserSpec(
       @JsonProperty("maxExpectedLatencySeconds") final int maxExpectedLatencySeconds,
-      @JsonProperty("windowSeconds") final int windowSeconds,
-      @JsonProperty("projectionSeconds") final int projectionSeconds,
-      @JsonProperty("scaledownBufferSeconds") final int scaleDownBufferSeconds,
-      @JsonProperty("graceSeconds") final int graceSeconds,
-      @JsonProperty("staggerSeconds") final int staggerSeconds,
+      @JsonProperty("windowSeconds") final Optional<Integer> windowSeconds,
+      @JsonProperty("projectionSeconds") final Optional<Integer> projectionSeconds,
+      @JsonProperty("scaledownBufferSeconds") final Optional<Integer> scaleDownBufferSeconds,
+      @JsonProperty("graceSeconds") final Optional<Integer> graceSeconds,
+      @JsonProperty("staggerSeconds") final Optional<Integer> staggerSeconds,
       @JsonProperty("scaleUpStrategy") final ScaleUpStrategySpec scaleUpStrategy
   ) {
     this.maxExpectedLatencySeconds = maxExpectedLatencySeconds;
@@ -35,23 +36,23 @@ public class ExpectedLatencyDiagnoserSpec {
     return maxExpectedLatencySeconds;
   }
 
-  public int getWindowSeconds() {
+  public Optional<Integer> getWindowSeconds() {
     return windowSeconds;
   }
 
-  public int getProjectionSeconds() {
+  public Optional<Integer> getProjectionSeconds() {
     return projectionSeconds;
   }
 
-  public int getScaleDownBufferSeconds() {
+  public Optional<Integer> getScaleDownBufferSeconds() {
     return scaleDownBufferSeconds;
   }
 
-  public int getGraceSeconds() {
+  public Optional<Integer> getGraceSeconds() {
     return graceSeconds;
   }
 
-  public int getStaggerSeconds() {
+  public Optional<Integer> getStaggerSeconds() {
     return staggerSeconds;
   }
 

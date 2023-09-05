@@ -28,12 +28,12 @@ public class DiagnoserProtoFactories {
   ) {
     final var builder = ControllerOuterClass.KafkaStreamsPolicySpec.ExpectedLatencyDiagnoserSpec
         .newBuilder()
-        .setMaxExpectedLatencySeconds(diagnoser.getMaxExpectedLatencySeconds())
-        .setWindowSeconds(diagnoser.getWindowSeconds())
-        .setProjectionSeconds(diagnoser.getProjectionSeconds())
-        .setGraceSeconds(diagnoser.getGraceSeconds())
-        .setStaggerSeconds(diagnoser.getStaggerSeconds())
-        .setScaleDownBufferSeconds(diagnoser.getScaleDownBufferSeconds());
+        .setMaxExpectedLatencySeconds(diagnoser.getMaxExpectedLatencySeconds());
+    diagnoser.getWindowSeconds().ifPresent(builder::setWindowSeconds);
+    diagnoser.getProjectionSeconds().ifPresent(builder::setProjectionSeconds);
+    diagnoser.getGraceSeconds().ifPresent(builder::setGraceSeconds);
+    diagnoser.getScaleDownBufferSeconds().ifPresent(builder::setScaleDownBufferSeconds);
+    diagnoser.getStaggerSeconds().ifPresent(builder::setStaggerSeconds);
     final var type = diagnoser.getScaleUpStrategy().getType();
     switch (type) {
       case RATE_BASED: {

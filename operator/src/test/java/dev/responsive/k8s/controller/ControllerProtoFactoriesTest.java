@@ -182,11 +182,11 @@ class ControllerProtoFactoriesTest {
         specWithDiagnoser(DiagnoserSpec.expectedLatency(
             new ExpectedLatencyDiagnoserSpec(
                 123,
-                10,
-                11,
-                12,
-                13,
-                14,
+                Optional.of(10),
+                Optional.of(11),
+                Optional.of(12),
+                Optional.of(13),
+                Optional.of(14),
                 ScaleUpStrategySpec.fixedReplica(new FixedReplicaScaleUpStrategySpec(3))
             )
         ))
@@ -216,11 +216,11 @@ class ControllerProtoFactoriesTest {
         specWithDiagnoser(DiagnoserSpec.expectedLatency(
             new ExpectedLatencyDiagnoserSpec(
                 123,
-                0,
-                0,
-                0,
-                0,
-                0,
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
                 ScaleUpStrategySpec.rateBased()
             )
         ))
@@ -244,11 +244,11 @@ class ControllerProtoFactoriesTest {
         specWithDiagnoser(DiagnoserSpec.expectedLatency(
             new ExpectedLatencyDiagnoserSpec(
                 123,
-                0,
-                0,
-                0,
-                0,
-                0,
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
                 ScaleUpStrategySpec.scaleToMax()
             )
         ))
@@ -263,6 +263,37 @@ class ControllerProtoFactoriesTest {
     assertThat(diagnoser.hasExpectedLatency(), is(true));
     assertThat(diagnoser.getExpectedLatency().getMaxExpectedLatencySeconds(), is(123));
     assertThat(diagnoser.getExpectedLatency().hasScaleToMax(), is(true));
+  }
+
+  @Test
+  public void shouldCreateUpsertPolicyRequestWithExpectedLatencyDiagnoserWithEmptyOptionals() {
+    // given:
+    kafkaStreamsPolicy.setSpec(
+        specWithDiagnoser(DiagnoserSpec.expectedLatency(
+            new ExpectedLatencyDiagnoserSpec(
+                123,
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                ScaleUpStrategySpec.scaleToMax()
+            )
+        ))
+    );
+
+    // when:
+    final var request
+        = ControllerProtoFactories.upsertPolicyRequest("", kafkaStreamsPolicy);
+
+    // then:
+    final var diagnoser = request.getPolicy().getKafkaStreamsPolicy().getDiagnoserList().get(0);
+    assertThat(diagnoser.hasExpectedLatency(), is(true));
+    assertThat(diagnoser.getExpectedLatency().hasWindowSeconds(), is(false));
+    assertThat(diagnoser.getExpectedLatency().hasProjectionSeconds(), is(false));
+    assertThat(diagnoser.getExpectedLatency().hasStaggerSeconds(), is(false));
+    assertThat(diagnoser.getExpectedLatency().hasGraceSeconds(), is(false));
+    assertThat(diagnoser.getExpectedLatency().hasScaleDownBufferSeconds(), is(false));
   }
 
   @Test

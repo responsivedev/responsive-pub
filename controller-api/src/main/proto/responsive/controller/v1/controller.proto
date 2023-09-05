@@ -103,11 +103,11 @@ message KafkaStreamsPolicySpec {
 
   message ExpectedLatencyDiagnoserSpec {
     int32 max_expected_latency_seconds = 1;
-    int32 window_seconds = 7;
-    int32 projection_seconds = 8;
-    int32 scale_down_buffer_seconds = 9;
-    int32 grace_seconds = 10;
-    int32 stagger_seconds = 11;
+    optional int32 window_seconds = 7;
+    optional int32 projection_seconds = 8;
+    optional int32 scale_down_buffer_seconds = 9;
+    optional int32 grace_seconds = 10;
+    optional int32 stagger_seconds = 11;
 
     oneof scale_up_strategy {
       FixedReplicaScaleUpStrategySpec fixed_replicas = 2;
