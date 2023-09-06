@@ -19,12 +19,9 @@ plugins {
 }
 
 dependencies {
-    // TODO: we should make sure to fail the release of kafka-client
-    // if we don't bump this up - or have some other mechanism to
-    // ensure they are released in tandem - otherwise it is possible
-    // that the latest release of kafka-client will be untestable
-    implementation(libs.bundles.scylla)
-    implementation("dev.responsive:kafka-client:0.7.1")
+    // TODO: we should make sure to never release this unless the kafka-client
+    // version is pinned
+    implementation(project(":kafka-client"))
 
     implementation(libs.bundles.scylla)
     implementation(libs.kafka.streams.test.utils)
