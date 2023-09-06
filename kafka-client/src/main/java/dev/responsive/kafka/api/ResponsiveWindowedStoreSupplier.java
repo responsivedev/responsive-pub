@@ -17,48 +17,66 @@
 package dev.responsive.kafka.api;
 
 import dev.responsive.kafka.store.ResponsiveWindowStore;
+import dev.responsive.utils.TableName;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 
 public class ResponsiveWindowedStoreSupplier implements WindowBytesStoreSupplier {
 
-  private final ResponsiveWindowParams params;
-  private final long segmentIntervalMs;
+  private final TableName name;
+  private final long retentionPeriod;
+  private final long windowSize;
+  private final boolean retainDuplicates;
 
-  public ResponsiveWindowedStoreSupplier(final ResponsiveWindowParams params) {
-    this.params = params;
-    this.segmentIntervalMs = params.retentionPeriod() / params.numSegments();
+  public ResponsiveWindowedStoreSupplier(
+      final String name,
+      final long retentionPeriod,
+      final long windowSize,
+      final boolean retainDuplicates
+  ) {
+    this.name = new TableName(name);
+    this.retentionPeriod = retentionPeriod;
+    this.windowSize = windowSize;
+    this.retainDuplicates = retainDuplicates;
   }
 
   @Override
   public String name() {
-    return params.name().kafkaName();
+    return name.kafkaName();
   }
 
   @Override
   public WindowStore<Bytes, byte[]> get() {
-    return new ResponsiveWindowStore(params);
+    return new ResponsiveWindowStore(
+        name,
+        retentionPeriod,
+        windowSize,
+        retainDuplicates
+    );
   }
 
+  // Responsive window store is not *really* segmented, so just
+  // say size is 1 ms this is what InMemoryWindowBytesStoreSupplier
+  // does in Kafka Streams
   @Override
   public long segmentIntervalMs() {
-    return segmentIntervalMs;
+    return 1;
   }
 
   @Override
   public long windowSize() {
-    return params.windowSize();
+    return windowSize;
   }
 
   @Override
   public boolean retainDuplicates() {
-    return params.retainDuplicates();
+    return retainDuplicates;
   }
 
   @Override
   public long retentionPeriod() {
-    return params.retentionPeriod();
+    return retentionPeriod;
   }
 
   @Override

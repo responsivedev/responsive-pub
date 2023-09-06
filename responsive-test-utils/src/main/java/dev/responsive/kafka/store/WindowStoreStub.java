@@ -40,13 +40,6 @@ public class WindowStoreStub {
     records.remove(key);
   }
 
-  public byte[] fetch(
-      final Bytes key,
-      final long windowStart
-  ) {
-    throw new UnsupportedOperationException("Not yet implemented.");
-  }
-
   public KeyValueIterator<Stamped<Bytes>, byte[]> fetch(
       final Bytes key,
       long timeFrom,

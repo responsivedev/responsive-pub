@@ -280,7 +280,7 @@ public class CassandraKeyValueSchema implements RemoteKeyValueSchema {
 
     final List<Row> result = client.execute(get).all();
     if (result.size() > 1) {
-      throw new IllegalStateException("Unexpected multiple results for point lookup");
+      throw new IllegalArgumentException();
     } else if (result.isEmpty()) {
       return null;
     } else {

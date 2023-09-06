@@ -20,7 +20,6 @@ import dev.responsive.db.CassandraClient;
 import dev.responsive.db.RemoteKeyValueSchema;
 import dev.responsive.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.clients.SharedClients;
-import dev.responsive.kafka.store.SchemaTypes.KVSchema;
 import dev.responsive.utils.RemoteMonitor;
 import dev.responsive.utils.TableName;
 import java.time.Duration;
@@ -96,7 +95,7 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
       client = sharedClients.cassandraClient;
 
       final RemoteMonitor monitor = client.awaitTable(name.cassandraName(), sharedClients.executor);
-      schema = client.kvSchema(KVSchema.KEY_VALUE);
+      schema = client.kvSchema(SchemaType.KEY_VALUE);
       schema.create(name.cassandraName(), Optional.empty());
       monitor.await(Duration.ofSeconds(60));
       LOG.info("Global table {} is available for querying.", name);

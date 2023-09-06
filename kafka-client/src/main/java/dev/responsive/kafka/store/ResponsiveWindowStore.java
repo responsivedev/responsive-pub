@@ -24,7 +24,6 @@ import dev.responsive.db.RemoteWindowedSchema;
 import dev.responsive.db.StampedKeySpec;
 import dev.responsive.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.api.InternalConfigs;
-import dev.responsive.kafka.api.ResponsiveWindowParams;
 import dev.responsive.kafka.clients.SharedClients;
 import dev.responsive.kafka.config.ResponsiveConfig;
 import dev.responsive.model.Result;
@@ -58,7 +57,6 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
   private CassandraClient client;
   private RemoteWindowedSchema schema;
 
-  private final ResponsiveWindowParams params;
   private final TableName name;
   private final long windowSize;
   private final Position position;
@@ -75,9 +73,13 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
   private ResponsiveStoreRegistration registration;
   private SubPartitioner partitioner;
 
-  public ResponsiveWindowStore(final ResponsiveWindowParams params) {
-    this.params = params;
-    this.name = params.name();
+  public ResponsiveWindowStore(
+      final TableName name,
+      final long retentionPeriod,
+      final long windowSize,
+      final boolean retainDuplicates
+  ) {
+    this.name = name;
 
     // TODO: figure out how to implement retention period in Cassandra
     // there are a few options for this: we can use the wall-clock based
@@ -90,9 +92,18 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
     //
     // for now (so we can get correct behavior) we just post-filter anything
     // that is past the TTL
-    this.retentionPeriod = params.retentionPeriod();
-    this.windowSize = params.windowSize();
+    this.retentionPeriod = retentionPeriod;
+    this.windowSize = windowSize;
     this.position = Position.emptyPosition();
+
+    if (retainDuplicates) {
+      // TODO: we should implement support for retaining duplicates
+      // I suspect this is a pretty niche use case, so this can wait for later
+      // as it's only used to ensure the result of stream-stream joins include
+      // duplicate results for the joins if there are duplicate keys in the source
+      // with the same timestamp
+      LOG.warn("ResponsiveWindowStore does not fully support retaining duplicates");
+    }
   }
 
   @Override
@@ -126,8 +137,8 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       final SharedClients sharedClients = new SharedClients(context.appConfigs());
       client = sharedClients.cassandraClient;
 
-      schema = client.windowedSchema(params.schemaType());
-      schema.create(params.name().cassandraName(), Optional.empty());
+      schema = client.windowedSchema();
+      schema.create(name.cassandraName(), Optional.empty());
 
       final RemoteMonitor monitor = client.awaitTable(name.cassandraName(), sharedClients.executor);
       monitor.await(Duration.ofSeconds(60));
@@ -202,12 +213,19 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       return localResult.isTombstone ? null : localResult.value;
     }
 
-    return schema.fetch(
+    final KeyValueIterator<Stamped<Bytes>, byte[]> remoteResult = schema.fetch(
         name.cassandraName(),
         partitioner.partition(partition, key),
         key,
-        time
+        time,
+        time + 1
     );
+
+    if (!remoteResult.hasNext()) {
+      return null;
+    }
+
+    return remoteResult.next().value;
   }
 
   @Override

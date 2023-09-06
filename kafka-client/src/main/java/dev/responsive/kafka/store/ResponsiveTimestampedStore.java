@@ -1,6 +1,7 @@
 package dev.responsive.kafka.store;
 
 import dev.responsive.kafka.api.ResponsiveKeyValueParams;
+import dev.responsive.utils.TableName;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 
 /**

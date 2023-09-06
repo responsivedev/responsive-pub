@@ -26,8 +26,7 @@ import com.datastax.oss.driver.api.core.cql.SimpleStatement;
 import com.datastax.oss.driver.api.core.cql.Statement;
 import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
 import dev.responsive.kafka.config.ResponsiveConfig;
-import dev.responsive.kafka.store.SchemaTypes.KVSchema;
-import dev.responsive.kafka.store.SchemaTypes.WindowSchema;
+import dev.responsive.kafka.store.SchemaType;
 import dev.responsive.utils.RemoteMonitor;
 import java.time.Duration;
 import java.util.OptionalInt;
@@ -145,7 +144,7 @@ public class CassandraClient {
     return numPartitions == 0 ? OptionalInt.empty() : OptionalInt.of(numPartitions);
   }
 
-  public RemoteKeyValueSchema kvSchema(final KVSchema schemaType) {
+  public RemoteKeyValueSchema kvSchema(final SchemaType schemaType) {
     switch (schemaType) {
       case KEY_VALUE: return kvSchema;
       case FACT:      return factSchema;
@@ -153,11 +152,7 @@ public class CassandraClient {
     }
   }
 
-  public RemoteWindowedSchema windowedSchema(final WindowSchema schemaType) {
-    switch (schemaType) {
-      case WINDOW:    return windowedSchema;
-      case STREAM:    throw new UnsupportedOperationException("Not yet implemented");
-      default:        throw new IllegalArgumentException(schemaType.name());
-    }
+  public RemoteWindowedSchema windowedSchema() {
+    return windowedSchema;
   }
 }

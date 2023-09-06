@@ -27,7 +27,6 @@ import dev.responsive.kafka.api.InternalConfigs;
 import dev.responsive.kafka.api.ResponsiveKeyValueParams;
 import dev.responsive.kafka.clients.SharedClients;
 import dev.responsive.kafka.config.ResponsiveConfig;
-import dev.responsive.kafka.store.SchemaTypes.KVSchema;
 import dev.responsive.model.Result;
 import dev.responsive.utils.RemoteMonitor;
 import dev.responsive.utils.StoreUtil;
@@ -104,7 +103,7 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
       final SharedClients sharedClients = new SharedClients(context.appConfigs());
       CassandraClient client = sharedClients.cassandraClient;
 
-      schema = client.kvSchema(params.kvSchema());
+      schema = client.kvSchema(params.schemaType());
       schema.create(params.name().cassandraName(), params.timeToLive());
 
       final RemoteMonitor monitor = client.awaitTable(name.cassandraName(), sharedClients.executor);
@@ -117,7 +116,7 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
           changelogFor(context, name.kafkaName(), false),
           partition
       );
-      partitioner = params.kvSchema() == KVSchema.FACT
+      partitioner = params.schemaType() == SchemaType.FACT
           ? SubPartitioner.NO_SUBPARTITIONS
           : config.getSubPartitioner(sharedClients.admin, name, topicPartition.topic());
 

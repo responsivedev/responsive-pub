@@ -50,6 +50,7 @@ import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.cql.BatchStatement;
 import com.datastax.oss.driver.api.core.cql.Statement;
 import dev.responsive.db.CassandraClient;
+import dev.responsive.db.CassandraKeyValueSchema;
 import dev.responsive.db.RemoteKeyValueSchema;
 import dev.responsive.kafka.api.CassandraClientFactory;
 import dev.responsive.kafka.api.DefaultCassandraClientFactory;
@@ -57,7 +58,6 @@ import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.ResponsiveKeyValueParams;
 import dev.responsive.kafka.api.ResponsiveStores;
 import dev.responsive.kafka.config.ResponsiveConfig;
-import dev.responsive.kafka.store.SchemaTypes.KVSchema;
 import dev.responsive.utils.IntegrationTestUtils;
 import dev.responsive.utils.ResponsiveConfigParam;
 import dev.responsive.utils.ResponsiveExtension;
@@ -153,8 +153,8 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
   }
 
   @ParameterizedTest
-  @EnumSource(KVSchema.class)
-  public void shouldFlushStoresBeforeClose(final KVSchema type) throws Exception {
+  @EnumSource(SchemaType.class)
+  public void shouldFlushStoresBeforeClose(final SchemaType type) throws Exception {
     final Map<String, Object> properties = getMutableProperties();
     final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties);
     final KafkaClientSupplier defaultClientSupplier = new DefaultKafkaClientSupplier();
@@ -189,8 +189,8 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
   }
 
   @ParameterizedTest
-  @EnumSource(KVSchema.class)
-  public void shouldRestoreUnflushedChangelog(final KVSchema type) throws Exception {
+  @EnumSource(SchemaType.class)
+  public void shouldRestoreUnflushedChangelog(final SchemaType type) throws Exception {
     final Map<String, Object> properties = getMutableProperties();
     final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties);
     final KafkaClientSupplier defaultClientSupplier = new DefaultKafkaClientSupplier();
@@ -307,7 +307,7 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
       final Map<String, Object> originals,
       final KafkaClientSupplier clientSupplier,
       final CassandraClientFactory cassandraClientFactory,
-      final KVSchema type) {
+      SchemaType type) {
     final Map<String, Object> properties = new HashMap<>(originals);
 
     final StreamsBuilder builder = new StreamsBuilder();
@@ -318,7 +318,7 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
         inputTblTopic(),
         Materialized.as(
             ResponsiveStores.keyValueStore(
-                type == KVSchema.FACT
+                type == SchemaType.FACT
                     ? ResponsiveKeyValueParams.fact(inputTableName)
                     : ResponsiveKeyValueParams.keyValue(inputTableName)
             )
@@ -331,7 +331,7 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
             (k, v, va) -> v + va,
             (Materialized) Materialized.as(
                     ResponsiveStores.keyValueStore(
-                            type == KVSchema.FACT
+                            type == SchemaType.FACT
                                 ? ResponsiveKeyValueParams.fact(aggName())
                                 : ResponsiveKeyValueParams.keyValue(aggName())
                     )
@@ -403,7 +403,7 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
 
     @Override
     public CassandraClient createCassandraClient(
-        final CqlSession session,
+        CqlSession session,
         final ResponsiveConfig responsiveConfigs
     ) {
       return wrappedFactory.createCassandraClient(session, responsiveConfigs);

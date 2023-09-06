@@ -25,8 +25,6 @@ import dev.responsive.db.CassandraClient;
 import dev.responsive.db.RemoteKeyValueSchema;
 import dev.responsive.db.RemoteWindowedSchema;
 import dev.responsive.kafka.config.ResponsiveConfig;
-import dev.responsive.kafka.store.SchemaTypes.KVSchema;
-import dev.responsive.kafka.store.SchemaTypes.WindowSchema;
 import dev.responsive.utils.RemoteMonitor;
 import java.time.Duration;
 import java.util.OptionalInt;
@@ -110,12 +108,12 @@ public class CassandraClientStub extends CassandraClient {
   }
 
   @Override
-  public RemoteKeyValueSchema kvSchema(final KVSchema schemaType) {
+  public RemoteKeyValueSchema kvSchema(final SchemaType schemaType) {
     return kvSchema;
   }
 
   @Override
-  public RemoteWindowedSchema windowedSchema(final WindowSchema schemaType) {
+  public RemoteWindowedSchema windowedSchema() {
     return windowedSchema;
   }
 
