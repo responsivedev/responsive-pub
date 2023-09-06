@@ -72,7 +72,6 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
   // if the key is absent, else not at all. this guarantee is not present
   // in all implementations of ConcurrentMap
   private final ConcurrentHashMap<String, PreparedStatement> insert;
-  private final ConcurrentHashMap<String, PreparedStatement> delete;
   private final ConcurrentHashMap<String, PreparedStatement> fetchSingle;
   private final ConcurrentHashMap<String, PreparedStatement> fetch;
   private final ConcurrentHashMap<String, PreparedStatement> fetchAll;
@@ -86,7 +85,6 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
   public CassandraWindowedSchema(final CassandraClient client) {
     this.client = client;
     insert = new ConcurrentHashMap<>();
-    delete = new ConcurrentHashMap<>();
     fetchSingle = new ConcurrentHashMap<>();
     fetch = new ConcurrentHashMap<>();
     fetchAll = new ConcurrentHashMap<>();
@@ -100,7 +98,7 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
 
   @Override
   public void create(final String name, Optional<Duration> ttl) {
-    // TODO(window): explore better data models for fetchRange/fetchAll
+    // TODO: explore better data models for fetchRange/fetchAll
     // Cassandra does not support filtering on a composite key column if
     // the previous columns in the composite are not equality filters
     // in the table below, for example, we cannot filter on WINDOW_START
@@ -196,16 +194,6 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
             .value(DATA_KEY.column(), bindMarker(DATA_KEY.bind()))
             .value(WINDOW_START.column(), bindMarker(WINDOW_START.bind()))
             .value(DATA_VALUE.column(), bindMarker(DATA_VALUE.bind()))
-            .build()
-    ));
-
-    delete.computeIfAbsent(tableName, k -> client.prepare(
-        QueryBuilder
-            .deleteFrom(tableName)
-            .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
-            .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
-            .where(DATA_KEY.relation().isEqualTo(bindMarker(DATA_KEY.bind())))
-            .where(WINDOW_START.relation().isEqualTo(bindMarker(WINDOW_START.bind())))
             .build()
     ));
 
@@ -326,12 +314,10 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
    * @param partitionKey the partitioning key
    * @param key          the data key
    * @param value        the data value
-   * @param epochMillis   the timestamp of the event
+   * @param epochMillis    the timestamp of the event
    * @return a statement that, when executed, will insert the row
-   *         matching {@code partitionKey} and {@code key} in the
-   *         {@code table} with value {@code value}. Note that the
-   *         {@code key} here is the "windowed key" which includes
-   *         both the record key and also the windowStart timestamp
+   * matching {@code partitionKey} and {@code key} in the
+   * {@code table} with value {@code value}
    */
   @Override
   @CheckReturnValue
@@ -350,29 +336,13 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
         .setByteBuffer(DATA_VALUE.bind(), ByteBuffer.wrap(value));
   }
 
-  /**
-   * @param table         the table to delete from
-   * @param partitionKey  the partitioning key
-   * @param key           the data key
-   *
-   * @return a statement that, when executed, will delete the row
-   *         matching {@code partitionKey} and {@code key} in the
-   *         {@code table}. Note that the {@code key} here is the
-   *         "windowed key" which includes both the record key and
-   *         also the window start timestamp
-   */
   @Override
-  @CheckReturnValue
   public BoundStatement delete(
       final String table,
       final int partitionKey,
       final Stamped<Bytes> key
   ) {
-    return delete.get(table)
-        .bind()
-        .setInt(PARTITION_KEY.bind(), partitionKey)
-        .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.key.get()))
-        .setInstant(WINDOW_START.bind(), Instant.ofEpochMilli(key.stamp));
+    throw new UnsupportedOperationException("Cannot delete windowed data using the delete API");
   }
 
   /**

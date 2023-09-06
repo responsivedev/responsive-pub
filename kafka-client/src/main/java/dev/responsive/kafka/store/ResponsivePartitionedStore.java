@@ -170,7 +170,8 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
 
   @Override
   public void put(final Bytes key, final byte[] value) {
-    putInternal(key, value);
+    buffer.put(key, value, context.timestamp());
+    StoreQueryUtils.updatePosition(position, context);
   }
 
   @Override
@@ -182,32 +183,23 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
     // batch will not be committed to remote storage)
     final byte[] old = get(key);
     if (old == null) {
-      putInternal(key, value);
+      put(key, value);
     }
     return old;
   }
 
   @Override
   public void putAll(final List<KeyValue<Bytes, byte[]>> entries) {
-    entries.forEach(kv -> putInternal(kv.key, kv.value));
+    entries.forEach(kv -> put(kv.key, kv.value));
+    StoreQueryUtils.updatePosition(position, context);
   }
 
   @Override
   public byte[] delete(final Bytes key) {
     // single writer prevents races (see putIfAbsent)
     final byte[] old = get(key);
-    putInternal(key, null);
-
+    buffer.tombstone(key, context.timestamp());
     return old;
-  }
-
-  private void putInternal(final Bytes key, final byte[] value) {
-    if (value != null) {
-      buffer.put(key, value, context.timestamp());
-    } else {
-      buffer.tombstone(key, context.timestamp());
-    }
-    StoreQueryUtils.updatePosition(position, context);
   }
 
   @Override
