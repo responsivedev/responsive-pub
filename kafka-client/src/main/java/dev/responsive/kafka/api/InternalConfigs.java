@@ -4,6 +4,7 @@ import dev.responsive.db.CassandraClient;
 import dev.responsive.kafka.store.ResponsiveStoreRegistry;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ScheduledExecutorService;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.streams.TopologyDescription;
 import org.slf4j.Logger;
@@ -16,8 +17,10 @@ public final class InternalConfigs {
       "__internal.responsive.cassandra.client__";
   private static final String INTERNAL_ADMIN_CLIENT_CONFIG =
           "__internal.responsive.admin.client__";
+  private static final String INTERNAL_EXECUTOR_CLIENT_CONFIG =
+              "__internal.responsive.executor.client__";
 
-  private static final String TOPOLOGY_DESCRIPTION_CONFIG
+  private static final String TOPOLOGY_DESCRIPITON_CONFIG
       = "__internal.responsive.topology.description__";
 
   public static <T> T loadFromConfig(
@@ -47,7 +50,7 @@ public final class InternalConfigs {
 
   public static TopologyDescription loadTopologyDescription(final Map<String, Object> config) {
     return loadFromConfig(
-        config, TOPOLOGY_DESCRIPTION_CONFIG, TopologyDescription.class, "Topology description"
+        config, TOPOLOGY_DESCRIPITON_CONFIG, TopologyDescription.class, "Topology description"
     );
   }
 
@@ -57,6 +60,15 @@ public final class InternalConfigs {
         InternalConfigs.INTERNAL_CASSANDRA_CLIENT_CONFIG,
         CassandraClient.class,
         "Shared Cassandra client"
+    );
+  }
+
+  public static ScheduledExecutorService loadExecutorService(final Map<String, Object> configs) {
+    return loadFromConfig(
+        configs,
+        InternalConfigs.INTERNAL_EXECUTOR_CLIENT_CONFIG,
+        ScheduledExecutorService.class,
+        "Shared ScheduledExecutorService client"
     );
   }
 
@@ -91,13 +103,18 @@ public final class InternalConfigs {
       return this;
     }
 
+    public Builder withExecutorService(final ScheduledExecutorService executorService) {
+      configs.put(INTERNAL_EXECUTOR_CLIENT_CONFIG, executorService);
+      return this;
+    }
+
     public Builder withStoreRegistry(final ResponsiveStoreRegistry storeRegistry) {
       configs.put(STORE_REGISTRY_CONFIG, storeRegistry);
       return this;
     }
 
     public Builder withTopologyDescription(final TopologyDescription topologyDescription) {
-      configs.put(TOPOLOGY_DESCRIPTION_CONFIG, topologyDescription);
+      configs.put(TOPOLOGY_DESCRIPITON_CONFIG, topologyDescription);
       return this;
     }
 
@@ -109,14 +126,16 @@ public final class InternalConfigs {
   public static Map<String, Object> getConfigs(
       final CassandraClient cassandraClient,
       final Admin admin,
+      final ScheduledExecutorService executor,
       final ResponsiveStoreRegistry registry,
       final TopologyDescription topologyDescription
   ) {
     return Map.of(
         INTERNAL_CASSANDRA_CLIENT_CONFIG, cassandraClient,
         INTERNAL_ADMIN_CLIENT_CONFIG, admin,
+        INTERNAL_EXECUTOR_CLIENT_CONFIG, executor,
         STORE_REGISTRY_CONFIG, registry,
-        TOPOLOGY_DESCRIPTION_CONFIG, topologyDescription
+        TOPOLOGY_DESCRIPITON_CONFIG, topologyDescription
     );
   }
 }

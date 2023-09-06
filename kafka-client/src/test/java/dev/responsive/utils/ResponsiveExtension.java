@@ -23,7 +23,6 @@ import static dev.responsive.kafka.config.ResponsiveConfig.STORAGE_HOSTNAME_CONF
 import static dev.responsive.kafka.config.ResponsiveConfig.STORAGE_PORT_CONFIG;
 import static dev.responsive.kafka.config.ResponsiveConfig.TASK_ASSIGNOR_CLASS_OVERRIDE;
 import static dev.responsive.kafka.config.ResponsiveConfig.TENANT_ID_CONFIG;
-import static dev.responsive.kafka.config.ResponsiveConfig.loggedConfig;
 import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS;
 
@@ -104,7 +103,7 @@ public class ResponsiveExtension implements BeforeAllCallback, AfterAllCallback,
       if (parameterContext.getParameter().getType().equals(Map.class)) {
         return map;
       } else  {
-        return loggedConfig(map);
+        return new ResponsiveConfig(map);
       }
     }
 

@@ -18,6 +18,7 @@ package dev.responsive.kafka.api;
 
 import dev.responsive.kafka.store.ResponsiveMaterialized;
 import dev.responsive.kafka.store.ResponsiveStoreBuilder;
+import dev.responsive.utils.StoreUtil;
 import java.time.Duration;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
@@ -167,22 +168,6 @@ public final class ResponsiveStores {
   /**
    * See for example {@link Stores#inMemoryWindowStore(String, Duration, Duration, boolean)}
    *
-   * @param params the {@link ResponsiveWindowParams} for this store
-   *        use {@link ResponsiveWindowParams#window(String, Duration, Duration)} for windowed
-   *               aggregations in the DSL or PAPI stores with update semantics
-   *        use {@link ResponsiveWindowParams#streamStreamJoin(String, Duration, Duration)}
-   *               for stream-stream joins in the DSL  or PAPI stores with duplicates semantics
-   * @return a supplier for a window store with the given options
-   *         that uses Responsive's storage for its backend
-   */
-  public static WindowBytesStoreSupplier windowStoreSupplier(final ResponsiveWindowParams params) {
-    final var ret = new ResponsiveWindowedStoreSupplier(params);
-    throw new UnsupportedOperationException("Not yet implemented");
-  }
-
-  /**
-   * See for example {@link Stores#inMemoryWindowStore(String, Duration, Duration, boolean)}
-   *
    * @param name the store name
    * @param retentionPeriod the retention period, must be greater than or equal to window size
    * @param windowSize the window size, must be greater than 0
@@ -197,24 +182,23 @@ public final class ResponsiveStores {
       final Duration windowSize,
       final boolean retainDuplicates
   ) {
-    final Duration gracePeriod = retentionPeriod.minus(windowSize);
-    if (windowSize.isNegative() || windowSize.isZero()) {
-      throw new IllegalArgumentException("Window size cannot be negative or zero");
-    } else if (gracePeriod.isNegative()) {
+    final long retentionMs = StoreUtil.durationToMillis(retentionPeriod, "retentionPeriod");
+    final long windowSizeMs = StoreUtil.durationToMillis(windowSize, "windowSize");
+    if (windowSizeMs < 0) {
+      throw new IllegalArgumentException("Window size cannot be zero");
+    } else if (retentionMs < windowSizeMs) {
       throw new IllegalArgumentException("Retention period cannot be less than window size");
     }
 
-    final ResponsiveWindowedStoreSupplier ret;
-    if (!retainDuplicates) {
-      ret = new ResponsiveWindowedStoreSupplier(
-          ResponsiveWindowParams.window(name, windowSize, gracePeriod)
-      );
-    } else {
-      ret = new ResponsiveWindowedStoreSupplier(
-          ResponsiveWindowParams.streamStreamJoin(name, windowSize, gracePeriod)
-      );
-    }
-    throw new UnsupportedOperationException("Not yet implemented");
+    final WindowBytesStoreSupplier ret = new ResponsiveWindowedStoreSupplier(
+        name,
+        retentionMs,
+        windowSizeMs,
+        retainDuplicates
+    );
+    throw new UnsupportedOperationException(
+        "Window store implementation is incomplete, please contact the Responsive team if you "
+            + "require this feature");
   }
 
   /**
@@ -294,15 +278,22 @@ public final class ResponsiveStores {
    * and materialized in the DSL for most operators. If using the low-level Processor API,
    * use {@link #windowStoreBuilder}
    *
-   * @param params the store parameters
+   * @param name the store name
+   * @param retentionMs the retention period in milliseconds
+   * @param windowSize the window size in milliseconds
+   * @param retainDuplicates whether to retain duplicates. Should be false for most operators
    * @return a Materialized configuration that can be used to build a key value store with the
    *         given options that uses Responsive's storage for its backend
    */
   public static <K, V> Materialized<K, V, WindowStore<Bytes, byte[]>> windowMaterialized(
-      final ResponsiveWindowParams params
+      final String name,
+      final long retentionMs,
+      final long windowSize,
+      final boolean retainDuplicates
   ) {
+    // TODO: create a ResponsiveWindowedParams class instead of using individual parameters here
     final Materialized<K, V, WindowStore<Bytes, byte[]>> materialized = Materialized.as(
-        new ResponsiveWindowedStoreSupplier(params)
+        new ResponsiveWindowedStoreSupplier(name, retentionMs, windowSize, retainDuplicates)
     );
 
     final ResponsiveMaterialized<K, V, WindowStore<Bytes, byte[]>> ret =
@@ -314,6 +305,7 @@ public final class ResponsiveStores {
         "Window store implementation is incomplete, please contact the Responsive team if you "
             + "require this feature");
   }
+
 
   private ResponsiveStores() { }
 }
