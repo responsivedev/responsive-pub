@@ -25,17 +25,14 @@ import com.datastax.oss.driver.api.core.cql.ResultSet;
 import com.datastax.oss.driver.api.core.cql.SimpleStatement;
 import com.datastax.oss.driver.api.core.cql.Statement;
 import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
-import dev.responsive.kafka.api.ResponsiveKeyValueParams;
-import dev.responsive.kafka.api.ResponsiveWindowParams;
 import dev.responsive.kafka.config.ResponsiveConfig;
+import dev.responsive.kafka.store.SchemaTypes.KVSchema;
+import dev.responsive.kafka.store.SchemaTypes.WindowSchema;
 import dev.responsive.utils.RemoteMonitor;
 import java.time.Duration;
-import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
-import java.util.concurrent.TimeoutException;
 import java.util.function.BooleanSupplier;
 
 /**
@@ -46,9 +43,7 @@ import java.util.function.BooleanSupplier;
  */
 public class CassandraClient {
 
-  private final ScheduledExecutorService executor = new ScheduledThreadPoolExecutor(2);
   private final CqlSession session;
-
   private final ResponsiveConfig config;
   private final RemoteKeyValueSchema kvSchema;
   private final RemoteKeyValueSchema factSchema;
@@ -150,59 +145,19 @@ public class CassandraClient {
     return numPartitions == 0 ? OptionalInt.empty() : OptionalInt.of(numPartitions);
   }
 
-  public void shutdown() {
-    executor.shutdown();
-    session.close();
-  }
-
-  public RemoteKeyValueSchema prepareKVTableSchema(final ResponsiveKeyValueParams params)
-      throws TimeoutException, InterruptedException {
-
-    final RemoteKeyValueSchema schema;
-    switch (params.schemaType()) {
-      case KEY_VALUE:
-        schema = kvSchema;
-        break;
-      case FACT:
-        schema = factSchema;
-        break;
-      default:
-        throw new IllegalArgumentException(params.schemaType().name());
+  public RemoteKeyValueSchema kvSchema(final KVSchema schemaType) {
+    switch (schemaType) {
+      case KEY_VALUE: return kvSchema;
+      case FACT:      return factSchema;
+      default:        throw new IllegalArgumentException(schemaType.name());
     }
-
-    schema.create(params.name().cassandraName(), params.timeToLive());
-    awaitTableAndPrepareSchema(params.name().cassandraName(), schema);
-
-    return schema;
   }
 
-  public RemoteWindowedSchema prepareWindowedTableSchema(final ResponsiveWindowParams params)
-      throws TimeoutException, InterruptedException {
-
-    final RemoteWindowedSchema schema;
-    switch (params.schemaType()) {
-      case WINDOW:
-        schema = windowedSchema;
-        break;
-      case STREAM:
-        throw new UnsupportedOperationException("Not yet implemented");
-      default:
-        throw new IllegalArgumentException(params.schemaType().name());
+  public RemoteWindowedSchema windowedSchema(final WindowSchema schemaType) {
+    switch (schemaType) {
+      case WINDOW:    return windowedSchema;
+      case STREAM:    throw new UnsupportedOperationException("Not yet implemented");
+      default:        throw new IllegalArgumentException(schemaType.name());
     }
-
-    schema.create(params.name().cassandraName(), Optional.empty());
-    awaitTableAndPrepareSchema(params.name().cassandraName(), schema);
-
-    return schema;
-  }
-
-  private void awaitTableAndPrepareSchema(
-      final String cassandraName,
-      final RemoteSchema<?> schema
-  ) throws TimeoutException, InterruptedException {
-
-    final RemoteMonitor monitor = awaitTable(cassandraName, executor);
-    monitor.await(Duration.ofSeconds(60));
-    schema.prepare(cassandraName);
   }
 }

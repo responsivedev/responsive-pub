@@ -234,27 +234,29 @@ public class ResponsiveConfig extends AbstractConfig {
           REMOTE_TABLE_CHECK_INTERVAL_MS_DOC
       );
 
-  /**
-   * This should generally be used over the {@link #loggedConfig(Map)} override in all
-   * cases outside the initial {@link dev.responsive.kafka.api.ResponsiveKafkaStreams#create}.
-   * Prefer this API whenever you need to construct a {@code ResponsiveConfig} mid-application,
-   * for example during state store init.
-   */
-  public static ResponsiveConfig responsiveConfig(final Map<?, ?> originals) {
-    return new ResponsiveConfig(originals, false);
+  private static class NonEmptyPassword implements Validator {
+    private final String passwordConfig;
+
+    NonEmptyPassword(final String passwordConfig) {
+      this.passwordConfig = passwordConfig;
+    }
+
+    @Override
+    public void ensureValid(String name, Object o) {
+      Password p = (Password) o;
+      if (p != null && p.value().isEmpty()) {
+        throw new ConfigException(name, o, passwordConfig + " must be non-empty");
+      }
+    }
+
+    @Override
+    public String toString() {
+      return "non-empty password";
+    }
   }
 
-  /**
-   * This should generally be used only once per app to avoid excessive logging. Prefer
-   * {@link #responsiveConfig(Map)} whenever you need to construct a {@code ResponsiveConfig}
-   * mid-application, for example during state store init.
-   */
-  public static ResponsiveConfig loggedConfig(final Map<?, ?> originals) {
-    return new ResponsiveConfig(originals, true);
-  }
-
-  private ResponsiveConfig(final Map<?, ?> originals, final boolean doLog) {
-    super(CONFIG_DEF, originals, doLog);
+  public ResponsiveConfig(final Map<?, ?> originals) {
+    super(CONFIG_DEF, originals);
   }
 
   public SubPartitioner getSubPartitioner(
@@ -285,26 +287,4 @@ public class ResponsiveConfig extends AbstractConfig {
         getConfiguredInstance(SUBPARTITION_HASHER_CONFIG, Hasher.class)
     );
   }
-
-  private static class NonEmptyPassword implements Validator {
-    private final String passwordConfig;
-
-    NonEmptyPassword(final String passwordConfig) {
-      this.passwordConfig = passwordConfig;
-    }
-
-    @Override
-    public void ensureValid(String name, Object o) {
-      Password p = (Password) o;
-      if (p != null && p.value().isEmpty()) {
-        throw new ConfigException(name, o, passwordConfig + " must be non-empty");
-      }
-    }
-
-    @Override
-    public String toString() {
-      return "non-empty password";
-    }
-  }
-
 }

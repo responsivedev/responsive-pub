@@ -24,13 +24,13 @@ import com.datastax.oss.driver.api.core.cql.Statement;
 import dev.responsive.db.CassandraClient;
 import dev.responsive.db.RemoteKeyValueSchema;
 import dev.responsive.db.RemoteWindowedSchema;
-import dev.responsive.kafka.api.ResponsiveKeyValueParams;
-import dev.responsive.kafka.api.ResponsiveWindowParams;
 import dev.responsive.kafka.config.ResponsiveConfig;
+import dev.responsive.kafka.store.SchemaTypes.KVSchema;
+import dev.responsive.kafka.store.SchemaTypes.WindowSchema;
 import dev.responsive.utils.RemoteMonitor;
 import java.time.Duration;
-import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.Properties;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ScheduledExecutorService;
 import org.apache.kafka.common.utils.Time;
@@ -43,8 +43,8 @@ public class CassandraClientStub extends CassandraClient {
   private final TTDKeyValueSchema kvSchema;
   private final TTDWindowedSchema windowedSchema;
 
-  public CassandraClientStub(final ResponsiveConfig config, final Time time) {
-    super(config);
+  public CassandraClientStub(final Properties props, final Time time) {
+    super(new ResponsiveConfig(props));
     this.time = time;
 
     kvSchema = new TTDKeyValueSchema(this);
@@ -110,16 +110,12 @@ public class CassandraClientStub extends CassandraClient {
   }
 
   @Override
-  public RemoteKeyValueSchema prepareKVTableSchema(final ResponsiveKeyValueParams params) {
-    kvSchema.create(params.name().cassandraName(), params.timeToLive());
-    kvSchema.prepare(params.name().cassandraName());
+  public RemoteKeyValueSchema kvSchema(final KVSchema schemaType) {
     return kvSchema;
   }
 
   @Override
-  public RemoteWindowedSchema prepareWindowedTableSchema(final ResponsiveWindowParams params) {
-    windowedSchema.create(params.name().cassandraName(), Optional.empty());
-    windowedSchema.prepare(params.name().cassandraName());
+  public RemoteWindowedSchema windowedSchema(final WindowSchema schemaType) {
     return windowedSchema;
   }
 

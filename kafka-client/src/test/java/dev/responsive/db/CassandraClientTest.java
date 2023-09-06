@@ -45,7 +45,7 @@ class CassandraClientTest {
     // Given:
     final CassandraClient client = new CassandraClient(
         session,
-        ResponsiveConfig.loggedConfig(Map.of(
+        new ResponsiveConfig(Map.of(
             ResponsiveConfig.TENANT_ID_CONFIG, "ignored",
             ResponsiveConfig.STORAGE_HOSTNAME_CONFIG, "ignored",
             ResponsiveConfig.STORAGE_PORT_CONFIG, 0

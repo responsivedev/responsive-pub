@@ -16,18 +16,18 @@
 
 package dev.responsive.kafka.store;
 
-import static dev.responsive.kafka.clients.SharedClients.loadSharedClients;
-
 import dev.responsive.db.CassandraClient;
 import dev.responsive.db.RemoteKeyValueSchema;
 import dev.responsive.db.partitioning.SubPartitioner;
-import dev.responsive.kafka.api.ResponsiveKeyValueParams;
 import dev.responsive.kafka.clients.SharedClients;
+import dev.responsive.kafka.store.SchemaTypes.KVSchema;
+import dev.responsive.utils.RemoteMonitor;
 import dev.responsive.utils.TableName;
+import java.time.Duration;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.TimeoutException;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -39,35 +39,28 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.internals.StoreQueryUtils;
 import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * The {@code ResponsiveGlobalStore}
  */
 public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
 
+  private static final Logger LOG = LoggerFactory.getLogger(ResponsiveGlobalStore.class);
   private static final long ALL_VALID_TS = -1L; // Global stores don't support TTL
 
-  private final Logger log;
-
-  private final ResponsiveKeyValueParams params;
-  private final TableName name;
-  private final Position position; // TODO(IQ): update the position during restoration
-
-  private GlobalProcessorContextImpl context;
-  private int partition;
-
   private CassandraClient client;
-  private RemoteKeyValueSchema schema;
+  private final TableName name;
+  private final Position position;
 
   private boolean open;
+  private int partition;
+  private GlobalProcessorContextImpl context;
+  private RemoteKeyValueSchema schema;
 
-  public ResponsiveGlobalStore(final ResponsiveKeyValueParams params) {
-    this.params = params;
-    this.name = params.name();
+  public ResponsiveGlobalStore(final TableName name) {
+    this.name = name;
     this.position = Position.emptyPosition();
-    log = new LogContext(
-        String.format("global-store [%s]", name.kafkaName())
-    ).logger(ResponsivePartitionedStore.class);
   }
 
   @Override
@@ -90,7 +83,7 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
   @Override
   public void init(final StateStoreContext context, final StateStore root) {
     try {
-      log.info("Initializing global state store {}", name);
+      LOG.info("Initializing global state store {}", name);
       this.context = (GlobalProcessorContextImpl) context;
       // this is bad, but the assumption is that global tables are small
       // and can fit in a single partition - all writers will write using
@@ -99,12 +92,16 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
       // to be more evently distributed and take the hit only on range
       // queries
       partition = 0;
-      final SharedClients sharedClients = loadSharedClients(context.appConfigs());
+      final SharedClients sharedClients = new SharedClients(context.appConfigs());
       client = sharedClients.cassandraClient;
 
-      schema = client.prepareKVTableSchema(params);
-      log.info("Global table {} is available for querying.", name);
+      final RemoteMonitor monitor = client.awaitTable(name.cassandraName(), sharedClients.executor);
+      schema = client.kvSchema(KVSchema.KEY_VALUE);
+      schema.create(name.cassandraName(), Optional.empty());
+      monitor.await(Duration.ofSeconds(60));
+      LOG.info("Global table {} is available for querying.", name);
 
+      schema.prepare(name.cassandraName());
       schema.init(name.cassandraName(), SubPartitioner.NO_SUBPARTITIONS, partition);
 
       open = true;
@@ -149,13 +146,13 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
   @Override
   public void putAll(final List<KeyValue<Bytes, byte[]>> entries) {
     entries.forEach(kv -> put(kv.key, kv.value));
+    StoreQueryUtils.updatePosition(position, context);
   }
 
   @Override
   public byte[] delete(final Bytes key) {
     final byte[] bytes = get(key);
     client.execute(schema.delete(name.cassandraName(), partition, key));
-    StoreQueryUtils.updatePosition(position, context);
     return bytes;
   }
 

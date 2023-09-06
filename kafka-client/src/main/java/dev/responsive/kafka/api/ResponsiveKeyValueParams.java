@@ -69,7 +69,7 @@ public final class ResponsiveKeyValueParams {
     return timestamped;
   }
 
-  public KVSchema schemaType() {
+  public KVSchema kvSchema() {
     return schema;
   }
 

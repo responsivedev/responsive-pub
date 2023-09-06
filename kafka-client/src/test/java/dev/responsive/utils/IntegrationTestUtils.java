@@ -11,7 +11,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -19,8 +18,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
-import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -32,66 +29,10 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KafkaStreams.StateListener;
 import org.apache.kafka.streams.KeyValue;
-import org.junit.jupiter.api.TestInfo;
 
 public final class IntegrationTestUtils {
 
-  public static String getCassandraValidName(final TestInfo info) {
-    // add displayName to name to account for parameterized tests
-    return info.getTestMethod().orElseThrow().getName().toLowerCase(Locale.ROOT)
-        + info.getDisplayName().substring("[X] ".length()).toLowerCase(Locale.ROOT)
-        .replace("_", ""); // keep only valid cassandra chars to keep testing code easier
-  }
-
-  /**
-   * Create the given topics with the default number of partitions (1) and wait for them
-   * to finish being created.
-   * <p>
-   * To set the number of partitions explicitly, use {@link #createTopicsAndWait(Admin, Map)}
-   * or {@link #createTopicsAndWait(Admin, int, String...)}
-   */
-  public static void createTopicsAndWait(final Admin admin, final String... topicNames) {
-    final List<NewTopic> newTopics = new ArrayList<>();
-    for (final String topic : topicNames) {
-      newTopics.add(new NewTopic(topic, Optional.of(1), Optional.empty()));
-    }
-    try {
-      admin.createTopics(newTopics).all().get();
-    } catch (final Exception e) {
-      throw new RuntimeException("Topic creation failed", e);
-    }
-  }
-
-  public static void createTopicsAndWait(
-      final Admin admin,
-      final int numPartitions,
-      final String... topicNames
-  ) {
-    final List<NewTopic> newTopics = new ArrayList<>();
-    for (final String topic : topicNames) {
-      newTopics.add(new NewTopic(topic, Optional.of(numPartitions), Optional.empty()));
-    }
-    try {
-      admin.createTopics(newTopics).all().get();
-    } catch (final Exception e) {
-      throw new RuntimeException("Topic creation failed", e);
-    }
-  }
-
-  public static void createTopicsAndWait(
-      final Admin admin,
-      final Map<String, Integer> topicToPartitions
-  ) {
-    final List<NewTopic> newTopics = new ArrayList<>();
-    for (final var entry : topicToPartitions.entrySet()) {
-      newTopics.add(new NewTopic(entry.getKey(), Optional.of(entry.getValue()), Optional.empty()));
-    }
-
-    try {
-      admin.createTopics(newTopics).all().get();
-    } catch (final Exception e) {
-      throw new RuntimeException("Topic creation failed", e);
-    }
+  private IntegrationTestUtils() {
   }
 
   public static void pipeInput(
@@ -234,8 +175,4 @@ public final class IntegrationTestUtils {
       lock.unlock();
     }
   }
-
-  private IntegrationTestUtils() {
-  }
-
 }

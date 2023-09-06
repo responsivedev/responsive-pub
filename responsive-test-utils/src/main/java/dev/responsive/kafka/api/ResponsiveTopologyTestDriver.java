@@ -16,8 +16,6 @@
 
 package dev.responsive.kafka.api;
 
-import static dev.responsive.kafka.config.ResponsiveConfig.loggedConfig;
-
 import dev.responsive.kafka.config.ResponsiveConfig;
 import dev.responsive.kafka.store.CassandraClientStub;
 import java.time.Duration;
@@ -25,6 +23,7 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Properties;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.common.Node;
@@ -91,9 +90,7 @@ public class ResponsiveTopologyTestDriver extends TopologyTestDriver {
         topology,
         config,
         initialWallClockTime,
-        new CassandraClientStub(
-            loggedConfig(baseProps(config)),
-            mockTime(initialWallClockTime))
+        new CassandraClientStub(baseProps(config), mockTime(initialWallClockTime))
     );
   }
 
@@ -133,6 +130,7 @@ public class ResponsiveTopologyTestDriver extends TopologyTestDriver {
     props.putAll(new InternalConfigs.Builder()
         .withCassandraClient(client)
         .withKafkaAdmin(new TTDMockAdmin())
+        .withExecutorService(new ScheduledThreadPoolExecutor(1))
         .withStoreRegistry(client.storeRegistry())
         .withTopologyDescription(topologyDescription)
         .build()

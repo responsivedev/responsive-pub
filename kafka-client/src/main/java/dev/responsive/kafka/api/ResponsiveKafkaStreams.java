@@ -7,16 +7,16 @@ import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
 import com.datastax.oss.driver.api.core.CqlSession;
 import dev.responsive.db.CassandraClient;
 import dev.responsive.kafka.clients.ResponsiveKafkaClientSupplier;
-import dev.responsive.kafka.clients.SharedClients;
 import dev.responsive.kafka.config.ResponsiveConfig;
 import dev.responsive.kafka.store.ResponsiveRestoreListener;
 import dev.responsive.kafka.store.ResponsiveStoreRegistry;
-import dev.responsive.utils.StoreUtil;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.config.ConfigException;
@@ -46,7 +46,9 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
   private StateListener stateListener;
   private final ResponsiveRestoreListener restoreListener;
 
-  private final SharedClients sharedClients;
+  private final CqlSession session;
+  private final ScheduledExecutorService executor;
+  private final Admin admin;
 
   public static ResponsiveKafkaStreams create(
       final Topology topology,
@@ -100,7 +102,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
             entry.getKey().toString(), entry.getValue(), "Key must be a string.");
       }
     }
-    final ResponsiveConfig responsiveConfigs = ResponsiveConfig.loggedConfig(configs);
+    final ResponsiveConfig responsiveConfigs = new ResponsiveConfig(configs);
     final StreamsConfig streamsConfig = quietReadOnlystreamsConfig(configs);
     final Metrics metrics = createMetrics(streamsConfig);
 
@@ -117,20 +119,21 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
         );
 
     final Admin admin = responsiveClientSupplier.getAdmin((Map<String, Object>) configs);
-    final CassandraClient cassandraClient =
-        cassandraClientFactory.createCassandraClient(session, responsiveConfigs);
-
+    final ScheduledExecutorService executor = new ScheduledThreadPoolExecutor(2);
     return new ResponsiveKafkaStreams(
         topology,
         verifiedStreamsConfigs(
             configs,
-            cassandraClient,
+            cassandraClientFactory.createCassandraClient(session, responsiveConfigs),
             admin,
+            executor,
             storeRegistry,
             topology.describe()
         ),
         responsiveClientSupplier,
-        new SharedClients(cassandraClient, admin),
+        session,
+        admin,
+        executor,
         restoreListener
     );
   }
@@ -139,11 +142,15 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       final Topology topology,
       final StreamsConfig streamsConfigs,
       final ResponsiveKafkaClientSupplier clientSupplier,
-      final SharedClients sharedClients,
+      final CqlSession session,
+      final Admin admin,
+      final ScheduledExecutorService executor,
       final ResponsiveRestoreListener restoreListener
   ) {
     super(topology, streamsConfigs, clientSupplier);
-    this.sharedClients = sharedClients;
+    this.session = session;
+    this.admin = admin;
+    this.executor = executor;
     this.restoreListener = restoreListener;
 
     super.setGlobalStateRestoreListener(restoreListener);
@@ -180,6 +187,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       final Map<?, ?> configs,
       final CassandraClient cassandraClient,
       final Admin admin,
+      final ScheduledExecutorService executor,
       final ResponsiveStoreRegistry storeRegistry,
       final TopologyDescription topologyDescription
   ) {
@@ -188,6 +196,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     propsWithOverrides.putAll(new InternalConfigs.Builder()
             .withCassandraClient(cassandraClient)
             .withKafkaAdmin(admin)
+            .withExecutorService(executor)
             .withStoreRegistry(storeRegistry)
             .withTopologyDescription(topologyDescription)
             .build());
@@ -226,8 +235,6 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
 
     final StreamsConfig streamsConfig = new StreamsConfig(propsWithOverrides);
     verifyNotEosV1(streamsConfig);
-    StoreUtil.validateTopologyOptimizationConfig(streamsConfig);
-
 
     return streamsConfig;
   }
@@ -267,7 +274,9 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
   }
 
   private void closeClients() {
-    sharedClients.closeAll();
+    session.close();
+    admin.close();
+    executor.shutdown();
   }
 
   @Override
