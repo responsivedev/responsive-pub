@@ -18,6 +18,7 @@ package dev.responsive.kafka.store;
 
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.db.RemoteKeyValueSchema;
+import dev.responsive.kafka.clients.TTDCassandraClient;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
@@ -29,7 +30,7 @@ public class TTDKeyValueSchema extends TTDSchema<Bytes> implements RemoteKeyValu
 
   private final Map<String, KVStoreStub> tableNameToStore = new HashMap<>();
 
-  public TTDKeyValueSchema(final CassandraClientStub client) {
+  public TTDKeyValueSchema(final TTDCassandraClient client) {
     super(client);
   }
 

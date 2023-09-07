@@ -16,31 +16,23 @@
 
 package dev.responsive.kafka.api;
 
+import dev.responsive.kafka.clients.TTDCassandraClient;
+import dev.responsive.kafka.clients.TTDMockAdmin;
 import dev.responsive.kafka.config.ResponsiveConfig;
-import dev.responsive.kafka.store.CassandraClientStub;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.Properties;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
-import org.apache.kafka.clients.admin.DescribeTopicsResult;
-import org.apache.kafka.clients.admin.MockAdminClient;
-import org.apache.kafka.common.Node;
-import org.apache.kafka.common.TopicPartitionInfo;
-import org.apache.kafka.common.config.TopicConfig;
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyDescription;
 import org.apache.kafka.streams.TopologyTestDriver;
-import org.apache.kafka.streams.test.TestRecord;
 
 public class ResponsiveTopologyTestDriver extends TopologyTestDriver {
+  public static final String RESPONSIVE_TTD_ID = "Responsive_TopologyTestDriver";
 
-  private final CassandraClientStub client;
+  private final TTDCassandraClient client;
 
   /**
    * Create a new test diver instance.
@@ -93,7 +85,9 @@ public class ResponsiveTopologyTestDriver extends TopologyTestDriver {
         topology,
         config,
         initialWallClockTime,
-        new CassandraClientStub(baseProps(config), mockTime(initialWallClockTime))
+        new TTDCassandraClient(
+            new TTDMockAdmin(baseProps(config), topology),
+            mockTime(initialWallClockTime))
     );
   }
 
@@ -114,25 +108,26 @@ public class ResponsiveTopologyTestDriver extends TopologyTestDriver {
       final Topology topology,
       final Properties config,
       final Instant initialWallClockTime,
-      final CassandraClientStub cassandraClientStub
+      final TTDCassandraClient cassandraClient
   ) {
     super(
         topology,
-        testDriverProps(config, topology.describe(), cassandraClientStub),
+        testDriverProps(config, topology.describe(), cassandraClient),
         initialWallClockTime
     );
-    this.client = cassandraClientStub;
+    this.client = cassandraClient;
   }
 
   private static Properties testDriverProps(
       final Properties userProps,
       final TopologyDescription topologyDescription,
-      final CassandraClientStub client
+      final TTDCassandraClient client
   ) {
     final Properties props = baseProps(userProps);
+
     props.putAll(new InternalConfigs.Builder()
         .withCassandraClient(client)
-        .withKafkaAdmin(new TTDMockAdmin())
+        .withKafkaAdmin(client.mockAdmin())
         .withExecutorService(new ScheduledThreadPoolExecutor(1))
         .withStoreRegistry(client.storeRegistry())
         .withTopologyDescription(topologyDescription)
@@ -144,10 +139,13 @@ public class ResponsiveTopologyTestDriver extends TopologyTestDriver {
   @SuppressWarnings("deprecation")
   private static Properties baseProps(final Properties userProps) {
     final Properties props = new Properties();
-    props.put(ResponsiveConfig.TENANT_ID_CONFIG, "topology-test-driver");
-    props.put(ResponsiveConfig.STORE_FLUSH_INTERVAL_TRIGGER_MS_CONFIG, 0);
-    props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
     props.putAll(userProps);
+
+    props.put(ResponsiveConfig.TENANT_ID_CONFIG, RESPONSIVE_TTD_ID);
+    props.put(ResponsiveConfig.STORE_FLUSH_INTERVAL_TRIGGER_MS_CONFIG, 0);
+
+    props.putIfAbsent(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+    props.putIfAbsent(StreamsConfig.APPLICATION_ID_CONFIG, RESPONSIVE_TTD_ID);
     return props;
   }
 
@@ -160,30 +158,5 @@ public class ResponsiveTopologyTestDriver extends TopologyTestDriver {
     mockTime.setCurrentTimeMs(initialWallClockTimeMs);
     return mockTime;
   }
-
-  private static class TTDMockAdmin extends MockAdminClient {
-    private static final Node BROKER = new Node(0, "dummyHost-1", 1234);
-
-    public TTDMockAdmin() {
-      super(Collections.singletonList(BROKER), BROKER);
-    }
-
-    @Override
-    public DescribeTopicsResult describeTopics(Collection<String> topicNames) {
-      for (final String topic : topicNames) {
-        addTopic(
-            true,
-            topic,
-            Collections.singletonList(new TopicPartitionInfo(
-                0, BROKER, Collections.emptyList(), Collections.emptyList())
-            ),
-            Collections.singletonMap(
-                TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)
-        );
-      }
-      return super.describeTopics(topicNames);
-    }
-  }
-
 
 }

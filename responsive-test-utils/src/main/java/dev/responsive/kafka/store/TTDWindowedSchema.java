@@ -18,6 +18,7 @@ package dev.responsive.kafka.store;
 
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.db.RemoteWindowedSchema;
+import dev.responsive.kafka.clients.TTDCassandraClient;
 import dev.responsive.model.Stamped;
 import java.time.Duration;
 import java.util.HashMap;
@@ -30,7 +31,7 @@ public class TTDWindowedSchema extends TTDSchema<Stamped<Bytes>> implements Remo
 
   private final Map<String, WindowStoreStub> tableNameToStore = new HashMap<>();
 
-  public TTDWindowedSchema(final CassandraClientStub client) {
+  public TTDWindowedSchema(final TTDCassandraClient client) {
     super(client);
   }
 
