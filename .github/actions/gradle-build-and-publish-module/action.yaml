@@ -1,0 +1,28 @@
+name: 'Build/Publish Gradle Module'
+description: "Build, test, release, and publish a single module via gradle"
+inputs:
+  module:
+    required: true
+    description: which module to publish
+runs:
+  using: composite
+  steps:
+    - name: Build & Test
+      uses: gradle/gradle-build-action@v2
+      with:
+        arguments: :${{ inputs.module }}:build
+
+    - name: Release
+      uses: gradle/gradle-build-action@v2
+      with:
+        arguments: :${{ inputs.module }}:release
+
+    - name: Publish
+      uses: gradle/gradle-build-action@v2
+      with:
+        arguments: :${{ inputs.module }}:publish # publish to both S3 and Sonatype OSSRH
+      env:
+        OSSRH_USER: ${{ secrets.OSSRH_USER }}
+        OSSRH_PASSWORD: ${{ secrets.OSSRH_PASSWORD }}
+        SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+        SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
