@@ -42,7 +42,7 @@ jobs:
           registry-type: public
 
       - name: "Gradle: Build, Release, Publish"
-        uses: actions/gradle-build-and-publish-module
+        uses: ./.github/actions/gradle-build-and-publish-module
         with:
           arguments: ${{ inputs.module }}
 
