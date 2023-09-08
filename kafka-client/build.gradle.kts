@@ -30,5 +30,5 @@ dependencies {
     }
     testImplementation(testlibs.bundles.base)
     testImplementation(testlibs.bundles.testcontainers)
-    testImplementation(testlibs.kafka.streams.test.utils)
+    testImplementation(libs.kafka.streams.test.utils)
 }

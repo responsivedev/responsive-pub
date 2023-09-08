@@ -61,6 +61,32 @@ jobs:
           SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
           SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
 
+      #### MODULE GROUP: kafka-clients ####
+
+      # responsive-test-utils
+      - name: Build & Test (kafka-client group -- responsive-test-utils)
+        uses: gradle/gradle-build-action@v2
+        if: ${{ inputs.module == 'kafka-client' }}
+        with:
+          arguments: responsive-test-utils:build
+
+      - name: Release (kafka-client group -- responsive-test-utils)
+        uses: gradle/gradle-build-action@v2
+        if: ${{ inputs.module == 'kafka-client' }}
+        with:
+          arguments: responsive-test-utils:release
+
+      - name: Publish (kafka-client group -- responsive-test-utils)
+        uses: gradle/gradle-build-action@v2
+        if: ${{ inputs.module == 'kafka-client' }}
+        with:
+          arguments: responsive-test-utils:publish # publish to both S3 and Sonatype OSSRH
+        env:
+          OSSRH_USER: ${{ secrets.OSSRH_USER }}
+          OSSRH_PASSWORD: ${{ secrets.OSSRH_PASSWORD }}
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
+
       # We need this to emulate other architectures for multi-platform docker builds
       - name: Set up QEMU for Docker
         uses: docker/setup-qemu-action@v2
@@ -151,6 +177,16 @@ jobs:
             -Prelease.dryRun | grep "Creating" | git commit --allow-empty -F -
           git push
 
+      - name: Create Next Version Commit (kafka-client group -- responsive-test-utils)
+        if: ${{ inputs.module == 'kafka-client' }}
+        run: |
+          git config --global user.name 'Responsive Tools'
+          git config --global user.email 'tools@responsive.dev'
+          ./gradlew responsive-test-utils:markNextVersion \
+            -Prelease.incrementer=${{ inputs.increment }} \
+            -Prelease.dryRun | grep "Creating" | git commit --allow-empty -F -
+          git push
+
       - name: Push next platform version to Sindri
         working-directory: sindri
         run: |
@@ -163,3 +199,10 @@ jobs:
         uses: gradle/gradle-build-action@v2
         with:
           arguments: :${{ inputs.module }}:markNextVersion -Prelease.incrementer=${{ inputs.increment }}
+
+      - name: Increment Version (kafka-client group -- responsive-test-utils)
+        uses: gradle/gradle-build-action@v2
+        if: ${{ inputs.module == 'kafka-client' }}
+        with:
+          arguments: responsive-test-utils:markNextVersion -Prelease.incrementer=${{ inputs.increment }}
+

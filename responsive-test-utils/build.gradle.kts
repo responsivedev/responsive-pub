@@ -18,12 +18,13 @@ plugins {
     id("responsive.java-library-conventions")
 }
 
+version = project(":kafka-client").version
+
 dependencies {
     // TODO: we should make sure to fail the release of kafka-client
     // if we don't bump this up - or have some other mechanism to
     // ensure they are released in tandem - otherwise it is possible
     // that the latest release of kafka-client will be untestable
-    implementation(libs.bundles.scylla)
     implementation("dev.responsive:kafka-client:0.7.1")
 
     implementation(libs.bundles.scylla)
@@ -34,5 +35,5 @@ dependencies {
 
     testImplementation(testlibs.bundles.base)
     testImplementation(libs.bundles.logging)
-    testImplementation(testlibs.kafka.streams.test.utils)
+    testImplementation(libs.kafka.streams.test.utils)
 }
