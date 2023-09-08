@@ -20,25 +20,13 @@ jobs:
           java-version: '11'
           distribution: 'temurin'
 
-      - name: Configure AWS Credentials for Public ECR Login
-        uses: aws-actions/configure-aws-credentials@v2
+      - name: "Login to AWS & ECR"
+        uses: ./.github/actions/ecr-login
         with:
           role-to-assume: arn:aws:iam::292505934682:role/github-responsivedev-org
           role-session-name: github-publish-artifacts
           aws-region: us-east-1
-
-      - name: Login to Amazon ECR Public
-        id: login-ecr-public
-        uses: aws-actions/amazon-ecr-login@v1
-        with:
-          registry-type: public
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          role-to-assume: arn:aws:iam::292505934682:role/github-responsivedev-org
-          role-session-name: github-pr-builder
-          aws-region: us-west-2
+          public: "true"
 
       - name: Setup Gradle
         uses: gradle/gradle-build-action@v2
@@ -53,9 +41,12 @@ jobs:
           ref: refs/heads/master
           token: ${{ secrets.TOOLS_GHA_TOKEN }}
 
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v1
+      - name: "Login to AWS & ECR"
+        uses: ./.github/actions/ecr-login
+        with:
+          role-to-assume: arn:aws:iam::292505934682:role/github-responsivedev-org
+          role-session-name: github-pr-builder
+          aws-region: us-west-2
 
       - name: Install Kind
         uses: helm/kind-action@v1.5.0

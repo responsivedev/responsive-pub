@@ -21,68 +21,58 @@ jobs:
           java-version: '11'
           distribution: 'temurin'
 
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v2
+      - name: "Login to AWS & ECR"
+        uses: ./.github/actions/ecr-login
         with:
-          role-to-assume: arn:aws:iam::292505934682:role/github-responsive-pub-main
           role-session-name: github-publish-artifacts
           aws-region: us-east-1
+          public: "true"
 
-      - name: Login to Amazon ECR
-        id: login-ecr-public
-        uses: aws-actions/amazon-ecr-login@v1
-        with:
-          registry-type: public
-
-      - name: Setup Gradle
+      - name: "Setup Gradle"
         uses: gradle/gradle-build-action@v2
         with:
           arguments: build
 
-      - name: Publish
+      - name: "Publish"
         uses: gradle/gradle-build-action@v2
         with:
           arguments: publishMavenJavaPublicationToS3Repository # publish only to S3
         if: github.ref == 'refs/heads/main'
 
       # We need this to emulate other architectures for multi-platform docker builds
-      - name: Set up QEMU for Docker
+      - name: "Set up QEMU for Docker"
         uses: docker/setup-qemu-action@v2
 
       # We use the build extensions to do multi-architecture docker builds
-      - name: Set up Docker Buildx
+      - name: "Set up Docker Buildx"
         uses: docker/setup-buildx-action@v2
 
-      - name: Publish Images
+      - name: "Publish Images"
         uses: gradle/gradle-build-action@v2
         with:
           arguments: pushCRD pushDockerMultiArch pushHelm -PdockerRegistry=${{ steps.login-ecr-public.outputs.registry }}/j8q9y0n6 -PhelmRegistry=${{ steps.login-ecr-public.outputs.registry }}/j8q9y0n6
         #if: github.ref == 'refs/heads/main'
 
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v2
+      - name: "Login to AWS & ECR"
+        uses: ./.github/actions/ecr-login
         with:
-          role-to-assume: arn:aws:iam::292505934682:role/github-responsive-pub-main
           role-session-name: github-publish-artifacts
           aws-region: us-west-2
 
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v1
-
-      - uses: actions/checkout@v3
+      - name: "Checkout sindri"
+        uses: actions/checkout@v3
         with:
           repository: responsivedev/sindri
           path: sindri
           ref: refs/heads/master
           token: ${{ secrets.TOOLS_GHA_TOKEN }}
 
-      - name: Install Kind
+      - name: "Install Kind"
         uses: helm/kind-action@v1.5.0
         with:
             install_only: true
 
-      - name: Run Smoke Test
+      - name: "Run Smoke Test"
         run: |
           sindri/scripts/update-client-versions -s master -p true -i public.ecr.aws/j8q9y0n6/responsiveinc/simple-example -t `./gradlew kafka-client:cV  | grep "Project version" | sed 's/Project version: //'`
           sindri/scripts/run-smoke-test -s master -w system-tests-pub
@@ -91,7 +81,7 @@ jobs:
             DD_API_KEY: ${{ secrets.DD_API_KEY }}
             PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
 
-      - name: Push next pub version to Sindri
+      - name: "Push next pub version to Sindri"
         working-directory: sindri
         run: |
           git config --global user.name 'Responsive Tools'
