@@ -17,7 +17,7 @@ import java.util.Optional;
  * <p></p>
  * <p>We currently model diagnoser specs using this class to encapsulate all diagnoser
  * types. A given instance of DiagnoserSpec represents one of the actual DiagnoserSpec types
- * (e.g. MeanSojournTimeDiagnoserSpec or ProcessingRateDiagnoserSpec). The type represented
+ * (e.g. ExpectedLatencyDiagnoserSpec or ProcessingRateDiagnoserSpec). The type represented
  * is specified in the type field of this class. It would almost certainly be better
  * to model this in the class hierarchy by having the actual diagnoser spec types inherit
  * from a base type. Unfortunately we cannot do this as the fabric8 CRD generator is
@@ -36,7 +36,7 @@ public class DiagnoserSpec {
   private final Optional<RateBasedDiagnoserSpec> processingRateScaleUp;
   private final Optional<RateBasedDiagnoserSpec> processingRateScaleDown;
   private final Optional<RateBasedDiagnoserSpec> arrivalRateScaleUp;
-  private final Optional<MeanSojournTimeDiagnoserSpec> meanSojournTime;
+  private final Optional<ExpectedLatencyDiagnoserSpec> expectedLatency;
 
   @JsonCreator
   public DiagnoserSpec(
@@ -47,14 +47,14 @@ public class DiagnoserSpec {
       final Optional<RateBasedDiagnoserSpec> processingRateScaleDown,
       @JsonProperty("arrivalRateScaleUp")
       final Optional<RateBasedDiagnoserSpec> arrivalRateScaleUp,
-      @JsonProperty("meanSojournTime")
-      final Optional<MeanSojournTimeDiagnoserSpec> meanSojournTime
+      @JsonProperty("expectedLatency")
+      final Optional<ExpectedLatencyDiagnoserSpec> expectedLatency
   ) {
     this.type = strategy;
     this.processingRateScaleDown = Objects.requireNonNull(processingRateScaleDown);
     this.processingRateScaleUp = Objects.requireNonNull(processingRateScaleUp);
     this.arrivalRateScaleUp = Objects.requireNonNull(arrivalRateScaleUp);
-    this.meanSojournTime = Objects.requireNonNull(meanSojournTime);
+    this.expectedLatency = Objects.requireNonNull(expectedLatency);
   }
 
   public static DiagnoserSpec lag() {
@@ -91,7 +91,7 @@ public class DiagnoserSpec {
     );
   }
 
-  public static DiagnoserSpec meanSojournTime(final MeanSojournTimeDiagnoserSpec diagnoser) {
+  public static DiagnoserSpec expectedLatency(final ExpectedLatencyDiagnoserSpec diagnoser) {
     return new DiagnoserSpec(
         Type.MEAN_SOJOURN_TIME,
         empty(),
@@ -113,8 +113,8 @@ public class DiagnoserSpec {
     return processingRateScaleDown;
   }
 
-  public Optional<MeanSojournTimeDiagnoserSpec> getMeanSojournTime() {
-    return meanSojournTime;
+  public Optional<ExpectedLatencyDiagnoserSpec> getExpectedLatency() {
+    return expectedLatency;
   }
 
   public Optional<RateBasedDiagnoserSpec> getArrivalRateScaleUp() {
@@ -131,7 +131,7 @@ public class DiagnoserSpec {
         CrdUtils.validatePresent(processingRateScaleDown, "processingRateScaleDown");
         break;
       case MEAN_SOJOURN_TIME:
-        CrdUtils.validatePresent(meanSojournTime, "meanSojournTime");
+        CrdUtils.validatePresent(expectedLatency, "expectedLatency");
         break;
       default:
         break;

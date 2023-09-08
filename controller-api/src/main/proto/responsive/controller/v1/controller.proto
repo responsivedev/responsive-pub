@@ -110,8 +110,13 @@ message KafkaStreamsPolicySpec {
   message LagDiagnoserSpec {
   }
 
-  message MeanSojournTimeDiagnoserSpec {
-    int32 max_mean_sojourn_time_seconds = 1;
+  message ExpectedLatencyDiagnoserSpec {
+    int32 max_expected_latency_seconds = 1;
+    optional int32 window_seconds = 7;
+    optional int32 projection_seconds = 8;
+    optional int32 scale_down_buffer_seconds = 9;
+    optional int32 grace_seconds = 10;
+    optional int32 stagger_seconds = 11;
 
     oneof scale_up_strategy {
       FixedReplicaScaleUpStrategySpec fixed_replicas = 2;
@@ -130,7 +135,7 @@ message KafkaStreamsPolicySpec {
       RateBasedDiagnoserSpec processing_rate_scale_down = 2;
       RateBasedDiagnoserSpec arrival_rate_scale_up = 6;
       LagDiagnoserSpec lag_scale_up = 3;
-      MeanSojournTimeDiagnoserSpec mean_sojourn_time = 4;
+      ExpectedLatencyDiagnoserSpec expected_latency = 4;
       ThreadSaturationDiagnoserSpec thread_saturation = 5;
     }
   }
