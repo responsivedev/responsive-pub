@@ -22,7 +22,7 @@ jobs:
           distribution: 'temurin'
 
       - name: "Login to AWS & ECR"
-        uses: ./.github/actions/ecr-login
+        uses: ./.github/actions/aws-and-ecr-login
         with:
           role-session-name: github-publish-artifacts
           aws-region: us-east-1
@@ -54,7 +54,7 @@ jobs:
         #if: github.ref == 'refs/heads/main'
 
       - name: "Login to AWS & ECR"
-        uses: ./.github/actions/ecr-login
+        uses: ./.github/actions/aws-and-ecr-login
         with:
           role-session-name: github-publish-artifacts
           aws-region: us-west-2

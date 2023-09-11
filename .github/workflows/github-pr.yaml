@@ -21,7 +21,7 @@ jobs:
           distribution: 'temurin'
 
       - name: "Login to AWS & ECR"
-        uses: ./.github/actions/ecr-login
+        uses: ./.github/actions/aws-and-ecr-login
         with:
           role-to-assume: arn:aws:iam::292505934682:role/github-responsivedev-org
           role-session-name: github-publish-artifacts
@@ -42,7 +42,7 @@ jobs:
           token: ${{ secrets.TOOLS_GHA_TOKEN }}
 
       - name: "Login to AWS & ECR"
-        uses: ./.github/actions/ecr-login
+        uses: ./.github/actions/aws-and-ecr-login
         with:
           role-to-assume: arn:aws:iam::292505934682:role/github-responsivedev-org
           role-session-name: github-pr-builder

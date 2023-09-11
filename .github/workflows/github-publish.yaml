@@ -28,26 +28,12 @@ jobs:
           java-version: '11'
           distribution: 'temurin'
 
-<<<<<<< Updated upstream
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v2
-=======
       - name: "Login to AWS & ECR"
-        uses: ./.github/actions/ecr-login
->>>>>>> Stashed changes
+        uses: ./.github/actions/aws-and-ecr-login
         with:
           role-session-name: github-publish-artifacts
           aws-region: us-east-1
-<<<<<<< Updated upstream
-
-      - name: Login to Amazon ECR
-        id: login-ecr-public
-        uses: aws-actions/amazon-ecr-login@v1
-        with:
-          registry-type: public
-=======
           public: "true"
->>>>>>> Stashed changes
 
       - name: Build & Test
         uses: gradle/gradle-build-action@v2
@@ -105,26 +91,13 @@ jobs:
         with:
             install_only: true
 
-<<<<<<< Updated upstream
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v2
-=======
       - name: "Login to AWS & ECR"
-        uses: ./.github/actions/ecr-login
->>>>>>> Stashed changes
+        uses: ./.github/actions/aws-and-ecr-login
         with:
           role-session-name: github-publish-artifacts
           aws-region: us-west-2
 
-<<<<<<< Updated upstream
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v1
-
       - name: Set Operator Version
-=======
-      - name: 'Set Operator Version'
->>>>>>> Stashed changes
         run: |
           echo "OPERATOR_VERSION=$(./gradlew operator:cV | grep Project.version | sed 's/Project version: //')" >> $GITHUB_ENV
 
