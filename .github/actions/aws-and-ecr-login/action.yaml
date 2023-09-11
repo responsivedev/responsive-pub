@@ -24,7 +24,7 @@ runs:
       with:
         role-to-assume: ${{ inputs.role-to-assume }}
         role-session-name: ${{ inputs.role-session-name }}
-        aws-region: ${{ inputs.role-to-assume }}
+        aws-region: ${{ inputs.region }}
 
     - name: Login to Amazon ECR
       if: ${{ inputs.public == 'false' }}
