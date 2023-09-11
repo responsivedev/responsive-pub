@@ -23,6 +23,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZE
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.APPLICATION_ID_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.COMMIT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG;
@@ -125,6 +126,7 @@ public class ResponsiveGlobalStoreIntegrationTest {
     }
   }
 
+  @SuppressWarnings("deprecation")
   private Map<String, Object> getMutableProperties() {
     final Map<String, Object> properties = new HashMap<>(responsiveProps);
 
@@ -138,8 +140,8 @@ public class ResponsiveGlobalStoreIntegrationTest {
     properties.put(DEFAULT_VALUE_SERDE_CLASS_CONFIG, LongSerde.class.getName());
     properties.put(NUM_STREAM_THREADS_CONFIG, 1);
 
-    // this ensures we can control the commits by explicitly requesting a commit
-    properties.put(COMMIT_INTERVAL_MS_CONFIG, 100);
+    properties.put(COMMIT_INTERVAL_MS_CONFIG, 0);
+    properties.put(CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
 
     return properties;
   }
@@ -155,7 +157,16 @@ public class ResponsiveGlobalStoreIntegrationTest {
     );
 
     final KStream<Long, Long> stream = builder.stream(INPUT_TOPIC);
-    stream.join(globalTable, (k, v) -> k, Long::sum)
+    stream.join(
+        globalTable,
+        (k, v) -> {
+          LOG.info("Processing new record from input stream: <{}, {}>", k, v);
+          return k;
+        },
+        (l, r) -> {
+          LOG.info("Joining left='{}' and right='{}'", l, r);
+          return l + r;
+        })
         .to(OUTPUT_TOPIC);
 
     return ResponsiveKafkaStreams.create(builder.build(), properties);
