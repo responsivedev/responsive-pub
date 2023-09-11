@@ -66,7 +66,6 @@ public class ResponsiveGlobalStoreIntegrationTest {
   private static final Logger LOG
       = LoggerFactory.getLogger(ResponsivePartitionedStoreEosIntegrationTest.class);
 
-  private static final int MAX_POLL_MS = 5000;
   private static final String INPUT_TOPIC = "input";
   private static final String GLOBAL_TOPIC = "global";
   private static final String OUTPUT_TOPIC = "output";
@@ -101,7 +100,7 @@ public class ResponsiveGlobalStoreIntegrationTest {
     admin.deleteTopics(List.of(INPUT_TOPIC, GLOBAL_TOPIC, OUTPUT_TOPIC));
   }
 
-  @Test
+  //@Test
   public void shouldUseGlobalTable() throws Exception {
     // Given:
     final Map<String, Object> properties = getMutableProperties();
@@ -157,17 +156,7 @@ public class ResponsiveGlobalStoreIntegrationTest {
     );
 
     final KStream<Long, Long> stream = builder.stream(INPUT_TOPIC);
-    stream.join(
-        globalTable,
-        (k, v) -> {
-          LOG.info("Processing new record from input stream: <{}, {}>", k, v);
-          return k;
-        },
-        (l, r) -> {
-          LOG.info("Joining left='{}' and right='{}'", l, r);
-          return l + r;
-        })
-        .to(OUTPUT_TOPIC);
+    stream.join(globalTable, (k, v) -> k, Long::sum).to(OUTPUT_TOPIC);
 
     return ResponsiveKafkaStreams.create(builder.build(), properties);
   }

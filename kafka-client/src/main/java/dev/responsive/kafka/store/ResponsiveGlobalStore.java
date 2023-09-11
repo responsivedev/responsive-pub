@@ -60,6 +60,7 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
   public ResponsiveGlobalStore(final TableName name) {
     this.name = name;
     this.position = Position.emptyPosition();
+    throw new UnsupportedOperationException("Global tables are not available for use at this time");
   }
 
   @Override
