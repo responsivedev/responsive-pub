@@ -51,7 +51,7 @@ jobs:
       - name: "Publish Images"
         uses: gradle/gradle-build-action@v2
         with:
-          arguments: pushCRD pushDockerMultiArch pushHelm -PdockerRegistry=${{ steps.login-ecr-public.outputs.registry }}/j8q9y0n6 -PhelmRegistry=${{ steps.login-ecr-public.outputs.registry }}/j8q9y0n6
+          arguments: pushCRD pushDockerMultiArch pushHelm -PdockerRegistry=${{ steps.login-ecr-public.outputs.public-registry }}/j8q9y0n6 -PhelmRegistry=${{ steps.login-ecr-public.outputs.public-registry }}/j8q9y0n6
         #if: github.ref == 'refs/heads/main'
 
       - name: "Login to AWS & ECR"

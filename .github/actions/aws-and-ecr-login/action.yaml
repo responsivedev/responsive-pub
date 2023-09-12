@@ -41,7 +41,7 @@ runs:
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v1
 
-    - name: "Login to Amazon ECR (public)"
+    - name: "Login to public Amazon ECR"
       if: ${{ inputs.public == 'true' }}
       id: login-ecr-public
       uses: aws-actions/amazon-ecr-login@v1
