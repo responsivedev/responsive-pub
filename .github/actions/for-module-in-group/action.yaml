@@ -1,0 +1,38 @@
+##
+# Executes a given action on all modules with a specified group, where a
+# "module group" is defined as a set of modules with direct dependencies
+# on each other. Module groups are defined by a single, shared version.
+#
+# Module groups may contain 1 or more modules, and are named after the
+# "root" module in the dependency tree (if one exists). Practically
+# speaking, they should be named after the module where the version of
+# the entire group is originally defined.
+#
+# The current groups with more than one module are defined below
+#
+# root: kafka-client
+#  - responsive-test-utils
+#
+##
+name: "For Module in Group"
+description: "Executes the provided action on all modules in the group"
+inputs:
+  module_group:
+    required: true
+    description: "the module group to act on"
+  action:
+    required: true
+    description: "the action to execute for the specified module(s)"
+runs:
+  using: composite
+  steps:
+    - name: "Root Module"
+      uses: ./.github/actions/${{ inputs.action }}
+      with:
+        module: ${{ inputs.module_group }}
+
+    - name: "Group: kafka-client | Module: responsive-test-utils"
+      if: ${{ inputs.module == 'kafka-client' }}
+      uses: ./.github/actions/${{ inputs.action }}
+      with:
+        module: responsive-test-utils

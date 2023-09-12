@@ -36,25 +36,11 @@ jobs:
           aws-region: us-east-1
           public: "true"
 
-      - name: "Build & Test"
-        uses: gradle/gradle-build-action@v2
+      - name: "Gradle: Build & Test, Release, Publish"
+        uses: ./.github/actions/for-module-in-group
         with:
-          arguments: :${{ inputs.module }}:build
-
-      - name: "Release"
-        uses: gradle/gradle-build-action@v2
-        with:
-          arguments: :${{ inputs.module }}:release
-
-      - name: "Publish"
-        uses: gradle/gradle-build-action@v2
-        with:
-          arguments: :${{ inputs.module }}:publish # publish to both S3 and Sonatype OSSRH
-        env:
-          OSSRH_USER: ${{ secrets.OSSRH_USER }}
-          OSSRH_PASSWORD: ${{ secrets.OSSRH_PASSWORD }}
-          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
-          SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
+          module_group: ${{ inputs.module }}
+          action: gradle-build-and-publish
 
       # We need this to emulate other architectures for multi-platform docker builds
       - name: "Set up QEMU for Docker"
@@ -66,7 +52,7 @@ jobs:
 
       - name: "Publish Operator Images"
         uses: gradle/gradle-build-action@v2
-        if: ${{ inputs.module == 'operator' }}
+        if: ${{ inputs.module == "operator' }}
         with:
           arguments: operator:pushCRD operator:pushDockerMultiArch operator:pushHelm \
                       -PdockerRegistry=${{ steps.login-ecr-public.outputs.registry }}/j8q9y0n6 \
@@ -97,7 +83,7 @@ jobs:
         with:
             install_only: true
 
-      - name: "Login to AWS & ECR"
+      - name: 'Login to AWS & ECR'
         uses: ./.github/actions/aws-and-ecr-login
         with:
           role-session-name: github-publish-artifacts

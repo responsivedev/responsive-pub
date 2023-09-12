@@ -10,7 +10,7 @@ inputs:
     description: "the name of the session"
   aws-region:
     required: true
-    description: "the region (generally us-east-1 or us-west-2)"
+    description: "the region (generally us-west-2, or us-east-1 for public repo)"
   public:
     default: "false"
     required: false
