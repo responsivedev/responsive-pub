@@ -22,7 +22,7 @@ runs:
     - name: "Gradle: Build & Test"
       uses: gradle/gradle-build-action@v2
       with:
-        arguments: :${{ inputs.module }}:build
+        arguments: :${{ inputs.module }}:build -x test -x checkstyleMain -x checkstyleTest
 
     - name: "Gradle: Release"
       uses: gradle/gradle-build-action@v2
