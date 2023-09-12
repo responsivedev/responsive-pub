@@ -52,7 +52,7 @@ jobs:
 
       - name: "Publish Operator Images"
         uses: gradle/gradle-build-action@v2
-        if: ${{ inputs.module == "operator' }}
+        if: ${{ inputs.module == 'operator' }}
         with:
           arguments: operator:pushCRD operator:pushDockerMultiArch operator:pushHelm \
                       -PdockerRegistry=${{ steps.login-ecr-public.outputs.registry }}/j8q9y0n6 \
