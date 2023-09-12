@@ -13,6 +13,13 @@
 # root: kafka-client
 #  - responsive-test-utils
 #
+#
+# TODO: figure out if we can pass action names directly as input so we
+#       don't have to hard-code the mapping like we do now.
+#       Something like this does not seem to work:
+#
+#       uses: ./.github/actions/${{ inputs.action }}
+#
 ##
 name: "For Module in Group"
 description: "Executes the provided action on all modules in the group"
@@ -22,17 +29,18 @@ inputs:
     description: "the module group to act on"
   action:
     required: true
-    description: "the action to execute for the specified module(s)"
+    description: "the action to execute (options: gradle-build-and-publish)"
 runs:
   using: composite
   steps:
-    - name: "Root Module"
-      uses: ./.github/actions/${{ inputs.action }}
+    - name: "Gradle Build & Publish | Root Module"
+      if: ${{ inputs.action == 'gradle-build-and-publish' }}
+      uses: ./.github/actions/gradle-build-and-publish
       with:
         module: ${{ inputs.module_group }}
 
-    - name: "Group: kafka-client | Module: responsive-test-utils"
-      if: ${{ inputs.module == 'kafka-client' }}
-      uses: ./.github/actions/${{ inputs.action }}
+    - name: "Gradle Build & Publish | kafka-client: responsive-test-utils"
+      if: ${{ (inputs.module == 'kafka-client') && (inputs.action == 'gradle-build-and-publish') }}
+      uses: ./.github/actions/gradle-build-and-publish
       with:
         module: responsive-test-utils
