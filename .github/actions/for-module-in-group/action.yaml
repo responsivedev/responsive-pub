@@ -20,13 +20,17 @@
 #
 #       uses: ./.github/actions/${{ inputs.action }}
 #
+#       We may be able to use a strategy matrix to more cleanly define
+#       the module groups if/when this becomes overly complex or error
+#       prone
+#
 ##
 name: "For Module in Group"
 description: "Executes the provided action on all modules in the group"
 inputs:
-  module_group:
+  module:
     required: true
-    description: "the module group to act on"
+    description: "the module (or module group) to act on"
   action:
     required: true
     description: "the action to execute (options: gradle-build-and-publish)"
@@ -56,7 +60,7 @@ runs:
         SIGNING_PASSWORD: ${{ inputs.SIGNING_PASSWORD }}
 
     - name: "Gradle Build & Publish | kafka-client: responsive-test-utils"
-      if: ${{ (inputs.module_group == 'kafka-client') && (inputs.action == 'gradle-build-and-publish') }}
+      if: ${{ (inputs.module == 'kafka-client') && (inputs.action == 'gradle-build-and-publish') }}
       uses: ./.github/actions/gradle-build-and-publish
       with:
         module: "responsive-test-utils"
