@@ -24,6 +24,7 @@ jobs:
 
       - name: "Login to AWS & ECR"
         uses: ./.github/actions/aws-and-ecr-login
+        id: login-ecr-public
         with:
           role-session-name: github-publish-artifacts
           aws-region: us-east-1

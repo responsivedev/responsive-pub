@@ -59,7 +59,7 @@ jobs:
         uses: gradle/gradle-build-action@v2
         if: ${{ inputs.module == 'operator' }}
         with:
-          arguments: operator:pushCRD operator:pushDockerMultiArch operator:pushHelm -PdockerRegistry=${{ steps.login-ecr-public.outputs.registry }}/j8q9y0n6 -PhelmRegistry=${{ steps.login-ecr-public.outputs.registry }}/j8q9y0n6
+          arguments: operator:pushCRD operator:pushDockerMultiArch operator:pushHelm -PdockerRegistry=${{ steps.login-ecr-public.outputs.public-registry }}/j8q9y0n6 -PhelmRegistry=${{ steps.login-ecr-public.outputs.public-registry }}/j8q9y0n6
         env:
           ECR_REGISTRY: ${{ steps.login-ecr-public.outputs.public-registry }}
 
@@ -67,7 +67,7 @@ jobs:
         uses: gradle/gradle-build-action@v2
         if: ${{ inputs.module == 'kafka-client' }}
         with:
-          arguments: kafka-client-examples:simple-example:pushDockerMultiArch -PdockerRegistry=${{ steps.login-ecr-public.outputs.registry }}/j8q9y0n6 -PhelmRegistry=${{ steps.login-ecr-public.outputs.registry }}/j8q9y0n6
+          arguments: kafka-client-examples:simple-example:pushDockerMultiArch -PdockerRegistry=${{ steps.login-ecr-public.outputs.public-registry }}/j8q9y0n6 -PhelmRegistry=${{ steps.login-ecr-public.outputs.public-registry }}/j8q9y0n6
         env:
           ECR_REGISTRY: ${{ steps.login-ecr-public.outputs.public-registry }}
 
