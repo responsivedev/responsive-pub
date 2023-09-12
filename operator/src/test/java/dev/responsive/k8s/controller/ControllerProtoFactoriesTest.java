@@ -24,8 +24,8 @@ import dev.responsive.k8s.crd.ResponsivePolicy;
 import dev.responsive.k8s.crd.ResponsivePolicySpec;
 import dev.responsive.k8s.crd.kafkastreams.DemoPolicySpec;
 import dev.responsive.k8s.crd.kafkastreams.DiagnoserSpec;
+import dev.responsive.k8s.crd.kafkastreams.ExpectedLatencyDiagnoserSpec;
 import dev.responsive.k8s.crd.kafkastreams.FixedReplicaScaleUpStrategySpec;
-import dev.responsive.k8s.crd.kafkastreams.MeanSojournTimeDiagnoserSpec;
 import dev.responsive.k8s.crd.kafkastreams.RateBasedDiagnoserSpec;
 import dev.responsive.k8s.crd.kafkastreams.ScaleUpStrategySpec;
 import io.fabric8.kubernetes.api.model.ObjectMeta;
@@ -176,12 +176,17 @@ class ControllerProtoFactoriesTest {
   }
 
   @Test
-  public void shouldCreateUpsertPolicyRequestWithMeanSojournTimeDiagnoserWithFixedReplicaScaling() {
+  public void shouldCreateUpsertPolicyRequestWithExpectedLatencyDiagnoserWithFixedReplicaScaling() {
     // given:
     kafkaStreamsPolicy.setSpec(
-        specWithDiagnoser(DiagnoserSpec.meanSojournTime(
-            new MeanSojournTimeDiagnoserSpec(
+        specWithDiagnoser(DiagnoserSpec.expectedLatency(
+            new ExpectedLatencyDiagnoserSpec(
                 123,
+                Optional.of(10),
+                Optional.of(11),
+                Optional.of(12),
+                Optional.of(13),
+                Optional.of(14),
                 ScaleUpStrategySpec.fixedReplica(new FixedReplicaScaleUpStrategySpec(3))
             )
         ))
@@ -193,19 +198,29 @@ class ControllerProtoFactoriesTest {
 
     // then:
     final var diagnoser = request.getPolicy().getKafkaStreamsPolicy().getDiagnoserList().get(0);
-    assertThat(diagnoser.hasMeanSojournTime(), is(true));
-    assertThat(diagnoser.getMeanSojournTime().getMaxMeanSojournTimeSeconds(), is(123));
-    assertThat(diagnoser.getMeanSojournTime().hasFixedReplicas(), is(true));
-    assertThat(diagnoser.getMeanSojournTime().getFixedReplicas().getReplicas(), is(3));
+    assertThat(diagnoser.hasExpectedLatency(), is(true));
+    assertThat(diagnoser.getExpectedLatency().getMaxExpectedLatencySeconds(), is(123));
+    assertThat(diagnoser.getExpectedLatency().getWindowSeconds(), is(10));
+    assertThat(diagnoser.getExpectedLatency().getProjectionSeconds(), is(11));
+    assertThat(diagnoser.getExpectedLatency().getScaleDownBufferSeconds(), is(12));
+    assertThat(diagnoser.getExpectedLatency().getGraceSeconds(), is(13));
+    assertThat(diagnoser.getExpectedLatency().getStaggerSeconds(), is(14));
+    assertThat(diagnoser.getExpectedLatency().hasFixedReplicas(), is(true));
+    assertThat(diagnoser.getExpectedLatency().getFixedReplicas().getReplicas(), is(3));
   }
 
   @Test
-  public void shouldCreateUpsertPolicyRequestWithMeanSojournTimeDiagnoserWithRateBasedStrategy() {
+  public void shouldCreateUpsertPolicyRequestWithExpectedLatencyDiagnoserWithRateBasedStrategy() {
     // given:
     kafkaStreamsPolicy.setSpec(
-        specWithDiagnoser(DiagnoserSpec.meanSojournTime(
-            new MeanSojournTimeDiagnoserSpec(
+        specWithDiagnoser(DiagnoserSpec.expectedLatency(
+            new ExpectedLatencyDiagnoserSpec(
                 123,
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
                 ScaleUpStrategySpec.rateBased()
             )
         ))
@@ -217,18 +232,23 @@ class ControllerProtoFactoriesTest {
 
     // then:
     final var diagnoser = request.getPolicy().getKafkaStreamsPolicy().getDiagnoserList().get(0);
-    assertThat(diagnoser.hasMeanSojournTime(), is(true));
-    assertThat(diagnoser.getMeanSojournTime().getMaxMeanSojournTimeSeconds(), is(123));
-    assertThat(diagnoser.getMeanSojournTime().hasRateBased(), is(true));
+    assertThat(diagnoser.hasExpectedLatency(), is(true));
+    assertThat(diagnoser.getExpectedLatency().getMaxExpectedLatencySeconds(), is(123));
+    assertThat(diagnoser.getExpectedLatency().hasRateBased(), is(true));
   }
 
   @Test
-  public void shouldCreateUpsertPolicyRequestWithMeanSojournTimeDiagnoserWithScaleToMaxStrategy() {
+  public void shouldCreateUpsertPolicyRequestWithExpectedLatencyDiagnoserWithScaleToMaxStrategy() {
     // given:
     kafkaStreamsPolicy.setSpec(
-        specWithDiagnoser(DiagnoserSpec.meanSojournTime(
-            new MeanSojournTimeDiagnoserSpec(
+        specWithDiagnoser(DiagnoserSpec.expectedLatency(
+            new ExpectedLatencyDiagnoserSpec(
                 123,
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
                 ScaleUpStrategySpec.scaleToMax()
             )
         ))
@@ -240,9 +260,40 @@ class ControllerProtoFactoriesTest {
 
     // then:
     final var diagnoser = request.getPolicy().getKafkaStreamsPolicy().getDiagnoserList().get(0);
-    assertThat(diagnoser.hasMeanSojournTime(), is(true));
-    assertThat(diagnoser.getMeanSojournTime().getMaxMeanSojournTimeSeconds(), is(123));
-    assertThat(diagnoser.getMeanSojournTime().hasScaleToMax(), is(true));
+    assertThat(diagnoser.hasExpectedLatency(), is(true));
+    assertThat(diagnoser.getExpectedLatency().getMaxExpectedLatencySeconds(), is(123));
+    assertThat(diagnoser.getExpectedLatency().hasScaleToMax(), is(true));
+  }
+
+  @Test
+  public void shouldCreateUpsertPolicyRequestWithExpectedLatencyDiagnoserWithEmptyOptionals() {
+    // given:
+    kafkaStreamsPolicy.setSpec(
+        specWithDiagnoser(DiagnoserSpec.expectedLatency(
+            new ExpectedLatencyDiagnoserSpec(
+                123,
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                ScaleUpStrategySpec.scaleToMax()
+            )
+        ))
+    );
+
+    // when:
+    final var request
+        = ControllerProtoFactories.upsertPolicyRequest("", kafkaStreamsPolicy);
+
+    // then:
+    final var diagnoser = request.getPolicy().getKafkaStreamsPolicy().getDiagnoserList().get(0);
+    assertThat(diagnoser.hasExpectedLatency(), is(true));
+    assertThat(diagnoser.getExpectedLatency().hasWindowSeconds(), is(false));
+    assertThat(diagnoser.getExpectedLatency().hasProjectionSeconds(), is(false));
+    assertThat(diagnoser.getExpectedLatency().hasStaggerSeconds(), is(false));
+    assertThat(diagnoser.getExpectedLatency().hasGraceSeconds(), is(false));
+    assertThat(diagnoser.getExpectedLatency().hasScaleDownBufferSeconds(), is(false));
   }
 
   @Test

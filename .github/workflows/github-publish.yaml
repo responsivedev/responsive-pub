@@ -28,18 +28,12 @@ jobs:
           java-version: '11'
           distribution: 'temurin'
 
-      - name: 'Configure AWS Credentials'
-        uses: aws-actions/configure-aws-credentials@v2
+      - name: 'Login to AWS & ECR'
+        uses: ./.github/actions/aws-and-ecr-login
         with:
-          role-to-assume: arn:aws:iam::292505934682:role/github-responsive-pub-main
           role-session-name: github-publish-artifacts
           aws-region: us-east-1
-
-      - name: 'Login to Amazon ECR'
-        id: login-ecr-public
-        uses: aws-actions/amazon-ecr-login@v1
-        with:
-          registry-type: public
+          public: "true"
 
       - name: 'Gradle: Build & Test, Release, Publish'
         uses: ./.github/actions/for-module-in-group
@@ -71,7 +65,8 @@ jobs:
         env:
           ECR_REGISTRY: ${{ steps.login-ecr-public.outputs.registry }}
 
-      - uses: actions/checkout@v3
+      - name: 'Checkout Sindri'
+        uses: actions/checkout@v3
         with:
           repository: responsivedev/sindri
           path: sindri
@@ -83,16 +78,11 @@ jobs:
         with:
             install_only: true
 
-      - name: 'Configure AWS Credentials'
-        uses: aws-actions/configure-aws-credentials@v2
+      - name: 'Login to AWS & ECR'
+        uses: ./.github/actions/aws-and-ecr-login
         with:
-          role-to-assume: arn:aws:iam::292505934682:role/github-responsive-pub-main
           role-session-name: github-publish-artifacts
           aws-region: us-west-2
-
-      - name: 'Login to Amazon ECR'
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v1
 
       - name: 'Set Operator Version'
         run: |
