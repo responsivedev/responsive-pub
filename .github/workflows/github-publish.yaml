@@ -41,6 +41,7 @@ jobs:
         with:
           module_group: ${{ inputs.module }}
           action: gradle-build-and-publish
+          secrets: inherit
 
       # We need this to emulate other architectures for multi-platform docker builds
       - name: "Set up QEMU for Docker"

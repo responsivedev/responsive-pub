@@ -38,9 +38,17 @@ runs:
       uses: ./.github/actions/gradle-build-and-publish
       with:
         module: ${{ inputs.module_group }}
+        OSSRH_USER: ${{ secrets.OSSRH_USER }}
+        OSSRH_PASSWORD: ${{ secrets.OSSRH_PASSWORD }}
+        SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+        SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
 
     - name: "Gradle Build & Publish | kafka-client: responsive-test-utils"
       if: ${{ (inputs.module == 'kafka-client') && (inputs.action == 'gradle-build-and-publish') }}
       uses: ./.github/actions/gradle-build-and-publish
       with:
-        module: responsive-test-utils
+        module: "responsive-test-utils"
+        OSSRH_USER: ${{ secrets.OSSRH_USER }}
+        OSSRH_PASSWORD: ${{ secrets.OSSRH_PASSWORD }}
+        SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+        SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
