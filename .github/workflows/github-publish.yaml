@@ -1,14 +1,14 @@
-name: Publish Artifacts
+name: "Publish Artifacts"
 on:
   workflow_dispatch:
     inputs:
       module:
         required: true
-        description: which module to publish
+        description: "which module to publish"
       increment:
         required: false
         default: incrementMinor
-        description: version increment (default minor)
+        description: "version increment (default minor)"
 jobs:
   build:
     permissions:
@@ -16,13 +16,14 @@ jobs:
       contents: write # This is required for actions/checkout
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - name: "Checkout"
+        uses: actions/checkout@v3
         with:
           submodules: recursive
           fetch-depth: 0
           token: ${{ secrets.TOOLS_GHA_TOKEN }}
 
-      - name: Set up JDK 11
+      - name: "Set up JDK 11"
         uses: actions/setup-java@v3
         with:
           java-version: '11'
@@ -35,17 +36,17 @@ jobs:
           aws-region: us-east-1
           public: "true"
 
-      - name: Build & Test
+      - name: "Build & Test"
         uses: gradle/gradle-build-action@v2
         with:
           arguments: :${{ inputs.module }}:build
 
-      - name: Release
+      - name: "Release"
         uses: gradle/gradle-build-action@v2
         with:
           arguments: :${{ inputs.module }}:release
 
-      - name: Publish
+      - name: "Publish"
         uses: gradle/gradle-build-action@v2
         with:
           arguments: :${{ inputs.module }}:publish # publish to both S3 and Sonatype OSSRH
@@ -56,37 +57,42 @@ jobs:
           SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
 
       # We need this to emulate other architectures for multi-platform docker builds
-      - name: Set up QEMU for Docker
+      - name: "Set up QEMU for Docker"
         uses: docker/setup-qemu-action@v2
 
       # We use the build extensions to do multi-architecture docker builds
-      - name: Set up Docker Buildx
+      - name: "Set up Docker Buildx"
         uses: docker/setup-buildx-action@v2
 
-      - name: Publish Operator Images
+      - name: "Publish Operator Images"
         uses: gradle/gradle-build-action@v2
         if: ${{ inputs.module == 'operator' }}
         with:
-          arguments: operator:pushCRD operator:pushDockerMultiArch operator:pushHelm -PdockerRegistry=${{ steps.login-ecr-public.outputs.registry }}/j8q9y0n6 -PhelmRegistry=${{ steps.login-ecr-public.outputs.registry }}/j8q9y0n6
+          arguments: operator:pushCRD operator:pushDockerMultiArch operator:pushHelm \
+                      -PdockerRegistry=${{ steps.login-ecr-public.outputs.registry }}/j8q9y0n6 \
+                      -PhelmRegistry=${{ steps.login-ecr-public.outputs.registry }}/j8q9y0n6
         env:
           ECR_REGISTRY: ${{ steps.login-ecr-public.outputs.registry }}
 
-      - name: Publish Example Images
+      - name: "Publish Example Images"
         uses: gradle/gradle-build-action@v2
         if: ${{ inputs.module == 'kafka-client' }}
         with:
-          arguments: kafka-client-examples:simple-example:pushDockerMultiArch -PdockerRegistry=${{ steps.login-ecr-public.outputs.registry }}/j8q9y0n6 -PhelmRegistry=${{ steps.login-ecr-public.outputs.registry }}/j8q9y0n6
+          arguments: kafka-client-examples:simple-example:pushDockerMultiArch \
+                      -PdockerRegistry=${{ steps.login-ecr-public.outputs.registry }}/j8q9y0n6 \
+                      -PhelmRegistry=${{ steps.login-ecr-public.outputs.registry }}/j8q9y0n6
         env:
           ECR_REGISTRY: ${{ steps.login-ecr-public.outputs.registry }}
 
-      - uses: actions/checkout@v3
+      - name: "Checkout sindri"
+        uses: actions/checkout@v3
         with:
           repository: responsivedev/sindri
           path: sindri
           ref: refs/heads/master
           token: ${{ secrets.TOOLS_GHA_TOKEN }}
 
-      - name: Install Kind
+      - name: "Install Kind"
         uses: helm/kind-action@v1.5.0
         with:
             install_only: true
@@ -97,15 +103,15 @@ jobs:
           role-session-name: github-publish-artifacts
           aws-region: us-west-2
 
-      - name: Set Operator Version
+      - name: "Set Operator Version"
         run: |
           echo "OPERATOR_VERSION=$(./gradlew operator:cV | grep Project.version | sed 's/Project version: //')" >> $GITHUB_ENV
 
-      - name: Set Kafka Client Version
+      - name: "Set Kafka Client Version"
         run: |
           echo "KAFKA_CLIENTS_VERSION=$(./gradlew kafka-client:cV  | grep Project.version | sed 's/Project version: //')" >> $GITHUB_ENV
 
-      - name: Run Smoke Test (Operator)
+      - name: "Run Smoke Test (Operator)"
         working-directory: sindri
         if: ${{ inputs.module == 'operator' }}
         run: |
@@ -118,7 +124,7 @@ jobs:
           DD_API_KEY: ${{ secrets.DD_API_KEY }}
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
 
-      - name: Run Smoke Test (Kafka Clients)
+      - name: "Run Smoke Test (Kafka Clients)"
         working-directory: sindri
         if: ${{ inputs.module == 'kafka-client' }}
         run: |
@@ -131,7 +137,7 @@ jobs:
           DD_API_KEY: ${{ secrets.DD_API_KEY }}
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
 
-      - name: Create Next Version Commit
+      - name: "Create Next Version Commit"
         run: |
           git config --global user.name 'Responsive Tools'
           git config --global user.email 'tools@responsive.dev'
@@ -140,7 +146,7 @@ jobs:
             -Prelease.dryRun | grep "Creating" | git commit --allow-empty -F -
           git push
 
-      - name: Push next platform version to Sindri
+      - name: "Push next platform version to Sindri"
         working-directory: sindri
         run: |
           git config --global user.name 'Responsive Tools'
@@ -148,7 +154,7 @@ jobs:
           git commit --allow-empty -am "update responsive-pub artifact versions"
           git push
 
-      - name: Increment Version
+      - name: "Increment Version"
         uses: gradle/gradle-build-action@v2
         with:
           arguments: :${{ inputs.module }}:markNextVersion -Prelease.incrementer=${{ inputs.increment }}
