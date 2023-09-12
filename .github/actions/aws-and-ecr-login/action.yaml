@@ -1,5 +1,6 @@
-name: "ECR Login"
+name: "AWS and ECR Login"
 description: "Configure AWS credentials and log in to ECR"
+
 inputs:
   role-to-assume:
     default: arn:aws:iam::292505934682:role/github-responsive-pub-main
@@ -16,6 +17,15 @@ inputs:
     required: false
     description: "whether to set registry-type: public (true/false)"
 
+# Note: only one of the below outputs will be non-empty, depending on the value of inputs.public
+outputs:
+  registry:
+    description: "the private ECR registry that was logged into"
+    value: ${{ steps.login-ecr.outputs.registry }}
+  public-registry:
+    description: "the public ECR registry that was logged into"
+    value: ${{ steps.login-ecr-public.outputs.registry }}
+
 runs:
   using: composite
   steps:
@@ -31,7 +41,7 @@ runs:
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v1
 
-    - name: "Login to Amazon ECR (public)"
+    - name: "Login to public Amazon ECR"
       if: ${{ inputs.public == 'true' }}
       id: login-ecr-public
       uses: aws-actions/amazon-ecr-login@v1

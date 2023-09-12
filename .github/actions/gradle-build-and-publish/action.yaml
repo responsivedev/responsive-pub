@@ -4,6 +4,18 @@ inputs:
   module:
     required: true
     description: "which module to build and publish"
+  OSSRH_USER:
+    required: true
+    description: "the OSSRH user (found in the 'secrets' context)"
+  OSSRH_PASSWORD:
+    required: true
+    description: "the OSSRH password (found in the 'secrets' context)"
+  SIGNING_KEY:
+    required: true
+    description: "the signing key (found in the 'secrets' context)"
+  SIGNING_PASSWORD:
+    required: true
+    description: "the signing key password (found in the 'secrets' context)"
 runs:
   using: composite
   steps:
@@ -22,7 +34,7 @@ runs:
       with:
         arguments: :${{ inputs.module }}:publish # publish to both S3 and Sonatype OSSRH
       env:
-        OSSRH_USER: ${{ secrets.OSSRH_USER }}
-        OSSRH_PASSWORD: ${{ secrets.OSSRH_PASSWORD }}
-        SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
-        SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
+        OSSRH_USER: ${{ inputs.OSSRH_USER }}
+        OSSRH_PASSWORD: ${{ inputs.OSSRH_PASSWORD }}
+        SIGNING_KEY: ${{ inputs.SIGNING_KEY }}
+        SIGNING_PASSWORD: ${{ inputs.SIGNING_PASSWORD }}

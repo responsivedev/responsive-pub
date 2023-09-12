@@ -13,26 +13,58 @@
 # root: kafka-client
 #  - responsive-test-utils
 #
+#
+# TODO: figure out if we can pass action names directly as input so we
+#       don't have to hard-code the mapping like we do now.
+#       Something like this does not seem to work:
+#
+#       uses: ./.github/actions/${{ inputs.action }}
+#
+#       We may be able to use a strategy matrix to more cleanly define
+#       the module groups if/when this becomes overly complex or error
+#       prone
+#
 ##
 name: "For Module in Group"
 description: "Executes the provided action on all modules in the group"
 inputs:
-  module_group:
+  module:
     required: true
-    description: "the module group to act on"
+    description: "the module (or module group) to act on"
   action:
     required: true
-    description: "the action to execute for the specified module(s)"
+    description: "the action to execute (options: gradle-build-and-publish)"
+  OSSRH_USER:
+    required: false
+    description: "the OSSRH user for publishing actions (found in the 'secrets' context)"
+  OSSRH_PASSWORD:
+    required: false
+    description: "the OSSRH password for publishing actions (found in the 'secrets' context)"
+  SIGNING_KEY:
+    required: false
+    description: "the signing key for publishing actions (found in the 'secrets' context)"
+  SIGNING_PASSWORD:
+    required: false
+    description: "the signing key password for publishing actions (found in the 'secrets' context)"
 runs:
   using: composite
   steps:
-    - name: "Root Module"
-      uses: ./.github/actions/${{ inputs.action }}
+    - name: "Gradle Build & Publish | Root Module"
+      if: ${{ inputs.action == 'gradle-build-and-publish' }}
+      uses: ./.github/actions/gradle-build-and-publish
       with:
         module: ${{ inputs.module_group }}
+        OSSRH_USER: ${{ inputs.OSSRH_USER }}
+        OSSRH_PASSWORD: ${{ inputs.OSSRH_PASSWORD }}
+        SIGNING_KEY: ${{ inputs.SIGNING_KEY }}
+        SIGNING_PASSWORD: ${{ inputs.SIGNING_PASSWORD }}
 
-    - name: "Group: kafka-client | Module: responsive-test-utils"
-      if: ${{ inputs.module == 'kafka-client' }}
-      uses: ./.github/actions/${{ inputs.action }}
+    - name: "Gradle Build & Publish | kafka-client: responsive-test-utils"
+      if: ${{ (inputs.module == 'kafka-client') && (inputs.action == 'gradle-build-and-publish') }}
+      uses: ./.github/actions/gradle-build-and-publish
       with:
-        module: responsive-test-utils
+        module: "responsive-test-utils"
+        OSSRH_USER: ${{ inputs.OSSRH_USER }}
+        OSSRH_PASSWORD: ${{ inputs.OSSRH_PASSWORD }}
+        SIGNING_KEY: ${{ inputs.SIGNING_KEY }}
+        SIGNING_PASSWORD: ${{ inputs.SIGNING_PASSWORD }}
