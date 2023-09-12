@@ -14,7 +14,7 @@
 #  - responsive-test-utils
 #
 ##
-name: 'For Module in Group'
+name: "For Module in Group"
 description: "Executes the provided action on all modules in the group"
 inputs:
   module_group:
@@ -26,12 +26,12 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: 'Root Module'
+    - name: "Root Module"
       uses: ./.github/actions/${{ inputs.action }}
       with:
         module: ${{ inputs.module_group }}
 
-    - name: 'Group: kafka-client | Module: responsive-test-utils'
+    - name: "Group: kafka-client | Module: responsive-test-utils"
       if: ${{ inputs.module == 'kafka-client' }}
       uses: ./.github/actions/${{ inputs.action }}
       with:

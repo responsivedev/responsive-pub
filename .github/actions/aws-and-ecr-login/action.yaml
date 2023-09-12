@@ -1,4 +1,4 @@
-name: 'ECR Login'
+name: "ECR Login"
 description: "Configure AWS credentials and log in to ECR"
 inputs:
   role-to-assume:
@@ -19,19 +19,19 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Configure AWS Credentials
+    - name: "Configure AWS Credentials"
       uses: aws-actions/configure-aws-credentials@v2
       with:
         role-to-assume: ${{ inputs.role-to-assume }}
         role-session-name: ${{ inputs.role-session-name }}
         aws-region: ${{ inputs.aws-region }}
 
-    - name: Login to Amazon ECR
+    - name: "Login to Amazon ECR"
       if: ${{ inputs.public == 'false' }}
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v1
 
-    - name: Login to Amazon ECR (public)
+    - name: "Login to Amazon ECR (public)"
       if: ${{ inputs.public == 'true' }}
       id: login-ecr-public
       uses: aws-actions/amazon-ecr-login@v1
