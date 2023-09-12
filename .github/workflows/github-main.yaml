@@ -10,12 +10,13 @@ jobs:
       contents: write # This is required for actions/checkout (read) and publishing tags (write)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - name: "Checkout"
+        uses: actions/checkout@v3
         with:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Set up JDK 11
+      - name: "Set up JDK 11"
         uses: actions/setup-java@v3
         with:
           java-version: '11'
@@ -28,12 +29,12 @@ jobs:
           aws-region: us-east-1
           public: "true"
 
-      - name: "Setup Gradle"
+      - name: "Gradle Build"
         uses: gradle/gradle-build-action@v2
         with:
           arguments: build
 
-      - name: "Publish"
+      - name: "Publish To S3"
         uses: gradle/gradle-build-action@v2
         with:
           arguments: publishMavenJavaPublicationToS3Repository # publish only to S3
