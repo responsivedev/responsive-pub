@@ -56,7 +56,7 @@ runs:
         SIGNING_PASSWORD: ${{ inputs.SIGNING_PASSWORD }}
 
     - name: "Gradle Build & Publish | kafka-client: responsive-test-utils"
-      if: ${{ (inputs.module == 'kafka-client') && (inputs.action == 'gradle-build-and-publish') }}
+      if: ${{ (inputs.module_group == 'kafka-client') && (inputs.action == 'gradle-build-and-publish') }}
       uses: ./.github/actions/gradle-build-and-publish
       with:
         module: "responsive-test-utils"

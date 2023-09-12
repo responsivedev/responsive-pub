@@ -10,7 +10,7 @@ on:
         default: incrementMinor
         description: "version increment (default minor)"
 jobs:
-  build:
+  publish-and-increment:
     permissions:
       id-token: write # This is required for requesting the JWT
       contents: write # This is required for actions/checkout
