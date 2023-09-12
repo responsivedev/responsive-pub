@@ -41,7 +41,10 @@ jobs:
         with:
           module_group: ${{ inputs.module }}
           action: gradle-build-and-publish
-          secrets: inherit
+          OSSRH_USER: ${{ secrets.OSSRH_USER }}
+          OSSRH_PASSWORD: ${{ secrets.OSSRH_PASSWORD }}
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
 
       # We need this to emulate other architectures for multi-platform docker builds
       - name: "Set up QEMU for Docker"
