@@ -80,7 +80,7 @@ public class SubPartitioner {
                             + " store is already initialized with %d partitions - it is backwards "
                             + "incompatible to change this. Please set %s to %d.",
                         ResponsiveConfig.STORAGE_DESIRED_NUM_PARTITION_CONFIG,
-                        actualSubPartitionCount, kafkaPartitionCount,
+                        desiredSubPartitionCount, kafkaPartitionCount,
                         changelogTopicName, actualSubPartitionCount, name.kafkaName(),
                         remoteSubPartitionCount.getAsInt(),
                         ResponsiveConfig.STORAGE_DESIRED_NUM_PARTITION_CONFIG,
