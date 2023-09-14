@@ -118,7 +118,7 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
       );
       partitioner = params.schemaType() == SchemaType.FACT
           ? SubPartitioner.NO_SUBPARTITIONS
-          : config.getSubPartitioner(sharedClients.admin, name, topicPartition.topic());
+          : config.getSubPartitioner(client, name, topicPartition.topic());
 
       buffer = CommitBuffer.from(
           sharedClients,

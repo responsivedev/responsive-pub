@@ -124,7 +124,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
         topology,
         verifiedStreamsConfigs(
             configs,
-            cassandraClientFactory.createCassandraClient(session, responsiveConfigs),
+            cassandraClientFactory.createCassandraClient(session, responsiveConfigs, admin),
             admin,
             executor,
             storeRegistry,

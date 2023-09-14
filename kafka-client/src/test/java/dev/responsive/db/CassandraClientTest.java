@@ -24,6 +24,7 @@ import com.datastax.oss.driver.api.core.cql.SimpleStatement;
 import com.datastax.oss.driver.api.core.cql.Statement;
 import dev.responsive.kafka.config.ResponsiveConfig;
 import java.util.Map;
+import org.apache.kafka.clients.admin.Admin;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -37,6 +38,8 @@ class CassandraClientTest {
 
   @Mock
   private CqlSession session;
+  @Mock
+  private Admin admin;
   @Captor
   private ArgumentCaptor<Statement<?>> statementCaptor;
 
@@ -49,7 +52,8 @@ class CassandraClientTest {
             ResponsiveConfig.TENANT_ID_CONFIG, "ignored",
             ResponsiveConfig.STORAGE_HOSTNAME_CONFIG, "ignored",
             ResponsiveConfig.STORAGE_PORT_CONFIG, 0
-        ))
+        )),
+        admin
     );
     when(session.execute(statementCaptor.capture())).thenReturn(null);
 

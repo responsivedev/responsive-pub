@@ -32,11 +32,13 @@ import dev.responsive.utils.ResponsiveExtension;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Optional;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.utils.Bytes;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
 import org.testcontainers.containers.CassandraContainer;
 
 @ExtendWith(ResponsiveExtension.class)
@@ -44,6 +46,9 @@ class CassandraFactSchemaIntegrationTest {
 
   private static final long CURRENT_TIME = 100L;
   private static final long MIN_VALID_TS = 0L;
+
+  @Mock
+  private Admin admin;
 
   private String storeName;
   private CassandraClient client;
@@ -63,7 +68,7 @@ class CassandraFactSchemaIntegrationTest {
         .withLocalDatacenter(cassandra.getLocalDatacenter())
         .withKeyspace("responsive_clients") // NOTE: this keyspace is expected to exist
         .build();
-    client = new CassandraClient(session, new ResponsiveConfig(responsiveProps));
+    client = new CassandraClient(session, new ResponsiveConfig(responsiveProps), admin);
   }
 
   @Test

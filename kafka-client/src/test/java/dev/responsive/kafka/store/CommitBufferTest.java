@@ -102,7 +102,7 @@ public class CommitBufferTest {
         .withLocalDatacenter(cassandra.getLocalDatacenter())
         .withKeyspace("responsive_clients") // NOTE: this keyspace is expected to exist
         .build();
-    client = new CassandraClient(session, config);
+    client = new CassandraClient(session, config, admin);
     schema = new CassandraKeyValueSchema(client);
     changelogTp = new TopicPartition("log", KAFKA_PARTITION);
     partitioner = SubPartitioner.NO_SUBPARTITIONS;

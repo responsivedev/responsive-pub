@@ -29,17 +29,21 @@ import org.apache.kafka.streams.state.internals.Murmur3;
 /**
  * {@code SubPartitioner} allows sub-partitioning a partition
  * space into additional partitions such that there is a 1:N
- * mapping of original partitions to new partitions (namely,
- * if two events are in the same new partition they must have
- * been in the same original partition, but the opposite is
- * not true).
- *
- * <p>The algorithm used simply maps each original partition
- * to {@code n} new partitions, beginning with {@code original
- * * n} and ending with {@code original * n + n} (exclusive). To
+ * mapping of original partitions to new partitions, aka
+ * "sub-partitions". If two events are in the same subpartition
+ * they must have been in the same original kafka partition
+ * (though the opposite is not true).
+ * <p>
+ * In this context, the resulting new partition in Cassandra
+ * is referred to as the "sub-partition", whereas "partition"
+ * or "original partition" refers to the kafka partition.
+ * <p>
+ * The algorithm used simply maps each original partition to
+ * {@code n} new partitions, beginning with {@code original * n}
+ * and ending with {@code original * n + n} (exclusive). To
  * compute which new partition a key falls into, it applies a hash
  * function and mods by {@code n}, adding that value to the base
- * mapped partition.</p>
+ * mapped partition.
  */
 public class SubPartitioner {
 
@@ -52,27 +56,36 @@ public class SubPartitioner {
   private final Function<Bytes, Integer> hasher;
 
   public static SubPartitioner create(
-      final OptionalInt actualRemoteCount,
-      final int kafkaPartitions,
-      final int desiredNum,
+      final OptionalInt remoteSubPartitionCount,
+      final int kafkaPartitionCount,
+      final int desiredSubPartitionCount,
       final TableName name,
       final String changelogTopicName,
       final Hasher hasher
   ) {
-    final int factor = (desiredNum == ResponsiveConfig.NO_SUBPARTITIONS)
-        ? 1 : (int) Math.ceil((double) desiredNum / kafkaPartitions);
-    final int computedRemoteNum = factor * kafkaPartitions;
+    final int factor =
+        desiredSubPartitionCount == ResponsiveConfig.NO_SUBPARTITIONS
+            ? 1
+            : (int) Math.ceil((double) desiredSubPartitionCount / kafkaPartitionCount);
 
-    if (actualRemoteCount.isPresent() && actualRemoteCount.getAsInt() != computedRemoteNum) {
-      throw new ConfigException(String.format("%s was configured to %d, which "
-              + "given %s partitions in kafka topic %s would result in %d remote partitions "
-              + "for table %s (remote partitions must be a multiple of the kafka partitions). "
-              + "The remote store is already initialized with %d partitions - it is backwards "
-              + "incompatible to change this. Please set %s to %d.",
-          ResponsiveConfig.STORAGE_DESIRED_NUM_PARTITION_CONFIG, desiredNum, kafkaPartitions,
-          changelogTopicName, computedRemoteNum, name.kafkaName(),
-          actualRemoteCount.getAsInt(), ResponsiveConfig.STORAGE_DESIRED_NUM_PARTITION_CONFIG,
-          actualRemoteCount.getAsInt()));
+    final int actualSubPartitionCount = factor * kafkaPartitionCount;
+
+    if (remoteSubPartitionCount.isPresent()
+        && remoteSubPartitionCount.getAsInt() != actualSubPartitionCount
+    ) {
+      throw new ConfigException(
+          String.format("%s was configured to %d, which given %s partitions in kafka topic %s "
+                            + "would result in %d remote partitions for table %s (remote "
+                            + "partitions must be a multiple of the kafka partitions). The remote"
+                            + " store is already initialized with %d partitions - it is backwards "
+                            + "incompatible to change this. Please set %s to %d.",
+                        ResponsiveConfig.STORAGE_DESIRED_NUM_PARTITION_CONFIG,
+                        actualSubPartitionCount, kafkaPartitionCount,
+                        changelogTopicName, actualSubPartitionCount, name.kafkaName(),
+                        remoteSubPartitionCount.getAsInt(),
+                        ResponsiveConfig.STORAGE_DESIRED_NUM_PARTITION_CONFIG,
+                        remoteSubPartitionCount.getAsInt()));
+
     }
 
     return new SubPartitioner(factor, hasher);

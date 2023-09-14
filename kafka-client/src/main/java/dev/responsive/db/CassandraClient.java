@@ -27,12 +27,14 @@ import com.datastax.oss.driver.api.core.cql.Statement;
 import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
 import dev.responsive.kafka.config.ResponsiveConfig;
 import dev.responsive.kafka.store.SchemaType;
+import dev.responsive.utils.CachedMetadata;
 import dev.responsive.utils.RemoteMonitor;
 import java.time.Duration;
 import java.util.OptionalInt;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.function.BooleanSupplier;
+import org.apache.kafka.clients.admin.Admin;
 
 /**
  * {@code CassandraClient} wraps a {@link CqlSession} with utility methods
@@ -44,6 +46,8 @@ public class CassandraClient {
 
   private final CqlSession session;
   private final ResponsiveConfig config;
+  private final CachedMetadata metadata;
+
   private final RemoteKeyValueSchema kvSchema;
   private final RemoteKeyValueSchema factSchema;
   private final RemoteWindowedSchema windowedSchema;
@@ -54,17 +58,22 @@ public class CassandraClient {
    *                will not specify a keyspace in any CQL query)
    * @param config  the responsive configuration
    */
-  public CassandraClient(final CqlSession session, final ResponsiveConfig config) {
+  public CassandraClient(
+      final CqlSession session,
+      final ResponsiveConfig config,
+      final Admin admin
+  ) {
     this.session = session;
     this.config = config;
+    this.metadata = new CachedMetadata(admin, this);
 
     this.kvSchema = new CassandraKeyValueSchema(this);
     this.factSchema = new CassandraFactSchema(this);
     this.windowedSchema = new CassandraWindowedSchema(this);
   }
 
-  protected CassandraClient(final ResponsiveConfig config) {
-    this(null, config);
+  protected CassandraClient(final ResponsiveConfig config, final Admin admin) {
+    this(null, config, admin);
   }
 
   /**
@@ -136,12 +145,22 @@ public class CassandraClient {
     return result.one().getLong(0);
   }
 
-  public OptionalInt numPartitions(final String tableName) {
-    final ResultSet result = execute(
-        String.format("SELECT DISTINCT %s FROM %s;", PARTITION_KEY.column(), tableName));
+  /**
+   * @return the actual number of sub-partitions in the remote cassandra table
+   *         or {@code @Optional.empty()} if there are no partitions (ie table
+   *         does not yet exist)
+   */
+  public OptionalInt numSubPartitions(final String tableName) {
+    return metadata.subPartitionCount(tableName);
+  }
 
-    final int numPartitions = result.all().size();
-    return numPartitions == 0 ? OptionalInt.empty() : OptionalInt.of(numPartitions);
+  /**
+   * @return the number of kafka partitions in the given changelog. Results are cached
+   *         so this will only make a remote call on the first invocation of each
+   *         changelog topic
+   */
+  public int numKafkaPartitions(final String changelogTopicName) {
+    return metadata.kafkaPartitionCount(changelogTopicName);
   }
 
   public RemoteKeyValueSchema kvSchema(final SchemaType schemaType) {

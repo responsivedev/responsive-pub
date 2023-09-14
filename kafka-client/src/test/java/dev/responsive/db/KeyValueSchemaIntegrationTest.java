@@ -24,6 +24,7 @@ import dev.responsive.utils.ResponsiveExtension;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.hamcrest.MatcherAssert;
@@ -32,6 +33,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
 import org.testcontainers.containers.CassandraContainer;
 
 @ExtendWith(ResponsiveExtension.class)
@@ -39,6 +41,9 @@ public class KeyValueSchemaIntegrationTest {
 
   private static final long CURRENT_TS = 100L;
   private static final long MIN_VALID_TS = 0L;
+
+  @Mock
+  private Admin admin;
 
   private RemoteKeyValueSchema schema;
   private String name;
@@ -56,7 +61,7 @@ public class KeyValueSchemaIntegrationTest {
         .withLocalDatacenter(cassandra.getLocalDatacenter())
         .withKeyspace("responsive_clients") // NOTE: this keyspace is expected to exist
         .build();
-    client = new CassandraClient(session, config);
+    client = new CassandraClient(session, config, admin);
     schema = new CassandraKeyValueSchema(client);
     name = info.getTestMethod().orElseThrow().getName();
     schema.create(name, Optional.empty());
