@@ -127,6 +127,10 @@ message KafkaStreamsPolicySpec {
 
   message ThreadSaturationDiagnoserSpec {
     double threshold = 1;
+    optional int32 window_seconds = 2;
+    optional int32 num_windows = 3;
+    optional int32 grace_seconds = 4;
+    repeated string blocked_metric = 5;
   }
 
   message DiagnoserSpec {

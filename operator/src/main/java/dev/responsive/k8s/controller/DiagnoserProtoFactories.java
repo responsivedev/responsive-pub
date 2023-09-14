@@ -3,6 +3,7 @@ package dev.responsive.k8s.controller;
 import dev.responsive.k8s.crd.kafkastreams.DiagnoserSpec;
 import dev.responsive.k8s.crd.kafkastreams.ExpectedLatencyDiagnoserSpec;
 import dev.responsive.k8s.crd.kafkastreams.RateBasedDiagnoserSpec;
+import dev.responsive.k8s.crd.kafkastreams.ThreadSaturationDiagnoserSpec;
 import responsive.controller.v1.controller.proto.ControllerOuterClass;
 import responsive.controller.v1.controller.proto.ControllerOuterClass.KafkaStreamsPolicySpec.FixedReplicaScaleUpStrategySpec;
 import responsive.controller.v1.controller.proto.ControllerOuterClass.KafkaStreamsPolicySpec.RateBasedScaleUpStrategySpec;
@@ -19,6 +20,20 @@ public class DiagnoserProtoFactories {
     if (diagnoser.getWindowMs().isPresent()) {
       builder.setWindowMs(diagnoser.getWindowMs().get());
     }
+    return builder.build();
+  }
+
+  private static ControllerOuterClass.KafkaStreamsPolicySpec.ThreadSaturationDiagnoserSpec
+      threadSaturationDiagnoserFromK8sResource(
+          final ThreadSaturationDiagnoserSpec diagnoser
+  ) {
+    final var builder = ControllerOuterClass.KafkaStreamsPolicySpec.ThreadSaturationDiagnoserSpec
+        .newBuilder()
+        .setThreshold(diagnoser.getThreshold());
+    diagnoser.getWindowSeconds().ifPresent(builder::setWindowSeconds);
+    diagnoser.getNumWindows().ifPresent(builder::setNumWindows);
+    diagnoser.getGraceSeconds().ifPresent(builder::setGraceSeconds);
+    diagnoser.getBlockedMetric().forEach(builder::addBlockedMetric);
     return builder.build();
   }
 
@@ -92,6 +107,13 @@ public class DiagnoserProtoFactories {
             .setExpectedLatency(
                 expectedLatencyDiagnoserFromK8sResource(
                     diagnoserSpec.getExpectedLatency().get()))
+            .build();
+      }
+      case THREAD_SATURATION: {
+        return ControllerOuterClass.KafkaStreamsPolicySpec.DiagnoserSpec.newBuilder()
+            .setThreadSaturation(
+                threadSaturationDiagnoserFromK8sResource(
+                    diagnoserSpec.getThreadSaturation().get()))
             .build();
       }
       default:

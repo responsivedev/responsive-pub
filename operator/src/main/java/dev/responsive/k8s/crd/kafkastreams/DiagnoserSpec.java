@@ -29,7 +29,8 @@ public class DiagnoserSpec {
     PROCESSING_RATE_SCALE_DOWN,
     ARRIVAL_RATE_SCALE_UP,
     LAG_SCALE_UP,
-    MEAN_SOJOURN_TIME
+    MEAN_SOJOURN_TIME,
+    THREAD_SATURATION
   }
 
   private final Type type;
@@ -37,6 +38,7 @@ public class DiagnoserSpec {
   private final Optional<RateBasedDiagnoserSpec> processingRateScaleDown;
   private final Optional<RateBasedDiagnoserSpec> arrivalRateScaleUp;
   private final Optional<ExpectedLatencyDiagnoserSpec> expectedLatency;
+  private final Optional<ThreadSaturationDiagnoserSpec> threadSaturation;
 
   @JsonCreator
   public DiagnoserSpec(
@@ -48,23 +50,34 @@ public class DiagnoserSpec {
       @JsonProperty("arrivalRateScaleUp")
       final Optional<RateBasedDiagnoserSpec> arrivalRateScaleUp,
       @JsonProperty("expectedLatency")
-      final Optional<ExpectedLatencyDiagnoserSpec> expectedLatency
+      final Optional<ExpectedLatencyDiagnoserSpec> expectedLatency,
+      @JsonProperty("threadSaturation")
+      final Optional<ThreadSaturationDiagnoserSpec> threadSaturation
   ) {
     this.type = strategy;
     this.processingRateScaleDown = Objects.requireNonNull(processingRateScaleDown);
     this.processingRateScaleUp = Objects.requireNonNull(processingRateScaleUp);
     this.arrivalRateScaleUp = Objects.requireNonNull(arrivalRateScaleUp);
     this.expectedLatency = Objects.requireNonNull(expectedLatency);
+    this.threadSaturation = threadSaturation;
   }
 
   public static DiagnoserSpec lag() {
-    return new DiagnoserSpec(Type.LAG_SCALE_UP, empty(), empty(), empty(), empty());
+    return new DiagnoserSpec(
+        Type.LAG_SCALE_UP,
+        empty(),
+        empty(),
+        empty(),
+        empty(),
+        empty()
+    );
   }
 
   public static DiagnoserSpec processingRateScaleUp(final RateBasedDiagnoserSpec diagnoser) {
     return new DiagnoserSpec(
         Type.PROCESSING_RATE_SCALE_UP,
         Optional.of(diagnoser),
+        empty(),
         empty(),
         empty(),
         empty()
@@ -77,6 +90,7 @@ public class DiagnoserSpec {
         empty(),
         Optional.of(diagnoser),
         empty(),
+        empty(),
         empty()
     );
   }
@@ -87,6 +101,7 @@ public class DiagnoserSpec {
         empty(),
         empty(),
         Optional.of(diagnoser),
+        empty(),
         empty()
     );
   }
@@ -94,6 +109,18 @@ public class DiagnoserSpec {
   public static DiagnoserSpec expectedLatency(final ExpectedLatencyDiagnoserSpec diagnoser) {
     return new DiagnoserSpec(
         Type.MEAN_SOJOURN_TIME,
+        empty(),
+        empty(),
+        empty(),
+        Optional.of(diagnoser),
+        empty()
+    );
+  }
+
+  public static DiagnoserSpec thredSaturation(final ThreadSaturationDiagnoserSpec diagnoser) {
+    return new DiagnoserSpec(
+        Type.THREAD_SATURATION,
+        empty(),
         empty(),
         empty(),
         empty(),
@@ -121,6 +148,10 @@ public class DiagnoserSpec {
     return arrivalRateScaleUp;
   }
 
+  public Optional<ThreadSaturationDiagnoserSpec> getThreadSaturation() {
+    return threadSaturation;
+  }
+
   public void validate() {
     Objects.requireNonNull(type);
     switch (type) {
@@ -132,6 +163,9 @@ public class DiagnoserSpec {
         break;
       case MEAN_SOJOURN_TIME:
         CrdUtils.validatePresent(expectedLatency, "expectedLatency");
+        break;
+      case THREAD_SATURATION:
+        CrdUtils.validatePresent(threadSaturation, "threadSaturation");
         break;
       default:
         break;
