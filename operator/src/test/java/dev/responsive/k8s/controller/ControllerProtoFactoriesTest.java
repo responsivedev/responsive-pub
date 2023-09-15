@@ -28,6 +28,7 @@ import dev.responsive.k8s.crd.kafkastreams.ExpectedLatencyDiagnoserSpec;
 import dev.responsive.k8s.crd.kafkastreams.FixedReplicaScaleUpStrategySpec;
 import dev.responsive.k8s.crd.kafkastreams.RateBasedDiagnoserSpec;
 import dev.responsive.k8s.crd.kafkastreams.ScaleUpStrategySpec;
+import dev.responsive.k8s.crd.kafkastreams.ThreadSaturationDiagnoserSpec;
 import io.fabric8.kubernetes.api.model.ObjectMeta;
 import java.util.List;
 import java.util.Optional;
@@ -173,6 +174,36 @@ class ControllerProtoFactoriesTest {
 
     // then:
     assertThat(request.getApplicationId(), is("gouda/cheddar"));
+  }
+
+  @Test
+  public void shouldCreateUpsertPolicyRequestWithThreadSaturationDiagnoser() {
+    // given:
+    kafkaStreamsPolicy.setSpec(
+        specWithDiagnoser(DiagnoserSpec.thredSaturation(
+            new ThreadSaturationDiagnoserSpec(
+                0.9,
+                Optional.of(10),
+                Optional.of(11),
+                Optional.of(12),
+                List.of("foo.bar")
+            )
+        ))
+    );
+
+    // when:
+    final var request
+        = ControllerProtoFactories.upsertPolicyRequest("", kafkaStreamsPolicy);
+
+    // then:
+    final var diagnoser = request.getPolicy().getKafkaStreamsPolicy().getDiagnoserList().get(0);
+    assertThat(diagnoser.hasThreadSaturation(), is(true));
+    assertThat(diagnoser.getThreadSaturation().getThreshold(), is(0.9));
+    assertThat(diagnoser.getThreadSaturation().getWindowSeconds(), is(10));
+    assertThat(diagnoser.getThreadSaturation().getNumWindows(), is(11));
+    assertThat(diagnoser.getThreadSaturation().getGraceSeconds(), is(12));
+    assertThat(diagnoser.getThreadSaturation().getBlockedMetricCount(), is(1));
+    assertThat(diagnoser.getThreadSaturation().getBlockedMetric(0), is("foo.bar"));
   }
 
   @Test
