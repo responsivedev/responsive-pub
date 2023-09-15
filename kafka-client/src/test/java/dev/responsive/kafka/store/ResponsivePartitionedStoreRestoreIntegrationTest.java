@@ -95,12 +95,14 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes.LongSerde;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
@@ -318,30 +320,26 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
 
     final KTable<Long, Long> inputTbl = builder.table(
         inputTblTopic(),
-        Materialized.as(
-            ResponsiveStores.keyValueStore(
-                type == KVSchema.FACT
-                    ? ResponsiveKeyValueParams.fact(inputTableName)
-                    : ResponsiveKeyValueParams.keyValue(inputTableName)
-            )
+        ResponsiveStores.materialized(
+            type == KVSchema.FACT
+                ? ResponsiveKeyValueParams.fact(inputTableName)
+                : ResponsiveKeyValueParams.keyValue(inputTableName)
         )
     );
 
     final ResponsiveKeyValueParams baseParams = type == KVSchema.FACT
-        ? ResponsiveKeyValueParams.fact(inputTableName)
-        : ResponsiveKeyValueParams.keyValue(inputTableName);
+        ? ResponsiveKeyValueParams.fact(aggName())
+        : ResponsiveKeyValueParams.keyValue(aggName());
 
     input
         .groupByKey()
         .aggregate(
             () -> 0L,
             (k, v, va) -> v + va,
-            (Materialized) Materialized.as(
-                ResponsiveStores.keyValueStore(
-                    truncateChangelog
-                        ? baseParams.withTruncateChangelog()
-                        : baseParams
-                )
+            ResponsiveStores.<Long, Long>materialized(
+                truncateChangelog
+                    ? baseParams.withTruncateChangelog()
+                    : baseParams
             ).withLoggingEnabled(
                 Map.of(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE)))
         .toStream()
