@@ -160,7 +160,7 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
     final TopicPartition input = new TopicPartition(inputTopic(), 0);
 
     try (final ResponsiveKafkaStreams streams
-             = buildAggregatorApp(properties, defaultClientSupplier, defaultFactory, type)) {
+             = buildAggregatorApp(properties, defaultClientSupplier, defaultFactory, type, false)) {
       IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(30), streams);
       // Send some data through
       pipeInput(inputTopic(), 1, producer, System::currentTimeMillis, 0, 10, 0);
@@ -197,7 +197,7 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
     final TopicPartition input = new TopicPartition(inputTopic(), 0);
 
     try (final ResponsiveKafkaStreams streams
-             = buildAggregatorApp(properties, defaultClientSupplier, defaultFactory, type)) {
+             = buildAggregatorApp(properties, defaultClientSupplier, defaultFactory, type, false)) {
       IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(10), streams);
       // Send some data through
       pipeInput(inputTblTopic(), 1, producer, System::currentTimeMillis, 0, 10, 0, 1, 2, 3);
@@ -212,7 +212,7 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
         = new FaultInjectingCassandraClientSupplier();
     try (final ResponsiveKafkaStreams streams
              = buildAggregatorApp(
-                 properties, defaultClientSupplier, cassandraFaultInjector, type)) {
+                 properties, defaultClientSupplier, cassandraFaultInjector, type, false)) {
       IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(10), streams);
 
       // Inject a fault into cassandra client so it fails the next flush
@@ -246,7 +246,7 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
     // Restart with restore recorder
     final TestKafkaClientSupplier recordingClientSupplier = new TestKafkaClientSupplier();
     try (final ResponsiveKafkaStreams streams
-             = buildAggregatorApp(properties, recordingClientSupplier, defaultFactory, type)) {
+             = buildAggregatorApp(properties, recordingClientSupplier, defaultFactory, type, true)) {
       IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(30), streams);
       // Send some more data through and check output
       pipeInput(inputTopic(), 1, producer, System::currentTimeMillis, 20, 30, 0);
@@ -306,13 +306,15 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
       final Map<String, Object> originals,
       final KafkaClientSupplier clientSupplier,
       final CassandraClientFactory cassandraClientFactory,
-      final KVSchema type) {
+      final KVSchema type,
+      final boolean truncateChangelog) {
     final Map<String, Object> properties = new HashMap<>(originals);
 
     final StreamsBuilder builder = new StreamsBuilder();
 
     final KStream<Long, Long> input = builder.stream(inputTopic());
     final String inputTableName = name + "inputTbl";
+
     final KTable<Long, Long> inputTbl = builder.table(
         inputTblTopic(),
         Materialized.as(
@@ -323,19 +325,24 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
             )
         )
     );
+
+    final ResponsiveKeyValueParams baseParams = type == KVSchema.FACT
+        ? ResponsiveKeyValueParams.fact(inputTableName)
+        : ResponsiveKeyValueParams.keyValue(inputTableName);
+
     input
         .groupByKey()
         .aggregate(
             () -> 0L,
             (k, v, va) -> v + va,
             (Materialized) Materialized.as(
-                    ResponsiveStores.keyValueStore(
-                            type == KVSchema.FACT
-                                ? ResponsiveKeyValueParams.fact(aggName())
-                                : ResponsiveKeyValueParams.keyValue(aggName())
-                    )
-                ).withLoggingEnabled(
-                    Map.of(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE)))
+                ResponsiveStores.keyValueStore(
+                    truncateChangelog
+                        ? baseParams.withTruncateChangelog()
+                        : baseParams
+                )
+            ).withLoggingEnabled(
+                Map.of(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE)))
         .toStream()
         .to(outputTopic());
     input.join(inputTbl, Long::sum);
