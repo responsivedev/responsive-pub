@@ -27,7 +27,6 @@ import dev.responsive.kafka.clients.SharedClients;
 import dev.responsive.kafka.config.ResponsiveConfig;
 import dev.responsive.model.Result;
 import dev.responsive.utils.Iterators;
-import dev.responsive.utils.StoreUtil;
 import dev.responsive.utils.TableName;
 import java.time.Duration;
 import java.time.Instant;

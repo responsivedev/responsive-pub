@@ -21,7 +21,6 @@ import static dev.responsive.utils.StoreUtil.durationToMillis;
 import dev.responsive.kafka.store.SchemaTypes.WindowSchema;
 import dev.responsive.utils.TableName;
 import java.time.Duration;
-import javax.annotation.Nullable;
 
 public final class ResponsiveWindowParams {
 

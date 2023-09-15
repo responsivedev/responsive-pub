@@ -246,7 +246,8 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
     // Restart with restore recorder
     final TestKafkaClientSupplier recordingClientSupplier = new TestKafkaClientSupplier();
     try (final ResponsiveKafkaStreams streams
-             = buildAggregatorApp(properties, recordingClientSupplier, defaultFactory, type, true)) {
+             = buildAggregatorApp(properties, recordingClientSupplier, defaultFactory, type, true)
+    ) {
       IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(30), streams);
       // Send some more data through and check output
       pipeInput(inputTopic(), 1, producer, System::currentTimeMillis, 20, 30, 0);
