@@ -41,6 +41,8 @@ import org.apache.kafka.streams.state.WindowStore;
  */
 public final class ResponsiveStores {
 
+  //////////////////////////// KeyValue Stores ////////////////////////////
+
   /**
    * See for example {@link Stores#inMemoryKeyValueStore(String)}. This method should be
    * preferred over {@link #keyValueStore(String)} and {@link #timestampedKeyValueStore(String)}
@@ -165,6 +167,23 @@ public final class ResponsiveStores {
   }
 
   /**
+   * Create a {@link Materialized} that can be used to build a Responsive {@link KeyValueStore}
+   * and materialized in the DSL. If using the low-level Processor API, use
+   * {@link #keyValueStoreBuilder} instead.
+   *
+   * @param params the store parameters
+   * @return a Materialized configuration that can be used to build a key value store with the
+   *         given options that uses Responsive's storage for its backend
+   */
+  public static <K, V> Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized(
+      final ResponsiveKeyValueParams params
+  ) {
+    return new ResponsiveMaterialized<>(Materialized.as(keyValueStore(params)), false);
+  }
+
+  //////////////////////////// Window Stores ////////////////////////////
+
+  /**
    * See for example {@link Stores#inMemoryWindowStore(String, Duration, Duration, boolean)}
    *
    * @param params the {@link ResponsiveWindowParams} for this store
@@ -272,21 +291,6 @@ public final class ResponsiveStores {
     throw new UnsupportedOperationException(
         "Window store implementation is incomplete, please contact the Responsive team if you "
             + "require this feature");
-  }
-
-  /**
-   * Create a {@link Materialized} that can be used to build a Responsive {@link KeyValueStore}
-   * and materialized in the DSL. If using the low-level Processor API, use
-   * {@link #keyValueStoreBuilder} instead.
-   *
-   * @param params the store parameters
-   * @return a Materialized configuration that can be used to build a key value store with the
-   *         given options that uses Responsive's storage for its backend
-   */
-  public static <K, V> Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized(
-      final ResponsiveKeyValueParams params
-  ) {
-    return new ResponsiveMaterialized<>(Materialized.as(keyValueStore(params)), false);
   }
 
   /**

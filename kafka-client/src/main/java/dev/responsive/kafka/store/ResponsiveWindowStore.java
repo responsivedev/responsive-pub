@@ -138,6 +138,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
           partition,
           schema,
           new StampedKeySpec(this::withinRetention),
+          params.truncateChangelog(),
           partitioner,
           config
       );

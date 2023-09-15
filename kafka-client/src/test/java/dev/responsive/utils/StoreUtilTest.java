@@ -44,8 +44,9 @@ class StoreUtilTest {
             StreamsConfig.APPLICATION_ID_CONFIG, "foo",
             CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "foo.bar",
             StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE
-        ))
-    ));
+
+        )))
+    );
   }
 
   @Test
@@ -56,8 +57,9 @@ class StoreUtilTest {
             StreamsConfig.APPLICATION_ID_CONFIG, "foo",
             CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "foo.bar",
             StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS
-        ))
-    ));
+
+        )))
+    );
   }
 
   @Test
