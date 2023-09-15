@@ -45,6 +45,7 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.RecordsToDelete;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
@@ -74,6 +75,9 @@ class CommitBuffer<K, S extends RemoteSchema<K>> implements RecordBatchingStateR
 
   private Instant lastFlush;
   private WriterFactory<K> writerFactory;
+
+  // flag to skip further truncation attempts when the changelog is set to 'compact' only
+  private boolean isNotDeleteEnabled = false;
 
   static <K, S extends RemoteSchema<K>> CommitBuffer<K, S> from(
       final SharedClients clients,
@@ -401,13 +405,19 @@ class CommitBuffer<K, S extends RemoteSchema<K>> implements RecordBatchingStateR
   }
 
   private void maybeTruncateChangelog(final long offset) {
-    if (truncateChangelog) {
+    if (truncateChangelog && !isNotDeleteEnabled) {
       try {
         admin.deleteRecords(Map.of(changelog, RecordsToDelete.beforeOffset(offset))).all().get();
         log.info("Truncated changelog topic {} before offset {}", changelog, offset);
       } catch (final ExecutionException e) {
-        log.warn("Could not truncate changelog topic-partition {}.", changelog, e);
+        log.warn("Could not truncate changelog topic-partition " + changelog, e);
+        if (e.getCause() instanceof PolicyViolationException) {
+          log.info("Disabling further changelog truncation attempts due to topic configuration "
+                       + "being incompatible with deleteRecord requests", e);
+          isNotDeleteEnabled = true;
+        }
       } catch (final InterruptedException e) {
+        log.error("Interrupted while truncating the changelog " + changelog, e);
         throw new ProcessorStateException("Interrupted while truncating " + changelog, e);
       }
     }

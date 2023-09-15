@@ -24,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.datastax.oss.driver.api.core.CqlSession;
@@ -43,17 +44,24 @@ import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DeleteRecordsResult;
+import org.apache.kafka.clients.admin.DeletedRecords;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.internals.KafkaCompletableFuture;
+import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.errors.TaskMigratedException;
@@ -239,6 +247,33 @@ public class CommitBufferTest {
 
     // Then:
     verifyNoInteractions(admin);
+  }
+
+  @Test
+  public void shouldNotTruncateTopicAfterPolicyViolationException() {
+    // Given:
+    final String tableName = name;
+    final CommitBuffer<Bytes, RemoteKeyValueSchema> buffer = new CommitBuffer<>(
+        client, tableName, changelogTp, admin, schema,
+        KEY_SPEC, true, TRIGGERS, partitioner);
+    buffer.init();
+    buffer.put(KEY, VALUE, CURRENT_TS);
+
+    final KafkaFutureImpl<DeletedRecords> future = new KafkaFutureImpl<>();
+    future.completeExceptionally(new PolicyViolationException("oops"));
+    when(admin.deleteRecords(any())).thenReturn(new DeleteRecordsResult(Collections.singletonMap(
+        changelogTp,
+        future
+    )));
+
+    // When:
+    buffer.flush(100L);
+    verify(admin).deleteRecords(any());
+    buffer.put(KEY, VALUE, CURRENT_TS + 50_000);
+    buffer.flush(101L);
+
+    // Then:
+    verifyNoMoreInteractions(admin);
   }
 
   @Test
