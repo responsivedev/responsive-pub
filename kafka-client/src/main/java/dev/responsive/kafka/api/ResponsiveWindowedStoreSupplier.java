@@ -17,70 +17,53 @@
 package dev.responsive.kafka.api;
 
 import dev.responsive.kafka.store.ResponsiveWindowStore;
-import dev.responsive.utils.TableName;
+import java.util.Locale;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 
 public class ResponsiveWindowedStoreSupplier implements WindowBytesStoreSupplier {
 
-  private final TableName name;
-  private final long retentionPeriod;
-  private final long windowSize;
-  private final boolean retainDuplicates;
+  private final ResponsiveWindowParams params;
+  private final long segmentIntervalMs;
 
-  public ResponsiveWindowedStoreSupplier(
-      final String name,
-      final long retentionPeriod,
-      final long windowSize,
-      final boolean retainDuplicates
-  ) {
-    this.name = new TableName(name);
-    this.retentionPeriod = retentionPeriod;
-    this.windowSize = windowSize;
-    this.retainDuplicates = retainDuplicates;
+  public ResponsiveWindowedStoreSupplier(final ResponsiveWindowParams params) {
+    this.params = params;
+    this.segmentIntervalMs = params.retentionPeriod() / params.numSegments();
   }
 
   @Override
   public String name() {
-    return name.kafkaName();
+    return params.name().kafkaName();
   }
 
   @Override
   public WindowStore<Bytes, byte[]> get() {
-    return new ResponsiveWindowStore(
-        name,
-        retentionPeriod,
-        windowSize,
-        retainDuplicates
-    );
+    return new ResponsiveWindowStore(params);
   }
 
-  // Responsive window store is not *really* segmented, so just
-  // say size is 1 ms this is what InMemoryWindowBytesStoreSupplier
-  // does in Kafka Streams
   @Override
   public long segmentIntervalMs() {
-    return 1;
+    return segmentIntervalMs;
   }
 
   @Override
   public long windowSize() {
-    return windowSize;
+    return params.windowSize();
   }
 
   @Override
   public boolean retainDuplicates() {
-    return retainDuplicates;
+    return params.retainDuplicates();
   }
 
   @Override
   public long retentionPeriod() {
-    return retentionPeriod;
+    return params.retentionPeriod();
   }
 
   @Override
   public String metricsScope() {
-    return "responsive-window";
+    return "responsive-" + params.schemaType().name().toLowerCase(Locale.ROOT);
   }
 }

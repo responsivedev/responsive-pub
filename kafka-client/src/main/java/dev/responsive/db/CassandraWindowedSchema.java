@@ -45,6 +45,7 @@ import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import javax.annotation.CheckReturnValue;
@@ -71,6 +72,8 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
   // if the key is absent, else not at all. this guarantee is not present
   // in all implementations of ConcurrentMap
   private final ConcurrentHashMap<String, PreparedStatement> insert;
+  private final ConcurrentHashMap<String, PreparedStatement> delete;
+  private final ConcurrentHashMap<String, PreparedStatement> fetchSingle;
   private final ConcurrentHashMap<String, PreparedStatement> fetch;
   private final ConcurrentHashMap<String, PreparedStatement> fetchAll;
   private final ConcurrentHashMap<String, PreparedStatement> fetchRange;
@@ -83,6 +86,8 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
   public CassandraWindowedSchema(final CassandraClient client) {
     this.client = client;
     insert = new ConcurrentHashMap<>();
+    delete = new ConcurrentHashMap<>();
+    fetchSingle = new ConcurrentHashMap<>();
     fetch = new ConcurrentHashMap<>();
     fetchAll = new ConcurrentHashMap<>();
     fetchRange = new ConcurrentHashMap<>();
@@ -91,12 +96,11 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
     backFetchRange = new ConcurrentHashMap<>();
     getMeta = new ConcurrentHashMap<>();
     setOffset = new ConcurrentHashMap<>();
-
   }
 
   @Override
   public void create(final String name, Optional<Duration> ttl) {
-    // TODO: explore better data models for fetchRange/fetchAll
+    // TODO(window): explore better data models for fetchRange/fetchAll
     // Cassandra does not support filtering on a composite key column if
     // the previous columns in the composite are not equality filters
     // in the table below, for example, we cannot filter on WINDOW_START
@@ -192,6 +196,27 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
             .value(DATA_KEY.column(), bindMarker(DATA_KEY.bind()))
             .value(WINDOW_START.column(), bindMarker(WINDOW_START.bind()))
             .value(DATA_VALUE.column(), bindMarker(DATA_VALUE.bind()))
+            .build()
+    ));
+
+    delete.computeIfAbsent(tableName, k -> client.prepare(
+        QueryBuilder
+            .deleteFrom(tableName)
+            .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
+            .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
+            .where(DATA_KEY.relation().isEqualTo(bindMarker(DATA_KEY.bind())))
+            .where(WINDOW_START.relation().isEqualTo(bindMarker(WINDOW_START.bind())))
+            .build()
+    ));
+
+    fetchSingle.computeIfAbsent(tableName, k -> client.prepare(
+        QueryBuilder
+            .selectFrom(tableName)
+            .columns(DATA_KEY.column(), WINDOW_START.column(), DATA_VALUE.column())
+            .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
+            .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
+            .where(DATA_KEY.relation().isEqualTo(bindMarker(DATA_KEY.bind())))
+            .where(WINDOW_START.relation().isEqualTo(bindMarker(WINDOW_START.bind())))
             .build()
     ));
 
@@ -301,10 +326,12 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
    * @param partitionKey the partitioning key
    * @param key          the data key
    * @param value        the data value
-   * @param epochMillis    the timestamp of the event
+   * @param epochMillis   the timestamp of the event
    * @return a statement that, when executed, will insert the row
-   * matching {@code partitionKey} and {@code key} in the
-   * {@code table} with value {@code value}
+   *         matching {@code partitionKey} and {@code key} in the
+   *         {@code table} with value {@code value}. Note that the
+   *         {@code key} here is the "windowed key" which includes
+   *         both the record key and also the windowStart timestamp
    */
   @Override
   @CheckReturnValue
@@ -323,25 +350,74 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
         .setByteBuffer(DATA_VALUE.bind(), ByteBuffer.wrap(value));
   }
 
+  /**
+   * @param table         the table to delete from
+   * @param partitionKey  the partitioning key
+   * @param key           the data key
+   *
+   * @return a statement that, when executed, will delete the row
+   *         matching {@code partitionKey} and {@code key} in the
+   *         {@code table}. Note that the {@code key} here is the
+   *         "windowed key" which includes both the record key and
+   *         also the window start timestamp
+   */
   @Override
+  @CheckReturnValue
   public BoundStatement delete(
       final String table,
       final int partitionKey,
       final Stamped<Bytes> key
   ) {
-    throw new UnsupportedOperationException("Cannot delete windowed data using the delete API");
+    return delete.get(table)
+        .bind()
+        .setInt(PARTITION_KEY.bind(), partitionKey)
+        .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.key.get()))
+        .setInstant(WINDOW_START.bind(), Instant.ofEpochMilli(key.stamp));
   }
-
 
   /**
    * Retrieves the value of the given {@code partitionKey} and {@code key} from {@code table}.
+   *
+   * @param tableName   the table to retrieve from
+   * @param partition   the partition
+   * @param key         the data key
+   * @param windowStart the start time of the window
+   * @return the value previously set
+   */
+  @Override
+  public byte[] fetch(
+      final String tableName,
+      final int partition,
+      final Bytes key,
+      final long windowStart
+  ) {
+    final BoundStatement get = fetchSingle.get(tableName)
+        .bind()
+        .setInt(PARTITION_KEY.bind(), partition)
+        .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
+        .setInstant(WINDOW_START.bind(), Instant.ofEpochMilli(windowStart));
+
+    final List<Row> result = client.execute(get).all();
+    if (result.size() > 1) {
+      throw new IllegalStateException("Unexpected multiple results for point lookup");
+    } else if (result.isEmpty()) {
+      return null;
+    } else {
+      final ByteBuffer value = result.get(0).getByteBuffer(DATA_VALUE.column());
+      return Objects.requireNonNull(value).array();
+    }
+  }
+
+  /**
+   * Retrieves the range of windows of the given {@code partitionKey} and {@code key} with a
+   * start time between {@code timeFrom} and {@code timeTo} from {@code table}.
    *
    * @param tableName the table to retrieve from
    * @param partition the partition
    * @param key       the data key
    * @param timeFrom  the min timestamp (inclusive)
    * @param timeTo    the max timestamp (exclusive)
-   * @return the value previously set
+   * @return the windows previously stored
    */
   @Override
   public KeyValueIterator<Stamped<Bytes>, byte[]> fetch(
@@ -366,8 +442,8 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
   }
 
   /**
-   * Retrieves the value of the given {@code partitionKey} and {@code key}
-   * from {@code table}.
+   * Retrieves the range of window of the given {@code partitionKey} and {@code key} with a
+   * start time between {@code timeFrom} and {@code timeTo} from {@code table}.
    *
    * @param tableName the table to retrieve from
    * @param partition the partition
@@ -400,7 +476,8 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
   }
 
   /**
-   * Retrieves the value of the given {@code partitionKey} and {@code key}
+   * Retrieves the range of windows of the given {@code partitionKey} for all keys between
+   * {@code fromKey} and {@code toKey} with a start time between {@code timeFrom} and {@code timeTo}
    * from {@code table}.
    *
    * @param tableName the table to retrieve from
@@ -435,7 +512,8 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
   }
 
   /**
-   * Retrieves the value of the given {@code partitionKey} and {@code key}
+   * Retrieves the range of windows of the given {@code partitionKey} for all keys between
+   * {@code fromKey} and {@code toKey} with a start time between {@code timeFrom} and {@code timeTo}
    * from {@code table}.
    *
    * @param tableName the table to retrieve from
@@ -471,7 +549,7 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
 
 
   /**
-   * Retrieves the value of the given {@code partitionKey} and {@code key}
+   * Retrieves the windows of the given {@code partitionKey} across all keys and times
    * from {@code table}.
    *
    * @param tableName the table to retrieve from
@@ -502,7 +580,7 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
   }
 
   /**
-   * Retrieves the value of the given {@code partitionKey} and {@code key}
+   * Retrieves the windows of the given {@code partitionKey} across all keys and times
    * from {@code table}.
    *
    * @param tableName the table to retrieve from

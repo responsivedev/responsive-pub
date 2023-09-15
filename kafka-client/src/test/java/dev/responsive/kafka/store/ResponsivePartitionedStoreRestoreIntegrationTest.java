@@ -16,6 +16,7 @@
 
 package dev.responsive.kafka.store;
 
+import static dev.responsive.utils.IntegrationTestUtils.getCassandraValidName;
 import static dev.responsive.utils.IntegrationTestUtils.pipeInput;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
@@ -50,7 +51,6 @@ import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.cql.BatchStatement;
 import com.datastax.oss.driver.api.core.cql.Statement;
 import dev.responsive.db.CassandraClient;
-import dev.responsive.db.CassandraKeyValueSchema;
 import dev.responsive.db.RemoteKeyValueSchema;
 import dev.responsive.kafka.api.CassandraClientFactory;
 import dev.responsive.kafka.api.DefaultCassandraClientFactory;
@@ -58,6 +58,7 @@ import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.ResponsiveKeyValueParams;
 import dev.responsive.kafka.api.ResponsiveStores;
 import dev.responsive.kafka.config.ResponsiveConfig;
+import dev.responsive.kafka.store.SchemaTypes.KVSchema;
 import dev.responsive.utils.IntegrationTestUtils;
 import dev.responsive.utils.ResponsiveConfigParam;
 import dev.responsive.utils.ResponsiveExtension;
@@ -127,10 +128,7 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
       final Admin admin,
       @ResponsiveConfigParam final Map<String, Object> responsiveProps
   ) throws InterruptedException, ExecutionException {
-    // add displayName to name to account for parameterized tests
-    name = info.getTestMethod().orElseThrow().getName()
-        + info.getDisplayName().substring("[X] ".length()).toLowerCase(Locale.ROOT)
-        .replace("_", ""); // keep valid cassandra chars to keep testing code easier
+    this.name = getCassandraValidName(info);
     this.responsiveProps.putAll(responsiveProps);
 
     this.admin = admin;
@@ -153,8 +151,8 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
   }
 
   @ParameterizedTest
-  @EnumSource(SchemaType.class)
-  public void shouldFlushStoresBeforeClose(final SchemaType type) throws Exception {
+  @EnumSource(KVSchema.class)
+  public void shouldFlushStoresBeforeClose(final KVSchema type) throws Exception {
     final Map<String, Object> properties = getMutableProperties();
     final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties);
     final KafkaClientSupplier defaultClientSupplier = new DefaultKafkaClientSupplier();
@@ -170,13 +168,13 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
       waitTillFullyConsumed(input, Duration.ofSeconds(120));
 
       // Make sure changelog is even w/ cassandra
-      final ResponsiveConfig config = new ResponsiveConfig(properties);
+      final ResponsiveConfig config = ResponsiveConfig.responsiveConfig(properties);
       final CassandraClient cassandraClient = defaultFactory.createCassandraClient(
           defaultFactory.createCqlSession(config),
           config
       );
-      final RemoteKeyValueSchema statements = cassandraClient.kvSchema(type);
-      statements.prepare(aggName());
+      final RemoteKeyValueSchema statements =
+          cassandraClient.prepareKVTableSchema(params(type, aggName()));
       final long cassandraOffset = statements.metadata(aggName(), 0).offset;
       assertThat(cassandraOffset, greaterThan(0L));
       final TopicPartition changelog
@@ -189,8 +187,8 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
   }
 
   @ParameterizedTest
-  @EnumSource(SchemaType.class)
-  public void shouldRestoreUnflushedChangelog(final SchemaType type) throws Exception {
+  @EnumSource(KVSchema.class)
+  public void shouldRestoreUnflushedChangelog(final KVSchema type) throws Exception {
     final Map<String, Object> properties = getMutableProperties();
     final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties);
     final KafkaClientSupplier defaultClientSupplier = new DefaultKafkaClientSupplier();
@@ -229,12 +227,13 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
     }
 
     // Make sure changelog is ahead of cassandra
-    final ResponsiveConfig config = new ResponsiveConfig(properties);
+    final ResponsiveConfig config = ResponsiveConfig.responsiveConfig(properties);
     final CassandraClient cassandraClient = defaultFactory.createCassandraClient(
         defaultFactory.createCqlSession(config),
         config);
-    final RemoteKeyValueSchema statements = cassandraClient.kvSchema(type);
-    statements.prepare(aggName());
+    final RemoteKeyValueSchema statements =
+        cassandraClient.prepareKVTableSchema(params(type, aggName()));
+
     final long cassandraOffset = statements.metadata(aggName(), 0).offset;
     assertThat(cassandraOffset, greaterThan(0L));
     final TopicPartition changelog = new TopicPartition(name + "-" + aggName() + "-changelog", 0);
@@ -307,7 +306,7 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
       final Map<String, Object> originals,
       final KafkaClientSupplier clientSupplier,
       final CassandraClientFactory cassandraClientFactory,
-      SchemaType type) {
+      final KVSchema type) {
     final Map<String, Object> properties = new HashMap<>(originals);
 
     final StreamsBuilder builder = new StreamsBuilder();
@@ -318,7 +317,7 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
         inputTblTopic(),
         Materialized.as(
             ResponsiveStores.keyValueStore(
-                type == SchemaType.FACT
+                type == KVSchema.FACT
                     ? ResponsiveKeyValueParams.fact(inputTableName)
                     : ResponsiveKeyValueParams.keyValue(inputTableName)
             )
@@ -331,7 +330,7 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
             (k, v, va) -> v + va,
             (Materialized) Materialized.as(
                     ResponsiveStores.keyValueStore(
-                            type == SchemaType.FACT
+                            type == KVSchema.FACT
                                 ? ResponsiveKeyValueParams.fact(aggName())
                                 : ResponsiveKeyValueParams.keyValue(aggName())
                     )
@@ -403,7 +402,7 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
 
     @Override
     public CassandraClient createCassandraClient(
-        CqlSession session,
+        final CqlSession session,
         final ResponsiveConfig responsiveConfigs
     ) {
       return wrappedFactory.createCassandraClient(session, responsiveConfigs);
@@ -478,6 +477,14 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
     properties.put(ResponsiveConfig.STORE_FLUSH_RECORDS_TRIGGER_CONFIG, 0);
 
     return properties;
+  }
+
+  private ResponsiveKeyValueParams params(final KVSchema type, final String name) {
+    switch (type) {
+      case KEY_VALUE:  return ResponsiveKeyValueParams.keyValue(name);
+      case FACT:       return ResponsiveKeyValueParams.fact(name);
+      default:         throw new IllegalArgumentException();
+    }
   }
 
   private long endOffset(final TopicPartition topic)

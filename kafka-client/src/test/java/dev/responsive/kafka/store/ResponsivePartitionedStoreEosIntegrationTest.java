@@ -16,6 +16,8 @@
 
 package dev.responsive.kafka.store;
 
+import static dev.responsive.utils.IntegrationTestUtils.createTopicsAndWait;
+import static dev.responsive.utils.IntegrationTestUtils.getCassandraValidName;
 import static dev.responsive.utils.IntegrationTestUtils.pipeInput;
 import static dev.responsive.utils.IntegrationTestUtils.readOutput;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
@@ -41,6 +43,7 @@ import static org.hamcrest.Matchers.lessThan;
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.ResponsiveKeyValueParams;
 import dev.responsive.kafka.api.ResponsiveStores;
+import dev.responsive.kafka.store.SchemaTypes.KVSchema;
 import dev.responsive.utils.IntegrationTestUtils;
 import dev.responsive.utils.RemoteMonitor;
 import dev.responsive.utils.ResponsiveConfigParam;
@@ -48,9 +51,7 @@ import dev.responsive.utils.ResponsiveExtension;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -58,7 +59,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.common.config.TopicConfig;
@@ -107,19 +107,13 @@ public class ResponsivePartitionedStoreEosIntegrationTest {
       @ResponsiveConfigParam final Map<String, Object> responsiveProps
   ) {
     // add displayName to name to account for parameterized tests
-    name = info.getTestMethod().orElseThrow().getName()
-        + info.getDisplayName().substring("[X] ".length()).toLowerCase(Locale.ROOT);
+    name = getCassandraValidName(info);
     executor = new ScheduledThreadPoolExecutor(2);
 
     this.responsiveProps.putAll(responsiveProps);
 
     this.admin = admin;
-    admin.createTopics(
-        List.of(
-            new NewTopic(inputTopic(), Optional.of(2), Optional.empty()),
-            new NewTopic(outputTopic(), Optional.of(1), Optional.empty())
-        )
-    );
+    createTopicsAndWait(admin, Map.of(inputTopic(), 2, outputTopic(), 1));
   }
 
   @AfterEach
@@ -136,8 +130,8 @@ public class ResponsivePartitionedStoreEosIntegrationTest {
   }
 
   @ParameterizedTest
-  @EnumSource(SchemaType.class)
-  public void shouldMaintainStateOnEosFailOverAndFenceOldClient(final SchemaType type)
+  @EnumSource(KVSchema.class)
+  public void shouldMaintainStateOnEosFailOverAndFenceOldClient(final KVSchema type)
       throws Exception {
     // Given:
     final Map<String, Object> properties = getMutableProperties();
@@ -251,10 +245,10 @@ public class ResponsivePartitionedStoreEosIntegrationTest {
     return properties;
   }
 
-  private StoreBuilder<KeyValueStore<Long, Long>> storeSupplier(SchemaType type) {
+  private StoreBuilder<KeyValueStore<Long, Long>> storeSupplier(KVSchema type) {
     return ResponsiveStores.keyValueStoreBuilder(
         ResponsiveStores.keyValueStore(
-            type == SchemaType.FACT
+            type == KVSchema.FACT
                 ? ResponsiveKeyValueParams.fact(name)
                 : ResponsiveKeyValueParams.keyValue(name)
             ),
@@ -268,7 +262,7 @@ public class ResponsivePartitionedStoreEosIntegrationTest {
       final Map<String, Object> originals,
       final String instance,
       final SharedState state,
-      final SchemaType type
+      final KVSchema type
   ) {
     final Map<String, Object> properties = new HashMap<>(originals);
     properties.put(APPLICATION_SERVER_CONFIG, instance + ":1024");

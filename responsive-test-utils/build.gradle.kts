@@ -21,11 +21,7 @@ plugins {
 version = project(":kafka-client").version
 
 dependencies {
-    // TODO: we should make sure to fail the release of kafka-client
-    // if we don't bump this up - or have some other mechanism to
-    // ensure they are released in tandem - otherwise it is possible
-    // that the latest release of kafka-client will be untestable
-    implementation("dev.responsive:kafka-client:0.7.1")
+    implementation(project(":kafka-client"))
 
     implementation(libs.bundles.scylla)
     implementation(libs.kafka.streams.test.utils)
