@@ -173,7 +173,8 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
       final ResponsiveConfig config = new ResponsiveConfig(properties);
       final CassandraClient cassandraClient = defaultFactory.createCassandraClient(
           defaultFactory.createCqlSession(config),
-          config
+          config,
+          admin
       );
       final RemoteKeyValueSchema statements = cassandraClient.kvSchema(type);
       statements.prepare(aggName());
@@ -232,7 +233,9 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
     final ResponsiveConfig config = new ResponsiveConfig(properties);
     final CassandraClient cassandraClient = defaultFactory.createCassandraClient(
         defaultFactory.createCqlSession(config),
-        config);
+        config,
+        admin
+    );
     final RemoteKeyValueSchema statements = cassandraClient.kvSchema(type);
     statements.prepare(aggName());
     final long cassandraOffset = statements.metadata(aggName(), 0).offset;
@@ -403,10 +406,11 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
 
     @Override
     public CassandraClient createCassandraClient(
-        CqlSession session,
-        final ResponsiveConfig responsiveConfigs
+        final CqlSession session,
+        final ResponsiveConfig responsiveConfigs,
+        final Admin admin
     ) {
-      return wrappedFactory.createCassandraClient(session, responsiveConfigs);
+      return wrappedFactory.createCassandraClient(session, responsiveConfigs, admin);
     }
   }
 

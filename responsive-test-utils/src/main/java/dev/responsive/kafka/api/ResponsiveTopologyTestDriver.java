@@ -142,6 +142,7 @@ public class ResponsiveTopologyTestDriver extends TopologyTestDriver {
     props.putAll(userProps);
 
     props.put(ResponsiveConfig.TENANT_ID_CONFIG, RESPONSIVE_TTD_ID);
+    props.put(ResponsiveConfig.STORAGE_DESIRED_NUM_PARTITION_CONFIG, 1);
     props.put(ResponsiveConfig.STORE_FLUSH_INTERVAL_TRIGGER_MS_CONFIG, 0);
 
     props.putIfAbsent(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);

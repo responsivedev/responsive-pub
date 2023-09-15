@@ -124,7 +124,7 @@ public class SubPartitionIntegrationTest {
         .withLocalDatacenter(cassandra.getLocalDatacenter())
         .withKeyspace("responsive_clients") // NOTE: this keyspace is expected to exist
         .build();
-    client = new CassandraClient(session, new ResponsiveConfig(responsiveProps));
+    client = new CassandraClient(session, new ResponsiveConfig(responsiveProps), admin);
   }
 
   @AfterEach
@@ -166,7 +166,7 @@ public class SubPartitionIntegrationTest {
       final RemoteKeyValueSchema schema = new CassandraKeyValueSchema(client);
       schema.prepare(cassandraName);
 
-      assertThat(client.numPartitions(cassandraName), is(OptionalInt.of(32)));
+      assertThat(client.numSubPartitions(cassandraName), is(OptionalInt.of(32)));
       assertThat(client.count(cassandraName, 0), is(2L));
       assertThat(client.count(cassandraName, 16), is(2L));
 

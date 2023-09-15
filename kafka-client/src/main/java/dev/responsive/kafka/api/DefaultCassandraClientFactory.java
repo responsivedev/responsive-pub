@@ -13,6 +13,7 @@ import dev.responsive.db.CassandraClient;
 import dev.responsive.kafka.config.ResponsiveConfig;
 import dev.responsive.utils.SessionUtil;
 import java.net.InetSocketAddress;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.config.types.Password;
 
 public class DefaultCassandraClientFactory implements CassandraClientFactory {
@@ -41,8 +42,9 @@ public class DefaultCassandraClientFactory implements CassandraClientFactory {
   @Override
   public CassandraClient createCassandraClient(
       final CqlSession session,
-      final ResponsiveConfig responsiveConfigs
+      final ResponsiveConfig responsiveConfigs,
+      final Admin admin
   ) {
-    return new CassandraClient(session, responsiveConfigs);
+    return new CassandraClient(session, responsiveConfigs, admin);
   }
 }

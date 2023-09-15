@@ -151,7 +151,10 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
           partition
       );
       partitioner = config.getSubPartitioner(
-          sharedClients.admin, name, topicPartition.topic());
+          client,
+          name,
+          topicPartition.topic()
+      );
 
       buffer = CommitBuffer.from(
           sharedClients,

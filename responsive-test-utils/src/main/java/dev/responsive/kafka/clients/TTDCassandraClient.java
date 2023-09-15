@@ -46,7 +46,7 @@ public class TTDCassandraClient extends CassandraClient {
   private final TTDWindowedSchema windowedSchema;
 
   public TTDCassandraClient(final TTDMockAdmin admin, final Time time) {
-    super(new ResponsiveConfig(admin.props()));
+    super(new ResponsiveConfig(admin.props()), admin);
     this.time = time;
     this.admin = admin;
 
@@ -112,8 +112,13 @@ public class TTDCassandraClient extends CassandraClient {
   }
 
   @Override
-  public OptionalInt numPartitions(final String tableName) {
+  public OptionalInt numSubPartitions(final String tableName) {
     return OptionalInt.of(1);
+  }
+
+  @Override
+  public int numKafkaPartitions(final String changelogTopic) {
+    return 1;
   }
 
   @Override

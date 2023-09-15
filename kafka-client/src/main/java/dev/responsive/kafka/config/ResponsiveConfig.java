@@ -16,6 +16,7 @@
 
 package dev.responsive.kafka.config;
 
+import dev.responsive.db.CassandraClient;
 import dev.responsive.db.partitioning.Hasher;
 import dev.responsive.db.partitioning.Murmur3Hasher;
 import dev.responsive.db.partitioning.SubPartitioner;
@@ -260,27 +261,16 @@ public class ResponsiveConfig extends AbstractConfig {
   }
 
   public SubPartitioner getSubPartitioner(
-      final Admin admin,
+      final CassandraClient client,
       final TableName name,
       final String changelogTopicName
   ) {
-    // TODO(agavra): write the actual remote partition count into cassandra
-    final OptionalInt actualRemoteCount = OptionalInt.empty();
-    final int kafkaPartitions;
-    try {
-      kafkaPartitions = admin.describeTopics(List.of(changelogTopicName))
-          .allTopicNames()
-          .get()
-          .get(changelogTopicName)
-          .partitions()
-          .size();
-    } catch (InterruptedException | ExecutionException e) {
-      throw new RuntimeException(e);
-    }
+    final OptionalInt remoteSubPartitionCount = client.numSubPartitions(name.cassandraName());
+    final int kafkaPartitionCount = client.numKafkaPartitions(changelogTopicName);
 
     return SubPartitioner.create(
-        actualRemoteCount,
-        kafkaPartitions,
+        remoteSubPartitionCount,
+        kafkaPartitionCount,
         getInt(STORAGE_DESIRED_NUM_PARTITION_CONFIG),
         name,
         changelogTopicName,
