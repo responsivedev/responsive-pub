@@ -55,8 +55,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     return create(
         topology,
         configs,
-        new DefaultKafkaClientSupplier(),
-        new DefaultCassandraClientFactory()
+        new DefaultKafkaClientSupplier()
     );
   }
 
@@ -65,7 +64,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       final Map<?, ?> configs,
       final KafkaClientSupplier clientSupplier
   ) {
-    return create(
+    return connect(
         topology,
         configs,
         clientSupplier,
@@ -73,26 +72,12 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     );
   }
 
-  public static ResponsiveKafkaStreams create(
+  @SuppressWarnings("unchecked")
+  static ResponsiveKafkaStreams connect(
       final Topology topology,
       final Map<?, ?> configs,
       final KafkaClientSupplier clientSupplier,
       final CassandraClientFactory cassandraClientFactory
-  ) {
-    return connect(
-        topology,
-        configs,
-        cassandraClientFactory,
-        clientSupplier
-    );
-  }
-
-  @SuppressWarnings("unchecked")
-  private static ResponsiveKafkaStreams connect(
-      final Topology topology,
-      final Map<?, ?> configs,
-      final CassandraClientFactory cassandraClientFactory,
-      final KafkaClientSupplier clientSupplier
   ) {
     for (Map.Entry<?, ?> entry : configs.entrySet()) {
       if (!(entry.getKey() instanceof String)) {
