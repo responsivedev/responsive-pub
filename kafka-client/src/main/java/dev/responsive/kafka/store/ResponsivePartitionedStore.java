@@ -122,6 +122,7 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
           partition,
           schema,
           new BytesKeySpec(),
+          params.truncateChangelog(),
           partitioner,
           config
       );

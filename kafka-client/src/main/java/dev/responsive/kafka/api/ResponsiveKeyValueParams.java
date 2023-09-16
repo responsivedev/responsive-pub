@@ -28,7 +28,8 @@ public final class ResponsiveKeyValueParams {
   private final KVSchema schema;
   private final boolean timestamped;
 
-  @Nullable private Duration timeToLive;
+  @Nullable private Duration timeToLive = null;
+  private boolean truncateChangelog = false;
 
   private ResponsiveKeyValueParams(
       final String name,
@@ -61,6 +62,11 @@ public final class ResponsiveKeyValueParams {
     return this;
   }
 
+  public ResponsiveKeyValueParams withTruncateChangelog() {
+    this.truncateChangelog = true;
+    return this;
+  }
+
   public TableName name() {
     return name;
   }
@@ -75,5 +81,9 @@ public final class ResponsiveKeyValueParams {
 
   public Optional<Duration> timeToLive() {
     return Optional.ofNullable(timeToLive);
+  }
+
+  public boolean truncateChangelog() {
+    return truncateChangelog;
   }
 }

@@ -32,21 +32,21 @@ public final class ResponsiveWindowParams {
   private final long gracePeriodMs;
   private final boolean retainDuplicates;
 
-  private int numSegments;
+  private int numSegments = DEFAULT_NUM_SEGMENTS;
+  private boolean truncateChangelog = false;
+
 
   private ResponsiveWindowParams(
       final String name,
       final WindowSchema schemaType,
       final Duration windowSize,
       final Duration gracePeriod,
-      final int numSegments,
       final boolean retainDuplicates
   ) {
     this.name = new TableName(name);
     this.schemaType = schemaType;
     this.windowSizeMs = durationToMillis(windowSize, "windowSize");
     this.gracePeriodMs = durationToMillis(gracePeriod, "gracePeriod");
-    this.numSegments = numSegments;
     this.retainDuplicates = retainDuplicates;
   }
 
@@ -56,7 +56,7 @@ public final class ResponsiveWindowParams {
       final Duration gracePeriod
   ) {
     return new ResponsiveWindowParams(
-        name, WindowSchema.WINDOW, windowSize, gracePeriod, DEFAULT_NUM_SEGMENTS, false
+        name, WindowSchema.WINDOW, windowSize, gracePeriod, false
     );
   }
 
@@ -66,7 +66,7 @@ public final class ResponsiveWindowParams {
       final Duration gracePeriod
   ) {
     final ResponsiveWindowParams ret = new ResponsiveWindowParams(
-            name, WindowSchema.STREAM, windowSize, gracePeriod, DEFAULT_NUM_SEGMENTS, true
+            name, WindowSchema.STREAM, windowSize, gracePeriod, true
     );
 
     throw new UnsupportedOperationException("Window stores for stream-stream joins have not yet "
@@ -75,6 +75,11 @@ public final class ResponsiveWindowParams {
 
   public ResponsiveWindowParams withNumSegments(final int numSegments) {
     this.numSegments = numSegments;
+    return this;
+  }
+
+  public ResponsiveWindowParams withTruncateChangelog() {
+    this.truncateChangelog = true;
     return this;
   }
 
@@ -94,12 +99,15 @@ public final class ResponsiveWindowParams {
     return windowSizeMs + gracePeriodMs;
   }
 
-  public int numSegments() {
-    return numSegments;
-  }
-
   public boolean retainDuplicates() {
     return retainDuplicates;
   }
 
+  public int numSegments() {
+    return numSegments;
+  }
+
+  public boolean truncateChangelog() {
+    return truncateChangelog;
+  }
 }

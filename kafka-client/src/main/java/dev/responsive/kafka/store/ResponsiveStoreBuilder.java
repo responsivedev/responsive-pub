@@ -49,7 +49,7 @@ public class ResponsiveStoreBuilder<T extends StateStore> implements StoreBuilde
 
   @Override
   public StoreBuilder<T> withLoggingEnabled(final Map<String, String> config) {
-    validateLogConfigs(config, truncateChangelog);
+    validateLogConfigs(config, truncateChangelog, name());
 
     delegate.withLoggingEnabled(config);
     return this;
@@ -58,7 +58,9 @@ public class ResponsiveStoreBuilder<T extends StateStore> implements StoreBuilde
   @Override
   public StoreBuilder<T> withLoggingDisabled() {
     delegate.withLoggingDisabled();
-    return this;
+    throw new UnsupportedOperationException(
+        "Responsive stores are currently incompatible with disabling the changelog. "
+            + "Please reach out to us to request this feature.");
   }
 
   @Override
