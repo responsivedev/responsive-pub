@@ -183,7 +183,7 @@ public class ResponsiveWindowIntegrationTest {
     properties.put(APPLICATION_SERVER_CONFIG, "host1:1024");
     try (
         final ResponsiveKafkaStreams kafkaStreams =
-            ResponsiveKafkaStreams.create(builder.build(), properties);
+            new ResponsiveKafkaStreams(builder.build(), properties);
         final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties)
     ) {
       kafkaStreams.start();
@@ -202,7 +202,7 @@ public class ResponsiveWindowIntegrationTest {
     // the old Kafka Streams and creating a new one
     properties.put(APPLICATION_SERVER_CONFIG, "host2:1024");
     try (
-        final ResponsiveKafkaStreams kafkaStreams = ResponsiveKafkaStreams.create(
+        final ResponsiveKafkaStreams kafkaStreams = new ResponsiveKafkaStreams(
             builder.build(),
             properties
         );
@@ -282,7 +282,7 @@ public class ResponsiveWindowIntegrationTest {
     final AtomicLong timestamp = new AtomicLong(baseTs);
     properties.put(APPLICATION_SERVER_CONFIG, "host1:1024");
     try (
-        final ResponsiveKafkaStreams kafkaStreams = ResponsiveKafkaStreams.create(
+        final ResponsiveKafkaStreams kafkaStreams = new ResponsiveKafkaStreams(
             builder.build(), properties
         );
         final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties)
@@ -302,7 +302,7 @@ public class ResponsiveWindowIntegrationTest {
     properties.put(APPLICATION_SERVER_CONFIG, "host2:1024");
     try (
         final ResponsiveKafkaStreams kafkaStreams =
-            ResponsiveKafkaStreams.create(builder.build(), properties);
+            new ResponsiveKafkaStreams(builder.build(), properties);
         final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties)
     ) {
       kafkaStreams.start();

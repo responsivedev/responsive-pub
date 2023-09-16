@@ -18,7 +18,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
-import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
@@ -52,84 +51,113 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       final Topology topology,
       final Map<?, ?> configs
   ) {
-    return create(
-        topology,
-        configs,
-        new DefaultKafkaClientSupplier()
-    );
+    return new ResponsiveKafkaStreams(topology, configs);
   }
 
-  public static ResponsiveKafkaStreams create(
+  public ResponsiveKafkaStreams(
+      final Topology topology,
+      final Map<?, ?> configs
+  ) {
+    this(topology, configs, new DefaultKafkaClientSupplier());
+  }
+
+  public ResponsiveKafkaStreams(
       final Topology topology,
       final Map<?, ?> configs,
       final KafkaClientSupplier clientSupplier
   ) {
-    return connect(
+    this(
         topology,
-        configs,
+        ResponsiveConfig.loggedConfig(configs),
+        quietReadOnlystreamsConfig(configs),
         clientSupplier,
         new DefaultCassandraClientFactory()
     );
   }
 
-  @SuppressWarnings("unchecked")
-  static ResponsiveKafkaStreams connect(
+  ResponsiveKafkaStreams(
       final Topology topology,
-      final Map<?, ?> configs,
+      final ResponsiveConfig responsiveConfig,
+      final StreamsConfig baseStreamsConfig,
       final KafkaClientSupplier clientSupplier,
-      final CassandraClientFactory cassandraClientFactory
+      final CassandraClientFactory clientFactory
   ) {
-    for (Map.Entry<?, ?> entry : configs.entrySet()) {
-      if (!(entry.getKey() instanceof String)) {
-        throw new ConfigException(
-            entry.getKey().toString(), entry.getValue(), "Key must be a string.");
-      }
-    }
-    final ResponsiveConfig responsiveConfigs = ResponsiveConfig.loggedConfig(configs);
-    final StreamsConfig streamsConfig = quietReadOnlystreamsConfig(configs);
-    final Metrics metrics = createMetrics(streamsConfig);
-
-    final ResponsiveStoreRegistry storeRegistry = new ResponsiveStoreRegistry();
-    final ResponsiveRestoreListener restoreListener = new ResponsiveRestoreListener(metrics);
-
-    final CqlSession session = cassandraClientFactory.createCqlSession(responsiveConfigs);
-    final ResponsiveKafkaClientSupplier responsiveClientSupplier =
-        new ResponsiveKafkaClientSupplier(
-            clientSupplier,
-            streamsConfig,
-            storeRegistry,
-            metrics
-        );
-
-    final Admin admin = responsiveClientSupplier.getAdmin((Map<String, Object>) configs);
-    final CassandraClient cassandraClient =
-        cassandraClientFactory.createCassandraClient(session, responsiveConfigs);
-
-    return new ResponsiveKafkaStreams(
+    this(
         topology,
-        verifiedStreamsConfigs(
-            configs,
-            cassandraClient,
-            admin,
-            storeRegistry,
-            topology.describe()
-        ),
-        responsiveClientSupplier,
-        new SharedClients(cassandraClient, admin),
-        restoreListener
+        responsiveConfig,
+        baseStreamsConfig,
+        clientSupplier,
+        new ResponsiveStoreRegistry(),
+        createMetrics(baseStreamsConfig),
+        clientFactory,
+        clientFactory.createCqlSession(responsiveConfig)
     );
   }
 
   private ResponsiveKafkaStreams(
       final Topology topology,
-      final StreamsConfig streamsConfigs,
-      final ResponsiveKafkaClientSupplier clientSupplier,
-      final SharedClients sharedClients,
-      final ResponsiveRestoreListener restoreListener
+      final ResponsiveConfig responsiveConfig,
+      final StreamsConfig baseStreamsConfig,
+      final KafkaClientSupplier clientSupplier,
+      final ResponsiveStoreRegistry storeRegistry,
+      final Metrics metrics,
+      final CassandraClientFactory clientFactory,
+      final CqlSession session
   ) {
-    super(topology, streamsConfigs, clientSupplier);
+    this(
+        topology,
+        responsiveConfig,
+        new ResponsiveKafkaClientSupplier(
+            clientSupplier,
+            baseStreamsConfig,
+            storeRegistry,
+            metrics),
+        storeRegistry,
+        metrics,
+        clientFactory.createCassandraClient(session, responsiveConfig)
+    );
+  }
+
+  private ResponsiveKafkaStreams(
+      final Topology topology,
+      final ResponsiveConfig responsiveConfig,
+      final ResponsiveKafkaClientSupplier responsiveKafkaClientSupplier,
+      final ResponsiveStoreRegistry storeRegistry,
+      final Metrics metrics,
+      final CassandraClient cassandraClient
+  ) {
+    this(
+        topology,
+        responsiveConfig,
+        responsiveKafkaClientSupplier,
+        storeRegistry,
+        metrics,
+        new SharedClients(
+            cassandraClient,
+            responsiveKafkaClientSupplier.getAdmin(responsiveConfig.originals())
+        )
+    );
+  }
+
+  private ResponsiveKafkaStreams(
+      final Topology topology,
+      final ResponsiveConfig responsiveConfig,
+      final ResponsiveKafkaClientSupplier clientSupplier,
+      final ResponsiveStoreRegistry storeRegistry,
+      final Metrics metrics,
+      final SharedClients sharedClients
+  ) {
+    super(
+        topology,
+        verifiedStreamsConfigs(
+            responsiveConfig.originals(),
+            sharedClients,
+            storeRegistry,
+            topology.describe()),
+        clientSupplier
+    );
     this.sharedClients = sharedClients;
-    this.restoreListener = restoreListener;
+    this.restoreListener = new ResponsiveRestoreListener(metrics);
 
     super.setGlobalStateRestoreListener(restoreListener);
   }
@@ -163,16 +191,15 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
   //  pure Streams properties
   private static StreamsConfig verifiedStreamsConfigs(
       final Map<?, ?> configs,
-      final CassandraClient cassandraClient,
-      final Admin admin,
+      final SharedClients sharedClients,
       final ResponsiveStoreRegistry storeRegistry,
       final TopologyDescription topologyDescription
   ) {
     final Properties propsWithOverrides = new Properties();
     propsWithOverrides.putAll(configs);
     propsWithOverrides.putAll(new InternalConfigs.Builder()
-            .withCassandraClient(cassandraClient)
-            .withKafkaAdmin(admin)
+            .withCassandraClient(sharedClients.cassandraClient)
+            .withKafkaAdmin(sharedClients.admin)
             .withStoreRegistry(storeRegistry)
             .withTopologyDescription(topologyDescription)
             .build());

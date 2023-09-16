@@ -92,6 +92,7 @@ import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes.LongSerde;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
@@ -340,9 +341,10 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
 
     final Properties builderProperties = new Properties();
     builderProperties.putAll(properties);
-    return ResponsiveKafkaStreams.connect(
+    return new ResponsiveKafkaStreams(
         builder.build(builderProperties),
-        properties,
+        ResponsiveConfig.loggedConfig(properties),
+        new StreamsConfig(properties),
         clientSupplier,
         cassandraClientFactory
     );

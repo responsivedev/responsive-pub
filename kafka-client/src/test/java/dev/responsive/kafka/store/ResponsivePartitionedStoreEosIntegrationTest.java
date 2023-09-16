@@ -275,7 +275,7 @@ public class ResponsivePartitionedStoreEosIntegrationTest {
         .process(() -> new TestProcessor(instance, state, name), name)
         .to(outputTopic());
 
-    return ResponsiveKafkaStreams.create(builder.build(), properties);
+    return new ResponsiveKafkaStreams(builder.build(), properties);
   }
 
   private static class SharedState {

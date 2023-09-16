@@ -152,7 +152,7 @@ public class ResponsiveGlobalStoreIntegrationTest {
     final KStream<Long, Long> stream = builder.stream(INPUT_TOPIC);
     stream.join(globalTable, (k, v) -> k, Long::sum).to(OUTPUT_TOPIC);
 
-    return ResponsiveKafkaStreams.create(builder.build(), properties);
+    return new ResponsiveKafkaStreams(builder.build(), properties);
   }
 
 }
