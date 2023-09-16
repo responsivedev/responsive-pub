@@ -42,15 +42,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
 
   private StateListener stateListener;
   private final ResponsiveRestoreListener restoreListener;
-
   private final SharedClients sharedClients;
-
-  public static ResponsiveKafkaStreams create(
-      final Topology topology,
-      final Map<?, ?> configs
-  ) {
-    return new ResponsiveKafkaStreams(topology, configs);
-  }
 
   /**
    * Create a {@code ResponsiveKafkaStreams} instance.
