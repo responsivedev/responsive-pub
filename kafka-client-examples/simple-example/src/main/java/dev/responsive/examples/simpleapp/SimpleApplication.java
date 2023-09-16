@@ -101,7 +101,7 @@ public class SimpleApplication {
     });
     final KTable<byte[], Long> counts = stream.groupByKey()
         .count(ResponsiveStores.materialized(
-            ResponsiveKeyValueParams.timestamped(cfg.getString(Config.NAME))));
+            ResponsiveKeyValueParams.keyValue(cfg.getString(Config.NAME))));
     result.to(source + "-out", Produced.with(Serdes.ByteArray(), Serdes.ByteArray()));
     counts.toStream().to(source + "-counts", Produced.with(Serdes.ByteArray(), Serdes.Long()));
     final Properties properties = new Properties();
