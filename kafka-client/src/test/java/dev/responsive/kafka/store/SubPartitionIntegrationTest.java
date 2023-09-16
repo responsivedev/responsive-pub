@@ -139,7 +139,7 @@ public class SubPartitionIntegrationTest {
     final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties);
 
     try (
-        final var streams = ResponsiveKafkaStreams.create(
+        final var streams = new ResponsiveKafkaStreams(
             simpleDslTopology(ResponsiveStores.materialized(
                 ResponsiveKeyValueParams.timestamped(storeName))), properties);
         final var serializer = new LongSerializer();
@@ -193,7 +193,7 @@ public class SubPartitionIntegrationTest {
     final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties);
 
     try (
-        final var streams = ResponsiveKafkaStreams.create(
+        final var streams = new ResponsiveKafkaStreams(
             simpleDslTopology(new ResponsiveMaterialized<>(
                 Materialized.as(ResponsiveStores.factStore(storeName)),
                 false

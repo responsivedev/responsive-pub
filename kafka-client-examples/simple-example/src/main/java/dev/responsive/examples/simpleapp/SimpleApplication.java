@@ -106,7 +106,7 @@ public class SimpleApplication {
     counts.toStream().to(source + "-counts", Produced.with(Serdes.ByteArray(), Serdes.Long()));
     final Properties properties = new Properties();
     properties.putAll(rawCfg);
-    return ResponsiveKafkaStreams.create(builder.build(properties), properties);
+    return new ResponsiveKafkaStreams(builder.build(properties), properties);
   }
 
   private void maybeCreateTopics() {

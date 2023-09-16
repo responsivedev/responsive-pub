@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package dev.responsive.kafka.store;
+package dev.responsive.kafka.api;
 
 import static dev.responsive.utils.IntegrationTestUtils.getCassandraValidName;
 import static dev.responsive.utils.IntegrationTestUtils.pipeInput;
@@ -52,11 +52,6 @@ import com.datastax.oss.driver.api.core.cql.BatchStatement;
 import com.datastax.oss.driver.api.core.cql.Statement;
 import dev.responsive.db.CassandraClient;
 import dev.responsive.db.RemoteKeyValueSchema;
-import dev.responsive.kafka.api.CassandraClientFactory;
-import dev.responsive.kafka.api.DefaultCassandraClientFactory;
-import dev.responsive.kafka.api.ResponsiveKafkaStreams;
-import dev.responsive.kafka.api.ResponsiveKeyValueParams;
-import dev.responsive.kafka.api.ResponsiveStores;
 import dev.responsive.kafka.config.ResponsiveConfig;
 import dev.responsive.kafka.store.SchemaTypes.KVSchema;
 import dev.responsive.utils.IntegrationTestUtils;
@@ -97,6 +92,7 @@ import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes.LongSerde;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
@@ -345,9 +341,10 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
 
     final Properties builderProperties = new Properties();
     builderProperties.putAll(properties);
-    return ResponsiveKafkaStreams.create(
+    return new ResponsiveKafkaStreams(
         builder.build(builderProperties),
-        properties,
+        ResponsiveConfig.loggedConfig(properties),
+        new StreamsConfig(properties),
         clientSupplier,
         cassandraClientFactory
     );
