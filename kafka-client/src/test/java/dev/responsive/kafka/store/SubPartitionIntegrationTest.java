@@ -141,7 +141,7 @@ public class SubPartitionIntegrationTest {
     try (
         final var streams = new ResponsiveKafkaStreams(
             simpleDslTopology(ResponsiveStores.materialized(
-                ResponsiveKeyValueParams.timestamped(storeName))), properties);
+                ResponsiveKeyValueParams.keyValue(storeName))), properties);
         final var serializer = new LongSerializer();
         final var deserializer = new LongDeserializer();
     ) {

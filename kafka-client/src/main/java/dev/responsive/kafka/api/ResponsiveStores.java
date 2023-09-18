@@ -45,9 +45,9 @@ public final class ResponsiveStores {
 
   /**
    * See for example {@link Stores#inMemoryKeyValueStore(String)}. This method should be
-   * preferred over {@link #keyValueStore(String)} and {@link #timestampedKeyValueStore(String)}
-   * as it provides additional options such as TTL support and will always compile
-   * when new features are added to {@code ResponsiveKeyValueParams}.
+   * preferred over {@link #keyValueStore(String)} as it provides additional options such
+   * as TTL support and will always compile when new features are added to
+   * {@code ResponsiveKeyValueParams}.
    *
    * @param params parameters for creation of the key value store
    * @return a supplier for a key-value store with the given options
@@ -66,17 +66,6 @@ public final class ResponsiveStores {
    */
   public static KeyValueBytesStoreSupplier keyValueStore(final String name) {
     return keyValueStore(ResponsiveKeyValueParams.keyValue(name));
-  }
-
-  /**
-   * See for example {@link Stores#persistentTimestampedKeyValueStore(String)}
-   *
-   * @param name the store name
-   * @return a supplier for a timestamped key-value store with the given options
-   *         that uses Responsive's storage for its backend
-   */
-  public static KeyValueBytesStoreSupplier timestampedKeyValueStore(final String name) {
-    return keyValueStore(ResponsiveKeyValueParams.timestamped(name));
   }
 
   /**
@@ -106,21 +95,16 @@ public final class ResponsiveStores {
   }
 
   /**
-   * @param name the store name
-   * @return a supplier for a timestamped key-value store with the given options
-   *         that uses Responsive's storage for its backend
-   * @see #factStore(String) {@link #timestampedKeyValueStore(String)}
-   */
-  public static KeyValueBytesStoreSupplier timestampedFactStore(final String name) {
-    return keyValueStore(ResponsiveKeyValueParams.timestampedFact(name));
-  }
-
-  /**
    * Create a {@link StoreBuilder} that can be used to build a Responsive
-   * {@link KeyValueStore} and connect it via the Processor API. If using the DSL, use
-   * {@link #materialized(ResponsiveKeyValueParams)} instead.
+   * {@link KeyValueStore} and connect it via the Processor API. If configuring
+   * stateful DSL operators, use {@link #materialized(ResponsiveKeyValueParams)} instead.
    * <p>
    * See {@link Stores#keyValueStoreBuilder(KeyValueBytesStoreSupplier, Serde, Serde)}
+   * for more details.
+   * <p>
+   * Note: all of Responsive's key-value {@link KeyValueBytesStoreSupplier StoreSuppliers}
+   * are compatible with this builder.
+   * We recommend using {@link #keyValueStore(ResponsiveKeyValueParams)}.
    *
    * @param storeSupplier the key-value store supplier
    * @param keySerde the key serde. If null, the default.key.serde config will be used
@@ -141,12 +125,17 @@ public final class ResponsiveStores {
 
   /**
    * Create a {@link StoreBuilder} that can be used to build a Responsive
-   * {@link TimestampedKeyValueStore} and connect it via the Processor API. If using the DSL, use
-   * {@link #materialized} instead.
+   * {@link TimestampedKeyValueStore} and connect it via the Processor API. If configuring
+   * stateful DSL operators, use {@link #materialized(ResponsiveKeyValueParams)} instead.
    * <p>
    * See {@link Stores#timestampedKeyValueStoreBuilder(KeyValueBytesStoreSupplier, Serde, Serde)}
+   * for more details.
+   * <p>
+   * Note: all of Responsive's key-value {@link KeyValueBytesStoreSupplier StoreSuppliers}
+   * are compatible with this builder (specifically, they are all timestamp-enabled).
+   * We recommend using {@link #keyValueStore(ResponsiveKeyValueParams)}.
    *
-   * @param storeSupplier the timestamped key-value store supplier
+   * @param storeSupplier the key-value store supplier
    * @param keySerde the key serde. If null, the default.key.serde config will be used
    * @param valueSerde the value serde. If null, the default.value.serde config will be used
    * @return a store builder that can be used to build a key-value store with the given options

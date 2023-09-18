@@ -17,7 +17,6 @@
 package dev.responsive.kafka.api;
 
 import dev.responsive.kafka.store.ResponsiveStore;
-import dev.responsive.kafka.store.ResponsiveTimestampedStore;
 import java.util.Locale;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
@@ -38,11 +37,7 @@ public class ResponsiveKeyValueBytesStoreSupplier implements KeyValueBytesStoreS
 
   @Override
   public KeyValueStore<Bytes, byte[]> get() {
-    if (params.isTimestamped()) {
-      return new ResponsiveTimestampedStore(params);
-    } else {
-      return new ResponsiveStore(params);
-    }
+    return new ResponsiveStore(params);
   }
 
   @Override

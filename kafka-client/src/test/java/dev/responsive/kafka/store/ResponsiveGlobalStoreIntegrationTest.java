@@ -146,7 +146,7 @@ public class ResponsiveGlobalStoreIntegrationTest {
 
     final GlobalKTable<Long, Long> globalTable = builder.globalTable(
         GLOBAL_TOPIC,
-        ResponsiveStores.materialized(ResponsiveKeyValueParams.timestamped(STORE_NAME))
+        ResponsiveStores.materialized(ResponsiveKeyValueParams.keyValue(STORE_NAME))
     );
 
     final KStream<Long, Long> stream = builder.stream(INPUT_TOPIC);
