@@ -1,17 +1,15 @@
 package dev.responsive.kafka.api;
 
-import static dev.responsive.kafka.config.ResponsiveConfig.NUM_STANDBYS_OVERRIDE;
 import static dev.responsive.kafka.config.ResponsiveConfig.TASK_ASSIGNOR_CLASS_OVERRIDE;
-import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
 
 import com.datastax.oss.driver.api.core.CqlSession;
 import dev.responsive.db.CassandraClient;
 import dev.responsive.kafka.clients.ResponsiveKafkaClientSupplier;
 import dev.responsive.kafka.clients.SharedClients;
+import dev.responsive.kafka.clients.config.ResponsiveStreamsConfig;
 import dev.responsive.kafka.config.ResponsiveConfig;
 import dev.responsive.kafka.store.ResponsiveRestoreListener;
 import dev.responsive.kafka.store.ResponsiveStoreRegistry;
-import dev.responsive.utils.StoreUtil;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
@@ -31,9 +29,9 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyDescription;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.internals.ClientUtils;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -58,19 +56,73 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       final Topology topology,
       final Map<?, ?> configs
   ) {
-    this(topology, configs, new DefaultKafkaClientSupplier());
+    this(topology, configs, Time.SYSTEM);
   }
 
+  /**
+   * Create a {@code ResponsiveKafkaStreams} instance
+   * <p>
+   * Note: even if you never call {@link #start()} on a {@code ResponsiveKafkaStreams} instance,
+   * you still must {@link #close()} it to avoid resource leaks.
+   *
+   * @param topology       the topology specifying the computational logic
+   * @param configs        map with all {@link ResponsiveConfig} and {@link StreamsConfig} props
+   * @param clientSupplier the Kafka clients supplier which provides underlying admin, producer,
+   *                       and main/restore/global consumer clients
+   * @throws StreamsException if any fatal error occurs
+   */
   public ResponsiveKafkaStreams(
       final Topology topology,
       final Map<?, ?> configs,
       final KafkaClientSupplier clientSupplier
   ) {
+    this(topology, configs, clientSupplier, Time.SYSTEM);
+  }
+
+  /**
+   * Create a {@code ResponsiveKafkaStreams} instance
+   * <p>
+   * Note: even if you never call {@link #start()} on a {@code ResponsiveKafkaStreams} instance,
+   * you still must {@link #close()} it to avoid resource leaks.
+   *
+   * @param topology       the topology specifying the computational logic
+   * @param configs        map with all {@link ResponsiveConfig} and {@link StreamsConfig} props
+   * @param time           {@code Time} implementation; cannot be null
+   * @throws StreamsException if any fatal error occurs
+   */
+  public ResponsiveKafkaStreams(
+      final Topology topology,
+      final Map<?, ?> configs,
+      final Time time
+  ) {
+    this(topology, configs, new DefaultKafkaClientSupplier(), time);
+  }
+
+  /**
+   * Create a {@code ResponsiveKafkaStreams} instance.
+   * <p>
+   * Note: even if you never call {@link #start()} on a {@code ResponsiveKafkaStreams} instance,
+   * you still must {@link #close()} it to avoid resource leaks.
+   *
+   * @param topology       the topology specifying the computational logic
+   * @param configs        map with all {@link ResponsiveConfig} and {@link StreamsConfig} props
+   * @param clientSupplier the Kafka clients supplier which provides underlying admin, producer,
+   *                       and main/restore/global consumer clients
+   * @param time           {@code Time} implementation; cannot be null
+   * @throws StreamsException if any fatal error occurs
+   */
+  public ResponsiveKafkaStreams(
+      final Topology topology,
+      final Map<?, ?> configs,
+      final KafkaClientSupplier clientSupplier,
+      final Time time
+  ) {
     this(
         topology,
-        ResponsiveConfig.loggedConfig(configs),
-        quietReadOnlystreamsConfig(configs),
+        ResponsiveConfig.loggedConfig(configs), // this should be the only place this is logged!
+        ResponsiveStreamsConfig.streamsConfig(configs),
         clientSupplier,
+        time,
         new DefaultCassandraClientFactory()
     );
   }
@@ -80,6 +132,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       final ResponsiveConfig responsiveConfig,
       final StreamsConfig baseStreamsConfig,
       final KafkaClientSupplier clientSupplier,
+      final Time time,
       final CassandraClientFactory clientFactory
   ) {
     this(
@@ -87,6 +140,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
         responsiveConfig,
         baseStreamsConfig,
         clientSupplier,
+        time,
         new ResponsiveStoreRegistry(),
         createMetrics(baseStreamsConfig),
         clientFactory,
@@ -99,6 +153,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       final ResponsiveConfig responsiveConfig,
       final StreamsConfig baseStreamsConfig,
       final KafkaClientSupplier clientSupplier,
+      final Time time,
       final ResponsiveStoreRegistry storeRegistry,
       final Metrics metrics,
       final CassandraClientFactory clientFactory,
@@ -112,6 +167,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
             baseStreamsConfig,
             storeRegistry,
             metrics),
+        time,
         storeRegistry,
         metrics,
         clientFactory.createCassandraClient(session, responsiveConfig)
@@ -122,6 +178,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       final Topology topology,
       final ResponsiveConfig responsiveConfig,
       final ResponsiveKafkaClientSupplier responsiveKafkaClientSupplier,
+      final Time time,
       final ResponsiveStoreRegistry storeRegistry,
       final Metrics metrics,
       final CassandraClient cassandraClient
@@ -130,6 +187,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
         topology,
         responsiveConfig,
         responsiveKafkaClientSupplier,
+        time,
         storeRegistry,
         metrics,
         new SharedClients(
@@ -143,19 +201,27 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       final Topology topology,
       final ResponsiveConfig responsiveConfig,
       final ResponsiveKafkaClientSupplier clientSupplier,
+      final Time time,
       final ResponsiveStoreRegistry storeRegistry,
       final Metrics metrics,
       final SharedClients sharedClients
   ) {
     super(
         topology,
-        verifiedStreamsConfigs(
+        propsWithOverrides(
             responsiveConfig.originals(),
             sharedClients,
             storeRegistry,
             topology.describe()),
-        clientSupplier
+        clientSupplier,
+        time
     );
+
+    try {
+      ResponsiveStreamsConfig.validateStreamsConfig(super.applicationConfigs);
+    } catch (final ConfigException e) {
+      throw new StreamsException("Configuration error, please check your properties");
+    }
     this.sharedClients = sharedClients;
     this.restoreListener = new ResponsiveRestoreListener(metrics);
 
@@ -180,16 +246,11 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     );
   }
 
-  // TODO: extend StreamsConfig ourselves to avoid depending on internal AK utils
-  public static StreamsConfig quietReadOnlystreamsConfig(final Map<?, ?> configs) {
-    // use a "quiet" StreamsConfig to avoid excessive repeat logging
-    return new ClientUtils.QuietStreamsConfig(configs);
-  }
-
-  // TODO: move to ResponsiveStreamsConfig and define clear boundary between "real" config object
-  //  containing the InternalConfig/SharedClients, and dummy quiet StreamsConfig for accessing
-  //  pure Streams properties
-  private static StreamsConfig verifiedStreamsConfigs(
+  /**
+   * Fill in the props with any overrides and all internal objects shared via the configs
+   * before these get finalized as a {@link StreamsConfig} object
+   */
+  private static Properties propsWithOverrides(
       final Map<?, ?> configs,
       final SharedClients sharedClients,
       final ResponsiveStoreRegistry storeRegistry,
@@ -204,21 +265,6 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
             .withTopologyDescription(topologyDescription)
             .build());
 
-    // In this case the default and our desired value are both 0, so we only need to check for
-    // accidental user overrides
-    final Integer numStandbys = (Integer) configs.get(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG);
-    if (numStandbys != null && numStandbys != 0) {
-      final String errorMsg = String.format(
-          "Invalid Streams configuration value for '%s': got %d, expected '%d'",
-          StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG,
-          numStandbys,
-          NUM_STANDBYS_OVERRIDE
-      );
-      LOG.error(errorMsg);
-      throw new ConfigException(errorMsg);
-    }
-
-    // TODO(sophie): finish writing KIP to make this a public StreamsConfig
     final Object o = configs.get(InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS);
     if (o == null) {
       propsWithOverrides.put(
@@ -236,19 +282,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       throw new ConfigException(errorMsg);
     }
 
-    final StreamsConfig streamsConfig = new StreamsConfig(propsWithOverrides);
-    verifyNotEosV1(streamsConfig);
-    StoreUtil.validateTopologyOptimizationConfig(streamsConfig);
-
-
-    return streamsConfig;
-  }
-
-  @SuppressWarnings("deprecation")
-  private static void verifyNotEosV1(final StreamsConfig streamsConfig) {
-    if (EXACTLY_ONCE.equals(streamsConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
-      throw new IllegalStateException("Responsive driver can only be used with ALOS/EOS-V2");
-    }
+    return propsWithOverrides;
   }
 
   @Override
@@ -274,7 +308,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     restoreListener.registerUserRestoreListener(listener);
   }
 
-  public StateRestoreListener userStateRestoreListener() {
+  public StateRestoreListener stateRestoreListener() {
     return restoreListener.userListener();
   }
 

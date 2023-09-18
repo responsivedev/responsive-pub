@@ -132,8 +132,10 @@ public class ResponsiveConfig extends AbstractConfig {
   private static final String SUBPARTITION_HASHER_DOC = "Hasher to use for sub-partitioning.";
   private static final Class<?> SUBPARTITION_HASHER_DEFAULT = Murmur3Hasher.class;
 
-  // ------------------ required StreamsConfig overrides ----------------------
+  // ------------------ StreamsConfig overrides ----------------------
 
+  // These configuration values are required by Responsive, and a ConfigException will
+  // be thrown if they are overridden to anything else
   public static final int NUM_STANDBYS_OVERRIDE = 0;
   public static final String TASK_ASSIGNOR_CLASS_OVERRIDE = StickyTaskAssignor.class.getName();
 
