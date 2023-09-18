@@ -2,9 +2,9 @@ package dev.responsive.utils;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import java.util.Collections;
 import java.util.Map;
-import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.common.config.TopicConfig;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -13,61 +13,60 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class StoreUtilTest {
 
   @Test
-  public void shouldThrowOnEnableAllOptimizations() {
+  public void shouldThrowOnCompactAndTruncateChangelogTrue() {
     assertThrows(
         IllegalArgumentException.class,
-        () -> StoreUtil.validateTopologyOptimizationConfig(new StreamsConfig(Map.of(
-            StreamsConfig.APPLICATION_ID_CONFIG, "foo",
-            CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "foo.bar",
-            StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE
-
-        )))
+        () -> StoreUtil.validateLogConfigs(Map.of(
+            TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT
+        ), true, "store")
     );
   }
 
   @Test
-  public void shouldThrowOnEnableReuseSourceTopicOptimizations() {
-    assertThrows(
-        IllegalArgumentException.class,
-        () -> StoreUtil.validateTopologyOptimizationConfig(new StreamsConfig(Map.of(
-            StreamsConfig.APPLICATION_ID_CONFIG, "foo",
-            CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "foo.bar",
-            StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS
-
-        )))
-    );
+  public void shouldNotThrowOnDeleteAndTruncateChangelogTrue() {
+    StoreUtil.validateLogConfigs(Map.of(
+        TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE
+    ), true, "store");
   }
 
   @Test
-  public void shouldThrowOnEnableReuseSourceTopicMultiOptimization() {
-    assertThrows(
-        IllegalArgumentException.class,
-        () -> StoreUtil.validateTopologyOptimizationConfig(new StreamsConfig(Map.of(
-            StreamsConfig.APPLICATION_ID_CONFIG, "foo",
-            CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "foo.bar",
-            StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG,
-            StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS + "," + StreamsConfig.MERGE_REPARTITION_TOPICS
-
-        )))
-    );
+  public void shouldNotThrowOnCompactDeleteAndTruncateChangelogTrue() {
+    StoreUtil.validateLogConfigs(Map.of(
+        TopicConfig.CLEANUP_POLICY_CONFIG,
+        TopicConfig.CLEANUP_POLICY_COMPACT + "," + TopicConfig.CLEANUP_POLICY_DELETE
+    ), true, "store");
   }
 
   @Test
-  public void shouldNotThrowWhenOptimizationsOff() {
-    StoreUtil.validateTopologyOptimizationConfig(new StreamsConfig(Map.of(
-        StreamsConfig.APPLICATION_ID_CONFIG, "foo",
-        CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "foo.bar")
-    ));
+  public void shouldNotThrowWhenCleanupPolicyUnspecifiedAndTruncateChangelogTrue() {
+    StoreUtil.validateLogConfigs(Collections.emptyMap(), true, "store");
   }
 
   @Test
-  public void shouldNotThrowWhenOptimizationsDoNotIncludeReuseSourceTopic() {
-    StoreUtil.validateTopologyOptimizationConfig(new StreamsConfig(Map.of(
-        StreamsConfig.APPLICATION_ID_CONFIG, "foo",
-        CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "foo.bar",
-        StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG,
-        StreamsConfig.SINGLE_STORE_SELF_JOIN + "," + StreamsConfig.MERGE_REPARTITION_TOPICS)
-    ));
+  public void shouldNotThrowOnCompactAndTruncateChangelogFalse() {
+    StoreUtil.validateLogConfigs(Map.of(
+        TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT
+    ), false, "store");
+  }
+
+  @Test
+  public void shouldNotThrowOnDeleteAndTruncateChangelogFalse() {
+    StoreUtil.validateLogConfigs(Map.of(
+        TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE
+    ), false, "store");
+  }
+
+  @Test
+  public void shouldNotThrowOnCompactDeleteAndTruncateChangelogFalse() {
+    StoreUtil.validateLogConfigs(Map.of(
+        TopicConfig.CLEANUP_POLICY_CONFIG,
+        TopicConfig.CLEANUP_POLICY_COMPACT + "," + TopicConfig.CLEANUP_POLICY_DELETE
+    ), false, "store");
+  }
+
+  @Test
+  public void shouldNotThrowWhenCleanupPolicyUnspecifiedAndTruncateChangelogFalse() {
+    StoreUtil.validateLogConfigs(Collections.emptyMap(), false, "store");
   }
 
 }

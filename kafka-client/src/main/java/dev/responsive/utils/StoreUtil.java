@@ -19,28 +19,12 @@ package dev.responsive.utils;
 import java.time.Duration;
 import java.util.Map;
 import org.apache.kafka.common.config.TopicConfig;
-import org.apache.kafka.streams.StreamsConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class StoreUtil {
 
   private static final Logger LOG = LoggerFactory.getLogger(StoreUtil.class);
-
-  public static void validateTopologyOptimizationConfig(final StreamsConfig config) {
-    final String optimizations = config.getString(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG);
-    if (optimizations.equals(StreamsConfig.OPTIMIZE)
-        || optimizations.contains(StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS)) {
-      LOG.error("Responsive stores are not currently compatible with the source topic optimization."
-                    + " This application was configured with {}", optimizations);
-      throw new IllegalArgumentException(
-          "Responsive stores cannot be used with reuse.ktable.source.topics optimization, please "
-              + "reach out to us if you are attempting to migrate an existing application that "
-              + "uses this optimization. For new applications, please disable this optimization "
-              + "by setting only the desired subset of optimizations, or else disabling all of"
-              + "them. See StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIGS for the list of options");
-    }
-  }
 
   public static void validateLogConfigs(
       final Map<String, String> config,
