@@ -52,6 +52,18 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     return new ResponsiveKafkaStreams(topology, configs);
   }
 
+  /**
+   * Create a {@code ResponsiveKafkaStreams} instance.
+   * <p>
+   * Should be used in exactly the same way as the regular {@link KafkaStreams}.
+   * <p>
+   * Note: even if you never call {@link #start()} on a {@code ResponsiveKafkaStreams} instance,
+   * you still must {@link #close()} it to avoid resource leaks.
+   *
+   * @param topology       the topology specifying the computational logic
+   * @param configs        map with all {@link ResponsiveConfig} and {@link StreamsConfig} props
+   * @throws StreamsException if any fatal error occurs
+   */
   public ResponsiveKafkaStreams(
       final Topology topology,
       final Map<?, ?> configs
@@ -60,7 +72,9 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
   }
 
   /**
-   * Create a {@code ResponsiveKafkaStreams} instance
+   * Create a {@code ResponsiveKafkaStreams} instance.
+   * <p>
+   * Should be used in exactly the same way as the regular {@link KafkaStreams}.
    * <p>
    * Note: even if you never call {@link #start()} on a {@code ResponsiveKafkaStreams} instance,
    * you still must {@link #close()} it to avoid resource leaks.
@@ -80,7 +94,9 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
   }
 
   /**
-   * Create a {@code ResponsiveKafkaStreams} instance
+   * Create a {@code ResponsiveKafkaStreams} instance.
+   * <p>
+   * Should be used in exactly the same way as the regular {@link KafkaStreams}.
    * <p>
    * Note: even if you never call {@link #start()} on a {@code ResponsiveKafkaStreams} instance,
    * you still must {@link #close()} it to avoid resource leaks.
@@ -100,6 +116,8 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
 
   /**
    * Create a {@code ResponsiveKafkaStreams} instance.
+   * <p>
+   * Should be used in exactly the same way as the regular {@link KafkaStreams}.
    * <p>
    * Note: even if you never call {@link #start()} on a {@code ResponsiveKafkaStreams} instance,
    * you still must {@link #close()} it to avoid resource leaks.

@@ -34,8 +34,9 @@ public class ResponsiveTopologyTestDriver extends TopologyTestDriver {
   private final TTDCassandraClient client;
 
   /**
-   * Create a new test diver instance.
-   * Default test properties are used to initialize the driver instance
+   * Create a new test diver instance with default test properties.
+   * <p>
+   * Can be used exactly the same as the usual {@link TopologyTestDriver}
    *
    * @param topology the topology to be tested
    */
@@ -47,6 +48,8 @@ public class ResponsiveTopologyTestDriver extends TopologyTestDriver {
    * Create a new test diver instance.
    * Initialized the internally mocked wall-clock time with
    * {@link System#currentTimeMillis() current system time}.
+   * <p>
+   * Can be used exactly the same as the usual {@link TopologyTestDriver}
    *
    * @param topology the topology to be tested
    * @param config   the configuration for the topology
@@ -56,7 +59,9 @@ public class ResponsiveTopologyTestDriver extends TopologyTestDriver {
   }
 
   /**
-   * Create a new test diver instance.
+   * Create a new test diver instance with default test properties.
+   * <p>
+   * Can be used exactly the same as the usual {@link TopologyTestDriver}
    *
    * @param topology the topology to be tested
    * @param initialWallClockTimeMs the initial value of internally mocked wall-clock time
@@ -70,6 +75,8 @@ public class ResponsiveTopologyTestDriver extends TopologyTestDriver {
 
   /**
    * Create a new test diver instance.
+   * <p>
+   * Can be used exactly the same as the usual {@link TopologyTestDriver}
    *
    * @param topology               the topology to be tested
    * @param config                 the configuration for the topology
