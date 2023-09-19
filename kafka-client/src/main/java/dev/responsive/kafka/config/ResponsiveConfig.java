@@ -238,7 +238,7 @@ public class ResponsiveConfig extends AbstractConfig {
 
   /**
    * This should generally be used over the {@link #loggedConfig(Map)} override in all
-   * cases outside the initial {@link dev.responsive.kafka.api.ResponsiveKafkaStreams#create}.
+   * cases outside the initial {@link dev.responsive.kafka.api.ResponsiveKafkaStreams} constructor.
    * Prefer this API whenever you need to construct a {@code ResponsiveConfig} mid-application,
    * for example during state store init.
    */
