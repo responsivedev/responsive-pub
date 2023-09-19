@@ -29,7 +29,7 @@ public class DiagnoserSpec {
     PROCESSING_RATE_SCALE_DOWN,
     ARRIVAL_RATE_SCALE_UP,
     LAG_SCALE_UP,
-    MEAN_SOJOURN_TIME,
+    EXPECTED_LATENCY,
     THREAD_SATURATION
   }
 
@@ -108,7 +108,7 @@ public class DiagnoserSpec {
 
   public static DiagnoserSpec expectedLatency(final ExpectedLatencyDiagnoserSpec diagnoser) {
     return new DiagnoserSpec(
-        Type.MEAN_SOJOURN_TIME,
+        Type.EXPECTED_LATENCY,
         empty(),
         empty(),
         empty(),
@@ -161,7 +161,7 @@ public class DiagnoserSpec {
       case PROCESSING_RATE_SCALE_DOWN:
         CrdUtils.validatePresent(processingRateScaleDown, "processingRateScaleDown");
         break;
-      case MEAN_SOJOURN_TIME:
+      case EXPECTED_LATENCY:
         CrdUtils.validatePresent(expectedLatency, "expectedLatency");
         break;
       case THREAD_SATURATION:
