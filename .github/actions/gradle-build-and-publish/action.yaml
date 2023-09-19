@@ -59,4 +59,6 @@ runs:
     - name: "Print Release Version"
       id: print-release-version
       shell: bash
-      run: echo "version=$(./gradlew ${{ inputs.module }}:currentVersion)" >> $GITHUB_OUTPUT
+      run: |
+        RELEASE_VERSION=$(./gradlew ${{ inputs.module }}:currentVersion | grep "Project version" | sed -e "s|Project version: ||g")
+        echo "version=${RELEASE_VERSION}" >> $GITHUB_OUTPUT
