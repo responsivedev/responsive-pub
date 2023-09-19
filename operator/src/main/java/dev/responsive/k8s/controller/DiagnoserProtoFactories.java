@@ -102,7 +102,7 @@ public class DiagnoserProtoFactories {
             .build();
 
       }
-      case MEAN_SOJOURN_TIME: {
+      case EXPECTED_LATENCY: {
         return ControllerOuterClass.KafkaStreamsPolicySpec.DiagnoserSpec.newBuilder()
             .setExpectedLatency(
                 expectedLatencyDiagnoserFromK8sResource(
