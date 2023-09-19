@@ -50,6 +50,7 @@ runs:
   using: composite
   steps:
     - name: "Gradle Build & Publish | Root Module"
+      id: gradle-build-and-publish-root-module
       if: ${{ inputs.action == 'gradle-build-and-publish' }}
       uses: ./.github/actions/gradle-build-and-publish
       with:
@@ -64,7 +65,7 @@ runs:
       uses: ./.github/actions/gradle-build-and-publish
       with:
         module: "responsive-test-utils"
-        skip_release: "true"
+        force_version: ${{ steps.gradle-build-and-publish-root-module.outputs.release_version }}
         OSSRH_USER: ${{ inputs.OSSRH_USER }}
         OSSRH_PASSWORD: ${{ inputs.OSSRH_PASSWORD }}
         SIGNING_KEY: ${{ inputs.SIGNING_KEY }}

@@ -4,10 +4,10 @@ inputs:
   module:
     required: true
     description: "which module to build and publish"
-  skip_release:
-    default: "false"
+  force_version:
+    default: "None"
     required: false
-    description: whether or not to skip the axion plugin release step (should be true for all sub-modules, eg responsive-test-utils)
+    description: "desired release version (use root module version for all sub-modules, eg kafka-client:currentVersion for responsive-test-utils)"
   OSSRH_USER:
     required: true
     description: "the OSSRH user (found in the 'secrets' context)"
@@ -21,6 +21,11 @@ inputs:
     required: true
     description: "the signing key password (found in the 'secrets' context)"
 
+outputs:
+  release_version:
+    description: "the version of the current release"
+    value: ${{ steps.print-release-version.outputs.version }}
+
 runs:
   using: composite
   steps:
@@ -30,10 +35,16 @@ runs:
         arguments: :${{ inputs.module }}:build
 
     - name: "Gradle: Release Version"
-      if: ${{ inputs.skip_release == 'false' }}
+      if: ${{ inputs.force_version == 'None' }}
       uses: gradle/gradle-build-action@v2
       with:
         arguments: :${{ inputs.module }}:release
+
+    - name: "Gradle: Release Version (forced)"
+      if: ${{ inputs.force_version != 'None' }}
+      uses: gradle/gradle-build-action@v2
+      with:
+        arguments: :${{ inputs.module }}:release -Prelease.forceVersion=${{ inputs.force_version }}
 
     - name: "Gradle: Publish Artifacts"
       uses: gradle/gradle-build-action@v2
@@ -44,3 +55,8 @@ runs:
         OSSRH_PASSWORD: ${{ inputs.OSSRH_PASSWORD }}
         SIGNING_KEY: ${{ inputs.SIGNING_KEY }}
         SIGNING_PASSWORD: ${{ inputs.SIGNING_PASSWORD }}
+
+    - name: "Print Release Version"
+      id: print-release-version
+      shell: bash
+      run: echo "version=$(./gradlew ${{ inputs.module }}:currentVersion)" >> $GITHUB_OUTPUT
