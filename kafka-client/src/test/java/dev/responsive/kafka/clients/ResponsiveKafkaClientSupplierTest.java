@@ -20,6 +20,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -115,7 +116,7 @@ class ResponsiveKafkaClientSupplierTest {
     lenient().when(
         factories.createResponsiveConsumer(any(), (ResponsiveConsumer<byte[], byte[]>) any(), any())
     ).thenReturn(responsiveConsumer);
-    lenient().when(factories.createMetricsPublishingCommitListener(any(), any(), any()))
+    lenient().when(factories.createMetricsPublishingCommitListener(any(), any(), any(), any()))
         .thenReturn(commitMetricListener);
     lenient().when(factories.createOffsetRecorder(anyBoolean())).thenReturn(offsetRecorder);
 
@@ -190,8 +191,8 @@ class ResponsiveKafkaClientSupplierTest {
         producerListenerCaptor.getValue(),
         Matchers.hasItem(offsetRecorder.getProducerListener())
     );
-    verify(factories)
-        .createMetricsPublishingCommitListener(metrics, "StreamThread-0", offsetRecorder);
+    verify(factories).createMetricsPublishingCommitListener(
+        metrics, "StreamThread-0", "appid", offsetRecorder);
   }
 
   @Test
@@ -202,8 +203,8 @@ class ResponsiveKafkaClientSupplierTest {
     // then:
     verify(factories).createResponsiveConsumer(any(), any(), consumerListenerCaptor.capture());
     assertThat(consumerListenerCaptor.getValue(), Matchers.hasItem(commitMetricListener));
-    verify(factories)
-        .createMetricsPublishingCommitListener(metrics, "StreamThread-0", offsetRecorder);
+    verify(factories).createMetricsPublishingCommitListener(
+        metrics, "StreamThread-0", "appid", offsetRecorder);
   }
 
   @Test
@@ -213,16 +214,17 @@ class ResponsiveKafkaClientSupplierTest {
 
     // when:
     supplier.getConsumer(CONSUMER_CONFIGS);
-    supplier.getConsumer(configsWithOverrides(
+    final Map<String, Object> withOverrides = configsWithOverrides(
         CONSUMER_CONFIGS,
         Map.of(ConsumerConfig.CLIENT_ID_CONFIG, "foo-StreamThread-1-consumer")
-    ));
+    );
+    supplier.getConsumer(withOverrides);
 
     // then:
-    verify(factories, times(1))
-        .createMetricsPublishingCommitListener(metrics, "StreamThread-0", offsetRecorder);
-    verify(factories, times(1))
-        .createMetricsPublishingCommitListener(metrics, "StreamThread-1", offsetRecorder);
+    verify(factories, times(1)).createMetricsPublishingCommitListener(
+        metrics, "StreamThread-0", "appid", offsetRecorder);
+    verify(factories, times(1)).createMetricsPublishingCommitListener(
+        metrics, "StreamThread-1", "appid", offsetRecorder);
   }
 
   @Test

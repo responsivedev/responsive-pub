@@ -130,12 +130,12 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
     this.admin = admin;
     final var result = admin.createTopics(
         List.of(
-            new NewTopic(inputTopic(), Optional.of(1), Optional.empty()),
-            new NewTopic(inputTblTopic(), Optional.of(1), Optional.empty())
+            new NewTopic(inputTopic(), Optional.of(2), Optional.empty()),
+            new NewTopic(inputTblTopic(), Optional.of(2), Optional.empty())
                 .configs(Map.of(
                     TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)),
-            new NewTopic(outputTopic(), Optional.of(1), Optional.empty()),
-            new NewTopic(outputJoined(), Optional.of(1), Optional.empty())
+            new NewTopic(outputTopic(), Optional.of(2), Optional.empty()),
+            new NewTopic(outputJoined(), Optional.of(2), Optional.empty())
         )
     );
     result.all().get();
