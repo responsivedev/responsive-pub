@@ -40,7 +40,7 @@ jobs:
       - name: "Gradle: Build & Test, Release, Publish"
         uses: ./.github/actions/for-module-in-group
         with:
-          module_group: ${{ inputs.module }}
+          module: ${{ inputs.module }}
           action: gradle-build-and-publish
           OSSRH_USER: ${{ secrets.OSSRH_USER }}
           OSSRH_PASSWORD: ${{ secrets.OSSRH_PASSWORD }}

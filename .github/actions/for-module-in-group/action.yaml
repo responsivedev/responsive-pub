@@ -53,7 +53,7 @@ runs:
       if: ${{ inputs.action == 'gradle-build-and-publish' }}
       uses: ./.github/actions/gradle-build-and-publish
       with:
-        module: ${{ inputs.module_group }}
+        module: ${{ inputs.module }}
         OSSRH_USER: ${{ inputs.OSSRH_USER }}
         OSSRH_PASSWORD: ${{ inputs.OSSRH_PASSWORD }}
         SIGNING_KEY: ${{ inputs.SIGNING_KEY }}
