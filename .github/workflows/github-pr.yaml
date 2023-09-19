@@ -9,6 +9,17 @@ jobs:
       contents: read  # This is required for actions/checkout
     runs-on: ubuntu-latest
     steps:
+      - name: Free Disk Space (Ubuntu)
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          docker-images: true
+          swap-storage: true
+
       - name: "Checkout"
         uses: actions/checkout@v3
         with:
