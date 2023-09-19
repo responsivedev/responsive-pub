@@ -64,6 +64,7 @@ runs:
       uses: ./.github/actions/gradle-build-and-publish
       with:
         module: "responsive-test-utils"
+        skip_release: "true"
         OSSRH_USER: ${{ inputs.OSSRH_USER }}
         OSSRH_PASSWORD: ${{ inputs.OSSRH_PASSWORD }}
         SIGNING_KEY: ${{ inputs.SIGNING_KEY }}

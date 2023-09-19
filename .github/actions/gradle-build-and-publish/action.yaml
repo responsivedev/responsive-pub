@@ -4,6 +4,10 @@ inputs:
   module:
     required: true
     description: "which module to build and publish"
+  skip_release:
+    default: "false"
+    required: false
+    description: whether or not to skip the axion plugin release step (should be true for all sub-modules, eg responsive-test-utils)
   OSSRH_USER:
     required: true
     description: "the OSSRH user (found in the 'secrets' context)"
@@ -16,6 +20,7 @@ inputs:
   SIGNING_PASSWORD:
     required: true
     description: "the signing key password (found in the 'secrets' context)"
+
 runs:
   using: composite
   steps:
@@ -24,12 +29,13 @@ runs:
       with:
         arguments: :${{ inputs.module }}:build
 
-    - name: "Gradle: Release"
+    - name: "Gradle: Release Version"
+      if: ${{ inputs.skip_release == 'false' }}
       uses: gradle/gradle-build-action@v2
       with:
         arguments: :${{ inputs.module }}:release
 
-    - name: "Gradle: Publish"
+    - name: "Gradle: Publish Artifacts"
       uses: gradle/gradle-build-action@v2
       with:
         arguments: :${{ inputs.module }}:publish # publish to both S3 and Sonatype OSSRH
