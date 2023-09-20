@@ -100,6 +100,8 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
         eos,
         tid,
         metrics,
+        applicationId,
+        config,
         endOffsetsPoller,
         storeRegistry,
         factories
@@ -125,6 +127,8 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
         eos,
         tid,
         metrics,
+        applicationId,
+        config,
         endOffsetsPoller,
         storeRegistry,
         factories
@@ -211,6 +215,8 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
         final boolean eos,
         final String threadId,
         final Metrics metrics,
+        final String consumerGroup,
+        final Map<String, Object> configs,
         final EndOffsetsPoller endOffsetsPoller,
         final ResponsiveStoreRegistry storeRegistry,
         final Factories factories
@@ -226,7 +232,12 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
           new ListenersForThread(
               threadId,
               offsetRecorder,
-              factories.createMetricsPublishingCommitListener(metrics, threadId, offsetRecorder),
+              factories.createMetricsPublishingCommitListener(
+                  metrics,
+                  threadId,
+                  consumerGroup,
+                  offsetRecorder
+              ),
               new StoreCommitListener(storeRegistry, offsetRecorder),
               endOffsetsPoller.addForThread(threadId)
           )
@@ -334,9 +345,15 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
     default MetricPublishingCommitListener createMetricsPublishingCommitListener(
         final Metrics metrics,
         final String threadId,
+        final String consumerGroup,
         final OffsetRecorder offsetRecorder
     ) {
-      return new MetricPublishingCommitListener(metrics, threadId, offsetRecorder);
+      return new MetricPublishingCommitListener(
+          metrics,
+          threadId,
+          consumerGroup,
+          offsetRecorder
+      );
     }
   }
 }

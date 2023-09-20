@@ -22,7 +22,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import org.apache.kafka.common.MetricName;
@@ -45,41 +45,39 @@ public class MetricPublishingCommitListener implements ResponsiveConsumer.Listen
   private static final Logger LOG = LoggerFactory.getLogger(MetricPublishingCommitListener.class);
   private final Metrics metrics;
   private final String threadId;
-  private final Map<TopicPartition, Optional<CommittedOffset>> offsets = new ConcurrentHashMap<>();
+  private final String consumerGroup;
+  private final Map<TopicPartition, CommittedOffset> offsets = new ConcurrentHashMap<>();
 
   private static class CommittedOffset {
-    private final long offset;
-    private final String consumerGroup;
+    private final TopicPartition topicPartition;
+    private final Long offset;
 
-    private CommittedOffset(final long offset, final String consumerGroup) {
+    private CommittedOffset(
+        final TopicPartition topicPartition,
+        final Long offset
+    ) {
+      this.topicPartition = topicPartition;
       this.offset = offset;
-      this.consumerGroup = consumerGroup;
     }
 
-    public long getOffset() {
-      return offset;
-    }
-
-    public String getConsumerGroup() {
-      return consumerGroup;
+    public OptionalLong getOffset() {
+      return offset == null ? OptionalLong.empty() : OptionalLong.of(offset);
     }
   }
 
   public MetricPublishingCommitListener(
       final Metrics metrics,
       final String threadId,
+      final String consumerGroup,
       final OffsetRecorder offsetRecorder
   ) {
     this.metrics = Objects.requireNonNull(metrics);
     this.threadId = Objects.requireNonNull(threadId);
+    this.consumerGroup = Objects.requireNonNull(consumerGroup);
     offsetRecorder.addCommitCallback(this::commitCallback);
   }
 
-  private MetricName metricName(final RecordingKey k) {
-    return metricName(k.getPartition(), k.getConsumerGroup());
-  }
-
-  private MetricName metricName(final TopicPartition partition, final String consumerGroup) {
+  private MetricName metricName(final TopicPartition partition) {
     final Map<String, String> tags = new HashMap<>();
     tags.put("consumerGroup", consumerGroup);
     tags.put("thread", threadId);
@@ -96,17 +94,8 @@ public class MetricPublishingCommitListener implements ResponsiveConsumer.Listen
       offsets.computeIfPresent(
           e.getKey().getPartition(),
           (k, v) -> {
-            if (v.isEmpty()) {
-              LOG.debug("add committed offset metric for {} {}", threadId, k);
-              metrics.addMetric(
-                  metricName(e.getKey()),
-                  (Gauge<Long>) (config, now) ->
-                      offsets.getOrDefault(k, Optional.empty())
-                          .map(CommittedOffset::getOffset).orElse(-1L)
-              );
-            }
             LOG.debug("record committed offset {} {}: {}", threadId, k, e.getValue());
-            return Optional.of(new CommittedOffset(e.getValue(), e.getKey().getConsumerGroup()));
+            return new CommittedOffset(k, e.getValue());
           }
       );
     }
@@ -122,7 +111,7 @@ public class MetricPublishingCommitListener implements ResponsiveConsumer.Listen
     );
     for (final var p : partitions) {
       offsets.computeIfPresent(p, (k, v) -> {
-        v.ifPresent(offset -> metrics.removeMetric(metricName(k, offset.getConsumerGroup())));
+        metrics.removeMetric(metricName(k));
         return null;
       });
     }
@@ -134,8 +123,26 @@ public class MetricPublishingCommitListener implements ResponsiveConsumer.Listen
         partitions.stream().map(TopicPartition::toString).collect(Collectors.joining(","))
     );
     for (final var p : partitions) {
-      offsets.putIfAbsent(p, Optional.empty());
+      offsets.computeIfAbsent(
+          p,
+          k -> {
+            LOG.debug("add committed offset metric for {} {}", threadId, k);
+            metrics.addMetric(metricName(k), (Gauge<Long>) (config, now) -> getCommittedOffset(k));
+            return new CommittedOffset(
+                p,
+                null
+            );
+          }
+      );
     }
+  }
+
+  private Long getCommittedOffset(final TopicPartition partition) {
+    final CommittedOffset committedOffset = offsets.get(partition);
+    if (committedOffset == null || committedOffset.getOffset().isEmpty()) {
+      return -1L;
+    }
+    return committedOffset.getOffset().getAsLong();
   }
 
   @Override
@@ -147,9 +154,9 @@ public class MetricPublishingCommitListener implements ResponsiveConsumer.Listen
   public void close() {
     // at this point we assume no threads will call the other callbacks
     for (final TopicPartition p : offsets.keySet()) {
-      if (offsets.get(p).isPresent()) {
+      if (offsets.containsKey(p)) {
         LOG.info("Clean up committed offset metric {} {}", threadId, p);
-        metrics.removeMetric(metricName(p, offsets.get(p).get().getConsumerGroup()));
+        metrics.removeMetric(metricName(p));
       }
     }
     offsets.clear();

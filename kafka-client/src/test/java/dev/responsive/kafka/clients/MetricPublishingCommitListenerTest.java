@@ -61,7 +61,7 @@ class MetricPublishingCommitListenerTest {
 
   @BeforeEach
   public void setup() {
-    listener = new MetricPublishingCommitListener(metrics, THREAD_ID, offsetRecorder);
+    listener = new MetricPublishingCommitListener(metrics, THREAD_ID, GROUP, offsetRecorder);
   }
 
   @Test
@@ -87,6 +87,23 @@ class MetricPublishingCommitListenerTest {
         .collect(Collectors.toMap(names::get, values::get));
     assertThat(nameToValue.get(getName(PARTITION1)).value(null, 0), is(123L));
     assertThat(nameToValue.get(getName(PARTITION2)).value(null, 0), is(345L));
+  }
+
+  @Test
+  public void shouldReportUnknownCommittedOffsets() {
+    // when:
+    listener.onPartitionsAssigned(List.of(PARTITION1, PARTITION2));
+
+    // then:
+    verify(metrics, times(2)).addMetric(
+        nameCaptor.capture(), metricCaptor.capture()
+    );
+    final var values = metricCaptor.getAllValues();
+    final var names = nameCaptor.getAllValues();
+    final var nameToValue = IntStream.range(0, names.size()).boxed()
+        .collect(Collectors.toMap(names::get, values::get));
+    assertThat(nameToValue.get(getName(PARTITION1)).value(null, 0), is(-1L));
+    assertThat(nameToValue.get(getName(PARTITION2)).value(null, 0), is(-1L));
   }
 
   @Test
