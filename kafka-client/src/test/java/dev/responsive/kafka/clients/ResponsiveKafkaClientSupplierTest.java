@@ -20,7 +20,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
-import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -92,8 +91,6 @@ class ResponsiveKafkaClientSupplierTest {
   private ResponsiveConsumer<byte[], byte[]> responsiveConsumer;
   @Mock
   private MetricPublishingCommitListener commitMetricListener;
-  @Mock
-  private ResponsiveProducer.Listener commitMetricProducerListener;
   @Captor
   private ArgumentCaptor<List<ResponsiveProducer.Listener>> producerListenerCaptor;
   @Captor
