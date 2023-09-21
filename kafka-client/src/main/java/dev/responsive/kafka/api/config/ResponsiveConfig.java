@@ -262,7 +262,7 @@ public class ResponsiveConfig extends AbstractConfig {
 
     final Properties props = loadVersionPropertiesFromFile();
     final String version = props.getProperty("git.build.version", "").trim();
-    final String commitId = props.getProperty("git.commit.id.abbrev", "").trim();
+    final String commitId = props.getProperty("git.commit.id", "").trim();
 
     if (!version.isEmpty() && !commitId.isEmpty()) {
       LOG.info("Responsive Client version: {}", version);

@@ -1,3 +1,5 @@
+import java.io.ByteArrayOutputStream
+
 /*
  * Copyright 2023 Responsive Computing, Inc.
  *
@@ -16,19 +18,57 @@
 
 plugins {
     id("responsive.java-library-conventions")
-    id("com.gorylenko.gradle-git-properties") version "2.4.1"
+    id("java")
 }
 
-configure<com.gorylenko.GitPropertiesPluginExtension> {
-    // Creates a file with various git properties at build/resources/main/{gitPropertiesName}
-    // See https://github.com/n0mer/gradle-git-properties#usage for all available props
+/*********** Generated Resources ***********/
 
-    // Can be a file name or relative path under build/resources/main
-    gitPropertiesName = "version.properties"
-
-    keys = arrayOf("git.build.version","git.commit.id.abbrev").toMutableList()
+val gitCommitId: String by lazy {
+    val stdout = ByteArrayOutputStream()
+    //rootProject.exec {
+    exec {
+        commandLine("git", "rev-parse", "--verify", "--short", "HEAD")
+        standardOutput = stdout
+    }
+    stdout.toString().trim()
 }
 
+val writeVersionPropertiesFile = "writeVersionPropertiesFile"
+val gitVersion = version
+
+val resourcesDir = "$buildDir/resources/main"
+val versionFilePath = "$resourcesDir/version.properties"
+
+tasks.register(writeVersionPropertiesFile) {
+    val versionFile = file(versionFilePath)
+    outputs.file(versionFile)
+    doLast {
+        file(versionFilePath).writeText(
+                "git.build.version=" + gitVersion + "\n" +
+                "git.commit.id=" + gitCommitId + "\n"
+        )
+    }
+}
+
+// Need to add all generated resource directories as outputs of the main sourceSet
+sourceSets {
+    main {
+        output.dir(file("$buildDir/resources"))
+    }
+}
+
+tasks.compileJava {
+    dependsOn(tasks[writeVersionPropertiesFile])
+    dependsOn(tasks.processResources)
+}
+
+tasks.compileTestJava {
+    dependsOn(tasks[writeVersionPropertiesFile])
+    dependsOn(tasks.processResources)
+    dependsOn(tasks.processTestResources)
+}
+
+/********************************************/
 
 dependencies {
     api(libs.kafka.streams)
