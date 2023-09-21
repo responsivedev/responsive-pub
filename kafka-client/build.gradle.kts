@@ -57,6 +57,12 @@ sourceSets {
     }
 }
 
+tasks.jar {
+    dependsOn(tasks[writeVersionPropertiesFile])
+    dependsOn(tasks.processResources)
+    dependsOn(tasks.processTestResources)
+}
+
 tasks.compileJava {
     dependsOn(tasks[writeVersionPropertiesFile])
     dependsOn(tasks.processResources)
