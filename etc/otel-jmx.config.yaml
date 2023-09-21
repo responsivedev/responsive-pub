@@ -50,6 +50,11 @@ rules:
    metricAttribute:
      clientid: param(client-id)
    mapping:
+     assigned-partitions:
+       metric: kafka.streams.assigned.partitions
+       type: gauge
+       desc: the number of assigned partitions
+       unit: '{partitions}'
      rebalance-rate-per-hour:
        metric: kafka.streams.rebalance.rate
        type: gauge
