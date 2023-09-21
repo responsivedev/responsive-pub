@@ -57,6 +57,21 @@ sourceSets {
     }
 }
 
+
+// TODO: there has GOT to be a more concise way to do this than listing it out for every task individually...
+//  might be overkill with some of these already depending on each other so we can probably clean up a bit too
+tasks.release {
+    dependsOn(tasks[writeVersionPropertiesFile])
+}
+
+tasks.publish {
+    dependsOn(tasks[writeVersionPropertiesFile])
+}
+
+tasks.publishToMavenLocal {
+    dependsOn(tasks[writeVersionPropertiesFile])
+}
+
 tasks.jar {
     dependsOn(tasks[writeVersionPropertiesFile])
     dependsOn(tasks.processResources)
