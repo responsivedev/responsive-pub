@@ -16,7 +16,19 @@
 
 plugins {
     id("responsive.java-library-conventions")
+    id("com.gorylenko.gradle-git-properties") version "2.4.1"
 }
+
+configure<com.gorylenko.GitPropertiesPluginExtension> {
+    // Creates a file with various git properties at build/resources/main/{gitPropertiesName}
+    // See https://github.com/n0mer/gradle-git-properties#usage for all available props
+
+    // Can be a file name or relative path under build/resources/main
+    gitPropertiesName = "version.properties"
+
+    keys = arrayOf("git.build.version","git.commit.id.abbrev").toMutableList()
+}
+
 
 dependencies {
     api(libs.kafka.streams)
