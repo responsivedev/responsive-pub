@@ -236,7 +236,7 @@ public class EndOffsetsPoller {
         log.debug("Updated end offsets to [{}].",
                   endOffsets.entrySet().stream()
                      .map(tp -> "(" + tp.getKey() + ": " + tp.getValue() + ")")
-                     .collect(Collectors.joining(","))
+                     .collect(Collectors.joining(", "))
         );
       }
     }
