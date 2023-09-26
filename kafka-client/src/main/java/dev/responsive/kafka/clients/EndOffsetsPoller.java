@@ -125,7 +125,11 @@ public class EndOffsetsPoller {
     if (poller != null) {
       throw new IllegalStateException("Poller was already initialized");
     }
-    poller = new Poller(() -> factories.createAdminClient(configs), executor, this::getThreadMetrics);
+    poller = new Poller(
+        () -> factories.createAdminClient(configs),
+        executor,
+        this::getThreadMetrics
+    );
   }
 
   private void stopPoller() {
