@@ -242,7 +242,7 @@ public class EndOffsetsPoller {
     }
 
     public void close() {
-      log.debug("Cleaning up offset metrics");
+      log.info("Cleaning up offset metrics");
       for (final TopicPartition p : endOffsets.keySet()) {
         metrics.removeMetric(metricName(p));
       }

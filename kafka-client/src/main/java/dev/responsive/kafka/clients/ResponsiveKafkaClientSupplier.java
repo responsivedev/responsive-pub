@@ -32,7 +32,9 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
 import org.slf4j.Logger;
@@ -94,8 +96,9 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
 
   @Override
   public Producer<byte[], byte[]> getProducer(final Map<String, Object> config) {
-    LOG.info("Creating responsive producer");
-    final String tid = threadIdFromProducerConfig(config);
+    final String clientId = (String) config.get(ProducerConfig.CLIENT_ID_CONFIG);
+    LOG.info("Creating responsive producer: {}", clientId);
+    final String tid = threadIdFromProducerConfig(clientId);
     final ListenersForThread tc = sharedListeners.getAndMaybeInitListenersForThread(
         eos,
         tid,
@@ -120,9 +123,9 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
 
   @Override
   public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
-    final String clientId = (String) config.get(CommonClientConfigs.CLIENT_ID_CONFIG);
+    final String clientId = (String) config.get(ConsumerConfig.CLIENT_ID_CONFIG);
     LOG.info("Creating responsive main consumer: {}", clientId);
-    final String tid = threadIdFromConsumerConfig(config);
+    final String tid = threadIdFromConsumerConfig(clientId);
     final ListenersForThread tc = sharedListeners.getAndMaybeInitListenersForThread(
         eos,
         tid,
@@ -148,7 +151,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
 
   @Override
   public Consumer<byte[], byte[]> getRestoreConsumer(final Map<String, Object> config) {
-    final String clientId = (String) config.get(CommonClientConfigs.CLIENT_ID_CONFIG);
+    final String clientId = (String) config.get(ConsumerConfig.CLIENT_ID_CONFIG);
     LOG.info("Creating responsive restore consumer: {}", clientId);
     return new ResponsiveRestoreConsumer<>(
         clientId,
@@ -172,24 +175,22 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
     );
   }
 
-  private String threadIdFromProducerConfig(final Map<String, Object> config) {
-    final String clientId = (String) config.get(CommonClientConfigs.CLIENT_ID_CONFIG);
-    LOG.info("Found producer client ID {}", clientId);
+  private String threadIdFromProducerConfig(final String clientId) {
     final var regex = Pattern.compile(".*-(StreamThread-\\d+)-producer");
     final var match = regex.matcher(clientId);
     if (!match.find()) {
+      LOG.error("Unable to parse thread id from producer client id = {}", clientId);
       throw new RuntimeException("unexpected client id " + clientId);
     }
     return match.group(1);
   }
 
-  private String threadIdFromConsumerConfig(final Map<String, Object> config) {
-    final String clientId = (String) config.get(CommonClientConfigs.CLIENT_ID_CONFIG);
-    LOG.info("Found consumer client ID {}", clientId);
+  private String threadIdFromConsumerConfig(final String clientId) {
     final var regex = Pattern.compile(".*-(StreamThread-\\d+)-consumer$");
     final var match = regex.matcher(clientId);
     if (!match.find()) {
-      throw new RuntimeException("unexpected client id " + clientId);
+      LOG.error("Unable to parse thread id from consumer client id = {}", clientId);
+      throw new RuntimeException("Unexpected client id " + clientId);
     }
     return match.group(1);
   }
@@ -265,7 +266,8 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
         final OffsetRecorder offsetRecorder,
         final MetricPublishingCommitListener committedOffsetMetricListener,
         final StoreCommitListener storeCommitListener,
-        final EndOffsetsPoller.Listener endOffsetsPollerListener) {
+        final EndOffsetsPoller.Listener endOffsetsPollerListener
+    ) {
       this.threadId = threadId;
       this.offsetRecorder = offsetRecorder;
       this.committedOffsetMetricListener = committedOffsetMetricListener;
@@ -273,6 +275,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
       this.endOffsetsPollerListener = endOffsetsPollerListener;
     }
 
+    @Override
     public void close() {
       committedOffsetMetricListener.close();
       endOffsetsPollerListener.close();
@@ -281,25 +284,25 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
 
   private static class ReferenceCounted<T extends Closeable> {
     final T val;
-    final String name;
+    final Logger refLog;
     int count;
 
     private ReferenceCounted(final String name, final T val) {
-      this.name = name;
+      this.refLog = new LogContext(String.format("[%s]: ", name)).logger(ReferenceCounted.class);
       this.val = val;
       this.count = 1;
     }
 
     private void ref() {
-      LOG.info("bumping ref count for {} to {}", name, count + 1);
+      refLog.info("Bumping ref count to {}", count + 1);
       count += 1;
     }
 
     private boolean deref() {
-      LOG.info("reducing ref count for {} to {}", name, count - 1);
+      refLog.info("Reducing ref count to {}", count - 1);
       count -= 1;
       if (count == 0) {
-        LOG.info("closing referred value for {}", name);
+        refLog.info("Closing reference value");
         try {
           val.close();
         } catch (final IOException e) {
