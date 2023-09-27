@@ -30,6 +30,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.OffsetSpec;
@@ -88,10 +89,10 @@ public class EndOffsetsPoller {
   }
 
   public synchronized Listener addForThread(final String threadId) {
-    LOG.info("add end offset metrics for thread {}", threadId);
+    LOG.debug("Adding end offset metrics for thread {}", threadId);
     final var tm = new Listener(threadId, metrics, this::removeForThread);
     if (threadIdToMetrics.containsKey(threadId)) {
-      final var msg = String.format("end offset poller already has metrics for %s", threadId);
+      final var msg = String.format("End offset poller already has metrics for %s", threadId);
       final var err = new RuntimeException(msg);
       LOG.error(msg, err);
       throw err;
@@ -104,13 +105,14 @@ public class EndOffsetsPoller {
   }
 
   private synchronized void removeForThread(final String threadId) {
+    LOG.debug("Removing end offset metrics for thread {}", threadId);
     final Listener tm = threadIdToMetrics.remove(threadId);
     if (tm != null) {
       if (threadIdToMetrics.isEmpty()) {
         stopPoller();
       }
     } else {
-      LOG.warn("no metrics found for thread {}", threadId);
+      LOG.warn("No metrics found for thread {}", threadId);
     }
   }
 
@@ -119,19 +121,23 @@ public class EndOffsetsPoller {
   }
 
   private void initPoller() {
-    LOG.info("init end offsets poller");
+    LOG.info("Initializing end offsets poller");
     if (poller != null) {
-      throw new IllegalStateException("poller already initialized");
+      throw new IllegalStateException("Poller was already initialized");
     }
-    poller = new Poller(factories.createAdminClient(configs), executor, this::getThreadMetrics);
+    poller = new Poller(
+        () -> factories.createAdminClient(configs),
+        executor,
+        this::getThreadMetrics
+    );
   }
 
   private void stopPoller() {
-    LOG.info("stopping end offsets poller");
+    LOG.info("Stopping end offsets poller");
     try {
       poller.stop();
     } catch (final RuntimeException e) {
-      LOG.warn("poller stop returned an unexpected error. It will be ignored, and the poller "
+      LOG.warn("Poller stop returned an unexpected error. It will be ignored, and the poller "
           + "task + admin client might be leaked.", e);
     }
     poller = null;
@@ -144,11 +150,11 @@ public class EndOffsetsPoller {
     private final Supplier<Collection<Listener>> threadMetricsSupplier;
 
     private Poller(
-        final Admin adminClient,
+        final Supplier<Admin> adminClientSupplier,
         final ScheduledExecutorService executor,
         final Supplier<Collection<Listener>> threadMetricsSupplier
     ) {
-      this.adminClient = adminClient;
+      this.adminClient = adminClientSupplier.get();
       this.executor = executor;
       this.threadMetricsSupplier = threadMetricsSupplier;
       this.future = executor.scheduleAtFixedRate(this::pollEndOffsets, 0, 30, TimeUnit.SECONDS);
@@ -160,6 +166,8 @@ public class EndOffsetsPoller {
     }
 
     private void pollEndOffsets() {
+      LOG.info("Polling end offsets");
+
       final var partitions = new HashMap<TopicPartition, OffsetSpec>();
       final Collection<Listener> threadMetrics = threadMetricsSupplier.get();
       for (final var tm : threadMetrics) {
@@ -175,26 +183,32 @@ public class EndOffsetsPoller {
         throw new RuntimeException(e);
       }
       threadMetrics.forEach(tm -> tm.update(endOffsets));
+
+      LOG.info("Finished updating end offsets");
     }
+
   }
 
   static class Listener implements ResponsiveConsumer.Listener {
     private final String threadId;
     private final Map<TopicPartition, Long> endOffsets = new ConcurrentHashMap<>();
-    private final Logger logger;
+    private final Logger log;
     private final Metrics metrics;
     private final Consumer<String> onClose;
-
 
     private Listener(final String threadId, final Metrics metrics, final Consumer<String> onClose) {
       this.threadId = threadId;
       this.metrics = metrics;
       this.onClose = onClose;
-      logger = LoggerFactory.getLogger(EndOffsetsPoller.class.getName() + "." + threadId);
+      log = LoggerFactory.getLogger(EndOffsetsPoller.class.getName() + "." + threadId);
     }
 
     @Override
     public void onPartitionsLost(final Collection<TopicPartition> lost) {
+      // For now we can just delegate to #onPartitionsRevoked here since we're just
+      // cleaning up partitions we no longer own, but these callbacks are semantically
+      // distinct and may need individual implementations if more sophisticated metrics
+      // are ever introduced
       onPartitionsRevoked(lost);
     }
 
@@ -217,21 +231,22 @@ public class EndOffsetsPoller {
       }
     }
 
-    private void update(final Map<TopicPartition, ListOffsetsResultInfo> endOffsets) {
-      for (final var entry : endOffsets.entrySet()) {
-        this.endOffsets.computeIfPresent(entry.getKey(), (k, v) -> {
-          logger.info("update end offset of {}/{} to {}",
-              k.topic(),
-              k.partition(),
-              entry.getValue().offset()
-          );
-          return entry.getValue().offset();
-        });
+    private void update(final Map<TopicPartition, ListOffsetsResultInfo> newEndOffsets) {
+      for (final var entry : newEndOffsets.entrySet()) {
+        endOffsets.computeIfPresent(entry.getKey(), (k, v) -> entry.getValue().offset());
+      }
+
+      if (log.isDebugEnabled()) {
+        log.debug("Updated end offsets to [{}].",
+                  endOffsets.entrySet().stream()
+                     .map(tp -> "(" + tp.getKey() + ": " + tp.getValue() + ")")
+                     .collect(Collectors.joining(", "))
+        );
       }
     }
 
     public void close() {
-      logger.info("cleanup offset metrics for thread {}", threadId);
+      log.info("Cleaning up offset metrics");
       for (final TopicPartition p : endOffsets.keySet()) {
         metrics.removeMetric(metricName(p));
       }
