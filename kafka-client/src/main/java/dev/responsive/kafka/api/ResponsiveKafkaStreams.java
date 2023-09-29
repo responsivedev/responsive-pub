@@ -229,13 +229,16 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     );
 
     try {
-      ResponsiveStreamsConfig.validateStreamsConfig(super.applicationConfigs);
+      ResponsiveStreamsConfig.validateStreamsConfig(applicationConfigs);
     } catch (final ConfigException e) {
       throw new StreamsException("Configuration error, please check your properties");
     }
+
     this.sharedClients = sharedClients;
-    this.restoreListener = new ResponsiveRestoreListener(metrics);
-    this.stateListener = new ResponsiveStateListener(metrics);
+
+    final String applicationId = applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG);
+    restoreListener = new ResponsiveRestoreListener(metrics);
+    stateListener = new ResponsiveStateListener(metrics, applicationId, clientId);
 
     super.setGlobalStateRestoreListener(restoreListener);
     super.setStateListener(stateListener);

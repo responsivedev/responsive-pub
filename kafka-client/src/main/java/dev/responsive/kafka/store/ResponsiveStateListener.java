@@ -1,7 +1,8 @@
 package dev.responsive.kafka.store;
 
 import java.io.Closeable;
-import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.Metrics;
@@ -15,13 +16,25 @@ public class ResponsiveStateListener implements StateListener, Closeable {
   private StateListener userStateListener;
   private State currentState;
 
-  public ResponsiveStateListener(final Metrics metrics, final String applicationId) {
+  /**
+   * @param applicationId the Streams application id, ie the shared consumer group id
+   * @param streamsClientId the Streams client id, ie the process-specific id
+   */
+  public ResponsiveStateListener(
+      final Metrics metrics,
+      final String applicationId,
+      final String streamsClientId
+  ) {
     this.metrics = metrics;
+    final Map<String, String> tags = new HashMap<>();
+    tags.put("application-id", applicationId);
+    tags.put("client-id", streamsClientId);
+
     stateMetricName = new MetricName(
         "state",
         "stream-application-metrics",
         "The current KafkaStreams.State expressed as its ordinal value",
-        Collections.singletonMap("application", applicationId)
+        tags
     );
 
     metrics.addMetric(stateMetricName, (Gauge<Long>) (config, now) -> currentStateId());

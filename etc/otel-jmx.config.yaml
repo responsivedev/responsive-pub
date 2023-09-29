@@ -14,7 +14,7 @@ rules:
        unit: '{offset}'
  - bean: dev.responsive:type=responsive.streams,consumerGroup=*,thread=*,topic=*,partition=*
    metricAttribute:
-     group: param(group)
+     group: param(consumerGroup)
      thread: param(thread)
      partition: param(partition)
      topic: param(topic)
@@ -67,9 +67,10 @@ rules:
        unit: '{rebalances-per-hour}'
 
  # Kafka Streams application metrics
- - bean: kafka.streams:type=stream-application-metrics,application-id=*
+ - bean: kafka.streams:type=stream-application-metrics,application-id=*,client-id=*
    metricAttribute:
-     application: param(application-id)
+     applicationid: param(application-id)
+     clientid: param(client-id)
    mapping:
      state:
        metric: kafka.streams.state
