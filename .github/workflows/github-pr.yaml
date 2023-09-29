@@ -51,7 +51,7 @@ jobs:
         with:
           repository: responsivedev/sindri
           path: sindri
-          ref: refs/heads/SYSTEM-TEST-improve-logging
+          ref: refs/heads/main
           token: ${{ secrets.TOOLS_GHA_TOKEN }}
 
       - name: "Login to AWS & ECR"
