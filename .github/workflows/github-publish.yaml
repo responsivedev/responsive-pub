@@ -87,7 +87,7 @@ jobs:
         with:
           repository: responsivedev/sindri
           path: sindri
-          ref: refs/heads/master
+          ref: refs/heads/main
           token: ${{ secrets.TOOLS_GHA_TOKEN }}
 
       - name: "Install Kind"

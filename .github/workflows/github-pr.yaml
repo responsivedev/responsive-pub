@@ -51,7 +51,7 @@ jobs:
         with:
           repository: responsivedev/sindri
           path: sindri
-          ref: refs/heads/master
+          ref: refs/heads/main
           token: ${{ secrets.TOOLS_GHA_TOKEN }}
 
       - name: "Login to AWS & ECR"
@@ -73,8 +73,8 @@ jobs:
       - name: "Run Smoke Test"
         run: |
           sindri/scripts/update-versions -u -s responsiveOperator -e local -i responsive-operator:`./gradlew operator:cV | grep Project.version | sed 's/Project version: //'`
-          sindri/scripts/update-client-versions -s master -p false -i simple-example -t `./gradlew kafka-client:cV  | grep "Project version" | sed 's/Project version: //'`
-          sindri/scripts/run-smoke-test -l -w system-tests-pub-${GITHUB_HEAD_REF} -s master
+          sindri/scripts/update-client-versions -s main -p false -i simple-example -t `./gradlew kafka-client:cV  | grep "Project version" | sed 's/Project version: //'`
+          sindri/scripts/run-smoke-test -l -w system-tests-pub-${GITHUB_HEAD_REF} -s main
         env:
             DD_SERVICE: "https://us5.datadoghq.com/"
             DD_API_KEY: ${{ secrets.DD_API_KEY }}
