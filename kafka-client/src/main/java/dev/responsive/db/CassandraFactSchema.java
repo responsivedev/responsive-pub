@@ -41,6 +41,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import javax.annotation.CheckReturnValue;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -89,7 +90,26 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
                   .withCompactionWindow(
                       compactionWindow.toMinutes(),
                       TimeWindowCompactionStrategy.CompactionWindowUnit.MINUTES)
-          );
+          )
+          // without setting a low gc_grace_seconds, we will have to wait an
+          // additional 10 days (the default gc_grace_seconds) before any SST
+          // on disk is removed. setting a good value for this is somewhat a
+          // "dark art"
+          //
+          // there's no reason to hold on to tombstones (or hints) for more than
+          // the TTL since any data that was written more than ttlSeconds ago
+          // does not need to be replicated to a node that has been down for the
+          // entirety of ttlSeconds
+          //
+          // we choose 6 hours for the minimum value since that's 2x the default
+          // retention for hints (hinted handoff). handoffs are disabled by default
+          // in cloud, so we could theoretically set this to 0, but holding on to
+          // an extra 6 hours of data when TTL is larger than 6 hours anyway isn't
+          // too big of a concern (and it can always be tweaked afterwards)
+          //
+          // see this blog for mor information:
+          // https://thelastpickle.com/blog/2018/03/21/hinted-handoff-gc-grace-demystified.html
+          .withGcGraceSeconds(Math.min(ttlSeconds, (int) TimeUnit.HOURS.toSeconds(6)));
     } else {
       createTable = createTable(tableName)
           .withCompaction(SchemaBuilder.timeWindowCompactionStrategy());
