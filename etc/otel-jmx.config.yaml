@@ -14,7 +14,7 @@ rules:
        unit: '{offset}'
  - bean: dev.responsive:type=responsive.streams,consumerGroup=*,thread=*,topic=*,partition=*
    metricAttribute:
-     group: param(consumerGroup)
+     group: param(group)
      thread: param(thread)
      partition: param(partition)
      topic: param(topic)
