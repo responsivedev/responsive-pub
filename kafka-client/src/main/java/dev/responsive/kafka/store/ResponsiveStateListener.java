@@ -51,7 +51,10 @@ public class ResponsiveStateListener implements StateListener, Closeable {
   @Override
   public void onChange(final State newState, final State oldState) {
     currentState = newState;
-    userStateListener.onChange(newState, oldState);
+
+    if (userStateListener != null) {
+      userStateListener.onChange(newState, oldState);
+    }
   }
 
   private long currentStateId() {
