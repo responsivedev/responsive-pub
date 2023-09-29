@@ -41,8 +41,8 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
 
   private static final Logger LOG = LoggerFactory.getLogger(ResponsiveKafkaStreams.class);
 
-  private final ResponsiveStateListener stateListener;
-  private final ResponsiveRestoreListener restoreListener;
+  private final ResponsiveStateListener responsiveStateListener;
+  private final ResponsiveRestoreListener responsiveRestoreListener;
   private final SharedClients sharedClients;
 
   /**
@@ -237,11 +237,11 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     this.sharedClients = sharedClients;
 
     final String applicationId = applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG);
-    restoreListener = new ResponsiveRestoreListener(metrics);
-    stateListener = new ResponsiveStateListener(metrics, applicationId, clientId);
+    responsiveRestoreListener = new ResponsiveRestoreListener(metrics);
+    responsiveStateListener = new ResponsiveStateListener(metrics, applicationId, clientId);
 
-    super.setGlobalStateRestoreListener(restoreListener);
-    super.setStateListener(stateListener);
+    super.setGlobalStateRestoreListener(responsiveRestoreListener);
+    super.setStateListener(responsiveStateListener);
   }
 
   private static Metrics createMetrics(final StreamsConfig config) {
@@ -303,11 +303,11 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
 
   @Override
   public void setStateListener(final StateListener stateListener) {
-    this.stateListener.registerUserStateListener(stateListener);
+    responsiveStateListener.registerUserStateListener(stateListener);
   }
 
   public StateListener stateListener() {
-    return stateListener.userStateListener();
+    return responsiveStateListener.userStateListener();
   }
 
   /**
@@ -316,19 +316,19 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
    * it will be invoked for global state stores. This will only be invoked for ACTIVE task types,
    * ie not for global or standby tasks.
    *
-   * @param listener The listener triggered when a {@link StateStore} is being restored.
+   * @param restoreListener The listener triggered when a {@link StateStore} is being restored.
    */
   @Override
-  public void setGlobalStateRestoreListener(final StateRestoreListener listener) {
-    restoreListener.registerUserRestoreListener(listener);
+  public void setGlobalStateRestoreListener(final StateRestoreListener restoreListener) {
+    responsiveRestoreListener.registerUserRestoreListener(restoreListener);
   }
 
   public StateRestoreListener stateRestoreListener() {
-    return restoreListener.userListener();
+    return responsiveRestoreListener.userRestoreListener();
   }
 
   private void closeInternal() {
-    stateListener.close();
+    responsiveStateListener.close();
     sharedClients.closeAll();
   }
 
