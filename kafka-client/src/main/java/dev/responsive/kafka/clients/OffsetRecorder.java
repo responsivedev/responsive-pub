@@ -12,7 +12,7 @@ import org.apache.kafka.common.TopicPartition;
 /**
  * Record offsets written to kafka and committed to consumer groups. When a commit happens,
  * notify listeners about the set of offsets.
- *
+ * <p>
  * The callbacks here need to be synchronized. Almost all the callbacks happen on the stream
  * thread. The lone exception is the Send callback, which happens on Producer I/O threads.
  */

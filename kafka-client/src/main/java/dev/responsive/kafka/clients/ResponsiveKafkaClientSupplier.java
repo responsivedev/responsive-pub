@@ -175,6 +175,10 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
     );
   }
 
+  /**
+   * @param clientId the producer client id
+   * @return the extracted StreamThread id, of the form "StreamThread-n"
+   */
   private String threadIdFromProducerConfig(final String clientId) {
     final var regex = Pattern.compile(".*-(StreamThread-\\d+)-producer");
     final var match = regex.matcher(clientId);
@@ -185,6 +189,10 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
     return match.group(1);
   }
 
+  /**
+   * @param clientId the consumer client id
+   * @return the extracted StreamThread id, of the form "StreamThread-n"
+   */
   private String threadIdFromConsumerConfig(final String clientId) {
     final var regex = Pattern.compile(".*-(StreamThread-\\d+)-consumer$");
     final var match = regex.matcher(clientId);

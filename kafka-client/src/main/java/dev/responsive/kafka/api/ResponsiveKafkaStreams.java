@@ -9,6 +9,7 @@ import dev.responsive.kafka.clients.SharedClients;
 import dev.responsive.kafka.clients.config.ResponsiveStreamsConfig;
 import dev.responsive.kafka.config.ResponsiveConfig;
 import dev.responsive.kafka.store.ResponsiveRestoreListener;
+import dev.responsive.kafka.store.ResponsiveStateListener;
 import dev.responsive.kafka.store.ResponsiveStoreRegistry;
 import java.time.Duration;
 import java.util.Collections;
@@ -40,7 +41,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
 
   private static final Logger LOG = LoggerFactory.getLogger(ResponsiveKafkaStreams.class);
 
-  private StateListener stateListener;
+  private final ResponsiveStateListener stateListener;
   private final ResponsiveRestoreListener restoreListener;
   private final SharedClients sharedClients;
 
@@ -234,8 +235,10 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     }
     this.sharedClients = sharedClients;
     this.restoreListener = new ResponsiveRestoreListener(metrics);
+    this.stateListener = new ResponsiveStateListener(metrics);
 
     super.setGlobalStateRestoreListener(restoreListener);
+    super.setStateListener(stateListener);
   }
 
   private static Metrics createMetrics(final StreamsConfig config) {
@@ -297,12 +300,11 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
 
   @Override
   public void setStateListener(final StateListener stateListener) {
-    super.setStateListener(stateListener);
-    this.stateListener = stateListener;
+    this.stateListener.registerUserStateListener(stateListener);
   }
 
   public StateListener stateListener() {
-    return stateListener;
+    return stateListener.userStateListener();
   }
 
   /**
@@ -322,27 +324,28 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     return restoreListener.userListener();
   }
 
-  private void closeClients() {
+  private void closeInternal() {
+    stateListener.close();
     sharedClients.closeAll();
   }
 
   @Override
   public void close() {
     super.close();
-    closeClients();
+    closeInternal();
   }
 
   @Override
   public boolean close(final Duration timeout) {
     final boolean closed = super.close(timeout);
-    closeClients();
+    closeInternal();
     return closed;
   }
 
   @Override
   public boolean close(final CloseOptions options) {
     final boolean closed = super.close(options);
-    closeClients();
+    closeInternal();
     return closed;
   }
 }
