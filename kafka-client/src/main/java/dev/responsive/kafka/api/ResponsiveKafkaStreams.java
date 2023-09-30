@@ -9,6 +9,7 @@ import dev.responsive.kafka.clients.SharedClients;
 import dev.responsive.kafka.clients.config.ResponsiveStreamsConfig;
 import dev.responsive.kafka.config.ResponsiveConfig;
 import dev.responsive.kafka.store.ResponsiveRestoreListener;
+import dev.responsive.kafka.store.ResponsiveStateListener;
 import dev.responsive.kafka.store.ResponsiveStoreRegistry;
 import java.time.Duration;
 import java.util.Collections;
@@ -40,8 +41,8 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
 
   private static final Logger LOG = LoggerFactory.getLogger(ResponsiveKafkaStreams.class);
 
-  private StateListener stateListener;
-  private final ResponsiveRestoreListener restoreListener;
+  private final ResponsiveStateListener responsiveStateListener;
+  private final ResponsiveRestoreListener responsiveRestoreListener;
   private final SharedClients sharedClients;
 
   /**
@@ -228,14 +229,19 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     );
 
     try {
-      ResponsiveStreamsConfig.validateStreamsConfig(super.applicationConfigs);
+      ResponsiveStreamsConfig.validateStreamsConfig(applicationConfigs);
     } catch (final ConfigException e) {
       throw new StreamsException("Configuration error, please check your properties");
     }
-    this.sharedClients = sharedClients;
-    this.restoreListener = new ResponsiveRestoreListener(metrics);
 
-    super.setGlobalStateRestoreListener(restoreListener);
+    this.sharedClients = sharedClients;
+
+    final String applicationId = applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG);
+    responsiveRestoreListener = new ResponsiveRestoreListener(metrics);
+    responsiveStateListener = new ResponsiveStateListener(metrics, applicationId, clientId);
+
+    super.setGlobalStateRestoreListener(responsiveRestoreListener);
+    super.setStateListener(responsiveStateListener);
   }
 
   private static Metrics createMetrics(final StreamsConfig config) {
@@ -297,12 +303,11 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
 
   @Override
   public void setStateListener(final StateListener stateListener) {
-    super.setStateListener(stateListener);
-    this.stateListener = stateListener;
+    responsiveStateListener.registerUserStateListener(stateListener);
   }
 
   public StateListener stateListener() {
-    return stateListener;
+    return responsiveStateListener.userStateListener();
   }
 
   /**
@@ -311,38 +316,39 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
    * it will be invoked for global state stores. This will only be invoked for ACTIVE task types,
    * ie not for global or standby tasks.
    *
-   * @param listener The listener triggered when a {@link StateStore} is being restored.
+   * @param restoreListener The listener triggered when a {@link StateStore} is being restored.
    */
   @Override
-  public void setGlobalStateRestoreListener(final StateRestoreListener listener) {
-    restoreListener.registerUserRestoreListener(listener);
+  public void setGlobalStateRestoreListener(final StateRestoreListener restoreListener) {
+    responsiveRestoreListener.registerUserRestoreListener(restoreListener);
   }
 
   public StateRestoreListener stateRestoreListener() {
-    return restoreListener.userListener();
+    return responsiveRestoreListener.userRestoreListener();
   }
 
-  private void closeClients() {
+  private void closeInternal() {
+    responsiveStateListener.close();
     sharedClients.closeAll();
   }
 
   @Override
   public void close() {
     super.close();
-    closeClients();
+    closeInternal();
   }
 
   @Override
   public boolean close(final Duration timeout) {
     final boolean closed = super.close(timeout);
-    closeClients();
+    closeInternal();
     return closed;
   }
 
   @Override
   public boolean close(final CloseOptions options) {
     final boolean closed = super.close(options);
-    closeClients();
+    closeInternal();
     return closed;
   }
 }

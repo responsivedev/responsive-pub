@@ -14,7 +14,7 @@ rules:
        unit: '{offset}'
  - bean: dev.responsive:type=responsive.streams,consumerGroup=*,thread=*,topic=*,partition=*
    metricAttribute:
-     group: param(group)
+     group: param(consumerGroup)
      thread: param(thread)
      partition: param(partition)
      topic: param(topic)
@@ -65,6 +65,18 @@ rules:
        type: gauge
        desc: the rate of failed rebalances
        unit: '{rebalances-per-hour}'
+
+ # Kafka Streams application metrics
+ - bean: kafka.streams:type=stream-application-metrics,application-id=*,client-id=*
+   metricAttribute:
+     applicationid: param(application-id)
+     clientid: param(client-id)
+   mapping:
+     state:
+       metric: kafka.streams.state
+       type: gauge
+       desc: the KafkaStreams.State
+       unit: '{state}'
 
  # Kafka Streams topic metrics
  - bean: kafka.streams:type=stream-topic-metrics,thread-id=*,task-id=*,processor-node-id=*,topic=*

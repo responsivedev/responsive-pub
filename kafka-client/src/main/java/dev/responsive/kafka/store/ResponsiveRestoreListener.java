@@ -31,18 +31,18 @@ public class ResponsiveRestoreListener implements StateRestoreListener {
 
   private final Metrics metrics;
 
-  private StateRestoreListener userListener;
+  private StateRestoreListener userRestoreListener;
 
   public ResponsiveRestoreListener(final Metrics metrics) {
     this.metrics = metrics;
   }
 
   public void registerUserRestoreListener(final StateRestoreListener restoreListener) {
-    userListener = restoreListener;
+    userRestoreListener = restoreListener;
   }
 
-  public StateRestoreListener userListener() {
-    return userListener;
+  public StateRestoreListener userRestoreListener() {
+    return userRestoreListener;
   }
 
   @Override
@@ -55,8 +55,8 @@ public class ResponsiveRestoreListener implements StateRestoreListener {
     LOG.info("Beginning restoration from offset {} to {} for partition {} of state store {}",
              startingOffset, endingOffset, topicPartition, storeName);
 
-    if (userListener != null) {
-      userListener.onRestoreStart(
+    if (userRestoreListener != null) {
+      userRestoreListener.onRestoreStart(
           topicPartition,
           storeName,
           startingOffset,
@@ -74,8 +74,8 @@ public class ResponsiveRestoreListener implements StateRestoreListener {
     LOG.debug("Restored {} more records up to offset {} for partition {} of state store {}",
               numRestored, batchEndOffset, topicPartition, storeName);
 
-    if (userListener != null) {
-      userListener.onBatchRestored(
+    if (userRestoreListener != null) {
+      userRestoreListener.onBatchRestored(
           topicPartition,
           storeName,
           batchEndOffset,
@@ -92,8 +92,8 @@ public class ResponsiveRestoreListener implements StateRestoreListener {
     LOG.info("Finished restoration of {} total records for partition {} of state store {}",
              totalRestored, topicPartition, storeName);
 
-    if (userListener != null) {
-      userListener.onRestoreEnd(
+    if (userRestoreListener != null) {
+      userRestoreListener.onRestoreEnd(
           topicPartition,
           storeName,
           totalRestored);
