@@ -22,15 +22,15 @@ import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils
 
 import dev.responsive.api.config.ResponsiveConfig;
 import dev.responsive.api.stores.ResponsiveWindowParams;
-import dev.responsive.internal.utils.SharedClients;
 import dev.responsive.internal.config.InternalConfigs;
 import dev.responsive.internal.db.CassandraClient;
 import dev.responsive.internal.db.RemoteWindowedSchema;
 import dev.responsive.internal.db.StampedKeySpec;
 import dev.responsive.internal.db.partitioning.SubPartitioner;
-import dev.responsive.internal.utils.Result;
-import dev.responsive.internal.utils.Stamped;
 import dev.responsive.internal.utils.Iterators;
+import dev.responsive.internal.utils.Result;
+import dev.responsive.internal.utils.SharedClients;
+import dev.responsive.internal.utils.Stamped;
 import dev.responsive.internal.utils.TableName;
 import java.util.concurrent.TimeoutException;
 import org.apache.kafka.common.TopicPartition;

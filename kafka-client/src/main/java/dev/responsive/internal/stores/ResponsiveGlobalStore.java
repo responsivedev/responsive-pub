@@ -19,10 +19,10 @@ package dev.responsive.internal.stores;
 import static dev.responsive.internal.utils.SharedClients.loadSharedClients;
 
 import dev.responsive.api.stores.ResponsiveKeyValueParams;
-import dev.responsive.internal.utils.SharedClients;
 import dev.responsive.internal.db.CassandraClient;
 import dev.responsive.internal.db.RemoteKeyValueSchema;
 import dev.responsive.internal.db.partitioning.SubPartitioner;
+import dev.responsive.internal.utils.SharedClients;
 import dev.responsive.internal.utils.TableName;
 import java.util.List;
 import java.util.concurrent.TimeoutException;

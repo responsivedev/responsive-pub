@@ -17,7 +17,6 @@
 package dev.responsive.internal.stores;
 
 import dev.responsive.api.config.ResponsiveConfig;
-import dev.responsive.internal.utils.SharedClients;
 import dev.responsive.internal.db.CassandraClient;
 import dev.responsive.internal.db.KeySpec;
 import dev.responsive.internal.db.MetadataRow;
@@ -25,8 +24,9 @@ import dev.responsive.internal.db.RemoteSchema;
 import dev.responsive.internal.db.RemoteWriter;
 import dev.responsive.internal.db.WriterFactory;
 import dev.responsive.internal.db.partitioning.SubPartitioner;
-import dev.responsive.internal.utils.Result;
 import dev.responsive.internal.utils.Iterators;
+import dev.responsive.internal.utils.Result;
+import dev.responsive.internal.utils.SharedClients;
 import dev.responsive.internal.utils.TableName;
 import java.time.Duration;
 import java.time.Instant;

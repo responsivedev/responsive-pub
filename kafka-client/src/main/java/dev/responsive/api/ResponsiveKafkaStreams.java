@@ -5,7 +5,6 @@ import static dev.responsive.api.config.ResponsiveConfig.TASK_ASSIGNOR_CLASS_OVE
 import com.datastax.oss.driver.api.core.CqlSession;
 import dev.responsive.api.config.ResponsiveConfig;
 import dev.responsive.internal.clients.ResponsiveKafkaClientSupplier;
-import dev.responsive.internal.utils.SharedClients;
 import dev.responsive.internal.config.InternalConfigs;
 import dev.responsive.internal.config.ResponsiveStreamsConfig;
 import dev.responsive.internal.db.CassandraClient;
@@ -14,6 +13,7 @@ import dev.responsive.internal.db.DefaultCassandraClientFactory;
 import dev.responsive.internal.metrics.ResponsiveStateListener;
 import dev.responsive.internal.stores.ResponsiveRestoreListener;
 import dev.responsive.internal.stores.ResponsiveStoreRegistry;
+import dev.responsive.internal.utils.SharedClients;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;

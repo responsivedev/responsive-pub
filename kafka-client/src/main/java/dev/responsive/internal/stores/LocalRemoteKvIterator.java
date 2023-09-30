@@ -16,8 +16,8 @@
 
 package dev.responsive.internal.stores;
 
-import dev.responsive.internal.utils.Result;
 import dev.responsive.internal.utils.Iterators;
+import dev.responsive.internal.utils.Result;
 import java.util.Comparator;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
