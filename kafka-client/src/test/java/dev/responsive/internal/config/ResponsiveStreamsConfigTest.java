@@ -20,7 +20,6 @@ package dev.responsive.internal.config;
 
 import static dev.responsive.internal.config.ResponsiveStreamsConfig.verifyNoStandbys;
 import static dev.responsive.internal.config.ResponsiveStreamsConfig.verifyNotEosV1;
-import static dev.responsive.internal.config.ResponsiveStreamsConfig.verifyTopologyOptimizationConfig;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.Map;
@@ -74,78 +73,5 @@ class ResponsiveStreamsConfigTest {
             StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE
         )))
     );
-  }
-
-  @Test
-  public void shouldNotThrowOnEOSV2() {
-    verifyTopologyOptimizationConfig(new StreamsConfig(Map.of(
-        StreamsConfig.APPLICATION_ID_CONFIG, "foo",
-        CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "foo.bar",
-        StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2
-    )));
-  }
-
-  @Test
-  public void shouldNotThrowOnALOS() {
-    verifyTopologyOptimizationConfig(new StreamsConfig(Map.of(
-        StreamsConfig.APPLICATION_ID_CONFIG, "foo",
-        CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "foo.bar",
-        StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.AT_LEAST_ONCE
-    )));
-  }
-  
-  @Test
-  public void shouldThrowOnEnableAllOptimizations() {
-    assertThrows(
-        ConfigException.class,
-        () -> verifyTopologyOptimizationConfig(new StreamsConfig(Map.of(
-            StreamsConfig.APPLICATION_ID_CONFIG, "foo",
-            CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "foo.bar",
-            StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE
-        )))
-    );
-  }
-
-  @Test
-  public void shouldThrowOnEnableReuseSourceTopicOptimizations() {
-    assertThrows(
-        ConfigException.class,
-        () -> verifyTopologyOptimizationConfig(new StreamsConfig(Map.of(
-            StreamsConfig.APPLICATION_ID_CONFIG, "foo",
-            CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "foo.bar",
-            StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS
-        )))
-    );
-  }
-
-  @Test
-  public void shouldThrowOnEnableReuseSourceTopicMultiOptimization() {
-    assertThrows(
-        ConfigException.class,
-        () -> verifyTopologyOptimizationConfig(new StreamsConfig(Map.of(
-            StreamsConfig.APPLICATION_ID_CONFIG, "foo",
-            CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "foo.bar",
-            StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG,
-            StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS + "," + StreamsConfig.MERGE_REPARTITION_TOPICS
-        )))
-    );
-  }
-
-  @Test
-  public void shouldNotThrowWhenOptimizationsOff() {
-    verifyTopologyOptimizationConfig(new StreamsConfig(Map.of(
-        StreamsConfig.APPLICATION_ID_CONFIG, "foo",
-        CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "foo.bar")
-    ));
-  }
-
-  @Test
-  public void shouldNotThrowWhenOptimizationsDoNotIncludeReuseSourceTopic() {
-    verifyTopologyOptimizationConfig(new StreamsConfig(Map.of(
-        StreamsConfig.APPLICATION_ID_CONFIG, "foo",
-        CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "foo.bar",
-        StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG,
-        StreamsConfig.SINGLE_STORE_SELF_JOIN + "," + StreamsConfig.MERGE_REPARTITION_TOPICS)
-    ));
   }
 }
