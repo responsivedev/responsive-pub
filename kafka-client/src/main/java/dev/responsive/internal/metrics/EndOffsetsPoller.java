@@ -263,7 +263,7 @@ public class EndOffsetsPoller {
     }
   }
 
-  interface Factories {
+  public interface Factories {
     default Admin createAdminClient(final Map<String, Object> configs) {
       return Admin.create(configs);
     }
