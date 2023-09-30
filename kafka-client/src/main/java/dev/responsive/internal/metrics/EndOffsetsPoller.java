@@ -190,7 +190,7 @@ public class EndOffsetsPoller {
 
   }
 
-  static class Listener implements ResponsiveConsumer.Listener {
+  public static class Listener implements ResponsiveConsumer.Listener {
     private final String threadId;
     private final Map<TopicPartition, Long> endOffsets = new ConcurrentHashMap<>();
     private final Logger log;
@@ -206,7 +206,7 @@ public class EndOffsetsPoller {
 
     @Override
     public void onPartitionsLost(final Collection<TopicPartition> lost) {
-      // For now we can just delegate to #onPartitionsRevoked here since we're just
+      // For now, we can just delegate to #onPartitionsRevoked here since we're just
       // cleaning up partitions we no longer own, but these callbacks are semantically
       // distinct and may need individual implementations if more sophisticated metrics
       // are ever introduced
