@@ -55,6 +55,10 @@ import org.slf4j.Logger;
 
 class CommitBuffer<K, S extends RemoteSchema<K>> implements RecordBatchingStateRestoreCallback {
 
+  // Keep INFO level logging to a reasonable frequency
+  private static final long INFO_LOGGING_OFFSET_INTERVAL = 50_000L;
+  private long lastOffsetLogged = 0L;
+
   public static final int MAX_BATCH_SIZE = 1000;
   private final Logger log;
 
@@ -270,11 +274,6 @@ class CommitBuffer<K, S extends RemoteSchema<K>> implements RecordBatchingStateR
     return remoteSchema.metadata(tableName, basePartition).offset;
   }
 
-  // Visible For Testing
-  int size() {
-    return buffer.getReader().size();
-  }
-
   private long totalBytesBuffered() {
     return buffer.getBytes();
   }
@@ -284,44 +283,50 @@ class CommitBuffer<K, S extends RemoteSchema<K>> implements RecordBatchingStateR
     boolean bytesTrigger = false;
     boolean timeTrigger = false;
     if (buffer.getReader().size() >= flushTriggers.getRecords()) {
-      log.info("will flush due to records buffered {} over trigger {}",
+      log.debug("Will flush due to records buffered {} over trigger {}",
           buffer.getReader().size(),
           flushTriggers.getRecords()
       );
       recordsTrigger = true;
     } else {
-      log.debug("records buffered {} not over trigger {}",
+      log.debug("Records buffered since last flush {} not over trigger {}",
           buffer.getReader().size(),
           flushTriggers.getRecords()
       );
     }
     final long totalBytesBuffered = totalBytesBuffered();
     if (totalBytesBuffered >= flushTriggers.getBytes()) {
-      log.info("will flush due to bytes buffered {} over bytes trigger {}",
+      log.debug("Will flush due to bytes buffered {} over bytes trigger {}",
           totalBytesBuffered,
           flushTriggers.getBytes()
       );
       bytesTrigger = true;
     } else {
-      log.debug("bytes buffered {} not over trigger {}",
+      log.debug("Bytes buffered since last flush {} not over trigger {}",
           totalBytesBuffered,
           flushTriggers.getBytes()
       );
     }
     final var now = clock.get();
     if (lastFlush.plus(flushTriggers.getInterval()).isBefore(now)) {
-      log.info("will flush due to time since last flush {} over interval trigger {}",
+      log.debug("Will flush as time since last flush {} over interval trigger {}",
           Duration.between(lastFlush, now),
           now
       );
       timeTrigger = true;
     } else {
-      log.debug("time since last flush {} not over trigger {}",
+      log.debug("Time since last flush {} not over trigger {}",
           Duration.between(lastFlush, now),
           now
       );
     }
-    return recordsTrigger || bytesTrigger || timeTrigger;
+    final boolean shouldFlush = recordsTrigger || bytesTrigger || timeTrigger;
+
+    if (shouldFlush) {
+      log.info("Triggering flush due to recordsTrigger={}, bytesTrigger={}, timeTrigger={}",
+                recordsTrigger, bytesTrigger, timeTrigger);
+    }
+    return shouldFlush;
   }
 
   public void flush(long offset) {
@@ -331,7 +336,7 @@ class CommitBuffer<K, S extends RemoteSchema<K>> implements RecordBatchingStateR
 
     if (buffer.getReader().isEmpty()) {
       // no need to do anything if the buffer is empty
-      log.info("Ignoring flush() to empty commit buffer");
+      log.debug("Ignoring flush() of empty commit buffer");
       return;
     }
 
@@ -345,7 +350,7 @@ class CommitBuffer<K, S extends RemoteSchema<K>> implements RecordBatchingStateR
   @SuppressWarnings("BooleanMethodIsAlwaysInverted")
   private RemoteWriteResult flush(final long offset, final int batchSize) {
     final long startNs = System.nanoTime();
-    log.info("Flushing {} records to remote (offset={}, writer={})",
+    log.debug("Flushing {} records to remote (offset={}, writer={})",
         buffer.getReader().size(),
         offset,
         writerFactory
@@ -386,7 +391,7 @@ class CommitBuffer<K, S extends RemoteSchema<K>> implements RecordBatchingStateR
       return writeResult;
     }
 
-    log.info("Flushed {} records to remote in {}ms (offset={}, writer={}, numPartitions={})",
+    log.debug("Flushed {} records to remote in {}ms (offset={}, writer={}, numPartitions={})",
         buffer.getReader().size(),
         TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNs),
         offset,
@@ -394,6 +399,11 @@ class CommitBuffer<K, S extends RemoteSchema<K>> implements RecordBatchingStateR
         writers.size()
     );
     buffer.clear();
+
+    if (offset - lastOffsetLogged > INFO_LOGGING_OFFSET_INTERVAL) {
+      log.info("Flushed to remote up to offset {}", offset);
+      lastOffsetLogged = offset;
+    }
 
     maybeTruncateChangelog(offset);
     return RemoteWriteResult.success(partition);
