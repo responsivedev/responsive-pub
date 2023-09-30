@@ -109,7 +109,7 @@ public class CommitBufferTest {
         .build();
     client = new CassandraClient(session, config);
     schema = new CassandraKeyValueSchema(client);
-    changelogTp = new TopicPartition("log", KAFKA_PARTITION);
+    changelogTp = new TopicPartition(name + "-changelog", KAFKA_PARTITION);
     partitioner = SubPartitioner.NO_SUBPARTITIONS;
 
     schema.create(name, Optional.empty());
@@ -236,6 +236,31 @@ public class CommitBufferTest {
     final CommitBuffer<Bytes, RemoteKeyValueSchema> buffer = new CommitBuffer<>(
         client, tableName, changelogTp, admin, schema,
         KEY_SPEC, false, TRIGGERS, partitioner);
+    buffer.init();
+    buffer.put(KEY, VALUE, CURRENT_TS);
+
+    // when:
+    buffer.flush(100L);
+
+    // Then:
+    verifyNoInteractions(admin);
+  }
+
+  @Test
+  public void shouldNotTruncateTopicAfterFlushIfTruncateEnabledForSourceTopicChangelog() {
+    // Given:
+    final String tableName = name;
+    final CommitBuffer<Bytes, RemoteKeyValueSchema> buffer = new CommitBuffer<>(
+        client,
+        tableName,
+        new TopicPartition("some-source-topic", KAFKA_PARTITION),
+        admin,
+        schema,
+        KEY_SPEC,
+        true,
+        TRIGGERS,
+        partitioner
+    );
     buffer.init();
     buffer.put(KEY, VALUE, CURRENT_TS);
 

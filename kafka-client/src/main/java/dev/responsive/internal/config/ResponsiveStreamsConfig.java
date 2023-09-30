@@ -43,7 +43,6 @@ public class ResponsiveStreamsConfig extends StreamsConfig {
   public static void validateStreamsConfig(final StreamsConfig streamsConfig) {
     verifyNoStandbys(streamsConfig);
     verifyNotEosV1(streamsConfig);
-    verifyTopologyOptimizationConfig(streamsConfig);
   }
 
   static void verifyNoStandbys(final StreamsConfig config) throws ConfigException {
@@ -66,22 +65,6 @@ public class ResponsiveStreamsConfig extends StreamsConfig {
   static void verifyNotEosV1(final StreamsConfig config) throws ConfigException {
     if (EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
       throw new ConfigException("Responsive driver can only be used with ALOS/EOS-V2");
-    }
-  }
-
-  static void verifyTopologyOptimizationConfig(final StreamsConfig config)
-      throws ConfigException {
-    final String optimizations = config.getString(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG);
-    if (optimizations.equals(StreamsConfig.OPTIMIZE)
-        || optimizations.contains(StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS)) {
-      LOG.error("Responsive stores are not currently compatible with the source topic optimization."
-                    + " This application was configured with {}", optimizations);
-      throw new ConfigException(
-          "Responsive stores cannot be used with reuse.ktable.source.topics optimization, please "
-              + "reach out to us if you are attempting to migrate an existing application that "
-              + "uses this optimization. For new applications, please disable this optimization "
-              + "by setting only the desired subset of optimizations, or else disabling all of"
-              + "them. See StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIGS for the list of options");
     }
   }
 

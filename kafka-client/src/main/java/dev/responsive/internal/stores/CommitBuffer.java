@@ -152,15 +152,25 @@ class CommitBuffer<K, S extends RemoteSchema<K>> implements RecordBatchingStateR
 
     this.buffer = new SizeTrackingBuffer<>(keySpec);
     this.keySpec = keySpec;
-    this.truncateChangelog = truncateChangelog;
     this.flushTriggers = flushTriggers;
     this.maxBatchSize = maxBatchSize;
     this.subPartitioner = subPartitioner;
     this.clock = clock;
 
-    final String logPrefix = String.format("commit-buffer-%s[%d] ", tableName, partition);
-    final LogContext logContext = new LogContext(logPrefix);
-    log = logContext.logger(CommitBuffer.class);
+    final String logPrefix = String.format("commit-buffer [%s-%d] ", tableName, partition);
+    log = new LogContext(logPrefix).logger(CommitBuffer.class);
+
+    if (truncateChangelog && hasSourceTopicChangelog(changelog.topic())) {
+      this.truncateChangelog = false;
+      log.warn("Changelog truncation is not compatible with the source-topic changelog "
+                   + "optimization, and will not be enabled for this source-topic table");
+    } else {
+      this.truncateChangelog = truncateChangelog;
+    }
+  }
+
+  private static boolean hasSourceTopicChangelog(final String changelogTopicName) {
+    return !changelogTopicName.endsWith("changelog");
   }
 
   public void init() {
