@@ -60,6 +60,7 @@ import dev.responsive.internal.db.DefaultCassandraClientFactory;
 import dev.responsive.internal.db.RemoteKeyValueSchema;
 import dev.responsive.internal.stores.SchemaTypes.KVSchema;
 import dev.responsive.testutils.IntegrationTestUtils;
+import dev.responsive.testutils.IntegrationTestUtils.MockResponsiveKafkaStreams;
 import dev.responsive.testutils.ResponsiveConfigParam;
 import dev.responsive.testutils.ResponsiveExtension;
 import java.time.Duration;
@@ -95,10 +96,8 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes.LongSerde;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
@@ -347,12 +346,10 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
 
     final Properties builderProperties = new Properties();
     builderProperties.putAll(properties);
-    return new ResponsiveKafkaStreams(
+    return new MockResponsiveKafkaStreams(
         builder.build(builderProperties),
-        ResponsiveConfig.loggedConfig(properties),
-        new StreamsConfig(properties),
+        properties,
         clientSupplier,
-        Time.SYSTEM,
         cassandraClientFactory
     );
   }

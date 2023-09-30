@@ -141,7 +141,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     );
   }
 
-  ResponsiveKafkaStreams(
+  protected ResponsiveKafkaStreams(
       final Topology topology,
       final ResponsiveConfig responsiveConfig,
       final StreamsConfig baseStreamsConfig,

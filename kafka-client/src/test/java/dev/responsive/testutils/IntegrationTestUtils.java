@@ -3,6 +3,9 @@ package dev.responsive.testutils;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_CONFIG;
 
 import dev.responsive.api.ResponsiveKafkaStreams;
+import dev.responsive.api.config.ResponsiveConfig;
+import dev.responsive.internal.config.ResponsiveStreamsConfig;
+import dev.responsive.internal.db.CassandraClientFactory;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -28,13 +31,38 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KafkaStreams.StateListener;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.Topology;
 import org.junit.jupiter.api.TestInfo;
 
 public final class IntegrationTestUtils {
+
+  /**
+   * Simple override that allows plugging in a custom CassandraClientFactory
+   * to mock or verify this connection in tests
+   */
+  public static class MockResponsiveKafkaStreams extends ResponsiveKafkaStreams {
+    public MockResponsiveKafkaStreams(
+        final Topology topology,
+        final Map<?, ?> config,
+        final KafkaClientSupplier clientSupplier,
+        final CassandraClientFactory clientFactory
+    ) {
+      super(
+          topology,
+          ResponsiveConfig.responsiveConfig(config),
+          ResponsiveStreamsConfig.streamsConfig(config),
+          clientSupplier,
+          Time.SYSTEM,
+          clientFactory
+      );
+    }
+  }
 
   public static String getCassandraValidName(final TestInfo info) {
     // add displayName to name to account for parameterized tests
