@@ -75,7 +75,7 @@ public class OffsetRecorder {
   }
 
   @FunctionalInterface
-  interface CommitCallback {
+  public interface CommitCallback {
     void onCommit(
         final Map<RecordingKey, Long> committedOffsets,
         final Map<TopicPartition, Long> lastWrittenOffsets
