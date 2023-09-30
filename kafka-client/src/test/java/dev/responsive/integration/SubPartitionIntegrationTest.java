@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package dev.responsive.internal.stores;
+package dev.responsive.integration;
 
 import static dev.responsive.api.config.ResponsiveConfig.STORAGE_DESIRED_NUM_PARTITION_CONFIG;
 import static dev.responsive.api.config.ResponsiveConfig.STORE_FLUSH_RECORDS_TRIGGER_CONFIG;
@@ -48,6 +48,7 @@ import dev.responsive.internal.db.CassandraKeyValueSchema;
 import dev.responsive.internal.db.RemoteKeyValueSchema;
 import dev.responsive.internal.db.partitioning.Hasher;
 import dev.responsive.internal.db.partitioning.SubPartitioner;
+import dev.responsive.internal.stores.ResponsiveMaterialized;
 import dev.responsive.internal.utils.TableName;
 import dev.responsive.testutils.ResponsiveConfigParam;
 import dev.responsive.testutils.ResponsiveExtension;

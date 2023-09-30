@@ -76,7 +76,7 @@ public class EndOffsetsPoller {
     );
   }
 
-  EndOffsetsPoller(
+  public EndOffsetsPoller(
       final Map<String, ?> configs,
       final Metrics metrics,
       final ScheduledExecutorService executor,

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package dev.responsive.internal.structs;
+package dev.responsive.internal.utils;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 

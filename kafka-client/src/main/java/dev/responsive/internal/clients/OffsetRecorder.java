@@ -24,7 +24,7 @@ public class OffsetRecorder {
   private final List<CommitCallback> commitCallback = new LinkedList<>();
   private final boolean eos;
 
-  OffsetRecorder(final boolean eos) {
+  public OffsetRecorder(final boolean eos) {
     this.eos = eos;
   }
 

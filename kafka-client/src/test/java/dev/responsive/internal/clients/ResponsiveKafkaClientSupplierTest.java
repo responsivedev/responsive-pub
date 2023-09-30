@@ -25,9 +25,9 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import dev.responsive.internal.clients.ResponsiveKafkaClientSupplier.Factories;
 import dev.responsive.internal.metrics.EndOffsetsPoller;
 import dev.responsive.internal.metrics.MetricPublishingCommitListener;
-import dev.responsive.internal.clients.ResponsiveKafkaClientSupplier.Factories;
 import dev.responsive.internal.stores.ResponsiveStoreRegistry;
 import java.util.HashMap;
 import java.util.List;

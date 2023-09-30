@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package dev.responsive.api;
+package dev.responsive.integration;
 
 import static dev.responsive.testutils.IntegrationTestUtils.getCassandraValidName;
 import static dev.responsive.testutils.IntegrationTestUtils.pipeInput;
@@ -50,6 +50,7 @@ import static org.mockito.Mockito.spy;
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.cql.BatchStatement;
 import com.datastax.oss.driver.api.core.cql.Statement;
+import dev.responsive.api.ResponsiveKafkaStreams;
 import dev.responsive.api.config.ResponsiveConfig;
 import dev.responsive.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.api.stores.ResponsiveStores;

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package dev.responsive.internal.stores;
+package dev.responsive.integration;
 
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;

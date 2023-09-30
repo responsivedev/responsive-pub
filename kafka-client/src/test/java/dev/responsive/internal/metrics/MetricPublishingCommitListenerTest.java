@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package dev.responsive.internal.clients;
+package dev.responsive.internal.metrics;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsInAnyOrder;
@@ -23,7 +23,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-import dev.responsive.internal.metrics.MetricPublishingCommitListener;
+import dev.responsive.internal.clients.OffsetRecorder;
 import dev.responsive.internal.clients.ResponsiveProducer.Listener;
 import java.util.List;
 import java.util.Map;

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package dev.responsive.internal.stores;
+package dev.responsive.integration;
 
 import static dev.responsive.testutils.IntegrationTestUtils.awaitOutput;
 import static dev.responsive.testutils.IntegrationTestUtils.pipeInput;

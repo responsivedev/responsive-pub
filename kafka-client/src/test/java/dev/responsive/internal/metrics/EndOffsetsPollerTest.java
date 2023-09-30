@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package dev.responsive.internal.clients;
+package dev.responsive.internal.metrics;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.contains;
