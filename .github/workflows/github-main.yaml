@@ -33,7 +33,7 @@ jobs:
           java-version: '11'
           distribution: 'temurin'
 
-      - name: "Login to AWS & ECR"
+      - name: "Login to AWS & Public ECR"
         uses: ./.github/actions/aws-and-ecr-login
         id: login-ecr-public
         with:

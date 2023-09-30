@@ -14,7 +14,7 @@ public class ResponsiveStateListener implements StateListener, Closeable {
   private final MetricName stateMetricName;
 
   private StateListener userStateListener;
-  private State currentState;
+  private State currentState = State.CREATED;
 
   /**
    * @param applicationId the Streams application id, ie the shared consumer group id

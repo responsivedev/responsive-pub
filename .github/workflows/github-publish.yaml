@@ -8,7 +8,7 @@ on:
       increment:
         required: false
         default: incrementMinor
-        description: "version increment (default minor)"
+        description: "version increment (default: minor)"
 jobs:
   publish-and-increment:
     permissions:
