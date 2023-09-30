@@ -17,6 +17,10 @@
 package dev.responsive.kafka.integration;
 
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.createTopicsAndWait;
+import static dev.responsive.kafka.testutils.IntegrationTestUtils.getCassandraValidName;
+import static dev.responsive.kafka.testutils.IntegrationTestUtils.pipeInput;
+import static dev.responsive.kafka.testutils.IntegrationTestUtils.readOutput;
+import static dev.responsive.kafka.testutils.IntegrationTestUtils.startAppAndAwaitRunning;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
@@ -42,7 +46,6 @@ import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.api.stores.ResponsiveStores;
 import dev.responsive.kafka.internal.stores.SchemaTypes.KVSchema;
 import dev.responsive.kafka.internal.utils.RemoteMonitor;
-import dev.responsive.kafka.testutils.IntegrationTestUtils;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
 import java.time.Duration;
@@ -104,13 +107,13 @@ public class ResponsivePartitionedStoreEosIntegrationTest {
       @ResponsiveConfigParam final Map<String, Object> responsiveProps
   ) {
     // add displayName to name to account for parameterized tests
-    name = IntegrationTestUtils.getCassandraValidName(info);
+    name = getCassandraValidName(info);
     executor = new ScheduledThreadPoolExecutor(2);
 
     this.responsiveProps.putAll(responsiveProps);
 
     this.admin = admin;
-    IntegrationTestUtils.createTopicsAndWait(admin, Map.of(inputTopic(), 2, outputTopic(), 1));
+    createTopicsAndWait(admin, Map.of(inputTopic(), 2, outputTopic(), 1));
   }
 
   @AfterEach
@@ -140,11 +143,11 @@ public class ResponsivePartitionedStoreEosIntegrationTest {
         final ResponsiveKafkaStreams streamsA = buildStreams(properties, "a", state, type);
         final ResponsiveKafkaStreams streamsB = buildStreams(properties, "b", state, type);
     ) {
-      IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(10), streamsA, streamsB);
+      startAppAndAwaitRunning(Duration.ofSeconds(10), streamsA, streamsB);
 
       // committed data first, then second set of uncommitted data
-      IntegrationTestUtils.pipeInput(inputTopic(), 2, producer, System::currentTimeMillis, 0, 10, 0, 1);
-      IntegrationTestUtils.pipeInput(inputTopic(), 2, producer, System::currentTimeMillis, 10, 15, 0, 1);
+      pipeInput(inputTopic(), 2, producer, System::currentTimeMillis, 0, 10, 0, 1);
+      pipeInput(inputTopic(), 2, producer, System::currentTimeMillis, 10, 15, 0, 1);
 
       new RemoteMonitor(executor, () -> state.numCommits.get() == 2, Duration.ofMillis(100))
           .await(Duration.ofSeconds(5));
@@ -153,7 +156,7 @@ public class ResponsivePartitionedStoreEosIntegrationTest {
       // an additional 10 values are uncommitted (5 for each partition)
       // this statement below just blocks until we've read 30 uncommitted
       // records before causing one of the tasks to stall
-      IntegrationTestUtils.readOutput(outputTopic(), 0, 30, true, properties);
+      readOutput(outputTopic(), 0, 30, true, properties);
 
       state.stall.set(Stall.INJECTED);
 
@@ -161,7 +164,7 @@ public class ResponsivePartitionedStoreEosIntegrationTest {
       // topic-partitions should be assigned to the first client, at
       // which point 5 of the writes should be aborted and reprocessed
       // by the new client
-      IntegrationTestUtils.pipeInput(inputTopic(), 2, producer, System::currentTimeMillis, 15, 20, 0, 1);
+      pipeInput(inputTopic(), 2, producer, System::currentTimeMillis, 15, 20, 0, 1);
 
       // the stall only happens on process, so this needs to be after the
       // previous pipeInput call
@@ -181,8 +184,8 @@ public class ResponsivePartitionedStoreEosIntegrationTest {
       // 20 more values beyond the first read are now committed (10
       // for each partition), but 5 should never have been committed
       // so there should be more uncommitted reads in total
-      final List<KeyValue<Long, Long>> readC = IntegrationTestUtils.readOutput(outputTopic(), 0, 40, false, properties);
-      final List<KeyValue<Long, Long>> readU = IntegrationTestUtils.readOutput(outputTopic(), 0, 45, true, properties);
+      final List<KeyValue<Long, Long>> readC = readOutput(outputTopic(), 0, 40, false, properties);
+      final List<KeyValue<Long, Long>> readU = readOutput(outputTopic(), 0, 45, true, properties);
 
       // now we release the stalled consumer
       state.stall.set(Stall.RELEASED);

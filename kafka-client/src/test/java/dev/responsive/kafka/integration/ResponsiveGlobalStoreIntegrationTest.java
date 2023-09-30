@@ -16,6 +16,9 @@
 
 package dev.responsive.kafka.integration;
 
+import static dev.responsive.kafka.testutils.IntegrationTestUtils.awaitOutput;
+import static dev.responsive.kafka.testutils.IntegrationTestUtils.pipeInput;
+import static dev.responsive.kafka.testutils.IntegrationTestUtils.startAppAndAwaitRunning;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
@@ -30,7 +33,6 @@ import static org.apache.kafka.streams.StreamsConfig.NUM_STREAM_THREADS_CONFIG;
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.api.stores.ResponsiveStores;
-import dev.responsive.kafka.testutils.IntegrationTestUtils;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
 import java.time.Duration;
@@ -102,9 +104,9 @@ public class ResponsiveGlobalStoreIntegrationTest {
         final var streams = buildStreams(properties)
     ) {
       // When:
-      IntegrationTestUtils.pipeInput(GLOBAL_TOPIC, 2, producer, System::currentTimeMillis, 0, 3, 0, 1);
-      IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(10), streams);
-      IntegrationTestUtils.pipeInput(INPUT_TOPIC, 2, producer, System::currentTimeMillis, 0, 10, 0, 1);
+      pipeInput(GLOBAL_TOPIC, 2, producer, System::currentTimeMillis, 0, 3, 0, 1);
+      startAppAndAwaitRunning(Duration.ofSeconds(10), streams);
+      pipeInput(INPUT_TOPIC, 2, producer, System::currentTimeMillis, 0, 10, 0, 1);
 
       // Then:
       final Set<KeyValue<Long, Long>> expected = new HashSet<>();
@@ -113,7 +115,7 @@ public class ResponsiveGlobalStoreIntegrationTest {
           expected.add(new KeyValue<>((long) k, i + 2L));
         }
       }
-      IntegrationTestUtils.awaitOutput(OUTPUT_TOPIC, 0, expected, false, properties);
+      awaitOutput(OUTPUT_TOPIC, 0, expected, false, properties);
     }
   }
 

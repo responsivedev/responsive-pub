@@ -16,6 +16,8 @@
 
 package dev.responsive.kafka.internal.db;
 
+import static dev.responsive.kafka.internal.db.ColumnName.PARTITION_KEY;
+
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.cql.AsyncResultSet;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
@@ -27,8 +29,6 @@ import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.api.stores.ResponsiveWindowParams;
 import dev.responsive.kafka.internal.utils.RemoteMonitor;
-import dev.responsive.kafka.internal.stores.SchemaTypes.KVSchema;
-import dev.responsive.kafka.internal.stores.SchemaTypes.WindowSchema;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.OptionalInt;
@@ -135,7 +135,7 @@ public class CassandraClient {
     final ResultSet result = execute(QueryBuilder
         .selectFrom(tableName)
         .countAll()
-        .where(ColumnName.PARTITION_KEY.relation().isEqualTo(ColumnName.PARTITION_KEY.literal(partition)))
+        .where(PARTITION_KEY.relation().isEqualTo(PARTITION_KEY.literal(partition)))
         .build()
     );
 
@@ -144,7 +144,7 @@ public class CassandraClient {
 
   public OptionalInt numPartitions(final String tableName) {
     final ResultSet result = execute(
-        String.format("SELECT DISTINCT %s FROM %s;", ColumnName.PARTITION_KEY.column(), tableName));
+        String.format("SELECT DISTINCT %s FROM %s;", PARTITION_KEY.column(), tableName));
 
     final int numPartitions = result.all().size();
     return numPartitions == 0 ? OptionalInt.empty() : OptionalInt.of(numPartitions);
@@ -160,10 +160,10 @@ public class CassandraClient {
 
     final RemoteKeyValueSchema schema;
     switch (params.schemaType()) {
-      case KVSchema.KEY_VALUE:
+      case KEY_VALUE:
         schema = kvSchema;
         break;
-      case KVSchema.FACT:
+      case FACT:
         schema = factSchema;
         break;
       default:
@@ -181,10 +181,10 @@ public class CassandraClient {
 
     final RemoteWindowedSchema schema;
     switch (params.schemaType()) {
-      case WindowSchema.WINDOW:
+      case WINDOW:
         schema = windowedSchema;
         break;
-      case WindowSchema.STREAM:
+      case STREAM:
         throw new UnsupportedOperationException("Not yet implemented");
       default:
         throw new IllegalArgumentException(params.schemaType().name());

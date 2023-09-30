@@ -16,6 +16,8 @@
 
 package dev.responsive.kafka.internal.stores;
 
+import static dev.responsive.kafka.api.config.ResponsiveConfig.responsiveConfig;
+import static dev.responsive.kafka.internal.utils.SharedClients.loadSharedClients;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.changelogFor;
 
@@ -100,7 +102,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
   }
 
   @Override
-  @SuppressWarnings("deprecation")
+  @Deprecated
   public void init(final ProcessorContext context, final StateStore root) {
     if (context instanceof StateStoreContext) {
       init((StateStoreContext) context, root);
@@ -117,8 +119,8 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       log.info("Initializing state store");
       context = asInternalProcessorContext(storeContext);
 
-      final ResponsiveConfig config = ResponsiveConfig.responsiveConfig(storeContext.appConfigs());
-      final SharedClients sharedClients = SharedClients.loadSharedClients(storeContext.appConfigs());
+      final ResponsiveConfig config = responsiveConfig(storeContext.appConfigs());
+      final SharedClients sharedClients = loadSharedClients(storeContext.appConfigs());
       final CassandraClient client = sharedClients.cassandraClient;
 
       storeRegistry = InternalConfigs.loadStoreRegistry(context.appConfigs());

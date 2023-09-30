@@ -17,6 +17,15 @@
 package dev.responsive.kafka.internal.db;
 
 import static com.datastax.oss.driver.api.querybuilder.QueryBuilder.bindMarker;
+import static dev.responsive.kafka.internal.db.ColumnName.DATA_KEY;
+import static dev.responsive.kafka.internal.db.ColumnName.DATA_VALUE;
+import static dev.responsive.kafka.internal.db.ColumnName.EPOCH;
+import static dev.responsive.kafka.internal.db.ColumnName.METADATA_KEY;
+import static dev.responsive.kafka.internal.db.ColumnName.METADATA_TS;
+import static dev.responsive.kafka.internal.db.ColumnName.OFFSET;
+import static dev.responsive.kafka.internal.db.ColumnName.PARTITION_KEY;
+import static dev.responsive.kafka.internal.db.ColumnName.ROW_TYPE;
+import static dev.responsive.kafka.internal.db.ColumnName.TIMESTAMP;
 import static dev.responsive.kafka.internal.db.RowType.DATA_ROW;
 import static dev.responsive.kafka.internal.db.RowType.METADATA_ROW;
 import static dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration.NO_COMMITTED_OFFSET;
@@ -79,9 +88,9 @@ public class CassandraKeyValueSchema implements RemoteKeyValueSchema {
   @Override
   public void create(final String name, Optional<Duration> ttl) {
     LOG.info("Creating data table {} in remote store.", name);
-    final CreateTableWithOptions createTable = ttl.isPresent()
-        ? createTable(name).withDefaultTimeToLiveSeconds(Math.toIntExact(ttl.get().getSeconds()))
-        : createTable(name);
+    final CreateTableWithOptions createTable = ttl.map(duration -> createTable(name)
+            .withDefaultTimeToLiveSeconds(Math.toIntExact(duration.getSeconds())))
+        .orElseGet(() -> createTable(name));
 
     client.execute(createTable.build());
   }
@@ -90,13 +99,13 @@ public class CassandraKeyValueSchema implements RemoteKeyValueSchema {
     return SchemaBuilder
         .createTable(tableName)
         .ifNotExists()
-        .withPartitionKey(ColumnName.PARTITION_KEY.column(), DataTypes.INT)
-        .withClusteringColumn(ColumnName.ROW_TYPE.column(), DataTypes.TINYINT)
-        .withClusteringColumn(ColumnName.DATA_KEY.column(), DataTypes.BLOB)
-        .withColumn(ColumnName.DATA_VALUE.column(), DataTypes.BLOB)
-        .withColumn(ColumnName.OFFSET.column(), DataTypes.BIGINT)
-        .withColumn(ColumnName.EPOCH.column(), DataTypes.BIGINT)
-        .withColumn(ColumnName.TIMESTAMP.column(), DataTypes.TIMESTAMP);
+        .withPartitionKey(PARTITION_KEY.column(), DataTypes.INT)
+        .withClusteringColumn(ROW_TYPE.column(), DataTypes.TINYINT)
+        .withClusteringColumn(DATA_KEY.column(), DataTypes.BLOB)
+        .withColumn(DATA_VALUE.column(), DataTypes.BLOB)
+        .withColumn(OFFSET.column(), DataTypes.BIGINT)
+        .withColumn(EPOCH.column(), DataTypes.BIGINT)
+        .withColumn(TIMESTAMP.column(), DataTypes.TIMESTAMP);
   }
 
   @Override
@@ -112,12 +121,12 @@ public class CassandraKeyValueSchema implements RemoteKeyValueSchema {
     partitioner.all(kafkaPartition).forEach(sub -> {
       client.execute(
           QueryBuilder.insertInto(table)
-              .value(ColumnName.PARTITION_KEY.column(), ColumnName.PARTITION_KEY.literal(sub))
-              .value(ColumnName.ROW_TYPE.column(), METADATA_ROW.literal())
-              .value(ColumnName.DATA_KEY.column(), ColumnName.DATA_KEY.literal(ColumnName.METADATA_KEY))
-              .value(ColumnName.TIMESTAMP.column(), ColumnName.TIMESTAMP.literal(ColumnName.METADATA_TS))
-              .value(ColumnName.OFFSET.column(), ColumnName.OFFSET.literal(NO_COMMITTED_OFFSET))
-              .value(ColumnName.EPOCH.column(), ColumnName.EPOCH.literal(0L))
+              .value(PARTITION_KEY.column(), PARTITION_KEY.literal(sub))
+              .value(ROW_TYPE.column(), METADATA_ROW.literal())
+              .value(DATA_KEY.column(), DATA_KEY.literal(METADATA_KEY))
+              .value(TIMESTAMP.column(), TIMESTAMP.literal(METADATA_TS))
+              .value(OFFSET.column(), OFFSET.literal(NO_COMMITTED_OFFSET))
+              .value(EPOCH.column(), EPOCH.literal(0L))
               .ifNotExists()
               .build()
       );
@@ -129,7 +138,7 @@ public class CassandraKeyValueSchema implements RemoteKeyValueSchema {
   public MetadataRow metadata(final String table, final int partition) {
     final BoundStatement bound = getMeta.get(table)
         .bind()
-        .setInt(ColumnName.PARTITION_KEY.bind(), partition);
+        .setInt(PARTITION_KEY.bind(), partition);
     final List<Row> result = client.execute(bound).all();
 
     if (result.size() != 1) {
@@ -138,8 +147,8 @@ public class CassandraKeyValueSchema implements RemoteKeyValueSchema {
           table, partition, result.size()));
     } else {
       return new MetadataRow(
-          result.get(0).getLong(ColumnName.OFFSET.column()),
-          result.get(0).getLong(ColumnName.EPOCH.column())
+          result.get(0).getLong(OFFSET.column()),
+          result.get(0).getLong(EPOCH.column())
       );
     }
   }
@@ -152,8 +161,8 @@ public class CassandraKeyValueSchema implements RemoteKeyValueSchema {
   ) {
     return setOffset.get(table)
         .bind()
-        .setInt(ColumnName.PARTITION_KEY.bind(), partition)
-        .setLong(ColumnName.OFFSET.bind(), offset);
+        .setInt(PARTITION_KEY.bind(), partition)
+        .setLong(OFFSET.bind(), offset);
   }
 
   @Override
@@ -161,22 +170,22 @@ public class CassandraKeyValueSchema implements RemoteKeyValueSchema {
     insert.computeIfAbsent(tableName, k -> client.prepare(
         QueryBuilder
             .insertInto(tableName)
-            .value(ColumnName.PARTITION_KEY.column(), QueryBuilder.bindMarker(ColumnName.PARTITION_KEY.bind()))
-            .value(ColumnName.ROW_TYPE.column(), DATA_ROW.literal())
-            .value(ColumnName.DATA_KEY.column(), QueryBuilder.bindMarker(ColumnName.DATA_KEY.bind()))
-            .value(ColumnName.TIMESTAMP.column(), QueryBuilder.bindMarker(ColumnName.TIMESTAMP.bind()))
-            .value(ColumnName.DATA_VALUE.column(), QueryBuilder.bindMarker(ColumnName.DATA_VALUE.bind()))
+            .value(PARTITION_KEY.column(), bindMarker(PARTITION_KEY.bind()))
+            .value(ROW_TYPE.column(), DATA_ROW.literal())
+            .value(DATA_KEY.column(), bindMarker(DATA_KEY.bind()))
+            .value(TIMESTAMP.column(), bindMarker(TIMESTAMP.bind()))
+            .value(DATA_VALUE.column(), bindMarker(DATA_VALUE.bind()))
             .build()
     ));
 
     get.computeIfAbsent(tableName, k -> client.prepare(
         QueryBuilder
             .selectFrom(tableName)
-            .columns(ColumnName.DATA_VALUE.column())
-            .where(ColumnName.PARTITION_KEY.relation().isEqualTo(QueryBuilder.bindMarker(ColumnName.PARTITION_KEY.bind())))
-            .where(ColumnName.ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
-            .where(ColumnName.DATA_KEY.relation().isEqualTo(QueryBuilder.bindMarker(ColumnName.DATA_KEY.bind())))
-            .where(ColumnName.TIMESTAMP.relation().isGreaterThanOrEqualTo(QueryBuilder.bindMarker(ColumnName.TIMESTAMP.bind())))
+            .columns(DATA_VALUE.column())
+            .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
+            .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
+            .where(DATA_KEY.relation().isEqualTo(bindMarker(DATA_KEY.bind())))
+            .where(TIMESTAMP.relation().isGreaterThanOrEqualTo(bindMarker(TIMESTAMP.bind())))
             // ALLOW FILTERING is OK b/c the query only scans one partition
             .allowFiltering()
             .build()
@@ -185,12 +194,12 @@ public class CassandraKeyValueSchema implements RemoteKeyValueSchema {
     range.computeIfAbsent(tableName, k -> client.prepare(
         QueryBuilder
             .selectFrom(tableName)
-            .columns(ColumnName.DATA_KEY.column(), ColumnName.DATA_VALUE.column(), ColumnName.TIMESTAMP.column())
-            .where(ColumnName.ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
-            .where(ColumnName.PARTITION_KEY.relation().isEqualTo(QueryBuilder.bindMarker(ColumnName.PARTITION_KEY.bind())))
-            .where(ColumnName.DATA_KEY.relation().isGreaterThanOrEqualTo(bindMarker(FROM_BIND)))
-            .where(ColumnName.DATA_KEY.relation().isLessThan(bindMarker(TO_BIND)))
-            .where(ColumnName.TIMESTAMP.relation().isGreaterThanOrEqualTo(QueryBuilder.bindMarker(ColumnName.TIMESTAMP.bind())))
+            .columns(DATA_KEY.column(), DATA_VALUE.column(), TIMESTAMP.column())
+            .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
+            .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
+            .where(DATA_KEY.relation().isGreaterThanOrEqualTo(bindMarker(FROM_BIND)))
+            .where(DATA_KEY.relation().isLessThan(bindMarker(TO_BIND)))
+            .where(TIMESTAMP.relation().isGreaterThanOrEqualTo(bindMarker(TIMESTAMP.bind())))
             // ALLOW FILTERING is OK b/c the query only scans one partition
             .allowFiltering()
             .build()
@@ -199,29 +208,29 @@ public class CassandraKeyValueSchema implements RemoteKeyValueSchema {
     delete.computeIfAbsent(tableName, k -> client.prepare(
         QueryBuilder
             .deleteFrom(tableName)
-            .where(ColumnName.PARTITION_KEY.relation().isEqualTo(QueryBuilder.bindMarker(ColumnName.PARTITION_KEY.bind())))
-            .where(ColumnName.ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
-            .where(ColumnName.DATA_KEY.relation().isEqualTo(QueryBuilder.bindMarker(ColumnName.DATA_KEY.bind())))
+            .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
+            .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
+            .where(DATA_KEY.relation().isEqualTo(bindMarker(DATA_KEY.bind())))
             .build()
     ));
 
     getMeta.computeIfAbsent(tableName, k -> client.prepare(
         QueryBuilder
             .selectFrom(tableName)
-            .column(ColumnName.EPOCH.column())
-            .column(ColumnName.OFFSET.column())
-            .where(ColumnName.PARTITION_KEY.relation().isEqualTo(QueryBuilder.bindMarker(ColumnName.PARTITION_KEY.bind())))
-            .where(ColumnName.ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
-            .where(ColumnName.DATA_KEY.relation().isEqualTo(ColumnName.DATA_KEY.literal(ColumnName.METADATA_KEY)))
+            .column(EPOCH.column())
+            .column(OFFSET.column())
+            .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
+            .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
+            .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
             .build()
     ));
 
     setOffset.computeIfAbsent(tableName, k -> client.prepare(QueryBuilder
         .update(tableName)
-        .setColumn(ColumnName.OFFSET.column(), QueryBuilder.bindMarker(ColumnName.OFFSET.bind()))
-        .where(ColumnName.PARTITION_KEY.relation().isEqualTo(QueryBuilder.bindMarker(ColumnName.PARTITION_KEY.bind())))
-        .where(ColumnName.ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
-        .where(ColumnName.DATA_KEY.relation().isEqualTo(ColumnName.DATA_KEY.literal(ColumnName.METADATA_KEY)))
+        .setColumn(OFFSET.column(), bindMarker(OFFSET.bind()))
+        .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
+        .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
+        .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
         .build()
     ));
   }
@@ -240,8 +249,8 @@ public class CassandraKeyValueSchema implements RemoteKeyValueSchema {
   ) {
     return delete.get(table)
         .bind()
-        .setInt(ColumnName.PARTITION_KEY.bind(), partitionKey)
-        .setByteBuffer(ColumnName.DATA_KEY.bind(), ByteBuffer.wrap(key.get()));
+        .setInt(PARTITION_KEY.bind(), partitionKey)
+        .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()));
   }
 
   @Override
@@ -255,19 +264,19 @@ public class CassandraKeyValueSchema implements RemoteKeyValueSchema {
   ) {
     return insert.get(table)
         .bind()
-        .setInt(ColumnName.PARTITION_KEY.bind(), partitionKey)
-        .setByteBuffer(ColumnName.DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
-        .setInstant(ColumnName.TIMESTAMP.bind(), Instant.ofEpochMilli(epochMillis))
-        .setByteBuffer(ColumnName.DATA_VALUE.bind(), ByteBuffer.wrap(value));
+        .setInt(PARTITION_KEY.bind(), partitionKey)
+        .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
+        .setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(epochMillis))
+        .setByteBuffer(DATA_VALUE.bind(), ByteBuffer.wrap(value));
   }
 
   @Override
   public byte[] get(final String tableName, final int partition, final Bytes key, long minValidTs) {
     final BoundStatement get = this.get.get(tableName)
         .bind()
-        .setInt(ColumnName.PARTITION_KEY.bind(), partition)
-        .setByteBuffer(ColumnName.DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
-        .setInstant(ColumnName.TIMESTAMP.bind(), Instant.ofEpochMilli(minValidTs));
+        .setInt(PARTITION_KEY.bind(), partition)
+        .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
+        .setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(minValidTs));
 
     final List<Row> result = client.execute(get).all();
     if (result.size() > 1) {
@@ -275,7 +284,7 @@ public class CassandraKeyValueSchema implements RemoteKeyValueSchema {
     } else if (result.isEmpty()) {
       return null;
     } else {
-      final ByteBuffer value = result.get(0).getByteBuffer(ColumnName.DATA_VALUE.column());
+      final ByteBuffer value = result.get(0).getByteBuffer(DATA_VALUE.column());
       return Objects.requireNonNull(value).array();
     }
   }
@@ -290,10 +299,10 @@ public class CassandraKeyValueSchema implements RemoteKeyValueSchema {
   ) {
     final BoundStatement range = this.range.get(tableName)
         .bind()
-        .setInt(ColumnName.PARTITION_KEY.bind(), partition)
+        .setInt(PARTITION_KEY.bind(), partition)
         .setByteBuffer(FROM_BIND, ByteBuffer.wrap(from.get()))
         .setByteBuffer(TO_BIND, ByteBuffer.wrap(to.get()))
-        .setInstant(ColumnName.TIMESTAMP.bind(), Instant.ofEpochMilli(minValidTs));
+        .setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(minValidTs));
 
     final ResultSet result = client.execute(range);
     return Iterators.kv(result.iterator(), CassandraKeyValueSchema::rows);
@@ -306,9 +315,9 @@ public class CassandraKeyValueSchema implements RemoteKeyValueSchema {
       long minValidTs) {
     final ResultSet result = client.execute(QueryBuilder
         .selectFrom(tableName)
-        .columns(ColumnName.DATA_KEY.column(), ColumnName.DATA_VALUE.column(), ColumnName.TIMESTAMP.column())
-        .where(ColumnName.PARTITION_KEY.relation().isEqualTo(ColumnName.PARTITION_KEY.literal(partition)))
-        .where(ColumnName.TIMESTAMP.relation().isGreaterThanOrEqualTo(ColumnName.TIMESTAMP.literal(minValidTs)))
+        .columns(DATA_KEY.column(), DATA_VALUE.column(), TIMESTAMP.column())
+        .where(PARTITION_KEY.relation().isEqualTo(PARTITION_KEY.literal(partition)))
+        .where(TIMESTAMP.relation().isGreaterThanOrEqualTo(TIMESTAMP.literal(minValidTs)))
         // since all() scans all the data anyway, allowing filtering is no worse
         .allowFiltering()
         .build()
@@ -319,8 +328,8 @@ public class CassandraKeyValueSchema implements RemoteKeyValueSchema {
 
   protected static KeyValue<Bytes, byte[]> rows(final Row row) {
     return new KeyValue<>(
-        Bytes.wrap(row.getByteBuffer(ColumnName.DATA_KEY.column()).array()),
-        row.getByteBuffer(ColumnName.DATA_VALUE.column()).array()
+        Bytes.wrap(row.getByteBuffer(DATA_KEY.column()).array()),
+        row.getByteBuffer(DATA_VALUE.column()).array()
     );
   }
 
