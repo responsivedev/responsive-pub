@@ -55,12 +55,10 @@ import org.slf4j.Logger;
 
 class CommitBuffer<K, S extends RemoteSchema<K>> implements RecordBatchingStateRestoreCallback {
 
-  // Keep INFO level logging to a reasonable frequency
-  private static final long INFO_LOGGING_OFFSET_INTERVAL = 50_000L;
-  private long lastOffsetLogged = 0L;
-
   public static final int MAX_BATCH_SIZE = 1000;
+
   private final Logger log;
+  private final String logPrefix;
 
   private final SizeTrackingBuffer<K> buffer;
   private final CassandraClient client;
@@ -161,13 +159,15 @@ class CommitBuffer<K, S extends RemoteSchema<K>> implements RecordBatchingStateR
     this.subPartitioner = subPartitioner;
     this.clock = clock;
 
-    final String logPrefix = String.format("commit-buffer [%s-%d] ", tableName, partition);
+    logPrefix = String.format("commit-buffer [%s-%d] ", tableName, partition);
     log = new LogContext(logPrefix).logger(CommitBuffer.class);
 
-    if (truncateChangelog && hasSourceTopicChangelog(changelog.topic())) {
+    if (hasSourceTopicChangelog(changelog.topic())) {
       this.truncateChangelog = false;
-      log.warn("Changelog truncation is not compatible with the source-topic changelog "
-                   + "optimization, and will not be enabled for this source-topic table");
+      if (truncateChangelog) {
+        log.warn("Changelog truncation is not compatible with the source-topic changelog "
+                     + "optimization, and will not be enabled for the topic {}", changelog.topic());
+      }
     } else {
       this.truncateChangelog = truncateChangelog;
     }
@@ -183,7 +183,7 @@ class CommitBuffer<K, S extends RemoteSchema<K>> implements RecordBatchingStateR
     this.writerFactory = remoteSchema.init(tableName, subPartitioner, partition);
 
     final int basePartition = subPartitioner.first(partition);
-    log.info("Initialized store with {} for all subpartitions {} -> {}",
+    log.info("Initialized store with {} for subpartitions in range: {{} -> {}}",
         writerFactory, basePartition, basePartition + subPartitioner.getFactor() - 1);
   }
 
@@ -278,7 +278,7 @@ class CommitBuffer<K, S extends RemoteSchema<K>> implements RecordBatchingStateR
     return buffer.getBytes();
   }
 
-  private boolean shouldFlush() {
+  private boolean triggerFlush() {
     boolean recordsTrigger = false;
     boolean bytesTrigger = false;
     boolean timeTrigger = false;
@@ -320,39 +320,30 @@ class CommitBuffer<K, S extends RemoteSchema<K>> implements RecordBatchingStateR
           now
       );
     }
-    final boolean shouldFlush = recordsTrigger || bytesTrigger || timeTrigger;
-
-    if (shouldFlush) {
-      log.info("Triggering flush due to recordsTrigger={}, bytesTrigger={}, timeTrigger={}",
-                recordsTrigger, bytesTrigger, timeTrigger);
-    }
-    return shouldFlush;
+    return recordsTrigger || bytesTrigger || timeTrigger;
   }
 
-  public void flush(long offset) {
-    if (!shouldFlush()) {
+  public void flush(final long consumedOffset) {
+    if (!triggerFlush()) {
       return;
     }
 
     if (buffer.getReader().isEmpty()) {
-      // no need to do anything if the buffer is empty
       log.debug("Ignoring flush() of empty commit buffer");
       return;
     }
 
-    final var writeResult = flush(offset, maxBatchSize);
-    if (!writeResult.wasApplied()) {
-      throwFencedException(writeResult, offset);
-    }
+    doFlush(consumedOffset, maxBatchSize);
+
     lastFlush = clock.get();
   }
 
-  @SuppressWarnings("BooleanMethodIsAlwaysInverted")
-  private RemoteWriteResult flush(final long offset, final int batchSize) {
+  private void doFlush(final long consumedOffset, final int batchSize) {
     final long startNs = System.nanoTime();
-    log.debug("Flushing {} records to remote (offset={}, writer={})",
+    log.info("Flushing {} records with batchSize={} to remote (offset={}, writer={})",
         buffer.getReader().size(),
-        offset,
+        batchSize,
+        consumedOffset,
         writerFactory
     );
 
@@ -374,39 +365,33 @@ class CommitBuffer<K, S extends RemoteSchema<K>> implements RecordBatchingStateR
       }
     }
 
-    var writeResult = drain(writers.values());
-    if (!writeResult.wasApplied()) {
-      return writeResult;
+    final var drainWriteResult = drain(writers.values());
+    if (!drainWriteResult.wasApplied()) {
+      throwFencedException(drainWriteResult, consumedOffset);
     }
 
     // this offset is only used for recovery, so it can (and should) be done only
     // when all the flushes above have completed and only needs to be written to
     // the first subpartition
-    writeResult = writers.computeIfAbsent(
+    final var offsetWriteResult = writers.computeIfAbsent(
         subPartitioner.first(partition),
-        partition -> writerFactory.createWriter(client, tableName, partition, batchSize)
-    ).setOffset(offset);
+        subPartition -> writerFactory.createWriter(client, tableName, subPartition, batchSize)
+    ).setOffset(consumedOffset);
 
-    if (!writeResult.wasApplied()) {
-      return writeResult;
+    if (!offsetWriteResult.wasApplied()) {
+      throwFencedException(offsetWriteResult, consumedOffset);
     }
 
-    log.debug("Flushed {} records to remote in {}ms (offset={}, writer={}, numPartitions={})",
+    log.debug("Flushed {} records to remote in {}ms (offset={}, writer={}, numSubPartitions={})",
         buffer.getReader().size(),
         TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNs),
-        offset,
+        consumedOffset,
         writerFactory,
         writers.size()
     );
     buffer.clear();
 
-    if (offset - lastOffsetLogged > INFO_LOGGING_OFFSET_INTERVAL) {
-      log.info("Flushed to remote up to offset {}", offset);
-      lastOffsetLogged = offset;
-    }
-
-    maybeTruncateChangelog(offset);
-    return RemoteWriteResult.success(partition);
+    maybeTruncateChangelog(consumedOffset);
   }
 
   private RemoteWriteResult drain(final Collection<RemoteWriter<K>> writers) {
@@ -417,9 +402,9 @@ class CommitBuffer<K, S extends RemoteSchema<K>> implements RecordBatchingStateR
 
     try {
       return result.toCompletableFuture().get();
-    } catch (InterruptedException | ExecutionException e) {
-      throw new RuntimeException(
-          "Failed while flushing partition " + partition + " to remote", e);
+    } catch (final InterruptedException | ExecutionException e) {
+      log.error("Unexpected exception while flushing to remote", e);
+      throw new RuntimeException(logPrefix + "Failed while flushing to remote", e);
     }
   }
 
@@ -431,7 +416,7 @@ class CommitBuffer<K, S extends RemoteSchema<K>> implements RecordBatchingStateR
       } catch (final ExecutionException e) {
         log.warn("Could not truncate changelog topic-partition " + changelog, e);
         if (e.getCause() instanceof PolicyViolationException) {
-          log.info("Disabling further changelog truncation attempts due to topic configuration "
+          log.warn("Disabling further changelog truncation attempts due to topic configuration "
                        + "being incompatible with deleteRecord requests", e);
           isNotDeleteEnabled = true;
         }
@@ -469,30 +454,25 @@ class CommitBuffer<K, S extends RemoteSchema<K>> implements RecordBatchingStateR
     }
 
     if (consumedOffset >= 0) {
-      final var writeResult = flush(consumedOffset, records.size());
-      if (!writeResult.wasApplied()) {
-        throwFencedException(writeResult, consumedOffset);
-      }
+      doFlush(consumedOffset, records.size());
     }
   }
 
-  private void throwFencedException(final RemoteWriteResult result, final long offset) {
+  private void throwFencedException(final RemoteWriteResult result, final long consumedOffset) {
     final MetadataRow stored = remoteSchema.metadata(tableName, result.getPartition());
     // we were fenced - the only conditional statement is the
     // offset update, so it's the only failure point
     final String msg = String.format(
-        "%s[%d:%d] Fenced while writing batch! Local Epoch: %s, "
+        "[%d] Fenced while writing batch! Local Epoch: %s, "
             + "Persisted Epoch: %d, Batch Offset: %d, Persisted Offset: %d",
-        tableName,
-        partition,
         result.getPartition(),
         writerFactory,
         stored.epoch,
-        offset,
+        consumedOffset,
         stored.offset
     );
-    log.error(msg);
-    throw new TaskMigratedException(msg);
+    log.warn(msg);
+    throw new TaskMigratedException(logPrefix + msg);
   }
 
 }

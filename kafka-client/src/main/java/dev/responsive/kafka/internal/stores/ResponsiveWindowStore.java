@@ -92,7 +92,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
     this.windowSize = params.windowSize();
     this.position = Position.emptyPosition();
     log = new LogContext(
-        String.format("window-store [%s]", name.kafkaName())
+        String.format("window-store [%s] ", name.kafkaName())
     ).logger(ResponsiveWindowStore.class);
   }
 
