@@ -1,43 +1,28 @@
 package dev.responsive.kafka.internal.metrics;
 
+import static dev.responsive.kafka.internal.metrics.ApplicationMetrics.STREAMS_STATE;
+import static dev.responsive.kafka.internal.metrics.ApplicationMetrics.STREAMS_STATE_DESCRIPTION;
+
 import java.io.Closeable;
-import java.util.HashMap;
-import java.util.Map;
 import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.metrics.Gauge;
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KafkaStreams.StateListener;
 
 public class ResponsiveStateListener implements StateListener, Closeable {
-  private final Metrics metrics;
-  private final MetricName stateMetricName;
+  private final ResponsiveMetrics metrics;
+  private final MetricName stateMetric;
 
   private StateListener userStateListener;
   private State currentState = State.CREATED;
 
-  /**
-   * @param applicationId the Streams application id, ie the shared consumer group id
-   * @param streamsClientId the Streams client id, ie the process-specific id
-   */
-  public ResponsiveStateListener(
-      final Metrics metrics,
-      final String applicationId,
-      final String streamsClientId
-  ) {
+  public ResponsiveStateListener(final ResponsiveMetrics metrics) {
     this.metrics = metrics;
-    final Map<String, String> tags = new HashMap<>();
-    tags.put("application-id", applicationId);
-    tags.put("client-id", streamsClientId);
-
-    stateMetricName = new MetricName(
-        "state",
-        "stream-application-metrics",
-        "The current KafkaStreams.State expressed as its ordinal value",
-        tags
+    this.stateMetric = metrics.metricName(
+        STREAMS_STATE,
+        STREAMS_STATE_DESCRIPTION,
+        metrics.applicationLevelMetric(),
+        (config, now) -> currentState.ordinal()
     );
-
-    metrics.addMetric(stateMetricName, (Gauge<Long>) (config, now) -> currentStateId());
   }
 
   public void registerUserStateListener(final StateListener userStateListener) {
@@ -57,12 +42,8 @@ public class ResponsiveStateListener implements StateListener, Closeable {
     }
   }
 
-  private long currentStateId() {
-    return currentState.ordinal();
-  }
-
   @Override
   public void close() {
-    metrics.removeMetric(stateMetricName);
+    metrics.removeMetric(stateMetric);
   }
 }

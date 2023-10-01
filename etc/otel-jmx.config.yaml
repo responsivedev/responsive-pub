@@ -67,7 +67,7 @@ rules:
        unit: '{rebalances-per-hour}'
 
  # Kafka Streams application metrics
- - bean: kafka.streams:type=stream-application-metrics,application-id=*,client-id=*
+ - bean: dev.responsive:type=stream-application-metrics,application-id=*,client-id=*
    metricAttribute:
      applicationid: param(application-id)
      clientid: param(client-id)
@@ -87,10 +87,25 @@ rules:
      topic: param(topic)
    mapping:
      records-consumed-total:
-       metric: kafka.streams.topic.consumed.total
+       metric: kafka.streams.topic.records.consumed.total
        type: gauge
        desc: total records consumed
        unit: '{records}'
+     bytes-consumed-total:
+       metric: kafka.streams.topic.bytes.consumed.total
+       type: gauge
+       desc: total bytes consumed
+       unit: '{bytes}'
+     records-produced-total:
+       metric: kafka.streams.topic.records.produced.total
+       type: gauge
+       desc: the total records produced
+       unit: '{records}'
+     bytes-produced-total:
+       metric: kafka.streams.topic.bytes.produced.total
+       type: gauge
+       desc: the total bytes produced
+       unit: '{bytes}'
 
  # Kafka Streams thread metrics
  - bean: kafka.streams:type=stream-thread-metrics,thread-id=*

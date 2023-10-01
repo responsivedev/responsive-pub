@@ -51,7 +51,7 @@ class MetricPublishingCommitListenerTest {
   private static final TopicPartition PARTITION2 = new TopicPartition("airplane", 2);
 
   @Mock
-  private Metrics metrics;
+  private ResponsiveMetrics metrics;
   @Captor
   private ArgumentCaptor<MetricName> nameCaptor;
   @Captor
@@ -63,7 +63,7 @@ class MetricPublishingCommitListenerTest {
 
   @BeforeEach
   public void setup() {
-    listener = new MetricPublishingCommitListener(metrics, THREAD_ID, GROUP, offsetRecorder);
+    listener = new MetricPublishingCommitListener(metrics, THREAD_ID, offsetRecorder);
   }
 
   @Test
