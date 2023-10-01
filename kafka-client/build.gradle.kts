@@ -52,13 +52,6 @@ tasks.register(writeVersionPropertiesFile) {
 
 tasks.compileJava {
     dependsOn(tasks[writeVersionPropertiesFile])
-    dependsOn(tasks.processResources)
-}
-
-tasks.compileTestJava {
-    dependsOn(tasks[writeVersionPropertiesFile])
-    dependsOn(tasks.processResources)
-    dependsOn(tasks.processTestResources)
 }
 
 /********************************************/
