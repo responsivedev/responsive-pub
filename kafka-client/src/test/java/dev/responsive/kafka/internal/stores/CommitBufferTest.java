@@ -55,6 +55,7 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DeleteRecordsResult;
 import org.apache.kafka.clients.admin.DeletedRecords;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -115,8 +116,8 @@ public class CommitBufferTest {
     schema.create(name, Optional.empty());
     schema.prepare(name);
 
-    when(admin.deleteRecords(Mockito.any()))
-        .thenReturn(new DeleteRecordsResult(Map.of()));
+    when(admin.deleteRecords(Mockito.any())).thenReturn(new DeleteRecordsResult(Map.of(
+            changelogTp, KafkaFuture.completedFuture(new DeletedRecords(100)))));
   }
 
   private void setPartitioner(final int factor) {
