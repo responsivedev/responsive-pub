@@ -16,6 +16,8 @@
 
 package dev.responsive.kafka.internal.stores;
 
+import static org.apache.kafka.clients.admin.RecordsToDelete.beforeOffset;
+
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.KeySpec;
@@ -41,13 +43,14 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.RecordsToDelete;
+import org.apache.kafka.clients.admin.DeleteRecordsResult;
+import org.apache.kafka.clients.admin.DeletedRecords;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -67,7 +70,6 @@ class CommitBuffer<K, S extends RemoteSchema<K>> implements RecordBatchingStateR
   private final Admin admin;
   private final TopicPartition changelog;
   private final S remoteSchema;
-  private final boolean truncateChangelog;
   private final FlushTriggers flushTriggers;
   private final int maxBatchSize;
   private final SubPartitioner subPartitioner;
@@ -79,6 +81,8 @@ class CommitBuffer<K, S extends RemoteSchema<K>> implements RecordBatchingStateR
 
   // flag to skip further truncation attempts when the changelog is set to 'compact' only
   private boolean isNotDeleteEnabled = false;
+  private final boolean truncateChangelog;
+  private DeleteRecordsResult deleteRecordsResult;
 
   static <K, S extends RemoteSchema<K>> CommitBuffer<K, S> from(
       final SharedClients clients,
@@ -408,22 +412,50 @@ class CommitBuffer<K, S extends RemoteSchema<K>> implements RecordBatchingStateR
     }
   }
 
+  /**
+   * Performs async changelog truncation by allowing the delete requests to be completed
+   * in the background. After a flush, we will check on the completion of the previous
+   * delete request and if successful, send out a new request to truncate up to the
+   * last flushed offset
+   *
+   * @param offset the flushed offset up to which we can safely delete changelog records
+   */
   private void maybeTruncateChangelog(final long offset) {
-    if (truncateChangelog && !isNotDeleteEnabled) {
-      try {
-        admin.deleteRecords(Map.of(changelog, RecordsToDelete.beforeOffset(offset))).all().get();
-        log.info("Truncated changelog topic {} before offset {}", changelog, offset);
-      } catch (final ExecutionException e) {
-        log.warn("Could not truncate changelog topic-partition " + changelog, e);
-        if (e.getCause() instanceof PolicyViolationException) {
-          log.warn("Disabling further changelog truncation attempts due to topic configuration "
-                       + "being incompatible with deleteRecord requests", e);
-          isNotDeleteEnabled = true;
+    if (deleteRecordsResult != null) {
+      final KafkaFuture<DeletedRecords> future = deleteRecordsResult.lowWatermarks().get(changelog);
+
+      if (future.isDone()) {
+
+        if (future.isCancelled()) {
+          log.warn("Delete records request for changelog {} was unexpectedly cancelled, "
+                       + "will retry the topic truncation", changelog);
+        } else {
+          try {
+            final DeletedRecords deleted = future.get();
+            log.info("Truncated changelog {} up to offset {}", changelog, deleted.lowWatermark());
+          } catch (final ExecutionException e) {
+            if (e.getCause() instanceof PolicyViolationException) {
+              log.warn("Disabling further changelog truncation attempts due to topic configuration "
+                           + "being incompatible with deleteRecords requests", e);
+              isNotDeleteEnabled = true;
+            } else {
+              log.warn("Truncation of changelog " + changelog + " failed and will be retried", e);
+            }
+          } catch (final InterruptedException e) {
+            log.error("Interrupted while truncating the changelog " + changelog, e);
+            throw new RuntimeException(logPrefix + "Interrupted while truncating " + changelog, e);
+          }
         }
-      } catch (final InterruptedException e) {
-        log.error("Interrupted while truncating the changelog " + changelog, e);
-        throw new ProcessorStateException("Interrupted while truncating " + changelog, e);
+        deleteRecordsResult = null;
+
+      } else {
+        log.debug("Still waiting on previous changelog truncation attempt to complete");
       }
+    }
+
+    if (truncateChangelog && !isNotDeleteEnabled && deleteRecordsResult == null) {
+      log.debug("Issuing new delete request to truncate {} up to offset {}", changelog, offset);
+      deleteRecordsResult = admin.deleteRecords(Map.of(changelog, beforeOffset(offset)));
     }
   }
 
