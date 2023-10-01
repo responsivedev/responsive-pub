@@ -73,7 +73,7 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
     this.name = params.name();
     this.position = Position.emptyPosition();
     log = new LogContext(
-        String.format("store [%s]", name.kafkaName())
+        String.format("store [%s] ", name.kafkaName())
     ).logger(ResponsivePartitionedStore.class);
   }
 
