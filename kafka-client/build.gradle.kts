@@ -1,3 +1,5 @@
+import java.io.ByteArrayOutputStream
+
 /*
  * Copyright 2023 Responsive Computing, Inc.
  *
@@ -16,7 +18,43 @@
 
 plugins {
     id("responsive.java-library-conventions")
+    id("java")
 }
+
+/*********** Generated Resources ***********/
+
+val gitCommitId: String by lazy {
+    val stdout = ByteArrayOutputStream()
+    //rootProject.exec {
+    exec {
+        commandLine("git", "rev-parse", "--verify", "--short", "HEAD")
+        standardOutput = stdout
+    }
+    stdout.toString().trim()
+}
+
+val writeVersionPropertiesFile = "writeVersionPropertiesFile"
+val gitVersion = version
+
+val resourcesDir = "$buildDir/resources/main"
+val versionFilePath = "$resourcesDir/version.properties"
+
+tasks.register(writeVersionPropertiesFile) {
+    val versionFile = file(versionFilePath)
+    outputs.file(versionFile)
+    doFirst {
+        file(versionFilePath).writeText(
+                "git.build.version=" + gitVersion + "\n" +
+                "git.commit.id=" + gitCommitId + "\n"
+        )
+    }
+}
+
+tasks.compileJava {
+    dependsOn(tasks[writeVersionPropertiesFile])
+}
+
+/********************************************/
 
 dependencies {
     api(libs.kafka.streams)
