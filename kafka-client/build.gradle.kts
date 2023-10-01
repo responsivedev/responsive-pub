@@ -42,7 +42,7 @@ val versionFilePath = "$resourcesDir/version.properties"
 tasks.register(writeVersionPropertiesFile) {
     val versionFile = file(versionFilePath)
     outputs.file(versionFile)
-    doLast {
+    doFirst {
         file(versionFilePath).writeText(
                 "git.build.version=" + gitVersion + "\n" +
                 "git.commit.id=" + gitCommitId + "\n"
