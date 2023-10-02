@@ -28,14 +28,14 @@ public class FactWriterFactory<K> implements WriterFactory<K> {
   public RemoteWriter<K> createWriter(
       final CassandraClient client,
       final String tableName,
-      final int subpartition,
+      final int tablePartition,
       final int batchSize
   ) {
     return new FactSchemaWriter<>(
         client,
         schema,
         tableName,
-        subpartition
+        tablePartition
     );
   }
 

@@ -55,7 +55,7 @@ public abstract class TTDSchema<K> implements RemoteSchema<K> {
       final SubPartitioner partitioner,
       final int kafkaPartition
   ) {
-    return (client, name, partition, batchSize) -> new TTDWriter<K>(this, tableName, partition);
+    return (client, name, tablePartition, batchSize) -> new TTDWriter<K>(this, tableName, tablePartition);
   }
 
   @Override
@@ -109,7 +109,7 @@ public abstract class TTDSchema<K> implements RemoteSchema<K> {
     }
 
     @Override
-    public int subpartition() {
+    public int tablePartition() {
       return partition;
     }
   }

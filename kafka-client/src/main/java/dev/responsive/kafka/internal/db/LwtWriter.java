@@ -33,7 +33,7 @@ public class LwtWriter<K> implements RemoteWriter<K> {
   private final Supplier<BatchableStatement<?>> fencingStatementFactory;
   private final RemoteSchema<K> schema;
   private final String tableName;
-  private final int subpartition;
+  private final int tablePartition;
   private final int batchSize;
 
   private final List<BatchableStatement<?>> statements;
@@ -43,14 +43,14 @@ public class LwtWriter<K> implements RemoteWriter<K> {
       final Supplier<BatchableStatement<?>> fencingStatementFactory,
       final RemoteSchema<K> schema,
       final String tableName,
-      final int subpartition,
+      final int tablePartition,
       final int batchSize
   ) {
     this.client = client;
     this.fencingStatementFactory = fencingStatementFactory;
     this.schema = schema;
     this.tableName = tableName;
-    this.subpartition = subpartition;
+    this.tablePartition = tablePartition;
     this.batchSize = batchSize;
 
     statements = new ArrayList<>();
@@ -58,17 +58,17 @@ public class LwtWriter<K> implements RemoteWriter<K> {
 
   @Override
   public void insert(final K key, final byte[] value, long epochMillis) {
-    statements.add(schema.insert(tableName, subpartition, key, value, epochMillis));
+    statements.add(schema.insert(tableName, tablePartition, key, value, epochMillis));
   }
 
   @Override
   public void delete(final K key) {
-    statements.add(schema.delete(tableName, subpartition, key));
+    statements.add(schema.delete(tableName, tablePartition, key));
   }
 
   @Override
   public CompletionStage<RemoteWriteResult> flush() {
-    var result = CompletableFuture.completedStage(RemoteWriteResult.success(subpartition));
+    var result = CompletableFuture.completedStage(RemoteWriteResult.success(tablePartition));
 
     final var it = statements.iterator();
     while (it.hasNext()) {
@@ -90,21 +90,21 @@ public class LwtWriter<K> implements RemoteWriter<K> {
   public RemoteWriteResult setOffset(final long offset) {
     final BatchStatementBuilder builder = new BatchStatementBuilder(BatchType.UNLOGGED);
     builder.addStatement(fencingStatementFactory.get());
-    builder.addStatement(schema.setOffset(tableName, subpartition, offset));
+    builder.addStatement(schema.setOffset(tableName, tablePartition, offset));
 
     final var result = client.execute(builder.build());
     return result.wasApplied()
-        ? RemoteWriteResult.success(subpartition)
-        : RemoteWriteResult.failure(subpartition);
+        ? RemoteWriteResult.success(tablePartition)
+        : RemoteWriteResult.failure(tablePartition);
   }
 
   @Override
-  public int subpartition() {
-    return subpartition;
+  public int tablePartition() {
+    return tablePartition;
   }
 
   private CompletionStage<RemoteWriteResult> executeAsync(final Statement<?> statement) {
     return client.executeAsync(statement)
-        .thenApply(resp -> RemoteWriteResult.of(subpartition, resp));
+        .thenApply(resp -> RemoteWriteResult.of(tablePartition, resp));
   }
 }

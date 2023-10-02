@@ -85,12 +85,12 @@ public class LwtWriterFactory<K> implements WriterFactory<K> {
   public static <K> LwtWriterFactory<K> reserve(
       final RemoteSchema<K> schema,
       final String tableName,
-      final int[] subpartitions,
+      final int[] tablePartitions,
       final int kafkaPartition,
       final long epoch,
       final boolean windowed
   ) {
-    for (final int sub : subpartitions) {
+    for (final int sub : tablePartitions) {
       final var setEpoch = windowed
           ? reserveEpochWindowed(schema, tableName, sub, epoch)
           : reserveEpoch(schema, tableName, sub, epoch);
@@ -135,15 +135,15 @@ public class LwtWriterFactory<K> implements WriterFactory<K> {
   public RemoteWriter<K> createWriter(
       final CassandraClient client,
       final String tableName,
-      final int subpartition,
+      final int tablePartition,
       final int batchSize
   ) {
     return new LwtWriter<>(
         client,
-        () -> ensureEpoch.bind().setInt(PARTITION_KEY.bind(), subpartition),
+        () -> ensureEpoch.bind().setInt(PARTITION_KEY.bind(), tablePartition),
         schema,
         tableName,
-        subpartition,
+        tablePartition,
         batchSize
     );
   }
