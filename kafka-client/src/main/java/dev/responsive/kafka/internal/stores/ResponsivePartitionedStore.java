@@ -259,5 +259,8 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
     if (storeRegistry != null) {
       storeRegistry.deregisterStore(registration);
     }
+    if (buffer != null) {
+      buffer.close();
+    }
   }
 }
