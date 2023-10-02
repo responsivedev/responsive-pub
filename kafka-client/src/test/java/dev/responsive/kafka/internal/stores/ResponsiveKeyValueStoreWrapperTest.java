@@ -20,9 +20,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.instanceOf;
 
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
-import dev.responsive.kafka.internal.stores.ResponsiveGlobalStore;
-import dev.responsive.kafka.internal.stores.ResponsivePartitionedStore;
-import dev.responsive.kafka.internal.stores.ResponsiveStore;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
@@ -37,11 +34,11 @@ import org.mockito.quality.Strictness;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
-public class ResponsiveStoreTest {
+public class ResponsiveKeyValueStoreWrapperTest {
 
   private static final String NAME = "foo";
-  private final ResponsiveStore store =
-      new ResponsiveStore(ResponsiveKeyValueParams.keyValue(NAME));
+  private final ResponsiveKeyValueStoreWrapper store =
+      new ResponsiveKeyValueStoreWrapper(ResponsiveKeyValueParams.keyValue(NAME));
 
   @Mock
   private StateStore root;

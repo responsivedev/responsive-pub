@@ -36,12 +36,12 @@ import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 
-public class ResponsiveStore implements KeyValueStore<Bytes, byte[]> {
+public class ResponsiveKeyValueStoreWrapper implements KeyValueStore<Bytes, byte[]> {
 
   private final ResponsiveKeyValueParams params;
   private KeyValueStore<Bytes, byte[]> delegate;
 
-  public ResponsiveStore(final ResponsiveKeyValueParams params) {
+  public ResponsiveKeyValueStoreWrapper(final ResponsiveKeyValueParams params) {
     this.params = params;
   }
 

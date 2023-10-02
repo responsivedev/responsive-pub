@@ -17,20 +17,17 @@
 package dev.responsive.kafka.internal.stores;
 
 import static dev.responsive.kafka.internal.utils.SharedClients.loadSharedClients;
-import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.changelogFor;
 
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.internal.config.InternalConfigs;
 import dev.responsive.kafka.internal.db.BytesKeySpec;
-import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.RemoteKeyValueSchema;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.stores.SchemaTypes.KVSchema;
 import dev.responsive.kafka.internal.utils.Result;
 import dev.responsive.kafka.internal.utils.SharedClients;
-import dev.responsive.kafka.internal.utils.TableName;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
 import org.apache.kafka.common.TopicPartition;
@@ -41,49 +38,31 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
-import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
-import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.internals.StoreQueryUtils;
 import org.slf4j.Logger;
 
-public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> {
+public class ResponsivePartitionedStore extends AbstractResponsiveStore
+    implements KeyValueStore<Bytes, byte[]> {
 
   private final Logger log;
-
   private final ResponsiveKeyValueParams params;
-  private final TableName name;
-  private final Position position; // TODO(IQ): update the position during restoration
-
-  @SuppressWarnings("rawtypes")
-  private InternalProcessorContext context;
-  private TopicPartition partition;
 
   private CommitBuffer<Bytes, RemoteKeyValueSchema> buffer;
   private RemoteKeyValueSchema schema;
-  private ResponsiveStoreRegistry storeRegistry;
-  private ResponsiveStoreRegistration registration;
   private SubPartitioner partitioner;
 
-  private boolean open;
-
   public ResponsivePartitionedStore(final ResponsiveKeyValueParams params) {
+    super(params.name());
     this.params = params;
-    this.name = params.name();
-    this.position = Position.emptyPosition();
     log = new LogContext(
         String.format("store [%s] ", name.kafkaName())
     ).logger(ResponsivePartitionedStore.class);
   }
 
   @Override
-  public String name() {
-    return name.kafkaName();
-  }
-
-  @Override
-  @SuppressWarnings("deprecation")
+  @Deprecated
   public void init(final ProcessorContext context, final StateStore root) {
     if (context instanceof StateStoreContext) {
       init((StateStoreContext) context, root);
@@ -98,20 +77,22 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
   public void init(final StateStoreContext storeContext, final StateStore root) {
     try {
       log.info("Initializing state store");
-      context = asInternalProcessorContext(storeContext);
 
       final ResponsiveConfig config = ResponsiveConfig.responsiveConfig(storeContext.appConfigs());
       final SharedClients sharedClients = loadSharedClients(storeContext.appConfigs());
-      final CassandraClient client = sharedClients.cassandraClient;
 
-      storeRegistry = InternalConfigs.loadStoreRegistry(storeContext.appConfigs());
-      partition =  new TopicPartition(
-          changelogFor(storeContext, name.kafkaName(), false),
-          context.taskId().partition()
+      super.init(
+          storeContext,
+          sharedClients.cassandraClient,
+          InternalConfigs.loadStoreRegistry(storeContext.appConfigs()),
+          new TopicPartition(
+              changelogFor(storeContext, name.kafkaName(), false),
+              context.taskId().partition())
       );
+
       partitioner = params.schemaType() == KVSchema.FACT
           ? SubPartitioner.NO_SUBPARTITIONS
-          : config.getSubPartitioner(sharedClients.admin, name, partition.topic());
+          : config.getSubPartitioner(sharedClients.admin, name, changelog.topic());
 
       schema = client.prepareKVTableSchema(params);
       log.info("Remote table {} is available for querying.", name.cassandraName());
@@ -119,7 +100,7 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
       buffer = CommitBuffer.from(
           sharedClients,
           name,
-          partition,
+          changelog,
           schema,
           new BytesKeySpec(),
           params.truncateChangelog(),
@@ -128,40 +109,19 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
       );
       buffer.init();
 
-      open = true;
-
       final long offset = buffer.offset();
       registration = new ResponsiveStoreRegistration(
           name.kafkaName(),
-          partition,
+          changelog,
           offset == -1 ? 0 : offset,
           buffer::flush
       );
       storeRegistry.registerStore(registration);
 
-      storeContext.register(root, buffer);
+      super.open(root, buffer::restoreBatch);
     } catch (InterruptedException | TimeoutException e) {
       throw new ProcessorStateException("Failed to initialize store.", e);
     }
-  }
-
-  @Override
-  public void flush() {
-  }
-
-  @Override
-  public boolean isOpen() {
-    return open;
-  }
-
-  @Override
-  public boolean persistent() {
-    // Kafka Streams uses this to determine whether it
-    // needs to create and lock state directories. since
-    // the Responsive Client doesn't require flushing state
-    // to disk, we return false even though the store is
-    // persistent in a remote store
-    return false;
   }
 
   @Override
@@ -224,7 +184,7 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
 
     return schema.get(
         name.cassandraName(),
-        partitioner.partition(partition.partition(), key),
+        partitioner.partition(changelog.partition(), key),
         key,
         minValidTs
     );
@@ -241,14 +201,9 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
   }
 
   @Override
-  public Position getPosition() {
-    return position;
-  }
-
-  @Override
   public long approximateNumEntries() {
     return partitioner
-        .all(partition.partition())
+        .all(changelog.partition())
         .mapToLong(p -> schema.cassandraClient().count(name.cassandraName(), p))
         .sum();
   }
@@ -256,7 +211,7 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
   @Override
   public void close() {
     // no need to flush the buffer here, will happen through the kafka client commit as usual
-    if (storeRegistry != null) {
+    if (storeRegistry != null && registration != null) {
       storeRegistry.deregisterStore(registration);
     }
     if (buffer != null) {

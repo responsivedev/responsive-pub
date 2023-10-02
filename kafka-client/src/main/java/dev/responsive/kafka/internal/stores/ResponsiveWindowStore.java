@@ -18,13 +18,11 @@ package dev.responsive.kafka.internal.stores;
 
 import static dev.responsive.kafka.api.config.ResponsiveConfig.responsiveConfig;
 import static dev.responsive.kafka.internal.utils.SharedClients.loadSharedClients;
-import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.changelogFor;
 
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.stores.ResponsiveWindowParams;
 import dev.responsive.kafka.internal.config.InternalConfigs;
-import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.RemoteWindowedSchema;
 import dev.responsive.kafka.internal.db.StampedKeySpec;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
@@ -32,7 +30,6 @@ import dev.responsive.kafka.internal.utils.Iterators;
 import dev.responsive.kafka.internal.utils.Result;
 import dev.responsive.kafka.internal.utils.SharedClients;
 import dev.responsive.kafka.internal.utils.Stamped;
-import dev.responsive.kafka.internal.utils.TableName;
 import java.util.concurrent.TimeoutException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Bytes;
@@ -42,40 +39,30 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
-import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
-import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.StoreQueryUtils;
 import org.slf4j.Logger;
 
-public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
+public class ResponsiveWindowStore extends AbstractResponsiveStore
+    implements WindowStore<Bytes, byte[]> {
 
   private final Logger log;
 
   private final ResponsiveWindowParams params;
-  private final TableName name;
-  private final Position position; // TODO(IQ): update the position during restoration
   private final long windowSize;
   private final long retentionPeriod;
 
-  @SuppressWarnings("rawtypes")
-  private InternalProcessorContext context;
-  private TopicPartition partition;
-
   private CommitBuffer<Stamped<Bytes>, RemoteWindowedSchema> buffer;
   private RemoteWindowedSchema schema;
-  private ResponsiveStoreRegistry storeRegistry;
-  private ResponsiveStoreRegistration registration;
   private SubPartitioner partitioner;
 
-  private boolean open;
   private long observedStreamTime;
 
   public ResponsiveWindowStore(final ResponsiveWindowParams params) {
+    super(params.name());
     this.params = params;
-    this.name = params.name();
 
     // TODO: figure out how to implement retention period in Cassandra
     // there are a few options for this: we can use the wall-clock based
@@ -90,15 +77,9 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
     // that is past the TTL
     this.retentionPeriod = params.retentionPeriod();
     this.windowSize = params.windowSize();
-    this.position = Position.emptyPosition();
     log = new LogContext(
         String.format("window-store [%s] ", name.kafkaName())
     ).logger(ResponsiveWindowStore.class);
-  }
-
-  @Override
-  public String name() {
-    return name.kafkaName();
   }
 
   @Override
@@ -117,18 +98,20 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
   public void init(final StateStoreContext storeContext, final StateStore root) {
     try {
       log.info("Initializing state store");
-      context = asInternalProcessorContext(storeContext);
 
       final ResponsiveConfig config = responsiveConfig(storeContext.appConfigs());
       final SharedClients sharedClients = loadSharedClients(storeContext.appConfigs());
-      final CassandraClient client = sharedClients.cassandraClient;
 
-      storeRegistry = InternalConfigs.loadStoreRegistry(context.appConfigs());
-      partition =  new TopicPartition(
-          changelogFor(storeContext, name.kafkaName(), false),
-          context.taskId().partition()
+      super.init(
+          storeContext,
+          sharedClients.cassandraClient,
+          InternalConfigs.loadStoreRegistry(storeContext.appConfigs()),
+          new TopicPartition(
+              changelogFor(storeContext, name.kafkaName(), false),
+              context.taskId().partition())
       );
-      partitioner = config.getSubPartitioner(sharedClients.admin, name, partition.topic());
+
+      partitioner = config.getSubPartitioner(sharedClients.admin, name, changelog.topic());
 
       schema = client.prepareWindowedTableSchema(params);
       log.info("Remote table {} is available for querying.", name.cassandraName());
@@ -136,7 +119,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       buffer = CommitBuffer.from(
           sharedClients,
           name,
-          partition,
+          changelog,
           schema,
           new StampedKeySpec(this::withinRetention),
           params.truncateChangelog(),
@@ -145,36 +128,20 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       );
       buffer.init();
 
-      open = true;
-
       final long offset = buffer.offset();
       registration = new ResponsiveStoreRegistration(
           name.kafkaName(),
-          partition,
+          changelog,
           offset == -1 ? 0 : offset,
           buffer::flush
       );
       storeRegistry.registerStore(registration);
 
-      storeContext.register(root, buffer);
+      super.open(root, buffer::restoreBatch);
+
     } catch (InterruptedException | TimeoutException e) {
       throw new ProcessorStateException("Failed to initialize store.", e);
     }
-  }
-
-  @Override
-  public boolean persistent() {
-    // Kafka Streams uses this to determine whether it
-    // needs to create and lock state directories. since
-    // the Responsive Client doesn't require flushing state
-    // to disk, we return false even though the store is
-    // persistent in a remote store
-    return false;
-  }
-
-  @Override
-  public boolean isOpen() {
-    return open;
   }
 
   @Override
@@ -204,7 +171,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
 
     return schema.fetch(
         name.cassandraName(),
-        partitioner.partition(partition.partition(), key),
+        partitioner.partition(changelog.partition(), key),
         key,
         time
     );
@@ -220,7 +187,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
     final Stamped<Bytes> from = new Stamped<>(key, start);
     final Stamped<Bytes> to = new Stamped<>(key, timeTo);
 
-    final int subPartition = partitioner.partition(partition.partition(), key);
+    final int subPartition = partitioner.partition(changelog.partition(), key);
     return Iterators.windowed(
         new LocalRemoteKvIterator<>(
             buffer.range(from, to),
@@ -250,7 +217,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
     final Stamped<Bytes> from = new Stamped<>(key, start);
     final Stamped<Bytes> to = new Stamped<>(key, timeTo);
 
-    final int subPartition = partitioner.partition(partition.partition(), key);
+    final int subPartition = partitioner.partition(changelog.partition(), key);
     return Iterators.windowed(
         new LocalRemoteKvIterator<>(
             buffer.backRange(from, to),
@@ -296,26 +263,6 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
     throw new UnsupportedOperationException("Not yet implemented");
   }
 
-  @Override
-  public void flush() {
-  }
-
-  @Override
-  public void close() {
-    // no need to flush the buffer here, will happen through the kafka client commit as usual
-    if (storeRegistry != null) {
-      storeRegistry.deregisterStore(registration);
-    }
-    if (buffer != null) {
-      buffer.close();
-    }
-  }
-
-  @Override
-  public Position getPosition() {
-    return position;
-  }
-
   private boolean withinRetention(final Stamped<Bytes> key) {
     return key.stamp > observedStreamTime - retentionPeriod;
   }
@@ -327,6 +274,17 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
     }
 
     return Long.compare(o1.stamp, o2.stamp);
+  }
+
+  @Override
+  public void close() {
+    // no need to flush the buffer here, will happen through the kafka client commit as usual
+    if (storeRegistry != null && registration != null) {
+      storeRegistry.deregisterStore(registration);
+    }
+    if (buffer != null) {
+      buffer.close();
+    }
   }
 
 }

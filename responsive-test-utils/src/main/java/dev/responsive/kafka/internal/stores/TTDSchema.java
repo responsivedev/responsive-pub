@@ -109,7 +109,7 @@ public abstract class TTDSchema<K> implements RemoteSchema<K> {
     }
 
     @Override
-    public int partition() {
+    public int subpartition() {
       return partition;
     }
   }

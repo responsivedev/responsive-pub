@@ -16,14 +16,17 @@
 
 package dev.responsive.kafka.internal.stores;
 
+import static dev.responsive.kafka.internal.utils.SharedClients.loadSharedClients;
+
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
-import dev.responsive.kafka.internal.db.CassandraClient;
+import dev.responsive.kafka.internal.config.InternalConfigs;
 import dev.responsive.kafka.internal.db.RemoteKeyValueSchema;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.utils.SharedClients;
-import dev.responsive.kafka.internal.utils.TableName;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
@@ -32,7 +35,6 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.GlobalProcessorContextImpl;
-import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.internals.StoreQueryUtils;
@@ -41,41 +43,26 @@ import org.slf4j.Logger;
 /**
  * The {@code ResponsiveGlobalStore}
  */
-public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
+public class ResponsiveGlobalStore extends AbstractResponsiveStore
+    implements KeyValueStore<Bytes, byte[]> {
 
   private static final long ALL_VALID_TS = -1L; // Global stores don't support TTL
 
   private final Logger log;
-
   private final ResponsiveKeyValueParams params;
-  private final TableName name;
-  private final Position position; // TODO(IQ): update the position during restoration
-
-  private GlobalProcessorContextImpl context;
-  private int partition;
-
-  private CassandraClient client;
   private RemoteKeyValueSchema schema;
 
-  private boolean open;
-
   public ResponsiveGlobalStore(final ResponsiveKeyValueParams params) {
+    super(params.name());
     this.params = params;
-    this.name = params.name();
-    this.position = Position.emptyPosition();
     log = new LogContext(
         String.format("global-store [%s]", name.kafkaName())
-    ).logger(ResponsivePartitionedStore.class);
+    ).logger(ResponsiveGlobalStore.class);
     throw new UnsupportedOperationException("Global tables are not available for use at this time");
   }
 
   @Override
-  public String name() {
-    return name.kafkaName();
-  }
-
-  @Override
-  @SuppressWarnings("deprecation")
+  @Deprecated
   public void init(final ProcessorContext context, final StateStore root) {
     if (context instanceof StateStoreContext) {
       init((StateStoreContext) context, root);
@@ -87,60 +74,61 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
   }
 
   @Override
-  public void init(final StateStoreContext context, final StateStore root) {
+  public void init(final StateStoreContext storeContext, final StateStore root) {
     try {
       log.info("Initializing global state store {}", name);
-      this.context = (GlobalProcessorContextImpl) context;
-      // this is bad, but the assumption is that global tables are small
-      // and can fit in a single partition - all writers will write using
-      // the same partition key. we should consider using ALLOW FILTERING
-      // instead. that would make gets/puts more efficient and the queries
-      // to be more evently distributed and take the hit only on range
-      // queries
-      partition = 0;
-      final SharedClients sharedClients = SharedClients.loadSharedClients(context.appConfigs());
-      client = sharedClients.cassandraClient;
 
-      schema = client.prepareKVTableSchema(params);
+      final SharedClients sharedClients = loadSharedClients(storeContext.appConfigs());
+
+      // this is bad, but the assumption is that global tables are small
+      // and can fit in a single topicPartition - all writers will write using
+      // the same topicPartition key. we should consider using ALLOW FILTERING
+      // instead. that would make gets/puts more efficient and the queries
+      // to be more evently distributed and take the hit only on range queries
+      final TopicPartition globalTopicPartition =
+          new TopicPartition(((GlobalProcessorContextImpl) storeContext).topic(), 0);
+
+      super.init(
+          storeContext,
+          sharedClients.cassandraClient,
+          InternalConfigs.loadStoreRegistry(storeContext.appConfigs()),
+          globalTopicPartition
+      );
+
+      schema = sharedClients.cassandraClient.prepareKVTableSchema(params);
+
+      schema.init(
+          name.cassandraName(),
+          SubPartitioner.NO_SUBPARTITIONS,
+          changelog.partition()
+      );
       log.info("Global table {} is available for querying.", name);
 
-      schema.init(name.cassandraName(), SubPartitioner.NO_SUBPARTITIONS, partition);
-
-      open = true;
-
-      context.register(root, (key, value) -> {
-        if (value == null) {
-          delete(new Bytes(key));
-        } else {
-          put(new Bytes(key), value);
+      super.open(root, batch -> {
+        for (final ConsumerRecord<byte[], byte[]> record : batch) {
+          put(Bytes.wrap(record.key()), record.value());
         }
       });
+
     } catch (InterruptedException | TimeoutException e) {
       throw new ProcessorStateException("Failed to initialize store.", e);
     }
   }
 
   @Override
-  public boolean isOpen() {
-    return open;
-  }
-
-  @Override
-  public boolean persistent() {
-    return false;
-  }
-
-  @Override
   public void put(final Bytes key, final byte[] value) {
-    client.execute(schema.insert(name.cassandraName(), partition, key, value, context.timestamp()));
-    StoreQueryUtils.updatePosition(position, context);
+    if (value == null) {
+      delete(key);
+    } else {
+      putInternal(key, value);
+    }
   }
 
   @Override
   public byte[] putIfAbsent(final Bytes key, final byte[] value) {
     final byte[] old = get(key);
-    if (old == null) {
-      put(key, value);
+    if (old == null && value != null) {
+      putInternal(key, value);
     }
     return old;
   }
@@ -150,44 +138,48 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
     entries.forEach(kv -> put(kv.key, kv.value));
   }
 
+  private void putInternal(final Bytes key, final byte[] value) {
+    client.execute(schema.insert(
+        name.cassandraName(),
+        changelog.partition(),
+        key,
+        value,
+        context.timestamp())
+    );
+    StoreQueryUtils.updatePosition(position, context);
+  }
+
   @Override
   public byte[] delete(final Bytes key) {
     final byte[] bytes = get(key);
-    client.execute(schema.delete(name.cassandraName(), partition, key));
+    client.execute(schema.delete(name.cassandraName(), changelog.partition(), key));
     StoreQueryUtils.updatePosition(position, context);
     return bytes;
   }
 
   @Override
   public byte[] get(final Bytes key) {
-    return schema.get(name.cassandraName(), partition, key, ALL_VALID_TS);
+    return schema.get(name.cassandraName(), changelog.partition(), key, ALL_VALID_TS);
   }
 
   @Override
   public KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
-    return schema.range(name.cassandraName(), partition, from, to, ALL_VALID_TS);
+    return schema.range(name.cassandraName(), changelog.partition(), from, to, ALL_VALID_TS);
   }
 
   @Override
   public KeyValueIterator<Bytes, byte[]> all() {
-    return schema.all(name.cassandraName(), partition, ALL_VALID_TS);
-  }
-
-  @Override
-  public Position getPosition() {
-    return position;
+    return schema.all(name.cassandraName(), changelog.partition(), ALL_VALID_TS);
   }
 
   @Override
   public long approximateNumEntries() {
-    return client.count(name.cassandraName(), partition);
-  }
-
-  @Override
-  public void flush() {
+    return client.count(name.cassandraName(), changelog.partition());
   }
 
   @Override
   public void close() {
+   // nothing to do for the global store since we don't register it or go through a commit buffer
   }
+
 }

@@ -202,11 +202,11 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
         responsiveConfig,
         responsiveKafkaClientSupplier,
         time,
-        storeRegistry,
         metrics,
         new SharedClients(
             cassandraClient,
-            responsiveKafkaClientSupplier.getAdmin(responsiveConfig.originals())
+            responsiveKafkaClientSupplier.getAdmin(responsiveConfig.originals()),
+            storeRegistry
         )
     );
   }
@@ -216,7 +216,6 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       final ResponsiveConfig responsiveConfig,
       final ResponsiveKafkaClientSupplier clientSupplier,
       final Time time,
-      final ResponsiveStoreRegistry storeRegistry,
       final Metrics metrics,
       final SharedClients sharedClients
   ) {
@@ -225,7 +224,6 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
         propsWithOverrides(
             responsiveConfig.originals(),
             sharedClients,
-            storeRegistry,
             topology.describe()),
         clientSupplier,
         time
@@ -272,7 +270,6 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
   private static Properties propsWithOverrides(
       final Map<?, ?> configs,
       final SharedClients sharedClients,
-      final ResponsiveStoreRegistry storeRegistry,
       final TopologyDescription topologyDescription
   ) {
     final Properties propsWithOverrides = new Properties();
@@ -280,7 +277,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     propsWithOverrides.putAll(new InternalConfigs.Builder()
             .withCassandraClient(sharedClients.cassandraClient)
             .withKafkaAdmin(sharedClients.admin)
-            .withStoreRegistry(storeRegistry)
+            .withStoreRegistry(sharedClients.storeRegistry)
             .withTopologyDescription(topologyDescription)
             .build());
 

@@ -20,8 +20,8 @@ public interface WriterFactory<K> {
 
   RemoteWriter<K> createWriter(
       final CassandraClient client,
-      final String name,
-      final int partition,
+      final String tableName,
+      final int subpartition,
       final int batchSize
   );
 

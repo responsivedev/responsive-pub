@@ -353,10 +353,10 @@ class CommitBuffer<K, S extends RemoteSchema<K>>
         writerFactory
     );
 
-    final var writers = new HashMap<Integer, RemoteWriter<K>>();
+    final HashMap<Integer, RemoteWriter<K>> writersBySubpartition = new HashMap<>();
     for (final Result<K> result : buffer.getReader().values()) {
       final int subPartition = subPartitioner.partition(partition, keySpec.bytes(result.key));
-      final RemoteWriter<K> writer = writers
+      final RemoteWriter<K> writer = writersBySubpartition
           .computeIfAbsent(subPartition, k -> writerFactory.createWriter(
               client,
               tableName,
@@ -371,7 +371,7 @@ class CommitBuffer<K, S extends RemoteSchema<K>>
       }
     }
 
-    final var drainWriteResult = drain(writers.values());
+    final var drainWriteResult = drain(writersBySubpartition.values());
     if (!drainWriteResult.wasApplied()) {
       throwFencedException(drainWriteResult, consumedOffset);
     }
@@ -379,7 +379,7 @@ class CommitBuffer<K, S extends RemoteSchema<K>>
     // this offset is only used for recovery, so it can (and should) be done only
     // when all the flushes above have completed and only needs to be written to
     // the first subpartition
-    final var offsetWriteResult = writers.computeIfAbsent(
+    final var offsetWriteResult = writersBySubpartition.computeIfAbsent(
         subPartitioner.first(partition),
         subPartition -> writerFactory.createWriter(client, tableName, subPartition, batchSize)
     ).setOffset(consumedOffset);
@@ -393,7 +393,7 @@ class CommitBuffer<K, S extends RemoteSchema<K>>
         TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNs),
         consumedOffset,
         writerFactory,
-        writers.size()
+        writersBySubpartition.size()
     );
     buffer.clear();
 

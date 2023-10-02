@@ -29,7 +29,7 @@ public class FactSchemaWriter<K> implements RemoteWriter<K> {
   private final CassandraClient client;
   private final RemoteSchema<K> schema;
   private final String name;
-  private final int partition;
+  private final int subpartition;
 
   private final List<Statement<?>> statements;
 
@@ -37,24 +37,24 @@ public class FactSchemaWriter<K> implements RemoteWriter<K> {
       final CassandraClient client,
       final RemoteSchema<K> schema,
       final String name,
-      final int partition
+      final int subpartition
   ) {
     this.client = client;
     this.schema = schema;
     this.name = name;
-    this.partition = partition;
+    this.subpartition = subpartition;
 
     statements = new ArrayList<>();
   }
 
   @Override
   public void insert(final K key, final byte[] value, long epochMillis) {
-    statements.add(schema.insert(name, partition, key, value, epochMillis));
+    statements.add(schema.insert(name, subpartition, key, value, epochMillis));
   }
 
   @Override
   public void delete(final K key) {
-    statements.add(schema.delete(name, partition, key));
+    statements.add(schema.delete(name, subpartition, key));
   }
 
   @Override
@@ -69,7 +69,7 @@ public class FactSchemaWriter<K> implements RemoteWriter<K> {
     // it's safe to run these in parallel w/o a guaranteed ordering because commit
     // buffer only maintains the latest value per key, and we only flush that, also
     // fact schema expects immutable values
-    var result = CompletableFuture.completedStage(RemoteWriteResult.success(partition));
+    var result = CompletableFuture.completedStage(RemoteWriteResult.success(subpartition));
     for (final CompletionStage<RemoteWriteResult> future : results) {
       result = result.thenCombine(future, (one, two) -> !one.wasApplied() ? one : two);
     }
@@ -79,19 +79,19 @@ public class FactSchemaWriter<K> implements RemoteWriter<K> {
 
   @Override
   public RemoteWriteResult setOffset(final long offset) {
-    final var result = client.execute(schema.setOffset(name, partition, offset));
+    final var result = client.execute(schema.setOffset(name, subpartition, offset));
     return result.wasApplied()
-        ? RemoteWriteResult.success(partition)
-        : RemoteWriteResult.failure(partition);
+        ? RemoteWriteResult.success(subpartition)
+        : RemoteWriteResult.failure(subpartition);
   }
 
   @Override
-  public int partition() {
-    return partition;
+  public int subpartition() {
+    return subpartition;
   }
 
   private CompletionStage<RemoteWriteResult> executeAsync(final Statement<?> statement) {
     return client.executeAsync(statement)
-        .thenApply(resp -> RemoteWriteResult.of(partition, resp));
+        .thenApply(resp -> RemoteWriteResult.of(subpartition, resp));
   }
 }

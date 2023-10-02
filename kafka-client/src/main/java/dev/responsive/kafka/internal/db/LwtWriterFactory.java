@@ -84,23 +84,23 @@ public class LwtWriterFactory<K> implements WriterFactory<K> {
   // Visible for Testing
   public static <K> LwtWriterFactory<K> reserve(
       final RemoteSchema<K> schema,
-      final String name,
-      final int[] partitions,
+      final String tableName,
+      final int[] subpartitions,
       final int kafkaPartition,
       final long epoch,
       final boolean windowed
   ) {
-    for (final int sub : partitions) {
+    for (final int sub : subpartitions) {
       final var setEpoch = windowed
-          ? reserveEpochWindowed(schema, name, sub, epoch)
-          : reserveEpoch(schema, name, sub, epoch);
+          ? reserveEpochWindowed(schema, tableName, sub, epoch)
+          : reserveEpoch(schema, tableName, sub, epoch);
 
       if (!setEpoch.wasApplied()) {
-        final long otherEpoch = schema.metadata(name, sub).epoch;
+        final long otherEpoch = schema.metadata(tableName, sub).epoch;
         final var msg = String.format(
             "Could not initialize commit buffer %s[%d] - attempted to claim epoch %d, "
                 + "but was fenced by a writer that claimed epoch %d on sub partition %d",
-            name,
+            tableName,
             kafkaPartition,
             epoch,
             otherEpoch,
@@ -116,8 +116,8 @@ public class LwtWriterFactory<K> implements WriterFactory<K> {
         schema,
         epoch,
         windowed
-            ? ensureEpochWindowed(schema, name, epoch)
-            : ensureEpoch(schema, name, epoch)
+            ? ensureEpochWindowed(schema, tableName, epoch)
+            : ensureEpoch(schema, tableName, epoch)
     );
   }
 
@@ -134,16 +134,16 @@ public class LwtWriterFactory<K> implements WriterFactory<K> {
   @Override
   public RemoteWriter<K> createWriter(
       final CassandraClient client,
-      final String name,
-      final int partition,
+      final String tableName,
+      final int subpartition,
       final int batchSize
   ) {
     return new LwtWriter<>(
-       client,
-        () -> ensureEpoch.bind().setInt(PARTITION_KEY.bind(), partition),
+        client,
+        () -> ensureEpoch.bind().setInt(PARTITION_KEY.bind(), subpartition),
         schema,
-        name,
-        partition,
+        tableName,
+        subpartition,
         batchSize
     );
   }
