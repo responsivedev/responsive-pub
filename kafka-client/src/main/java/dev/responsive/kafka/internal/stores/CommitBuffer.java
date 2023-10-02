@@ -84,7 +84,7 @@ class CommitBuffer<K, S extends RemoteSchema<K>>
   // flag to skip further truncation attempts when the changelog is set to 'compact' only
   private boolean isDeleteEnabled = true;
   private final boolean truncateChangelog;
-  private KafkaFuture<DeletedRecords> deleteRecordsFuture;
+  private KafkaFuture<DeletedRecords> deleteRecordsFuture = KafkaFuture.completedFuture(null);
 
   static <K, S extends RemoteSchema<K>> CommitBuffer<K, S> from(
       final SharedClients clients,
