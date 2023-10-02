@@ -57,7 +57,8 @@ import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCa
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.slf4j.Logger;
 
-class CommitBuffer<K, S extends RemoteSchema<K>> implements RecordBatchingStateRestoreCallback, Closeable {
+class CommitBuffer<K, S extends RemoteSchema<K>> 
+    implements RecordBatchingStateRestoreCallback, Closeable {
 
   public static final int MAX_BATCH_SIZE = 1000;
 
