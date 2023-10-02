@@ -16,6 +16,8 @@
 
 package dev.responsive.kafka.internal.stores;
 
+import static org.apache.kafka.clients.admin.RecordsToDelete.beforeOffset;
+
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.KeySpec;
@@ -28,6 +30,7 @@ import dev.responsive.kafka.internal.utils.Iterators;
 import dev.responsive.kafka.internal.utils.Result;
 import dev.responsive.kafka.internal.utils.SharedClients;
 import dev.responsive.kafka.internal.utils.TableName;
+import java.io.Closeable;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -35,25 +38,27 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.RecordsToDelete;
+import org.apache.kafka.clients.admin.DeletedRecords;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.slf4j.Logger;
 
-class CommitBuffer<K, S extends RemoteSchema<K>> implements RecordBatchingStateRestoreCallback {
+class CommitBuffer<K, S extends RemoteSchema<K>> 
+    implements RecordBatchingStateRestoreCallback, Closeable {
 
   public static final int MAX_BATCH_SIZE = 1000;
 
@@ -67,7 +72,6 @@ class CommitBuffer<K, S extends RemoteSchema<K>> implements RecordBatchingStateR
   private final Admin admin;
   private final TopicPartition changelog;
   private final S remoteSchema;
-  private final boolean truncateChangelog;
   private final FlushTriggers flushTriggers;
   private final int maxBatchSize;
   private final SubPartitioner subPartitioner;
@@ -78,7 +82,9 @@ class CommitBuffer<K, S extends RemoteSchema<K>> implements RecordBatchingStateR
   private WriterFactory<K> writerFactory;
 
   // flag to skip further truncation attempts when the changelog is set to 'compact' only
-  private boolean isNotDeleteEnabled = false;
+  private boolean isDeleteEnabled = true;
+  private final boolean truncateChangelog;
+  private KafkaFuture<DeletedRecords> deleteRecordsFuture = KafkaFuture.completedFuture(null);
 
   static <K, S extends RemoteSchema<K>> CommitBuffer<K, S> from(
       final SharedClients clients,
@@ -408,21 +414,46 @@ class CommitBuffer<K, S extends RemoteSchema<K>> implements RecordBatchingStateR
     }
   }
 
+  /**
+   * Performs async changelog truncation by allowing the delete requests to be completed
+   * in the background. After a flush, we will check on the completion of the previous
+   * delete request and if successful, send out a new request to truncate up to the
+   * last flushed offset
+   *
+   * @param offset the flushed offset up to which we can safely delete changelog records
+   */
   private void maybeTruncateChangelog(final long offset) {
-    if (truncateChangelog && !isNotDeleteEnabled) {
-      try {
-        admin.deleteRecords(Map.of(changelog, RecordsToDelete.beforeOffset(offset))).all().get();
-        log.info("Truncated changelog topic {} before offset {}", changelog, offset);
-      } catch (final ExecutionException e) {
-        log.warn("Could not truncate changelog topic-partition " + changelog, e);
-        if (e.getCause() instanceof PolicyViolationException) {
-          log.warn("Disabling further changelog truncation attempts due to topic configuration "
-                       + "being incompatible with deleteRecord requests", e);
-          isNotDeleteEnabled = true;
-        }
-      } catch (final InterruptedException e) {
-        log.error("Interrupted while truncating the changelog " + changelog, e);
-        throw new ProcessorStateException("Interrupted while truncating " + changelog, e);
+    if (truncateChangelog && isDeleteEnabled) {
+      if (deleteRecordsFuture.isDone()) {
+        log.debug("Issuing new delete request to truncate {} up to offset {}", changelog, offset);
+
+        deleteRecordsFuture = admin.deleteRecords(Map.of(changelog, beforeOffset(offset)))
+            .lowWatermarks()
+            .get(changelog)
+            .whenComplete(this::onDeleteRecords);
+      } else {
+        log.debug("Still waiting on previous changelog truncation attempt to complete");
+      }
+    }
+  }
+
+  private void onDeleteRecords(final DeletedRecords deletedRecords, final Throwable throwable) {
+    if (throwable == null) {
+      log.info("Truncated changelog {} up to offset {}", changelog, deletedRecords.lowWatermark());
+    } else {
+      if (throwable instanceof PolicyViolationException) {
+        // Don't retry and cancel all further attempts since we know they will fail
+        log.warn("Disabling further changelog truncation attempts due to topic configuration "
+                     + "being incompatible with deleteRecords requests", throwable);
+        isDeleteEnabled = false;
+      } else if (throwable instanceof CancellationException) {
+        // Don't retry and just log at INFO since we cancel the future as part of shutdown
+        log.info("Delete records request for changelog {} was cancelled", changelog);
+      } else {
+        // Pretty much anything else can and should be retried, but we always wait for the
+        // next flush to retry to make sure the offset gets updated
+        log.warn("Truncation of changelog " + changelog + " failed and will be retried"
+                     + "after the next flush", throwable);
       }
     }
   }
@@ -475,4 +506,8 @@ class CommitBuffer<K, S extends RemoteSchema<K>> implements RecordBatchingStateR
     throw new TaskMigratedException(logPrefix + msg);
   }
 
+  @Override
+  public void close() {
+    deleteRecordsFuture.cancel(true);
+  }
 }

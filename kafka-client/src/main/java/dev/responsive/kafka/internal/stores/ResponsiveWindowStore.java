@@ -306,6 +306,9 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
     if (storeRegistry != null) {
       storeRegistry.deregisterStore(registration);
     }
+    if (buffer != null) {
+      buffer.close();
+    }
   }
 
   @Override
