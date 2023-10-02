@@ -150,7 +150,7 @@ public class CassandraClient {
     return numPartitions == 0 ? OptionalInt.empty() : OptionalInt.of(numPartitions);
   }
 
-  public void close() {
+  public void shutdown() {
     executor.shutdown();
     session.close();
   }

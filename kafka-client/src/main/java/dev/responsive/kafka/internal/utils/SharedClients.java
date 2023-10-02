@@ -34,7 +34,7 @@ public class SharedClients {
   }
 
   public void closeAll() {
-    cassandraClient.close();
+    cassandraClient.shutdown();
     admin.close();
   }
 }

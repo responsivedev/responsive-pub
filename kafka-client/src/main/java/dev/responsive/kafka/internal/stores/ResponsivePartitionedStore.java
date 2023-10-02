@@ -17,6 +17,7 @@
 package dev.responsive.kafka.internal.stores;
 
 import static dev.responsive.kafka.internal.utils.SharedClients.loadSharedClients;
+import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.changelogFor;
 
 import dev.responsive.kafka.api.config.ResponsiveConfig;
@@ -87,7 +88,7 @@ public class ResponsivePartitionedStore extends AbstractResponsiveStore
           InternalConfigs.loadStoreRegistry(storeContext.appConfigs()),
           new TopicPartition(
               changelogFor(storeContext, name.kafkaName(), false),
-              context.taskId().partition())
+              asInternalProcessorContext(storeContext).taskId().partition())
       );
 
       partitioner = params.schemaType() == KVSchema.FACT

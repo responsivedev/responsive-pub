@@ -301,7 +301,8 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
       final int partition,
       final Bytes from,
       final Bytes to,
-      long minValidTs) {
+      long minValidTs
+  ) {
     throw new UnsupportedOperationException("range scans are not supported on Idempotent schemas.");
   }
 
@@ -309,7 +310,8 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
   public KeyValueIterator<Bytes, byte[]> all(
       final String tableName,
       final int partition,
-      long minValidTs) {
+      long minValidTs
+  ) {
     throw new UnsupportedOperationException("all is not supported on Idempotent schemas");
   }
 
