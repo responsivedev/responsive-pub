@@ -81,8 +81,8 @@ public class ResponsiveGlobalStore extends AbstractResponsiveStore
       final SharedClients sharedClients = loadSharedClients(storeContext.appConfigs());
 
       // this is bad, but the assumption is that global tables are small
-      // and can fit in a single topicPartition - all writers will write using
-      // the same topicPartition key. we should consider using ALLOW FILTERING
+      // and can fit in a single table partition - all writers will write using
+      // the same partition key. we should consider using ALLOW FILTERING
       // instead. that would make gets/puts more efficient and the queries
       // to be more evently distributed and take the hit only on range queries
       final TopicPartition globalTopicPartition =
