@@ -108,13 +108,8 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
 
       open = true;
 
-      context.register(root, (key, value) -> {
-        if (value == null) {
-          delete(new Bytes(key));
-        } else {
-          put(new Bytes(key), value);
-        }
-      });
+      context.register(root, (key, value) -> put(Bytes.wrap(key), value));
+
     } catch (InterruptedException | TimeoutException e) {
       throw new ProcessorStateException("Failed to initialize store.", e);
     }
@@ -129,18 +124,21 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
   public boolean persistent() {
     return false;
   }
-
+  
   @Override
   public void put(final Bytes key, final byte[] value) {
-    client.execute(schema.insert(name.cassandraName(), partition, key, value, context.timestamp()));
-    StoreQueryUtils.updatePosition(position, context);
+    if (value == null) {
+      delete(key);
+    } else {
+      putInternal(key, value);
+    }
   }
 
   @Override
   public byte[] putIfAbsent(final Bytes key, final byte[] value) {
     final byte[] old = get(key);
-    if (old == null) {
-      put(key, value);
+    if (old == null && value != null) {
+      putInternal(key, value);
     }
     return old;
   }
@@ -148,6 +146,17 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
   @Override
   public void putAll(final List<KeyValue<Bytes, byte[]>> entries) {
     entries.forEach(kv -> put(kv.key, kv.value));
+  }
+
+  private void putInternal(final Bytes key, final byte[] value) {
+    client.execute(schema.insert(
+        name.cassandraName(),
+        partition,
+        key,
+        value,
+        context.timestamp())
+    );
+    StoreQueryUtils.updatePosition(position, context);
   }
 
   @Override
