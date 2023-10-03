@@ -53,6 +53,7 @@ public class CassandraClient {
   private final RemoteKeyValueSchema kvSchema;
   private final RemoteKeyValueSchema factSchema;
   private final RemoteWindowedSchema windowedSchema;
+  private final RemoteKeyValueSchema globalSchema;
 
   /**
    * @param session the Cassandra session, expected to be initialized
@@ -67,6 +68,7 @@ public class CassandraClient {
     this.kvSchema = new CassandraKeyValueSchema(this);
     this.factSchema = new CassandraFactSchema(this);
     this.windowedSchema = new CassandraWindowedSchema(this);
+    this.globalSchema = new CassandraGlobalKeyValueSchema(this);
   }
 
   protected CassandraClient(final ResponsiveConfig config) {
@@ -153,6 +155,14 @@ public class CassandraClient {
   public void shutdown() {
     executor.shutdown();
     session.close();
+  }
+
+  public RemoteKeyValueSchema prepareGlobalSchema(final ResponsiveKeyValueParams params)
+      throws InterruptedException, TimeoutException {
+    globalSchema.create(params.name().cassandraName(), params.timeToLive());
+    awaitTableAndPrepareSchema(params.name().cassandraName(), globalSchema);
+
+    return globalSchema;
   }
 
   public RemoteKeyValueSchema prepareKVTableSchema(final ResponsiveKeyValueParams params)

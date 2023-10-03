@@ -48,7 +48,7 @@ public class ResponsiveStoreTest {
   @Mock
   private InternalProcessorContext<?, ?> context;
 
-  //@Test
+  @Test
   public void shouldCreateGlobalStore() {
     // Given:
     Mockito.when(context.taskType()).thenReturn(TaskType.GLOBAL);

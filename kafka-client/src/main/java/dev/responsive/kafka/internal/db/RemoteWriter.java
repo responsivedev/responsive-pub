@@ -29,5 +29,4 @@ public interface RemoteWriter<K> {
 
   RemoteWriteResult setOffset(final long offset);
 
-  int partition();
 }

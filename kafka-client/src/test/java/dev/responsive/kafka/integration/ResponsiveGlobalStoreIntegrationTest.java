@@ -54,6 +54,7 @@ import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.KStream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.ExtendWith;
 
@@ -94,7 +95,7 @@ public class ResponsiveGlobalStoreIntegrationTest {
     admin.deleteTopics(List.of(INPUT_TOPIC, GLOBAL_TOPIC, OUTPUT_TOPIC));
   }
 
-  //@Test
+  @Test
   public void shouldUseGlobalTable() throws Exception {
     // Given:
     final Map<String, Object> properties = getMutableProperties();

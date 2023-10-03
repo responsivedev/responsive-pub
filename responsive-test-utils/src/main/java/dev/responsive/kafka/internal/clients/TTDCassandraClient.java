@@ -121,6 +121,13 @@ public class TTDCassandraClient extends CassandraClient {
   }
 
   @Override
+  public RemoteKeyValueSchema prepareGlobalSchema(final ResponsiveKeyValueParams params) {
+    // for testing, just use the KV schema since partitions are ignored anyway,
+    // which is the main difference between the stores
+    return prepareKVTableSchema(params);
+  }
+
+  @Override
   public RemoteKeyValueSchema prepareKVTableSchema(final ResponsiveKeyValueParams params) {
     kvSchema.create(params.name().cassandraName(), params.timeToLive());
     kvSchema.prepare(params.name().cassandraName());
