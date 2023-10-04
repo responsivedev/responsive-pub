@@ -65,7 +65,16 @@ public final class IntegrationTestUtils {
   }
 
   public static String getCassandraValidName(final TestInfo info) {
-    return info.getTestMethod().orElseThrow().getName().toLowerCase(Locale.ROOT);
+    // no need to do the below on non-parameterized tests
+    final String name = info.getTestMethod().orElseThrow().getName().toLowerCase(Locale.ROOT);
+    if (info.getTestMethod().orElseThrow().getParameterCount() == 0) {
+      return name;
+    }
+
+    // add displayName to name to account for parameterized tests
+    return name
+        + info.getDisplayName().substring("[X] ".length()).toLowerCase(Locale.ROOT)
+        .replace("_", ""); // keep only valid cassandra chars to keep testing code easier
   }
 
   /**
