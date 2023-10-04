@@ -44,7 +44,6 @@ import static org.hamcrest.Matchers.lessThan;
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.api.stores.ResponsiveStores;
-import dev.responsive.kafka.internal.stores.SchemaTypes.KVSchema;
 import dev.responsive.kafka.internal.utils.RemoteMonitor;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
@@ -77,18 +76,17 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 @ExtendWith(ResponsiveExtension.class)
-public class ResponsivePartitionedStoreEosIntegrationTest {
+public class ResponsiveKVStoreEosIntegrationTest {
 
   private static final Logger LOG
-      = LoggerFactory.getLogger(ResponsivePartitionedStoreEosIntegrationTest.class);
+      = LoggerFactory.getLogger(ResponsiveKVStoreEosIntegrationTest.class);
 
   private static final int MAX_POLL_MS = 5000;
   private static final String INPUT_TOPIC = "input";
@@ -129,9 +127,8 @@ public class ResponsivePartitionedStoreEosIntegrationTest {
     return name + "." + OUTPUT_TOPIC;
   }
 
-  @ParameterizedTest
-  @EnumSource(KVSchema.class)
-  public void shouldMaintainStateOnEosFailOverAndFenceOldClient(final KVSchema type)
+  @Test
+  public void shouldMaintainStateOnEosFailOverAndFenceOldClient()
       throws Exception {
     // Given:
     final Map<String, Object> properties = getMutableProperties();
@@ -140,8 +137,8 @@ public class ResponsivePartitionedStoreEosIntegrationTest {
 
     // When:
     try (
-        final ResponsiveKafkaStreams streamsA = buildStreams(properties, "a", state, type);
-        final ResponsiveKafkaStreams streamsB = buildStreams(properties, "b", state, type);
+        final ResponsiveKafkaStreams streamsA = buildStreams(properties, "a", state);
+        final ResponsiveKafkaStreams streamsB = buildStreams(properties, "b", state);
     ) {
       startAppAndAwaitRunning(Duration.ofSeconds(10), streamsA, streamsB);
 
@@ -245,13 +242,9 @@ public class ResponsivePartitionedStoreEosIntegrationTest {
     return properties;
   }
 
-  private StoreBuilder<KeyValueStore<Long, Long>> storeSupplier(KVSchema type) {
+  private StoreBuilder<KeyValueStore<Long, Long>> storeSupplier() {
     return ResponsiveStores.keyValueStoreBuilder(
-        ResponsiveStores.keyValueStore(
-            type == KVSchema.FACT
-                ? ResponsiveKeyValueParams.fact(name)
-                : ResponsiveKeyValueParams.keyValue(name)
-            ),
+        ResponsiveStores.keyValueStore(ResponsiveKeyValueParams.keyValue(name)),
         Serdes.Long(),
         Serdes.Long()
     ).withLoggingEnabled(
@@ -261,14 +254,13 @@ public class ResponsivePartitionedStoreEosIntegrationTest {
   private ResponsiveKafkaStreams buildStreams(
       final Map<String, Object> originals,
       final String instance,
-      final SharedState state,
-      final KVSchema type
+      final SharedState state
   ) {
     final Map<String, Object> properties = new HashMap<>(originals);
     properties.put(APPLICATION_SERVER_CONFIG, instance + ":1024");
 
     final StreamsBuilder builder = new StreamsBuilder();
-    builder.addStateStore(storeSupplier(type));
+    builder.addStateStore(storeSupplier());
 
     final KStream<Long, Long> input = builder.stream(inputTopic());
     input

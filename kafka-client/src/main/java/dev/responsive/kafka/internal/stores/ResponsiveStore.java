@@ -88,8 +88,18 @@ public class ResponsiveStore implements KeyValueStore<Bytes, byte[]> {
     if (asInternalProcessorContext(context).taskType() == TaskType.GLOBAL) {
       delegate = new ResponsiveGlobalStore(params);
     } else {
-      delegate = new ResponsivePartitionedStore(params);
+      switch (params.schemaType()) {
+        case KEY_VALUE:
+          delegate = new ResponsiveKVStore(params);
+          break;
+        case FACT:
+          delegate = new ResponsiveFactStore(params);
+          break;
+        default:
+          throw new IllegalArgumentException("Unexpected schema type " + params.schemaType());
+      }
     }
+
     delegate.init(context, root);
   }
 

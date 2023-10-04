@@ -27,7 +27,6 @@ import dev.responsive.kafka.internal.db.BytesKeySpec;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.RemoteKeyValueSchema;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
-import dev.responsive.kafka.internal.stores.SchemaTypes.KVSchema;
 import dev.responsive.kafka.internal.utils.Result;
 import dev.responsive.kafka.internal.utils.SharedClients;
 import dev.responsive.kafka.internal.utils.TableName;
@@ -48,7 +47,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.internals.StoreQueryUtils;
 import org.slf4j.Logger;
 
-public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> {
+public abstract class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> {
 
   private final Logger log;
 
@@ -68,7 +67,7 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
 
   private boolean open;
 
-  public ResponsivePartitionedStore(final ResponsiveKeyValueParams params) {
+  protected ResponsivePartitionedStore(final ResponsiveKeyValueParams params) {
     this.params = params;
     this.name = params.name();
     this.position = Position.emptyPosition();
@@ -109,9 +108,7 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
           changelogFor(storeContext, name.kafkaName(), false),
           context.taskId().partition()
       );
-      partitioner = params.schemaType() == KVSchema.FACT
-          ? SubPartitioner.NO_SUBPARTITIONS
-          : config.getSubPartitioner(sharedClients.admin, name, partition.topic());
+      partitioner = partitioner(config, sharedClients, name, partition);
 
       schema = client.prepareKVTableSchema(params);
       log.info("Remote table {} is available for querying.", name.cassandraName());
@@ -144,6 +141,13 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
       throw new ProcessorStateException("Failed to initialize store.", e);
     }
   }
+
+  protected abstract SubPartitioner partitioner(
+      ResponsiveConfig config,
+      SharedClients clients,
+      TableName name,
+      TopicPartition partition
+  );
 
   @Override
   public void flush() {

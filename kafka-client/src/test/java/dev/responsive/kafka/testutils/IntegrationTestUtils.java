@@ -65,10 +65,7 @@ public final class IntegrationTestUtils {
   }
 
   public static String getCassandraValidName(final TestInfo info) {
-    // add displayName to name to account for parameterized tests
-    return info.getTestMethod().orElseThrow().getName().toLowerCase(Locale.ROOT)
-        + info.getDisplayName().substring("[X] ".length()).toLowerCase(Locale.ROOT)
-        .replace("_", ""); // keep only valid cassandra chars to keep testing code easier
+    return info.getTestMethod().orElseThrow().getName().toLowerCase(Locale.ROOT);
   }
 
   /**
