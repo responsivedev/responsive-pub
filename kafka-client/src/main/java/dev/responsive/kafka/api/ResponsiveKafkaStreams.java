@@ -14,12 +14,11 @@ import dev.responsive.kafka.internal.db.DefaultCassandraClientFactory;
 import dev.responsive.kafka.internal.metrics.ClientVersionMetadata;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.metrics.ResponsiveStateListener;
-import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
+import dev.responsive.kafka.internal.stores.ResponsiveRestoreListener;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistry;
 import dev.responsive.kafka.internal.utils.SharedClients;
 import java.time.Duration;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -53,6 +52,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
 
   private final ResponsiveMetrics responsiveMetrics;
   private final ResponsiveStateListener responsiveStateListener;
+  private final ResponsiveRestoreListener responsiveRestoreListener;
   private final SharedClients sharedClients;
 
   /**
@@ -213,8 +213,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
         metrics,
         new SharedClients(
             cassandraClient,
-            responsiveKafkaClientSupplier.getAdmin(responsiveConfig.originals()),
-            new ResponsiveRestoreListener(metrics)
+            responsiveKafkaClientSupplier.getAdmin(responsiveConfig.originals())
         )
     );
   }
@@ -260,9 +259,11 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
         versionMetadata,
         applicationConfigs.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX)
     );
+
+    responsiveRestoreListener = new ResponsiveRestoreListener(responsiveMetrics);
     responsiveStateListener = new ResponsiveStateListener(responsiveMetrics);
 
-    super.setGlobalStateRestoreListener(sharedClients.restoreListener);
+    super.setGlobalStateRestoreListener(responsiveRestoreListener);
     super.setStateListener(responsiveStateListener);
   }
 
@@ -344,11 +345,11 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
    */
   @Override
   public void setGlobalStateRestoreListener(final StateRestoreListener restoreListener) {
-    sharedClients.restoreListener.registerUserRestoreListener(restoreListener);
+    responsiveRestoreListener.registerUserRestoreListener(restoreListener);
   }
 
   public StateRestoreListener stateRestoreListener() {
-    return sharedClients.restoreListener.userRestoreListener();
+    return responsiveRestoreListener.userRestoreListener();
   }
 
   private void closeInternal() {

@@ -1,7 +1,6 @@
 package dev.responsive.kafka.internal.config;
 
 import dev.responsive.kafka.internal.db.CassandraClient;
-import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistry;
 import java.util.HashMap;
 import java.util.Map;
@@ -10,15 +9,16 @@ import org.apache.kafka.streams.TopologyDescription;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-@SuppressWarnings("checkstyle:linelength")
 public final class InternalConfigs {
   private static final Logger LOG = LoggerFactory.getLogger(InternalConfigs.class);
-
-  private static final String INTERNAL_CASSANDRA_CLIENT_CONFIG = "__internal.responsive.cassandra.client__";
-  private static final String INTERNAL_ADMIN_CLIENT_CONFIG = "__internal.responsive.admin.client__";
-  private static final String RESTORE_LISTENER_CONFIG = "__internal.responsive.restore.listener__";
   private static final String STORE_REGISTRY_CONFIG = "__internal.responsive.store.registry__";
-  private static final String TOPOLOGY_DESCRIPTION_CONFIG = "__internal.responsive.topology.description__";
+  private static final String INTERNAL_CASSANDRA_CLIENT_CONFIG =
+      "__internal.responsive.cassandra.client__";
+  private static final String INTERNAL_ADMIN_CLIENT_CONFIG =
+          "__internal.responsive.admin.client__";
+
+  private static final String TOPOLOGY_DESCRIPTION_CONFIG
+      = "__internal.responsive.topology.description__";
 
   public static <T> T loadFromConfig(
       final Map<String, Object> configs,
@@ -75,15 +75,6 @@ public final class InternalConfigs {
         STORE_REGISTRY_CONFIG,
         ResponsiveStoreRegistry.class,
         "Store registry"
-    );
-  }
-
-  public static ResponsiveRestoreListener loadRestoreListener(final Map<String, Object> configs) {
-    return loadFromConfig(
-        configs,
-        RESTORE_LISTENER_CONFIG,
-        ResponsiveRestoreListener.class,
-        "Restore listener"
     );
   }
 
