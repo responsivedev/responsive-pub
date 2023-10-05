@@ -61,7 +61,7 @@ public class ResponsiveMetrics implements Closeable {
   ) {
     // this is technically redundant with the application id, but sometimes it's useful to have both
     baseTags.put("consumer-group", applicationId);
-    baseTags.put("application-id", applicationId);
+    baseTags.put("streams-application-id", applicationId);
     baseTags.put("streams-client-id", streamsClientId);
 
     baseTags.put("responsive-version", versionMetadata.responsiveClientVersion);
