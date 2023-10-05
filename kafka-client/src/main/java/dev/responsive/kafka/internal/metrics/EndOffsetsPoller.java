@@ -263,7 +263,8 @@ public class EndOffsetsPoller {
       return metrics.metricName(
           END_OFFSET,
           END_OFFSET_DESCRIPTION,
-          metrics.topicLevelMetric(threadId, topicPartition));
+          metrics.topicLevelMetric(threadId, topicPartition)
+      );
     }
   }
 

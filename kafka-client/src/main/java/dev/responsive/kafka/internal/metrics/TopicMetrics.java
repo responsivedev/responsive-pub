@@ -27,10 +27,10 @@ public class TopicMetrics implements MetricGroup {
   public static final String TOPIC_METRIC_GROUP = "topic-metrics";
 
   public static final String COMMITTED_OFFSET = "committed-offset";
-  public static final String COMMITTED_OFFSET_DESCRIPTION = "The latest committed offset";
+  public static final String COMMITTED_OFFSET_DESCRIPTION = "The latest committed offset of this topic partition";
 
   public static final String END_OFFSET = "end-offset";
-  public static final String END_OFFSET_DESCRIPTION = "The highest end offset";
+  public static final String END_OFFSET_DESCRIPTION = "The end offset of this topic partition";
 
   private final Map<String, String> tags = new HashMap<>();
 
@@ -42,7 +42,7 @@ public class TopicMetrics implements MetricGroup {
     tags.putAll(baseAppTags);
     tags.put("thread", threadId);
     tags.put("topic", topicPartition.topic());
-    tags.put("partition", String.valueOf(topicPartition.partition()));
+    tags.put("partition", Integer.toString(topicPartition.partition()));
   }
   
   @Override
@@ -52,6 +52,6 @@ public class TopicMetrics implements MetricGroup {
 
   @Override
   public Map<String, String> tags() {
-    return null;
+    return tags;
   }
 }
