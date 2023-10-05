@@ -39,6 +39,7 @@ import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
 import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
 import com.datastax.oss.driver.api.querybuilder.schema.CreateTableWithOptions;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
+import dev.responsive.kafka.internal.db.spec.CassandraTableSpec;
 import dev.responsive.kafka.internal.utils.Iterators;
 import dev.responsive.kafka.internal.utils.Stamped;
 import java.nio.ByteBuffer;
@@ -46,8 +47,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeoutException;
 import javax.annotation.CheckReturnValue;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
@@ -55,51 +55,36 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class CassandraWindowedSchema implements RemoteWindowedSchema {
+public class CassandraWindowedTable implements RemoteWindowedTable {
 
-  private static final Logger LOG = LoggerFactory.getLogger(CassandraWindowedSchema.class);
+  private static final Logger LOG = LoggerFactory.getLogger(CassandraWindowedTable.class);
 
   private static final String FROM_BIND = "fk";
   private static final String TO_BIND = "tk";
   private static final String W_FROM_BIND = "wf";
   private static final String W_TO_BIND = "wt";
 
+  private final String name;
   private final CassandraClient client;
 
-  // use ConcurrentHashMap instead of ConcurrentMap in the declaration here
-  // because ConcurrentHashMap guarantees that the supplied function for
-  // computeIfAbsent is invoked exactly once per invocation of the method
-  // if the key is absent, else not at all. this guarantee is not present
-  // in all implementations of ConcurrentMap
-  private final ConcurrentHashMap<String, PreparedStatement> insert;
-  private final ConcurrentHashMap<String, PreparedStatement> delete;
-  private final ConcurrentHashMap<String, PreparedStatement> fetchSingle;
-  private final ConcurrentHashMap<String, PreparedStatement> fetch;
-  private final ConcurrentHashMap<String, PreparedStatement> fetchAll;
-  private final ConcurrentHashMap<String, PreparedStatement> fetchRange;
-  private final ConcurrentHashMap<String, PreparedStatement> backFetch;
-  private final ConcurrentHashMap<String, PreparedStatement> backFetchAll;
-  private final ConcurrentHashMap<String, PreparedStatement> backFetchRange;
-  private final ConcurrentHashMap<String, PreparedStatement> getMeta;
-  private final ConcurrentHashMap<String, PreparedStatement> setOffset;
+  private final PreparedStatement insert;
+  private final PreparedStatement delete;
+  private final PreparedStatement fetchSingle;
+  private final PreparedStatement fetch;
+  private final PreparedStatement fetchAll;
+  private final PreparedStatement fetchRange;
+  private final PreparedStatement backFetch;
+  private final PreparedStatement backFetchAll;
+  private final PreparedStatement backFetchRange;
+  private final PreparedStatement getMeta;
+  private final PreparedStatement setOffset;
 
-  public CassandraWindowedSchema(final CassandraClient client) {
-    this.client = client;
-    insert = new ConcurrentHashMap<>();
-    delete = new ConcurrentHashMap<>();
-    fetchSingle = new ConcurrentHashMap<>();
-    fetch = new ConcurrentHashMap<>();
-    fetchAll = new ConcurrentHashMap<>();
-    fetchRange = new ConcurrentHashMap<>();
-    backFetch = new ConcurrentHashMap<>();
-    backFetchAll = new ConcurrentHashMap<>();
-    backFetchRange = new ConcurrentHashMap<>();
-    getMeta = new ConcurrentHashMap<>();
-    setOffset = new ConcurrentHashMap<>();
-  }
+  public static CassandraWindowedTable create(
+      CassandraTableSpec spec,
+      final CassandraClient client
+  ) throws InterruptedException, TimeoutException {
+    final String name = spec.tableName();
 
-  @Override
-  public void create(final String name, Optional<Duration> ttl) {
     // TODO(window): explore better data models for fetchRange/fetchAll
     // Cassandra does not support filtering on a composite key column if
     // the previous columns in the composite are not equality filters
@@ -113,14 +98,153 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
     // too small in cardinality) we just filter the results to match the
     // time bounds
     LOG.info("Creating windowed data table {} in remote store.", name);
-    final CreateTableWithOptions createTable = ttl.isPresent()
-        ? createTable(name).withDefaultTimeToLiveSeconds(Math.toIntExact(ttl.get().getSeconds()))
-        : createTable(name);
+    final CreateTableWithOptions createTable = spec.applyOptions(createTable(name));
 
     client.execute(createTable.build());
+    client.awaitTable(name).await(Duration.ofSeconds(60));
+
+    final var insert = client.prepare(
+        QueryBuilder
+            .insertInto(name)
+            .value(PARTITION_KEY.column(), bindMarker(PARTITION_KEY.bind()))
+            .value(ROW_TYPE.column(), DATA_ROW.literal())
+            .value(DATA_KEY.column(), bindMarker(DATA_KEY.bind()))
+            .value(WINDOW_START.column(), bindMarker(WINDOW_START.bind()))
+            .value(DATA_VALUE.column(), bindMarker(DATA_VALUE.bind()))
+            .build()
+    );
+
+    final var delete = client.prepare(
+        QueryBuilder
+            .deleteFrom(name)
+            .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
+            .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
+            .where(DATA_KEY.relation().isEqualTo(bindMarker(DATA_KEY.bind())))
+            .where(WINDOW_START.relation().isEqualTo(bindMarker(WINDOW_START.bind())))
+            .build()
+    );
+
+    final var fetchSingle = client.prepare(
+        QueryBuilder
+            .selectFrom(name)
+            .columns(DATA_KEY.column(), WINDOW_START.column(), DATA_VALUE.column())
+            .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
+            .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
+            .where(DATA_KEY.relation().isEqualTo(bindMarker(DATA_KEY.bind())))
+            .where(WINDOW_START.relation().isEqualTo(bindMarker(WINDOW_START.bind())))
+            .build()
+    );
+
+    final var fetch = client.prepare(
+        QueryBuilder
+            .selectFrom(name)
+            .columns(DATA_KEY.column(), WINDOW_START.column(), DATA_VALUE.column())
+            .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
+            .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
+            .where(DATA_KEY.relation().isEqualTo(bindMarker(DATA_KEY.bind())))
+            .where(WINDOW_START.relation().isGreaterThanOrEqualTo(bindMarker(W_FROM_BIND)))
+            .where(WINDOW_START.relation().isLessThan(bindMarker(W_TO_BIND)))
+            .build()
+    );
+
+    final var fetchAll = client.prepare(
+        QueryBuilder
+            .selectFrom(name)
+            .columns(DATA_KEY.column(), WINDOW_START.column(), DATA_VALUE.column())
+            .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
+            .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
+            .build()
+    );
+
+    final var fetchRange = client.prepare(
+        QueryBuilder
+            .selectFrom(name)
+            .columns(DATA_KEY.column(), WINDOW_START.column(), DATA_VALUE.column())
+            .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
+            .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
+            .where(DATA_KEY.relation().isGreaterThan(bindMarker(FROM_BIND)))
+            .where(DATA_KEY.relation().isLessThan(bindMarker(TO_BIND)))
+            .build()
+    );
+
+    final var backFetch = client.prepare(
+        QueryBuilder
+            .selectFrom(name)
+            .columns(DATA_KEY.column(), WINDOW_START.column(), DATA_VALUE.column())
+            .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
+            .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
+            .where(DATA_KEY.relation().isEqualTo(bindMarker(DATA_KEY.bind())))
+            .where(WINDOW_START.relation().isGreaterThanOrEqualTo(bindMarker(W_FROM_BIND)))
+            .where(WINDOW_START.relation().isLessThan(bindMarker(W_TO_BIND)))
+            .orderBy(DATA_KEY.column(), ClusteringOrder.DESC)
+            .orderBy(WINDOW_START.column(), ClusteringOrder.DESC)
+            .build()
+    );
+
+    final var backFetchAll = client.prepare(
+        QueryBuilder
+            .selectFrom(name)
+            .columns(DATA_KEY.column(), WINDOW_START.column(), DATA_VALUE.column())
+            .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
+            .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
+            .orderBy(DATA_KEY.column(), ClusteringOrder.DESC)
+            .orderBy(WINDOW_START.column(), ClusteringOrder.DESC)
+            .build()
+    );
+
+    final var backFetchRange = client.prepare(
+        QueryBuilder
+            .selectFrom(name)
+            .columns(DATA_KEY.column(), WINDOW_START.column(), DATA_VALUE.column())
+            .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
+            .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
+            .where(DATA_KEY.relation().isGreaterThan(bindMarker(FROM_BIND)))
+            .where(DATA_KEY.relation().isLessThan(bindMarker(TO_BIND)))
+            .orderBy(DATA_KEY.column(), ClusteringOrder.DESC)
+            .orderBy(WINDOW_START.column(), ClusteringOrder.DESC)
+            .build()
+    );
+
+    final var getMeta = client.prepare(
+        QueryBuilder
+            .selectFrom(name)
+            .column(EPOCH.column())
+            .column(OFFSET.column())
+            .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
+            .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
+            .where(WINDOW_START.relation().isEqualTo(WINDOW_START.literal(0L)))
+            .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
+            .build()
+    );
+
+    final var setOffset = client.prepare(QueryBuilder
+        .update(name)
+        .setColumn(OFFSET.column(), bindMarker(OFFSET.bind()))
+        .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
+        .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
+        .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
+        .where(WINDOW_START.relation().isEqualTo(WINDOW_START.literal(0L)))
+        .build()
+    );
+
+    return new CassandraWindowedTable(
+        name,
+        client,
+        insert,
+        delete,
+        fetchSingle,
+        fetch,
+        fetchAll,
+        fetchRange,
+        backFetch,
+        backFetchAll,
+        backFetchRange,
+        getMeta,
+        setOffset
+    );
   }
 
-  private CreateTableWithOptions createTable(final String tableName) {
+  private static CreateTableWithOptions createTable(final String tableName) {
     return SchemaBuilder
         .createTable(tableName)
         .ifNotExists()
@@ -133,15 +257,49 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
         .withColumn(EPOCH.column(), DataTypes.BIGINT);
   }
 
+  public CassandraWindowedTable(
+      final String name,
+      final CassandraClient client,
+      final PreparedStatement insert,
+      final PreparedStatement delete,
+      final PreparedStatement fetchSingle,
+      final PreparedStatement fetch,
+      final PreparedStatement fetchAll,
+      final PreparedStatement fetchRange,
+      final PreparedStatement backFetch,
+      final PreparedStatement backFetchAll,
+      final PreparedStatement backFetchRange,
+      final PreparedStatement getMeta,
+      final PreparedStatement setOffset
+  ) {
+    this.name = name;
+    this.client = client;
+    this.insert = insert;
+    this.delete = delete;
+    this.fetchSingle = fetchSingle;
+    this.fetch = fetch;
+    this.fetchAll = fetchAll;
+    this.fetchRange = fetchRange;
+    this.backFetch = backFetch;
+    this.backFetchAll = backFetchAll;
+    this.backFetchRange = backFetchRange;
+    this.getMeta = getMeta;
+    this.setOffset = setOffset;
+  }
+
+  @Override
+  public String name() {
+    return name;
+  }
+
   @Override
   public WriterFactory<Stamped<Bytes>> init(
-      final String table,
       final SubPartitioner partitioner,
       final int kafkaPartition
   ) {
     partitioner.all(kafkaPartition).forEach(sub -> {
       client.execute(
-          QueryBuilder.insertInto(table)
+          QueryBuilder.insertInto(name)
               .value(PARTITION_KEY.column(), PARTITION_KEY.literal(sub))
               .value(ROW_TYPE.column(), METADATA_ROW.literal())
               .value(DATA_KEY.column(), DATA_KEY.literal(ColumnName.METADATA_KEY))
@@ -152,12 +310,12 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
               .build()
       );
     });
-    return LwtWriterFactory.reserveWindowed(this, table, partitioner, kafkaPartition);
+    return LwtWriterFactory.reserveWindowed(this, partitioner, kafkaPartition);
   }
 
   @Override
-  public MetadataRow metadata(final String table, final int partition) {
-    final BoundStatement bound = getMeta.get(table)
+  public MetadataRow metadata(final int partition) {
+    final BoundStatement bound = getMeta
         .bind()
         .setInt(PARTITION_KEY.bind(), partition);
     final List<Row> result = client.execute(bound).all();
@@ -165,7 +323,7 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
     if (result.size() != 1) {
       throw new IllegalStateException(String.format(
           "Expected exactly one offset row for %s[%s] but got %d",
-          table, partition, result.size()));
+          name, partition, result.size()));
     } else {
       return new MetadataRow(
           result.get(0).getLong(OFFSET.column()),
@@ -176,141 +334,13 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
 
   @Override
   public BoundStatement setOffset(
-      final String table,
       final int partition,
       final long offset
   ) {
-    return setOffset.get(table)
+    return setOffset
         .bind()
         .setInt(PARTITION_KEY.bind(), partition)
         .setLong(OFFSET.bind(), offset);
-  }
-
-  @Override
-  public void prepare(final String tableName) {
-    insert.computeIfAbsent(tableName, k -> client.prepare(
-        QueryBuilder
-            .insertInto(tableName)
-            .value(PARTITION_KEY.column(), bindMarker(PARTITION_KEY.bind()))
-            .value(ROW_TYPE.column(), DATA_ROW.literal())
-            .value(DATA_KEY.column(), bindMarker(DATA_KEY.bind()))
-            .value(WINDOW_START.column(), bindMarker(WINDOW_START.bind()))
-            .value(DATA_VALUE.column(), bindMarker(DATA_VALUE.bind()))
-            .build()
-    ));
-
-    delete.computeIfAbsent(tableName, k -> client.prepare(
-        QueryBuilder
-            .deleteFrom(tableName)
-            .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
-            .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
-            .where(DATA_KEY.relation().isEqualTo(bindMarker(DATA_KEY.bind())))
-            .where(WINDOW_START.relation().isEqualTo(bindMarker(WINDOW_START.bind())))
-            .build()
-    ));
-
-    fetchSingle.computeIfAbsent(tableName, k -> client.prepare(
-        QueryBuilder
-            .selectFrom(tableName)
-            .columns(DATA_KEY.column(), WINDOW_START.column(), DATA_VALUE.column())
-            .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
-            .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
-            .where(DATA_KEY.relation().isEqualTo(bindMarker(DATA_KEY.bind())))
-            .where(WINDOW_START.relation().isEqualTo(bindMarker(WINDOW_START.bind())))
-            .build()
-    ));
-
-    fetch.computeIfAbsent(tableName, k -> client.prepare(
-        QueryBuilder
-            .selectFrom(tableName)
-            .columns(DATA_KEY.column(), WINDOW_START.column(), DATA_VALUE.column())
-            .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
-            .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
-            .where(DATA_KEY.relation().isEqualTo(bindMarker(DATA_KEY.bind())))
-            .where(WINDOW_START.relation().isGreaterThanOrEqualTo(bindMarker(W_FROM_BIND)))
-            .where(WINDOW_START.relation().isLessThan(bindMarker(W_TO_BIND)))
-            .build()
-    ));
-
-    fetchAll.computeIfAbsent(tableName, k -> client.prepare(
-        QueryBuilder
-            .selectFrom(tableName)
-            .columns(DATA_KEY.column(), WINDOW_START.column(), DATA_VALUE.column())
-            .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
-            .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
-            .build()
-    ));
-
-    fetchRange.computeIfAbsent(tableName, k -> client.prepare(
-        QueryBuilder
-            .selectFrom(tableName)
-            .columns(DATA_KEY.column(), WINDOW_START.column(), DATA_VALUE.column())
-            .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
-            .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
-            .where(DATA_KEY.relation().isGreaterThan(bindMarker(FROM_BIND)))
-            .where(DATA_KEY.relation().isLessThan(bindMarker(TO_BIND)))
-            .build()
-    ));
-
-    backFetch.computeIfAbsent(tableName, k -> client.prepare(
-        QueryBuilder
-            .selectFrom(tableName)
-            .columns(DATA_KEY.column(), WINDOW_START.column(), DATA_VALUE.column())
-            .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
-            .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
-            .where(DATA_KEY.relation().isEqualTo(bindMarker(DATA_KEY.bind())))
-            .where(WINDOW_START.relation().isGreaterThanOrEqualTo(bindMarker(W_FROM_BIND)))
-            .where(WINDOW_START.relation().isLessThan(bindMarker(W_TO_BIND)))
-            .orderBy(DATA_KEY.column(), ClusteringOrder.DESC)
-            .orderBy(WINDOW_START.column(), ClusteringOrder.DESC)
-            .build()
-    ));
-
-    backFetchAll.computeIfAbsent(tableName, k -> client.prepare(
-        QueryBuilder
-            .selectFrom(tableName)
-            .columns(DATA_KEY.column(), WINDOW_START.column(), DATA_VALUE.column())
-            .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
-            .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
-            .orderBy(DATA_KEY.column(), ClusteringOrder.DESC)
-            .orderBy(WINDOW_START.column(), ClusteringOrder.DESC)
-            .build()
-    ));
-
-    backFetchRange.computeIfAbsent(tableName, k -> client.prepare(
-        QueryBuilder
-            .selectFrom(tableName)
-            .columns(DATA_KEY.column(), WINDOW_START.column(), DATA_VALUE.column())
-            .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
-            .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
-            .where(DATA_KEY.relation().isGreaterThan(bindMarker(FROM_BIND)))
-            .where(DATA_KEY.relation().isLessThan(bindMarker(TO_BIND)))
-            .orderBy(DATA_KEY.column(), ClusteringOrder.DESC)
-            .orderBy(WINDOW_START.column(), ClusteringOrder.DESC)
-            .build()
-    ));
-
-    getMeta.computeIfAbsent(tableName, k -> client.prepare(
-        QueryBuilder
-            .selectFrom(tableName)
-            .column(EPOCH.column())
-            .column(OFFSET.column())
-            .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
-            .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
-            .where(WINDOW_START.relation().isEqualTo(WINDOW_START.literal(0L)))
-            .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
-            .build()
-    ));
-
-    setOffset.computeIfAbsent(tableName, k -> client.prepare(QueryBuilder
-        .update(tableName)
-        .setColumn(OFFSET.column(), bindMarker(OFFSET.bind()))
-        .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
-        .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
-        .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
-        .where(WINDOW_START.relation().isEqualTo(WINDOW_START.literal(0L)))
-        .build()
-    ));
   }
 
   @Override
@@ -322,7 +352,6 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
    * Inserts data into {@code table}. Note that this will overwrite
    * any existing entry in the table with the same key.
    *
-   * @param table        the table to insert into
    * @param partitionKey the partitioning key
    * @param key          the data key
    * @param value        the data value
@@ -336,13 +365,12 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
   @Override
   @CheckReturnValue
   public BoundStatement insert(
-      final String table,
       final int partitionKey,
       final Stamped<Bytes> key,
       final byte[] value,
       final long epochMillis
   ) {
-    return insert.get(table)
+    return insert
         .bind()
         .setInt(PARTITION_KEY.bind(), partitionKey)
         .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.key.get()))
@@ -351,7 +379,6 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
   }
 
   /**
-   * @param table         the table to delete from
    * @param partitionKey  the partitioning key
    * @param key           the data key
    *
@@ -364,11 +391,10 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
   @Override
   @CheckReturnValue
   public BoundStatement delete(
-      final String table,
       final int partitionKey,
       final Stamped<Bytes> key
   ) {
-    return delete.get(table)
+    return delete
         .bind()
         .setInt(PARTITION_KEY.bind(), partitionKey)
         .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.key.get()))
@@ -378,7 +404,6 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
   /**
    * Retrieves the value of the given {@code partitionKey} and {@code key} from {@code table}.
    *
-   * @param tableName   the table to retrieve from
    * @param partition   the partition
    * @param key         the data key
    * @param windowStart the start time of the window
@@ -386,12 +411,11 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
    */
   @Override
   public byte[] fetch(
-      final String tableName,
       final int partition,
       final Bytes key,
       final long windowStart
   ) {
-    final BoundStatement get = fetchSingle.get(tableName)
+    final BoundStatement get = fetchSingle
         .bind()
         .setInt(PARTITION_KEY.bind(), partition)
         .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
@@ -412,7 +436,6 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
    * Retrieves the range of windows of the given {@code partitionKey} and {@code key} with a
    * start time between {@code timeFrom} and {@code timeTo} from {@code table}.
    *
-   * @param tableName the table to retrieve from
    * @param partition the partition
    * @param key       the data key
    * @param timeFrom  the min timestamp (inclusive)
@@ -421,13 +444,12 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
    */
   @Override
   public KeyValueIterator<Stamped<Bytes>, byte[]> fetch(
-      final String tableName,
       final int partition,
       final Bytes key,
       final long timeFrom,
       final long timeTo
   ) {
-    final BoundStatement get = fetch.get(tableName)
+    final BoundStatement get = fetch
         .bind()
         .setInt(PARTITION_KEY.bind(), partition)
         .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
@@ -437,7 +459,7 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
     final ResultSet result = client.execute(get);
     return Iterators.kv(
         result.iterator(),
-        CassandraWindowedSchema::windowRows
+        CassandraWindowedTable::windowRows
     );
   }
 
@@ -445,7 +467,6 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
    * Retrieves the range of window of the given {@code partitionKey} and {@code key} with a
    * start time between {@code timeFrom} and {@code timeTo} from {@code table}.
    *
-   * @param tableName the table to retrieve from
    * @param partition the partition
    * @param key       the data key
    * @param timeFrom  the min timestamp (inclusive)
@@ -455,13 +476,12 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
    */
   @Override
   public KeyValueIterator<Stamped<Bytes>, byte[]> backFetch(
-      final String tableName,
       final int partition,
       final Bytes key,
       final long timeFrom,
       final long timeTo
   ) {
-    final BoundStatement get = backFetch.get(tableName)
+    final BoundStatement get = backFetch
         .bind()
         .setInt(PARTITION_KEY.bind(), partition)
         .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
@@ -471,7 +491,7 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
     final ResultSet result = client.execute(get);
     return Iterators.kv(
         result.iterator(),
-        CassandraWindowedSchema::windowRows
+        CassandraWindowedTable::windowRows
     );
   }
 
@@ -480,7 +500,6 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
    * {@code fromKey} and {@code toKey} with a start time between {@code timeFrom} and {@code timeTo}
    * from {@code table}.
    *
-   * @param tableName the table to retrieve from
    * @param partition the partition
    * @param fromKey   the min data key (inclusive)
    * @param toKey     the max data key (exclusive)
@@ -491,14 +510,13 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
    */
   @Override
   public KeyValueIterator<Stamped<Bytes>, byte[]> fetchRange(
-      final String tableName,
       final int partition,
       final Bytes fromKey,
       final Bytes toKey,
       final long timeFrom,
       final long timeTo
   ) {
-    final BoundStatement get = fetchRange.get(tableName)
+    final BoundStatement get = fetchRange
         .bind()
         .setInt(PARTITION_KEY.bind(), partition)
         .setByteBuffer(FROM_BIND, ByteBuffer.wrap(fromKey.get()))
@@ -506,7 +524,7 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
 
     final ResultSet result = client.execute(get);
     return Iterators.filterKv(
-        Iterators.kv(result.iterator(), CassandraWindowedSchema::windowRows),
+        Iterators.kv(result.iterator(), CassandraWindowedTable::windowRows),
         k -> k.stamp >= timeFrom && k.stamp < timeTo
     );
   }
@@ -516,7 +534,6 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
    * {@code fromKey} and {@code toKey} with a start time between {@code timeFrom} and {@code timeTo}
    * from {@code table}.
    *
-   * @param tableName the table to retrieve from
    * @param partition the partition
    * @param fromKey   the min data key (inclusive)
    * @param toKey     the max data key (exclusive)
@@ -527,14 +544,13 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
    */
   @Override
   public KeyValueIterator<Stamped<Bytes>, byte[]> backFetchRange(
-      final String tableName,
       final int partition,
       final Bytes fromKey,
       final Bytes toKey,
       final long timeFrom,
       final long timeTo
   ) {
-    final BoundStatement get = backFetchRange.get(tableName)
+    final BoundStatement get = backFetchRange
         .bind()
         .setInt(PARTITION_KEY.bind(), partition)
         .setByteBuffer(FROM_BIND, ByteBuffer.wrap(fromKey.get()))
@@ -542,7 +558,7 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
 
     final ResultSet result = client.execute(get);
     return Iterators.filterKv(
-        Iterators.kv(result.iterator(), CassandraWindowedSchema::windowRows),
+        Iterators.kv(result.iterator(), CassandraWindowedTable::windowRows),
         k -> k.stamp >= timeFrom && k.stamp < timeTo
     );
   }
@@ -552,7 +568,6 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
    * Retrieves the windows of the given {@code partitionKey} across all keys and times
    * from {@code table}.
    *
-   * @param tableName the table to retrieve from
    * @param partition the partition
    * @param timeFrom  the min timestamp (inclusive)
    * @param timeTo    the max timestamp (exclusive)
@@ -561,12 +576,11 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
    */
   @Override
   public KeyValueIterator<Stamped<Bytes>, byte[]> fetchAll(
-      final String tableName,
       final int partition,
       final long timeFrom,
       final long timeTo
   ) {
-    final BoundStatement get = fetchAll.get(tableName)
+    final BoundStatement get = fetchAll
         .bind()
         .setInt(PARTITION_KEY.bind(), partition)
         .setInstant(FROM_BIND, Instant.ofEpochMilli(timeFrom))
@@ -574,7 +588,7 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
 
     final ResultSet result = client.execute(get);
     return Iterators.filterKv(
-        Iterators.kv(result.iterator(), CassandraWindowedSchema::windowRows),
+        Iterators.kv(result.iterator(), CassandraWindowedTable::windowRows),
         k -> k.stamp >= timeFrom && k.stamp < timeTo
     );
   }
@@ -583,7 +597,6 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
    * Retrieves the windows of the given {@code partitionKey} across all keys and times
    * from {@code table}.
    *
-   * @param tableName the table to retrieve from
    * @param partition the partition
    * @param timeFrom  the min timestamp (inclusive)
    * @param timeTo    the max timestamp (exclusive)
@@ -592,18 +605,17 @@ public class CassandraWindowedSchema implements RemoteWindowedSchema {
    */
   @Override
   public KeyValueIterator<Stamped<Bytes>, byte[]> backFetchAll(
-      final String tableName,
       final int partition,
       final long timeFrom,
       final long timeTo
   ) {
-    final BoundStatement get = backFetchAll.get(tableName)
+    final BoundStatement get = backFetchAll
         .bind()
         .setInt(PARTITION_KEY.bind(), partition);
 
     final ResultSet result = client.execute(get);
     return Iterators.filterKv(
-        Iterators.kv(result.iterator(), CassandraWindowedSchema::windowRows),
+        Iterators.kv(result.iterator(), CassandraWindowedTable::windowRows),
         k -> k.stamp >= timeFrom && k.stamp < timeTo
     );
   }

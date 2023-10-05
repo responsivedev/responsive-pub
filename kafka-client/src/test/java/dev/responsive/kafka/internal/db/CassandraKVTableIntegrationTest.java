@@ -19,11 +19,12 @@ package dev.responsive.kafka.internal.db;
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
+import dev.responsive.kafka.internal.db.spec.BaseTableSpec;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
+import java.util.concurrent.TimeoutException;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.hamcrest.MatcherAssert;
@@ -35,12 +36,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.testcontainers.containers.CassandraContainer;
 
 @ExtendWith(ResponsiveExtension.class)
-public class KeyValueSchemaIntegrationTest {
+public class CassandraKVTableIntegrationTest {
 
   private static final long CURRENT_TS = 100L;
   private static final long MIN_VALID_TS = 0L;
 
-  private RemoteKeyValueSchema schema;
+  private RemoteKVTable table;
   private String name;
   private CassandraClient client;
 
@@ -49,7 +50,7 @@ public class KeyValueSchemaIntegrationTest {
       final TestInfo info,
       final CassandraContainer<?> cassandra,
       @ResponsiveConfigParam final ResponsiveConfig config
-  ) {
+  ) throws InterruptedException, TimeoutException {
     // NOTE: this keyspace is expected to exist
     CqlSession session = CqlSession.builder()
         .addContactPoint(cassandra.getContactPoint())
@@ -57,10 +58,9 @@ public class KeyValueSchemaIntegrationTest {
         .withKeyspace("responsive_clients") // NOTE: this keyspace is expected to exist
         .build();
     client = new CassandraClient(session, config);
-    schema = new CassandraKeyValueSchema(client);
     name = info.getTestMethod().orElseThrow().getName();
-    schema.create(name, Optional.empty());
-    schema.prepare(name);
+    table = CassandraKeyValueTable.create(
+        new BaseTableSpec(name), client);
   }
 
   @Test
@@ -68,19 +68,19 @@ public class KeyValueSchemaIntegrationTest {
     // Given:
     final String table = name;
     final List<BoundStatement> inserts = List.of(
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x0, 0x1}), new byte[]{0x1}, CURRENT_TS),
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x1, 0x0}), new byte[]{0x1}, CURRENT_TS),
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x2, 0x0}), new byte[]{0x1}, CURRENT_TS),
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x2, 0x2}), new byte[]{0x1}, CURRENT_TS),
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x1, 0x1}), new byte[]{0x1}, CURRENT_TS),
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x0, 0x2}), new byte[]{0x1}, CURRENT_TS),
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x2}), new byte[]{0x1}, CURRENT_TS),
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x0}), new byte[]{0x1}, CURRENT_TS)
+        this.table.insert(0, Bytes.wrap(new byte[]{0x0, 0x1}), new byte[]{0x1}, CURRENT_TS),
+        this.table.insert(0, Bytes.wrap(new byte[]{0x1, 0x0}), new byte[]{0x1}, CURRENT_TS),
+        this.table.insert(0, Bytes.wrap(new byte[]{0x2, 0x0}), new byte[]{0x1}, CURRENT_TS),
+        this.table.insert(0, Bytes.wrap(new byte[]{0x2, 0x2}), new byte[]{0x1}, CURRENT_TS),
+        this.table.insert(0, Bytes.wrap(new byte[]{0x1, 0x1}), new byte[]{0x1}, CURRENT_TS),
+        this.table.insert(0, Bytes.wrap(new byte[]{0x0, 0x2}), new byte[]{0x1}, CURRENT_TS),
+        this.table.insert(0, Bytes.wrap(new byte[]{0x2}), new byte[]{0x1}, CURRENT_TS),
+        this.table.insert(0, Bytes.wrap(new byte[]{0x0}), new byte[]{0x1}, CURRENT_TS)
     );
     inserts.forEach(client::execute);
 
     // When:
-    final KeyValueIterator<Bytes, byte[]> all = schema.all(table, 0, MIN_VALID_TS);
+    final KeyValueIterator<Bytes, byte[]> all = this.table.all(0, MIN_VALID_TS);
 
     // Then:
     Bytes old = all.next().key;
@@ -96,20 +96,19 @@ public class KeyValueSchemaIntegrationTest {
     // Given:
     final String table = name;
     final List<BoundStatement> inserts = List.of(
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x0, 0x1}), new byte[]{0x1}, CURRENT_TS),
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x1, 0x0}), new byte[]{0x1}, CURRENT_TS),
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x2, 0x0}), new byte[]{0x1}, CURRENT_TS),
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x2, 0x2}), new byte[]{0x1}, CURRENT_TS),
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x1, 0x1}), new byte[]{0x1}, CURRENT_TS),
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x0, 0x2}), new byte[]{0x1}, CURRENT_TS),
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x2}), new byte[]{0x1}, CURRENT_TS),
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x0}), new byte[]{0x1}, CURRENT_TS)
+        this.table.insert(0, Bytes.wrap(new byte[]{0x0, 0x1}), new byte[]{0x1}, CURRENT_TS),
+        this.table.insert(0, Bytes.wrap(new byte[]{0x1, 0x0}), new byte[]{0x1}, CURRENT_TS),
+        this.table.insert(0, Bytes.wrap(new byte[]{0x2, 0x0}), new byte[]{0x1}, CURRENT_TS),
+        this.table.insert(0, Bytes.wrap(new byte[]{0x2, 0x2}), new byte[]{0x1}, CURRENT_TS),
+        this.table.insert(0, Bytes.wrap(new byte[]{0x1, 0x1}), new byte[]{0x1}, CURRENT_TS),
+        this.table.insert(0, Bytes.wrap(new byte[]{0x0, 0x2}), new byte[]{0x1}, CURRENT_TS),
+        this.table.insert(0, Bytes.wrap(new byte[]{0x2}), new byte[]{0x1}, CURRENT_TS),
+        this.table.insert(0, Bytes.wrap(new byte[]{0x0}), new byte[]{0x1}, CURRENT_TS)
     );
     inserts.forEach(client::execute);
 
     // When:
-    final KeyValueIterator<Bytes, byte[]> range = schema.range(
-        table,
+    final KeyValueIterator<Bytes, byte[]> range = this.table.range(
         0,
         Bytes.wrap(new byte[]{0x0, 0x1}),
         Bytes.wrap(new byte[]{0x0, 0x3}),
@@ -130,11 +129,11 @@ public class KeyValueSchemaIntegrationTest {
     // Given:
     final String table = name;
     client.execute(
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x0, 0x1}), new byte[]{0x1}, CURRENT_TS));
+        this.table.insert(0, Bytes.wrap(new byte[]{0x0, 0x1}), new byte[]{0x1}, CURRENT_TS));
 
     // When:
-    final byte[] valid = schema.get(table, 0, Bytes.wrap(new byte[]{0x0, 0x1}), MIN_VALID_TS);
-    final byte[] expired = schema.get(table, 0, Bytes.wrap(new byte[]{0x0, 0x1}), CURRENT_TS + 1);
+    final byte[] valid = this.table.get(0, Bytes.wrap(new byte[]{0x0, 0x1}), MIN_VALID_TS);
+    final byte[] expired = this.table.get(0, Bytes.wrap(new byte[]{0x0, 0x1}), CURRENT_TS + 1);
 
     // Then:
     MatcherAssert.assertThat(valid, Matchers.is(new byte[]{0x1}));
@@ -146,18 +145,17 @@ public class KeyValueSchemaIntegrationTest {
     // Given:
     final String table = name;
     final List<BoundStatement> inserts = List.of(
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x0, 0x0}), new byte[]{0x1}, CURRENT_TS + 10),
+        this.table.insert(0, Bytes.wrap(new byte[]{0x0, 0x0}), new byte[]{0x1}, CURRENT_TS + 10),
         // expired
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x0, 0x1}), new byte[]{0x1}, CURRENT_TS),
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x0, 0x2}), new byte[]{0x1}, CURRENT_TS + 20),
+        this.table.insert(0, Bytes.wrap(new byte[]{0x0, 0x1}), new byte[]{0x1}, CURRENT_TS),
+        this.table.insert(0, Bytes.wrap(new byte[]{0x0, 0x2}), new byte[]{0x1}, CURRENT_TS + 20),
         // not expired, but out of range
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x1, 0x0}), new byte[]{0x1}, CURRENT_TS + 20)
+        this.table.insert(0, Bytes.wrap(new byte[]{0x1, 0x0}), new byte[]{0x1}, CURRENT_TS + 20)
     );
     inserts.forEach(client::execute);
 
     // When:
-    final KeyValueIterator<Bytes, byte[]> range = schema.range(
-        table,
+    final KeyValueIterator<Bytes, byte[]> range = this.table.range(
         0,
         Bytes.wrap(new byte[]{0x0, 0x0}),
         Bytes.wrap(new byte[]{0x0, 0x3}),
@@ -179,16 +177,15 @@ public class KeyValueSchemaIntegrationTest {
     // Given:
     final String table = name;
     final List<BoundStatement> inserts = List.of(
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x0, 0x0}), new byte[]{0x1}, CURRENT_TS + 10),
+        this.table.insert(0, Bytes.wrap(new byte[]{0x0, 0x0}), new byte[]{0x1}, CURRENT_TS + 10),
         // expired
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x0, 0x1}), new byte[]{0x1}, CURRENT_TS),
-        schema.insert(table, 0, Bytes.wrap(new byte[]{0x0, 0x2}), new byte[]{0x1}, CURRENT_TS + 20)
+        this.table.insert(0, Bytes.wrap(new byte[]{0x0, 0x1}), new byte[]{0x1}, CURRENT_TS),
+        this.table.insert(0, Bytes.wrap(new byte[]{0x0, 0x2}), new byte[]{0x1}, CURRENT_TS + 20)
     );
     inserts.forEach(client::execute);
 
     // When:
-    final KeyValueIterator<Bytes, byte[]> range = schema.all(
-        table,
+    final KeyValueIterator<Bytes, byte[]> range = this.table.all(
         0,
         CURRENT_TS + 5
     );
@@ -206,12 +203,11 @@ public class KeyValueSchemaIntegrationTest {
   @Test
   public void shouldSupportDataKeyThatEqualsMetadataKey() {
     // Given:
-    final String table = name;
     final byte[] valBytes = new byte[]{0x1};
-    client.execute(schema.insert(table, 0, ColumnName.METADATA_KEY, valBytes, CURRENT_TS));
+    client.execute(this.table.insert(0, ColumnName.METADATA_KEY, valBytes, CURRENT_TS));
 
     // When:
-    final byte[] val = schema.get(name, 0, ColumnName.METADATA_KEY, MIN_VALID_TS);
+    final byte[] val = this.table.get(0, ColumnName.METADATA_KEY, MIN_VALID_TS);
 
     // Then:
     MatcherAssert.assertThat(val, Matchers.is(valBytes));

@@ -39,7 +39,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.testcontainers.containers.CassandraContainer;
 
 @ExtendWith(ResponsiveExtension.class)
-class CassandraFactSchemaIntegrationTest {
+class CassandraFactTableIntegrationTest {
 
   private static final long CURRENT_TIME = 100L;
   private static final long MIN_VALID_TS = 0L;
@@ -71,14 +71,16 @@ class CassandraFactSchemaIntegrationTest {
     // Given:
     params = ResponsiveKeyValueParams.fact(storeName);
     final String tableName = params.name().cassandraName();
-    final RemoteKeyValueSchema schema = client.prepareKVTableSchema(params);
+    final RemoteKVTable schema = client
+        .factFactory()
+        .create(CassandraTableSpecFactory.fromKVParams(params));
 
     // When:
-    final var token = schema.init(tableName, SubPartitioner.NO_SUBPARTITIONS, 1);
-    schema.init(tableName, SubPartitioner.NO_SUBPARTITIONS, 2);
-    client.execute(schema.setOffset(tableName, 2, 10));
-    final MetadataRow metadata1 = schema.metadata(tableName, 1);
-    final MetadataRow metadata2 = schema.metadata(tableName, 2);
+    final var token = schema.init(SubPartitioner.NO_SUBPARTITIONS, 1);
+    schema.init(SubPartitioner.NO_SUBPARTITIONS, 2);
+    client.execute(schema.setOffset(2, 10));
+    final MetadataRow metadata1 = schema.metadata(1);
+    final MetadataRow metadata2 = schema.metadata(2);
 
     // Then:
     assertThat(token, instanceOf(FactWriterFactory.class));
@@ -105,7 +107,9 @@ class CassandraFactSchemaIntegrationTest {
     final String tableName = params.name().cassandraName();
 
     // When:
-    client.prepareKVTableSchema(params);
+    final RemoteKVTable schema = client
+        .factFactory()
+        .create(CassandraTableSpecFactory.fromKVParams(params));
 
     // Then:
     final var table = session.getMetadata()
@@ -131,7 +135,8 @@ class CassandraFactSchemaIntegrationTest {
     final String tableName = params.name().cassandraName();
 
     // When:
-    client.prepareKVTableSchema(params);
+    client.factFactory()
+        .create(CassandraTableSpecFactory.fromKVParams(params));
 
     // Then:
     final var table = session.getMetadata()
@@ -148,19 +153,20 @@ class CassandraFactSchemaIntegrationTest {
   public void shouldInsertAndDelete() throws Exception {
     // Given:
     params = ResponsiveKeyValueParams.fact(storeName);
-    final RemoteKeyValueSchema schema = client.prepareKVTableSchema(params);
-    final String tableName = params.name().cassandraName();
+    final RemoteKVTable table = client
+        .factFactory()
+        .create(CassandraTableSpecFactory.fromKVParams(params));
 
-    schema.init(tableName, SubPartitioner.NO_SUBPARTITIONS, 1);
+    table.init(SubPartitioner.NO_SUBPARTITIONS, 1);
 
     final Bytes key = Bytes.wrap(new byte[]{0});
     final byte[] val = new byte[]{1};
 
     // When:
-    client.execute(schema.insert(tableName, 1, key, val, CURRENT_TIME));
-    final byte[] valAt0 = schema.get(tableName, 1, key, MIN_VALID_TS);
-    client.execute(schema.delete(tableName, 1, key));
-    final byte[] valAt1 = schema.get(tableName, 1, key, MIN_VALID_TS);
+    client.execute(table.insert(1, key, val, CURRENT_TIME));
+    final byte[] valAt0 = table.get(1, key, MIN_VALID_TS);
+    client.execute(table.delete(1, key));
+    final byte[] valAt1 = table.get(1, key, MIN_VALID_TS);
 
     // Then
     assertThat(valAt0, is(val));
@@ -173,16 +179,19 @@ class CassandraFactSchemaIntegrationTest {
     params = ResponsiveKeyValueParams.fact(storeName);
     final String tableName = params.name().cassandraName();
 
-    final RemoteKeyValueSchema schema = client.prepareKVTableSchema(params);
-    schema.init(tableName, SubPartitioner.NO_SUBPARTITIONS, 1);
+    final RemoteKVTable table = client
+        .factFactory()
+        .create(CassandraTableSpecFactory.fromKVParams(params));
+
+    table.init(SubPartitioner.NO_SUBPARTITIONS, 1);
 
     final Bytes key = Bytes.wrap(new byte[]{0});
     final byte[] val = new byte[]{1};
 
     // When:
-    client.execute(schema.insert(tableName, 1, key, val, CURRENT_TIME));
-    final byte[] valid = schema.get(tableName, 1, key, MIN_VALID_TS);
-    final byte[] expired = schema.get(tableName, 1, key, CURRENT_TIME + 100L);
+    client.execute(table.insert(1, key, val, CURRENT_TIME));
+    final byte[] valid = table.get(1, key, MIN_VALID_TS);
+    final byte[] expired = table.get(1, key, CURRENT_TIME + 100L);
 
     // Then
     assertThat(valid, is(val));

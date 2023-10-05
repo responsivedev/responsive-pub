@@ -30,7 +30,7 @@ import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.Statement;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.FactSchemaWriter;
-import dev.responsive.kafka.internal.db.RemoteSchema;
+import dev.responsive.kafka.internal.db.RemoteTable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
@@ -49,7 +49,7 @@ class FactSchemaWriterTest {
   private static final long CURRENT_TS = 100L;
 
   @Mock private CassandraClient client;
-  @Mock private RemoteSchema<Bytes> schema;
+  @Mock private RemoteTable<Bytes> table;
   @Mock private AsyncResultSet result;
 
   private final ArgumentCaptor<Statement<?>> statementCaptor =
@@ -58,7 +58,7 @@ class FactSchemaWriterTest {
   @Test
   public void shouldNotUseBatchesOnFlush() {
     // Given:
-    when(schema.insert(any(), anyInt(), any(), any(), anyLong()))
+    when(table.insert(anyInt(), any(), any(), anyLong()))
         .thenReturn(mock(BoundStatement.class));
     when(result.wasApplied()).thenReturn(true);
     when(client.executeAsync(statementCaptor.capture()))
@@ -67,8 +67,7 @@ class FactSchemaWriterTest {
     // When:
     final FactSchemaWriter<Bytes> writer = new FactSchemaWriter<>(
         client,
-        schema,
-        "foo",
+        table,
         0
     );
     writer.insert(Bytes.wrap(new byte[]{0}), new byte[]{1}, CURRENT_TS);
@@ -85,7 +84,7 @@ class FactSchemaWriterTest {
   @Timeout(5)
   public void shouldIssueInsertsInParallel() throws ExecutionException, InterruptedException {
     // Given:
-    when(schema.insert(any(), anyInt(), any(), any(), anyLong()))
+    when(table.insert(anyInt(), any(), any(), anyLong()))
         .thenReturn(mock(BoundStatement.class));
     when(result.wasApplied()).thenReturn(true);
 
@@ -107,8 +106,7 @@ class FactSchemaWriterTest {
     // When:
     final FactSchemaWriter<Bytes> writer = new FactSchemaWriter<>(
         client,
-        schema,
-        "foo",
+        table,
         0
     );
 

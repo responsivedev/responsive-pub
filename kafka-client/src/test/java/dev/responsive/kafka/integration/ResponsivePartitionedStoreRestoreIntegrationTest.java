@@ -57,7 +57,8 @@ import dev.responsive.kafka.api.stores.ResponsiveStores;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.CassandraClientFactory;
 import dev.responsive.kafka.internal.db.DefaultCassandraClientFactory;
-import dev.responsive.kafka.internal.db.RemoteKeyValueSchema;
+import dev.responsive.kafka.internal.db.RemoteKVTable;
+import dev.responsive.kafka.internal.db.spec.BaseTableSpec;
 import dev.responsive.kafka.internal.stores.SchemaTypes.KVSchema;
 import dev.responsive.kafka.testutils.IntegrationTestUtils;
 import dev.responsive.kafka.testutils.IntegrationTestUtils.MockResponsiveKafkaStreams;
@@ -173,9 +174,22 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
           defaultFactory.createCqlSession(config),
           config
       );
-      final RemoteKeyValueSchema statements =
-          cassandraClient.prepareKVTableSchema(params(type, aggName()));
-      final long cassandraOffset = statements.metadata(aggName(), 0).offset;
+
+      final RemoteKVTable table;
+      switch (type) {
+        case KEY_VALUE:
+          table = cassandraClient.kvFactory()
+              .create(new BaseTableSpec(aggName()));
+          break;
+        case FACT:
+          table = cassandraClient.factFactory()
+              .create(new BaseTableSpec(aggName()));
+          break;
+        default:
+          throw new IllegalArgumentException("Unexpected type " + type);
+      }
+
+      final long cassandraOffset = table.metadata(0).offset;
       assertThat(cassandraOffset, greaterThan(0L));
       final TopicPartition changelog
           = new TopicPartition(name + "-" + aggName() + "-changelog", 0);
@@ -231,10 +245,22 @@ public class ResponsivePartitionedStoreRestoreIntegrationTest {
     final CassandraClient cassandraClient = defaultFactory.createCassandraClient(
         defaultFactory.createCqlSession(config),
         config);
-    final RemoteKeyValueSchema statements =
-        cassandraClient.prepareKVTableSchema(params(type, aggName()));
 
-    final long cassandraOffset = statements.metadata(aggName(), 0).offset;
+    final RemoteKVTable table;
+    switch (type) {
+      case KEY_VALUE:
+        table = cassandraClient.kvFactory()
+            .create(new BaseTableSpec(aggName()));
+        break;
+      case FACT:
+        table = cassandraClient.factFactory()
+            .create(new BaseTableSpec(aggName()));
+        break;
+      default:
+        throw new IllegalArgumentException("Unexpected type " + type);
+    }
+
+    final long cassandraOffset = table.metadata(0).offset;
     assertThat(cassandraOffset, greaterThan(0L));
     final TopicPartition changelog = new TopicPartition(name + "-" + aggName() + "-changelog", 0);
     final long changelogOffset = admin.listOffsets(Map.of(changelog, OffsetSpec.latest())).all()

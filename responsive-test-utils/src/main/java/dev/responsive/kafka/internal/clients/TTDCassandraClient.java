@@ -23,20 +23,17 @@ import com.datastax.oss.driver.api.core.cql.PreparedStatement;
 import com.datastax.oss.driver.api.core.cql.ResultSet;
 import com.datastax.oss.driver.api.core.cql.SimpleStatement;
 import com.datastax.oss.driver.api.core.cql.Statement;
-import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
-import dev.responsive.kafka.api.stores.ResponsiveWindowParams;
 import dev.responsive.kafka.internal.db.CassandraClient;
-import dev.responsive.kafka.internal.db.RemoteKeyValueSchema;
-import dev.responsive.kafka.internal.db.RemoteWindowedSchema;
+import dev.responsive.kafka.internal.db.RemoteKVTable;
+import dev.responsive.kafka.internal.db.RemoteWindowedTable;
+import dev.responsive.kafka.internal.db.TableFactory;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistry;
-import dev.responsive.kafka.internal.stores.TTDKeyValueSchema;
-import dev.responsive.kafka.internal.stores.TTDWindowedSchema;
+import dev.responsive.kafka.internal.stores.TTDKeyValueTable;
+import dev.responsive.kafka.internal.stores.TTDWindowedTable;
 import dev.responsive.kafka.internal.utils.RemoteMonitor;
 import java.time.Duration;
-import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.concurrent.CompletionStage;
-import java.util.concurrent.ScheduledExecutorService;
 import org.apache.kafka.common.utils.Time;
 
 // TODO: use mock return values instead of null here and in the TTD schemas
@@ -45,18 +42,17 @@ public class TTDCassandraClient extends CassandraClient {
   private final ResponsiveStoreRegistry storeRegistry = new ResponsiveStoreRegistry();
   private final TTDMockAdmin admin;
 
-  private final TTDKeyValueSchema kvSchema;
-  private final TTDWindowedSchema windowedSchema;
+  private final TableFactory<RemoteKVTable> kvFactory;
+  private final TableFactory<RemoteWindowedTable> windowedFactory;
 
   public TTDCassandraClient(final TTDMockAdmin admin, final Time time) {
     super(loggedConfig(admin.props()));
     this.time = time;
     this.admin = admin;
 
-    kvSchema = new TTDKeyValueSchema(this);
-    windowedSchema = new TTDWindowedSchema(this);
+    kvFactory = new TableFactory<>(this, TTDKeyValueTable::create);
+    windowedFactory = new TableFactory<>(this, TTDWindowedTable::create);
   }
-
 
   public Time time() {
     return time;
@@ -101,18 +97,16 @@ public class TTDCassandraClient extends CassandraClient {
 
   @Override
   public RemoteMonitor awaitTable(
-      final String tableName,
-      final ScheduledExecutorService executorService
+      final String tableName
   ) {
-    return new RemoteMonitor(
-        executorService,
-        () -> true
-    );
+    return new RemoteMonitor(executor, () -> true);
   }
 
   @Override
   public long count(final String tableName, final int partition) {
-    return kvSchema.count(tableName) + windowedSchema.count(tableName);
+    final var kv = (TTDKeyValueTable) kvFactory.getTable(tableName);
+    final var window = (TTDWindowedTable) windowedFactory.getTable(tableName);
+    return (kv == null ? 0 : kv.count()) + (window == null ? 0 : window.count());
   }
 
   @Override
@@ -121,24 +115,22 @@ public class TTDCassandraClient extends CassandraClient {
   }
 
   @Override
-  public RemoteKeyValueSchema prepareGlobalSchema(final ResponsiveKeyValueParams params) {
-    // for testing, just use the KV schema since partitions are ignored anyway,
-    // which is the main difference between the stores
-    return prepareKVTableSchema(params);
+  public TableFactory<RemoteKVTable> globalFactory() {
+    return kvFactory;
   }
 
   @Override
-  public RemoteKeyValueSchema prepareKVTableSchema(final ResponsiveKeyValueParams params) {
-    kvSchema.create(params.name().cassandraName(), params.timeToLive());
-    kvSchema.prepare(params.name().cassandraName());
-    return kvSchema;
+  public TableFactory<RemoteKVTable> kvFactory() {
+    return kvFactory;
   }
 
   @Override
-  public RemoteWindowedSchema prepareWindowedTableSchema(final ResponsiveWindowParams params) {
-    windowedSchema.create(params.name().cassandraName(), Optional.empty());
-    windowedSchema.prepare(params.name().cassandraName());
-    return windowedSchema;
+  public TableFactory<RemoteKVTable> factFactory() {
+    return kvFactory;
   }
 
+  @Override
+  public TableFactory<RemoteWindowedTable> windowedFactory() {
+    return windowedFactory;
+  }
 }

@@ -26,16 +26,12 @@ import com.datastax.oss.driver.api.core.cql.SimpleStatement;
 import com.datastax.oss.driver.api.core.cql.Statement;
 import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
-import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
-import dev.responsive.kafka.api.stores.ResponsiveWindowParams;
 import dev.responsive.kafka.internal.utils.RemoteMonitor;
 import java.time.Duration;
-import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
-import java.util.concurrent.TimeoutException;
 import java.util.function.BooleanSupplier;
 
 /**
@@ -46,14 +42,14 @@ import java.util.function.BooleanSupplier;
  */
 public class CassandraClient {
 
-  private final ScheduledExecutorService executor = new ScheduledThreadPoolExecutor(2);
+  protected final ScheduledExecutorService executor = new ScheduledThreadPoolExecutor(2);
   private final CqlSession session;
 
   private final ResponsiveConfig config;
-  private final RemoteKeyValueSchema kvSchema;
-  private final RemoteKeyValueSchema factSchema;
-  private final RemoteWindowedSchema windowedSchema;
-  private final RemoteKeyValueSchema globalSchema;
+  private final TableFactory<RemoteKVTable> kvFactory;
+  private final TableFactory<RemoteKVTable> factFactory;
+  private final TableFactory<RemoteWindowedTable> windowedFactory;
+  private final TableFactory<RemoteKVTable> globalFactory;
 
   /**
    * @param session the Cassandra session, expected to be initialized
@@ -65,10 +61,10 @@ public class CassandraClient {
     this.session = session;
     this.config = config;
 
-    this.kvSchema = new CassandraKeyValueSchema(this);
-    this.factSchema = new CassandraFactSchema(this);
-    this.windowedSchema = new CassandraWindowedSchema(this);
-    this.globalSchema = new CassandraGlobalKeyValueSchema(this);
+    this.kvFactory = new TableFactory<>(this, CassandraKeyValueTable::create);
+    this.factFactory = new TableFactory<>(this, CassandraFactTable::create);
+    this.windowedFactory = new TableFactory<>(this, CassandraWindowedTable::create);
+    this.globalFactory = new TableFactory<>(this, CassandraFactTable::create);
   }
 
   protected CassandraClient(final ResponsiveConfig config) {
@@ -104,21 +100,19 @@ public class CassandraClient {
 
   /**
    * @param tableName       wait for this table to be created
-   * @param executorService the executor service to use for waiting
    *
    * @return a monitor that multiple callers can listen on waiting for
    *         {@code tableName} to be available
    */
   public RemoteMonitor awaitTable(
-      final String tableName,
-      final ScheduledExecutorService executorService
+      final String tableName
   ) {
     final BooleanSupplier checkRemote = () -> session.getMetadata()
         .getKeyspace(session.getKeyspace().orElseThrow())
         .flatMap(ks -> ks.getTable(tableName))
         .isPresent();
     return new RemoteMonitor(
-        executorService,
+        executor,
         checkRemote,
         Duration.ofMillis(config.getLong(ResponsiveConfig.REMOTE_TABLE_CHECK_INTERVAL_MS_CONFIG))
     );
@@ -157,62 +151,19 @@ public class CassandraClient {
     session.close();
   }
 
-  public RemoteKeyValueSchema prepareGlobalSchema(final ResponsiveKeyValueParams params)
-      throws InterruptedException, TimeoutException {
-    globalSchema.create(params.name().cassandraName(), params.timeToLive());
-    awaitTableAndPrepareSchema(params.name().cassandraName(), globalSchema);
-
-    return globalSchema;
+  public TableFactory<RemoteKVTable> globalFactory() {
+    return globalFactory;
   }
 
-  public RemoteKeyValueSchema prepareKVTableSchema(final ResponsiveKeyValueParams params)
-      throws TimeoutException, InterruptedException {
-
-    final RemoteKeyValueSchema schema;
-    switch (params.schemaType()) {
-      case KEY_VALUE:
-        schema = kvSchema;
-        break;
-      case FACT:
-        schema = factSchema;
-        break;
-      default:
-        throw new IllegalArgumentException(params.schemaType().name());
-    }
-
-    schema.create(params.name().cassandraName(), params.timeToLive());
-    awaitTableAndPrepareSchema(params.name().cassandraName(), schema);
-
-    return schema;
+  public TableFactory<RemoteKVTable> kvFactory() {
+    return kvFactory;
   }
 
-  public RemoteWindowedSchema prepareWindowedTableSchema(final ResponsiveWindowParams params)
-      throws TimeoutException, InterruptedException {
-
-    final RemoteWindowedSchema schema;
-    switch (params.schemaType()) {
-      case WINDOW:
-        schema = windowedSchema;
-        break;
-      case STREAM:
-        throw new UnsupportedOperationException("Not yet implemented");
-      default:
-        throw new IllegalArgumentException(params.schemaType().name());
-    }
-
-    schema.create(params.name().cassandraName(), Optional.empty());
-    awaitTableAndPrepareSchema(params.name().cassandraName(), schema);
-
-    return schema;
+  public TableFactory<RemoteKVTable> factFactory() {
+    return factFactory;
   }
 
-  private void awaitTableAndPrepareSchema(
-      final String cassandraName,
-      final RemoteSchema<?> schema
-  ) throws TimeoutException, InterruptedException {
-
-    final RemoteMonitor monitor = awaitTable(cassandraName, executor);
-    monitor.await(Duration.ofSeconds(60));
-    schema.prepare(cassandraName);
+  public TableFactory<RemoteWindowedTable> windowedFactory() {
+    return windowedFactory;
   }
 }

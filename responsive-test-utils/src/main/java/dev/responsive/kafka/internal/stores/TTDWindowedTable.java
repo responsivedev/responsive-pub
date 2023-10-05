@@ -18,128 +18,127 @@ package dev.responsive.kafka.internal.stores;
 
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.kafka.internal.clients.TTDCassandraClient;
-import dev.responsive.kafka.internal.db.RemoteWindowedSchema;
+import dev.responsive.kafka.internal.db.CassandraClient;
+import dev.responsive.kafka.internal.db.RemoteWindowedTable;
+import dev.responsive.kafka.internal.db.spec.CassandraTableSpec;
 import dev.responsive.kafka.internal.utils.Stamped;
-import java.time.Duration;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
-public class TTDWindowedSchema extends TTDSchema<Stamped<Bytes>> implements RemoteWindowedSchema {
+public class TTDWindowedTable extends TTDTable<Stamped<Bytes>> implements RemoteWindowedTable  {
 
-  private final Map<String, WindowStoreStub> tableNameToStore = new HashMap<>();
+  private final String name;
+  private final WindowStoreStub stub;
 
-  public TTDWindowedSchema(final TTDCassandraClient client) {
+  public static TTDWindowedTable create(
+      final CassandraTableSpec spec,
+      final CassandraClient client
+  ) {
+    return new TTDWindowedTable(spec, (TTDCassandraClient) client);
+  }
+
+  public TTDWindowedTable(final CassandraTableSpec spec, final TTDCassandraClient client) {
     super(client);
+    name = spec.tableName();
+    stub = new WindowStoreStub();
   }
 
   @Override
-  public void create(final String tableName, final Optional<Duration> ttl) {
-    tableNameToStore.put(tableName, new WindowStoreStub());
-  }
-
-  @Override
-  public long count(final String tableName) {
-    return tableNameToStore.containsKey(tableName) ? tableNameToStore.get(tableName).count() : 0L;
+  public String name() {
+    return name;
   }
 
   @Override
   public BoundStatement insert(
-      final String tableName,
       final int partitionKey,
       final Stamped<Bytes> key,
       final byte[] value,
       final long epochMillis
   ) {
-    tableNameToStore.get(tableName).put(key, value);
+    stub.put(key, value);
     return null;
   }
 
   @Override
   public BoundStatement delete(
-      final String tableName,
       final int partitionKey,
       final Stamped<Bytes> key
   ) {
-    tableNameToStore.get(tableName).delete(key);
+    stub.delete(key);
     return null;
   }
 
   @Override
   public byte[] fetch(
-      String tableName,
       int partition,
       Bytes key,
       long windowStart
   ) {
-    return tableNameToStore.get(tableName).fetch(key, windowStart);
+    return stub.fetch(key, windowStart);
   }
 
   @Override
   public KeyValueIterator<Stamped<Bytes>, byte[]> fetch(
-      final String tableName,
       final int partition,
       final Bytes key,
       final long timeFrom,
       final long timeTo
   ) {
-    return tableNameToStore.get(tableName).fetch(key, timeFrom, timeTo);
+    return stub.fetch(key, timeFrom, timeTo);
   }
 
   @Override
   public KeyValueIterator<Stamped<Bytes>, byte[]> backFetch(
-      final String tableName,
       final int partition,
       final Bytes key,
       final long timeFrom,
       final long timeTo
   ) {
-    return tableNameToStore.get(tableName).backFetch(key, timeFrom, timeTo);
+    return stub.backFetch(key, timeFrom, timeTo);
   }
 
   @Override
   public KeyValueIterator<Stamped<Bytes>, byte[]> fetchRange(
-      final String tableName,
       final int partition,
       final Bytes fromKey,
       final Bytes toKey,
       final long timeFrom,
       final long timeTo
   ) {
-    return tableNameToStore.get(tableName).fetchRange(fromKey, toKey, timeFrom, timeTo);
+    return stub.fetchRange(fromKey, toKey, timeFrom, timeTo);
   }
 
   @Override
   public KeyValueIterator<Stamped<Bytes>, byte[]> backFetchRange(
-      final String tableName,
       final int partition,
       final Bytes fromKey,
       final Bytes toKey,
       final long timeFrom,
       final long timeTo
   ) {
-    return tableNameToStore.get(tableName).backFetchRange(fromKey, toKey, timeFrom, timeTo);
+    return stub.backFetchRange(fromKey, toKey, timeFrom, timeTo);
   }
 
   @Override
   public KeyValueIterator<Stamped<Bytes>, byte[]> fetchAll(
-      final String tableName,
       final int partition,
       final long timeFrom,
       final long timeTo
   ) {
-    return tableNameToStore.get(tableName).fetchAll(timeFrom, timeTo);
+    return stub.fetchAll(timeFrom, timeTo);
   }
 
   @Override
   public KeyValueIterator<Stamped<Bytes>, byte[]> backFetchAll(
-      final String tableName,
       final int partition,
       final long timeFrom,
       final long timeTo
   ) {
-    return tableNameToStore.get(tableName).backFetchAll(timeFrom, timeTo);
+    return stub.backFetchAll(timeFrom, timeTo);
+  }
+
+  @Override
+  public long count() {
+    return 0;
   }
 }

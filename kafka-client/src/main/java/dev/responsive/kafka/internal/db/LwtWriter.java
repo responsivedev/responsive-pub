@@ -31,8 +31,7 @@ public class LwtWriter<K> implements RemoteWriter<K> {
 
   private final CassandraClient client;
   private final Supplier<BatchableStatement<?>> fencingStatementFactory;
-  private final RemoteSchema<K> schema;
-  private final String name;
+  private final RemoteTable<K> table;
   private final int partition;
   private final int batchSize;
 
@@ -41,15 +40,13 @@ public class LwtWriter<K> implements RemoteWriter<K> {
   public LwtWriter(
       final CassandraClient client,
       final Supplier<BatchableStatement<?>> fencingStatementFactory,
-      final RemoteSchema<K> schema,
-      final String name,
+      final RemoteTable<K> table,
       final int partition,
       final int batchSize
   ) {
     this.client = client;
     this.fencingStatementFactory = fencingStatementFactory;
-    this.schema = schema;
-    this.name = name;
+    this.table = table;
     this.partition = partition;
     this.batchSize = batchSize;
 
@@ -58,12 +55,12 @@ public class LwtWriter<K> implements RemoteWriter<K> {
 
   @Override
   public void insert(final K key, final byte[] value, long epochMillis) {
-    statements.add(schema.insert(name, partition, key, value, epochMillis));
+    statements.add(table.insert(partition, key, value, epochMillis));
   }
 
   @Override
   public void delete(final K key) {
-    statements.add(schema.delete(name, partition, key));
+    statements.add(table.delete(partition, key));
   }
 
   @Override
@@ -90,7 +87,7 @@ public class LwtWriter<K> implements RemoteWriter<K> {
   public RemoteWriteResult setOffset(final long offset) {
     final BatchStatementBuilder builder = new BatchStatementBuilder(BatchType.UNLOGGED);
     builder.addStatement(fencingStatementFactory.get());
-    builder.addStatement(schema.setOffset(name, partition, offset));
+    builder.addStatement(table.setOffset(partition, offset));
 
     final var result = client.execute(builder.build());
     return result.wasApplied()

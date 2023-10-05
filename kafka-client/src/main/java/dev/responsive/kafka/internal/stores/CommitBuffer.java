@@ -22,14 +22,13 @@ import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.KeySpec;
 import dev.responsive.kafka.internal.db.MetadataRow;
-import dev.responsive.kafka.internal.db.RemoteSchema;
+import dev.responsive.kafka.internal.db.RemoteTable;
 import dev.responsive.kafka.internal.db.RemoteWriter;
 import dev.responsive.kafka.internal.db.WriterFactory;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.utils.Iterators;
 import dev.responsive.kafka.internal.utils.Result;
 import dev.responsive.kafka.internal.utils.SharedClients;
-import dev.responsive.kafka.internal.utils.TableName;
 import java.io.Closeable;
 import java.time.Duration;
 import java.time.Instant;
@@ -57,7 +56,7 @@ import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCa
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.slf4j.Logger;
 
-class CommitBuffer<K, S extends RemoteSchema<K>> 
+class CommitBuffer<K, S extends RemoteTable<K>>
     implements RecordBatchingStateRestoreCallback, Closeable {
 
   public static final int MAX_BATCH_SIZE = 1000;
@@ -67,11 +66,10 @@ class CommitBuffer<K, S extends RemoteSchema<K>>
 
   private final SizeTrackingBuffer<K> buffer;
   private final CassandraClient client;
-  private final String tableName;
   private final int partition;
   private final Admin admin;
   private final TopicPartition changelog;
-  private final S remoteSchema;
+  private final S table;
   private final FlushTriggers flushTriggers;
   private final int maxBatchSize;
   private final SubPartitioner subPartitioner;
@@ -86,9 +84,8 @@ class CommitBuffer<K, S extends RemoteSchema<K>>
   private final boolean truncateChangelog;
   private KafkaFuture<DeletedRecords> deleteRecordsFuture = KafkaFuture.completedFuture(null);
 
-  static <K, S extends RemoteSchema<K>> CommitBuffer<K, S> from(
+  static <K, S extends RemoteTable<K>> CommitBuffer<K, S> from(
       final SharedClients clients,
-      final TableName tableName,
       final TopicPartition changelog,
       final S schema,
       final KeySpec<K> keySpec,
@@ -101,7 +98,6 @@ class CommitBuffer<K, S extends RemoteSchema<K>>
 
     return new CommitBuffer<>(
         cassandraClient,
-        tableName.cassandraName(),
         changelog,
         admin,
         schema,
@@ -114,7 +110,6 @@ class CommitBuffer<K, S extends RemoteSchema<K>>
 
   CommitBuffer(
       final CassandraClient client,
-      final String tableName,
       final TopicPartition changelog,
       final Admin admin,
       final S schema,
@@ -125,7 +120,6 @@ class CommitBuffer<K, S extends RemoteSchema<K>>
   ) {
     this(
         client,
-        tableName,
         changelog,
         admin,
         schema,
@@ -140,10 +134,9 @@ class CommitBuffer<K, S extends RemoteSchema<K>>
 
   CommitBuffer(
       final CassandraClient client,
-      final String tableName,
       final TopicPartition changelog,
       final Admin admin,
-      final S schema,
+      final S table,
       final KeySpec<K> keySpec,
       final boolean truncateChangelog,
       final FlushTriggers flushTriggers,
@@ -152,11 +145,10 @@ class CommitBuffer<K, S extends RemoteSchema<K>>
       final Supplier<Instant> clock
   ) {
     this.client = client;
-    this.tableName = tableName;
     this.changelog = changelog;
     this.partition = changelog.partition();
     this.admin = admin;
-    this.remoteSchema = schema;
+    this.table = table;
 
     this.buffer = new SizeTrackingBuffer<>(keySpec);
     this.keySpec = keySpec;
@@ -165,7 +157,7 @@ class CommitBuffer<K, S extends RemoteSchema<K>>
     this.subPartitioner = subPartitioner;
     this.clock = clock;
 
-    logPrefix = String.format("commit-buffer [%s-%d] ", tableName, partition);
+    logPrefix = String.format("commit-buffer [%s-%d] ", table.name(), partition);
     log = new LogContext(logPrefix).logger(CommitBuffer.class);
 
     if (hasSourceTopicChangelog(changelog.topic())) {
@@ -186,7 +178,7 @@ class CommitBuffer<K, S extends RemoteSchema<K>>
   public void init() {
     lastFlush = clock.get();
 
-    this.writerFactory = remoteSchema.init(tableName, subPartitioner, partition);
+    this.writerFactory = table.init(subPartitioner, partition);
 
     final int basePartition = subPartitioner.first(partition);
     log.info("Initialized store with {} for subpartitions in range: {{} -> {}}",
@@ -277,7 +269,7 @@ class CommitBuffer<K, S extends RemoteSchema<K>>
 
   long offset() {
     final int basePartition = subPartitioner.first(partition);
-    return remoteSchema.metadata(tableName, basePartition).offset;
+    return table.metadata(basePartition).offset;
   }
 
   private long totalBytesBuffered() {
@@ -359,7 +351,6 @@ class CommitBuffer<K, S extends RemoteSchema<K>>
       final RemoteWriter<K> writer = writers
           .computeIfAbsent(subPartition, k -> writerFactory.createWriter(
               client,
-              tableName,
               subPartition,
               batchSize
           ));
@@ -381,7 +372,7 @@ class CommitBuffer<K, S extends RemoteSchema<K>>
     // the first subpartition
     final var offsetWriteResult = writers.computeIfAbsent(
         subPartitioner.first(partition),
-        subPartition -> writerFactory.createWriter(client, tableName, subPartition, batchSize)
+        subPartition -> writerFactory.createWriter(client, subPartition, batchSize)
     ).setOffset(consumedOffset);
 
     if (!offsetWriteResult.wasApplied()) {
@@ -490,7 +481,7 @@ class CommitBuffer<K, S extends RemoteSchema<K>>
   }
 
   private void throwFencedException(final RemoteWriteResult result, final long consumedOffset) {
-    final MetadataRow stored = remoteSchema.metadata(tableName, result.getPartition());
+    final MetadataRow stored = table.metadata(result.getPartition());
     // we were fenced - the only conditional statement is the
     // offset update, so it's the only failure point
     final String msg = String.format(

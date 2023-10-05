@@ -19,19 +19,12 @@ package dev.responsive.kafka.internal.db;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
-/**
- * This specifies additional functions required for reading from
- * a key-value store.
- *
- * @see RemoteSchema
- */
-public interface RemoteKeyValueSchema extends RemoteSchema<Bytes> {
+public interface RemoteKVTable extends RemoteTable<Bytes> {
 
   /**
    * Retrieves the value of the given {@code partitionKey} and {@code key}
    * from {@code table}.
    *
-   * @param tableName  the table to retrieve from
    * @param partition  the partition
    * @param key        the data key
    * @param minValidTs the minimum valid timestamp to apply semantic TTL,
@@ -39,7 +32,7 @@ public interface RemoteKeyValueSchema extends RemoteSchema<Bytes> {
    *
    * @return the value previously set
    */
-  byte[] get(String tableName, int partition, Bytes key, long minValidTs);
+  byte[] get(int partition, Bytes key, long minValidTs);
 
   /**
    * Retrieves a range of key value pairs from the given {@code partitionKey} and
@@ -50,7 +43,6 @@ public interface RemoteKeyValueSchema extends RemoteSchema<Bytes> {
    * as it's iterated (data fetching is handling by the underlying Cassandra
    * session).
    *
-   * @param tableName  the table to retrieve from
    * @param partition  the partition
    * @param from       the starting key (inclusive)
    * @param to         the ending key (exclusive)
@@ -60,13 +52,11 @@ public interface RemoteKeyValueSchema extends RemoteSchema<Bytes> {
    * @return an iterator of all key-value pairs in the range
    */
   KeyValueIterator<Bytes, byte[]> range(
-      String tableName,
       int partition,
       Bytes from,
       Bytes to,
       long minValidTs
   );
-
 
   /**
    * Retrieves all key value pairs from the given {@code partitionKey} and
@@ -76,11 +66,11 @@ public interface RemoteKeyValueSchema extends RemoteSchema<Bytes> {
    * as it's iterated (data fetching is handling by the underlying Cassandra
    * session).
    *
-   * @param tableName  the table to retrieve from
    * @param partition  the partition
    * @param minValidTs the minimum valid timestamp, in epochMilliis, to return
    *
    * @return an iterator of all key-value pairs
    */
-  KeyValueIterator<Bytes, byte[]> all(String tableName, int partition, long minValidTs);
+  KeyValueIterator<Bytes, byte[]> all(int partition, long minValidTs);
+
 }
