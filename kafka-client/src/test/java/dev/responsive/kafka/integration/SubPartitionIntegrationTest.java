@@ -58,6 +58,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
 import org.apache.kafka.clients.admin.Admin;
@@ -73,6 +74,12 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
@@ -139,16 +146,15 @@ public class SubPartitionIntegrationTest {
 
     try (
         final var streams = new ResponsiveKafkaStreams(
-            simpleDslTopology(ResponsiveStores.materialized(
-                ResponsiveKeyValueParams.keyValue(storeName))), properties);
-        final var serializer = new LongSerializer();
-        final var deserializer = new LongDeserializer();
+            simpleDslTopology(ResponsiveStores.keyValueStore(
+                ResponsiveKeyValueParams.keyValue(storeName))),
+            properties);
     ) {
       // When:
       // this will send one key to each virtual partition using the LongBytesHasher
       IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(20), streams);
       IntegrationTestUtils.pipeInput(
-          inputTopic(), 2, producer, System::currentTimeMillis, 0, 100L,
+          inputTopic(), 2, producer, System::currentTimeMillis, 0, 2L,
           LongStream.range(0, 32).toArray());
 
       // Then
@@ -157,10 +163,16 @@ public class SubPartitionIntegrationTest {
           0,
           LongStream.range(0, 32)
               .boxed()
-              .map(k -> new KeyValue<>(k, 100L))
+              .map(k -> new KeyValue<>(k, 1L))
               .collect(Collectors.toSet()),
           true,
           properties);
+    }
+
+    try (
+        final var serializer = new LongSerializer();
+        final var deserializer = new LongDeserializer()
+    ) {
       final String cassandraName = new TableName(storeName).cassandraName();
       final RemoteKeyValueSchema schema = new CassandraKeyValueSchema(client);
       schema.prepare(cassandraName);
@@ -180,7 +192,7 @@ public class SubPartitionIntegrationTest {
                         MIN_VALID_TS),
                     8,
                     16)),
-            is(100L));
+            is(0L));
       }
     }
   }
@@ -193,10 +205,9 @@ public class SubPartitionIntegrationTest {
 
     try (
         final var streams = new ResponsiveKafkaStreams(
-            simpleDslTopology(new ResponsiveMaterialized<>(
-                Materialized.as(ResponsiveStores.factStore(storeName)),
-                false
-            )), properties);
+            simpleDslTopology(
+                ResponsiveStores.keyValueStore(ResponsiveKeyValueParams.fact(storeName))),
+            properties);
         final var serializer = new LongSerializer();
         final var deserializer = new LongDeserializer();
     ) {
@@ -204,7 +215,7 @@ public class SubPartitionIntegrationTest {
       // this will send one key to each virtual partition using the LongBytesHasher
       IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(10), streams);
       IntegrationTestUtils.pipeInput(
-          inputTopic(), 2, producer, System::currentTimeMillis, 0, 100L,
+          inputTopic(), 2, producer, System::currentTimeMillis, 0, 2L,
           LongStream.range(0, 32).toArray());
 
       // Then
@@ -213,7 +224,7 @@ public class SubPartitionIntegrationTest {
           0,
           LongStream.range(0, 32)
               .boxed()
-              .map(k -> new KeyValue<>(k, 100L))
+              .map(k -> new KeyValue<>(k, 1L))
               .collect(Collectors.toSet()),
           true,
           properties);
@@ -244,20 +255,39 @@ public class SubPartitionIntegrationTest {
                         MIN_VALID_TS),
                     8,
                     16)),
-            is(100L));
+            is(0L));
       }
     }
   }
 
   private Topology simpleDslTopology(
-      final Materialized<Long, Long, KeyValueStore<Bytes, byte[]>> materialized
+      final KeyValueBytesStoreSupplier storeSupplier
   ) {
     final var builder = new StreamsBuilder();
 
     final KStream<Long, Long> stream = builder.stream(inputTopic());
-    stream.groupByKey()
-        .count(materialized)
-        .toStream()
+    builder.addStateStore(ResponsiveStores.keyValueStoreBuilder(
+        storeSupplier, new LongSerde(), new LongSerde()));
+    stream
+        .process((ProcessorSupplier<Long, Long, Long, Long>) () -> new Processor<>() {
+
+          ProcessorContext<Long, Long> context;
+          KeyValueStore<Long, Long> store;
+
+          @Override
+          public void init(final ProcessorContext<Long, Long> context) {
+            store = context.getStateStore(storeSupplier.name());
+            this.context = context;
+          }
+
+          @Override
+          public void process(final Record<Long, Long> record) {
+            // only forward duplicates
+            if (store.putIfAbsent(record.key(), record.value()) != null) {
+              context.forward(record);
+            }
+          }
+        }, storeSupplier.name())
         .to(outputTopic());
 
     return builder.build();
