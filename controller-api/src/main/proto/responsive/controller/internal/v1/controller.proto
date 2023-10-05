@@ -9,10 +9,6 @@ package responsive.controller.internal.v1.controller.proto;
 import "opentelemetry/proto/metrics/v1/metrics.proto";
 import "responsive/controller/v1/controller.proto";
 
-message ControllerState {
-  map<string, PolicyState> managed_state = 1;
-}
-
 message PolicyState {
   enum State {
     INITIALIZING = 0;
@@ -38,14 +34,4 @@ message Action {
 
 message ChangeApplicationState {
   responsive.controller.v1.controller.proto.ApplicationState target_state = 1;
-}
-
-message DataPoint {
-  oneof data {
-    opentelemetry.proto.metrics.v1.Gauge gauge = 5;
-    opentelemetry.proto.metrics.v1.Sum sum = 7;
-    opentelemetry.proto.metrics.v1.Histogram histogram = 9;
-    opentelemetry.proto.metrics.v1.ExponentialHistogram exponential_histogram = 10;
-    opentelemetry.proto.metrics.v1.Summary summary = 11;
-  }
 }

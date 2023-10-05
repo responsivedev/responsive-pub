@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+package responsive.controller.internal.v1.statedump.proto;
+
+import "responsive/controller/internal/v1/controller.proto";
+
+message StateDump {
+  message ApplicationId {
+    string tenant = 1;
+    string application = 2;
+  }
+
+  message ApplicationState {
+    ApplicationId application_id = 1;
+    responsive.controller.internal.v1.controller.proto.PolicyState state = 2;
+  }
+
+  message MetricsStoreDump {
+    message DataPoint {
+      int64 time_seconds = 1;
+      int64 time_nanos = 2;
+      optional double value_as_double = 3;
+      optional int64 value_as_long = 4;
+    }
+
+    message MetricSeries {
+      MetricKey key = 1;
+      repeated DataPoint points = 2;
+    }
+
+    message MetricKey {
+      string name = 1;
+      map<string, string> tags = 2;
+    }
+
+    message ApplicationMetrics {
+      ApplicationId application_id = 1;
+      repeated MetricSeries series = 2;
+    }
+
+    repeated ApplicationMetrics metrics = 1;
+  }
+
+  repeated ApplicationState application_state = 1;
+  optional MetricsStoreDump metrics_store_dump = 2;
+}
