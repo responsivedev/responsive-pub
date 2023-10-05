@@ -98,11 +98,6 @@ public class LwtWriter<K> implements RemoteWriter<K> {
         : RemoteWriteResult.failure(partition);
   }
 
-  @Override
-  public int partition() {
-    return partition;
-  }
-
   private CompletionStage<RemoteWriteResult> executeAsync(final Statement<?> statement) {
     return client.executeAsync(statement)
         .thenApply(resp -> RemoteWriteResult.of(partition, resp));

@@ -22,8 +22,10 @@ import dev.responsive.kafka.internal.db.RemoteKeyValueSchema;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.utils.SharedClients;
 import dev.responsive.kafka.internal.utils.TableName;
+import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
@@ -32,6 +34,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.GlobalProcessorContextImpl;
+import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -44,6 +47,7 @@ import org.slf4j.Logger;
 public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
 
   private static final long ALL_VALID_TS = -1L; // Global stores don't support TTL
+  private static final int IGNORED_PARTITION = -1; // Global stores ignored partitions
 
   private final Logger log;
 
@@ -52,7 +56,6 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
   private final Position position; // TODO(IQ): update the position during restoration
 
   private GlobalProcessorContextImpl context;
-  private int partition;
 
   private CassandraClient client;
   private RemoteKeyValueSchema schema;
@@ -66,7 +69,6 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
     log = new LogContext(
         String.format("global-store [%s]", name.kafkaName())
     ).logger(ResponsivePartitionedStore.class);
-    throw new UnsupportedOperationException("Global tables are not available for use at this time");
   }
 
   @Override
@@ -91,25 +93,17 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
     try {
       log.info("Initializing global state store {}", name);
       this.context = (GlobalProcessorContextImpl) context;
-      // this is bad, but the assumption is that global tables are small
-      // and can fit in a single partition - all writers will write using
-      // the same partition key. we should consider using ALLOW FILTERING
-      // instead. that would make gets/puts more efficient and the queries
-      // to be more evently distributed and take the hit only on range
-      // queries
-      partition = 0;
       final SharedClients sharedClients = SharedClients.loadSharedClients(context.appConfigs());
       client = sharedClients.cassandraClient;
 
-      schema = client.prepareKVTableSchema(params);
+      schema = client.prepareGlobalSchema(params);
       log.info("Global table {} is available for querying.", name);
 
-      schema.init(name.cassandraName(), SubPartitioner.NO_SUBPARTITIONS, partition);
+      schema.init(name.cassandraName(), SubPartitioner.NO_SUBPARTITIONS, IGNORED_PARTITION);
 
       open = true;
 
-      context.register(root, (key, value) -> put(Bytes.wrap(key), value));
-
+      context.register(root, new RestoreCallback());
     } catch (InterruptedException | TimeoutException e) {
       throw new ProcessorStateException("Failed to initialize store.", e);
     }
@@ -127,10 +121,20 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
   
   @Override
   public void put(final Bytes key, final byte[] value) {
+    put(key, value, context.partition(), context.offset(), context.timestamp());
+  }
+
+  private void put(
+      final Bytes key,
+      final byte[] value,
+      final int partition,
+      final long offset,
+      final long timestamp
+  ) {
     if (value == null) {
       delete(key);
     } else {
-      putInternal(key, value);
+      putInternal(key, value, partition, offset, timestamp);
     }
   }
 
@@ -138,7 +142,7 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
   public byte[] putIfAbsent(final Bytes key, final byte[] value) {
     final byte[] old = get(key);
     if (old == null && value != null) {
-      putInternal(key, value);
+      putInternal(key, value, context.partition(), context.offset(), context.timestamp());
     }
     return old;
   }
@@ -148,38 +152,46 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
     entries.forEach(kv -> put(kv.key, kv.value));
   }
 
-  private void putInternal(final Bytes key, final byte[] value) {
-    client.execute(schema.insert(
-        name.cassandraName(),
-        partition,
-        key,
-        value,
-        context.timestamp())
-    );
+  private void putInternal(
+      final Bytes key,
+      final byte[] value,
+      final int partition,
+      final long offset,
+      final long timestamp
+  ) {
+    client.execute(schema.insert(name.cassandraName(), IGNORED_PARTITION, key, value, timestamp));
+    client.execute(schema.setOffset(name.cassandraName(), partition, offset));
     StoreQueryUtils.updatePosition(position, context);
   }
 
   @Override
   public byte[] delete(final Bytes key) {
+    return delete(key, context.partition(), context.offset());
+  }
+
+  private byte[] delete(final Bytes key, final int partition, final long offset) {
     final byte[] bytes = get(key);
-    client.execute(schema.delete(name.cassandraName(), partition, key));
+    client.execute(schema.delete(name.cassandraName(), IGNORED_PARTITION, key));
+    client.execute(schema.setOffset(name.cassandraName(), partition, offset));
+
+    // TODO: this position may be incorrectly updated during restoration
     StoreQueryUtils.updatePosition(position, context);
     return bytes;
   }
 
   @Override
   public byte[] get(final Bytes key) {
-    return schema.get(name.cassandraName(), partition, key, ALL_VALID_TS);
+    return schema.get(name.cassandraName(), IGNORED_PARTITION, key, ALL_VALID_TS);
   }
 
   @Override
   public KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
-    return schema.range(name.cassandraName(), partition, from, to, ALL_VALID_TS);
+    return schema.range(name.cassandraName(), IGNORED_PARTITION, from, to, ALL_VALID_TS);
   }
 
   @Override
   public KeyValueIterator<Bytes, byte[]> all() {
-    return schema.all(name.cassandraName(), partition, ALL_VALID_TS);
+    return schema.all(name.cassandraName(), IGNORED_PARTITION, ALL_VALID_TS);
   }
 
   @Override
@@ -189,7 +201,7 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
 
   @Override
   public long approximateNumEntries() {
-    return client.count(name.cassandraName(), partition);
+    return client.count(name.cassandraName(), IGNORED_PARTITION);
   }
 
   @Override
@@ -198,5 +210,36 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
 
   @Override
   public void close() {
+  }
+
+  private class RestoreCallback implements RecordBatchingStateRestoreCallback {
+
+    @Override
+    public void restoreBatch(final Collection<ConsumerRecord<byte[], byte[]>> records) {
+      for (final var rec : records) {
+        // We should consider using the same strategy we use in the
+        // ResponsiveRestoreConsumer and just seek to where we need to
+        // start from instead of skipping records - this is just less wiring
+        // code for now and the number of records to skip is pretty minimal
+        // (limited by the number of records committed between a single window
+        // of auto.commit.interval.ms) unlike the changelog equivalent which
+        // always restores from scratch
+        final int partition = rec.partition();
+        final long offset = schema.metadata(name.cassandraName(), partition).offset;
+        if (rec.offset() < offset) {
+          // ignore records that have already been processed - race conditions
+          // are not important since the worst case we'll have just not written
+          // the last record, which we just re-process here (we update the offset
+          // after each write to remote)
+          continue;
+        }
+
+        if (rec.value() == null) {
+          delete(new Bytes(rec.key()), rec.partition(), rec.offset());
+        } else {
+          put(new Bytes(rec.key()), rec.value(), rec.partition(), rec.offset(), rec.timestamp());
+        }
+      }
+    }
   }
 }

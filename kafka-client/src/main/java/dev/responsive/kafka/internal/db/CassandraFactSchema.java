@@ -32,6 +32,7 @@ import com.datastax.oss.driver.api.core.type.DataTypes;
 import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
 import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
 import com.datastax.oss.driver.api.querybuilder.schema.CreateTableWithOptions;
+import com.datastax.oss.driver.api.querybuilder.schema.compaction.CompactionStrategy;
 import com.datastax.oss.driver.api.querybuilder.schema.compaction.TimeWindowCompactionStrategy;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import java.nio.ByteBuffer;
@@ -43,6 +44,7 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import javax.annotation.CheckReturnValue;
+import javax.annotation.Nullable;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.slf4j.Logger;
@@ -85,12 +87,7 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
       // 20 is a magic number recommended by scylla for the number of buckets
       final Duration compactionWindow = Duration.ofSeconds(ttlSeconds / 20);
       createTable = createTable(tableName).withDefaultTimeToLiveSeconds(ttlSeconds)
-          .withCompaction(
-              SchemaBuilder.timeWindowCompactionStrategy()
-                  .withCompactionWindow(
-                      compactionWindow.toMinutes(),
-                      TimeWindowCompactionStrategy.CompactionWindowUnit.MINUTES)
-          )
+          .withCompaction(compactionStrategy(compactionWindow))
           // without setting a low gc_grace_seconds, we will have to wait an
           // additional 10 days (the default gc_grace_seconds) before any SST
           // on disk is removed. setting a good value for this is somewhat a
@@ -111,8 +108,7 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
           // https://thelastpickle.com/blog/2018/03/21/hinted-handoff-gc-grace-demystified.html
           .withGcGraceSeconds(Math.min(ttlSeconds, (int) TimeUnit.HOURS.toSeconds(6)));
     } else {
-      createTable = createTable(tableName)
-          .withCompaction(SchemaBuilder.timeWindowCompactionStrategy());
+      createTable = createTable(tableName).withCompaction(compactionStrategy(null));
     }
 
     // separate metadata from the main table for the fact schema, this is acceptable
@@ -130,6 +126,15 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
 
     client.execute(createTable.build());
     client.execute(createMetadataTable.build());
+  }
+
+  protected CompactionStrategy<?> compactionStrategy(@Nullable final Duration compactionWindow) {
+    return compactionWindow == null
+        ? SchemaBuilder.timeWindowCompactionStrategy()
+        : SchemaBuilder.timeWindowCompactionStrategy()
+          .withCompactionWindow(
+            compactionWindow.toMinutes(),
+            TimeWindowCompactionStrategy.CompactionWindowUnit.MINUTES);
   }
 
   private CreateTableWithOptions createTable(final String tableName) {
@@ -167,10 +172,12 @@ public class CassandraFactSchema implements RemoteKeyValueSchema {
         .setInt(PARTITION_KEY.bind(), partition);
     final List<Row> result = client.execute(bound).all();
 
-    if (result.size() != 1) {
+    if (result.size() > 1) {
       throw new IllegalStateException(String.format(
-          "Expected exactly one offset row for %s[%s] but got %d",
+          "Expected at most one offset row for %s[%s] but got %d",
           table, partition, result.size()));
+    } else if (result.isEmpty()) {
+      return new MetadataRow(NO_COMMITTED_OFFSET, -1L);
     } else {
       final long offset = result.get(0).getLong(OFFSET.column());
       LOG.info("Got offset for {}[{}]: {}", table, partition, offset);

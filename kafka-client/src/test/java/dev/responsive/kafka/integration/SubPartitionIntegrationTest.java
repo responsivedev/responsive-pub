@@ -20,6 +20,7 @@ import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_DESIRED_N
 import static dev.responsive.kafka.api.config.ResponsiveConfig.STORE_FLUSH_RECORDS_TRIGGER_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.SUBPARTITION_HASHER_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.responsiveConfig;
+import static dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration.NO_COMMITTED_OFFSET;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
@@ -228,7 +229,7 @@ public class SubPartitionIntegrationTest {
       assertThat(meta1.offset, is(notNullValue()));
 
       // throws because it doesn't exist
-      Assertions.assertThrows(IllegalStateException.class, () -> schema.metadata(cassandraName, 2));
+      Assertions.assertEquals(schema.metadata(cassandraName, 2).offset, NO_COMMITTED_OFFSET);
 
       // these store ValueAndTimestamp, so we need to just pluck the last 8 bytes
       final var hasher = SubPartitioner.NO_SUBPARTITIONS;

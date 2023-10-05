@@ -108,10 +108,6 @@ public abstract class TTDSchema<K> implements RemoteSchema<K> {
       return RemoteWriteResult.success(partition);
     }
 
-    @Override
-    public int partition() {
-      return partition;
-    }
   }
 
 }

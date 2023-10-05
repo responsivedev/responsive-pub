@@ -90,6 +90,18 @@ public class ResponsiveGlobalConsumer extends DelegatingConsumer<byte[], byte[]>
     );
   }
 
+  @Override
+  public void unsubscribe() {
+    // since this consumer has ENABLE_AUTO_COMMIT_CONFIG set to true,
+    // it is not guaranteed that any commits will happen before calling
+    // unsubscribe - the GlobalStreamThread will call unsubscribe
+    // when it's finished restoring, so we should make sure to commit
+    // any offsets at this point so that when it resumes normal operation
+    // it doesn't experience any time travel
+    commitSync();
+    super.unsubscribe();
+  }
+
   @Deprecated
   public ConsumerRecords<byte[], byte[]> poll(final long timeoutMs) {
     return poll(Duration.ofMillis(timeoutMs));
