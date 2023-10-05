@@ -21,8 +21,8 @@ import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.KafkaMetric;
+import org.apache.kafka.common.metrics.MetricValueProvider;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.slf4j.Logger;
@@ -78,7 +78,9 @@ public class ResponsiveMetrics implements Closeable {
   }
 
   public interface MetricGroup {
+
     String groupName();
+
     Map<String, String> tags();
   }
 
@@ -122,11 +124,8 @@ public class ResponsiveMetrics implements Closeable {
     );
   }
 
-  /**
-   * @param gauge        a gauge that defines the measured value or property
-   */
-  public void addMetric(final MetricName metricName, final Gauge<?> gauge) {
-    metrics.addMetric(metricName, gauge);
+  public void addMetric(final MetricName metricName, final MetricValueProvider<?> valueProvider) {
+    metrics.addMetric(metricName, valueProvider);
   }
 
   public Sensor addSensor(final String sensorName) {

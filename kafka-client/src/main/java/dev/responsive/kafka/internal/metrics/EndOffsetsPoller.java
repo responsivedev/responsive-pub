@@ -198,7 +198,11 @@ public class EndOffsetsPoller {
     private final ResponsiveMetrics metrics;
     private final Consumer<String> onClose;
 
-    private Listener(final String threadId, final ResponsiveMetrics metrics, final Consumer<String> onClose) {
+    private Listener(
+        final String threadId,
+        final ResponsiveMetrics metrics,
+        final Consumer<String> onClose
+    ) {
       this.threadId = threadId;
       this.metrics = metrics;
       this.onClose = onClose;

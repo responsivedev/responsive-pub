@@ -21,6 +21,7 @@ import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.common.TopicPartition;
 
+@SuppressWarnings("checkstyle:linelength")
 public class TopicMetrics implements MetricGroup {
   
   public static final String TOPIC_METRIC_GROUP = "topic-metrics";

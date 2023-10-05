@@ -29,7 +29,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import dev.responsive.kafka.internal.metrics.EndOffsetsPoller;
 import dev.responsive.kafka.internal.metrics.EndOffsetsPoller.Factories;
 import java.util.List;
 import java.util.Map;
@@ -47,7 +46,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.MetricValueProvider;
-import org.apache.kafka.common.metrics.Metrics;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -68,7 +66,7 @@ class EndOffsetsPollerTest {
   @Mock
   private Factories factories;
   @Mock
-  private Metrics metrics;
+  private ResponsiveMetrics metrics;
   @Mock
   private ScheduledExecutorService executor;
   @Mock

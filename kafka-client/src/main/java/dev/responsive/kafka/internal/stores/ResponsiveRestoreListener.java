@@ -18,7 +18,6 @@ package dev.responsive.kafka.internal.stores;
 
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

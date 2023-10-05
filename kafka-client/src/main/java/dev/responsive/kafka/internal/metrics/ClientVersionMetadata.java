@@ -47,13 +47,17 @@ public class ClientVersionMetadata {
   }
 
   public static ClientVersionMetadata loadVersionMetadata() {
-    final Properties responsiveVersionProps = loadPropertiesFromFile(RESPONSIVE_VERSION_FILE);
-    final String responsiveClientVersion = responsiveVersionProps.getProperty("git.build.version", "").trim();
-    final String responsiveClientCommitId = responsiveVersionProps.getProperty("git.commit.id", "").trim();
+    final Properties responsiveProps = loadPropertiesFromFile(RESPONSIVE_VERSION_FILE);
+    final String responsiveClientVersion =
+        responsiveProps.getProperty("git.build.version", "").trim();
+    final String responsiveClientCommitId =
+        responsiveProps.getProperty("git.commit.id", "").trim();
 
-    final Properties streamsVersionProps = loadPropertiesFromFile(KAFKA_STREAMS_VERSION_FILE);
-    final String streamsClientVersion = streamsVersionProps.getProperty("version", "").trim();
-    final String streamsClientCommitId = streamsVersionProps.getProperty("commitId", "").trim();
+    final Properties kafkaStreamsProps = loadPropertiesFromFile(KAFKA_STREAMS_VERSION_FILE);
+    final String streamsClientVersion =
+        kafkaStreamsProps.getProperty("version", "").trim();
+    final String streamsClientCommitId =
+        kafkaStreamsProps.getProperty("commitId", "").trim();
 
     return new ClientVersionMetadata(
         responsiveClientVersion,

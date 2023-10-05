@@ -25,7 +25,6 @@ import static org.mockito.Mockito.verify;
 
 import dev.responsive.kafka.internal.clients.OffsetRecorder;
 import dev.responsive.kafka.internal.clients.ResponsiveProducer.Listener;
-import dev.responsive.kafka.internal.metrics.MetricPublishingCommitListener;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -34,7 +33,6 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Gauge;
-import org.apache.kafka.common.metrics.Metrics;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

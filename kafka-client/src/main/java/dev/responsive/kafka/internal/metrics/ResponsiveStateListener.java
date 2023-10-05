@@ -21,6 +21,7 @@ import static dev.responsive.kafka.internal.metrics.ApplicationMetrics.STREAMS_S
 
 import java.io.Closeable;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KafkaStreams.StateListener;
 
@@ -39,7 +40,7 @@ public class ResponsiveStateListener implements StateListener, Closeable {
         STREAMS_STATE_DESCRIPTION,
         metrics.applicationLevelMetric()
     );
-    metrics.addMetric(stateMetric, (config, now) -> currentState.ordinal());
+    metrics.addMetric(stateMetric, (Gauge<Integer>) (config, now) -> currentState.ordinal());
   }
 
   public void registerUserStateListener(final StateListener userStateListener) {

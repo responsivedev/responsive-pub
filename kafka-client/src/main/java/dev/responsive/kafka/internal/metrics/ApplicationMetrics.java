@@ -20,6 +20,7 @@ import dev.responsive.kafka.internal.metrics.ResponsiveMetrics.MetricGroup;
 import java.util.HashMap;
 import java.util.Map;
 
+@SuppressWarnings("checkstyle:linelength")
 public class ApplicationMetrics implements MetricGroup {
 
   // Responsive application metrics scoped to the Streams client level

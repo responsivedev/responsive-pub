@@ -21,6 +21,7 @@ import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.common.TopicPartition;
 
+@SuppressWarnings("checkstyle:linelength")
 public class StoreMetrics implements MetricGroup {
 
   // Responsive store metrics scoped to the individual state store level
