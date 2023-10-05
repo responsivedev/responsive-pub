@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package responsive.controller.internal.v1.internal.proto;
+
+import "responsive/controller/internal/v1/controller.proto";
+
+service Internal {
+  rpc DumpState(DumpStateRequest) returns (EmptyResponse) {}
+}
+
+message DumpStateRequest {
+  optional string path = 1;
+}
+
+message EmptyResponse {
+}
