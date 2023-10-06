@@ -16,8 +16,8 @@
 
 package dev.responsive.kafka.internal.stores;
 
+import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,11 +29,11 @@ import org.slf4j.LoggerFactory;
 public class ResponsiveRestoreListener implements StateRestoreListener {
   private static final Logger LOG = LoggerFactory.getLogger(ResponsiveRestoreListener.class);
 
-  private final Metrics metrics;
+  private final ResponsiveMetrics metrics;
 
   private StateRestoreListener userRestoreListener;
 
-  public ResponsiveRestoreListener(final Metrics metrics) {
+  public ResponsiveRestoreListener(final ResponsiveMetrics metrics) {
     this.metrics = metrics;
   }
 

@@ -25,13 +25,10 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import dev.responsive.kafka.internal.clients.OffsetRecorder;
-import dev.responsive.kafka.internal.clients.ResponsiveConsumer;
-import dev.responsive.kafka.internal.clients.ResponsiveKafkaClientSupplier;
 import dev.responsive.kafka.internal.clients.ResponsiveKafkaClientSupplier.Factories;
-import dev.responsive.kafka.internal.clients.ResponsiveProducer;
 import dev.responsive.kafka.internal.metrics.EndOffsetsPoller;
 import dev.responsive.kafka.internal.metrics.MetricPublishingCommitListener;
+import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistry;
 import java.util.HashMap;
 import java.util.List;
@@ -40,7 +37,6 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.BytesDeserializer;
 import org.apache.kafka.common.serialization.BytesSerializer;
 import org.apache.kafka.streams.KafkaClientSupplier;
@@ -80,7 +76,7 @@ class ResponsiveKafkaClientSupplierTest {
   @Mock
   private Factories factories;
   @Mock
-  private Metrics metrics;
+  private ResponsiveMetrics metrics;
   @Mock
   private EndOffsetsPoller.Listener consumerEndOffsetsPollListener;
   @Mock
@@ -119,7 +115,7 @@ class ResponsiveKafkaClientSupplierTest {
     lenient().when(
         factories.createResponsiveConsumer(any(), (ResponsiveConsumer<byte[], byte[]>) any(), any())
     ).thenReturn(responsiveConsumer);
-    lenient().when(factories.createMetricsPublishingCommitListener(any(), any(), any(), any()))
+    lenient().when(factories.createMetricsPublishingCommitListener(any(), any(), any()))
         .thenReturn(commitMetricListener);
     lenient().when(factories.createOffsetRecorder(anyBoolean())).thenReturn(offsetRecorder);
 
@@ -195,7 +191,7 @@ class ResponsiveKafkaClientSupplierTest {
         Matchers.hasItem(offsetRecorder.getProducerListener())
     );
     verify(factories).createMetricsPublishingCommitListener(
-        metrics, "StreamThread-0", "appid", offsetRecorder);
+        metrics, "StreamThread-0", offsetRecorder);
   }
 
   @Test
@@ -207,7 +203,7 @@ class ResponsiveKafkaClientSupplierTest {
     verify(factories).createResponsiveConsumer(any(), any(), consumerListenerCaptor.capture());
     assertThat(consumerListenerCaptor.getValue(), Matchers.hasItem(commitMetricListener));
     verify(factories).createMetricsPublishingCommitListener(
-        metrics, "StreamThread-0", "appid", offsetRecorder);
+        metrics, "StreamThread-0", offsetRecorder);
   }
 
   @Test
@@ -225,9 +221,9 @@ class ResponsiveKafkaClientSupplierTest {
 
     // then:
     verify(factories, times(1)).createMetricsPublishingCommitListener(
-        metrics, "StreamThread-0", "appid", offsetRecorder);
+        metrics, "StreamThread-0", offsetRecorder);
     verify(factories, times(1)).createMetricsPublishingCommitListener(
-        metrics, "StreamThread-1", "appid", offsetRecorder);
+        metrics, "StreamThread-1", offsetRecorder);
   }
 
   @Test

@@ -25,7 +25,7 @@ import static org.mockito.Mockito.verify;
 
 import dev.responsive.kafka.internal.clients.OffsetRecorder;
 import dev.responsive.kafka.internal.clients.ResponsiveProducer.Listener;
-import dev.responsive.kafka.internal.metrics.MetricPublishingCommitListener;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -47,6 +47,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class MetricPublishingCommitListenerTest {
   private static final String THREAD_ID = "StreamThread-0";
   private static final String GROUP = "foo";
+  private static final String CLIENT = "foo-bar";
   private static final TopicPartition PARTITION1 = new TopicPartition("blimp", 1);
   private static final TopicPartition PARTITION2 = new TopicPartition("airplane", 2);
 
@@ -63,7 +64,10 @@ class MetricPublishingCommitListenerTest {
 
   @BeforeEach
   public void setup() {
-    listener = new MetricPublishingCommitListener(metrics, THREAD_ID, GROUP, offsetRecorder);
+    final ResponsiveMetrics responsiveMetrics = new ResponsiveMetrics(metrics);
+    responsiveMetrics.initializeTags(
+        GROUP, CLIENT, new ClientVersionMetadata("1", "abc", "2", "dfe"), Collections.emptyMap());
+    listener = new MetricPublishingCommitListener(responsiveMetrics, THREAD_ID, offsetRecorder);
   }
 
   @Test
@@ -173,12 +177,20 @@ class MetricPublishingCommitListenerTest {
 
   private MetricName getName(final TopicPartition tp) {
     return new MetricName(
-        "committed-offset", "responsive.streams", "",
+        "committed-offset",
+        "topic-metrics",
+        "The latest committed offset of this topic partition",
         Map.of(
-            "thread", THREAD_ID,
+            "thread-id", THREAD_ID,
             "topic", tp.topic(),
             "partition", Integer.toString(tp.partition()),
-            "consumerGroup", GROUP
+            "consumer-group", GROUP,
+            "streams-application-id", GROUP,
+            "streams-client-id", CLIENT,
+            "responsive-version", "1",
+            "responsive-commit-id", "abc",
+            "streams-version", "2",
+            "streams-commit-id", "dfe"
         )
     );
   }

@@ -20,6 +20,7 @@ import static org.apache.kafka.streams.StreamsConfig.AT_LEAST_ONCE;
 
 import dev.responsive.kafka.internal.metrics.EndOffsetsPoller;
 import dev.responsive.kafka.internal.metrics.MetricPublishingCommitListener;
+import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistry;
 import java.io.Closeable;
 import java.io.IOException;
@@ -35,7 +36,6 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
@@ -58,7 +58,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
   private final KafkaClientSupplier wrapped;
   private final ResponsiveStoreRegistry storeRegistry;
   private final Factories factories;
-  private final Metrics metrics;
+  private final ResponsiveMetrics metrics;
   private final EndOffsetsPoller endOffsetsPoller;
   private final String applicationId;
   private final boolean eos;
@@ -67,7 +67,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
       final KafkaClientSupplier clientSupplier,
       final StreamsConfig configs,
       final ResponsiveStoreRegistry storeRegistry,
-      final Metrics metrics
+      final ResponsiveMetrics metrics
   ) {
     this(new Factories() {}, clientSupplier, configs, storeRegistry, metrics);
   }
@@ -77,7 +77,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
       final KafkaClientSupplier wrapped,
       final StreamsConfig configs,
       final ResponsiveStoreRegistry storeRegistry,
-      final Metrics metrics
+      final ResponsiveMetrics metrics
   ) {
     this.factories = factories;
     this.wrapped = wrapped;
@@ -225,7 +225,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
     private synchronized ListenersForThread getAndMaybeInitListenersForThread(
         final boolean eos,
         final String threadId,
-        final Metrics metrics,
+        final ResponsiveMetrics metrics,
         final String consumerGroup,
         final Map<String, Object> configs,
         final EndOffsetsPoller endOffsetsPoller,
@@ -246,7 +246,6 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
               factories.createMetricsPublishingCommitListener(
                   metrics,
                   threadId,
-                  consumerGroup,
                   offsetRecorder
               ),
               new StoreCommitListener(storeRegistry, offsetRecorder),
@@ -331,7 +330,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
   interface Factories {
     default EndOffsetsPoller createEndOffsetPoller(
         final Map<String, ?> config,
-        final Metrics metrics
+        final ResponsiveMetrics metrics
     ) {
       return new EndOffsetsPoller(config, metrics);
     }
@@ -356,15 +355,13 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
     }
 
     default MetricPublishingCommitListener createMetricsPublishingCommitListener(
-        final Metrics metrics,
+        final ResponsiveMetrics metrics,
         final String threadId,
-        final String consumerGroup,
         final OffsetRecorder offsetRecorder
     ) {
       return new MetricPublishingCommitListener(
           metrics,
           threadId,
-          consumerGroup,
           offsetRecorder
       );
     }

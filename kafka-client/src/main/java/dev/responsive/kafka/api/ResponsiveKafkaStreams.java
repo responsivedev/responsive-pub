@@ -1,6 +1,23 @@
+/*
+ * Copyright 2023 Responsive Computing, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package dev.responsive.kafka.api;
 
 import static dev.responsive.kafka.api.config.ResponsiveConfig.TASK_ASSIGNOR_CLASS_OVERRIDE;
+import static dev.responsive.kafka.internal.metrics.ResponsiveMetrics.RESPONSIVE_METRICS_NAMESPACE;
 
 import com.datastax.oss.driver.api.core.CqlSession;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
@@ -10,16 +27,21 @@ import dev.responsive.kafka.internal.config.ResponsiveStreamsConfig;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.CassandraClientFactory;
 import dev.responsive.kafka.internal.db.DefaultCassandraClientFactory;
+import dev.responsive.kafka.internal.metrics.ClientVersionMetadata;
+import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.metrics.ResponsiveStateListener;
 import dev.responsive.kafka.internal.stores.ResponsiveRestoreListener;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistry;
 import dev.responsive.kafka.internal.utils.SharedClients;
 import java.time.Duration;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
+import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
@@ -44,6 +66,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
 
   private static final Logger LOG = LoggerFactory.getLogger(ResponsiveKafkaStreams.class);
 
+  private final ResponsiveMetrics responsiveMetrics;
   private final ResponsiveStateListener responsiveStateListener;
   private final ResponsiveRestoreListener responsiveRestoreListener;
   private final SharedClients sharedClients;
@@ -169,7 +192,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       final KafkaClientSupplier clientSupplier,
       final Time time,
       final ResponsiveStoreRegistry storeRegistry,
-      final Metrics metrics,
+      final ResponsiveMetrics metrics,
       final CassandraClientFactory clientFactory,
       final CqlSession session
   ) {
@@ -194,7 +217,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       final ResponsiveKafkaClientSupplier responsiveKafkaClientSupplier,
       final Time time,
       final ResponsiveStoreRegistry storeRegistry,
-      final Metrics metrics,
+      final ResponsiveMetrics metrics,
       final CassandraClient cassandraClient
   ) {
     this(
@@ -217,7 +240,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       final ResponsiveKafkaClientSupplier clientSupplier,
       final Time time,
       final ResponsiveStoreRegistry storeRegistry,
-      final Metrics metrics,
+      final ResponsiveMetrics responsiveMetrics,
       final SharedClients sharedClients
   ) {
     super(
@@ -237,17 +260,30 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       throw new StreamsException("Configuration error, please check your properties");
     }
 
+    this.responsiveMetrics = responsiveMetrics;
     this.sharedClients = sharedClients;
 
-    final String applicationId = applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG);
-    responsiveRestoreListener = new ResponsiveRestoreListener(metrics);
-    responsiveStateListener = new ResponsiveStateListener(metrics, applicationId, clientId);
+    final ClientVersionMetadata versionMetadata = ClientVersionMetadata.loadVersionMetadata();
+    // Only log the version metadata for Responsive since Kafka Streams will log its own
+    LOG.info("Responsive Client version: {}", versionMetadata.responsiveClientVersion);
+    LOG.info("Responsive Client commit ID: {}", versionMetadata.responsiveClientCommitId);
+
+
+    responsiveMetrics.initializeTags(
+        applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG),
+        clientId,
+        versionMetadata,
+        applicationConfigs.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX)
+    );
+
+    responsiveRestoreListener = new ResponsiveRestoreListener(responsiveMetrics);
+    responsiveStateListener = new ResponsiveStateListener(responsiveMetrics);
 
     super.setGlobalStateRestoreListener(responsiveRestoreListener);
     super.setStateListener(responsiveStateListener);
   }
 
-  private static Metrics createMetrics(final StreamsConfig config) {
+  private static ResponsiveMetrics createMetrics(final StreamsConfig config) {
     final MetricConfig metricConfig = new MetricConfig()
         .samples(config.getInt(StreamsConfig.METRICS_NUM_SAMPLES_CONFIG))
         .recordLevel(Sensor.RecordingLevel.forName(
@@ -257,12 +293,14 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
 
     final JmxReporter jmxReporter = new JmxReporter();
     jmxReporter.configure(config.originals());
-    return new Metrics(
+    return new ResponsiveMetrics(new Metrics(
         metricConfig,
         Collections.singletonList(jmxReporter),
         Time.SYSTEM,
-        new KafkaMetricsContext("dev.responsive", new HashMap<>())
-    );
+        new KafkaMetricsContext(
+            RESPONSIVE_METRICS_NAMESPACE,
+            config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX))
+    ));
   }
 
   /**
@@ -333,6 +371,31 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
   private void closeInternal() {
     responsiveStateListener.close();
     sharedClients.closeAll();
+  }
+
+  /**
+   * Get read-only handle on the complete responsive metrics registry, which contains all
+   * custom Responsive metrics as well as the original Streams metrics (which in turn
+   * contain the streams client's own metrics plus its embedded producer, consumer and
+   * admin clients' metrics across all stream threads.
+   *
+   * @return a map of all metrics for this Responsive Streams client, equivalent to the
+   *         combination of {@link #streamsMetrics()} and {@link #responsiveMetrics()}
+   */
+  @Override
+  public Map<MetricName, ? extends Metric> metrics() {
+    final Map<MetricName, Metric> allMetrics = new LinkedHashMap<>();
+    allMetrics.putAll(streamsMetrics());
+    allMetrics.putAll(responsiveMetrics());
+    return Collections.unmodifiableMap(allMetrics);
+  }
+
+  public Map<MetricName, ? extends Metric> streamsMetrics() {
+    return super.metrics();
+  }
+
+  public Map<MetricName, ? extends Metric> responsiveMetrics() {
+    return responsiveMetrics.metrics();
   }
 
   @Override

@@ -21,12 +21,10 @@ import dev.responsive.kafka.internal.db.partitioning.Hasher;
 import dev.responsive.kafka.internal.db.partitioning.Murmur3Hasher;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.utils.TableName;
-import java.io.InputStream;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
-import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.config.AbstractConfig;
@@ -37,16 +35,12 @@ import org.apache.kafka.common.config.ConfigDef.Validator;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Configurations for {@link ResponsiveKafkaStreams}
  */
 @SuppressWarnings("checkstyle:linelength")
 public class ResponsiveConfig extends AbstractConfig {
-
-  private static final Logger LOG = LoggerFactory.getLogger(ResponsiveConfig.class);
 
   // ------------------ connection configurations -----------------------------
 
@@ -259,33 +253,11 @@ public class ResponsiveConfig extends AbstractConfig {
    * mid-application, for example during state store init.
    */
   public static ResponsiveConfig loggedConfig(final Map<?, ?> originals) {
-
-    final Properties props = loadVersionPropertiesFromFile();
-    final String version = props.getProperty("git.build.version", "").trim();
-    final String commitId = props.getProperty("git.commit.id", "").trim();
-
-    if (!version.isEmpty() && !commitId.isEmpty()) {
-      LOG.info("Responsive Client version: {}", version);
-      LOG.info("Responsive Client commit ID: {}", commitId);
-    }
-
     return new ResponsiveConfig(originals, true);
   }
 
   private ResponsiveConfig(final Map<?, ?> originals, final boolean doLog) {
     super(CONFIG_DEF, originals, doLog);
-  }
-
-  private static Properties loadVersionPropertiesFromFile() {
-    final Properties props = new Properties();
-    try (final InputStream resourceStream = ResponsiveConfig.class
-        .getResourceAsStream("/version.properties")
-    ) {
-      props.load(resourceStream);
-    } catch (final Exception exception) {
-      LOG.warn("Error while loading version.properties", exception);
-    }
-    return props;
   }
 
   public SubPartitioner getSubPartitioner(

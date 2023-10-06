@@ -29,8 +29,8 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import dev.responsive.kafka.internal.metrics.EndOffsetsPoller;
 import dev.responsive.kafka.internal.metrics.EndOffsetsPoller.Factories;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -60,6 +60,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class EndOffsetsPollerTest {
   private static final Map<String, Object> CONFIGS = Map.of();
   private static final String THREAD_ID = "StreamThread-0";
+  private static final String GROUP = "foo";
+  private static final String CLIENT = "foo-bar";
   private static final TopicPartition PARTITION1 = new TopicPartition("alice", 1);
   private static final TopicPartition PARTITION2 = new TopicPartition("bob", 2);
 
@@ -79,6 +81,7 @@ class EndOffsetsPollerTest {
   private ArgumentCaptor<MetricValueProvider<Long>> valueProviderCaptor;
   @Captor
   private ArgumentCaptor<Runnable> taskCaptor;
+
   private EndOffsetsPoller endOffsetsPoller;
 
   @BeforeEach
@@ -87,7 +90,12 @@ class EndOffsetsPollerTest {
     lenient().when(factories.createAdminClient(anyMap())).thenReturn(adminClient);
     lenient().when(executor.scheduleAtFixedRate(any(), anyLong(), anyLong(), any()))
         .thenReturn((ScheduledFuture) pollFuture);
-    endOffsetsPoller = new EndOffsetsPoller(CONFIGS, metrics, executor, factories);
+
+    final ResponsiveMetrics responsiveMetrics = new ResponsiveMetrics(metrics);
+    responsiveMetrics.initializeTags(
+        GROUP, CLIENT, new ClientVersionMetadata("1", "abc", "2", "dfe"), Collections.emptyMap());
+
+    endOffsetsPoller = new EndOffsetsPoller(CONFIGS, responsiveMetrics, executor, factories);
   }
 
   @Test
@@ -184,11 +192,18 @@ class EndOffsetsPollerTest {
   }
 
   private MetricName metricName(final String thread, final TopicPartition tp) {
-    return new MetricName("end-offset", "responsive.streams", "",
+    return new MetricName("end-offset", "topic-metrics", "The end offset of this topic partition",
         Map.of(
-            "thread", thread,
+            "thread-id", thread,
             "topic", tp.topic(),
-            "partition", Integer.toString(tp.partition())
+            "partition", Integer.toString(tp.partition()),
+            "consumer-group", GROUP,
+            "streams-application-id", GROUP,
+            "streams-client-id", CLIENT,
+            "responsive-version", "1",
+            "responsive-commit-id", "abc",
+            "streams-version", "2",
+            "streams-commit-id", "dfe"
         )
     );
   }

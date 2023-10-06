@@ -16,12 +16,14 @@
 
 package dev.responsive.kafka.internal.metrics;
 
+import static dev.responsive.kafka.internal.metrics.TopicMetrics.COMMITTED_OFFSET;
+import static dev.responsive.kafka.internal.metrics.TopicMetrics.COMMITTED_OFFSET_DESCRIPTION;
+
 import dev.responsive.kafka.internal.clients.OffsetRecorder;
 import dev.responsive.kafka.internal.clients.OffsetRecorder.RecordingKey;
 import dev.responsive.kafka.internal.clients.ResponsiveConsumer.Listener;
 import java.io.Closeable;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.OptionalLong;
@@ -30,7 +32,6 @@ import java.util.stream.Collectors;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Gauge;
-import org.apache.kafka.common.metrics.Metrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,9 +46,8 @@ import org.slf4j.LoggerFactory;
  */
 public class MetricPublishingCommitListener implements Listener, Closeable {
   private static final Logger LOG = LoggerFactory.getLogger(MetricPublishingCommitListener.class);
-  private final Metrics metrics;
+  private final ResponsiveMetrics metrics;
   private final String threadId;
-  private final String consumerGroup;
   private final Map<TopicPartition, CommittedOffset> offsets = new ConcurrentHashMap<>();
 
   private static class CommittedOffset {
@@ -68,24 +68,20 @@ public class MetricPublishingCommitListener implements Listener, Closeable {
   }
 
   public MetricPublishingCommitListener(
-      final Metrics metrics,
+      final ResponsiveMetrics metrics,
       final String threadId,
-      final String consumerGroup,
       final OffsetRecorder offsetRecorder
   ) {
     this.metrics = Objects.requireNonNull(metrics);
     this.threadId = Objects.requireNonNull(threadId);
-    this.consumerGroup = Objects.requireNonNull(consumerGroup);
     offsetRecorder.addCommitCallback(this::commitCallback);
   }
 
-  private MetricName metricName(final TopicPartition partition) {
-    final Map<String, String> tags = new HashMap<>();
-    tags.put("consumerGroup", consumerGroup);
-    tags.put("thread", threadId);
-    tags.put("topic", partition.topic());
-    tags.put("partition", Integer.toString(partition.partition()));
-    return new MetricName("committed-offset", "responsive.streams", "", tags);
+  private MetricName committedOffsetMetric(final TopicPartition topicPartition) {
+    return metrics.metricName(
+        COMMITTED_OFFSET,
+        COMMITTED_OFFSET_DESCRIPTION,
+        metrics.topicLevelMetric(threadId, topicPartition));
   }
 
   private void commitCallback(
@@ -113,7 +109,7 @@ public class MetricPublishingCommitListener implements Listener, Closeable {
     );
     for (final var p : partitions) {
       offsets.computeIfPresent(p, (k, v) -> {
-        metrics.removeMetric(metricName(k));
+        metrics.removeMetric(committedOffsetMetric(k));
         return null;
       });
     }
@@ -129,7 +125,8 @@ public class MetricPublishingCommitListener implements Listener, Closeable {
           p,
           k -> {
             LOG.debug("add committed offset metric for {} {}", threadId, k);
-            metrics.addMetric(metricName(k), (Gauge<Long>) (config, now) -> getCommittedOffset(k));
+            metrics.addMetric(
+                committedOffsetMetric(k), (Gauge<Long>) (config, now) -> getCommittedOffset(k));
             return new CommittedOffset(
                 p,
                 null
@@ -158,7 +155,7 @@ public class MetricPublishingCommitListener implements Listener, Closeable {
     for (final TopicPartition p : offsets.keySet()) {
       if (offsets.containsKey(p)) {
         LOG.info("Clean up committed offset metric {} {}", threadId, p);
-        metrics.removeMetric(metricName(p));
+        metrics.removeMetric(committedOffsetMetric(p));
       }
     }
     offsets.clear();

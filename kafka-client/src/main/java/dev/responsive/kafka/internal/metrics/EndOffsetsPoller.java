@@ -16,6 +16,9 @@
 
 package dev.responsive.kafka.internal.metrics;
 
+import static dev.responsive.kafka.internal.metrics.TopicMetrics.END_OFFSET;
+import static dev.responsive.kafka.internal.metrics.TopicMetrics.END_OFFSET_DESCRIPTION;
+
 import dev.responsive.kafka.internal.clients.ResponsiveConsumer;
 import java.time.Duration;
 import java.util.Collection;
@@ -38,7 +41,6 @@ import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Gauge;
-import org.apache.kafka.common.metrics.Metrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,7 +55,7 @@ public class EndOffsetsPoller {
   private static final Logger LOG = LoggerFactory.getLogger(EndOffsetsPoller.class);
 
   private final Map<String, Listener> threadIdToMetrics = new HashMap<>();
-  private final Metrics metrics;
+  private final ResponsiveMetrics metrics;
   private final Map<String, Object> configs;
   private final Factories factories;
   private final ScheduledExecutorService executor;
@@ -61,7 +63,7 @@ public class EndOffsetsPoller {
 
   public EndOffsetsPoller(
       final Map<String, ?> configs,
-      final Metrics metrics
+      final ResponsiveMetrics metrics
   ) {
     this(
         configs,
@@ -78,7 +80,7 @@ public class EndOffsetsPoller {
 
   public EndOffsetsPoller(
       final Map<String, ?> configs,
-      final Metrics metrics,
+      final ResponsiveMetrics metrics,
       final ScheduledExecutorService executor,
       final Factories factories
   ) {
@@ -187,17 +189,20 @@ public class EndOffsetsPoller {
 
       LOG.info("Finished updating end offsets");
     }
-
   }
 
   public static class Listener implements ResponsiveConsumer.Listener {
     private final String threadId;
     private final Map<TopicPartition, Long> endOffsets = new ConcurrentHashMap<>();
     private final Logger log;
-    private final Metrics metrics;
+    private final ResponsiveMetrics metrics;
     private final Consumer<String> onClose;
 
-    private Listener(final String threadId, final Metrics metrics, final Consumer<String> onClose) {
+    private Listener(
+        final String threadId,
+        final ResponsiveMetrics metrics,
+        final Consumer<String> onClose
+    ) {
       this.threadId = threadId;
       this.metrics = metrics;
       this.onClose = onClose;
@@ -216,7 +221,7 @@ public class EndOffsetsPoller {
     @Override
     public void onPartitionsRevoked(final Collection<TopicPartition> revoked) {
       for (final var p : revoked) {
-        metrics.removeMetric(metricName(p));
+        metrics.removeMetric(endOffsetMetric(p));
         endOffsets.remove(p);
       }
     }
@@ -226,7 +231,7 @@ public class EndOffsetsPoller {
       for (final var p : assigned) {
         endOffsets.put(p, -1L);
         metrics.addMetric(
-            metricName(p),
+            endOffsetMetric(p),
             (Gauge<Long>) (config, now) -> endOffsets.getOrDefault(p, -1L)
         );
       }
@@ -249,17 +254,17 @@ public class EndOffsetsPoller {
     public void close() {
       log.info("Cleaning up offset metrics");
       for (final TopicPartition p : endOffsets.keySet()) {
-        metrics.removeMetric(metricName(p));
+        metrics.removeMetric(endOffsetMetric(p));
       }
       onClose.accept(threadId);
     }
 
-    private MetricName metricName(final TopicPartition topicPartition) {
-      final var tags = new HashMap<String, String>();
-      tags.put("thread", threadId);
-      tags.put("topic", topicPartition.topic());
-      tags.put("partition", Integer.toString(topicPartition.partition()));
-      return new MetricName("end-offset", "responsive.streams", "", tags);
+    private MetricName endOffsetMetric(final TopicPartition topicPartition) {
+      return metrics.metricName(
+          END_OFFSET,
+          END_OFFSET_DESCRIPTION,
+          metrics.topicLevelMetric(threadId, topicPartition)
+      );
     }
   }
 
