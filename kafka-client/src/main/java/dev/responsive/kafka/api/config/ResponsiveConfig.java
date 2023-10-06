@@ -44,8 +44,6 @@ import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssigno
 @SuppressWarnings("checkstyle:linelength")
 public class ResponsiveConfig extends AbstractConfig {
 
-  private final boolean eosEnabled;
-
   // ------------------ connection configurations -----------------------------
 
   public static final String STORAGE_HOSTNAME_CONFIG = "responsive.storage.hostname";
@@ -242,7 +240,9 @@ public class ResponsiveConfig extends AbstractConfig {
       );
 
   public boolean eosEnabled() {
-    return eosEnabled;
+    return ResponsiveStreamsConfig.streamsConfig(originals())
+        .getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)
+        .equals(StreamsConfig.EXACTLY_ONCE_V2); // only eos-v2 is allowed
   }
 
   /**
@@ -266,8 +266,6 @@ public class ResponsiveConfig extends AbstractConfig {
 
   private ResponsiveConfig(final Map<?, ?> originals, final boolean doLog) {
     super(CONFIG_DEF, originals, doLog);
-    eosEnabled = ResponsiveStreamsConfig.streamsConfig(originals).getString(Streamsconfig.)
-
   }
 
   public SubPartitioner getSubPartitioner(

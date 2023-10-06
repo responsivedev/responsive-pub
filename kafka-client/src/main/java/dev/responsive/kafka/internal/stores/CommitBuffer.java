@@ -45,10 +45,12 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DeletedRecords;
+import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.PolicyViolationException;
+import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.TaskMigratedException;
@@ -100,6 +102,7 @@ class CommitBuffer<K, S extends RemoteTable<K>>
     return new CommitBuffer<>(
         cassandraClient,
         changelog,
+        config.eosEnabled(),
         admin,
         schema,
         keySpec,
@@ -112,6 +115,7 @@ class CommitBuffer<K, S extends RemoteTable<K>>
   CommitBuffer(
       final CassandraClient client,
       final TopicPartition changelog,
+      final boolean eosEnabled,
       final Admin admin,
       final S schema,
       final KeySpec<K> keySpec,
@@ -122,6 +126,7 @@ class CommitBuffer<K, S extends RemoteTable<K>>
     this(
         client,
         changelog,
+        eosEnabled,
         admin,
         schema,
         keySpec,
@@ -136,6 +141,7 @@ class CommitBuffer<K, S extends RemoteTable<K>>
   CommitBuffer(
       final CassandraClient client,
       final TopicPartition changelog,
+      final boolean eosEnabled,
       final Admin admin,
       final S table,
       final KeySpec<K> keySpec,
@@ -147,7 +153,7 @@ class CommitBuffer<K, S extends RemoteTable<K>>
   ) {
     this.client = client;
     this.changelog = changelog;
-    this.
+    this.eosEnabled = eosEnabled;
     this.admin = admin;
     this.table = table;
 
@@ -158,7 +164,7 @@ class CommitBuffer<K, S extends RemoteTable<K>>
     this.subPartitioner = subPartitioner;
     this.clock = clock;
 
-    logPrefix = String.format("commit-buffer [%s-%d] ", table.name(), partition);
+    logPrefix = String.format("commit-buffer [%s-%d] ", table.name(), changelog.partition());
     log = new LogContext(logPrefix).logger(CommitBuffer.class);
 
     if (hasSourceTopicChangelog(changelog.topic())) {
@@ -179,9 +185,9 @@ class CommitBuffer<K, S extends RemoteTable<K>>
   public void init() {
     lastFlush = clock.get();
 
-    this.writerFactory = table.init(subPartitioner, partition);
+    this.writerFactory = table.init(subPartitioner, changelog.partition());
 
-    final int basePartition = subPartitioner.first(partition);
+    final int basePartition = subPartitioner.first(changelog.partition());
     log.info("Initialized store with {} for subpartitions in range: {{} -> {}}",
         writerFactory, basePartition, basePartition + subPartitioner.getFactor() - 1);
   }
@@ -269,7 +275,7 @@ class CommitBuffer<K, S extends RemoteTable<K>>
   }
 
   long offset() {
-    final int basePartition = subPartitioner.first(partition);
+    final int basePartition = subPartitioner.first(changelog.partition());
     return table.metadata(basePartition).offset;
   }
 
@@ -348,7 +354,7 @@ class CommitBuffer<K, S extends RemoteTable<K>>
 
     final var writers = new HashMap<Integer, RemoteWriter<K>>();
     for (final Result<K> result : buffer.getReader().values()) {
-      final int subPartition = subPartitioner.partition(partition, keySpec.bytes(result.key));
+      final int subPartition = subPartitioner.partition(changelog.partition(), keySpec.bytes(result.key));
       final RemoteWriter<K> writer = writers
           .computeIfAbsent(subPartition, k -> writerFactory.createWriter(
               client,
@@ -372,7 +378,7 @@ class CommitBuffer<K, S extends RemoteTable<K>>
     // when all the flushes above have completed and only needs to be written to
     // the first subpartition
     final var offsetWriteResult = writers.computeIfAbsent(
-        subPartitioner.first(partition),
+        subPartitioner.first(changelog.partition()),
         subPartition -> writerFactory.createWriter(client, subPartition, batchSize)
     ).setOffset(consumedOffset);
 
@@ -393,7 +399,7 @@ class CommitBuffer<K, S extends RemoteTable<K>>
   }
 
   private RemoteWriteResult drain(final Collection<RemoteWriter<K>> writers) {
-    var result = CompletableFuture.completedStage(RemoteWriteResult.success(partition));
+    var result = CompletableFuture.completedStage(RemoteWriteResult.success(changelog.partition()));
     for (final RemoteWriter<K> writer : writers) {
       result = result.thenCombine(writer.flush(), (one, two) -> !one.wasApplied() ? one : two);
     }
@@ -495,7 +501,11 @@ class CommitBuffer<K, S extends RemoteTable<K>>
         stored.offset
     );
     log.warn(msg);
-    throw new TaskMigratedException(logPrefix + msg);
+    if (eosEnabled) {
+      throw new ProducerFencedException(logPrefix + msg);
+    } else {
+      throw new CommitFailedException(logPrefix + msg);
+    }
   }
 
   @Override
