@@ -86,19 +86,12 @@ public class OrderedTagsSupplier {
   }
 
   public LinkedHashMap<String, String> applicationGroupTags() {
-    // IMPORTANT: DO NOT MODIFY THE ORDER OF INSERTION
     final LinkedHashMap<String, String> applicationGroupTags = new LinkedHashMap<>();
 
-    applicationGroupTags.put(RESPONSIVE_VERSION_TAG, responsiveClientVersion);
-    applicationGroupTags.put(RESPONSIVE_COMMIT_ID_TAG, responsiveClientCommitId);
-    applicationGroupTags.put(STREAMS_VERSION_TAG, streamsClientVersion);
-    applicationGroupTags.put(STREAMS_COMMIT_ID_TAG, streamsClientCommitId);
-
-    applicationGroupTags.put(CONSUMER_GROUP_TAG, consumerGroup);
-    applicationGroupTags.put(STREAMS_APPLICATION_ID_TAG, streamsApplicationId);
-    applicationGroupTags.put(STREAMS_CLIENT_ID_TAG, streamsClientId);
-
+    // IMPORTANT: DO NOT MODIFY THE ORDER OF INSERTION
+    fillInApplicationTags(applicationGroupTags);
     fillInCustomUserTags(applicationGroupTags);
+
     return applicationGroupTags;
   }
 
@@ -106,13 +99,13 @@ public class OrderedTagsSupplier {
       final String threadId,
       final TopicPartition topicPartition
   ) {
-    // IMPORTANT: DO NOT MODIFY THE ORDER OF INSERTION
-    final LinkedHashMap<String, String> topicGroupTags = applicationGroupTags();
-    topicGroupTags.put(THREAD_ID_TAG, threadId);
-    topicGroupTags.put(TOPIC_TAG, topicPartition.topic());
-    topicGroupTags.put(PARTITION_TAG, Integer.toString(topicPartition.partition()));
+    final LinkedHashMap<String, String> topicGroupTags = new LinkedHashMap<>();
 
+    // IMPORTANT: DO NOT MODIFY THE ORDER OF INSERTION
+    fillInApplicationTags(topicGroupTags);
+    fillInTopicTags(topicGroupTags, threadId, topicPartition);
     fillInCustomUserTags(topicGroupTags);
+
     return topicGroupTags;
   }
 
@@ -121,12 +114,43 @@ public class OrderedTagsSupplier {
       final TopicPartition topicPartition,
       final String storeName
   ) {
-    // IMPORTANT: DO NOT MODIFY THE ORDER OF INSERTION
-    final LinkedHashMap<String, String> storeGroupTags = topicGroupTags(threadId, topicPartition);
-    storeGroupTags.put(STORE_NAME_TAG, storeName);
+    final LinkedHashMap<String, String> storeGroupTags = new LinkedHashMap<>();
 
+    // IMPORTANT: DO NOT MODIFY THE ORDER OF INSERTION
+    fillInApplicationTags(storeGroupTags);
+    fillInTopicTags(storeGroupTags, threadId, topicPartition);
+    fillInStoreTags(storeGroupTags, storeName);
     fillInCustomUserTags(storeGroupTags);
+
     return storeGroupTags;
+  }
+
+  private void fillInApplicationTags(final LinkedHashMap<String, String> tags) {
+    tags.put(RESPONSIVE_VERSION_TAG, responsiveClientVersion);
+    tags.put(RESPONSIVE_COMMIT_ID_TAG, responsiveClientCommitId);
+    tags.put(STREAMS_VERSION_TAG, streamsClientVersion);
+    tags.put(STREAMS_COMMIT_ID_TAG, streamsClientCommitId);
+
+    tags.put(CONSUMER_GROUP_TAG, consumerGroup);
+    tags.put(STREAMS_APPLICATION_ID_TAG, streamsApplicationId);
+    tags.put(STREAMS_CLIENT_ID_TAG, streamsClientId);
+  }
+
+  private void fillInTopicTags(
+      final LinkedHashMap<String, String> tags,
+      final String threadId,
+      final TopicPartition topicPartition
+  ) {
+    tags.put(THREAD_ID_TAG, threadId);
+    tags.put(TOPIC_TAG, topicPartition.topic());
+    tags.put(PARTITION_TAG, Integer.toString(topicPartition.partition()));
+  }
+
+  private void fillInStoreTags(
+      final LinkedHashMap<String, String> tags,
+      final String storeName
+  ) {
+    tags.put(STORE_NAME_TAG, storeName);
   }
 
   // Fill these in last, after all the Responsive tags
