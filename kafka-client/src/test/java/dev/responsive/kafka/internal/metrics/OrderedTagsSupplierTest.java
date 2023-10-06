@@ -63,6 +63,8 @@ public class OrderedTagsSupplierTest {
     final Iterator<Entry<String, String>> tagsIter = tags.entrySet().iterator();
 
     verifyBaseTags(tagsIter);
+    verifyUserTags(tagsIter);
+
     assertFalse(tagsIter.hasNext());
   }
 
@@ -73,6 +75,7 @@ public class OrderedTagsSupplierTest {
 
     verifyBaseTags(tagsIter);
     verifyTopicTags(tagsIter);
+    verifyUserTags(tagsIter);
 
     assertFalse(tagsIter.hasNext());
   }
@@ -85,6 +88,7 @@ public class OrderedTagsSupplierTest {
     verifyBaseTags(tagsIter);
     verifyTopicTags(tagsIter);
     verifyStoreTags(tagsIter);
+    verifyUserTags(tagsIter);
 
     assertFalse(tagsIter.hasNext());
   }
@@ -117,18 +121,6 @@ public class OrderedTagsSupplierTest {
     tag = tagsIter.next();
     assertThat(tag.getKey(), equalTo("streams-client-id"));
     assertThat(tag.getValue(), equalTo("ordered-tags-test-node-1"));
-
-    tag = tagsIter.next();
-    assertThat(tag.getKey(), equalTo("custom-tag-1"));
-    assertThat(tag.getValue(), equalTo("C"));
-
-    tag = tagsIter.next();
-    assertThat(tag.getKey(), equalTo("custom-tag-2"));
-    assertThat(tag.getValue(), equalTo("B"));
-
-    tag = tagsIter.next();
-    assertThat(tag.getKey(), equalTo("custom-tag-3"));
-    assertThat(tag.getValue(), equalTo("A"));
   }
 
   private void verifyTopicTags(final Iterator<Entry<String, String>> tagsIter) {
@@ -149,6 +141,20 @@ public class OrderedTagsSupplierTest {
     Map.Entry<String, String> tag = tagsIter.next();
     assertThat(tag.getKey(), equalTo("store-name"));
     assertThat(tag.getValue(), equalTo("count-store"));
+  }
+
+  private void verifyUserTags(final Iterator<Entry<String, String>> tagsIter) {
+    Map.Entry<String, String> tag = tagsIter.next();
+    assertThat(tag.getKey(), equalTo("custom-tag-1"));
+    assertThat(tag.getValue(), equalTo("C"));
+
+    tag = tagsIter.next();
+    assertThat(tag.getKey(), equalTo("custom-tag-2"));
+    assertThat(tag.getValue(), equalTo("B"));
+
+    tag = tagsIter.next();
+    assertThat(tag.getKey(), equalTo("custom-tag-3"));
+    assertThat(tag.getValue(), equalTo("A"));
   }
 
 }

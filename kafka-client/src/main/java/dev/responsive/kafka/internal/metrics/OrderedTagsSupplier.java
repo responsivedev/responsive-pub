@@ -87,25 +87,19 @@ public class OrderedTagsSupplier {
 
   public LinkedHashMap<String, String> applicationGroupTags() {
     // IMPORTANT: DO NOT MODIFY THE ORDER OF INSERTION
-    final LinkedHashMap<String, String> orderedApplicationGroupTags = new LinkedHashMap<>();
+    final LinkedHashMap<String, String> applicationGroupTags = new LinkedHashMap<>();
 
-    orderedApplicationGroupTags.put(RESPONSIVE_VERSION_TAG, responsiveClientVersion);
-    orderedApplicationGroupTags.put(RESPONSIVE_COMMIT_ID_TAG, responsiveClientCommitId);
-    orderedApplicationGroupTags.put(STREAMS_VERSION_TAG, streamsClientVersion);
-    orderedApplicationGroupTags.put(STREAMS_COMMIT_ID_TAG, streamsClientCommitId);
+    applicationGroupTags.put(RESPONSIVE_VERSION_TAG, responsiveClientVersion);
+    applicationGroupTags.put(RESPONSIVE_COMMIT_ID_TAG, responsiveClientCommitId);
+    applicationGroupTags.put(STREAMS_VERSION_TAG, streamsClientVersion);
+    applicationGroupTags.put(STREAMS_COMMIT_ID_TAG, streamsClientCommitId);
 
-    orderedApplicationGroupTags.put(CONSUMER_GROUP_TAG, consumerGroup);
-    orderedApplicationGroupTags.put(STREAMS_APPLICATION_ID_TAG, streamsApplicationId);
-    orderedApplicationGroupTags.put(STREAMS_CLIENT_ID_TAG, streamsClientId);
+    applicationGroupTags.put(CONSUMER_GROUP_TAG, consumerGroup);
+    applicationGroupTags.put(STREAMS_APPLICATION_ID_TAG, streamsApplicationId);
+    applicationGroupTags.put(STREAMS_CLIENT_ID_TAG, streamsClientId);
 
-    for (final var tag : orderedUserTags) {
-      final String tagKey = tag.getKey();
-      final String tagValue = tag.getValue().toString();
-      LOG.debug("Adding custom metric tag <{}:{}>", tagKey, tagValue);
-      orderedApplicationGroupTags.put(tagKey, tagValue);
-    }
-
-    return orderedApplicationGroupTags;
+    fillInCustomUserTags(applicationGroupTags);
+    return applicationGroupTags;
   }
 
   public LinkedHashMap<String, String> topicGroupTags(
@@ -117,6 +111,8 @@ public class OrderedTagsSupplier {
     topicGroupTags.put(THREAD_ID_TAG, threadId);
     topicGroupTags.put(TOPIC_TAG, topicPartition.topic());
     topicGroupTags.put(PARTITION_TAG, Integer.toString(topicPartition.partition()));
+
+    fillInCustomUserTags(topicGroupTags);
     return topicGroupTags;
   }
 
@@ -128,7 +124,19 @@ public class OrderedTagsSupplier {
     // IMPORTANT: DO NOT MODIFY THE ORDER OF INSERTION
     final LinkedHashMap<String, String> storeGroupTags = topicGroupTags(threadId, topicPartition);
     storeGroupTags.put(STORE_NAME_TAG, storeName);
+
+    fillInCustomUserTags(storeGroupTags);
     return storeGroupTags;
+  }
+
+  // Fill these in last, after all the Responsive tags
+  private void fillInCustomUserTags(final LinkedHashMap<String, String> tags) {
+    for (final var tag : orderedUserTags) {
+      final String tagKey = tag.getKey();
+      final String tagValue = tag.getValue();
+      LOG.debug("Adding custom metric tag <{}:{}>", tagKey, tagValue);
+      tags.put(tagKey, tagValue);
+    }
   }
 
 }
