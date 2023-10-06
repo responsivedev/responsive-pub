@@ -41,12 +41,12 @@ import org.slf4j.Logger;
 
 public class ResponsiveKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
-  private final Logger log;
 
   private final ResponsiveKeyValueParams params;
   private final TableName name;
   private final Position position; // TODO(IQ): update the position during restoration
 
+  private Logger log;
   private boolean open;
   private KeyValueOperations operations;
   private ResponsiveStoreRegistry storeRegistry;
@@ -83,10 +83,18 @@ public class ResponsiveKeyValueStore implements KeyValueStore<Bytes, byte[]> {
   @Override
   public void init(final StateStoreContext context, final StateStore root) {
     try {
+      final TaskType taskType = asInternalProcessorContext(context).taskType();
+      log = new LogContext(
+          String.format(
+              "%sstore [%s] ",
+              taskType == TaskType.GLOBAL ? "global-" : "",
+              name.kafkaName())
+      ).logger(ResponsiveKeyValueStore.class);
+
       log.info("Initializing state store");
       this.context = context;
 
-      if (asInternalProcessorContext(context).taskType() == TaskType.GLOBAL) {
+      if (taskType == TaskType.GLOBAL) {
         this.spec = CassandraTableSpecFactory.globalSpec(params);
         operations = GlobalOperations.create(context, spec);
       } else {
