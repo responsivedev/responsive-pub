@@ -59,7 +59,7 @@ public class ResponsiveMetrics implements Closeable {
   /**
    * @param applicationId the Streams application id, ie the shared consumer group id
    * @param streamsClientId the Streams client id, ie the process-specific id
-   * @param versionMetadata struct containing Responsive & Kafka Streams version info
+   * @param versionMetadata struct containing Responsive and Kafka Streams version info
    * @param userTags optional custom tags that will be attached to each metric
    */
   public void initializeTags(
