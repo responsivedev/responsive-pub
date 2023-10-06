@@ -53,7 +53,6 @@ import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.slf4j.Logger;
@@ -354,7 +353,8 @@ class CommitBuffer<K, S extends RemoteTable<K>>
 
     final var writers = new HashMap<Integer, RemoteWriter<K>>();
     for (final Result<K> result : buffer.getReader().values()) {
-      final int subPartition = subPartitioner.partition(changelog.partition(), keySpec.bytes(result.key));
+      final int subPartition =
+          subPartitioner.partition(changelog.partition(), keySpec.bytes(result.key));
       final RemoteWriter<K> writer = writers
           .computeIfAbsent(subPartition, k -> writerFactory.createWriter(
               client,
