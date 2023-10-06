@@ -34,15 +34,23 @@ public class ResponsiveMetrics implements Closeable {
 
   public static final String RESPONSIVE_METRICS_NAMESPACE = "dev.responsive";
 
-  public static final String STORE_METRIC_GROUP = "store-metrics";
+  // Base tags that all Responsive metrics are tagged with:
+  public static final String RESPONSIVE_VERSION_TAG = "responsive-version";
+  public static final String RESPONSIVE_COMMIT_ID_TAG = "responsive-commit-id";
+  public static final String STREAMS_VERSION_TAG = "streams-version";
+  public static final String STREAMS_COMMIT_ID_TAG = "streams-commit-id";
+  public static final String CONSUMER_GROUP_TAG = "consumer-group";
+  public static final String STREAMS_APPLICATION_ID_TAG = "streams-application-id";
+  public static final String STREAMS_CLIENT_ID_TAG = "streams-client-id";
 
-  public static final String RESTORE_LATENCY = "restore-latency";
-  public static final String RESTORE_LATENCY_AVG = RESTORE_LATENCY + "-avg";
-  public static final String RESTORE_LATENCY_MAX = RESTORE_LATENCY + "-max";
-  public static final String RESTORE_LATENCY_DESCRIPTION = "amount of time spent restoring this state store before resuming processing";
+  // Group tags that are specific to the given metric group and scope
+  public static final String THREAD_ID_TAG = "thread-id";
+  public static final String TOPIC_TAG = "topic";
+  public static final String PARTITION_TAG = "partition";
+  public static final String STORE_NAME_TAG = "store-name";
 
-  private final Metrics metrics;
   private final Map<String, String> baseTags = new HashMap<>();
+  private final Metrics metrics;
 
   public ResponsiveMetrics(final Metrics metrics) {
     this.metrics = metrics;
@@ -51,23 +59,24 @@ public class ResponsiveMetrics implements Closeable {
   /**
    * @param applicationId the Streams application id, ie the shared consumer group id
    * @param streamsClientId the Streams client id, ie the process-specific id
+   * @param versionMetadata struct containing Responsive & Kafka Streams version info
    * @param userTags optional custom tags that will be attached to each metric
    */
-  public void initialize(
+  public void initializeTags(
       final String applicationId,
       final String streamsClientId,
       final ClientVersionMetadata versionMetadata,
       final Map<String, ?> userTags
   ) {
     // this is technically redundant with the application id, but sometimes it's useful to have both
-    baseTags.put("consumer-group", applicationId);
-    baseTags.put("streams-application-id", applicationId);
-    baseTags.put("streams-client-id", streamsClientId);
+    baseTags.put(CONSUMER_GROUP_TAG, applicationId);
+    baseTags.put(STREAMS_APPLICATION_ID_TAG, applicationId);
+    baseTags.put(STREAMS_CLIENT_ID_TAG, streamsClientId);
 
-    baseTags.put("responsive-version", versionMetadata.responsiveClientVersion);
-    baseTags.put("responsive-commit-id", versionMetadata.responsiveClientCommitId);
-    baseTags.put("streams-version", versionMetadata.streamsClientVersion);
-    baseTags.put("streams-commit-id", versionMetadata.streamsClientCommitId);
+    baseTags.put(RESPONSIVE_VERSION_TAG, versionMetadata.responsiveClientVersion);
+    baseTags.put(RESPONSIVE_COMMIT_ID_TAG, versionMetadata.responsiveClientCommitId);
+    baseTags.put(STREAMS_VERSION_TAG, versionMetadata.streamsClientVersion);
+    baseTags.put(STREAMS_COMMIT_ID_TAG, versionMetadata.streamsClientCommitId);
 
     for (final var tag : userTags.entrySet()) {
       final String tagKey = tag.getKey();

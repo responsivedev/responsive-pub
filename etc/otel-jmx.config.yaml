@@ -1,9 +1,17 @@
 ---
 rules:
- # Responsive metrics
- - bean: dev.responsive:type=responsive.streams,thread=*,topic=*,partition=*
+ #### Responsive Metrics ####
+ -
+ - bean: dev.responsive:type=topic.metrics,responsive-version=*,responsive-commit-id=*,streams-version=*,streams-commit-id=*,consumer-group=*,streams-application-id=*,streams-client-id=*,thread-id=*,topic=*,partition=*
    metricAttribute:
-     thread: param(thread)
+     responsiveVersion: param(responsive-version)
+     responsiveCommitId: param(responsive-commit-id)
+     streamsVersion: param(streams-version)
+     streamsCommitId: param(streams-commit-id)
+     consumerGroup: param(consumer-group)
+     streamsApplicationId: param(streams-application-id)
+     streamsClientId: param(streams-client-id)
+     thread: param(thread-id)
      partition: param(partition)
      topic: param(topic)
    mapping:
@@ -12,25 +20,35 @@ rules:
        type: gauge
        desc: the current end offset of the partition
        unit: '{offset}'
- - bean: dev.responsive:type=responsive.streams,consumerGroup=*,thread=*,topic=*,partition=*
-   metricAttribute:
-     group: param(consumerGroup)
-     thread: param(thread)
-     partition: param(partition)
-     topic: param(topic)
-   mapping:
      committed-offset:
        metric: responsive.kafka.streams.source.offset.committed
        type: gauge
        desc: the current committed offset of the partition
        unit: '{offset}'
+ - bean: dev.responsive:type=application.metrics,responsive-version=*,responsive-commit-id=*,streams-version=*,streams-commit-id=*,consumer-group=*,streams-application-id=*,streams-client-id=*
+   metricAttribute:
+     responsiveVersion: param(responsive-version)
+     responsiveCommitId: param(responsive-commit-id)
+     streamsVersion: param(streams-version)
+     streamsCommitId: param(streams-commit-id)
+     consumerGroup: param(consumer-group)
+     streamsApplicationId: param(streams-application-id)
+     streamsClientId: param(streams-client-id)
+   mapping:
+     streams-state:
+       metric: responsive.kafka.streams.state
+       type: gauge
+       desc: the current state of this Kafka Streams client
+       unit: '{KafkaStreams.State}'
 
- # Kafka Consumer metrics
+ #### Apache Kafka Metrics ####
+
+ # Consumer Client metrics
  - bean: kafka.consumer:type=consumer-fetch-manager-metrics,partition=*,topic=*,client-id=*
    metricAttribute:
      partition: param(partition)
      topic: param(topic)
-     clientid: param(client-id)
+     clientId: param(client-id)
    mapping:
      records-lag:
        metric: kafka.streams.records.lag
@@ -39,7 +57,7 @@ rules:
        unit: '{records}'
  - bean: kafka.consumer:type=consumer-fetch-manager-metrics,client-id=*
    metricAttribute:
-     clientid: param(client-id)
+     clientId: param(client-id)
    mapping:
      records-lag-max:
        metric: kafka.streams.records.lag.max
@@ -48,7 +66,7 @@ rules:
        unit: '{records}'
  - bean: kafka.consumer:type=consumer-coordinator-metrics,client-id=*
    metricAttribute:
-     clientid: param(client-id)
+     clientId: param(client-id)
    mapping:
      assigned-partitions:
        metric: kafka.streams.assigned.partitions
@@ -65,18 +83,6 @@ rules:
        type: gauge
        desc: the rate of failed rebalances
        unit: '{rebalances-per-hour}'
-
- # Kafka Streams application metrics
- - bean: kafka.streams:type=stream-application-metrics,application-id=*,client-id=*
-   metricAttribute:
-     applicationid: param(application-id)
-     clientid: param(client-id)
-   mapping:
-     state:
-       metric: kafka.streams.state
-       type: gauge
-       desc: the KafkaStreams.State
-       unit: '{state}'
 
  # Kafka Streams topic metrics
  - bean: kafka.streams:type=stream-topic-metrics,thread-id=*,task-id=*,processor-node-id=*,topic=*

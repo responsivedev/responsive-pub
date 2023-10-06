@@ -269,7 +269,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     LOG.info("Responsive Client commit ID: {}", versionMetadata.responsiveClientCommitId);
 
 
-    responsiveMetrics.initialize(
+    responsiveMetrics.initializeTags(
         applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG),
         clientId,
         versionMetadata,

@@ -92,7 +92,7 @@ class EndOffsetsPollerTest {
         .thenReturn((ScheduledFuture) pollFuture);
 
     final ResponsiveMetrics responsiveMetrics = new ResponsiveMetrics(metrics);
-    responsiveMetrics.initialize(
+    responsiveMetrics.initializeTags(
         GROUP, CLIENT, new ClientVersionMetadata("1", "abc", "2", "dfe"), Collections.emptyMap());
 
     endOffsetsPoller = new EndOffsetsPoller(CONFIGS, responsiveMetrics, executor, factories);
@@ -194,7 +194,7 @@ class EndOffsetsPollerTest {
   private MetricName metricName(final String thread, final TopicPartition tp) {
     return new MetricName("end-offset", "topic-metrics", "The end offset of this topic partition",
         Map.of(
-            "thread", thread,
+            "thread-id", thread,
             "topic", tp.topic(),
             "partition", Integer.toString(tp.partition()),
             "consumer-group", GROUP,

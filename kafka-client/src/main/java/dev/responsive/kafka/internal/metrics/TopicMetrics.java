@@ -16,6 +16,10 @@
 
 package dev.responsive.kafka.internal.metrics;
 
+import static dev.responsive.kafka.internal.metrics.ResponsiveMetrics.PARTITION_TAG;
+import static dev.responsive.kafka.internal.metrics.ResponsiveMetrics.THREAD_ID_TAG;
+import static dev.responsive.kafka.internal.metrics.ResponsiveMetrics.TOPIC_TAG;
+
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics.MetricGroup;
 import java.util.HashMap;
 import java.util.Map;
@@ -40,9 +44,9 @@ public class TopicMetrics implements MetricGroup {
       final TopicPartition topicPartition
   ) {
     tags.putAll(baseAppTags);
-    tags.put("thread", threadId);
-    tags.put("topic", topicPartition.topic());
-    tags.put("partition", Integer.toString(topicPartition.partition()));
+    tags.put(THREAD_ID_TAG, threadId);
+    tags.put(TOPIC_TAG, topicPartition.topic());
+    tags.put(PARTITION_TAG, Integer.toString(topicPartition.partition()));
   }
   
   @Override

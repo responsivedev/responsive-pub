@@ -65,7 +65,7 @@ class MetricPublishingCommitListenerTest {
   @BeforeEach
   public void setup() {
     final ResponsiveMetrics responsiveMetrics = new ResponsiveMetrics(metrics);
-    responsiveMetrics.initialize(
+    responsiveMetrics.initializeTags(
         GROUP, CLIENT, new ClientVersionMetadata("1", "abc", "2", "dfe"), Collections.emptyMap());
     listener = new MetricPublishingCommitListener(responsiveMetrics, THREAD_ID, offsetRecorder);
   }
@@ -181,7 +181,7 @@ class MetricPublishingCommitListenerTest {
         "topic-metrics",
         "The latest committed offset of this topic partition",
         Map.of(
-            "thread", THREAD_ID,
+            "thread-id", THREAD_ID,
             "topic", tp.topic(),
             "partition", Integer.toString(tp.partition()),
             "consumer-group", GROUP,

@@ -16,6 +16,11 @@
 
 package dev.responsive.kafka.internal.metrics;
 
+import static dev.responsive.kafka.internal.metrics.ResponsiveMetrics.PARTITION_TAG;
+import static dev.responsive.kafka.internal.metrics.ResponsiveMetrics.STORE_NAME_TAG;
+import static dev.responsive.kafka.internal.metrics.ResponsiveMetrics.THREAD_ID_TAG;
+import static dev.responsive.kafka.internal.metrics.ResponsiveMetrics.TOPIC_TAG;
+
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics.MetricGroup;
 import java.util.HashMap;
 import java.util.Map;
@@ -41,10 +46,10 @@ public class StoreMetrics implements MetricGroup {
       final TopicPartition changelog
   ) {
     tags.putAll(baseAppTags);
-    tags.put("thread", threadId);
-    tags.put("store", storeName);
-    tags.put("topic", changelog.topic());
-    tags.put("partition", String.valueOf(changelog.partition()));
+    tags.put(THREAD_ID_TAG, threadId);
+    tags.put(STORE_NAME_TAG, storeName);
+    tags.put(TOPIC_TAG, changelog.topic());
+    tags.put(PARTITION_TAG, String.valueOf(changelog.partition()));
   }
   
   @Override

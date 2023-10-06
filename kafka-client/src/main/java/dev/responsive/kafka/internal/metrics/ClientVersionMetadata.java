@@ -79,4 +79,16 @@ public class ClientVersionMetadata {
     }
     return props;
   }
+
+  @Override
+  public String toString() {
+    return String.format(
+        "Responsive Version: %s\n"
+            + "Responsive Commit ID: %s\n"
+            + "Kafka Streams Version: %s\n"
+            + "Kafka Streams Commit ID: %s\n",
+        responsiveClientVersion, responsiveClientCommitId,
+        streamsClientVersion, streamsClientCommitId
+    );
+  }
 }
