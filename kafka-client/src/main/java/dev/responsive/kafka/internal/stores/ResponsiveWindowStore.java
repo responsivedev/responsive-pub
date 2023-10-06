@@ -25,9 +25,11 @@ import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.stores.ResponsiveWindowParams;
 import dev.responsive.kafka.internal.config.InternalConfigs;
 import dev.responsive.kafka.internal.db.CassandraClient;
-import dev.responsive.kafka.internal.db.RemoteWindowedSchema;
+import dev.responsive.kafka.internal.db.CassandraTableSpecFactory;
+import dev.responsive.kafka.internal.db.RemoteWindowedTable;
 import dev.responsive.kafka.internal.db.StampedKeySpec;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
+import dev.responsive.kafka.internal.db.spec.CassandraTableSpec;
 import dev.responsive.kafka.internal.utils.Iterators;
 import dev.responsive.kafka.internal.utils.Result;
 import dev.responsive.kafka.internal.utils.SharedClients;
@@ -55,6 +57,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
   private final Logger log;
 
   private final ResponsiveWindowParams params;
+  private final CassandraTableSpec spec;
   private final TableName name;
   private final Position position; // TODO(IQ): update the position during restoration
   private final long windowSize;
@@ -64,8 +67,8 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
   private InternalProcessorContext context;
   private TopicPartition partition;
 
-  private CommitBuffer<Stamped<Bytes>, RemoteWindowedSchema> buffer;
-  private RemoteWindowedSchema schema;
+  private CommitBuffer<Stamped<Bytes>, RemoteWindowedTable> buffer;
+  private RemoteWindowedTable table;
   private ResponsiveStoreRegistry storeRegistry;
   private ResponsiveStoreRegistration registration;
   private SubPartitioner partitioner;
@@ -91,6 +94,8 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
     this.retentionPeriod = params.retentionPeriod();
     this.windowSize = params.windowSize();
     this.position = Position.emptyPosition();
+    this.spec = CassandraTableSpecFactory.fromWindowParams(params);
+
     log = new LogContext(
         String.format("window-store [%s] ", name.kafkaName())
     ).logger(ResponsiveWindowStore.class);
@@ -130,14 +135,22 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       );
       partitioner = config.getSubPartitioner(sharedClients.admin, name, partition.topic());
 
-      schema = client.prepareWindowedTableSchema(params);
+      switch (params.schemaType()) {
+        case WINDOW:
+          table = client.windowedFactory().create(spec);
+          break;
+        case STREAM:
+          throw new UnsupportedOperationException("Not yet implemented");
+        default:
+          throw new IllegalArgumentException(params.schemaType().name());
+      }
+
       log.info("Remote table {} is available for querying.", name.cassandraName());
 
       buffer = CommitBuffer.from(
           sharedClients,
-          name,
           partition,
-          schema,
+          table,
           new StampedKeySpec(this::withinRetention),
           params.truncateChangelog(),
           partitioner,
@@ -202,8 +215,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       return localResult.isTombstone ? null : localResult.value;
     }
 
-    return schema.fetch(
-        name.cassandraName(),
+    return table.fetch(
         partitioner.partition(partition.partition(), key),
         key,
         time
@@ -224,7 +236,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
     return Iterators.windowed(
         new LocalRemoteKvIterator<>(
             buffer.range(from, to),
-            schema.fetch(name.cassandraName(), subPartition, key, start, timeTo),
+            table.fetch(subPartition, key, start, timeTo),
             ResponsiveWindowStore::compareKeys
         )
     );
@@ -254,7 +266,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
     return Iterators.windowed(
         new LocalRemoteKvIterator<>(
             buffer.backRange(from, to),
-            schema.backFetch(name.cassandraName(), subPartition, key, start, timeTo),
+            table.backFetch(subPartition, key, start, timeTo),
             ResponsiveWindowStore::compareKeys
         )
     );

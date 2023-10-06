@@ -18,8 +18,10 @@ package dev.responsive.kafka.internal.stores;
 
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.internal.db.CassandraClient;
-import dev.responsive.kafka.internal.db.RemoteKeyValueSchema;
+import dev.responsive.kafka.internal.db.CassandraTableSpecFactory;
+import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
+import dev.responsive.kafka.internal.db.spec.CassandraTableSpec;
 import dev.responsive.kafka.internal.utils.SharedClients;
 import dev.responsive.kafka.internal.utils.TableName;
 import java.util.Collection;
@@ -51,21 +53,22 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
 
   private final Logger log;
 
-  private final ResponsiveKeyValueParams params;
   private final TableName name;
   private final Position position; // TODO(IQ): update the position during restoration
+  private final CassandraTableSpec spec;
 
   private GlobalProcessorContextImpl context;
 
   private CassandraClient client;
-  private RemoteKeyValueSchema schema;
+  private RemoteKVTable table;
 
   private boolean open;
 
   public ResponsiveGlobalStore(final ResponsiveKeyValueParams params) {
-    this.params = params;
     this.name = params.name();
     this.position = Position.emptyPosition();
+    this.spec = CassandraTableSpecFactory.globalSpec(params);
+
     log = new LogContext(
         String.format("global-store [%s]", name.kafkaName())
     ).logger(ResponsivePartitionedStore.class);
@@ -95,11 +98,10 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
       this.context = (GlobalProcessorContextImpl) context;
       final SharedClients sharedClients = SharedClients.loadSharedClients(context.appConfigs());
       client = sharedClients.cassandraClient;
-
-      schema = client.prepareGlobalSchema(params);
+      table = client.globalFactory().create(spec);
       log.info("Global table {} is available for querying.", name);
 
-      schema.init(name.cassandraName(), SubPartitioner.NO_SUBPARTITIONS, IGNORED_PARTITION);
+      table.init(SubPartitioner.NO_SUBPARTITIONS, IGNORED_PARTITION);
 
       open = true;
 
@@ -159,8 +161,8 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
       final long offset,
       final long timestamp
   ) {
-    client.execute(schema.insert(name.cassandraName(), IGNORED_PARTITION, key, value, timestamp));
-    client.execute(schema.setOffset(name.cassandraName(), partition, offset));
+    client.execute(table.insert(IGNORED_PARTITION, key, value, timestamp));
+    client.execute(table.setOffset(partition, offset));
     StoreQueryUtils.updatePosition(position, context);
   }
 
@@ -171,8 +173,8 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
 
   private byte[] delete(final Bytes key, final int partition, final long offset) {
     final byte[] bytes = get(key);
-    client.execute(schema.delete(name.cassandraName(), IGNORED_PARTITION, key));
-    client.execute(schema.setOffset(name.cassandraName(), partition, offset));
+    client.execute(table.delete(IGNORED_PARTITION, key));
+    client.execute(table.setOffset(partition, offset));
 
     // TODO: this position may be incorrectly updated during restoration
     StoreQueryUtils.updatePosition(position, context);
@@ -181,17 +183,17 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
 
   @Override
   public byte[] get(final Bytes key) {
-    return schema.get(name.cassandraName(), IGNORED_PARTITION, key, ALL_VALID_TS);
+    return table.get(IGNORED_PARTITION, key, ALL_VALID_TS);
   }
 
   @Override
   public KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
-    return schema.range(name.cassandraName(), IGNORED_PARTITION, from, to, ALL_VALID_TS);
+    return table.range(IGNORED_PARTITION, from, to, ALL_VALID_TS);
   }
 
   @Override
   public KeyValueIterator<Bytes, byte[]> all() {
-    return schema.all(name.cassandraName(), IGNORED_PARTITION, ALL_VALID_TS);
+    return table.all(IGNORED_PARTITION, ALL_VALID_TS);
   }
 
   @Override
@@ -225,7 +227,7 @@ public class ResponsiveGlobalStore implements KeyValueStore<Bytes, byte[]> {
         // of auto.commit.interval.ms) unlike the changelog equivalent which
         // always restores from scratch
         final int partition = rec.partition();
-        final long offset = schema.metadata(name.cassandraName(), partition).offset;
+        final long offset = table.metadata(partition).offset;
         if (rec.offset() < offset) {
           // ignore records that have already been processed - race conditions
           // are not important since the worst case we'll have just not written

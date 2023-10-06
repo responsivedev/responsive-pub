@@ -27,21 +27,18 @@ import java.util.stream.Collectors;
 public class FactSchemaWriter<K> implements RemoteWriter<K> {
 
   private final CassandraClient client;
-  private final RemoteSchema<K> schema;
-  private final String name;
+  private final RemoteTable<K> table;
   private final int partition;
 
   private final List<Statement<?>> statements;
 
   public FactSchemaWriter(
       final CassandraClient client,
-      final RemoteSchema<K> schema,
-      final String name,
+      final RemoteTable<K> table,
       final int partition
   ) {
     this.client = client;
-    this.schema = schema;
-    this.name = name;
+    this.table = table;
     this.partition = partition;
 
     statements = new ArrayList<>();
@@ -49,12 +46,12 @@ public class FactSchemaWriter<K> implements RemoteWriter<K> {
 
   @Override
   public void insert(final K key, final byte[] value, long epochMillis) {
-    statements.add(schema.insert(name, partition, key, value, epochMillis));
+    statements.add(table.insert(partition, key, value, epochMillis));
   }
 
   @Override
   public void delete(final K key) {
-    statements.add(schema.delete(name, partition, key));
+    statements.add(table.delete(partition, key));
   }
 
   @Override
@@ -79,7 +76,7 @@ public class FactSchemaWriter<K> implements RemoteWriter<K> {
 
   @Override
   public RemoteWriteResult setOffset(final long offset) {
-    final var result = client.execute(schema.setOffset(name, partition, offset));
+    final var result = client.execute(table.setOffset(partition, offset));
     return result.wasApplied()
         ? RemoteWriteResult.success(partition)
         : RemoteWriteResult.failure(partition);

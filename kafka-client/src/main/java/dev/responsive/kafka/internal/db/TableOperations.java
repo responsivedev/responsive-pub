@@ -16,29 +16,29 @@
 
 package dev.responsive.kafka.internal.db;
 
-public class FactWriterFactory<K> implements WriterFactory<K> {
+import dev.responsive.kafka.internal.db.spec.CassandraTableSpec;
 
-  private final RemoteTable<K> table;
+/**
+ * All possible operations on {@link org.apache.kafka.streams.state.KeyValueStore}
+ * and {@link org.apache.kafka.streams.state.WindowStore}, used for checking whether
+ * a particular {@link CassandraTableSpec} supports certain operations.
+ */
+public enum TableOperations {
+  PUT,
+  PUT_IF_ABSENT,
+  PUT_ALL,
+  DELETE,
 
-  public FactWriterFactory(final RemoteTable<K> table) {
-    this.table = table;
-  }
+  GET,
+  RANGE,
+  ALL,
 
-  @Override
-  public RemoteWriter<K> createWriter(
-      final CassandraClient client,
-      final int partition,
-      final int batchSize
-  ) {
-    return new FactSchemaWriter<>(
-        client,
-        table,
-        partition
-    );
-  }
-
-  @Override
-  public String toString() {
-    return "FactWriterFactory{}";
-  }
+  FETCH,
+  FETCH_TIME_RANGE,
+  FETCH_KEY_RANGE,
+  FETCH_ALL,
+  BACK_FETCH,
+  BACK_FETCH_TIME_RANGE,
+  BACK_FETCH_KEY_RANGE,
+  BACK_FETCH_ALL,
 }

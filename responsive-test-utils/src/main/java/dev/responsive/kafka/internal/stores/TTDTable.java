@@ -20,7 +20,7 @@ import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.kafka.internal.clients.TTDCassandraClient;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.MetadataRow;
-import dev.responsive.kafka.internal.db.RemoteSchema;
+import dev.responsive.kafka.internal.db.RemoteTable;
 import dev.responsive.kafka.internal.db.RemoteWriter;
 import dev.responsive.kafka.internal.db.WriterFactory;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
@@ -28,12 +28,12 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import org.apache.kafka.common.utils.Time;
 
-public abstract class TTDSchema<K> implements RemoteSchema<K> {
+public abstract class TTDTable<K> implements RemoteTable<K> {
 
   private final TTDCassandraClient client;
   protected final Time time;
 
-  public TTDSchema(final TTDCassandraClient client) {
+  public TTDTable(final TTDCassandraClient client) {
     this.client = client;
     this.time = client.time();
   }
@@ -42,29 +42,23 @@ public abstract class TTDSchema<K> implements RemoteSchema<K> {
    * @return the number of elements in this table
    *         or 0 if the schema has no such table
    */
-  public abstract long count(final String tableName);
-
-  @Override
-  public void prepare(final String tableName) {
-
-  }
+  public abstract long count();
 
   @Override
   public WriterFactory<K> init(
-      final String tableName,
       final SubPartitioner partitioner,
       final int kafkaPartition
   ) {
-    return (client, name, partition, batchSize) -> new TTDWriter<K>(this, tableName, partition);
+    return (client, partition, batchSize) -> new TTDWriter<K>(this, partition);
   }
 
   @Override
-  public MetadataRow metadata(final String table, final int partition) {
+  public MetadataRow metadata(final int partition) {
     return new MetadataRow(0, 0);
   }
 
   @Override
-  public BoundStatement setOffset(final String table, final int partition, final long offset) {
+  public BoundStatement setOffset(final int partition, final long offset) {
     return null;
   }
 
@@ -74,26 +68,24 @@ public abstract class TTDSchema<K> implements RemoteSchema<K> {
   }
 
   private static class TTDWriter<K> implements RemoteWriter<K> {
-    private final TTDSchema<K> schema;
-    private final String tableName;
+    private final TTDTable<K> table;
     private final int partition;
 
-    public TTDWriter(final TTDSchema<K> schema, final String tableName, final int partition) {
-      this.schema = schema;
-      this.tableName = tableName;
+    public TTDWriter(final TTDTable<K> table, final int partition) {
+      this.table = table;
       this.partition = partition;
     }
 
     @SuppressWarnings("ResultOfMethodCallIgnored")
     @Override
     public void insert(final K key, final byte[] value, long epochMillis) {
-      schema.insert(tableName, partition, key, value, epochMillis);
+      table.insert(partition, key, value, epochMillis);
     }
 
     @SuppressWarnings("ResultOfMethodCallIgnored")
     @Override
     public void delete(final K key) {
-      schema.delete(tableName, partition, key);
+      table.delete(partition, key);
     }
 
     @Override
@@ -104,7 +96,7 @@ public abstract class TTDSchema<K> implements RemoteSchema<K> {
     @SuppressWarnings("ResultOfMethodCallIgnored")
     @Override
     public RemoteWriteResult setOffset(final long offset) {
-      schema.setOffset(tableName, partition, offset);
+      table.setOffset(partition, offset);
       return RemoteWriteResult.success(partition);
     }
 

@@ -29,7 +29,7 @@ import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.Statement;
 import com.datastax.oss.driver.internal.core.cql.DefaultBatchStatement;
 import dev.responsive.kafka.internal.db.CassandraClient;
-import dev.responsive.kafka.internal.db.CassandraKeyValueSchema;
+import dev.responsive.kafka.internal.db.CassandraKeyValueTable;
 import dev.responsive.kafka.internal.db.LwtWriter;
 import dev.responsive.kafka.internal.db.WriterFactory;
 import java.util.ArrayList;
@@ -83,8 +83,7 @@ class LwtWriterTest {
     final var writer = new LwtWriter<>(
         client,
         () -> capturingStatement("fencingStatement", new Object[]{}),
-        new TestRemoteSchema(client),
-        "foo",
+        new TestRemoteTable("foo", client),
         0,
         2
     );
@@ -126,8 +125,7 @@ class LwtWriterTest {
     final var writer = new LwtWriter<>(
         client,
         () -> capturingStatement("fencingStatement", new Object[]{}),
-        new TestRemoteSchema(client),
-        "foo",
+        new TestRemoteTable("foo", client),
         0,
         2
     );
@@ -142,29 +140,27 @@ class LwtWriterTest {
     verify(client, times(2)).executeAsync(statementCaptor.capture());
   }
 
-  private static class TestRemoteSchema extends CassandraKeyValueSchema {
+  private static class TestRemoteTable extends CassandraKeyValueTable {
 
-    public TestRemoteSchema(final CassandraClient client) {
-      super(client);
+    public TestRemoteTable(final String tableName, final CassandraClient client) {
+      super(tableName, client, null, null, null, null, null, null);
     }
 
     @Override
     public BoundStatement insert(
-        final String tableName,
         final int partition,
         final Bytes key,
         final byte[] value,
         long epochMillis) {
-      return capturingStatement("insertData", new Object[]{tableName, partition, key, value});
+      return capturingStatement("insertData", new Object[]{name(), partition, key, value});
     }
 
     @Override
     public BoundStatement delete(
-        final String tableName,
         final int partition,
         final Bytes key
     ) {
-      return capturingStatement("deleteData", new Object[]{tableName, partition, key});
+      return capturingStatement("deleteData", new Object[]{name(), partition, key});
     }
   }
 

@@ -25,8 +25,10 @@ import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.internal.config.InternalConfigs;
 import dev.responsive.kafka.internal.db.BytesKeySpec;
 import dev.responsive.kafka.internal.db.CassandraClient;
-import dev.responsive.kafka.internal.db.RemoteKeyValueSchema;
+import dev.responsive.kafka.internal.db.CassandraTableSpecFactory;
+import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
+import dev.responsive.kafka.internal.db.spec.CassandraTableSpec;
 import dev.responsive.kafka.internal.stores.SchemaTypes.KVSchema;
 import dev.responsive.kafka.internal.utils.Result;
 import dev.responsive.kafka.internal.utils.SharedClients;
@@ -53,6 +55,7 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
   private final Logger log;
 
   private final ResponsiveKeyValueParams params;
+  private final CassandraTableSpec spec;
   private final TableName name;
   private final Position position; // TODO(IQ): update the position during restoration
 
@@ -60,8 +63,8 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
   private InternalProcessorContext context;
   private TopicPartition partition;
 
-  private CommitBuffer<Bytes, RemoteKeyValueSchema> buffer;
-  private RemoteKeyValueSchema schema;
+  private CommitBuffer<Bytes, RemoteKVTable> buffer;
+  private RemoteKVTable table;
   private ResponsiveStoreRegistry storeRegistry;
   private ResponsiveStoreRegistration registration;
   private SubPartitioner partitioner;
@@ -72,6 +75,8 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
     this.params = params;
     this.name = params.name();
     this.position = Position.emptyPosition();
+    this.spec = CassandraTableSpecFactory.fromKVParams(params);
+
     log = new LogContext(
         String.format("store [%s] ", name.kafkaName())
     ).logger(ResponsivePartitionedStore.class);
@@ -113,14 +118,23 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
           ? SubPartitioner.NO_SUBPARTITIONS
           : config.getSubPartitioner(sharedClients.admin, name, partition.topic());
 
-      schema = client.prepareKVTableSchema(params);
+      switch (params.schemaType()) {
+        case KEY_VALUE:
+          table = client.kvFactory().create(spec);
+          break;
+        case FACT:
+          table = client.factFactory().create(spec);
+          break;
+        default:
+          throw new IllegalArgumentException("Unexpected schema type " + params.schemaType());
+      }
+
       log.info("Remote table {} is available for querying.", name.cassandraName());
 
       buffer = CommitBuffer.from(
           sharedClients,
-          name,
           partition,
-          schema,
+          table,
           new BytesKeySpec(),
           params.truncateChangelog(),
           partitioner,
@@ -222,8 +236,7 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
         .map(ttl -> context.timestamp() - ttl.toMillis())
         .orElse(-1L);
 
-    return schema.get(
-        name.cassandraName(),
+    return table.get(
         partitioner.partition(partition.partition(), key),
         key,
         minValidTs
@@ -249,7 +262,7 @@ public class ResponsivePartitionedStore implements KeyValueStore<Bytes, byte[]> 
   public long approximateNumEntries() {
     return partitioner
         .all(partition.partition())
-        .mapToLong(p -> schema.cassandraClient().count(name.cassandraName(), p))
+        .mapToLong(p -> table.cassandraClient().count(name.cassandraName(), p))
         .sum();
   }
 

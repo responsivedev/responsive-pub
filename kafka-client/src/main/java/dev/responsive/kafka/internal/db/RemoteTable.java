@@ -18,33 +18,28 @@ package dev.responsive.kafka.internal.db;
 
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
-import java.time.Duration;
-import java.util.Optional;
 import javax.annotation.CheckReturnValue;
 
-/**
- * A {@code RemoteSchema} defines the access pattern to the remote
- * store for a given table schema as well as the metadata schema.
- */
-public interface RemoteSchema<K> {
+public interface RemoteTable<K> {
+
+  String name();
 
   /**
-   * Creates a table with the supplied {@code tableName} with the
-   * desired schema.
+   * Initializes the table by setting the metadata fields to
+   * their initialized values.
+   *
+   * @return a {@link WriterFactory} that gives the callee access
+   *         to run statements on {@code table}
    */
-  void create(String tableName, Optional<Duration> ttl);
-
-  /**
-   * Prepares statements with this schema for the table with
-   * {@code tableName}.
-   */
-  void prepare(final String tableName);
+  WriterFactory<K> init(
+      final SubPartitioner partitioner,
+      final int kafkaPartition
+  );
 
   /**
    * Inserts data into {@code table}. Note that this will overwrite
    * any existing entry in the table with the same key.
    *
-   * @param table         the table to insert into
    * @param partitionKey  the partitioning key
    * @param key           the data key
    * @param value         the data value
@@ -57,7 +52,6 @@ public interface RemoteSchema<K> {
    */
   @CheckReturnValue
   BoundStatement insert(
-      final String table,
       final int partitionKey,
       final K key,
       final byte[] value,
@@ -65,7 +59,6 @@ public interface RemoteSchema<K> {
   );
 
   /**
-   * @param table         the table to delete from
    * @param partitionKey  the partitioning key
    * @param key           the data key
    *
@@ -75,22 +68,8 @@ public interface RemoteSchema<K> {
    */
   @CheckReturnValue
   BoundStatement delete(
-      final String table,
       final int partitionKey,
       final K key
-  );
-
-  /**
-   * Initializes the table by setting the metadata fields to
-   * their initialized values.
-   *
-   * @return a {@link WriterFactory} that gives the callee access
-   *         to run statements on {@code table}
-   */
-  WriterFactory<K> init(
-      final String table,
-      final SubPartitioner partitioner,
-      final int kafkaPartition
   );
 
   /**
@@ -99,7 +78,7 @@ public interface RemoteSchema<K> {
    * if the schema for that table does not contain such metadata.
    */
   // TODO: we should parameterized RemoteSchema on the metadata type
-  MetadataRow metadata(final String table, final int partition);
+  MetadataRow metadata(final int partition);
 
   /**
    * Generates a statement that can be used to set the offset
@@ -107,7 +86,6 @@ public interface RemoteSchema<K> {
    */
   @CheckReturnValue
   BoundStatement setOffset(
-      final String table,
       final int partition,
       final long offset
   );

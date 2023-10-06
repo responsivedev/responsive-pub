@@ -41,11 +41,12 @@ import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.api.stores.ResponsiveStores;
 import dev.responsive.kafka.internal.db.CassandraClient;
-import dev.responsive.kafka.internal.db.CassandraFactSchema;
-import dev.responsive.kafka.internal.db.CassandraKeyValueSchema;
-import dev.responsive.kafka.internal.db.RemoteKeyValueSchema;
+import dev.responsive.kafka.internal.db.CassandraFactTable;
+import dev.responsive.kafka.internal.db.CassandraKeyValueTable;
+import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.partitioning.Hasher;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
+import dev.responsive.kafka.internal.db.spec.BaseTableSpec;
 import dev.responsive.kafka.internal.stores.ResponsiveMaterialized;
 import dev.responsive.kafka.internal.utils.TableName;
 import dev.responsive.kafka.testutils.IntegrationTestUtils;
@@ -163,8 +164,8 @@ public class SubPartitionIntegrationTest {
           true,
           properties);
       final String cassandraName = new TableName(storeName).cassandraName();
-      final RemoteKeyValueSchema schema = new CassandraKeyValueSchema(client);
-      schema.prepare(cassandraName);
+      final RemoteKVTable table = CassandraKeyValueTable.create(
+          new BaseTableSpec(cassandraName), client);
 
       assertThat(client.numPartitions(cassandraName), is(OptionalInt.of(32)));
       assertThat(client.count(cassandraName, 0), is(2L));
@@ -177,7 +178,7 @@ public class SubPartitionIntegrationTest {
         assertThat(
             deserializer.deserialize("foo",
                 Arrays.copyOfRange(
-                    schema.get(cassandraName, hasher.partition((int) (k % 2), kBytes), kBytes,
+                    table.get(hasher.partition((int) (k % 2), kBytes), kBytes,
                         MIN_VALID_TS),
                     8,
                     16)),
@@ -219,17 +220,17 @@ public class SubPartitionIntegrationTest {
           true,
           properties);
       final String cassandraName = new TableName(storeName).cassandraName();
-      final RemoteKeyValueSchema schema = new CassandraFactSchema(client);
-      schema.prepare(cassandraName);
+      final RemoteKVTable table = CassandraFactTable.create(
+          new BaseTableSpec(cassandraName), client);
 
-      final var meta0 = schema.metadata(cassandraName, 0);
-      final var meta1 = schema.metadata(cassandraName, 1);
+      final var meta0 = table.metadata(0);
+      final var meta1 = table.metadata(1);
 
       assertThat(meta0.offset, is(notNullValue()));
       assertThat(meta1.offset, is(notNullValue()));
 
       // throws because it doesn't exist
-      Assertions.assertEquals(schema.metadata(cassandraName, 2).offset, NO_COMMITTED_OFFSET);
+      Assertions.assertEquals(table.metadata(2).offset, NO_COMMITTED_OFFSET);
 
       // these store ValueAndTimestamp, so we need to just pluck the last 8 bytes
       final var hasher = SubPartitioner.NO_SUBPARTITIONS;
@@ -238,8 +239,7 @@ public class SubPartitionIntegrationTest {
         assertThat(
             deserializer.deserialize("foo",
                 Arrays.copyOfRange(
-                    schema.get(
-                        cassandraName,
+                    table.get(
                         hasher.partition((int) (k % 2), kBytes),
                         kBytes,
                         MIN_VALID_TS),

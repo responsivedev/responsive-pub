@@ -14,31 +14,21 @@
  * limitations under the License.
  */
 
-package dev.responsive.kafka.internal.db;
+package dev.responsive.kafka.internal.db.spec;
 
-public class FactWriterFactory<K> implements WriterFactory<K> {
+import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
+import com.datastax.oss.driver.api.querybuilder.schema.CreateTableWithOptions;
 
-  private final RemoteTable<K> table;
+public class GlobalTableSpec extends DelegatingTableSpec {
 
-  public FactWriterFactory(final RemoteTable<K> table) {
-    this.table = table;
+  public GlobalTableSpec(final CassandraTableSpec delegate) {
+    super(delegate);
   }
 
   @Override
-  public RemoteWriter<K> createWriter(
-      final CassandraClient client,
-      final int partition,
-      final int batchSize
-  ) {
-    return new FactSchemaWriter<>(
-        client,
-        table,
-        partition
-    );
-  }
-
-  @Override
-  public String toString() {
-    return "FactWriterFactory{}";
+  public CreateTableWithOptions applyOptions(final CreateTableWithOptions base) {
+    return delegate()
+        .applyOptions(base)
+        .withCompaction(SchemaBuilder.leveledCompactionStrategy());
   }
 }
