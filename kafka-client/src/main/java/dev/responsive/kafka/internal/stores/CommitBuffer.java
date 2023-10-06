@@ -64,25 +64,26 @@ class CommitBuffer<K, S extends RemoteTable<K>>
   private final Logger log;
   private final String logPrefix;
 
+  private final TopicPartition changelog;
+  private final int maxBatchSize;
+  private final boolean eosEnabled;
+
   private final SizeTrackingBuffer<K> buffer;
   private final CassandraClient client;
-  private final int partition;
   private final Admin admin;
-  private final TopicPartition changelog;
   private final S table;
   private final FlushTriggers flushTriggers;
-  private final int maxBatchSize;
   private final SubPartitioner subPartitioner;
   private final Supplier<Instant> clock;
   private final KeySpec<K> keySpec;
-
-  private Instant lastFlush;
-  private WriterFactory<K> writerFactory;
 
   // flag to skip further truncation attempts when the changelog is set to 'compact' only
   private boolean isDeleteEnabled = true;
   private final boolean truncateChangelog;
   private KafkaFuture<DeletedRecords> deleteRecordsFuture = KafkaFuture.completedFuture(null);
+
+  private Instant lastFlush;
+  private WriterFactory<K> writerFactory;
 
   static <K, S extends RemoteTable<K>> CommitBuffer<K, S> from(
       final SharedClients clients,
@@ -146,7 +147,7 @@ class CommitBuffer<K, S extends RemoteTable<K>>
   ) {
     this.client = client;
     this.changelog = changelog;
-    this.partition = changelog.partition();
+    this.
     this.admin = admin;
     this.table = table;
 

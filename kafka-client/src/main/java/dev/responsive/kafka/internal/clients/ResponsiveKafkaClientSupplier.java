@@ -177,6 +177,10 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
     );
   }
 
+  public boolean eosEnabled() {
+    return eos;
+  }
+
   /**
    * @param clientId the producer client id
    * @return the extracted StreamThread id, of the form "StreamThread-n"

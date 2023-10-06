@@ -17,6 +17,7 @@
 package dev.responsive.kafka.api.config;
 
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
+import dev.responsive.kafka.internal.config.ResponsiveStreamsConfig;
 import dev.responsive.kafka.internal.db.partitioning.Hasher;
 import dev.responsive.kafka.internal.db.partitioning.Murmur3Hasher;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
@@ -34,6 +35,7 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigDef.Validator;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
 
 /**
@@ -41,6 +43,8 @@ import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssigno
  */
 @SuppressWarnings("checkstyle:linelength")
 public class ResponsiveConfig extends AbstractConfig {
+
+  private final boolean eosEnabled;
 
   // ------------------ connection configurations -----------------------------
 
@@ -237,6 +241,10 @@ public class ResponsiveConfig extends AbstractConfig {
           REMOTE_TABLE_CHECK_INTERVAL_MS_DOC
       );
 
+  public boolean eosEnabled() {
+    return eosEnabled;
+  }
+
   /**
    * This should generally be used over the {@link #loggedConfig(Map)} override in all
    * cases outside the initial {@link ResponsiveKafkaStreams} constructor.
@@ -258,6 +266,8 @@ public class ResponsiveConfig extends AbstractConfig {
 
   private ResponsiveConfig(final Map<?, ?> originals, final boolean doLog) {
     super(CONFIG_DEF, originals, doLog);
+    eosEnabled = ResponsiveStreamsConfig.streamsConfig(originals).getString(Streamsconfig.)
+
   }
 
   public SubPartitioner getSubPartitioner(
