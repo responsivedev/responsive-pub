@@ -110,7 +110,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 @ExtendWith(ResponsiveExtension.class)
-public class ResponsivePartitionedStoreRestoreIntegrationTest {
+public class ResponsiveKeyValueStoreRestoreIntegrationTest {
 
   private static final int MAX_POLL_MS = 5000;
   private static final String INPUT_TOPIC = "input";
