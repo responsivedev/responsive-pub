@@ -16,14 +16,8 @@
 
 package dev.responsive.kafka.internal.metrics;
 
-import static dev.responsive.kafka.internal.metrics.ResponsiveMetrics.PARTITION_TAG;
-import static dev.responsive.kafka.internal.metrics.ResponsiveMetrics.THREAD_ID_TAG;
-import static dev.responsive.kafka.internal.metrics.ResponsiveMetrics.TOPIC_TAG;
-
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics.MetricGroup;
-import java.util.HashMap;
-import java.util.Map;
-import org.apache.kafka.common.TopicPartition;
+import java.util.LinkedHashMap;
 
 @SuppressWarnings("checkstyle:linelength")
 public class TopicMetrics implements MetricGroup {
@@ -36,17 +30,10 @@ public class TopicMetrics implements MetricGroup {
   public static final String END_OFFSET = "end-offset";
   public static final String END_OFFSET_DESCRIPTION = "The end offset of this topic partition";
 
-  private final Map<String, String> tags = new HashMap<>();
+  private final LinkedHashMap<String, String> tags;
 
-  TopicMetrics(
-      final Map<String, String> baseAppTags,
-      final String threadId,
-      final TopicPartition topicPartition
-  ) {
-    tags.putAll(baseAppTags);
-    tags.put(THREAD_ID_TAG, threadId);
-    tags.put(TOPIC_TAG, topicPartition.topic());
-    tags.put(PARTITION_TAG, Integer.toString(topicPartition.partition()));
+  TopicMetrics(final LinkedHashMap<String, String> tags) {
+    this.tags = tags;
   }
   
   @Override
@@ -55,7 +42,7 @@ public class TopicMetrics implements MetricGroup {
   }
 
   @Override
-  public Map<String, String> tags() {
+  public LinkedHashMap<String, String> tags() {
     return tags;
   }
 }

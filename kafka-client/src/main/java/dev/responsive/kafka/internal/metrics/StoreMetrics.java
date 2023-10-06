@@ -16,15 +16,8 @@
 
 package dev.responsive.kafka.internal.metrics;
 
-import static dev.responsive.kafka.internal.metrics.ResponsiveMetrics.PARTITION_TAG;
-import static dev.responsive.kafka.internal.metrics.ResponsiveMetrics.STORE_NAME_TAG;
-import static dev.responsive.kafka.internal.metrics.ResponsiveMetrics.THREAD_ID_TAG;
-import static dev.responsive.kafka.internal.metrics.ResponsiveMetrics.TOPIC_TAG;
-
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics.MetricGroup;
-import java.util.HashMap;
-import java.util.Map;
-import org.apache.kafka.common.TopicPartition;
+import java.util.LinkedHashMap;
 
 @SuppressWarnings("checkstyle:linelength")
 public class StoreMetrics implements MetricGroup {
@@ -37,19 +30,10 @@ public class StoreMetrics implements MetricGroup {
   public static final String RESTORE_LATENCY_MAX = RESTORE_LATENCY + "-max";
   public static final String RESTORE_LATENCY_DESCRIPTION = "amount of time spent restoring this state store before resuming processing";
 
-  private final Map<String, String> tags = new HashMap<>();
+  private final LinkedHashMap<String, String> tags;
 
-  StoreMetrics(
-      final Map<String, String> baseAppTags,
-      final String threadId,
-      final String storeName,
-      final TopicPartition changelog
-  ) {
-    tags.putAll(baseAppTags);
-    tags.put(THREAD_ID_TAG, threadId);
-    tags.put(STORE_NAME_TAG, storeName);
-    tags.put(TOPIC_TAG, changelog.topic());
-    tags.put(PARTITION_TAG, String.valueOf(changelog.partition()));
+  StoreMetrics(final LinkedHashMap<String, String> tags) {
+    this.tags = tags;
   }
   
   @Override
@@ -58,7 +42,7 @@ public class StoreMetrics implements MetricGroup {
   }
 
   @Override
-  public Map<String, String> tags() {
+  public LinkedHashMap<String, String> tags() {
     return tags;
   }
   

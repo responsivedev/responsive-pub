@@ -17,8 +17,9 @@
 package dev.responsive.kafka.internal.metrics;
 
 import java.io.Closeable;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.stream.Collectors;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.KafkaMetric;
@@ -34,22 +35,7 @@ public class ResponsiveMetrics implements Closeable {
 
   public static final String RESPONSIVE_METRICS_NAMESPACE = "dev.responsive";
 
-  // Base tags that all Responsive metrics are tagged with:
-  public static final String RESPONSIVE_VERSION_TAG = "responsive-version";
-  public static final String RESPONSIVE_COMMIT_ID_TAG = "responsive-commit-id";
-  public static final String STREAMS_VERSION_TAG = "streams-version";
-  public static final String STREAMS_COMMIT_ID_TAG = "streams-commit-id";
-  public static final String CONSUMER_GROUP_TAG = "consumer-group";
-  public static final String STREAMS_APPLICATION_ID_TAG = "streams-application-id";
-  public static final String STREAMS_CLIENT_ID_TAG = "streams-client-id";
-
-  // Group tags that are specific to the given metric group and scope
-  public static final String THREAD_ID_TAG = "thread-id";
-  public static final String TOPIC_TAG = "topic";
-  public static final String PARTITION_TAG = "partition";
-  public static final String STORE_NAME_TAG = "store-name";
-
-  private final Map<String, String> baseTags = new HashMap<>();
+  private OrderedTagsSupplier orderedTagsSupplier;
   private final Metrics metrics;
 
   public ResponsiveMetrics(final Metrics metrics) {
@@ -60,7 +46,7 @@ public class ResponsiveMetrics implements Closeable {
    * @param applicationId the Streams application id, ie the shared consumer group id
    * @param streamsClientId the Streams client id, ie the process-specific id
    * @param versionMetadata struct containing Responsive and Kafka Streams version info
-   * @param userTags optional custom tags that will be attached to each metric
+   * @param userTags optional custom tags that will be attached to each metric in alphabetic order
    */
   public void initializeTags(
       final String applicationId,
@@ -68,48 +54,49 @@ public class ResponsiveMetrics implements Closeable {
       final ClientVersionMetadata versionMetadata,
       final Map<String, ?> userTags
   ) {
-    // this is technically redundant with the application id, but sometimes it's useful to have both
-    baseTags.put(CONSUMER_GROUP_TAG, applicationId);
-    baseTags.put(STREAMS_APPLICATION_ID_TAG, applicationId);
-    baseTags.put(STREAMS_CLIENT_ID_TAG, streamsClientId);
-
-    baseTags.put(RESPONSIVE_VERSION_TAG, versionMetadata.responsiveClientVersion);
-    baseTags.put(RESPONSIVE_COMMIT_ID_TAG, versionMetadata.responsiveClientCommitId);
-    baseTags.put(STREAMS_VERSION_TAG, versionMetadata.streamsClientVersion);
-    baseTags.put(STREAMS_COMMIT_ID_TAG, versionMetadata.streamsClientCommitId);
-
-    for (final var tag : userTags.entrySet()) {
-      final String tagKey = tag.getKey();
-      final String tagValue = tag.getValue().toString();
-      LOG.debug("Adding custom metric tag <{}:{}>", tagKey, tagValue);
-      baseTags.put(tagKey, tagValue);
-    }
+    orderedTagsSupplier = new OrderedTagsSupplier(
+        versionMetadata.responsiveClientVersion,
+        versionMetadata.responsiveClientCommitId,
+        versionMetadata.streamsClientVersion,
+        versionMetadata.streamsClientCommitId,
+        applicationId, // consumer group is technically redundant with app-id, but both are useful
+        applicationId,
+        streamsClientId,
+        userTags
+    );
   }
 
   public interface MetricGroup {
 
     String groupName();
 
-    Map<String, String> tags();
+    // Enforce LinkedHashMap to maintain tag ordering in mbean name
+    LinkedHashMap<String, String> tags();
   }
 
   public MetricGroup applicationLevelMetric() {
-    return new ApplicationMetrics(baseTags);
+    return new ApplicationMetrics(
+        orderedTagsSupplier.applicationGroupTags()
+    );
   }
 
   public MetricGroup topicLevelMetric(
       final String threadId,
       final TopicPartition topicPartition
   ) {
-    return new TopicMetrics(baseTags, threadId, topicPartition);
+    return new TopicMetrics(
+        orderedTagsSupplier.topicGroupTags(threadId, topicPartition)
+    );
   }
 
   public MetricGroup storeLevelMetric(
       final String threadId,
-      final String storeName,
-      final TopicPartition changelog
+      final TopicPartition changelog,
+      final String storeName
   ) {
-    return new StoreMetrics(baseTags, threadId, storeName, changelog);
+    return new StoreMetrics(
+        orderedTagsSupplier.storeGroupTags(threadId, changelog, storeName)
+    );
   }
 
   /**
