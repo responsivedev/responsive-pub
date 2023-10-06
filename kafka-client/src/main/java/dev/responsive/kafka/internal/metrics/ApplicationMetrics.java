@@ -24,7 +24,7 @@ import java.util.Map;
 public class ApplicationMetrics implements MetricGroup {
 
   // Responsive application metrics scoped to the Streams client level
-  public static final String APPLICATION_METRIC_GROUP = "application.metrics";
+  public static final String APPLICATION_METRIC_GROUP = "application-metrics";
 
   public static final String STREAMS_STATE = "streams-state";
   public static final String STREAMS_STATE_DESCRIPTION = "The current KafkaStreams.State expressed as its ordinal value";

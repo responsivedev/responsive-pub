@@ -4,7 +4,7 @@ rules:
 #### Responsive Metrics ####
 
  # Responsive application metrics
- - bean: dev.responsive:type=application.metrics,responsive-version=*,responsive-commit-id=*,streams-version=*,streams-commit-id=*,consumer-group=*,streams-application-id=*,streams-client-id=*
+ - bean: dev.responsive:type=application-metrics,responsive-version=*,responsive-commit-id=*,streams-version=*,streams-commit-id=*,consumer-group=*,streams-application-id=*,streams-client-id=*
    metricAttribute:
      responsiveVersion: param(responsive-version)
      responsiveCommitId: param(responsive-commit-id)
@@ -21,7 +21,7 @@ rules:
        unit: '{KafkaStreams.State}'
 
  # Responsive topic metrics
- - bean: dev.responsive:type=topic.metrics,responsive-version=*,responsive-commit-id=*,streams-version=*,streams-commit-id=*,consumer-group=*,streams-application-id=*,streams-client-id=*,thread-id=*,topic=*,partition=*
+ - bean: dev.responsive:type=topic-metrics,responsive-version=*,responsive-commit-id=*,streams-version=*,streams-commit-id=*,consumer-group=*,streams-application-id=*,streams-client-id=*,thread-id=*,topic=*,partition=*
    metricAttribute:
      responsiveVersion: param(responsive-version)
      responsiveCommitId: param(responsive-commit-id)
