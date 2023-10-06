@@ -17,8 +17,7 @@
 package dev.responsive.kafka.internal.metrics;
 
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics.MetricGroup;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.LinkedHashMap;
 
 @SuppressWarnings("checkstyle:linelength")
 public class ApplicationMetrics implements MetricGroup {
@@ -35,10 +34,10 @@ public class ApplicationMetrics implements MetricGroup {
   public static final String NUM_INTERRUPTED = "num-interrupted-changelogs";
   public static final String NUM_INTERRUPTED_DESCRIPTION = "The total number of changelog partitions that began restoring but did not complete";
 
-  private final Map<String, String> tags = new HashMap<>();
+  private final LinkedHashMap<String, String> tags;
   
-  ApplicationMetrics(final Map<String, String> baseAppTags) {
-    tags.putAll(baseAppTags);
+  ApplicationMetrics(final LinkedHashMap<String, String> tags) {
+    this.tags = tags;
   }
 
   @Override
@@ -47,7 +46,7 @@ public class ApplicationMetrics implements MetricGroup {
   }
 
   @Override
-  public Map<String, String> tags() {
+  public LinkedHashMap<String, String> tags() {
     return tags;
   }
 }
