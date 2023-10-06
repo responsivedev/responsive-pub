@@ -117,6 +117,18 @@ public class OrderedTagsSupplierTest {
     tag = tagsIter.next();
     assertThat(tag.getKey(), equalTo("streams-client-id"));
     assertThat(tag.getValue(), equalTo("ordered-tags-test-node-1"));
+
+    tag = tagsIter.next();
+    assertThat(tag.getKey(), equalTo("custom-tag-1"));
+    assertThat(tag.getValue(), equalTo("C"));
+
+    tag = tagsIter.next();
+    assertThat(tag.getKey(), equalTo("custom-tag-2"));
+    assertThat(tag.getValue(), equalTo("B"));
+
+    tag = tagsIter.next();
+    assertThat(tag.getKey(), equalTo("custom-tag-3"));
+    assertThat(tag.getValue(), equalTo("A"));
   }
 
   private void verifyTopicTags(final Iterator<Entry<String, String>> tagsIter) {

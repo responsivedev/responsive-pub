@@ -19,7 +19,6 @@ package dev.responsive.kafka.internal.metrics;
 import java.io.Closeable;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.stream.Collectors;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.KafkaMetric;

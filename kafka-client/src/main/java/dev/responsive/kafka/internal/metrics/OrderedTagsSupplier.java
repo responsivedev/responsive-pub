@@ -16,6 +16,7 @@
 
 package dev.responsive.kafka.internal.metrics;
 
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -55,8 +56,9 @@ public class OrderedTagsSupplier {
   private final String consumerGroup;
   private final String streamsApplicationId;
   private final String streamsClientId;
-  private final List<Entry<String, ?>> orderedUserTags;
+  private final List<Entry<String, String>> orderedUserTags;
 
+  @SuppressWarnings("unchecked")
   public OrderedTagsSupplier(
       final String responsiveClientVersion,
       final String responsiveClientCommitId,
@@ -74,7 +76,13 @@ public class OrderedTagsSupplier {
     this.consumerGroup = consumerGroup;
     this.streamsApplicationId = streamsApplicationId;
     this.streamsClientId = streamsClientId;
-    this.orderedUserTags = userTags.entrySet().stream().sorted().collect(Collectors.toList());
+
+    this.orderedUserTags = userTags.entrySet()
+        .stream()
+        .map(e -> (Map.Entry<String, String>) e)
+        .sorted(Entry.<String, String>comparingByKey()
+                    .thenComparing(Entry.comparingByValue(Comparator.comparing(v -> v))))
+        .collect(Collectors.toList());
   }
 
   public LinkedHashMap<String, String> applicationGroupTags() {
