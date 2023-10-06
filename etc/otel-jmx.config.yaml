@@ -1,7 +1,26 @@
 ---
 rules:
- #### Responsive Metrics ####
- -
+
+#### Responsive Metrics ####
+
+ # Responsive application metrics
+ - bean: dev.responsive:type=application.metrics,responsive-version=*,responsive-commit-id=*,streams-version=*,streams-commit-id=*,consumer-group=*,streams-application-id=*,streams-client-id=*
+   metricAttribute:
+     responsiveVersion: param(responsive-version)
+     responsiveCommitId: param(responsive-commit-id)
+     streamsVersion: param(streams-version)
+     streamsCommitId: param(streams-commit-id)
+     consumerGroup: param(consumer-group)
+     streamsApplicationId: param(streams-application-id)
+     streamsClientId: param(streams-client-id)
+   mapping:
+     streams-state:
+       metric: responsive.kafka.streams.state
+       type: gauge
+       desc: the current state of this Kafka Streams client
+       unit: '{KafkaStreams.State}'
+
+ # Responsive topic metrics
  - bean: dev.responsive:type=topic.metrics,responsive-version=*,responsive-commit-id=*,streams-version=*,streams-commit-id=*,consumer-group=*,streams-application-id=*,streams-client-id=*,thread-id=*,topic=*,partition=*
    metricAttribute:
      responsiveVersion: param(responsive-version)
@@ -25,21 +44,7 @@ rules:
        type: gauge
        desc: the current committed offset of the partition
        unit: '{offset}'
- - bean: dev.responsive:type=application.metrics,responsive-version=*,responsive-commit-id=*,streams-version=*,streams-commit-id=*,consumer-group=*,streams-application-id=*,streams-client-id=*
-   metricAttribute:
-     responsiveVersion: param(responsive-version)
-     responsiveCommitId: param(responsive-commit-id)
-     streamsVersion: param(streams-version)
-     streamsCommitId: param(streams-commit-id)
-     consumerGroup: param(consumer-group)
-     streamsApplicationId: param(streams-application-id)
-     streamsClientId: param(streams-client-id)
-   mapping:
-     streams-state:
-       metric: responsive.kafka.streams.state
-       type: gauge
-       desc: the current state of this Kafka Streams client
-       unit: '{KafkaStreams.State}'
+
 
  #### Apache Kafka Metrics ####
 
