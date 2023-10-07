@@ -104,7 +104,7 @@ class CommitBuffer<K, S extends RemoteTable<K>>
         keySpec,
         truncateChangelog,
         FlushTriggers.fromConfig(config),
-        ExceptionSupplier.fromConfig(config),
+        ExceptionSupplier.fromConfig(config.originals()),
         partitioner
     );
   }

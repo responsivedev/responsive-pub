@@ -2,6 +2,7 @@ package dev.responsive.kafka.internal.utils;
 
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.config.ResponsiveStreamsConfig;
+import java.util.Map;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.streams.StreamsConfig;
@@ -14,8 +15,8 @@ public class ExceptionSupplier {
     this.eosEnabled = eosEnabled;
   }
 
-  public static ExceptionSupplier fromConfig(final ResponsiveConfig config) {
-    final String processingGuarantee = ResponsiveStreamsConfig.streamsConfig(config.originals())
+  public static ExceptionSupplier fromConfig(final Map<?, ?> props) {
+    final String processingGuarantee = ResponsiveStreamsConfig.streamsConfig(props)
         .getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG);
 
     // only eos-v2 is allowed in Responsive, so we can ignore eos-v1 here
@@ -24,9 +25,9 @@ public class ExceptionSupplier {
 
   public RuntimeException commitFencedException(final String message) {
     if (eosEnabled) {
-      throw new ProducerFencedException(message);
+      return new ProducerFencedException(message);
     } else {
-      throw new CommitFailedException(message);
+      return new CommitFailedException(message);
     }
   }
 

@@ -26,9 +26,8 @@ public class ExceptionSupplierTest {
   public void shouldLoadFromConfigWithAlos() {
     final Map<String, String> props = new HashMap<>(BASE_PROPS);
     props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.AT_LEAST_ONCE);
-    final ResponsiveConfig config = ResponsiveConfig.loggedConfig(props);
 
-    final ExceptionSupplier exceptionSupplier = ExceptionSupplier.fromConfig(config);
+    final ExceptionSupplier exceptionSupplier = ExceptionSupplier.fromConfig(props);
     assertFalse(exceptionSupplier.eosEnabled());
   }
 
@@ -36,18 +35,16 @@ public class ExceptionSupplierTest {
   public void shouldLoadFromConfigWithEos() {
     final Map<String, String> props = new HashMap<>(BASE_PROPS);
     props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
-    final ResponsiveConfig config = ResponsiveConfig.loggedConfig(props);
 
-    final ExceptionSupplier exceptionSupplier = ExceptionSupplier.fromConfig(config);
+    final ExceptionSupplier exceptionSupplier = ExceptionSupplier.fromConfig(props);
     assertTrue(exceptionSupplier.eosEnabled());
   }
 
   @Test
   public void shouldLoadFromConfigWithProcessingGuaranteeUndefined() {
     final Map<String, String> props = new HashMap<>(BASE_PROPS);
-    final ResponsiveConfig config = ResponsiveConfig.loggedConfig(props);
 
-    final ExceptionSupplier exceptionSupplier = ExceptionSupplier.fromConfig(config);
+    final ExceptionSupplier exceptionSupplier = ExceptionSupplier.fromConfig(props);
     assertFalse(exceptionSupplier.eosEnabled());
   }
 
