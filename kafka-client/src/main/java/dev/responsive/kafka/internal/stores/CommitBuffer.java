@@ -26,6 +26,7 @@ import dev.responsive.kafka.internal.db.RemoteTable;
 import dev.responsive.kafka.internal.db.RemoteWriter;
 import dev.responsive.kafka.internal.db.WriterFactory;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
+import dev.responsive.kafka.internal.utils.ExceptionSupplier;
 import dev.responsive.kafka.internal.utils.Iterators;
 import dev.responsive.kafka.internal.utils.Result;
 import dev.responsive.kafka.internal.utils.SharedClients;
@@ -51,7 +52,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.slf4j.Logger;
@@ -66,23 +66,23 @@ class CommitBuffer<K, S extends RemoteTable<K>>
 
   private final SizeTrackingBuffer<K> buffer;
   private final CassandraClient client;
-  private final int partition;
   private final Admin admin;
   private final TopicPartition changelog;
   private final S table;
   private final FlushTriggers flushTriggers;
+  private final ExceptionSupplier exceptionSupplier;
   private final int maxBatchSize;
   private final SubPartitioner subPartitioner;
   private final Supplier<Instant> clock;
   private final KeySpec<K> keySpec;
 
-  private Instant lastFlush;
-  private WriterFactory<K> writerFactory;
-
   // flag to skip further truncation attempts when the changelog is set to 'compact' only
   private boolean isDeleteEnabled = true;
   private final boolean truncateChangelog;
   private KafkaFuture<DeletedRecords> deleteRecordsFuture = KafkaFuture.completedFuture(null);
+
+  private Instant lastFlush;
+  private WriterFactory<K> writerFactory;
 
   static <K, S extends RemoteTable<K>> CommitBuffer<K, S> from(
       final SharedClients clients,
@@ -104,6 +104,7 @@ class CommitBuffer<K, S extends RemoteTable<K>>
         keySpec,
         truncateChangelog,
         FlushTriggers.fromConfig(config),
+        ExceptionSupplier.fromConfig(config.originals()),
         partitioner
     );
   }
@@ -116,6 +117,7 @@ class CommitBuffer<K, S extends RemoteTable<K>>
       final KeySpec<K> keySpec,
       final boolean truncateChangelog,
       final FlushTriggers flushTriggers,
+      final ExceptionSupplier exceptionSupplier,
       final SubPartitioner subPartitioner
   ) {
     this(
@@ -126,6 +128,7 @@ class CommitBuffer<K, S extends RemoteTable<K>>
         keySpec,
         truncateChangelog,
         flushTriggers,
+        exceptionSupplier,
         MAX_BATCH_SIZE,
         subPartitioner,
         Instant::now
@@ -140,24 +143,25 @@ class CommitBuffer<K, S extends RemoteTable<K>>
       final KeySpec<K> keySpec,
       final boolean truncateChangelog,
       final FlushTriggers flushTriggers,
+      final ExceptionSupplier exceptionSupplier,
       final int maxBatchSize,
       final SubPartitioner subPartitioner,
       final Supplier<Instant> clock
   ) {
     this.client = client;
     this.changelog = changelog;
-    this.partition = changelog.partition();
     this.admin = admin;
     this.table = table;
 
     this.buffer = new SizeTrackingBuffer<>(keySpec);
     this.keySpec = keySpec;
     this.flushTriggers = flushTriggers;
+    this.exceptionSupplier = exceptionSupplier;
     this.maxBatchSize = maxBatchSize;
     this.subPartitioner = subPartitioner;
     this.clock = clock;
 
-    logPrefix = String.format("commit-buffer [%s-%d] ", table.name(), partition);
+    logPrefix = String.format("commit-buffer [%s-%d] ", table.name(), changelog.partition());
     log = new LogContext(logPrefix).logger(CommitBuffer.class);
 
     if (hasSourceTopicChangelog(changelog.topic())) {
@@ -178,9 +182,9 @@ class CommitBuffer<K, S extends RemoteTable<K>>
   public void init() {
     lastFlush = clock.get();
 
-    this.writerFactory = table.init(subPartitioner, partition);
+    this.writerFactory = table.init(subPartitioner, changelog.partition());
 
-    final int basePartition = subPartitioner.first(partition);
+    final int basePartition = subPartitioner.first(changelog.partition());
     log.info("Initialized store with {} for subpartitions in range: {{} -> {}}",
         writerFactory, basePartition, basePartition + subPartitioner.getFactor() - 1);
   }
@@ -268,7 +272,7 @@ class CommitBuffer<K, S extends RemoteTable<K>>
   }
 
   long offset() {
-    final int basePartition = subPartitioner.first(partition);
+    final int basePartition = subPartitioner.first(changelog.partition());
     return table.metadata(basePartition).offset;
   }
 
@@ -347,7 +351,8 @@ class CommitBuffer<K, S extends RemoteTable<K>>
 
     final var writers = new HashMap<Integer, RemoteWriter<K>>();
     for (final Result<K> result : buffer.getReader().values()) {
-      final int subPartition = subPartitioner.partition(partition, keySpec.bytes(result.key));
+      final int subPartition =
+          subPartitioner.partition(changelog.partition(), keySpec.bytes(result.key));
       final RemoteWriter<K> writer = writers
           .computeIfAbsent(subPartition, k -> writerFactory.createWriter(
               client,
@@ -371,7 +376,7 @@ class CommitBuffer<K, S extends RemoteTable<K>>
     // when all the flushes above have completed and only needs to be written to
     // the first subpartition
     final var offsetWriteResult = writers.computeIfAbsent(
-        subPartitioner.first(partition),
+        subPartitioner.first(changelog.partition()),
         subPartition -> writerFactory.createWriter(client, subPartition, batchSize)
     ).setOffset(consumedOffset);
 
@@ -392,7 +397,7 @@ class CommitBuffer<K, S extends RemoteTable<K>>
   }
 
   private RemoteWriteResult drain(final Collection<RemoteWriter<K>> writers) {
-    var result = CompletableFuture.completedStage(RemoteWriteResult.success(partition));
+    var result = CompletableFuture.completedStage(RemoteWriteResult.success(changelog.partition()));
     for (final RemoteWriter<K> writer : writers) {
       result = result.thenCombine(writer.flush(), (one, two) -> !one.wasApplied() ? one : two);
     }
@@ -494,7 +499,8 @@ class CommitBuffer<K, S extends RemoteTable<K>>
         stored.offset
     );
     log.warn(msg);
-    throw new TaskMigratedException(logPrefix + msg);
+
+    throw exceptionSupplier.commitFencedException(logPrefix + msg);
   }
 
   @Override

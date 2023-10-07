@@ -54,6 +54,14 @@ tasks.compileJava {
     dependsOn(tasks[writeVersionPropertiesFile])
 }
 
+tasks.publishToMavenLocal {
+    dependsOn(tasks[writeVersionPropertiesFile])
+}
+
+tasks.publish {
+    dependsOn(tasks[writeVersionPropertiesFile])
+}
+
 /********************************************/
 
 dependencies {

@@ -17,11 +17,13 @@
 package dev.responsive.kafka.internal.stores;
 
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -38,6 +40,7 @@ import dev.responsive.kafka.internal.db.MetadataRow;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.db.spec.BaseTableSpec;
+import dev.responsive.kafka.internal.utils.ExceptionSupplier;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
 import java.nio.ByteBuffer;
@@ -63,8 +66,6 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.errors.TaskMigratedException;
-import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -85,6 +86,7 @@ public class CommitBufferTest {
   private static final byte[] VALUE = new byte[]{1};
   private static final int KAFKA_PARTITION = 2;
   private static final FlushTriggers TRIGGERS = FlushTriggers.ALWAYS;
+  private static final ExceptionSupplier EXCEPTION_SUPPLIER = new ExceptionSupplier(true);
   private static final long CURRENT_TS = 100L;
   private static final long MIN_VALID_TS = 0L;
 
@@ -134,7 +136,7 @@ public class CommitBufferTest {
     setPartitioner(3);
     final CommitBuffer<Bytes, RemoteKVTable> buffer = new CommitBuffer<>(
         client, changelogTp, admin, table,
-        KEY_SPEC, true, TRIGGERS, partitioner);
+        KEY_SPEC, true, TRIGGERS, EXCEPTION_SUPPLIER, partitioner);
     buffer.init();
 
     // reserve epoch for partition 8 to ensure it doesn't get flushed
@@ -164,17 +166,22 @@ public class CommitBufferTest {
   @Test
   public void shouldNotFlushWithExpiredEpoch() {
     // Given:
+    final ExceptionSupplier exceptionSupplier = mock(ExceptionSupplier.class);
     final CommitBuffer<Bytes, RemoteKVTable> buffer = new CommitBuffer<>(
         client, changelogTp, admin, table,
-        KEY_SPEC, true, TRIGGERS, partitioner);
+        KEY_SPEC, true, TRIGGERS, exceptionSupplier, partitioner);
     buffer.init();
 
     LwtWriterFactory.reserve(
         table, new int[]{KAFKA_PARTITION}, KAFKA_PARTITION, 100L, false);
 
+
+    Mockito.when(exceptionSupplier.commitFencedException(anyString()))
+        .thenAnswer(msg -> new RuntimeException(msg.getArgument(0).toString()));
+
     // When:
-    final TaskMigratedException e = assertThrows(
-        TaskMigratedException.class,
+    final var e = assertThrows(
+        RuntimeException.class,
         () -> {
           buffer.put(KEY, VALUE, CURRENT_TS);
           buffer.flush(100L);
@@ -182,9 +189,10 @@ public class CommitBufferTest {
     );
 
     // Then:
-    assertThat(
-        e.getMessage(),
-        Matchers.containsString("Local Epoch: LwtWriterFactory{epoch=1}, Persisted Epoch: 100"));
+    final String errorMsg = "commit-buffer [" + table.name() + "-2] "
+        + "[2] Fenced while writing batch! Local Epoch: LwtWriterFactory{epoch=1}, "
+        + "Persisted Epoch: 100, Batch Offset: 100, Persisted Offset: -1";
+    assertThat(e.getMessage(), equalTo(errorMsg));
   }
 
   @Test
@@ -193,7 +201,7 @@ public class CommitBufferTest {
     setPartitioner(2);
     final CommitBuffer<Bytes, RemoteKVTable> buffer = new CommitBuffer<>(
         client, changelogTp, admin, table,
-        KEY_SPEC, true, TRIGGERS, partitioner);
+        KEY_SPEC, true, TRIGGERS, EXCEPTION_SUPPLIER, partitioner);
     // throwaway init to initialize table
     buffer.init();
 
@@ -213,7 +221,7 @@ public class CommitBufferTest {
     // Given:
     final CommitBuffer<Bytes, RemoteKVTable> buffer = new CommitBuffer<>(
         client, changelogTp, admin, table,
-        KEY_SPEC, true, TRIGGERS, partitioner);
+        KEY_SPEC, true, TRIGGERS, EXCEPTION_SUPPLIER, partitioner);
     buffer.init();
     buffer.put(KEY, VALUE, CURRENT_TS);
 
@@ -229,7 +237,7 @@ public class CommitBufferTest {
     // Given:
     final CommitBuffer<Bytes, RemoteKVTable> buffer = new CommitBuffer<>(
         client, changelogTp, admin, table,
-        KEY_SPEC, false, TRIGGERS, partitioner);
+        KEY_SPEC, false, TRIGGERS, EXCEPTION_SUPPLIER, partitioner);
     buffer.init();
     buffer.put(KEY, VALUE, CURRENT_TS);
 
@@ -251,6 +259,7 @@ public class CommitBufferTest {
         KEY_SPEC,
         true,
         TRIGGERS,
+        EXCEPTION_SUPPLIER,
         partitioner
     );
     buffer.init();
@@ -268,7 +277,7 @@ public class CommitBufferTest {
     // Given:
     final CommitBuffer<Bytes, RemoteKVTable> buffer = new CommitBuffer<>(
         client, changelogTp, admin, table,
-        KEY_SPEC, true, TRIGGERS, partitioner);
+        KEY_SPEC, true, TRIGGERS, EXCEPTION_SUPPLIER, partitioner);
     buffer.init();
     buffer.put(KEY, VALUE, CURRENT_TS);
 
@@ -300,6 +309,7 @@ public class CommitBufferTest {
         KEY_SPEC,
         false,
         FlushTriggers.ofRecords(10),
+        EXCEPTION_SUPPLIER,
         partitioner
     );
     buffer.init();
@@ -329,6 +339,7 @@ public class CommitBufferTest {
         KEY_SPEC,
         false,
         FlushTriggers.ofBytes(170),
+        EXCEPTION_SUPPLIER,
         partitioner
     );
     buffer.init();
@@ -360,6 +371,7 @@ public class CommitBufferTest {
         KEY_SPEC,
         false,
         FlushTriggers.ofInterval(Duration.ofSeconds(30)),
+        EXCEPTION_SUPPLIER,
         100,
         partitioner,
         clock::get
@@ -382,7 +394,8 @@ public class CommitBufferTest {
     // Given:
     client.execute(this.table.insert(KAFKA_PARTITION, KEY, VALUE, CURRENT_TS));
     final CommitBuffer<Bytes, RemoteKVTable> buffer = new CommitBuffer<>(
-        client, changelogTp, admin, this.table, KEY_SPEC, true, TRIGGERS, partitioner);
+        client, changelogTp, admin, this.table,
+        KEY_SPEC, true, TRIGGERS, EXCEPTION_SUPPLIER, partitioner);
     buffer.init();
 
     // When:
@@ -399,7 +412,7 @@ public class CommitBufferTest {
     // Given:
     final CommitBuffer<Bytes, RemoteKVTable> buffer = new CommitBuffer<>(
         client, changelogTp, admin, table,
-        KEY_SPEC, true, TRIGGERS, partitioner);
+        KEY_SPEC, true, TRIGGERS, EXCEPTION_SUPPLIER, partitioner);
     buffer.init();
 
     final ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>(
@@ -428,9 +441,10 @@ public class CommitBufferTest {
   @Test
   public void shouldNotRestoreRecordsWhenFencedByEpoch() {
     // Given:
+    final ExceptionSupplier exceptionSupplier = mock(ExceptionSupplier.class);
     final CommitBuffer<Bytes, RemoteKVTable> buffer = new CommitBuffer<>(
         client, changelogTp, admin, table,
-        KEY_SPEC, true, TRIGGERS, partitioner);
+        KEY_SPEC, true, TRIGGERS, exceptionSupplier, partitioner);
     buffer.init();
     LwtWriterFactory.reserve(
         table, new int[]{KAFKA_PARTITION}, KAFKA_PARTITION, 100L, false);
@@ -449,14 +463,19 @@ public class CommitBufferTest {
         Optional.empty()
     );
 
+    Mockito.when(exceptionSupplier.commitFencedException(anyString()))
+        .thenAnswer(msg -> new RuntimeException(msg.getArgument(0).toString()));
+
     // When:
     final var e = assertThrows(
-        TaskMigratedException.class,
+        RuntimeException.class,
         () -> buffer.restoreBatch(List.of(record)));
 
     // Then:
-    assertThat(e.getMessage(), containsString("Local Epoch: LwtWriterFactory{epoch=1}, "
-        + "Persisted Epoch: 100"));
+    final String errorMsg = "commit-buffer [" + table.name() + "-2] "
+        + "[2] Fenced while writing batch! Local Epoch: LwtWriterFactory{epoch=1}, "
+        + "Persisted Epoch: 100, Batch Offset: 100, Persisted Offset: -1";
+    assertThat(e.getMessage(), equalTo(errorMsg));
   }
 
   @Test
@@ -470,6 +489,7 @@ public class CommitBufferTest {
         KEY_SPEC,
         true,
         TRIGGERS,
+        EXCEPTION_SUPPLIER,
         3,
         partitioner,
         Instant::now

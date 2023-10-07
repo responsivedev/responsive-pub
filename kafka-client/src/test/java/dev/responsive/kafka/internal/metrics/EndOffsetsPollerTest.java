@@ -108,8 +108,8 @@ class EndOffsetsPollerTest {
     verify(metrics, times(2))
         .addMetric(metricNameCaptor.capture(), any(MetricValueProvider.class));
     assertThat(metricNameCaptor.getAllValues(), contains(
-        metricName(THREAD_ID, PARTITION1),
-        metricName(THREAD_ID, PARTITION2))
+        metricName(PARTITION1),
+        metricName(PARTITION2))
     );
   }
 
@@ -123,7 +123,7 @@ class EndOffsetsPollerTest {
     callback.onPartitionsRevoked(List.of(PARTITION1));
 
     // then:
-    verify(metrics).removeMetric(metricName(THREAD_ID, PARTITION1));
+    verify(metrics).removeMetric(metricName(PARTITION1));
   }
 
   @Test
@@ -136,7 +136,7 @@ class EndOffsetsPollerTest {
     callback.close();
 
     // then:
-    verify(metrics).removeMetric(metricName(THREAD_ID, PARTITION1));
+    verify(metrics).removeMetric(metricName(PARTITION1));
   }
 
   @Test
@@ -191,10 +191,10 @@ class EndOffsetsPollerTest {
     assertThat(((Gauge<Long>) providers.get(1)).value(null, 0L), equalTo(456L));
   }
 
-  private MetricName metricName(final String thread, final TopicPartition tp) {
+  private MetricName metricName(final TopicPartition tp) {
     return new MetricName("end-offset", "topic-metrics", "The end offset of this topic partition",
         Map.of(
-            "thread-id", thread,
+            "thread-id", THREAD_ID,
             "topic", tp.topic(),
             "partition", Integer.toString(tp.partition()),
             "consumer-group", GROUP,
