@@ -59,7 +59,7 @@ import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 @ExtendWith(ResponsiveExtension.class)
-public class ResponsiveGlobalStoreIntegrationTest {
+public class GlobalStoreIntegrationTest {
 
   private static final String INPUT_TOPIC = "input";
   private static final String GLOBAL_TOPIC = "global";

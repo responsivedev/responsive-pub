@@ -85,10 +85,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 @ExtendWith(ResponsiveExtension.class)
-public class ResponsivePartitionedStoreEosIntegrationTest {
+public class ResponsiveKeyValueStoreEosIntegrationTest {
 
   private static final Logger LOG
-      = LoggerFactory.getLogger(ResponsivePartitionedStoreEosIntegrationTest.class);
+      = LoggerFactory.getLogger(ResponsiveKeyValueStoreEosIntegrationTest.class);
 
   private static final int MAX_POLL_MS = 5000;
   private static final String INPUT_TOPIC = "input";
