@@ -5,7 +5,6 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.responsive.kafka.api.config.ResponsiveConfig;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.clients.consumer.CommitFailedException;
