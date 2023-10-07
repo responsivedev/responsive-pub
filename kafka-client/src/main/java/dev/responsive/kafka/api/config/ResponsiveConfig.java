@@ -17,7 +17,6 @@
 package dev.responsive.kafka.api.config;
 
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
-import dev.responsive.kafka.internal.config.ResponsiveStreamsConfig;
 import dev.responsive.kafka.internal.db.partitioning.Hasher;
 import dev.responsive.kafka.internal.db.partitioning.Murmur3Hasher;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
@@ -35,7 +34,6 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigDef.Validator;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.types.Password;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
 
 /**
