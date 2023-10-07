@@ -1,6 +1,5 @@
 package dev.responsive.kafka.internal.utils;
 
-import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.config.ResponsiveStreamsConfig;
 import java.util.Map;
 import org.apache.kafka.clients.consumer.CommitFailedException;
