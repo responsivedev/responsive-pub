@@ -17,11 +17,12 @@
 package dev.responsive.kafka.internal.stores;
 
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -63,8 +64,6 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.errors.TaskMigratedException;
-import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -165,17 +164,24 @@ public class CommitBufferTest {
   @Test
   public void shouldNotFlushWithExpiredEpoch() {
     // Given:
+    final ExceptionSupplier exceptionSupplier = mock(ExceptionSupplier.class);
     final CommitBuffer<Bytes, RemoteKVTable> buffer = new CommitBuffer<>(
         client, changelogTp, admin, table,
-        KEY_SPEC, true, TRIGGERS, EXCEPTION_SUPPLIER, partitioner);
+        KEY_SPEC, true, TRIGGERS, exceptionSupplier, partitioner);
     buffer.init();
 
     LwtWriterFactory.reserve(
         table, new int[]{KAFKA_PARTITION}, KAFKA_PARTITION, 100L, false);
 
+    final String errorMsg = "commit-buffer [" + table.name() + "-2] "
+        + "[1] Fenced while writing batch! Local Epoch: LwtWriterFactory{epoch=1}, "
+        + "Persisted Epoch: 100";
+    Mockito.when(exceptionSupplier.commitFencedException(errorMsg))
+        .thenReturn(new RuntimeException(errorMsg));
+
     // When:
-    final TaskMigratedException e = assertThrows(
-        TaskMigratedException.class,
+    final var e = assertThrows(
+        RuntimeException.class,
         () -> {
           buffer.put(KEY, VALUE, CURRENT_TS);
           buffer.flush(100L);
@@ -183,9 +189,8 @@ public class CommitBufferTest {
     );
 
     // Then:
-    assertThat(
-        e.getMessage(),
-        Matchers.containsString("Local Epoch: LwtWriterFactory{epoch=1}, Persisted Epoch: 100"));
+    assertThat(e.getMessage(), equalTo(errorMsg));
+    verify(exceptionSupplier);
   }
 
   @Test
@@ -434,9 +439,10 @@ public class CommitBufferTest {
   @Test
   public void shouldNotRestoreRecordsWhenFencedByEpoch() {
     // Given:
+    final ExceptionSupplier exceptionSupplier = mock(ExceptionSupplier.class);
     final CommitBuffer<Bytes, RemoteKVTable> buffer = new CommitBuffer<>(
         client, changelogTp, admin, table,
-        KEY_SPEC, true, TRIGGERS, EXCEPTION_SUPPLIER, partitioner);
+        KEY_SPEC, true, TRIGGERS, exceptionSupplier, partitioner);
     buffer.init();
     LwtWriterFactory.reserve(
         table, new int[]{KAFKA_PARTITION}, KAFKA_PARTITION, 100L, false);
@@ -455,14 +461,20 @@ public class CommitBufferTest {
         Optional.empty()
     );
 
+    final String errorMsg = "commit-buffer [" + table.name() + "-2] "
+        + "[1] Fenced while writing batch! Local Epoch: LwtWriterFactory{epoch=1}, "
+        + "Persisted Epoch: 100";
+    Mockito.when(exceptionSupplier.commitFencedException(errorMsg))
+        .thenReturn(new RuntimeException(errorMsg));
+
     // When:
     final var e = assertThrows(
-        TaskMigratedException.class,
+        RuntimeException.class,
         () -> buffer.restoreBatch(List.of(record)));
 
     // Then:
-    assertThat(e.getMessage(), containsString("Local Epoch: LwtWriterFactory{epoch=1}, "
-        + "Persisted Epoch: 100"));
+    assertThat(e.getMessage(), equalTo(errorMsg));
+    verify(exceptionSupplier);
   }
 
   @Test
