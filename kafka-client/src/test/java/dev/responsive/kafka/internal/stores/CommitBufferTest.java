@@ -22,6 +22,7 @@ import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -39,6 +40,7 @@ import dev.responsive.kafka.internal.db.MetadataRow;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.db.spec.BaseTableSpec;
+import dev.responsive.kafka.internal.utils.ExceptionSupplier;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
 import java.nio.ByteBuffer;
@@ -173,11 +175,9 @@ public class CommitBufferTest {
     LwtWriterFactory.reserve(
         table, new int[]{KAFKA_PARTITION}, KAFKA_PARTITION, 100L, false);
 
-    final String errorMsg = "commit-buffer [" + table.name() + "-2] "
-        + "[1] Fenced while writing batch! Local Epoch: LwtWriterFactory{epoch=1}, "
-        + "Persisted Epoch: 100";
-    Mockito.when(exceptionSupplier.commitFencedException(errorMsg))
-        .thenReturn(new RuntimeException(errorMsg));
+
+    Mockito.when(exceptionSupplier.commitFencedException(anyString()))
+        .thenAnswer(msg -> new RuntimeException(msg.getArgument(0).toString()));
 
     // When:
     final var e = assertThrows(
@@ -189,8 +189,10 @@ public class CommitBufferTest {
     );
 
     // Then:
+    final String errorMsg = "commit-buffer [" + table.name() + "-2] "
+        + "[2] Fenced while writing batch! Local Epoch: LwtWriterFactory{epoch=1}, "
+        + "Persisted Epoch: 100, Batch Offset: 100, Persisted Offset: -1";
     assertThat(e.getMessage(), equalTo(errorMsg));
-    verify(exceptionSupplier);
   }
 
   @Test
@@ -461,11 +463,8 @@ public class CommitBufferTest {
         Optional.empty()
     );
 
-    final String errorMsg = "commit-buffer [" + table.name() + "-2] "
-        + "[1] Fenced while writing batch! Local Epoch: LwtWriterFactory{epoch=1}, "
-        + "Persisted Epoch: 100";
-    Mockito.when(exceptionSupplier.commitFencedException(errorMsg))
-        .thenReturn(new RuntimeException(errorMsg));
+    Mockito.when(exceptionSupplier.commitFencedException(anyString()))
+        .thenAnswer(msg -> new RuntimeException(msg.getArgument(0).toString()));
 
     // When:
     final var e = assertThrows(
@@ -473,8 +472,10 @@ public class CommitBufferTest {
         () -> buffer.restoreBatch(List.of(record)));
 
     // Then:
+    final String errorMsg = "commit-buffer [" + table.name() + "-2] "
+        + "[2] Fenced while writing batch! Local Epoch: LwtWriterFactory{epoch=1}, "
+        + "Persisted Epoch: 100, Batch Offset: 100, Persisted Offset: -1";
     assertThat(e.getMessage(), equalTo(errorMsg));
-    verify(exceptionSupplier);
   }
 
   @Test

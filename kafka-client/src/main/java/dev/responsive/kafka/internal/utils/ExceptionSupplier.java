@@ -1,4 +1,4 @@
-package dev.responsive.kafka.internal.stores;
+package dev.responsive.kafka.internal.utils;
 
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.config.ResponsiveStreamsConfig;
@@ -10,7 +10,7 @@ public class ExceptionSupplier {
 
   private final boolean eosEnabled;
 
-  ExceptionSupplier(final boolean eosEnabled) {
+  public ExceptionSupplier(final boolean eosEnabled) {
     this.eosEnabled = eosEnabled;
   }
 
@@ -28,5 +28,9 @@ public class ExceptionSupplier {
     } else {
       throw new CommitFailedException(message);
     }
+  }
+
+  public boolean eosEnabled() {
+    return eosEnabled;
   }
 }

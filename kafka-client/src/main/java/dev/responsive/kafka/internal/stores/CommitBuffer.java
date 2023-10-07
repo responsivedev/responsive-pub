@@ -26,6 +26,7 @@ import dev.responsive.kafka.internal.db.RemoteTable;
 import dev.responsive.kafka.internal.db.RemoteWriter;
 import dev.responsive.kafka.internal.db.WriterFactory;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
+import dev.responsive.kafka.internal.utils.ExceptionSupplier;
 import dev.responsive.kafka.internal.utils.Iterators;
 import dev.responsive.kafka.internal.utils.Result;
 import dev.responsive.kafka.internal.utils.SharedClients;
