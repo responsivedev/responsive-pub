@@ -387,7 +387,8 @@ public class CommitBufferTest {
     // Given:
     client.execute(this.table.insert(KAFKA_PARTITION, KEY, VALUE, CURRENT_TS));
     final CommitBuffer<Bytes, RemoteKVTable> buffer = new CommitBuffer<>(
-        client, changelogTp, admin, this.table, KEY_SPEC, true, TRIGGERS, EXCEPTION_SUPPLIER, partitioner);
+        client, changelogTp, admin, this.table,
+        KEY_SPEC, true, TRIGGERS, EXCEPTION_SUPPLIER, partitioner);
     buffer.init();
 
     // When:
