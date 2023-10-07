@@ -239,12 +239,6 @@ public class ResponsiveConfig extends AbstractConfig {
           REMOTE_TABLE_CHECK_INTERVAL_MS_DOC
       );
 
-  public boolean eosEnabled() {
-    return ResponsiveStreamsConfig.streamsConfig(originals())
-        .getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)
-        .equals(StreamsConfig.EXACTLY_ONCE_V2); // only eos-v2 is allowed
-  }
-
   /**
    * This should generally be used over the {@link #loggedConfig(Map)} override in all
    * cases outside the initial {@link ResponsiveKafkaStreams} constructor.

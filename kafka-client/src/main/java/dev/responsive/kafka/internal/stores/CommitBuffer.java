@@ -45,12 +45,10 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DeletedRecords;
-import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.PolicyViolationException;
-import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
@@ -65,15 +63,14 @@ class CommitBuffer<K, S extends RemoteTable<K>>
   private final Logger log;
   private final String logPrefix;
 
-  private final TopicPartition changelog;
-  private final int maxBatchSize;
-  private final boolean eosEnabled;
-
   private final SizeTrackingBuffer<K> buffer;
   private final CassandraClient client;
   private final Admin admin;
+  private final TopicPartition changelog;
   private final S table;
   private final FlushTriggers flushTriggers;
+  private final ExceptionSupplier exceptionSupplier;
+  private final int maxBatchSize;
   private final SubPartitioner subPartitioner;
   private final Supplier<Instant> clock;
   private final KeySpec<K> keySpec;
@@ -101,12 +98,12 @@ class CommitBuffer<K, S extends RemoteTable<K>>
     return new CommitBuffer<>(
         cassandraClient,
         changelog,
-        config.eosEnabled(),
         admin,
         schema,
         keySpec,
         truncateChangelog,
         FlushTriggers.fromConfig(config),
+        ExceptionSupplier.fromConfig(config),
         partitioner
     );
   }
@@ -114,23 +111,23 @@ class CommitBuffer<K, S extends RemoteTable<K>>
   CommitBuffer(
       final CassandraClient client,
       final TopicPartition changelog,
-      final boolean eosEnabled,
       final Admin admin,
       final S schema,
       final KeySpec<K> keySpec,
       final boolean truncateChangelog,
       final FlushTriggers flushTriggers,
+      final ExceptionSupplier exceptionSupplier,
       final SubPartitioner subPartitioner
   ) {
     this(
         client,
         changelog,
-        eosEnabled,
         admin,
         schema,
         keySpec,
         truncateChangelog,
         flushTriggers,
+        exceptionSupplier,
         MAX_BATCH_SIZE,
         subPartitioner,
         Instant::now
@@ -140,25 +137,25 @@ class CommitBuffer<K, S extends RemoteTable<K>>
   CommitBuffer(
       final CassandraClient client,
       final TopicPartition changelog,
-      final boolean eosEnabled,
       final Admin admin,
       final S table,
       final KeySpec<K> keySpec,
       final boolean truncateChangelog,
       final FlushTriggers flushTriggers,
+      final ExceptionSupplier exceptionSupplier,
       final int maxBatchSize,
       final SubPartitioner subPartitioner,
       final Supplier<Instant> clock
   ) {
     this.client = client;
     this.changelog = changelog;
-    this.eosEnabled = eosEnabled;
     this.admin = admin;
     this.table = table;
 
     this.buffer = new SizeTrackingBuffer<>(keySpec);
     this.keySpec = keySpec;
     this.flushTriggers = flushTriggers;
+    this.exceptionSupplier = exceptionSupplier;
     this.maxBatchSize = maxBatchSize;
     this.subPartitioner = subPartitioner;
     this.clock = clock;
@@ -501,11 +498,8 @@ class CommitBuffer<K, S extends RemoteTable<K>>
         stored.offset
     );
     log.warn(msg);
-    if (eosEnabled) {
-      throw new ProducerFencedException(logPrefix + msg);
-    } else {
-      throw new CommitFailedException(logPrefix + msg);
-    }
+
+    throw exceptionSupplier.commitFencedException(logPrefix + msg);
   }
 
   @Override
