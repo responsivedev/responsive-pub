@@ -33,6 +33,13 @@ jobs:
           java-version: '11'
           distribution: 'temurin'
 
+      # Install an older version of helm until https://github.com/helm/helm/issues/12463 is fixed
+      - name: "Set up helm"
+        uses: azure/setup-helm@v3
+        with:
+          version: 'v3.11.3'
+        id: install
+
       - name: "Login to AWS & Public ECR"
         uses: ./.github/actions/aws-and-ecr-login
         id: login-ecr-public
