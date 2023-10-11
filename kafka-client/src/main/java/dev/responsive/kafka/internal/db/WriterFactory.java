@@ -16,10 +16,12 @@
 
 package dev.responsive.kafka.internal.db;
 
+import dev.responsive.kafka.internal.utils.SharedClients;
+
 public interface WriterFactory<K> {
 
   RemoteWriter<K> createWriter(
-      final CassandraClient client,
+      final SharedClients client,
       final int partition,
       final int batchSize
   );

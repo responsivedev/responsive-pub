@@ -26,9 +26,18 @@ import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.CqlSessionBuilder;
 import com.datastax.oss.driver.api.core.config.DriverConfigLoader;
 import com.datastax.oss.driver.internal.core.session.throttling.ConcurrencyLimitingRequestThrottler;
+import com.mongodb.ConnectionString;
+import com.mongodb.MongoClientSettings;
+import com.mongodb.MongoException;
+import com.mongodb.ServerApi;
+import com.mongodb.ServerApiVersion;
+import com.mongodb.client.MongoClient;
+import com.mongodb.client.MongoClients;
+import com.mongodb.client.MongoDatabase;
 import dev.responsive.kafka.internal.db.ResponsiveRetryPolicy;
 import java.net.InetSocketAddress;
 import javax.annotation.Nullable;
+import org.bson.Document;
 
 /**
  * This is a utility to help creating a session to connect to the remote
@@ -74,4 +83,46 @@ public final class SessionUtil {
         .build();
   }
 
+  public static MongoClient connect(
+      final String hostname,
+      @Nullable final String clientId,
+      @Nullable final String clientSecret
+  ) {
+    final String connectionString;
+    if (clientId != null && clientSecret != null) {
+      connectionString = String.format(
+          "mongodb+srv://%s:%s@%s/?retryWrites=true&w=majority",
+          clientId,
+          clientSecret,
+          hostname
+      );
+    } else if (clientId == null ^ clientSecret == null) {
+      throw new IllegalArgumentException("Must specify both or neither clientId and clientSecret.");
+    } else {
+      // TODO(agavra): TestContainers uses a different connection string, for now
+      // we just assume that all non authenticated usage is via test containers
+      connectionString = hostname;
+    }
+
+    ServerApi serverApi = ServerApi.builder()
+        .version(ServerApiVersion.V1)
+        .build();
+
+    MongoClientSettings settings = MongoClientSettings.builder()
+        .applyConnectionString(new ConnectionString(connectionString))
+        .serverApi(serverApi)
+        .build();
+
+    // Create a new client and connect to the server
+    MongoClient mongoClient = MongoClients.create(settings);
+    try {
+      // Send a ping to confirm a successful connection
+      MongoDatabase database = mongoClient.getDatabase("admin");
+      database.runCommand(new Document("ping", 1));
+      System.out.println("Pinged your deployment. You successfully connected to MongoDB!");
+      return mongoClient;
+    } catch (MongoException e) {
+      throw new RuntimeException(e);
+    }
+  }
 }

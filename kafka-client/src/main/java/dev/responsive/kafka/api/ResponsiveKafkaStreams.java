@@ -16,33 +16,41 @@
 
 package dev.responsive.kafka.api;
 
+import static dev.responsive.kafka.api.config.ResponsiveConfig.CLIENT_ID_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.CLIENT_SECRET_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_BACKEND_TYPE_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_HOSTNAME_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.TASK_ASSIGNOR_CLASS_OVERRIDE;
 import static dev.responsive.kafka.internal.metrics.ResponsiveMetrics.RESPONSIVE_METRICS_NAMESPACE;
 
-import com.datastax.oss.driver.api.core.CqlSession;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
+import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.internal.clients.ResponsiveKafkaClientSupplier;
 import dev.responsive.kafka.internal.config.InternalConfigs;
 import dev.responsive.kafka.internal.config.ResponsiveStreamsConfig;
-import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.CassandraClientFactory;
 import dev.responsive.kafka.internal.db.DefaultCassandraClientFactory;
+import dev.responsive.kafka.internal.db.mongo.ResponsiveMongoClient;
 import dev.responsive.kafka.internal.metrics.ClientVersionMetadata;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.metrics.ResponsiveStateListener;
 import dev.responsive.kafka.internal.stores.ResponsiveRestoreListener;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistry;
+import dev.responsive.kafka.internal.utils.SessionUtil;
 import dev.responsive.kafka.internal.utils.SharedClients;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -155,103 +163,23 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       final Time time
   ) {
     this(
-        topology,
-        ResponsiveConfig.loggedConfig(configs), // this should be the only place this is logged!
-        ResponsiveStreamsConfig.streamsConfig(configs),
-        clientSupplier,
-        time,
-        new DefaultCassandraClientFactory()
+        new Params(topology, configs)
+            .withClientSupplier(clientSupplier)
+            .withTime(time)
+            .build()
     );
   }
 
-  protected ResponsiveKafkaStreams(
-      final Topology topology,
-      final ResponsiveConfig responsiveConfig,
-      final StreamsConfig baseStreamsConfig,
-      final KafkaClientSupplier clientSupplier,
-      final Time time,
-      final CassandraClientFactory clientFactory
-  ) {
-    this(
-        topology,
-        responsiveConfig,
-        baseStreamsConfig,
-        clientSupplier,
-        time,
-        new ResponsiveStoreRegistry(),
-        createMetrics(baseStreamsConfig),
-        clientFactory,
-        clientFactory.createCqlSession(responsiveConfig)
-    );
-  }
-
-  private ResponsiveKafkaStreams(
-      final Topology topology,
-      final ResponsiveConfig responsiveConfig,
-      final StreamsConfig baseStreamsConfig,
-      final KafkaClientSupplier clientSupplier,
-      final Time time,
-      final ResponsiveStoreRegistry storeRegistry,
-      final ResponsiveMetrics metrics,
-      final CassandraClientFactory clientFactory,
-      final CqlSession session
-  ) {
-    this(
-        topology,
-        responsiveConfig,
-        new ResponsiveKafkaClientSupplier(
-            clientSupplier,
-            baseStreamsConfig,
-            storeRegistry,
-            metrics),
-        time,
-        storeRegistry,
-        metrics,
-        clientFactory.createCassandraClient(session, responsiveConfig)
-    );
-  }
-
-  private ResponsiveKafkaStreams(
-      final Topology topology,
-      final ResponsiveConfig responsiveConfig,
-      final ResponsiveKafkaClientSupplier responsiveKafkaClientSupplier,
-      final Time time,
-      final ResponsiveStoreRegistry storeRegistry,
-      final ResponsiveMetrics metrics,
-      final CassandraClient cassandraClient
-  ) {
-    this(
-        topology,
-        responsiveConfig,
-        responsiveKafkaClientSupplier,
-        time,
-        storeRegistry,
-        metrics,
-        new SharedClients(
-            cassandraClient,
-            responsiveKafkaClientSupplier.getAdmin(responsiveConfig.originals())
-        )
-    );
-  }
-
-  private ResponsiveKafkaStreams(
-      final Topology topology,
-      final ResponsiveConfig responsiveConfig,
-      final ResponsiveKafkaClientSupplier clientSupplier,
-      final Time time,
-      final ResponsiveStoreRegistry storeRegistry,
-      final ResponsiveMetrics responsiveMetrics,
-      final SharedClients sharedClients
-  ) {
+  protected ResponsiveKafkaStreams(final Params params) {
     super(
-        topology,
+        params.topology,
         propsWithOverrides(
-            responsiveConfig.originals(),
-            sharedClients,
-            storeRegistry,
-            topology.describe()),
-        clientSupplier,
-        time
+            params.responsiveConfig.originals(),
+            params.sharedClients,
+            params.storeRegistry,
+            params.topology.describe()),
+        params.responsiveKafkaClientSupplier,
+        params.time
     );
 
     try {
@@ -260,8 +188,8 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       throw new StreamsException("Configuration error, please check your properties");
     }
 
-    this.responsiveMetrics = responsiveMetrics;
-    this.sharedClients = sharedClients;
+    this.responsiveMetrics = params.metrics;
+    this.sharedClients = params.sharedClients;
 
     final ClientVersionMetadata versionMetadata = ClientVersionMetadata.loadVersionMetadata();
     // Only log the version metadata for Responsive since Kafka Streams will log its own
@@ -313,11 +241,22 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       final ResponsiveStoreRegistry storeRegistry,
       final TopologyDescription topologyDescription
   ) {
+    final InternalConfigs.Builder builder = new InternalConfigs.Builder();
+    switch (sharedClients.storageBackend()) {
+      case CASSANDRA:
+        builder.withCassandraClient(sharedClients.cassandraClient());
+        break;
+      case MONGO_DB:
+        builder.withMongoDbClient(sharedClients.mongoClient());
+        break;
+      default:
+        throw new IllegalStateException("Unexpected value: " + sharedClients.storageBackend());
+    }
+
     final Properties propsWithOverrides = new Properties();
     propsWithOverrides.putAll(configs);
-    propsWithOverrides.putAll(new InternalConfigs.Builder()
-            .withCassandraClient(sharedClients.cassandraClient)
-            .withKafkaAdmin(sharedClients.admin)
+    propsWithOverrides.putAll(builder
+            .withKafkaAdmin(sharedClients.admin())
             .withStoreRegistry(storeRegistry)
             .withTopologyDescription(topologyDescription)
             .build());
@@ -416,5 +355,94 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     final boolean closed = super.close(options);
     closeInternal();
     return closed;
+  }
+
+  protected static class Params {
+
+    final Topology topology;
+    final ResponsiveConfig responsiveConfig;
+    final StreamsConfig streamsConfig;
+    final ResponsiveMetrics metrics;
+    final ResponsiveStoreRegistry storeRegistry;
+
+    // can be set during construction
+    Time time = Time.SYSTEM;
+    KafkaClientSupplier clientSupplier = new DefaultKafkaClientSupplier();
+    CassandraClientFactory cassandraFactory = new DefaultCassandraClientFactory();
+
+    // initialized on init()
+    SharedClients sharedClients;
+    ResponsiveKafkaClientSupplier responsiveKafkaClientSupplier;
+
+    public Params(final Topology topology, final Map<?, ?> configs) {
+      this.topology = topology;
+
+      // this should be the only place this is logged!
+      this.responsiveConfig = ResponsiveConfig.loggedConfig(configs);
+      this.streamsConfig = ResponsiveStreamsConfig.streamsConfig(configs);
+
+      this.metrics = createMetrics(streamsConfig);
+      this.storeRegistry = new ResponsiveStoreRegistry();
+    }
+
+    public Params withClientSupplier(final KafkaClientSupplier clientSupplier) {
+      this.clientSupplier = clientSupplier;
+      return this;
+    }
+
+    public Params withCassandraClientFactory(final CassandraClientFactory clientFactory) {
+      this.cassandraFactory = clientFactory;
+      return this;
+    }
+
+    public Params withTime(final Time time) {
+      this.time = time;
+      return this;
+    }
+
+    // we may want to consider wrapping this in an additional Builder to ensure
+    // that it's impossible to use a Params instance that hasn't called build(),
+    // but that felt a little extra
+    public Params build() {
+      this.responsiveKafkaClientSupplier = new ResponsiveKafkaClientSupplier(
+          clientSupplier,
+          streamsConfig,
+          storeRegistry,
+          metrics
+      );
+      final var admin = responsiveKafkaClientSupplier.getAdmin(responsiveConfig.originals());
+
+      final var backendType = StorageBackend.valueOf(responsiveConfig
+          .getString(STORAGE_BACKEND_TYPE_CONFIG)
+          .toUpperCase(Locale.ROOT)
+      );
+
+      switch (backendType) {
+        case CASSANDRA:
+          final var cqlSession = cassandraFactory.createCqlSession(responsiveConfig);
+          final var cassandraClient = cassandraFactory.createClient(cqlSession, responsiveConfig);
+          sharedClients = new SharedClients(Optional.empty(), Optional.of(cassandraClient), admin);
+          break;
+        case MONGO_DB:
+          final var hostname = responsiveConfig.getString(STORAGE_HOSTNAME_CONFIG);
+          final String clientId = responsiveConfig.getString(CLIENT_ID_CONFIG);
+          final Password clientSecret = responsiveConfig.getPassword(CLIENT_SECRET_CONFIG);
+          final var mongoClient = SessionUtil.connect(
+              hostname,
+              clientId,
+              clientSecret == null ? null : clientSecret.value()
+          );
+          sharedClients = new SharedClients(
+              Optional.of(new ResponsiveMongoClient(mongoClient)),
+              Optional.empty(),
+              admin
+          );
+          break;
+        default:
+          throw new IllegalStateException("Unexpected value: " + backendType);
+      }
+
+      return this;
+    }
   }
 }

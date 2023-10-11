@@ -16,6 +16,9 @@
 
 package dev.responsive.kafka.integration;
 
+import static dev.responsive.kafka.api.config.ResponsiveConfig.CLIENT_ID_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.CLIENT_SECRET_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_HOSTNAME_CONFIG;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.getCassandraValidName;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.pipeInput;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_CONFIG;
@@ -52,14 +55,18 @@ import com.datastax.oss.driver.api.core.cql.BatchStatement;
 import com.datastax.oss.driver.api.core.cql.Statement;
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
+import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.api.stores.ResponsiveStores;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.CassandraClientFactory;
 import dev.responsive.kafka.internal.db.DefaultCassandraClientFactory;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
+import dev.responsive.kafka.internal.db.mongo.MongoKVTable;
+import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.db.spec.BaseTableSpec;
 import dev.responsive.kafka.internal.stores.SchemaTypes.KVSchema;
+import dev.responsive.kafka.internal.utils.SessionUtil;
 import dev.responsive.kafka.testutils.IntegrationTestUtils;
 import dev.responsive.kafka.testutils.IntegrationTestUtils.MockResponsiveKafkaStreams;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
@@ -93,6 +100,7 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
@@ -105,12 +113,17 @@ import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
-import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
-@ExtendWith(ResponsiveExtension.class)
 public class ResponsiveKeyValueStoreRestoreIntegrationTest {
+
+  // hardcoding CASSANDRA, but this test passes with MONGODB as well
+  private static final StorageBackend BACKEND = StorageBackend.CASSANDRA;
+
+  @RegisterExtension
+  static ResponsiveExtension EXTENSION = new ResponsiveExtension(BACKEND);
 
   private static final int MAX_POLL_MS = 5000;
   private static final String INPUT_TOPIC = "input";
@@ -170,24 +183,7 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
 
       // Make sure changelog is even w/ cassandra
       final ResponsiveConfig config = ResponsiveConfig.responsiveConfig(properties);
-      final CassandraClient cassandraClient = defaultFactory.createCassandraClient(
-          defaultFactory.createCqlSession(config),
-          config
-      );
-
-      final RemoteKVTable table;
-      switch (type) {
-        case KEY_VALUE:
-          table = cassandraClient.kvFactory()
-              .create(new BaseTableSpec(aggName()));
-          break;
-        case FACT:
-          table = cassandraClient.factFactory()
-              .create(new BaseTableSpec(aggName()));
-          break;
-        default:
-          throw new IllegalArgumentException("Unexpected type " + type);
-      }
+      final RemoteKVTable table = remoteKVTable(type, defaultFactory, config);
 
       final long cassandraOffset = table.metadata(0).offset;
       assertThat(cassandraOffset, greaterThan(0L));
@@ -240,34 +236,20 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
       waitTillConsumedPast(input, endInput + 1, Duration.ofSeconds(30));
     }
 
-    // Make sure changelog is ahead of cassandra
+    // Make sure changelog is ahead of remote
     final ResponsiveConfig config = ResponsiveConfig.responsiveConfig(properties);
-    final CassandraClient cassandraClient = defaultFactory.createCassandraClient(
-        defaultFactory.createCqlSession(config),
-        config);
-
     final RemoteKVTable table;
-    switch (type) {
-      case KEY_VALUE:
-        table = cassandraClient.kvFactory()
-            .create(new BaseTableSpec(aggName()));
-        break;
-      case FACT:
-        table = cassandraClient.factFactory()
-            .create(new BaseTableSpec(aggName()));
-        break;
-      default:
-        throw new IllegalArgumentException("Unexpected type " + type);
-    }
 
-    final long cassandraOffset = table.metadata(0).offset;
-    assertThat(cassandraOffset, greaterThan(0L));
+    table = remoteKVTable(type, defaultFactory, config);
+
+    final long remoteOffset = table.metadata(0).offset;
+    assertThat(remoteOffset, greaterThan(0L));
     final TopicPartition changelog = new TopicPartition(name + "-" + aggName() + "-changelog", 0);
     final long changelogOffset = admin.listOffsets(Map.of(changelog, OffsetSpec.latest())).all()
         .get()
         .get(changelog)
         .offset();
-    assertThat(cassandraOffset, lessThan(changelogOffset));
+    assertThat(remoteOffset, lessThan(changelogOffset));
 
     // Restart with restore recorder
     final TestKafkaClientSupplier recordingClientSupplier = new TestKafkaClientSupplier();
@@ -290,11 +272,50 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
     assertThat(recordingClientSupplier.restoreRecords.get(changelog), not(empty()));
     // Assert that we never restored from an offset earlier than committed to Cassandra
     for (final ConsumerRecord<?, ?> r :  recordingClientSupplier.restoreRecords.get(changelog)) {
-      assertThat(r.offset(), greaterThanOrEqualTo(cassandraOffset));
+      assertThat(r.offset(), greaterThanOrEqualTo(remoteOffset));
     }
     // Assert that our source table is never truncated and the changelog table is
     assertThat(firstOffset(inputTbl), is(0L));
     assertThat(firstOffset(changelog), greaterThan(0L));
+  }
+
+  private RemoteKVTable remoteKVTable(final KVSchema type,
+                                      final CassandraClientFactory defaultFactory,
+                                      final ResponsiveConfig config)
+      throws InterruptedException, TimeoutException {
+    final RemoteKVTable table;
+    if (EXTENSION.backend == StorageBackend.CASSANDRA) {
+      final CassandraClient cassandraClient = defaultFactory.createClient(
+          defaultFactory.createCqlSession(config),
+          config);
+
+      switch (type) {
+        case KEY_VALUE:
+          table = cassandraClient.kvFactory()
+              .create(new BaseTableSpec(aggName()));
+          break;
+        case FACT:
+          table = cassandraClient.factFactory()
+              .create(new BaseTableSpec(aggName()));
+          break;
+        default:
+          throw new IllegalArgumentException("Unexpected type " + type);
+      }
+    } else if (EXTENSION.backend == StorageBackend.MONGO_DB) {
+      final var hostname = config.getString(STORAGE_HOSTNAME_CONFIG);
+      final String clientId = config.getString(CLIENT_ID_CONFIG);
+      final Password clientSecret = config.getPassword(CLIENT_SECRET_CONFIG);
+      final var mongoClient = SessionUtil.connect(
+          hostname,
+          clientId,
+          clientSecret == null ? null : clientSecret.value()
+      );
+      table = new MongoKVTable(mongoClient, aggName());
+      table.init(SubPartitioner.NO_SUBPARTITIONS, 0);
+    } else {
+      throw new IllegalArgumentException(EXTENSION.backend + " Unsupported");
+    }
+    return table;
   }
 
   private Optional<ConsumerRecord<Long, Long>> readLastOutputRecord(
@@ -431,11 +452,11 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
     }
 
     @Override
-    public CassandraClient createCassandraClient(
+    public CassandraClient createClient(
         final CqlSession session,
         final ResponsiveConfig config
     ) {
-      return wrappedFactory.createCassandraClient(session, config);
+      return wrappedFactory.createClient(session, config);
     }
 
   }

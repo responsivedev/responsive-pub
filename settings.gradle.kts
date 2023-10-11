@@ -51,6 +51,7 @@ dependencyResolutionManagement {
             version("protobuf-java", "3.22.3")
             version("slf4j", "1.7.5")
             version("log4j2", "2.20.0")
+            version("mongoDB", "4.10.2")
 
             library("jackson", "com.fasterxml.jackson.datatype", "jackson-datatype-jdk8").versionRef("jackson")
 
@@ -62,6 +63,8 @@ dependencyResolutionManagement {
             library("scylla-query-builder", "com.scylladb", "java-driver-query-builder").versionRef("scylla")
             library("scylla-mapper-runtime", "com.scylladb", "java-driver-mapper-runtime").versionRef("scylla")
             bundle("scylla", listOf("scylla-driver-core", "scylla-query-builder", "scylla-mapper-runtime"))
+
+            library("mongodb-driver-sync", "org.mongodb", "mongodb-driver-sync").versionRef("mongoDB")
 
             library("javaoperatorsdk", "io.javaoperatorsdk", "operator-framework").versionRef("javaoperatorsdk")
 
@@ -107,7 +110,15 @@ dependencyResolutionManagement {
             library("testcontainers-junit", "org.testcontainers", "junit-jupiter").versionRef("testcontainers")
             library("testcontainers-cassandra", "org.testcontainers", "cassandra").versionRef("testcontainers")
             library("testcontainers-kafka", "org.testcontainers", "kafka").versionRef("testcontainers")
-            bundle("testcontainers", listOf("testcontainers", "testcontainers-junit", "testcontainers-cassandra", "testcontainers-kafka"))
+            library("testcontainers-mongodb", "org.testcontainers", "mongodb").versionRef("testcontainers")
+            bundle("testcontainers",
+                    listOf(
+                            "testcontainers",
+                            "testcontainers-junit",
+                            "testcontainers-cassandra",
+                            "testcontainers-kafka",
+                            "testcontainers-mongodb"
+                    ))
 
             bundle("base", listOf("junit", "slf4j", "log4j-core", "hamcrest", "mockito", "mockito-jupiter"))
         }

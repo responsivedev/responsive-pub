@@ -23,10 +23,9 @@ import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.internal.db.BytesKeySpec;
-import dev.responsive.kafka.internal.db.CassandraClient;
+import dev.responsive.kafka.internal.db.CassandraTableSpecFactory;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
-import dev.responsive.kafka.internal.db.spec.CassandraTableSpec;
 import dev.responsive.kafka.internal.utils.Result;
 import dev.responsive.kafka.internal.utils.SharedClients;
 import dev.responsive.kafka.internal.utils.TableName;
@@ -54,8 +53,7 @@ public class PartitionedOperations implements KeyValueOperations {
   public static PartitionedOperations create(
       final TableName name,
       final StateStoreContext storeContext,
-      final ResponsiveKeyValueParams params,
-      final CassandraTableSpec spec
+      final ResponsiveKeyValueParams params
   ) throws InterruptedException, TimeoutException {
     final var log = new LogContext(
         String.format("store [%s] ", name.kafkaName())
@@ -64,29 +62,28 @@ public class PartitionedOperations implements KeyValueOperations {
 
     final ResponsiveConfig config = ResponsiveConfig.responsiveConfig(storeContext.appConfigs());
     final SharedClients sharedClients = loadSharedClients(storeContext.appConfigs());
-    final CassandraClient client = sharedClients.cassandraClient;
 
-    final var partition =  new TopicPartition(
+    final var partition = new TopicPartition(
         changelogFor(storeContext, name.kafkaName(), false),
         context.taskId().partition()
     );
     final var partitioner = params.schemaType() == SchemaTypes.KVSchema.FACT
         ? SubPartitioner.NO_SUBPARTITIONS
-        : config.getSubPartitioner(sharedClients.admin, name, partition.topic());
+        : config.getSubPartitioner(sharedClients.admin(), name, partition.topic());
 
     final RemoteKVTable table;
-    switch (params.schemaType()) {
-      case KEY_VALUE:
-        table = client.kvFactory().create(spec);
+    switch (sharedClients.storageBackend()) {
+      case CASSANDRA:
+        table = createCassandra(params, sharedClients);
         break;
-      case FACT:
-        table = client.factFactory().create(spec);
+      case MONGO_DB:
+        table = createMongo(params, sharedClients);
         break;
       default:
-        throw new IllegalArgumentException("Unexpected schema type " + params.schemaType());
+        throw new IllegalStateException("Unexpected value: " + sharedClients.storageBackend());
     }
 
-    log.info("Remote table {} is available for querying.", name.cassandraName());
+    log.info("Remote table {} is available for querying.", name.remoteName());
 
     final var buffer = CommitBuffer.from(
         sharedClients,
@@ -115,6 +112,29 @@ public class PartitionedOperations implements KeyValueOperations {
         context,
         registration
     );
+  }
+
+  private static RemoteKVTable createCassandra(
+      final ResponsiveKeyValueParams params,
+      final SharedClients clients
+  ) throws InterruptedException, TimeoutException {
+    final var client = clients.cassandraClient();
+    final var spec = CassandraTableSpecFactory.fromKVParams(params);
+    switch (params.schemaType()) {
+      case KEY_VALUE:
+        return client.kvFactory().create(spec);
+      case FACT:
+        return client.factFactory().create(spec);
+      default:
+        throw new IllegalArgumentException("Unexpected schema type " + params.schemaType());
+    }
+  }
+
+  private static RemoteKVTable createMongo(
+      final ResponsiveKeyValueParams params,
+      final SharedClients sharedClients
+  ) throws InterruptedException, TimeoutException {
+    return sharedClients.mongoClient().kvTable(params.name().remoteName());
   }
 
   @SuppressWarnings("rawtypes")
@@ -207,7 +227,7 @@ public class PartitionedOperations implements KeyValueOperations {
   public long approximateNumEntries() {
     return partitioner
         .all(partition.partition())
-        .mapToLong(p -> table.cassandraClient().count(table.name(), p))
+        .mapToLong(table::approximateNumEntries)
         .sum();
   }
 

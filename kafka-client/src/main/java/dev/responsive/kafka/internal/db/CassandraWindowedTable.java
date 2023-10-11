@@ -80,7 +80,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable {
   private final PreparedStatement setOffset;
 
   public static CassandraWindowedTable create(
-      CassandraTableSpec spec,
+      final CassandraTableSpec spec,
       final CassandraClient client
   ) throws InterruptedException, TimeoutException {
     final String name = spec.tableName();
@@ -310,7 +310,12 @@ public class CassandraWindowedTable implements RemoteWindowedTable {
               .build()
       );
     });
-    return LwtWriterFactory.reserveWindowed(this, partitioner, kafkaPartition);
+    return LwtWriterFactory.reserveWindowed(
+        this,
+        client,
+        partitioner,
+        kafkaPartition
+    );
   }
 
   @Override
@@ -344,8 +349,8 @@ public class CassandraWindowedTable implements RemoteWindowedTable {
   }
 
   @Override
-  public CassandraClient cassandraClient() {
-    return client;
+  public long approximateNumEntries(final int partition) {
+    return client.count(name(), partition);
   }
 
   /**

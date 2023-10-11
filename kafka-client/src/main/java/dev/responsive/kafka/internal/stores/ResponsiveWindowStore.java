@@ -126,14 +126,14 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
 
       final ResponsiveConfig config = responsiveConfig(storeContext.appConfigs());
       final SharedClients sharedClients = loadSharedClients(storeContext.appConfigs());
-      final CassandraClient client = sharedClients.cassandraClient;
+      final CassandraClient client = sharedClients.cassandraClient();
 
       storeRegistry = InternalConfigs.loadStoreRegistry(context.appConfigs());
       partition =  new TopicPartition(
           changelogFor(storeContext, name.kafkaName(), false),
           context.taskId().partition()
       );
-      partitioner = config.getSubPartitioner(sharedClients.admin, name, partition.topic());
+      partitioner = config.getSubPartitioner(sharedClients.admin(), name, partition.topic());
 
       switch (params.schemaType()) {
         case WINDOW:
@@ -145,7 +145,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
           throw new IllegalArgumentException(params.schemaType().name());
       }
 
-      log.info("Remote table {} is available for querying.", name.cassandraName());
+      log.info("Remote table {} is available for querying.", name.remoteName());
 
       buffer = CommitBuffer.from(
           sharedClients,

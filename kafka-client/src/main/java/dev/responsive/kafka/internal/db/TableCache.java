@@ -28,23 +28,18 @@ import javax.annotation.concurrent.ThreadSafe;
  * table are only prepared once during the lifetime of the application.
  */
 @ThreadSafe
-public class TableFactory<T extends RemoteTable<?>> {
+public class TableCache<T extends RemoteTable<?>> {
 
   @FunctionalInterface
   public interface Factory<T> {
-    T create(final CassandraTableSpec spec, final CassandraClient client)
+    T create(final CassandraTableSpec spec)
         throws InterruptedException, TimeoutException;
   }
 
   private final Map<String, T> tables = new HashMap<>();
-  private final CassandraClient client;
   private final Factory<T> factory;
 
-  public TableFactory(
-      final CassandraClient client,
-      final Factory<T> factory
-  ) {
-    this.client = client;
+  public TableCache(final Factory<T> factory) {
     this.factory = factory;
   }
 
@@ -59,7 +54,7 @@ public class TableFactory<T extends RemoteTable<?>> {
       return existing;
     }
 
-    final T table = factory.create(spec, client);
+    final T table = factory.create(spec);
     tables.put(spec.tableName(), table);
     return table;
   }

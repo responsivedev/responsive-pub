@@ -14,33 +14,42 @@
  * limitations under the License.
  */
 
-package dev.responsive.kafka.internal.db;
+package dev.responsive.kafka.internal.db.mongo;
 
-import dev.responsive.kafka.internal.utils.SharedClients;
+import org.bson.codecs.pojo.annotations.BsonId;
+import org.bson.types.ObjectId;
 
-public class FactWriterFactory<K> implements WriterFactory<K> {
+public class MetadataDoc {
 
-  private final RemoteTable<K> table;
+  @BsonId
+  ObjectId id;
+  int partition;
+  long offset;
 
-  public FactWriterFactory(final RemoteTable<K> table) {
-    this.table = table;
+  public MetadataDoc() {
   }
 
-  @Override
-  public RemoteWriter<K> createWriter(
-      final SharedClients client,
-      final int partition,
-      final int batchSize
-  ) {
-    return new FactSchemaWriter<>(
-        client.cassandraClient(),
-        table,
-        partition
-    );
+  public ObjectId id() {
+    return id;
   }
 
-  @Override
-  public String toString() {
-    return "FactWriterFactory{}";
+  public void setId(final ObjectId id) {
+    this.id = id;
+  }
+
+  public int partition() {
+    return partition;
+  }
+
+  public void setPartition(final int partition) {
+    this.partition = partition;
+  }
+
+  public long offset() {
+    return offset;
+  }
+
+  public void setOffset(final long offset) {
+    this.offset = offset;
   }
 }

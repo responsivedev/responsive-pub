@@ -163,7 +163,7 @@ public class SubPartitionIntegrationTest {
               .collect(Collectors.toSet()),
           true,
           properties);
-      final String cassandraName = new TableName(storeName).cassandraName();
+      final String cassandraName = new TableName(storeName).remoteName();
       final RemoteKVTable table = CassandraKeyValueTable.create(
           new BaseTableSpec(cassandraName), client);
 
@@ -219,7 +219,7 @@ public class SubPartitionIntegrationTest {
               .collect(Collectors.toSet()),
           true,
           properties);
-      final String cassandraName = new TableName(storeName).cassandraName();
+      final String cassandraName = new TableName(storeName).remoteName();
       final RemoteKVTable table = CassandraFactTable.create(
           new BaseTableSpec(cassandraName), client);
 

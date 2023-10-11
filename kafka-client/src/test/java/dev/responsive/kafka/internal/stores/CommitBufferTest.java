@@ -41,6 +41,7 @@ import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.db.spec.BaseTableSpec;
 import dev.responsive.kafka.internal.utils.ExceptionSupplier;
+import dev.responsive.kafka.internal.utils.SharedClients;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
 import java.nio.ByteBuffer;
@@ -91,13 +92,14 @@ public class CommitBufferTest {
   private static final long MIN_VALID_TS = 0L;
 
   private CqlSession session;
-  private CassandraClient client;
+  private SharedClients client;
   private TopicPartition changelogTp;
 
   private String name;
   @Mock private Admin admin;
   private SubPartitioner partitioner;
   private RemoteKVTable table;
+  private CassandraClient cclient;
 
   @BeforeEach
   public void before(
@@ -111,8 +113,13 @@ public class CommitBufferTest {
         .withLocalDatacenter(cassandra.getLocalDatacenter())
         .withKeyspace("responsive_clients") // NOTE: this keyspace is expected to exist
         .build();
-    client = new CassandraClient(session, config);
-    table = client.kvFactory().create(new BaseTableSpec(name));
+    cclient = new CassandraClient(session, config);
+    client = new SharedClients(
+        Optional.empty(),
+        Optional.of(cclient),
+        admin
+    );
+    table = cclient.kvFactory().create(new BaseTableSpec(name));
     changelogTp = new TopicPartition(name + "-changelog", KAFKA_PARTITION);
     partitioner = SubPartitioner.NO_SUBPARTITIONS;
 
@@ -141,7 +148,7 @@ public class CommitBufferTest {
 
     // reserve epoch for partition 8 to ensure it doesn't get flushed
     // if it did it would get fenced
-    LwtWriterFactory.reserve(table, new int[]{8}, KAFKA_PARTITION, 3L, false);
+    LwtWriterFactory.reserve(table, cclient, new int[]{8}, KAFKA_PARTITION, 3L, false);
 
     final Bytes k0 = Bytes.wrap(ByteBuffer.allocate(4).putInt(0).array());
     final Bytes k1 = Bytes.wrap(ByteBuffer.allocate(4).putInt(1).array());
@@ -173,7 +180,7 @@ public class CommitBufferTest {
     buffer.init();
 
     LwtWriterFactory.reserve(
-        table, new int[]{KAFKA_PARTITION}, KAFKA_PARTITION, 100L, false);
+        table, cclient, new int[]{KAFKA_PARTITION}, KAFKA_PARTITION, 100L, false);
 
 
     Mockito.when(exceptionSupplier.commitFencedException(anyString()))
@@ -205,8 +212,8 @@ public class CommitBufferTest {
     // throwaway init to initialize table
     buffer.init();
 
-    LwtWriterFactory.reserve(table, new int[]{4}, KAFKA_PARTITION, 100L, false);
-    LwtWriterFactory.reserve(table, new int[]{5}, KAFKA_PARTITION, 100L, false);
+    LwtWriterFactory.reserve(table, cclient, new int[]{4}, KAFKA_PARTITION, 100L, false);
+    LwtWriterFactory.reserve(table, cclient, new int[]{5}, KAFKA_PARTITION, 100L, false);
 
     // When:
     buffer.init();
@@ -392,7 +399,7 @@ public class CommitBufferTest {
   @Test
   public void shouldDeleteRowInCassandraWithTombstone() {
     // Given:
-    client.execute(this.table.insert(KAFKA_PARTITION, KEY, VALUE, CURRENT_TS));
+    cclient.execute(this.table.insert(KAFKA_PARTITION, KEY, VALUE, CURRENT_TS));
     final CommitBuffer<Bytes, RemoteKVTable> buffer = new CommitBuffer<>(
         client, changelogTp, admin, this.table,
         KEY_SPEC, true, TRIGGERS, EXCEPTION_SUPPLIER, partitioner);
@@ -447,7 +454,7 @@ public class CommitBufferTest {
         KEY_SPEC, true, TRIGGERS, exceptionSupplier, partitioner);
     buffer.init();
     LwtWriterFactory.reserve(
-        table, new int[]{KAFKA_PARTITION}, KAFKA_PARTITION, 100L, false);
+        table, cclient, new int[]{KAFKA_PARTITION}, KAFKA_PARTITION, 100L, false);
 
     final ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>(
         changelogTp.topic(),
@@ -495,7 +502,7 @@ public class CommitBufferTest {
         Instant::now
     );
     buffer.init();
-    client.execute(table.setOffset(100, 1));
+    cclient.execute(table.setOffset(100, 1));
 
     final List<ConsumerRecord<byte[], byte[]>> records = IntStream.range(0, 5)
         .mapToObj(i -> new ConsumerRecord<>(

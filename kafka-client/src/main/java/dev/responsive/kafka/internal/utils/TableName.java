@@ -32,12 +32,12 @@ public class TableName {
       Pattern.compile("[^a-zA-Z0-9_]");
 
   private final String kafkaName;
-  private final String cassandraName;
+  private final String remoteName;
 
   public TableName(final String kafkaName) {
     this.kafkaName = kafkaName;
     final var escaped = kafkaName.replaceAll("_", "__"); // escape existing underscores
-    cassandraName = INVALID_CASSANDRA_CHARS
+    remoteName = INVALID_CASSANDRA_CHARS
         .matcher(escaped)
         .replaceAll("_")
         .toLowerCase();
@@ -47,8 +47,8 @@ public class TableName {
     return kafkaName;
   }
 
-  public String cassandraName() {
-    return cassandraName;
+  public String remoteName() {
+    return remoteName;
   }
 
   @Override
@@ -61,16 +61,16 @@ public class TableName {
     }
     final TableName tableName = (TableName) o;
     return Objects.equals(kafkaName, tableName.kafkaName)
-        && Objects.equals(cassandraName, tableName.cassandraName);
+        && Objects.equals(remoteName, tableName.remoteName);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(kafkaName, cassandraName);
+    return Objects.hash(kafkaName, remoteName);
   }
 
   @Override
   public String toString() {
-    return kafkaName + "(" + cassandraName + ")";
+    return kafkaName + "(" + remoteName + ")";
   }
 }

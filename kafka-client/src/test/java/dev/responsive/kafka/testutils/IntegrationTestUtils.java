@@ -3,8 +3,6 @@ package dev.responsive.kafka.testutils;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_CONFIG;
 
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
-import dev.responsive.kafka.api.config.ResponsiveConfig;
-import dev.responsive.kafka.internal.config.ResponsiveStreamsConfig;
 import dev.responsive.kafka.internal.db.CassandraClientFactory;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -31,7 +29,6 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreams.State;
@@ -54,12 +51,10 @@ public final class IntegrationTestUtils {
         final CassandraClientFactory clientFactory
     ) {
       super(
-          topology,
-          ResponsiveConfig.responsiveConfig(config),
-          ResponsiveStreamsConfig.streamsConfig(config),
-          clientSupplier,
-          Time.SYSTEM,
-          clientFactory
+          new Params(topology, config)
+              .withClientSupplier(clientSupplier)
+              .withCassandraClientFactory(clientFactory)
+              .build()
       );
     }
   }

@@ -29,6 +29,7 @@ import com.datastax.oss.driver.api.core.cql.PreparedStatement;
 import com.datastax.oss.driver.api.core.cql.ResultSet;
 import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
+import dev.responsive.kafka.internal.utils.SharedClients;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,22 +44,25 @@ public class LwtWriterFactory<K> implements WriterFactory<K> {
 
   public static <K> LwtWriterFactory<K> reserveWindowed(
       final RemoteTable<K> table,
+      final CassandraClient client,
       final SubPartitioner partitioner,
       final int kafkaPartition
   ) {
-    return reserve(table, partitioner, kafkaPartition, true);
+    return reserve(table, client, partitioner, kafkaPartition, true);
   }
 
   public static <K> LwtWriterFactory<K> reserve(
       final RemoteTable<K> table,
+      final CassandraClient client,
       final SubPartitioner partitioner,
       final int kafkaPartition
   ) {
-    return reserve(table, partitioner, kafkaPartition, false);
+    return reserve(table, client, partitioner, kafkaPartition, false);
   }
 
   private static <K> LwtWriterFactory<K> reserve(
       final RemoteTable<K> table,
+      final CassandraClient client,
       final SubPartitioner partitioner,
       final int kafkaPartition,
       final boolean windowed
@@ -70,6 +74,7 @@ public class LwtWriterFactory<K> implements WriterFactory<K> {
     final long epoch = table.metadata(basePartition).epoch + 1;
     return reserve(
         table,
+        client,
         partitioner.all(kafkaPartition).toArray(),
         kafkaPartition,
         epoch,
@@ -80,6 +85,7 @@ public class LwtWriterFactory<K> implements WriterFactory<K> {
   // Visible for Testing
   public static <K> LwtWriterFactory<K> reserve(
       final RemoteTable<K> table,
+      final CassandraClient client,
       final int[] partitions,
       final int kafkaPartition,
       final long epoch,
@@ -87,8 +93,8 @@ public class LwtWriterFactory<K> implements WriterFactory<K> {
   ) {
     for (final int sub : partitions) {
       final var setEpoch = windowed
-          ? reserveEpochWindowed(table, sub, epoch)
-          : reserveEpoch(table, sub, epoch);
+          ? reserveEpochWindowed(table, client, sub, epoch)
+          : reserveEpoch(table,  client, sub, epoch);
 
       if (!setEpoch.wasApplied()) {
         final long otherEpoch = table.metadata(sub).epoch;
@@ -111,8 +117,8 @@ public class LwtWriterFactory<K> implements WriterFactory<K> {
         table,
         epoch,
         windowed
-            ? ensureEpochWindowed(table, epoch)
-            : ensureEpoch(table, epoch)
+            ? ensureEpochWindowed(table, client, epoch)
+            : ensureEpoch(table, client, epoch)
     );
   }
 
@@ -128,12 +134,12 @@ public class LwtWriterFactory<K> implements WriterFactory<K> {
 
   @Override
   public RemoteWriter<K> createWriter(
-      final CassandraClient client,
+      final SharedClients client,
       final int partition,
       final int batchSize
   ) {
     return new LwtWriter<>(
-       client,
+        client.cassandraClient(),
         () -> ensureEpoch.bind().setInt(PARTITION_KEY.bind(), partition),
         table,
         partition,
@@ -150,10 +156,11 @@ public class LwtWriterFactory<K> implements WriterFactory<K> {
 
   private static ResultSet reserveEpoch(
       final RemoteTable<?> table,
+      final CassandraClient client,
       final int partition,
       final long epoch
   ) {
-    return table.cassandraClient().execute(
+    return client.execute(
         QueryBuilder.update(table.name())
             .setColumn(EPOCH.column(), EPOCH.literal(epoch))
             .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
@@ -166,10 +173,11 @@ public class LwtWriterFactory<K> implements WriterFactory<K> {
 
   private static ResultSet reserveEpochWindowed(
       final RemoteTable<?> table,
+      final CassandraClient client,
       final int partition,
       final long epoch
   ) {
-    return table.cassandraClient().execute(
+    return client.execute(
         QueryBuilder.update(table.name())
             .setColumn(EPOCH.column(), EPOCH.literal(epoch))
             .where(PARTITION_KEY.relation().isEqualTo(PARTITION_KEY.literal(partition)))
@@ -183,9 +191,10 @@ public class LwtWriterFactory<K> implements WriterFactory<K> {
 
   private static PreparedStatement ensureEpoch(
       final RemoteTable<?> table,
+      final CassandraClient client,
       final long epoch
   ) {
-    return table.cassandraClient().prepare(
+    return client.prepare(
         QueryBuilder.update(table.name())
             .setColumn(EPOCH.column(), EPOCH.literal(epoch))
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
@@ -198,9 +207,10 @@ public class LwtWriterFactory<K> implements WriterFactory<K> {
 
   private static PreparedStatement ensureEpochWindowed(
       final RemoteTable<?> table,
+      final CassandraClient client,
       final long epoch
   ) {
-    return table.cassandraClient().prepare(
+    return client.prepare(
         QueryBuilder.update(table.name())
             .setColumn(EPOCH.column(), EPOCH.literal(epoch))
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
