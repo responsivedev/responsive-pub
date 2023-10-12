@@ -26,7 +26,7 @@ import com.datastax.oss.driver.api.core.cql.Statement;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.RemoteWindowedTable;
-import dev.responsive.kafka.internal.db.TableFactory;
+import dev.responsive.kafka.internal.db.TableCache;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistry;
 import dev.responsive.kafka.internal.stores.TTDKeyValueTable;
 import dev.responsive.kafka.internal.stores.TTDWindowedTable;
@@ -42,16 +42,16 @@ public class TTDCassandraClient extends CassandraClient {
   private final ResponsiveStoreRegistry storeRegistry = new ResponsiveStoreRegistry();
   private final TTDMockAdmin admin;
 
-  private final TableFactory<RemoteKVTable> kvFactory;
-  private final TableFactory<RemoteWindowedTable> windowedFactory;
+  private final TableCache<RemoteKVTable> kvFactory;
+  private final TableCache<RemoteWindowedTable> windowedFactory;
 
   public TTDCassandraClient(final TTDMockAdmin admin, final Time time) {
     super(loggedConfig(admin.props()));
     this.time = time;
     this.admin = admin;
 
-    kvFactory = new TableFactory<>(this, TTDKeyValueTable::create);
-    windowedFactory = new TableFactory<>(this, TTDWindowedTable::create);
+    kvFactory = new TableCache<>(spec -> TTDKeyValueTable.create(spec, this));
+    windowedFactory = new TableCache<>(spec -> TTDWindowedTable.create(spec, this));
   }
 
   public Time time() {
@@ -115,22 +115,22 @@ public class TTDCassandraClient extends CassandraClient {
   }
 
   @Override
-  public TableFactory<RemoteKVTable> globalFactory() {
+  public TableCache<RemoteKVTable> globalFactory() {
     return kvFactory;
   }
 
   @Override
-  public TableFactory<RemoteKVTable> kvFactory() {
+  public TableCache<RemoteKVTable> kvFactory() {
     return kvFactory;
   }
 
   @Override
-  public TableFactory<RemoteKVTable> factFactory() {
+  public TableCache<RemoteKVTable> factFactory() {
     return kvFactory;
   }
 
   @Override
-  public TableFactory<RemoteWindowedTable> windowedFactory() {
+  public TableCache<RemoteWindowedTable> windowedFactory() {
     return windowedFactory;
   }
 }

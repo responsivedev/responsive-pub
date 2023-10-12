@@ -18,7 +18,6 @@ package dev.responsive.kafka.internal.stores;
 
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.kafka.internal.clients.TTDCassandraClient;
-import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.MetadataRow;
 import dev.responsive.kafka.internal.db.RemoteTable;
 import dev.responsive.kafka.internal.db.RemoteWriter;
@@ -49,7 +48,7 @@ public abstract class TTDTable<K> implements RemoteTable<K> {
       final SubPartitioner partitioner,
       final int kafkaPartition
   ) {
-    return (client, partition, batchSize) -> new TTDWriter<K>(this, partition);
+    return (client, partition, batchSize) -> new TTDWriter<>(this, partition);
   }
 
   @Override
@@ -63,8 +62,8 @@ public abstract class TTDTable<K> implements RemoteTable<K> {
   }
 
   @Override
-  public CassandraClient cassandraClient() {
-    return client;
+  public long approximateNumEntries(final int partition) {
+    return client.count(name(), partition);
   }
 
   private static class TTDWriter<K> implements RemoteWriter<K> {

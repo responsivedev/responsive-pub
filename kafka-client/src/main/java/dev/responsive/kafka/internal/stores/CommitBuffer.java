@@ -19,7 +19,6 @@ package dev.responsive.kafka.internal.stores;
 import static org.apache.kafka.clients.admin.RecordsToDelete.beforeOffset;
 
 import dev.responsive.kafka.api.config.ResponsiveConfig;
-import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.KeySpec;
 import dev.responsive.kafka.internal.db.MetadataRow;
 import dev.responsive.kafka.internal.db.RemoteTable;
@@ -65,7 +64,7 @@ class CommitBuffer<K, S extends RemoteTable<K>>
   private final String logPrefix;
 
   private final SizeTrackingBuffer<K> buffer;
-  private final CassandraClient client;
+  private final SharedClients client;
   private final Admin admin;
   private final TopicPartition changelog;
   private final S table;
@@ -93,11 +92,10 @@ class CommitBuffer<K, S extends RemoteTable<K>>
       final SubPartitioner partitioner,
       final ResponsiveConfig config
   ) {
-    final var admin = clients.admin;
-    final var cassandraClient = clients.cassandraClient;
+    final var admin = clients.admin();
 
     return new CommitBuffer<>(
-        cassandraClient,
+        clients,
         changelog,
         admin,
         schema,
@@ -110,7 +108,7 @@ class CommitBuffer<K, S extends RemoteTable<K>>
   }
 
   CommitBuffer(
-      final CassandraClient client,
+      final SharedClients client,
       final TopicPartition changelog,
       final Admin admin,
       final S schema,
@@ -136,7 +134,7 @@ class CommitBuffer<K, S extends RemoteTable<K>>
   }
 
   CommitBuffer(
-      final CassandraClient client,
+      final SharedClients client,
       final TopicPartition changelog,
       final Admin admin,
       final S table,

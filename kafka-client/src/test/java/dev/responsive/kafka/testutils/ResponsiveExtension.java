@@ -17,6 +17,7 @@
 package dev.responsive.kafka.testutils;
 
 import static dev.responsive.kafka.api.config.ResponsiveConfig.REMOTE_TABLE_CHECK_INTERVAL_MS_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_BACKEND_TYPE_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_DATACENTER_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_DESIRED_NUM_PARTITION_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_HOSTNAME_CONFIG;
@@ -28,6 +29,7 @@ import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CON
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS;
 
 import dev.responsive.kafka.api.config.ResponsiveConfig;
+import dev.responsive.kafka.api.config.StorageBackend;
 import java.lang.reflect.Parameter;
 import java.util.HashMap;
 import java.util.Map;
@@ -40,6 +42,7 @@ import org.junit.jupiter.api.extension.ParameterResolutionException;
 import org.junit.jupiter.api.extension.ParameterResolver;
 import org.testcontainers.containers.CassandraContainer;
 import org.testcontainers.containers.KafkaContainer;
+import org.testcontainers.containers.MongoDBContainer;
 
 public class ResponsiveExtension implements BeforeAllCallback, AfterAllCallback,
     ParameterResolver {
@@ -51,12 +54,32 @@ public class ResponsiveExtension implements BeforeAllCallback, AfterAllCallback,
       .withEnv("KAFKA_GROUP_MIN_SESSION_TIMEOUT_MS", "1000")
       .withEnv("KAFKA_GROUP_MAX_SESSION_TIMEOUT_MS", "60000")
       .withReuse(true);
+  public static MongoDBContainer mongo = new MongoDBContainer(TestConstants.MONGODB);
 
   public static Admin admin;
 
+  public StorageBackend backend = StorageBackend.CASSANDRA;
+
+  public ResponsiveExtension() {
+  }
+
+  public ResponsiveExtension(final StorageBackend backend) {
+    this.backend = backend;
+  }
+
   @Override
   public void beforeAll(final ExtensionContext context) throws Exception {
-    cassandra.start();
+    switch (backend) {
+      case CASSANDRA:
+        cassandra.start();
+        break;
+      case MONGO_DB:
+        mongo.start();
+        break;
+      default:
+        throw new IllegalStateException("Unexpected value: " + backend);
+    }
+
     kafka.start();
     admin = Admin.create(Map.of(BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers()));
   }
@@ -92,15 +115,28 @@ public class ResponsiveExtension implements BeforeAllCallback, AfterAllCallback,
       return admin;
     } else if (isContainerConfig(parameterContext)) {
       final Map<String, Object> map = new HashMap<>(Map.of(
-          STORAGE_HOSTNAME_CONFIG, cassandra.getContactPoint().getHostName(),
-          STORAGE_PORT_CONFIG, cassandra.getContactPoint().getPort(),
-          STORAGE_DATACENTER_CONFIG, cassandra.getLocalDatacenter(),
           TENANT_ID_CONFIG, "responsive_clients",
           INTERNAL_TASK_ASSIGNOR_CLASS, TASK_ASSIGNOR_CLASS_OVERRIDE,
           BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers(),
           STORAGE_DESIRED_NUM_PARTITION_CONFIG, -1,
           REMOTE_TABLE_CHECK_INTERVAL_MS_CONFIG, 100
       ));
+
+      switch (backend) {
+        case CASSANDRA:
+          map.put(STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.CASSANDRA.name());
+          map.put(STORAGE_HOSTNAME_CONFIG, cassandra.getContactPoint().getHostName());
+          map.put(STORAGE_PORT_CONFIG, cassandra.getContactPoint().getPort());
+          map.put(STORAGE_DATACENTER_CONFIG, cassandra.getLocalDatacenter());
+          break;
+        case MONGO_DB:
+          map.put(STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.MONGO_DB.name());
+          map.put(STORAGE_HOSTNAME_CONFIG, mongo.getConnectionString());
+          break;
+        default:
+          throw new IllegalStateException("Unexpected value: " + backend);
+      }
+
       if (parameterContext.getParameter().getType().equals(Map.class)) {
         return map;
       } else  {

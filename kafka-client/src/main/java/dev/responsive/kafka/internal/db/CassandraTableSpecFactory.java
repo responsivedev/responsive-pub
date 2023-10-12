@@ -37,11 +37,11 @@ import dev.responsive.kafka.internal.stores.SchemaTypes;
 public class CassandraTableSpecFactory {
 
   public static CassandraTableSpec globalSpec(final ResponsiveKeyValueParams params) {
-    return new GlobalTableSpec(new BaseTableSpec(params.name().cassandraName()));
+    return new GlobalTableSpec(new BaseTableSpec(params.name().remoteName()));
   }
 
   public static CassandraTableSpec fromKVParams(final ResponsiveKeyValueParams params) {
-    CassandraTableSpec spec = new BaseTableSpec(params.name().cassandraName());
+    CassandraTableSpec spec = new BaseTableSpec(params.name().remoteName());
 
     if (params.timeToLive().isPresent()) {
       spec = new TtlTableSpec(spec, params.timeToLive().get());
@@ -55,7 +55,7 @@ public class CassandraTableSpecFactory {
   }
 
   public static CassandraTableSpec fromWindowParams(final ResponsiveWindowParams params) {
-    return new BaseTableSpec(params.name().cassandraName());
+    return new BaseTableSpec(params.name().remoteName());
   }
 
 }

@@ -14,24 +14,15 @@
  * limitations under the License.
  */
 
-package dev.responsive.kafka.internal.utils;
+package dev.responsive.kafka.api.config;
 
-import org.hamcrest.MatcherAssert;
-import org.hamcrest.Matchers;
-import org.junit.jupiter.api.Test;
+import java.util.Arrays;
 
-class TableNameTest {
+public enum StorageBackend {
+  CASSANDRA,
+  MONGO_DB;
 
-  @Test
-  public void shouldReplaceInvalidCharsWithUnderscores() {
-    // Given:
-    final var kafkaName = "foo.Bar-baz_qux";
-
-    // When:
-    final var name = new TableName(kafkaName);
-
-    // Then:
-    MatcherAssert.assertThat(name.remoteName(), Matchers.is("foo_bar_baz__qux"));
+  public static String[] names() {
+    return Arrays.stream(values()).map(Enum::name).toArray(String[]::new);
   }
-
 }

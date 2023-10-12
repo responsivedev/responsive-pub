@@ -14,15 +14,18 @@
  * limitations under the License.
  */
 
-package dev.responsive.kafka.internal.db;
+package dev.responsive.kafka.internal.db.mongo;
 
+import dev.responsive.kafka.internal.db.RemoteTable;
+import dev.responsive.kafka.internal.db.RemoteWriter;
+import dev.responsive.kafka.internal.db.WriterFactory;
 import dev.responsive.kafka.internal.utils.SharedClients;
 
-public class FactWriterFactory<K> implements WriterFactory<K> {
+public class MongoWriterFactory<K> implements WriterFactory<K> {
 
   private final RemoteTable<K> table;
 
-  public FactWriterFactory(final RemoteTable<K> table) {
+  public MongoWriterFactory(final RemoteTable<K> table) {
     this.table = table;
   }
 
@@ -32,15 +35,7 @@ public class FactWriterFactory<K> implements WriterFactory<K> {
       final int partition,
       final int batchSize
   ) {
-    return new FactSchemaWriter<>(
-        client.cassandraClient(),
-        table,
-        partition
-    );
+    return new MongoWriter<>(table, partition);
   }
 
-  @Override
-  public String toString() {
-    return "FactWriterFactory{}";
-  }
 }

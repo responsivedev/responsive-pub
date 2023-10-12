@@ -53,7 +53,7 @@ class LwtWriterTest {
   private static final long CURRENT_TS = 100L;
 
   @Mock
-  private WriterFactory<Bytes> writerFactory;
+  private WriterFactory<?> writerFactory;
   @Mock
   private CassandraClient client;
   @Mock

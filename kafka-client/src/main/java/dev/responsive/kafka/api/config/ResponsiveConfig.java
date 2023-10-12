@@ -68,6 +68,10 @@ public class ResponsiveConfig extends AbstractConfig {
   public static final String CLIENT_SECRET_CONFIG = "responsive.client.secret";
   private static final String CLIENT_SECRET_DOC = "The client secret for authenticated access";
 
+  public static final String STORAGE_BACKEND_TYPE_CONFIG = "responsive.storage.backend.type";
+  private static final String STORAGE_BACKEND_TYPE_DOC = "The storage backend";
+  private static final StorageBackend STORAGE_BACKEND_TYPE_DEFAULT = StorageBackend.CASSANDRA;
+
   // ------------------ request configurations --------------------------------
 
   public static final String REQUEST_TIMEOUT_MS_CONFIG = "responsive.request.timeout.ms";
@@ -187,6 +191,13 @@ public class ResponsiveConfig extends AbstractConfig {
           new NonEmptyPassword(CLIENT_SECRET_CONFIG),
           Importance.HIGH,
           CLIENT_SECRET_DOC
+      ).define(
+          STORAGE_BACKEND_TYPE_CONFIG,
+          Type.STRING,
+          STORAGE_BACKEND_TYPE_DEFAULT.name(),
+          ConfigDef.CaseInsensitiveValidString.in(StorageBackend.names()),
+          Importance.HIGH,
+          STORAGE_BACKEND_TYPE_DOC
       ).define(
           REQUEST_TIMEOUT_MS_CONFIG,
           Type.LONG,

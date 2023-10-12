@@ -16,10 +16,11 @@
 
 package dev.responsive.kafka.internal.stores;
 
+import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.internal.db.CassandraClient;
+import dev.responsive.kafka.internal.db.CassandraTableSpecFactory;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
-import dev.responsive.kafka.internal.db.spec.CassandraTableSpec;
 import dev.responsive.kafka.internal.utils.SharedClients;
 import java.util.Collection;
 import java.util.concurrent.TimeoutException;
@@ -40,11 +41,12 @@ public class GlobalOperations implements KeyValueOperations {
 
   public static GlobalOperations create(
       final StateStoreContext storeContext,
-      final CassandraTableSpec spec
+      final ResponsiveKeyValueParams params
   ) throws InterruptedException, TimeoutException {
     final var context = (GlobalProcessorContextImpl) storeContext;
     final SharedClients sharedClients = SharedClients.loadSharedClients(context.appConfigs());
-    final var client = sharedClients.cassandraClient;
+    final var client = sharedClients.cassandraClient();
+    final var spec = CassandraTableSpecFactory.globalSpec(params);
     final var table = client.globalFactory().create(spec);
 
     table.init(SubPartitioner.NO_SUBPARTITIONS, IGNORED_PARTITION);

@@ -68,6 +68,7 @@ dependencies {
     api(libs.kafka.streams)
 
     implementation(libs.bundles.scylla)
+    implementation(libs.mongodb.driver.sync)
 
     testImplementation(libs.kafka.clients) {
         artifact {

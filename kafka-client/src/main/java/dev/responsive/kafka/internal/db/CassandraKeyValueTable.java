@@ -216,7 +216,7 @@ public class CassandraKeyValueTable implements RemoteKVTable {
               .build()
       );
     });
-    return LwtWriterFactory.reserve(this, partitioner, kafkaPartition);
+    return LwtWriterFactory.reserve(this, client, partitioner, kafkaPartition);
   }
 
   @Override
@@ -334,8 +334,8 @@ public class CassandraKeyValueTable implements RemoteKVTable {
   }
 
   @Override
-  public CassandraClient cassandraClient() {
-    return client;
+  public long approximateNumEntries(final int partition) {
+    return client.count(name(), partition);
   }
 
   private static KeyValue<Bytes, byte[]> rows(final Row row) {

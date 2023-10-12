@@ -29,7 +29,7 @@ public interface RemoteTable<K> {
    * their initialized values.
    *
    * @return a {@link WriterFactory} that gives the callee access
-   *         to run statements on {@code table}
+   * to run statements on {@code table}
    */
   WriterFactory<K> init(
       final SubPartitioner partitioner,
@@ -90,6 +90,5 @@ public interface RemoteTable<K> {
       final long offset
   );
 
-  CassandraClient cassandraClient();
-
+  long approximateNumEntries(int partition);
 }

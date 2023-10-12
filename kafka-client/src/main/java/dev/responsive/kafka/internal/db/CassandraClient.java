@@ -46,10 +46,10 @@ public class CassandraClient {
   private final CqlSession session;
 
   private final ResponsiveConfig config;
-  private final TableFactory<RemoteKVTable> kvFactory;
-  private final TableFactory<RemoteKVTable> factFactory;
-  private final TableFactory<RemoteWindowedTable> windowedFactory;
-  private final TableFactory<RemoteKVTable> globalFactory;
+  private final TableCache<RemoteKVTable> kvFactory;
+  private final TableCache<RemoteKVTable> factFactory;
+  private final TableCache<RemoteWindowedTable> windowedFactory;
+  private final TableCache<RemoteKVTable> globalFactory;
 
   /**
    * @param session the Cassandra session, expected to be initialized
@@ -61,10 +61,10 @@ public class CassandraClient {
     this.session = session;
     this.config = config;
 
-    this.kvFactory = new TableFactory<>(this, CassandraKeyValueTable::create);
-    this.factFactory = new TableFactory<>(this, CassandraFactTable::create);
-    this.windowedFactory = new TableFactory<>(this, CassandraWindowedTable::create);
-    this.globalFactory = new TableFactory<>(this, CassandraFactTable::create);
+    this.kvFactory = new TableCache<>(spec -> CassandraKeyValueTable.create(spec, this));
+    this.factFactory = new TableCache<>(spec -> CassandraFactTable.create(spec, this));
+    this.windowedFactory = new TableCache<>(spec -> CassandraWindowedTable.create(spec, this));
+    this.globalFactory = new TableCache<>(spec -> CassandraFactTable.create(spec, this));
   }
 
   protected CassandraClient(final ResponsiveConfig config) {
@@ -151,19 +151,19 @@ public class CassandraClient {
     session.close();
   }
 
-  public TableFactory<RemoteKVTable> globalFactory() {
+  public TableCache<RemoteKVTable> globalFactory() {
     return globalFactory;
   }
 
-  public TableFactory<RemoteKVTable> kvFactory() {
+  public TableCache<RemoteKVTable> kvFactory() {
     return kvFactory;
   }
 
-  public TableFactory<RemoteKVTable> factFactory() {
+  public TableCache<RemoteKVTable> factFactory() {
     return factFactory;
   }
 
-  public TableFactory<RemoteWindowedTable> windowedFactory() {
+  public TableCache<RemoteWindowedTable> windowedFactory() {
     return windowedFactory;
   }
 }

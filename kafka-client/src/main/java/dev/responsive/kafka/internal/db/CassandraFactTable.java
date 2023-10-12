@@ -227,8 +227,8 @@ public class CassandraFactTable implements RemoteKVTable {
   }
 
   @Override
-  public CassandraClient cassandraClient() {
-    return client;
+  public long approximateNumEntries(final int partition) {
+    return client.count(name(), partition);
   }
 
   @Override

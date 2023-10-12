@@ -20,8 +20,6 @@ import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils
 
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.internal.config.InternalConfigs;
-import dev.responsive.kafka.internal.db.CassandraTableSpecFactory;
-import dev.responsive.kafka.internal.db.spec.CassandraTableSpec;
 import dev.responsive.kafka.internal.utils.TableName;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
@@ -50,7 +48,6 @@ public class ResponsiveKeyValueStore implements KeyValueStore<Bytes, byte[]> {
   private boolean open;
   private KeyValueOperations operations;
   private ResponsiveStoreRegistry storeRegistry;
-  private CassandraTableSpec spec;
   private StateStoreContext context;
 
   public ResponsiveKeyValueStore(final ResponsiveKeyValueParams params) {
@@ -94,18 +91,9 @@ public class ResponsiveKeyValueStore implements KeyValueStore<Bytes, byte[]> {
       log.info("Initializing state store");
       this.context = context;
 
-      if (taskType == TaskType.GLOBAL) {
-        this.spec = CassandraTableSpecFactory.globalSpec(params);
-        operations = GlobalOperations.create(context, spec);
-      } else {
-        this.spec = CassandraTableSpecFactory.fromKVParams(params);
-        operations = PartitionedOperations.create(
-            name,
-            context,
-            params,
-            spec
-        );
-      }
+      operations = (taskType == TaskType.GLOBAL)
+          ? GlobalOperations.create(context, params)
+          : PartitionedOperations.create(name, context, params);
       log.info("Completed initializing state store");
 
       storeRegistry = InternalConfigs.loadStoreRegistry(context.appConfigs());
