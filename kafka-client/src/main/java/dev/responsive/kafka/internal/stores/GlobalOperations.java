@@ -16,12 +16,14 @@
 
 package dev.responsive.kafka.internal.stores;
 
+import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadSessionClients;
+
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.CassandraTableSpecFactory;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
-import dev.responsive.kafka.internal.utils.SharedClients;
+import dev.responsive.kafka.internal.utils.SessionClients;
 import java.util.Collection;
 import java.util.concurrent.TimeoutException;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -44,8 +46,8 @@ public class GlobalOperations implements KeyValueOperations {
       final ResponsiveKeyValueParams params
   ) throws InterruptedException, TimeoutException {
     final var context = (GlobalProcessorContextImpl) storeContext;
-    final SharedClients sharedClients = SharedClients.loadSharedClients(context.appConfigs());
-    final var client = sharedClients.cassandraClient();
+    final SessionClients sessionClients = loadSessionClients(context.appConfigs());
+    final var client = sessionClients.cassandraClient();
     final var spec = CassandraTableSpecFactory.globalSpec(params);
     final var table = client.globalFactory().create(spec);
 

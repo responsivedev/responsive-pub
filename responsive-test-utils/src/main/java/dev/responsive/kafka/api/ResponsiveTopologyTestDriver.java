@@ -19,9 +19,11 @@ package dev.responsive.kafka.api;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.clients.TTDCassandraClient;
 import dev.responsive.kafka.internal.clients.TTDMockAdmin;
-import dev.responsive.kafka.internal.config.InternalConfigs;
+import dev.responsive.kafka.internal.config.InternalSessionConfigs;
+import dev.responsive.kafka.internal.utils.SessionClients;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.Properties;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
@@ -132,9 +134,11 @@ public class ResponsiveTopologyTestDriver extends TopologyTestDriver {
   ) {
     final Properties props = baseProps(userProps);
 
-    props.putAll(new InternalConfigs.Builder()
-        .withCassandraClient(client)
-        .withKafkaAdmin(client.mockAdmin())
+    final SessionClients sessionClients = new SessionClients(
+        Optional.empty(), Optional.of(client), client.mockAdmin()
+    );
+    props.putAll(new InternalSessionConfigs.Builder()
+        .withSessionClients(sessionClients)
         .withStoreRegistry(client.storeRegistry())
         .withTopologyDescription(topologyDescription)
         .build()

@@ -1,10 +1,24 @@
+/*
+ * Copyright 2023 Responsive Computing, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package dev.responsive.kafka.internal.utils;
 
 import dev.responsive.kafka.api.config.StorageBackend;
-import dev.responsive.kafka.internal.config.InternalConfigs;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.mongo.ResponsiveMongoClient;
-import java.util.Map;
 import java.util.Optional;
 import org.apache.kafka.clients.admin.Admin;
 import org.slf4j.Logger;
@@ -14,23 +28,14 @@ import org.slf4j.LoggerFactory;
  * Basic container class for session clients and other shared resources that should only
  * be closed when the app itself is shutdown
  */
-public class SharedClients {
+public class SessionClients {
+  private static final Logger LOG = LoggerFactory.getLogger(SessionClients.class);
 
   private final Optional<ResponsiveMongoClient> mongoClient;
   private final Optional<CassandraClient> cassandraClient;
   private final Admin admin;
 
-  private static final Logger LOG = LoggerFactory.getLogger(SharedClients.class);
-
-  public static SharedClients loadSharedClients(final Map<String, Object> configs) {
-    return new SharedClients(
-        InternalConfigs.loadMongoClient(configs),
-        InternalConfigs.loadCassandraClient(configs),
-        InternalConfigs.loadKafkaAdmin(configs)
-    );
-  }
-
-  public SharedClients(
+  public SessionClients(
       final Optional<ResponsiveMongoClient> mongoClient,
       final Optional<CassandraClient> cassandraClient,
       final Admin admin
@@ -38,14 +43,6 @@ public class SharedClients {
     this.mongoClient = mongoClient;
     this.cassandraClient = cassandraClient;
     this.admin = admin;
-
-
-  }
-
-  public void closeAll() {
-    cassandraClient.ifPresent(CassandraClient::shutdown);
-    mongoClient.ifPresent(ResponsiveMongoClient::close);
-    admin().close();
   }
 
   public StorageBackend storageBackend() {
@@ -82,5 +79,11 @@ public class SharedClients {
 
   public Admin admin() {
     return admin;
+  }
+
+  public void closeAll() {
+    cassandraClient.ifPresent(CassandraClient::shutdown);
+    mongoClient.ifPresent(ResponsiveMongoClient::close);
+    admin.close();
   }
 }

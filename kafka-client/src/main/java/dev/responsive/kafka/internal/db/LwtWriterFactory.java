@@ -29,7 +29,7 @@ import com.datastax.oss.driver.api.core.cql.PreparedStatement;
 import com.datastax.oss.driver.api.core.cql.ResultSet;
 import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
-import dev.responsive.kafka.internal.utils.SharedClients;
+import dev.responsive.kafka.internal.utils.SessionClients;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -134,7 +134,7 @@ public class LwtWriterFactory<K> implements WriterFactory<K> {
 
   @Override
   public RemoteWriter<K> createWriter(
-      final SharedClients client,
+      final SessionClients client,
       final int partition,
       final int batchSize
   ) {

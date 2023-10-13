@@ -17,13 +17,13 @@
 package dev.responsive.kafka.internal.stores;
 
 import static dev.responsive.kafka.api.config.ResponsiveConfig.responsiveConfig;
-import static dev.responsive.kafka.internal.utils.SharedClients.loadSharedClients;
+import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadSessionClients;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.changelogFor;
 
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.stores.ResponsiveWindowParams;
-import dev.responsive.kafka.internal.config.InternalConfigs;
+import dev.responsive.kafka.internal.config.InternalSessionConfigs;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.CassandraTableSpecFactory;
 import dev.responsive.kafka.internal.db.RemoteWindowedTable;
@@ -32,7 +32,7 @@ import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.db.spec.CassandraTableSpec;
 import dev.responsive.kafka.internal.utils.Iterators;
 import dev.responsive.kafka.internal.utils.Result;
-import dev.responsive.kafka.internal.utils.SharedClients;
+import dev.responsive.kafka.internal.utils.SessionClients;
 import dev.responsive.kafka.internal.utils.Stamped;
 import dev.responsive.kafka.internal.utils.TableName;
 import java.util.concurrent.TimeoutException;
@@ -125,15 +125,15 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       context = asInternalProcessorContext(storeContext);
 
       final ResponsiveConfig config = responsiveConfig(storeContext.appConfigs());
-      final SharedClients sharedClients = loadSharedClients(storeContext.appConfigs());
-      final CassandraClient client = sharedClients.cassandraClient();
+      final SessionClients sessionClients = loadSessionClients(storeContext.appConfigs());
+      final CassandraClient client = sessionClients.cassandraClient();
 
-      storeRegistry = InternalConfigs.loadStoreRegistry(context.appConfigs());
+      storeRegistry = InternalSessionConfigs.loadStoreRegistry(context.appConfigs());
       partition =  new TopicPartition(
           changelogFor(storeContext, name.kafkaName(), false),
           context.taskId().partition()
       );
-      partitioner = config.getSubPartitioner(sharedClients.admin(), name, partition.topic());
+      partitioner = config.getSubPartitioner(sessionClients.admin(), name, partition.topic());
 
       switch (params.schemaType()) {
         case WINDOW:
@@ -148,7 +148,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       log.info("Remote table {} is available for querying.", name.remoteName());
 
       buffer = CommitBuffer.from(
-          sharedClients,
+          sessionClients,
           partition,
           table,
           new StampedKeySpec(this::withinRetention),

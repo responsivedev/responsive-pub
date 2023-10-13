@@ -16,7 +16,7 @@
 
 package dev.responsive.kafka.internal.db;
 
-import dev.responsive.kafka.internal.utils.SharedClients;
+import dev.responsive.kafka.internal.utils.SessionClients;
 
 public class FactWriterFactory<K> implements WriterFactory<K> {
 
@@ -28,7 +28,7 @@ public class FactWriterFactory<K> implements WriterFactory<K> {
 
   @Override
   public RemoteWriter<K> createWriter(
-      final SharedClients client,
+      final SessionClients client,
       final int partition,
       final int batchSize
   ) {

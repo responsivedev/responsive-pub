@@ -16,12 +16,12 @@
 
 package dev.responsive.kafka.internal.db;
 
-import dev.responsive.kafka.internal.utils.SharedClients;
+import dev.responsive.kafka.internal.utils.SessionClients;
 
 public interface WriterFactory<K> {
 
   RemoteWriter<K> createWriter(
-      final SharedClients client,
+      final SessionClients client,
       final int partition,
       final int batchSize
   );
