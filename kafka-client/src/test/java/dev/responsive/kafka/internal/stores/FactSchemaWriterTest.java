@@ -49,7 +49,7 @@ class FactSchemaWriterTest {
   private static final long CURRENT_TS = 100L;
 
   @Mock private CassandraClient client;
-  @Mock private RemoteTable<Bytes> table;
+  @Mock private RemoteTable<Bytes, BoundStatement> table;
   @Mock private AsyncResultSet result;
 
   private final ArgumentCaptor<Statement<?>> statementCaptor =

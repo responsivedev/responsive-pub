@@ -25,7 +25,8 @@ import dev.responsive.kafka.internal.utils.Stamped;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
-public class TTDWindowedTable extends TTDTable<Stamped<Bytes>> implements RemoteWindowedTable  {
+public class TTDWindowedTable extends TTDTable<Stamped<Bytes>>
+    implements RemoteWindowedTable<BoundStatement>  {
 
   private final String name;
   private final WindowStoreStub stub;

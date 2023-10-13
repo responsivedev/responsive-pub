@@ -25,6 +25,7 @@ import static dev.responsive.kafka.internal.db.ColumnName.ROW_TYPE;
 import static dev.responsive.kafka.internal.db.ColumnName.WINDOW_START;
 import static dev.responsive.kafka.internal.db.RowType.METADATA_ROW;
 
+import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
 import com.datastax.oss.driver.api.core.cql.ResultSet;
 import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
@@ -40,10 +41,10 @@ public class LwtWriterFactory<K> implements WriterFactory<K> {
 
   private final long epoch;
   private final PreparedStatement ensureEpoch;
-  private final RemoteTable<K> table;
+  private final RemoteTable<K, BoundStatement> table;
 
   public static <K> LwtWriterFactory<K> reserveWindowed(
-      final RemoteTable<K> table,
+      final RemoteTable<K, BoundStatement> table,
       final CassandraClient client,
       final SubPartitioner partitioner,
       final int kafkaPartition
@@ -52,7 +53,7 @@ public class LwtWriterFactory<K> implements WriterFactory<K> {
   }
 
   public static <K> LwtWriterFactory<K> reserve(
-      final RemoteTable<K> table,
+      final RemoteTable<K, BoundStatement> table,
       final CassandraClient client,
       final SubPartitioner partitioner,
       final int kafkaPartition
@@ -61,7 +62,7 @@ public class LwtWriterFactory<K> implements WriterFactory<K> {
   }
 
   private static <K> LwtWriterFactory<K> reserve(
-      final RemoteTable<K> table,
+      final RemoteTable<K, BoundStatement> table,
       final CassandraClient client,
       final SubPartitioner partitioner,
       final int kafkaPartition,
@@ -84,7 +85,7 @@ public class LwtWriterFactory<K> implements WriterFactory<K> {
 
   // Visible for Testing
   public static <K> LwtWriterFactory<K> reserve(
-      final RemoteTable<K> table,
+      final RemoteTable<K, BoundStatement> table,
       final CassandraClient client,
       final int[] partitions,
       final int kafkaPartition,
@@ -123,7 +124,7 @@ public class LwtWriterFactory<K> implements WriterFactory<K> {
   }
 
   public LwtWriterFactory(
-      final RemoteTable<K> table,
+      final RemoteTable<K, BoundStatement> table,
       final long epoch,
       final PreparedStatement ensureEpoch
   ) {
@@ -155,7 +156,7 @@ public class LwtWriterFactory<K> implements WriterFactory<K> {
   }
 
   private static ResultSet reserveEpoch(
-      final RemoteTable<?> table,
+      final RemoteTable<?, BoundStatement> table,
       final CassandraClient client,
       final int partition,
       final long epoch
@@ -172,7 +173,7 @@ public class LwtWriterFactory<K> implements WriterFactory<K> {
   }
 
   private static ResultSet reserveEpochWindowed(
-      final RemoteTable<?> table,
+      final RemoteTable<?, BoundStatement> table,
       final CassandraClient client,
       final int partition,
       final long epoch
@@ -190,7 +191,7 @@ public class LwtWriterFactory<K> implements WriterFactory<K> {
   }
 
   private static PreparedStatement ensureEpoch(
-      final RemoteTable<?> table,
+      final RemoteTable<?, BoundStatement> table,
       final CassandraClient client,
       final long epoch
   ) {
@@ -206,7 +207,7 @@ public class LwtWriterFactory<K> implements WriterFactory<K> {
   }
 
   private static PreparedStatement ensureEpochWindowed(
-      final RemoteTable<?> table,
+      final RemoteTable<?, BoundStatement> table,
       final CassandraClient client,
       final long epoch
   ) {

@@ -21,7 +21,6 @@ import static dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration.N
 import static org.bson.codecs.configuration.CodecRegistries.fromProviders;
 import static org.bson.codecs.configuration.CodecRegistries.fromRegistries;
 
-import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
@@ -42,7 +41,7 @@ import org.bson.codecs.configuration.CodecRegistry;
 import org.bson.codecs.pojo.PojoCodecProvider;
 import org.bson.types.ObjectId;
 
-public class MongoKVTable implements RemoteKVTable {
+public class MongoKVTable implements RemoteKVTable<Void> {
 
   private final String name;
   private final MongoCollection<KVDoc> collection;
@@ -112,7 +111,7 @@ public class MongoKVTable implements RemoteKVTable {
   }
 
   @Override
-  public BoundStatement insert(
+  public Void insert(
       final int partitionKey,
       final Bytes key,
       final byte[] value,
@@ -126,7 +125,7 @@ public class MongoKVTable implements RemoteKVTable {
   }
 
   @Override
-  public BoundStatement delete(final int partitionKey, final Bytes key) {
+  public Void delete(final int partitionKey, final Bytes key) {
     collection.deleteOne(Filters.eq("key", key));
     return null;
   }
@@ -143,8 +142,8 @@ public class MongoKVTable implements RemoteKVTable {
   }
 
   @Override
-  public BoundStatement setOffset(final int partition, final long offset) {
-    final UpdateResult modifiedCount = metadata.updateOne(
+  public Void setOffset(final int partition, final long offset) {
+    metadata.updateOne(
         Filters.eq("_id", metadataRows.get(partition)),
         Updates.set("offset", offset)
     );

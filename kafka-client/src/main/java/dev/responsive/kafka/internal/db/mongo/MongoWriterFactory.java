@@ -23,9 +23,9 @@ import dev.responsive.kafka.internal.utils.SessionClients;
 
 public class MongoWriterFactory<K> implements WriterFactory<K> {
 
-  private final RemoteTable<K> table;
+  private final RemoteTable<K, Void> table;
 
-  public MongoWriterFactory(final RemoteTable<K> table) {
+  public MongoWriterFactory(final RemoteTable<K, Void> table) {
     this.table = table;
   }
 

@@ -24,7 +24,7 @@ import java.util.concurrent.TimeoutException;
 
 public class ResponsiveMongoClient {
 
-  private final TableCache<RemoteKVTable> cache;
+  private final TableCache<RemoteKVTable<Void>> cache;
   private final MongoClient client;
 
   public ResponsiveMongoClient(final MongoClient client) {
@@ -32,7 +32,7 @@ public class ResponsiveMongoClient {
     cache = new TableCache<>(spec -> new MongoKVTable(client, spec.tableName()));
   }
 
-  public RemoteKVTable kvTable(final String name) throws InterruptedException, TimeoutException {
+  public RemoteKVTable<Void> kvTable(final String name) throws InterruptedException, TimeoutException {
     return cache.create(new BaseTableSpec(name));
   }
 

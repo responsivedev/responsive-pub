@@ -19,6 +19,7 @@ package dev.responsive.kafka.internal.clients;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.loggedConfig;
 
 import com.datastax.oss.driver.api.core.cql.AsyncResultSet;
+import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
 import com.datastax.oss.driver.api.core.cql.ResultSet;
 import com.datastax.oss.driver.api.core.cql.SimpleStatement;
@@ -42,8 +43,8 @@ public class TTDCassandraClient extends CassandraClient {
   private final ResponsiveStoreRegistry storeRegistry = new ResponsiveStoreRegistry();
   private final TTDMockAdmin admin;
 
-  private final TableCache<RemoteKVTable> kvFactory;
-  private final TableCache<RemoteWindowedTable> windowedFactory;
+  private final TableCache<RemoteKVTable<BoundStatement>> kvFactory;
+  private final TableCache<RemoteWindowedTable<BoundStatement>> windowedFactory;
 
   public TTDCassandraClient(final TTDMockAdmin admin, final Time time) {
     super(loggedConfig(admin.props()));
@@ -115,22 +116,22 @@ public class TTDCassandraClient extends CassandraClient {
   }
 
   @Override
-  public TableCache<RemoteKVTable> globalFactory() {
+  public TableCache<RemoteKVTable<BoundStatement>> globalFactory() {
     return kvFactory;
   }
 
   @Override
-  public TableCache<RemoteKVTable> kvFactory() {
+  public TableCache<RemoteKVTable<BoundStatement>> kvFactory() {
     return kvFactory;
   }
 
   @Override
-  public TableCache<RemoteKVTable> factFactory() {
+  public TableCache<RemoteKVTable<BoundStatement>> factFactory() {
     return kvFactory;
   }
 
   @Override
-  public TableCache<RemoteWindowedTable> windowedFactory() {
+  public TableCache<RemoteWindowedTable<BoundStatement>> windowedFactory() {
     return windowedFactory;
   }
 }

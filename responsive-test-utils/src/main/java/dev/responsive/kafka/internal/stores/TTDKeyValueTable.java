@@ -27,7 +27,7 @@ import java.time.Duration;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
-public class TTDKeyValueTable extends TTDTable<Bytes> implements RemoteKVTable {
+public class TTDKeyValueTable extends TTDTable<Bytes> implements RemoteKVTable<BoundStatement> {
 
   private final String name;
   private final KVStoreStub stub;

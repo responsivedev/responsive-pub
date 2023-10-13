@@ -24,10 +24,10 @@ import java.util.concurrent.CompletionStage;
 
 public class MongoWriter<K> implements RemoteWriter<K> {
 
-  private final RemoteTable<K> table;
+  private final RemoteTable<K, Void> table;
   private final int partition;
 
-  public MongoWriter(final RemoteTable<K> table, final int partition) {
+  public MongoWriter(final RemoteTable<K, Void> table, final int partition) {
     this.table = table;
     this.partition = partition;
   }

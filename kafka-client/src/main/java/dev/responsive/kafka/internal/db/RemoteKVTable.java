@@ -19,7 +19,7 @@ package dev.responsive.kafka.internal.db;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
-public interface RemoteKVTable extends RemoteTable<Bytes> {
+public interface RemoteKVTable<S> extends RemoteTable<Bytes, S> {
 
   /**
    * Retrieves the value of the given {@code partitionKey} and {@code key}
