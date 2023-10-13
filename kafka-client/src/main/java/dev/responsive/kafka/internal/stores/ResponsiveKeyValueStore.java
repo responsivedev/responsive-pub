@@ -44,11 +44,13 @@ public class ResponsiveKeyValueStore implements KeyValueStore<Bytes, byte[]> {
   private final ResponsiveKeyValueParams params;
   private final TableName name;
   private final Function<Map<String, Object>, ResponsiveStoreRegistry> registryProvider;
-  private final Position position; // TODO(IQ): update the position during restoration
   private final KVOperationsProvider opsProvider;
 
-  private Logger log;
+  private Position position; // TODO(IQ): update the position during restoration
   private boolean open;
+
+  // All the fields below this are effectively final, we just can't set them until #init is called
+  private Logger log;
   private KeyValueOperations operations;
   private ResponsiveStoreRegistry storeRegistry;
   private StateStoreContext context;

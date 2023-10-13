@@ -28,11 +28,11 @@ public class ApplicationMetrics implements MetricGroup {
   public static final String STREAMS_STATE = "streams-state";
   public static final String STREAMS_STATE_DESCRIPTION = "The current KafkaStreams.State expressed as its ordinal value";
 
-  public static final String NUM_RESTORING = "num-restoring-changelogs";
-  public static final String NUM_RESTORING_DESCRIPTION = "The number of changelog topics currently being restored from";
+  public static final String NUM_RESTORING_CHANGELOGS = "num-restoring-changelogs";
+  public static final String NUM_RESTORING_CHANGELOGS_DESCRIPTION = "The number of changelog topics currently being restored from";
 
-  public static final String NUM_INTERRUPTED = "num-interrupted-changelogs";
-  public static final String NUM_INTERRUPTED_DESCRIPTION = "The total number of changelog partitions that began restoring but did not complete";
+  public static final String NUM_INTERRUPTED_CHANGELOGS = "num-interrupted-changelogs";
+  public static final String NUM_INTERRUPTED_CHANGELOGS_DESCRIPTION = "The total number of changelog partitions that began restoring but did not complete";
 
   private final LinkedHashMap<String, String> tags;
   

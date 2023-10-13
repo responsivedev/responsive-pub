@@ -19,6 +19,16 @@ rules:
        type: gauge
        desc: the current state of this Kafka Streams client
        unit: '{KafkaStreams.State}'
+     num-restoring-changelogs:
+       metric: responsive.kafka.streams.num.restoring.changelogs
+       type: gauge
+       desc: the number of state stores currently being restored from a changelog
+       unit: '{stores}'
+     num-interrupted-changelogs:
+       metric: responsive.kafka.streams.num.interrupted.changelogs
+       type: gauge
+       desc: the number of state stores that were interrupted before finishing restoration
+       unit: '{stores}'
 
  # Responsive topic metrics
  - bean: dev.responsive:type=topic-metrics,responsive-version=*,responsive-commit-id=*,streams-version=*,streams-commit-id=*,consumer-group=*,streams-application-id=*,streams-client-id=*,thread-id=*,topic=*,partition=*
@@ -44,6 +54,32 @@ rules:
        type: gauge
        desc: the current committed offset of the partition
        unit: '{offset}'
+
+ # Responsive store metrics
+ - bean: dev.responsive:type=topic-metrics,responsive-version=*,responsive-commit-id=*,streams-version=*,streams-commit-id=*,consumer-group=*,streams-application-id=*,streams-client-id=*,thread-id=*,topic=*,partition=*,store=*
+   metricAttribute:
+     responsiveVersion: param(responsive-version)
+     responsiveCommitId: param(responsive-commit-id)
+     streamsVersion: param(streams-version)
+     streamsCommitId: param(streams-commit-id)
+     consumerGroup: param(consumer-group)
+     streamsApplicationId: param(streams-application-id)
+     streamsClientId: param(streams-client-id)
+     thread: param(thread-id)
+     partition: param(partition)
+     topic: param(topic)
+     store: param(store)
+   mapping:
+     restore-latency-avg:
+       metric: responsive.kafka.streams.restore.latency.avg
+       type: gauge
+       desc: the average time this task spent in restoration
+       unit: '{milliseconds}'
+     restore-latency-max:
+       metric: responsive.kafka.streams.restore.latency.max
+       type: gauge
+       desc: the average time this task spent in restoration
+       unit: '{milliseconds}'
 
 
  #### Apache Kafka Metrics ####
@@ -88,6 +124,17 @@ rules:
        type: gauge
        desc: the rate of failed rebalances
        unit: '{rebalances-per-hour}'
+
+  # Kafka Streams client metrics
+ - bean: kafka.streams:type=stream-metrics,client-id=*
+   metricAttribute:
+     clientId: param(client-id)
+   mapping:
+     failed-stream-threads:
+       metric: kafka.streams.failed.stream.threads
+       type: gauge
+       desc: The number of failed stream threads since this client started
+       unit: '{threads}'
 
  # Kafka Streams topic metrics
  - bean: kafka.streams:type=stream-topic-metrics,thread-id=*,task-id=*,processor-node-id=*,topic=*

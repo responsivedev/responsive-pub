@@ -33,8 +33,8 @@ import dev.responsive.kafka.internal.db.DefaultCassandraClientFactory;
 import dev.responsive.kafka.internal.db.mongo.ResponsiveMongoClient;
 import dev.responsive.kafka.internal.metrics.ClientVersionMetadata;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
+import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
 import dev.responsive.kafka.internal.metrics.ResponsiveStateListener;
-import dev.responsive.kafka.internal.stores.ResponsiveRestoreListener;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistry;
 import dev.responsive.kafka.internal.utils.SessionClients;
 import dev.responsive.kafka.internal.utils.SessionUtil;
@@ -196,7 +196,6 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     LOG.info("Responsive Client version: {}", versionMetadata.responsiveClientVersion);
     LOG.info("Responsive Client commit ID: {}", versionMetadata.responsiveClientCommitId);
 
-
     responsiveMetrics.initializeTags(
         applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG),
         clientId,
@@ -207,6 +206,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     responsiveRestoreListener = new ResponsiveRestoreListener(responsiveMetrics);
     responsiveStateListener = new ResponsiveStateListener(responsiveMetrics);
 
+    sessionClients.registerRestoreListener(responsiveRestoreListener);
     super.setGlobalStateRestoreListener(responsiveRestoreListener);
     super.setStateListener(responsiveStateListener);
   }
@@ -298,6 +298,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
 
   private void closeInternal() {
     responsiveStateListener.close();
+    responsiveRestoreListener.close();
     sessionClients.closeAll();
   }
 

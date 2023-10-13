@@ -139,7 +139,7 @@ public class OrderedTagsSupplierTest {
 
   private void verifyStoreTags(final Iterator<Entry<String, String>> tagsIter) {
     Map.Entry<String, String> tag = tagsIter.next();
-    assertThat(tag.getKey(), equalTo("store-name"));
+    assertThat(tag.getKey(), equalTo("store"));
     assertThat(tag.getValue(), equalTo("count-store"));
   }
 
