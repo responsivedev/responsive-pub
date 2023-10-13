@@ -8,6 +8,7 @@ import org.apache.kafka.streams.TopologyDescription;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+@SuppressWarnings("checkstyle:linelength")
 public final class InternalSessionConfigs {
   private static final Logger LOG = LoggerFactory.getLogger(InternalSessionConfigs.class);
 

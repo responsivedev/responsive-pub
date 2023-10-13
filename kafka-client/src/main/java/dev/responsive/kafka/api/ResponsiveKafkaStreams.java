@@ -36,8 +36,8 @@ import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.metrics.ResponsiveStateListener;
 import dev.responsive.kafka.internal.stores.ResponsiveRestoreListener;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistry;
-import dev.responsive.kafka.internal.utils.SessionUtil;
 import dev.responsive.kafka.internal.utils.SessionClients;
+import dev.responsive.kafka.internal.utils.SessionUtil;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -409,8 +409,11 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       switch (backendType) {
         case CASSANDRA:
           final var cqlSession = cassandraFactory.createCqlSession(responsiveConfig);
-          final var cassandraClient = cassandraFactory.createClient(cqlSession, responsiveConfig);
-          sessionClients = new SessionClients(Optional.empty(), Optional.of(cassandraClient), admin);
+          sessionClients = new SessionClients(
+              Optional.empty(),
+              Optional.of(cassandraFactory.createClient(cqlSession, responsiveConfig)),
+              admin
+          );
           break;
         case MONGO_DB:
           final var hostname = responsiveConfig.getString(STORAGE_HOSTNAME_CONFIG);

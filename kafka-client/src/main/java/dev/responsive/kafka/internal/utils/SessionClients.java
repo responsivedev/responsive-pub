@@ -17,10 +17,8 @@
 package dev.responsive.kafka.internal.utils;
 
 import dev.responsive.kafka.api.config.StorageBackend;
-import dev.responsive.kafka.internal.config.InternalSessionConfigs;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.mongo.ResponsiveMongoClient;
-import java.util.Map;
 import java.util.Optional;
 import org.apache.kafka.clients.admin.Admin;
 import org.slf4j.Logger;
