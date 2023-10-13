@@ -1,6 +1,5 @@
 package dev.responsive.kafka.internal.config;
 
-import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistry;
 import dev.responsive.kafka.internal.utils.SessionClients;
 import java.util.HashMap;
