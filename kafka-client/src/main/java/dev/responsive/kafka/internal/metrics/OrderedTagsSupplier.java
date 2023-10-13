@@ -47,7 +47,7 @@ public class OrderedTagsSupplier {
   public static final String THREAD_ID_TAG = "thread-id";
   public static final String TOPIC_TAG = "topic";
   public static final String PARTITION_TAG = "partition";
-  public static final String STORE_NAME_TAG = "store-name";
+  public static final String STORE_TAG = "store";
 
   private final String responsiveClientVersion;
   private final String responsiveClientCommitId;
@@ -150,7 +150,7 @@ public class OrderedTagsSupplier {
       final LinkedHashMap<String, String> tags,
       final String storeName
   ) {
-    tags.put(STORE_NAME_TAG, storeName);
+    tags.put(STORE_TAG, storeName);
   }
 
   // Fill these in last, after all the Responsive tags

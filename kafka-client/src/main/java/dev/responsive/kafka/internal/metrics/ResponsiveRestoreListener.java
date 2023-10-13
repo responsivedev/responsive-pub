@@ -18,10 +18,10 @@
 
 package dev.responsive.kafka.internal.metrics;
 
-import static dev.responsive.kafka.internal.metrics.ApplicationMetrics.NUM_INTERRUPTED;
-import static dev.responsive.kafka.internal.metrics.ApplicationMetrics.NUM_INTERRUPTED_DESCRIPTION;
-import static dev.responsive.kafka.internal.metrics.ApplicationMetrics.NUM_RESTORING;
-import static dev.responsive.kafka.internal.metrics.ApplicationMetrics.NUM_RESTORING_DESCRIPTION;
+import static dev.responsive.kafka.internal.metrics.ApplicationMetrics.NUM_INTERRUPTED_CHANGELOGS;
+import static dev.responsive.kafka.internal.metrics.ApplicationMetrics.NUM_INTERRUPTED_CHANGELOGS_DESCRIPTION;
+import static dev.responsive.kafka.internal.metrics.ApplicationMetrics.NUM_RESTORING_CHANGELOGS;
+import static dev.responsive.kafka.internal.metrics.ApplicationMetrics.NUM_RESTORING_CHANGELOGS_DESCRIPTION;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.RESTORE_LATENCY;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.RESTORE_LATENCY_AVG;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.RESTORE_LATENCY_DESCRIPTION;
@@ -46,7 +46,7 @@ import org.slf4j.LoggerFactory;
  * this Streams application.
  */
 public class ResponsiveRestoreListener implements StateRestoreListener, Closeable {
-  private static final Logger LOG = LoggerFactory.getLogger(dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ResponsiveRestoreListener.class);
 
   private final ResponsiveMetrics metrics;
   private final MetricName numRestoringMetricName;
@@ -61,11 +61,11 @@ public class ResponsiveRestoreListener implements StateRestoreListener, Closeabl
     this.metrics = metrics;
 
     numRestoringMetricName = metrics.metricName(
-        NUM_RESTORING,
-        NUM_RESTORING_DESCRIPTION,
+        NUM_RESTORING_CHANGELOGS,
+        NUM_RESTORING_CHANGELOGS_DESCRIPTION,
         metrics.applicationLevelMetric()
     );
-    numInterruptedSensor = metrics.addSensor(NUM_INTERRUPTED);
+    numInterruptedSensor = metrics.addSensor(NUM_INTERRUPTED_CHANGELOGS);
     restoreLatencySensor = metrics.addSensor(RESTORE_LATENCY);
 
     metrics.addMetric(
@@ -75,8 +75,8 @@ public class ResponsiveRestoreListener implements StateRestoreListener, Closeabl
 
     numInterruptedSensor.add(
         metrics.metricName(
-            NUM_INTERRUPTED,
-            NUM_INTERRUPTED_DESCRIPTION,
+            NUM_INTERRUPTED_CHANGELOGS,
+            NUM_INTERRUPTED_CHANGELOGS_DESCRIPTION,
             metrics.applicationLevelMetric()),
         new CumulativeCount()
     );
@@ -115,7 +115,8 @@ public class ResponsiveRestoreListener implements StateRestoreListener, Closeabl
         new Max()
     );
 
-    LOG.info("Beginning restoration from offset {} to {} at {}ms for partition {} of state store {}",
+    LOG.info("Beginning restoration from offset {} to {} at {}ms (epoch time) for partition {} "
+                 + "of state store {}",
              startingOffset, endingOffset, startMs, topicPartition, storeName);
 
     if (userRestoreListener != null) {
@@ -216,7 +217,7 @@ public class ResponsiveRestoreListener implements StateRestoreListener, Closeabl
   @Override
   public void close() {
     metrics.removeMetric(numRestoringMetricName);
-    metrics.removeSensor(NUM_INTERRUPTED);
+    metrics.removeSensor(NUM_INTERRUPTED_CHANGELOGS);
     metrics.removeSensor(RESTORE_LATENCY);
   }
 
