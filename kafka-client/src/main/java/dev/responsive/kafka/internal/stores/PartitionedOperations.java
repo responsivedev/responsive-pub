@@ -16,7 +16,7 @@
 
 package dev.responsive.kafka.internal.stores;
 
-import static dev.responsive.kafka.internal.utils.SharedClients.loadSharedClients;
+import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadSessionClients;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.changelogFor;
 
@@ -27,7 +27,7 @@ import dev.responsive.kafka.internal.db.CassandraTableSpecFactory;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.utils.Result;
-import dev.responsive.kafka.internal.utils.SharedClients;
+import dev.responsive.kafka.internal.utils.SessionClients;
 import dev.responsive.kafka.internal.utils.TableName;
 import java.util.Collection;
 import java.util.concurrent.TimeoutException;
@@ -61,7 +61,7 @@ public class PartitionedOperations implements KeyValueOperations {
     final var context = asInternalProcessorContext(storeContext);
 
     final ResponsiveConfig config = ResponsiveConfig.responsiveConfig(storeContext.appConfigs());
-    final SharedClients sharedClients = loadSharedClients(storeContext.appConfigs());
+    final SessionClients sessionClients = loadSessionClients(storeContext.appConfigs());
 
     final var partition = new TopicPartition(
         changelogFor(storeContext, name.kafkaName(), false),
@@ -69,24 +69,24 @@ public class PartitionedOperations implements KeyValueOperations {
     );
     final var partitioner = params.schemaType() == SchemaTypes.KVSchema.FACT
         ? SubPartitioner.NO_SUBPARTITIONS
-        : config.getSubPartitioner(sharedClients.admin(), name, partition.topic());
+        : config.getSubPartitioner(sessionClients.admin(), name, partition.topic());
 
     final RemoteKVTable table;
-    switch (sharedClients.storageBackend()) {
+    switch (sessionClients.storageBackend()) {
       case CASSANDRA:
-        table = createCassandra(params, sharedClients);
+        table = createCassandra(params, sessionClients);
         break;
       case MONGO_DB:
-        table = createMongo(params, sharedClients);
+        table = createMongo(params, sessionClients);
         break;
       default:
-        throw new IllegalStateException("Unexpected value: " + sharedClients.storageBackend());
+        throw new IllegalStateException("Unexpected value: " + sessionClients.storageBackend());
     }
 
     log.info("Remote table {} is available for querying.", name.remoteName());
 
     final var buffer = CommitBuffer.from(
-        sharedClients,
+        sessionClients,
         partition,
         table,
         new BytesKeySpec(),
@@ -116,7 +116,7 @@ public class PartitionedOperations implements KeyValueOperations {
 
   private static RemoteKVTable createCassandra(
       final ResponsiveKeyValueParams params,
-      final SharedClients clients
+      final SessionClients clients
   ) throws InterruptedException, TimeoutException {
     final var client = clients.cassandraClient();
     final var spec = CassandraTableSpecFactory.fromKVParams(params);
@@ -132,9 +132,9 @@ public class PartitionedOperations implements KeyValueOperations {
 
   private static RemoteKVTable createMongo(
       final ResponsiveKeyValueParams params,
-      final SharedClients sharedClients
+      final SessionClients sessionClients
   ) throws InterruptedException, TimeoutException {
-    return sharedClients.mongoClient().kvTable(params.name().remoteName());
+    return sessionClients.mongoClient().kvTable(params.name().remoteName());
   }
 
   @SuppressWarnings("rawtypes")

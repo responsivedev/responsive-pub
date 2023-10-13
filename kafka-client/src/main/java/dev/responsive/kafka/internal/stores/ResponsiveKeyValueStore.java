@@ -19,7 +19,7 @@ package dev.responsive.kafka.internal.stores;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
-import dev.responsive.kafka.internal.config.InternalConfigs;
+import dev.responsive.kafka.internal.config.InternalSessionConfigs;
 import dev.responsive.kafka.internal.utils.TableName;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
@@ -96,7 +96,7 @@ public class ResponsiveKeyValueStore implements KeyValueStore<Bytes, byte[]> {
           : PartitionedOperations.create(name, context, params);
       log.info("Completed initializing state store");
 
-      storeRegistry = InternalConfigs.loadStoreRegistry(context.appConfigs());
+      storeRegistry = InternalSessionConfigs.loadStoreRegistry(context.appConfigs());
       open = true;
       operations.register(storeRegistry);
       context.register(root, operations);

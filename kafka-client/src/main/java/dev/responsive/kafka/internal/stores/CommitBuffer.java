@@ -28,7 +28,7 @@ import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.utils.ExceptionSupplier;
 import dev.responsive.kafka.internal.utils.Iterators;
 import dev.responsive.kafka.internal.utils.Result;
-import dev.responsive.kafka.internal.utils.SharedClients;
+import dev.responsive.kafka.internal.utils.SessionClients;
 import java.io.Closeable;
 import java.time.Duration;
 import java.time.Instant;
@@ -64,7 +64,7 @@ class CommitBuffer<K, S extends RemoteTable<K>>
   private final String logPrefix;
 
   private final SizeTrackingBuffer<K> buffer;
-  private final SharedClients client;
+  private final SessionClients client;
   private final Admin admin;
   private final TopicPartition changelog;
   private final S table;
@@ -84,7 +84,7 @@ class CommitBuffer<K, S extends RemoteTable<K>>
   private WriterFactory<K> writerFactory;
 
   static <K, S extends RemoteTable<K>> CommitBuffer<K, S> from(
-      final SharedClients clients,
+      final SessionClients clients,
       final TopicPartition changelog,
       final S schema,
       final KeySpec<K> keySpec,
@@ -108,7 +108,7 @@ class CommitBuffer<K, S extends RemoteTable<K>>
   }
 
   CommitBuffer(
-      final SharedClients client,
+      final SessionClients client,
       final TopicPartition changelog,
       final Admin admin,
       final S schema,
@@ -134,7 +134,7 @@ class CommitBuffer<K, S extends RemoteTable<K>>
   }
 
   CommitBuffer(
-      final SharedClients client,
+      final SessionClients client,
       final TopicPartition changelog,
       final Admin admin,
       final S table,

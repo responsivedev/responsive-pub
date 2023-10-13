@@ -26,7 +26,7 @@ import static dev.responsive.kafka.internal.metrics.ResponsiveMetrics.RESPONSIVE
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.internal.clients.ResponsiveKafkaClientSupplier;
-import dev.responsive.kafka.internal.config.InternalConfigs;
+import dev.responsive.kafka.internal.config.InternalSessionConfigs;
 import dev.responsive.kafka.internal.config.ResponsiveStreamsConfig;
 import dev.responsive.kafka.internal.db.CassandraClientFactory;
 import dev.responsive.kafka.internal.db.DefaultCassandraClientFactory;
@@ -37,7 +37,7 @@ import dev.responsive.kafka.internal.metrics.ResponsiveStateListener;
 import dev.responsive.kafka.internal.stores.ResponsiveRestoreListener;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistry;
 import dev.responsive.kafka.internal.utils.SessionUtil;
-import dev.responsive.kafka.internal.utils.SharedClients;
+import dev.responsive.kafka.internal.utils.SessionClients;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -77,7 +77,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
   private final ResponsiveMetrics responsiveMetrics;
   private final ResponsiveStateListener responsiveStateListener;
   private final ResponsiveRestoreListener responsiveRestoreListener;
-  private final SharedClients sharedClients;
+  private final SessionClients sessionClients;
 
   /**
    * Create a {@code ResponsiveKafkaStreams} instance.
@@ -175,7 +175,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
         params.topology,
         propsWithOverrides(
             params.responsiveConfig.originals(),
-            params.sharedClients,
+            params.sessionClients,
             params.storeRegistry,
             params.topology.describe()),
         params.responsiveKafkaClientSupplier,
@@ -189,7 +189,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     }
 
     this.responsiveMetrics = params.metrics;
-    this.sharedClients = params.sharedClients;
+    this.sessionClients = params.sessionClients;
 
     final ClientVersionMetadata versionMetadata = ClientVersionMetadata.loadVersionMetadata();
     // Only log the version metadata for Responsive since Kafka Streams will log its own
@@ -237,26 +237,15 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
    */
   private static Properties propsWithOverrides(
       final Map<?, ?> configs,
-      final SharedClients sharedClients,
+      final SessionClients sessionClients,
       final ResponsiveStoreRegistry storeRegistry,
       final TopologyDescription topologyDescription
   ) {
-    final InternalConfigs.Builder builder = new InternalConfigs.Builder();
-    switch (sharedClients.storageBackend()) {
-      case CASSANDRA:
-        builder.withCassandraClient(sharedClients.cassandraClient());
-        break;
-      case MONGO_DB:
-        builder.withMongoDbClient(sharedClients.mongoClient());
-        break;
-      default:
-        throw new IllegalStateException("Unexpected value: " + sharedClients.storageBackend());
-    }
-
     final Properties propsWithOverrides = new Properties();
+
     propsWithOverrides.putAll(configs);
-    propsWithOverrides.putAll(builder
-            .withKafkaAdmin(sharedClients.admin())
+    propsWithOverrides.putAll(new InternalSessionConfigs.Builder()
+            .withSessionClients(sessionClients)
             .withStoreRegistry(storeRegistry)
             .withTopologyDescription(topologyDescription)
             .build());
@@ -309,7 +298,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
 
   private void closeInternal() {
     responsiveStateListener.close();
-    sharedClients.closeAll();
+    sessionClients.closeAll();
   }
 
   /**
@@ -366,13 +355,13 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     final ResponsiveStoreRegistry storeRegistry;
 
     // can be set during construction
-    Time time = Time.SYSTEM;
-    KafkaClientSupplier clientSupplier = new DefaultKafkaClientSupplier();
-    CassandraClientFactory cassandraFactory = new DefaultCassandraClientFactory();
+    private Time time = Time.SYSTEM;
+    private KafkaClientSupplier clientSupplier = new DefaultKafkaClientSupplier();
+    private CassandraClientFactory cassandraFactory = new DefaultCassandraClientFactory();
 
     // initialized on init()
-    SharedClients sharedClients;
-    ResponsiveKafkaClientSupplier responsiveKafkaClientSupplier;
+    private SessionClients sessionClients;
+    private ResponsiveKafkaClientSupplier responsiveKafkaClientSupplier;
 
     public Params(final Topology topology, final Map<?, ?> configs) {
       this.topology = topology;
@@ -421,7 +410,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
         case CASSANDRA:
           final var cqlSession = cassandraFactory.createCqlSession(responsiveConfig);
           final var cassandraClient = cassandraFactory.createClient(cqlSession, responsiveConfig);
-          sharedClients = new SharedClients(Optional.empty(), Optional.of(cassandraClient), admin);
+          sessionClients = new SessionClients(Optional.empty(), Optional.of(cassandraClient), admin);
           break;
         case MONGO_DB:
           final var hostname = responsiveConfig.getString(STORAGE_HOSTNAME_CONFIG);
@@ -432,7 +421,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
               clientId,
               clientSecret == null ? null : clientSecret.value()
           );
-          sharedClients = new SharedClients(
+          sessionClients = new SessionClients(
               Optional.of(new ResponsiveMongoClient(mongoClient)),
               Optional.empty(),
               admin

@@ -19,7 +19,7 @@ package dev.responsive.kafka.internal.db.mongo;
 import dev.responsive.kafka.internal.db.RemoteTable;
 import dev.responsive.kafka.internal.db.RemoteWriter;
 import dev.responsive.kafka.internal.db.WriterFactory;
-import dev.responsive.kafka.internal.utils.SharedClients;
+import dev.responsive.kafka.internal.utils.SessionClients;
 
 public class MongoWriterFactory<K> implements WriterFactory<K> {
 
@@ -31,7 +31,7 @@ public class MongoWriterFactory<K> implements WriterFactory<K> {
 
   @Override
   public RemoteWriter<K> createWriter(
-      final SharedClients client,
+      final SessionClients client,
       final int partition,
       final int batchSize
   ) {

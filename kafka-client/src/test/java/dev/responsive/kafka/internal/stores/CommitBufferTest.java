@@ -41,7 +41,7 @@ import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.db.spec.BaseTableSpec;
 import dev.responsive.kafka.internal.utils.ExceptionSupplier;
-import dev.responsive.kafka.internal.utils.SharedClients;
+import dev.responsive.kafka.internal.utils.SessionClients;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
 import java.nio.ByteBuffer;
@@ -92,7 +92,7 @@ public class CommitBufferTest {
   private static final long MIN_VALID_TS = 0L;
 
   private CqlSession session;
-  private SharedClients client;
+  private SessionClients client;
   private TopicPartition changelogTp;
 
   private String name;
@@ -114,7 +114,7 @@ public class CommitBufferTest {
         .withKeyspace("responsive_clients") // NOTE: this keyspace is expected to exist
         .build();
     cclient = new CassandraClient(session, config);
-    client = new SharedClients(
+    client = new SessionClients(
         Optional.empty(),
         Optional.of(cclient),
         admin
