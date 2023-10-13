@@ -30,7 +30,6 @@ rules:
        desc: the number of state stores that were interrupted before finishing restoration
        unit: '{stores}'
 
-
  # Responsive topic metrics
  - bean: dev.responsive:type=topic-metrics,responsive-version=*,responsive-commit-id=*,streams-version=*,streams-commit-id=*,consumer-group=*,streams-application-id=*,streams-client-id=*,thread-id=*,topic=*,partition=*
    metricAttribute:
@@ -56,7 +55,7 @@ rules:
        desc: the current committed offset of the partition
        unit: '{offset}'
 
-  # Responsive store metrics
+ # Responsive store metrics
  - bean: dev.responsive:type=topic-metrics,responsive-version=*,responsive-commit-id=*,streams-version=*,streams-commit-id=*,consumer-group=*,streams-application-id=*,streams-client-id=*,thread-id=*,topic=*,partition=*,store=*
    metricAttribute:
      responsiveVersion: param(responsive-version)
@@ -81,6 +80,7 @@ rules:
        type: gauge
        desc: the average time this task spent in restoration
        unit: '{milliseconds}'
+
 
  #### Apache Kafka Metrics ####
 
@@ -124,6 +124,17 @@ rules:
        type: gauge
        desc: the rate of failed rebalances
        unit: '{rebalances-per-hour}'
+
+  # Kafka Streams client metrics
+ - bean: kafka.streams:type=stream-metrics,client-id=*
+   metricAttribute:
+     clientId: param(client-id)
+   mapping:
+     failed-stream-threads:
+       metric: kafka.streams.failed.stream.threads
+       type: gauge
+       desc: The number of failed stream threads since this client started
+       unit: '{threads}'
 
  # Kafka Streams topic metrics
  - bean: kafka.streams:type=stream-topic-metrics,thread-id=*,task-id=*,processor-node-id=*,topic=*
