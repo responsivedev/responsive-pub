@@ -206,6 +206,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     responsiveRestoreListener = new ResponsiveRestoreListener(responsiveMetrics);
     responsiveStateListener = new ResponsiveStateListener(responsiveMetrics);
 
+    sessionClients.registerRestoreListener(responsiveRestoreListener);
     super.setGlobalStateRestoreListener(responsiveRestoreListener);
     super.setStateListener(responsiveStateListener);
   }

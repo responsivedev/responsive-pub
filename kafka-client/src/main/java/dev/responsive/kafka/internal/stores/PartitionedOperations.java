@@ -16,7 +16,6 @@
 
 package dev.responsive.kafka.internal.stores;
 
-import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadRestoreListener;
 import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadSessionClients;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.changelogFor;
@@ -69,7 +68,6 @@ public class PartitionedOperations implements KeyValueOperations {
 
     final ResponsiveConfig config = ResponsiveConfig.responsiveConfig(appConfigs);
     final SessionClients sessionClients = loadSessionClients(appConfigs);
-    final ResponsiveRestoreListener restoreListener = loadRestoreListener(appConfigs);
 
     final TopicPartition changelog = new TopicPartition(
         changelogFor(storeContext, name.kafkaName(), false),
@@ -119,7 +117,7 @@ public class PartitionedOperations implements KeyValueOperations {
         changelog,
         context,
         registration,
-        restoreListener
+        sessionClients.restoreListener()
     );
   }
 

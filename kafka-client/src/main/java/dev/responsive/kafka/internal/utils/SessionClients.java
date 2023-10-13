@@ -19,6 +19,7 @@ package dev.responsive.kafka.internal.utils;
 import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.mongo.ResponsiveMongoClient;
+import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
 import java.util.Optional;
 import org.apache.kafka.clients.admin.Admin;
 import org.slf4j.Logger;
@@ -35,6 +36,10 @@ public class SessionClients {
   private final Optional<CassandraClient> cassandraClient;
   private final Admin admin;
 
+  // This is effectively final, but has to be inserted after SessionClients are created
+  // (see the comment above #registerRestoreListener for more details)
+  private ResponsiveRestoreListener restoreListener;
+
   public SessionClients(
       final Optional<ResponsiveMongoClient> mongoClient,
       final Optional<CassandraClient> cassandraClient,
@@ -43,6 +48,15 @@ public class SessionClients {
     this.mongoClient = mongoClient;
     this.cassandraClient = cassandraClient;
     this.admin = admin;
+  }
+
+  // We unfortunately can't pass in the restore listener when creating the SessionClients
+  // as we are forced to insert the SessionClients into the StreamsConfig passed in to
+  // the KafkaStreams constructor, while the restore listener depends on some objects
+  // that are created during/after the KafkaStreams is. This should always be registered
+  // before an application is considered fully initialized
+  public void registerRestoreListener(final ResponsiveRestoreListener restoreListener) {
+    this.restoreListener = restoreListener;
   }
 
   public StorageBackend storageBackend() {
@@ -81,9 +95,17 @@ public class SessionClients {
     return admin;
   }
 
+  public ResponsiveRestoreListener restoreListener() {
+    return restoreListener;
+  }
+
   public void closeAll() {
     cassandraClient.ifPresent(CassandraClient::shutdown);
     mongoClient.ifPresent(ResponsiveMongoClient::close);
     admin.close();
+
+    if (restoreListener != null) {
+      restoreListener.close();
+    }
   }
 }

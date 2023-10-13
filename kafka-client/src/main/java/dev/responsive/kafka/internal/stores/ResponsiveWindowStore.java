@@ -17,7 +17,6 @@
 package dev.responsive.kafka.internal.stores;
 
 import static dev.responsive.kafka.api.config.ResponsiveConfig.responsiveConfig;
-import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadRestoreListener;
 import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadSessionClients;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.changelogFor;
@@ -137,7 +136,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       final CassandraClient client = sessionClients.cassandraClient();
 
       storeRegistry = InternalSessionConfigs.loadStoreRegistry(appConfigs);
-      restoreListener = loadRestoreListener(appConfigs);
+      restoreListener = sessionClients.restoreListener();
 
       changelog =  new TopicPartition(
           changelogFor(storeContext, name.kafkaName(), false),

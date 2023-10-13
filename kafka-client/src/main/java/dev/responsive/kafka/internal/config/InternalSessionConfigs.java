@@ -14,7 +14,6 @@ public final class InternalSessionConfigs {
   private static final Logger LOG = LoggerFactory.getLogger(InternalSessionConfigs.class);
 
   private static final String INTERNAL_SESSION_CLIENTS_CONFIG = "__internal.responsive.cassandra.client__";
-  private static final String INTERNAL_RESTORE_LISTENER_CONFIG = "__internal.responsive.restore.listener__";
   private static final String INTERNAL_STORE_REGISTRY_CONFIG = "__internal.responsive.store.registry__";
   private static final String INTERNAL_TOPOLOGY_DESCRIPTION_CONFIG = "__internal.responsive.topology.description__";
 
@@ -62,15 +61,6 @@ public final class InternalSessionConfigs {
         InternalSessionConfigs.INTERNAL_SESSION_CLIENTS_CONFIG,
         SessionClients.class,
         "Shared session clients"
-    );
-  }
-
-  public static ResponsiveRestoreListener loadRestoreListener(final Map<String, Object> configs) {
-    return loadFromConfig(
-        configs,
-        INTERNAL_RESTORE_LISTENER_CONFIG,
-        ResponsiveRestoreListener.class,
-        "Restore listener"
     );
   }
 

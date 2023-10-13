@@ -33,7 +33,8 @@ import org.slf4j.LoggerFactory;
 public class ResponsiveMetrics implements Closeable {
   private static final Logger LOG = LoggerFactory.getLogger(ResponsiveMetrics.class);
 
-  private static final Pattern STREAMTHREAD_REGEX = Pattern.compile(".*-(StreamThread-\\d+)");
+  private static final Pattern STREAM_THREAD_REGEX = Pattern.compile(".*-(StreamThread-\\d+)");
+  private static final Pattern GLOBAL_THREAD_REGEX = Pattern.compile(".*-(GlobalStreamThread+)");
   public static final String RESPONSIVE_METRICS_NAMESPACE = "dev.responsive";
 
   private OrderedTagsSupplier orderedTagsSupplier;
@@ -100,16 +101,27 @@ public class ResponsiveMetrics implements Closeable {
     );
   }
 
-  // Compute/extract the thread id for any metrics where this information is not already
-  // made available
+  // Compute/extract the id of this stream thread for any metrics where this information
+  // is not already made available
   public String computeThreadId() {
     final String threadName = Thread.currentThread().getName();
-    final var match = STREAMTHREAD_REGEX.matcher(threadName);
-    if (!match.find()) {
-      LOG.error("Unable to parse stream thread id from {}", threadName);
-      throw new RuntimeException("Could not extract thread id from " + threadName);
+    final var streamThreadMatcher = STREAM_THREAD_REGEX.matcher(threadName);
+    if (streamThreadMatcher.find()) {
+      return streamThreadMatcher.group(1);
     }
-    return match.group(1);
+
+    final var globalThreadMatcher = GLOBAL_THREAD_REGEX.matcher(threadName);
+    if (globalThreadMatcher.find()) {
+      return globalThreadMatcher.group(1);
+    }
+
+    LOG.error("Unable to parse the thread id from {}", threadName);
+    throw new RuntimeException("Could not extract thread id for " + threadName);
+  }
+
+  public boolean isGlobalStreamThread() {
+    final String threadName = Thread.currentThread().getName();
+    return GLOBAL_THREAD_REGEX.matcher(threadName).matches();
   }
 
   /**

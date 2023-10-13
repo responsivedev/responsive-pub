@@ -23,10 +23,12 @@ import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.CassandraTableSpecFactory;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
+import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
 import dev.responsive.kafka.internal.utils.SessionClients;
 import java.util.Collection;
 import java.util.concurrent.TimeoutException;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.GlobalProcessorContextImpl;
@@ -37,6 +39,10 @@ public class GlobalOperations implements KeyValueOperations {
   private static final long ALL_VALID_TS = -1L; // Global stores don't support TTL
   private static final int IGNORED_PARTITION = -1; // Global stores ignored partitions
 
+  private final String storeName;
+  private final TopicPartition changelog;
+  private final ResponsiveRestoreListener restoreListener;
+
   private final GlobalProcessorContextImpl context;
   private final CassandraClient client;
   private final RemoteKVTable table;
@@ -45,21 +51,40 @@ public class GlobalOperations implements KeyValueOperations {
       final StateStoreContext storeContext,
       final ResponsiveKeyValueParams params
   ) throws InterruptedException, TimeoutException {
+
     final var context = (GlobalProcessorContextImpl) storeContext;
-    final SessionClients sessionClients = loadSessionClients(context.appConfigs());
+
+    // Save this so we don't have to rebuild the config map on every access
+    final var appConfigs = storeContext.appConfigs();
+
+    final SessionClients sessionClients = loadSessionClients(appConfigs);
     final var client = sessionClients.cassandraClient();
     final var spec = CassandraTableSpecFactory.globalSpec(params);
-    final var table = client.globalFactory().create(spec);
 
+    final var table = client.globalFactory().create(spec);
     table.init(SubPartitioner.NO_SUBPARTITIONS, IGNORED_PARTITION);
-    return new GlobalOperations(context, client, table);
+
+    return new GlobalOperations(
+        params.name().kafkaName(),
+        new TopicPartition(context.topic(), 0),
+        sessionClients.restoreListener(),
+        context,
+        client,
+        table
+    );
   }
 
   public GlobalOperations(
+      final String storeName,
+      final TopicPartition changelog,
+      final ResponsiveRestoreListener restoreListener,
       final GlobalProcessorContextImpl context,
       final CassandraClient client,
       final RemoteKVTable table
   ) {
+    this.storeName = storeName;
+    this.changelog = changelog;
+    this.restoreListener = restoreListener;
     this.context = context;
     this.client = client;
     this.table = table;
@@ -135,6 +160,7 @@ public class GlobalOperations implements KeyValueOperations {
 
   @Override
   public void close() {
+    restoreListener.onStoreClosed(changelog, storeName);
   }
 
   @Override

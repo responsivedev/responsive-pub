@@ -20,6 +20,7 @@ import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils
 
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.internal.config.InternalSessionConfigs;
+import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
 import dev.responsive.kafka.internal.utils.TableName;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
@@ -48,7 +49,6 @@ public class ResponsiveKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
   // All the fields below this are effectively final, we just can't set them until #init is called
   private Logger log;
-  private TopicPartition changelog;
   private KeyValueOperations operations;
   private ResponsiveStoreRegistry storeRegistry;
   private StateStoreContext context;
