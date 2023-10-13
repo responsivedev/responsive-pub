@@ -216,6 +216,9 @@ public class ResponsiveRestoreListener implements StateRestoreListener, Closeabl
 
   @Override
   public void close() {
+    if (!restoringChangelogToStartMs.isEmpty()) {
+      LOG.warn("Not all state stores being restored were closed before ending shutdown");
+    }
     metrics.removeMetric(numRestoringMetricName);
     metrics.removeSensor(NUM_INTERRUPTED_CHANGELOGS);
     metrics.removeSensor(RESTORE_LATENCY);
