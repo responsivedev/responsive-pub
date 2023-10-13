@@ -119,11 +119,6 @@ public class ResponsiveMetrics implements Closeable {
     throw new RuntimeException("Could not extract thread id for " + threadName);
   }
 
-  public boolean isGlobalStreamThread() {
-    final String threadName = Thread.currentThread().getName();
-    return GLOBAL_THREAD_REGEX.matcher(threadName).matches();
-  }
-
   /**
    * @param metricName        a unique name for this metric
    * @param metricDescription a short description of the recorded metric

@@ -16,6 +16,8 @@
 
 package dev.responsive.kafka.api;
 
+import static dev.responsive.kafka.internal.clients.TTDRestoreListener.mockRestoreListener;
+
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.clients.TTDCassandraClient;
 import dev.responsive.kafka.internal.clients.TTDMockAdmin;
@@ -137,6 +139,8 @@ public class ResponsiveTopologyTestDriver extends TopologyTestDriver {
     final SessionClients sessionClients = new SessionClients(
         Optional.empty(), Optional.of(client), client.mockAdmin()
     );
+    sessionClients.registerRestoreListener(mockRestoreListener(props));
+
     props.putAll(new InternalSessionConfigs.Builder()
         .withSessionClients(sessionClients)
         .withStoreRegistry(client.storeRegistry())
