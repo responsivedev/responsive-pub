@@ -23,6 +23,7 @@ import dev.responsive.kafka.internal.config.InternalSessionConfigs;
 import dev.responsive.kafka.internal.utils.TableName;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
@@ -39,13 +40,15 @@ import org.slf4j.Logger;
 
 public class ResponsiveKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
-
   private final ResponsiveKeyValueParams params;
   private final TableName name;
-  private final Position position; // TODO(IQ): update the position during restoration
 
-  private Logger log;
+  private Position position; // TODO(IQ): update the position during restoration
   private boolean open;
+
+  // All the fields below this are effectively final, we just can't set them until #init is called
+  private Logger log;
+  private TopicPartition changelog;
   private KeyValueOperations operations;
   private ResponsiveStoreRegistry storeRegistry;
   private StateStoreContext context;

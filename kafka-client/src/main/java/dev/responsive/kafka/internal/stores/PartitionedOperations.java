@@ -16,6 +16,7 @@
 
 package dev.responsive.kafka.internal.stores;
 
+import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadRestoreListener;
 import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadSessionClients;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.changelogFor;
@@ -26,6 +27,7 @@ import dev.responsive.kafka.internal.db.BytesKeySpec;
 import dev.responsive.kafka.internal.db.CassandraTableSpecFactory;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
+import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
 import dev.responsive.kafka.internal.utils.Result;
 import dev.responsive.kafka.internal.utils.SessionClients;
 import dev.responsive.kafka.internal.utils.TableName;
@@ -45,31 +47,37 @@ public class PartitionedOperations implements KeyValueOperations {
   private final RemoteKVTable table;
   private final CommitBuffer<Bytes, RemoteKVTable> buffer;
   private final SubPartitioner partitioner;
-  private final TopicPartition partition;
+  private final TopicPartition changelog;
   @SuppressWarnings("rawtypes")
   private final InternalProcessorContext context;
   private final ResponsiveStoreRegistration registration;
+  private final ResponsiveRestoreListener restoreListener;
 
   public static PartitionedOperations create(
       final TableName name,
       final StateStoreContext storeContext,
       final ResponsiveKeyValueParams params
   ) throws InterruptedException, TimeoutException {
+
     final var log = new LogContext(
         String.format("store [%s] ", name.kafkaName())
     ).logger(PartitionedOperations.class);
     final var context = asInternalProcessorContext(storeContext);
 
-    final ResponsiveConfig config = ResponsiveConfig.responsiveConfig(storeContext.appConfigs());
-    final SessionClients sessionClients = loadSessionClients(storeContext.appConfigs());
+    // Save this so we don't have to rebuild the config map on every access
+    final var appConfigs = storeContext.appConfigs();
 
-    final var partition = new TopicPartition(
+    final ResponsiveConfig config = ResponsiveConfig.responsiveConfig(appConfigs);
+    final SessionClients sessionClients = loadSessionClients(appConfigs);
+    final ResponsiveRestoreListener restoreListener = loadRestoreListener(appConfigs);
+
+    final TopicPartition changelog = new TopicPartition(
         changelogFor(storeContext, name.kafkaName(), false),
         context.taskId().partition()
     );
     final var partitioner = params.schemaType() == SchemaTypes.KVSchema.FACT
         ? SubPartitioner.NO_SUBPARTITIONS
-        : config.getSubPartitioner(sessionClients.admin(), name, partition.topic());
+        : config.getSubPartitioner(sessionClients.admin(), name, changelog.topic());
 
     final RemoteKVTable table;
     switch (sessionClients.storageBackend()) {
@@ -87,7 +95,7 @@ public class PartitionedOperations implements KeyValueOperations {
 
     final var buffer = CommitBuffer.from(
         sessionClients,
-        partition,
+        changelog,
         table,
         new BytesKeySpec(),
         params.truncateChangelog(),
@@ -99,7 +107,7 @@ public class PartitionedOperations implements KeyValueOperations {
     final long offset = buffer.offset();
     final var registration = new ResponsiveStoreRegistration(
         name.kafkaName(),
-        partition,
+        changelog,
         offset == -1 ? 0 : offset,
         buffer::flush
     );
@@ -108,9 +116,10 @@ public class PartitionedOperations implements KeyValueOperations {
         table,
         buffer,
         partitioner,
-        partition,
+        changelog,
         context,
-        registration
+        registration,
+        restoreListener
     );
   }
 
@@ -143,17 +152,19 @@ public class PartitionedOperations implements KeyValueOperations {
       final RemoteKVTable table,
       final CommitBuffer<Bytes, RemoteKVTable> buffer,
       final SubPartitioner partitioner,
-      final TopicPartition partition,
+      final TopicPartition changelog,
       final InternalProcessorContext context,
-      final ResponsiveStoreRegistration registration
+      final ResponsiveStoreRegistration registration,
+      final ResponsiveRestoreListener restoreListener
   ) {
     this.params = params;
     this.table = table;
     this.buffer = buffer;
     this.partitioner = partitioner;
-    this.partition = partition;
+    this.changelog = changelog;
     this.context = context;
     this.registration = registration;
+    this.restoreListener = restoreListener;
   }
 
   @Override
@@ -197,7 +208,7 @@ public class PartitionedOperations implements KeyValueOperations {
         .orElse(-1L);
 
     return table.get(
-        partitioner.partition(partition.partition(), key),
+        partitioner.partition(changelog.partition(), key),
         key,
         minValidTs
     );
@@ -226,7 +237,7 @@ public class PartitionedOperations implements KeyValueOperations {
   @Override
   public long approximateNumEntries() {
     return partitioner
-        .all(partition.partition())
+        .all(changelog.partition())
         .mapToLong(table::approximateNumEntries)
         .sum();
   }
@@ -235,6 +246,7 @@ public class PartitionedOperations implements KeyValueOperations {
   public void close() {
     // no need to flush the buffer here, will happen through the kafka client commit as usual
     buffer.close();
+    restoreListener.onStoreClosed(changelog, params.name().kafkaName());
   }
 
   @Override

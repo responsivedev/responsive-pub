@@ -19,6 +19,7 @@ package dev.responsive.kafka.internal.metrics;
 import java.io.Closeable;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.regex.Pattern;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.KafkaMetric;
@@ -32,6 +33,7 @@ import org.slf4j.LoggerFactory;
 public class ResponsiveMetrics implements Closeable {
   private static final Logger LOG = LoggerFactory.getLogger(ResponsiveMetrics.class);
 
+  private static final Pattern STREAMTHREAD_REGEX = Pattern.compile(".*-(StreamThread-\\d+)");
   public static final String RESPONSIVE_METRICS_NAMESPACE = "dev.responsive";
 
   private OrderedTagsSupplier orderedTagsSupplier;
@@ -96,6 +98,18 @@ public class ResponsiveMetrics implements Closeable {
     return new StoreMetrics(
         orderedTagsSupplier.storeGroupTags(threadId, changelog, storeName)
     );
+  }
+
+  // Compute/extract the thread id for any metrics where this information is not already
+  // made available
+  public String computeThreadId() {
+    final String threadName = Thread.currentThread().getName();
+    final var match = STREAMTHREAD_REGEX.matcher(threadName);
+    if (!match.find()) {
+      LOG.error("Unable to parse stream thread id from {}", threadName);
+      throw new RuntimeException("Could not extract thread id from " + threadName);
+    }
+    return match.group(1);
   }
 
   /**

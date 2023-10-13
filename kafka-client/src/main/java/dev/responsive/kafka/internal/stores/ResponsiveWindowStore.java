@@ -17,6 +17,7 @@
 package dev.responsive.kafka.internal.stores;
 
 import static dev.responsive.kafka.api.config.ResponsiveConfig.responsiveConfig;
+import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadRestoreListener;
 import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadSessionClients;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.changelogFor;
@@ -30,6 +31,7 @@ import dev.responsive.kafka.internal.db.RemoteWindowedTable;
 import dev.responsive.kafka.internal.db.StampedKeySpec;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.db.spec.CassandraTableSpec;
+import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
 import dev.responsive.kafka.internal.utils.Iterators;
 import dev.responsive.kafka.internal.utils.Result;
 import dev.responsive.kafka.internal.utils.SessionClients;
@@ -59,22 +61,25 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
   private final ResponsiveWindowParams params;
   private final CassandraTableSpec spec;
   private final TableName name;
-  private final Position position; // TODO(IQ): update the position during restoration
   private final long windowSize;
   private final long retentionPeriod;
 
+  private Position position; // TODO(IQ): update the position during restoration
+  private boolean open;
+  private long observedStreamTime;
+
+  // All the fields below this are effectively final, we just can't set them until #init is called
+
   @SuppressWarnings("rawtypes")
   private InternalProcessorContext context;
-  private TopicPartition partition;
+  private TopicPartition changelog;
 
   private CommitBuffer<Stamped<Bytes>, RemoteWindowedTable> buffer;
   private RemoteWindowedTable table;
   private ResponsiveStoreRegistry storeRegistry;
   private ResponsiveStoreRegistration registration;
+  private ResponsiveRestoreListener restoreListener;
   private SubPartitioner partitioner;
-
-  private boolean open;
-  private long observedStreamTime;
 
   public ResponsiveWindowStore(final ResponsiveWindowParams params) {
     this.params = params;
@@ -124,16 +129,21 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       log.info("Initializing state store");
       context = asInternalProcessorContext(storeContext);
 
-      final ResponsiveConfig config = responsiveConfig(storeContext.appConfigs());
-      final SessionClients sessionClients = loadSessionClients(storeContext.appConfigs());
+      // Save this so we don't have to rebuild the config map on every access
+      final var appConfigs = storeContext.appConfigs();
+
+      final ResponsiveConfig config = responsiveConfig(appConfigs);
+      final SessionClients sessionClients = loadSessionClients(appConfigs);
       final CassandraClient client = sessionClients.cassandraClient();
 
-      storeRegistry = InternalSessionConfigs.loadStoreRegistry(context.appConfigs());
-      partition =  new TopicPartition(
+      storeRegistry = InternalSessionConfigs.loadStoreRegistry(appConfigs);
+      restoreListener = loadRestoreListener(appConfigs);
+
+      changelog =  new TopicPartition(
           changelogFor(storeContext, name.kafkaName(), false),
           context.taskId().partition()
       );
-      partitioner = config.getSubPartitioner(sessionClients.admin(), name, partition.topic());
+      partitioner = config.getSubPartitioner(sessionClients.admin(), name, changelog.topic());
 
       switch (params.schemaType()) {
         case WINDOW:
@@ -149,7 +159,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
 
       buffer = CommitBuffer.from(
           sessionClients,
-          partition,
+          changelog,
           table,
           new StampedKeySpec(this::withinRetention),
           params.truncateChangelog(),
@@ -163,7 +173,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       final long offset = buffer.offset();
       registration = new ResponsiveStoreRegistration(
           name.kafkaName(),
-          partition,
+          changelog,
           offset == -1 ? 0 : offset,
           buffer::flush
       );
@@ -216,7 +226,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
     }
 
     return table.fetch(
-        partitioner.partition(partition.partition(), key),
+        partitioner.partition(changelog.partition(), key),
         key,
         time
     );
@@ -232,7 +242,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
     final Stamped<Bytes> from = new Stamped<>(key, start);
     final Stamped<Bytes> to = new Stamped<>(key, timeTo);
 
-    final int subPartition = partitioner.partition(partition.partition(), key);
+    final int subPartition = partitioner.partition(changelog.partition(), key);
     return Iterators.windowed(
         new LocalRemoteKvIterator<>(
             buffer.range(from, to),
@@ -262,7 +272,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
     final Stamped<Bytes> from = new Stamped<>(key, start);
     final Stamped<Bytes> to = new Stamped<>(key, timeTo);
 
-    final int subPartition = partitioner.partition(partition.partition(), key);
+    final int subPartition = partitioner.partition(changelog.partition(), key);
     return Iterators.windowed(
         new LocalRemoteKvIterator<>(
             buffer.backRange(from, to),
@@ -315,6 +325,9 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
   @Override
   public void close() {
     // no need to flush the buffer here, will happen through the kafka client commit as usual
+    if (restoreListener != null) {
+      restoreListener.onStoreClosed(changelog, params.name().kafkaName());
+    }
     if (storeRegistry != null) {
       storeRegistry.deregisterStore(registration);
     }
