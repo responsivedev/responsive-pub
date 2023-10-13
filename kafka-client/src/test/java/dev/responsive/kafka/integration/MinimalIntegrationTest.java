@@ -16,6 +16,7 @@
 
 package dev.responsive.kafka.integration;
 
+import static dev.responsive.kafka.api.config.ResponsiveConfig.STORE_FLUSH_RECORDS_TRIGGER_CONFIG;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.createTopicsAndWait;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.pipeInput;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.readOutput;
@@ -25,6 +26,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZE
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.APPLICATION_ID_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.COMMIT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.NUM_STREAM_THREADS_CONFIG;
@@ -152,6 +154,8 @@ public class MinimalIntegrationTest {
     properties.put(DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.LongSerde.class.getName());
     properties.put(NUM_STREAM_THREADS_CONFIG, 1);
     properties.put(STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
+    properties.put(STORE_FLUSH_RECORDS_TRIGGER_CONFIG, 1);
+    properties.put(COMMIT_INTERVAL_MS_CONFIG, 1);
 
     properties.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 1);
     properties.put(consumerPrefix(ConsumerConfig.METADATA_MAX_AGE_CONFIG), "1000");
