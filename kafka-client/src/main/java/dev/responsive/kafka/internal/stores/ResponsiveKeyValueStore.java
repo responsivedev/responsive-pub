@@ -22,7 +22,9 @@ import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.internal.config.InternalSessionConfigs;
 import dev.responsive.kafka.internal.utils.TableName;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Function;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
@@ -39,10 +41,11 @@ import org.slf4j.Logger;
 
 public class ResponsiveKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
-
   private final ResponsiveKeyValueParams params;
   private final TableName name;
+  private final Function<Map<String, Object>, ResponsiveStoreRegistry> registryProvider;
   private final Position position; // TODO(IQ): update the position during restoration
+  private final KVOperationsProvider opsProvider;
 
   private Logger log;
   private boolean open;
@@ -51,9 +54,24 @@ public class ResponsiveKeyValueStore implements KeyValueStore<Bytes, byte[]> {
   private StateStoreContext context;
 
   public ResponsiveKeyValueStore(final ResponsiveKeyValueParams params) {
+    this(
+        params,
+        ResponsiveKeyValueStore::provideOperations,
+        InternalSessionConfigs::loadStoreRegistry
+    );
+  }
+ 
+  // Visible for Testing
+  public ResponsiveKeyValueStore(
+      final ResponsiveKeyValueParams params,
+      final KVOperationsProvider opsProvider,
+      final Function<Map<String, Object>, ResponsiveStoreRegistry> registryProvider
+  ) {
     this.params = params;
     this.name = params.name();
+    this.registryProvider = registryProvider;
     this.position = Position.emptyPosition();
+    this.opsProvider = opsProvider;
 
     log = new LogContext(
         String.format("store [%s] ", name.kafkaName())
@@ -91,18 +109,26 @@ public class ResponsiveKeyValueStore implements KeyValueStore<Bytes, byte[]> {
       log.info("Initializing state store");
       this.context = context;
 
-      operations = (taskType == TaskType.GLOBAL)
-          ? GlobalOperations.create(context, params)
-          : PartitionedOperations.create(name, context, params);
+      this.operations = opsProvider.provide(params, context, taskType);
       log.info("Completed initializing state store");
 
-      storeRegistry = InternalSessionConfigs.loadStoreRegistry(context.appConfigs());
+      storeRegistry = registryProvider.apply(context.appConfigs());
       open = true;
       operations.register(storeRegistry);
       context.register(root, operations);
     } catch (InterruptedException | TimeoutException e) {
       throw new ProcessorStateException("Failed to initialize store.", e);
     }
+  }
+
+  private static KeyValueOperations provideOperations(
+      final ResponsiveKeyValueParams params,
+      final StateStoreContext context,
+      final TaskType taskType
+  ) throws InterruptedException, TimeoutException {
+    return (taskType == TaskType.GLOBAL)
+        ? GlobalOperations.create(context, params)
+        : PartitionedOperations.create(params.name(), context, params);
   }
 
   @Override
@@ -137,7 +163,7 @@ public class ResponsiveKeyValueStore implements KeyValueStore<Bytes, byte[]> {
   @Override
   public byte[] putIfAbsent(final Bytes key, final byte[] value) {
     final byte[] old = get(key);
-    if (old != null && value != null) {
+    if (old == null && value != null) {
       put(key, value);
     }
     return old;
