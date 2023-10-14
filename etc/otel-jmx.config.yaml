@@ -74,6 +74,43 @@ rules:
        type: gauge
        desc: the amount of time since this state store started restoration"
        unit: '{milliseconds}'
+     time-since-last-flush:
+       metric: responsive.kafka.streams.time.since.last.flush
+       type: gauge
+       desc: the amount of time since the last successful flush
+       unit: '{milliseconds}'
+     flush-rate:
+       metric: responsive.kafka.streams.flush.rate
+       desc: the rate of commit buffer flushes
+       unit: '{flushes/s}'
+     flush-total:
+       metric: responsive.kafka.streams.flush.total
+       desc: the total number of commit buffer flushes
+       unit: '{flushes}'
+     flush-latency-avg:
+       metric: responsive.kafka.streams.flush.latency.avg
+       desc: the average time it took to flush the commit buffer
+       unit: '{nanoseconds}'
+     flush-latency-max:
+       metric: responsive.kafka.streams.flush.latency.max
+       desc: the maximum time it took to flush the commit buffer
+       unit: '{nanoseconds}'
+     commits-fenced-rate:
+       metric: responsive.kafka.streams.commits.fenced.rate
+       desc: the rate of commit buffer flushes that were fenced
+       unit: '{flushes/s}'
+     commits-fenced-total:
+       metric: responsive.kafka.streams.commits.fenced.total
+       desc: the total number of commit buffer flushes that were fenced
+       unit: '{flushes}'
+     failed-truncations-rate:
+       metric: responsive.kafka.streams.failed.truncations.rate
+       desc: the rate of changelog truncation attempts that failed
+       unit: '{deletes/s}'
+     failed-truncations-total:
+       metric: responsive.kafka.streams.failed.truncations.total
+       desc: the total number of changelog truncation attempts that failed
+       unit: '{deletes}'
 
 
  #### Apache Kafka Metrics ####

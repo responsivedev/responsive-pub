@@ -86,6 +86,7 @@ public class CommitBufferTest {
   private static final Bytes KEY = Bytes.wrap(ByteBuffer.allocate(4).putInt(0).array());
   private static final byte[] VALUE = new byte[]{1};
   private static final int KAFKA_PARTITION = 2;
+  private static final String NAME = "store";
   private static final FlushTriggers TRIGGERS = FlushTriggers.ALWAYS;
   private static final ExceptionSupplier EXCEPTION_SUPPLIER = new ExceptionSupplier(true);
   private static final long CURRENT_TS = 100L;
@@ -143,7 +144,7 @@ public class CommitBufferTest {
     setPartitioner(3);
     final CommitBuffer<Bytes, RemoteKVTable> buffer = new CommitBuffer<>(
         client, changelogTp, admin, table,
-        KEY_SPEC, true, TRIGGERS, EXCEPTION_SUPPLIER, partitioner);
+        KEY_SPEC, true, NAME, TRIGGERS, EXCEPTION_SUPPLIER, partitioner);
     buffer.init();
 
     // reserve epoch for partition 8 to ensure it doesn't get flushed
@@ -176,7 +177,7 @@ public class CommitBufferTest {
     final ExceptionSupplier exceptionSupplier = mock(ExceptionSupplier.class);
     final CommitBuffer<Bytes, RemoteKVTable> buffer = new CommitBuffer<>(
         client, changelogTp, admin, table,
-        KEY_SPEC, true, TRIGGERS, exceptionSupplier, partitioner);
+        KEY_SPEC, true, NAME, TRIGGERS, exceptionSupplier, partitioner);
     buffer.init();
 
     LwtWriterFactory.reserve(
@@ -208,7 +209,7 @@ public class CommitBufferTest {
     setPartitioner(2);
     final CommitBuffer<Bytes, RemoteKVTable> buffer = new CommitBuffer<>(
         client, changelogTp, admin, table,
-        KEY_SPEC, true, TRIGGERS, EXCEPTION_SUPPLIER, partitioner);
+        KEY_SPEC, true, NAME, TRIGGERS, EXCEPTION_SUPPLIER, partitioner);
     // throwaway init to initialize table
     buffer.init();
 
@@ -228,7 +229,7 @@ public class CommitBufferTest {
     // Given:
     final CommitBuffer<Bytes, RemoteKVTable> buffer = new CommitBuffer<>(
         client, changelogTp, admin, table,
-        KEY_SPEC, true, TRIGGERS, EXCEPTION_SUPPLIER, partitioner);
+        KEY_SPEC, true, NAME, TRIGGERS, EXCEPTION_SUPPLIER, partitioner);
     buffer.init();
     buffer.put(KEY, VALUE, CURRENT_TS);
 
@@ -244,7 +245,7 @@ public class CommitBufferTest {
     // Given:
     final CommitBuffer<Bytes, RemoteKVTable> buffer = new CommitBuffer<>(
         client, changelogTp, admin, table,
-        KEY_SPEC, false, TRIGGERS, EXCEPTION_SUPPLIER, partitioner);
+        KEY_SPEC, false, NAME, TRIGGERS, EXCEPTION_SUPPLIER, partitioner);
     buffer.init();
     buffer.put(KEY, VALUE, CURRENT_TS);
 
@@ -265,6 +266,7 @@ public class CommitBufferTest {
         table,
         KEY_SPEC,
         true,
+        NAME,
         TRIGGERS,
         EXCEPTION_SUPPLIER,
         partitioner
@@ -284,7 +286,7 @@ public class CommitBufferTest {
     // Given:
     final CommitBuffer<Bytes, RemoteKVTable> buffer = new CommitBuffer<>(
         client, changelogTp, admin, table,
-        KEY_SPEC, true, TRIGGERS, EXCEPTION_SUPPLIER, partitioner);
+        KEY_SPEC, true, NAME, TRIGGERS, EXCEPTION_SUPPLIER, partitioner);
     buffer.init();
     buffer.put(KEY, VALUE, CURRENT_TS);
 
@@ -315,6 +317,7 @@ public class CommitBufferTest {
         table,
         KEY_SPEC,
         false,
+        NAME,
         FlushTriggers.ofRecords(10),
         EXCEPTION_SUPPLIER,
         partitioner
@@ -345,6 +348,7 @@ public class CommitBufferTest {
         table,
         KEY_SPEC,
         false,
+        NAME,
         FlushTriggers.ofBytes(170),
         EXCEPTION_SUPPLIER,
         partitioner
@@ -377,6 +381,7 @@ public class CommitBufferTest {
         table,
         KEY_SPEC,
         false,
+        NAME,
         FlushTriggers.ofInterval(Duration.ofSeconds(30)),
         EXCEPTION_SUPPLIER,
         100,
@@ -402,7 +407,7 @@ public class CommitBufferTest {
     cclient.execute(this.table.insert(KAFKA_PARTITION, KEY, VALUE, CURRENT_TS));
     final CommitBuffer<Bytes, RemoteKVTable> buffer = new CommitBuffer<>(
         client, changelogTp, admin, this.table,
-        KEY_SPEC, true, TRIGGERS, EXCEPTION_SUPPLIER, partitioner);
+        KEY_SPEC, true, NAME, TRIGGERS, EXCEPTION_SUPPLIER, partitioner);
     buffer.init();
 
     // When:
@@ -419,7 +424,7 @@ public class CommitBufferTest {
     // Given:
     final CommitBuffer<Bytes, RemoteKVTable> buffer = new CommitBuffer<>(
         client, changelogTp, admin, table,
-        KEY_SPEC, true, TRIGGERS, EXCEPTION_SUPPLIER, partitioner);
+        KEY_SPEC, true, NAME, TRIGGERS, EXCEPTION_SUPPLIER, partitioner);
     buffer.init();
 
     final ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>(
@@ -451,7 +456,7 @@ public class CommitBufferTest {
     final ExceptionSupplier exceptionSupplier = mock(ExceptionSupplier.class);
     final CommitBuffer<Bytes, RemoteKVTable> buffer = new CommitBuffer<>(
         client, changelogTp, admin, table,
-        KEY_SPEC, true, TRIGGERS, exceptionSupplier, partitioner);
+        KEY_SPEC, true, NAME, TRIGGERS, exceptionSupplier, partitioner);
     buffer.init();
     LwtWriterFactory.reserve(
         table, cclient, new int[]{KAFKA_PARTITION}, KAFKA_PARTITION, 100L, false);
@@ -495,6 +500,7 @@ public class CommitBufferTest {
         table,
         KEY_SPEC,
         true,
+        NAME,
         TRIGGERS,
         EXCEPTION_SUPPLIER,
         3,

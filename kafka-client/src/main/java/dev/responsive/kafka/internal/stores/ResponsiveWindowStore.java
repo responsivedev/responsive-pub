@@ -162,6 +162,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
           table,
           new StampedKeySpec(this::withinRetention),
           params.truncateChangelog(),
+          params.name().kafkaName(),
           partitioner,
           config
       );

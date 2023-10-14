@@ -28,8 +28,11 @@ import org.apache.kafka.streams.StreamsConfig;
 
 public class TTDRestoreListener extends ResponsiveRestoreListener {
 
+  private final ResponsiveMetrics metrics;
+
   public TTDRestoreListener(final ResponsiveMetrics metrics) {
     super(metrics);
+    this.metrics = metrics;
   }
 
   public static TTDRestoreListener mockRestoreListener(final Properties props) {
@@ -42,6 +45,10 @@ public class TTDRestoreListener extends ResponsiveRestoreListener {
         Collections.emptyMap()
     );
     return new TTDRestoreListener(metrics);
+  }
+
+  public ResponsiveMetrics metrics() {
+    return metrics;
   }
 
 }

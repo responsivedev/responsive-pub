@@ -29,13 +29,23 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-@SuppressWarnings("checkstyle:linelength")
 public class ResponsiveMetrics implements Closeable {
   private static final Logger LOG = LoggerFactory.getLogger(ResponsiveMetrics.class);
 
+  public static final String RESPONSIVE_METRICS_NAMESPACE = "dev.responsive";
+
+  public static final String AVG_SUFFIX = "-avg";
+  public static final String MAX_SUFFIX = "-max";
+  public static final String RATE_SUFFIX = "-rate";
+  public static final String TOTAL_SUFFIX = "-total";
+
+  public static final String AVG_DESCRIPTION = "The average ";
+  public static final String MAX_DESCRIPTION = "The maximum ";
+  public static final String RATE_DESCRIPTION = "The rate of ";
+  public static final String TOTAL_DESCRIPTION = "The total ";
+
   private static final Pattern STREAM_THREAD_REGEX = Pattern.compile(".*-(StreamThread-\\d+)");
   private static final Pattern GLOBAL_THREAD_REGEX = Pattern.compile(".*-(GlobalStreamThread+)");
-  public static final String RESPONSIVE_METRICS_NAMESPACE = "dev.responsive";
 
   private OrderedTagsSupplier orderedTagsSupplier;
   private final Metrics metrics;
