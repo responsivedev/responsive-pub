@@ -147,7 +147,9 @@ public class ResponsiveRestoreListener implements StateRestoreListener, Closeabl
       final long totalRestored
   ) {
     final MetricName timeRestoringMetric = timeRestoringMetricName(topicPartition, storeName);
-    final long restoreTime = removeStateStore(timeRestoringMetric);
+
+    final long currentTimeMs = System.currentTimeMillis();
+    final long restoreTime = removeStateStore(timeRestoringMetric, currentTimeMs);
 
     LOG.info("Finished restoration of {} total records after {}ms for partition {} "
                  + "of state store {}", totalRestored, restoreTime, topicPartition, storeName);
@@ -170,9 +172,12 @@ public class ResponsiveRestoreListener implements StateRestoreListener, Closeabl
       final String storeName,
       final long totalRestored
   ) {
-    numInterruptedSensor.record();
     final MetricName timeRestoringMetric = timeRestoringMetricName(topicPartition, storeName);
-    final long restoreTime = removeStateStore(timeRestoringMetric);
+
+    final long currentTimeMs = System.currentTimeMillis();
+    final long restoreTime = removeStateStore(timeRestoringMetric, currentTimeMs);
+
+    numInterruptedSensor.record(1, currentTimeMs);
 
     LOG.info("Suspended restoration of {} total records after {}ms for partition {} "
                  + "of state store {}", totalRestored, restoreTime, topicPartition, storeName);
@@ -206,11 +211,11 @@ public class ResponsiveRestoreListener implements StateRestoreListener, Closeabl
    *
    * @return the amount of time spent restoring this state store
    */
-  private long removeStateStore(final MetricName timeRestoringMetric) {
+  private long removeStateStore(final MetricName timeRestoringMetric, final long currentTimeMs) {
     metrics.removeMetric(timeRestoringMetric);
 
     final long restoreStartMs = storeMetricToStartMs.remove(timeRestoringMetric);
-    return System.currentTimeMillis() - restoreStartMs;
+    return currentTimeMs - restoreStartMs;
   }
 
   @Override
