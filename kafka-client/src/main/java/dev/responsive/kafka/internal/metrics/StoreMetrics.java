@@ -21,14 +21,11 @@ import java.util.LinkedHashMap;
 
 @SuppressWarnings("checkstyle:linelength")
 public class StoreMetrics implements MetricGroup {
-
   // Responsive store metrics scoped to the individual state store level
   public static final String STORE_METRIC_GROUP = "store-metrics";
 
-  public static final String RESTORE_LATENCY = "restore-latency";
-  public static final String RESTORE_LATENCY_AVG = RESTORE_LATENCY + "-avg";
-  public static final String RESTORE_LATENCY_MAX = RESTORE_LATENCY + "-max";
-  public static final String RESTORE_LATENCY_DESCRIPTION = "amount of time spent restoring this state store before resuming processing";
+  public static final String TIME_RESTORING = "time-restoring";
+  public static final String TIME_RESTORING_DESCRIPTION = "The amount of time (in ms) since this state store started restoration";
 
   private final LinkedHashMap<String, String> tags;
 
