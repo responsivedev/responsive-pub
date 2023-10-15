@@ -16,17 +16,17 @@
 
 package dev.responsive.kafka.internal.stores;
 
-import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_FENCED;
-import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_FENCED_RATE;
-import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_FENCED_RATE_DESCRIPTION;
-import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_FENCED_TOTAL;
-import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_FENCED_TOTAL_DESCRIPTION;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.FAILED_TRUNCATIONS;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.FAILED_TRUNCATIONS_RATE;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.FAILED_TRUNCATIONS_RATE_DESCRIPTION;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.FAILED_TRUNCATIONS_TOTAL;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.FAILED_TRUNCATIONS_TOTAL_DESCRIPTION;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_FENCED;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_FENCED_RATE;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_FENCED_RATE_DESCRIPTION;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_FENCED_TOTAL;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_FENCED_TOTAL_DESCRIPTION;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_LATENCY;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_LATENCY_AVG;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_LATENCY_AVG_DESCRIPTION;
@@ -108,13 +108,13 @@ class CommitBuffer<K, S extends RemoteTable<K>>
 
   private final String flushSensorName;
   private final String flushLatencySensorName;
-  private final String commitsFencedSensorName;
+  private final String flushFencedSensorName;
   private final String failedTruncationsSensorName;
 
   private final MetricName lastFlushMetric;
   private final Sensor flushSensor;
   private final Sensor flushLatencySensor;
-  private final Sensor commitsFencedSensor;
+  private final Sensor flushFencedSensor;
   private final Sensor failedTruncationsSensor;
 
   // flag to skip further truncation attempts when the changelog is set to 'compact' only
@@ -213,7 +213,7 @@ class CommitBuffer<K, S extends RemoteTable<K>>
 
     flushSensorName = getSensorName(FLUSH, changelog);
     flushLatencySensorName = getSensorName(FLUSH_LATENCY, changelog);
-    commitsFencedSensorName = getSensorName(FLUSH_FENCED, changelog);
+    flushFencedSensorName = getSensorName(FLUSH_FENCED, changelog);
     failedTruncationsSensorName = getSensorName(FAILED_TRUNCATIONS, changelog);
 
     lastFlushMetric = metrics.metricName(
@@ -258,15 +258,15 @@ class CommitBuffer<K, S extends RemoteTable<K>>
         new Max()
     );
 
-    commitsFencedSensor = metrics.addSensor(commitsFencedSensorName);
-    commitsFencedSensor.add(
+    flushFencedSensor = metrics.addSensor(flushFencedSensorName);
+    flushFencedSensor.add(
         metrics.metricName(
             FLUSH_FENCED_RATE,
             FLUSH_FENCED_RATE_DESCRIPTION,
             metrics.storeLevelMetric(metrics.computeThreadId(), changelog, storeName)),
         new Rate()
     );
-    commitsFencedSensor.add(
+    flushFencedSensor.add(
         metrics.metricName(
             FLUSH_FENCED_TOTAL,
             FLUSH_FENCED_TOTAL_DESCRIPTION,
@@ -641,7 +641,7 @@ class CommitBuffer<K, S extends RemoteTable<K>>
     );
     log.warn(msg);
 
-    commitsFencedSensor.record();
+    flushFencedSensor.record();
     throw exceptionSupplier.commitFencedException(logPrefix + msg);
   }
 
@@ -651,7 +651,7 @@ class CommitBuffer<K, S extends RemoteTable<K>>
     metrics.removeMetric(lastFlushMetric);
     metrics.removeSensor(flushSensorName);
     metrics.removeSensor(flushLatencySensorName);
-    metrics.removeSensor(commitsFencedSensorName);
+    metrics.removeSensor(flushFencedSensorName);
     metrics.removeSensor(failedTruncationsSensorName);
   }
 }

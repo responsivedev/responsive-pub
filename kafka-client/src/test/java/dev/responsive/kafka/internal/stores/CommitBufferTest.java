@@ -16,14 +16,14 @@
 
 package dev.responsive.kafka.internal.stores;
 
-import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_FENCED_RATE;
-import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_FENCED_RATE_DESCRIPTION;
-import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_FENCED_TOTAL;
-import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_FENCED_TOTAL_DESCRIPTION;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.FAILED_TRUNCATIONS_RATE;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.FAILED_TRUNCATIONS_RATE_DESCRIPTION;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.FAILED_TRUNCATIONS_TOTAL;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.FAILED_TRUNCATIONS_TOTAL_DESCRIPTION;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_FENCED_RATE;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_FENCED_RATE_DESCRIPTION;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_FENCED_TOTAL;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_FENCED_TOTAL_DESCRIPTION;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_LATENCY_AVG;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_LATENCY_AVG_DESCRIPTION;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_LATENCY_MAX;
@@ -194,7 +194,7 @@ public class CommitBufferTest {
 
     Mockito.when(metrics.sensor("flush-" + changelogTp)).thenReturn(flushSensor);
     Mockito.when(metrics.sensor("flush-latency-" + changelogTp)).thenReturn(flushLatencySensor);
-    Mockito.when(metrics.sensor("commits-fenced-" + changelogTp)).thenReturn(flushFencedSensor);
+    Mockito.when(metrics.sensor("flush-fenced-" + changelogTp)).thenReturn(flushFencedSensor);
     Mockito.when(metrics.sensor("failed-truncations-" + changelogTp))
         .thenReturn(failedTruncationsSensor);
   }
@@ -280,7 +280,7 @@ public class CommitBufferTest {
 
     Mockito.verify(metrics).removeSensor("flush-" + changelogTp);
     Mockito.verify(metrics).removeSensor("flush-latency-" + changelogTp);
-    Mockito.verify(metrics).removeSensor("commits-fenced-" + changelogTp);
+    Mockito.verify(metrics).removeSensor("flush-fenced-" + changelogTp);
     Mockito.verify(metrics).removeSensor("failed-truncations-" + changelogTp);
   }
 
@@ -410,7 +410,7 @@ public class CommitBufferTest {
         .thenReturn(flushSensor);
     Mockito.when(metrics.sensor("flush-latency-" + sourceChangelog))
         .thenReturn(flushLatencySensor);
-    Mockito.when(metrics.sensor("commits-fenced-" + sourceChangelog))
+    Mockito.when(metrics.sensor("flush-fenced-" + sourceChangelog))
         .thenReturn(flushFencedSensor);
     Mockito.when(metrics.sensor("failed-truncations-" + sourceChangelog))
         .thenReturn(failedTruncationsSensor);
