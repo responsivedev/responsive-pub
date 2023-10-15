@@ -16,11 +16,11 @@
 
 package dev.responsive.kafka.internal.stores;
 
-import static dev.responsive.kafka.internal.metrics.StoreMetrics.COMMITS_FENCED;
-import static dev.responsive.kafka.internal.metrics.StoreMetrics.COMMITS_FENCED_RATE;
-import static dev.responsive.kafka.internal.metrics.StoreMetrics.COMMITS_FENCED_RATE_DESCRIPTION;
-import static dev.responsive.kafka.internal.metrics.StoreMetrics.COMMITS_FENCED_TOTAL;
-import static dev.responsive.kafka.internal.metrics.StoreMetrics.COMMITS_FENCED_TOTAL_DESCRIPTION;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_FENCED;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_FENCED_RATE;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_FENCED_RATE_DESCRIPTION;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_FENCED_TOTAL;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_FENCED_TOTAL_DESCRIPTION;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.FAILED_TRUNCATIONS;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.FAILED_TRUNCATIONS_RATE;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.FAILED_TRUNCATIONS_RATE_DESCRIPTION;
@@ -213,7 +213,7 @@ class CommitBuffer<K, S extends RemoteTable<K>>
 
     flushSensorName = getSensorName(FLUSH, changelog);
     flushLatencySensorName = getSensorName(FLUSH_LATENCY, changelog);
-    commitsFencedSensorName = getSensorName(COMMITS_FENCED, changelog);
+    commitsFencedSensorName = getSensorName(FLUSH_FENCED, changelog);
     failedTruncationsSensorName = getSensorName(FAILED_TRUNCATIONS, changelog);
 
     lastFlushMetric = metrics.metricName(
@@ -261,15 +261,15 @@ class CommitBuffer<K, S extends RemoteTable<K>>
     commitsFencedSensor = metrics.addSensor(commitsFencedSensorName);
     commitsFencedSensor.add(
         metrics.metricName(
-            COMMITS_FENCED_RATE,
-            COMMITS_FENCED_RATE_DESCRIPTION,
+            FLUSH_FENCED_RATE,
+            FLUSH_FENCED_RATE_DESCRIPTION,
             metrics.storeLevelMetric(metrics.computeThreadId(), changelog, storeName)),
         new Rate()
     );
     commitsFencedSensor.add(
         metrics.metricName(
-            COMMITS_FENCED_TOTAL,
-            COMMITS_FENCED_TOTAL_DESCRIPTION,
+            FLUSH_FENCED_TOTAL,
+            FLUSH_FENCED_TOTAL_DESCRIPTION,
             metrics.storeLevelMetric(metrics.computeThreadId(), changelog, storeName)),
         new CumulativeCount()
     );
@@ -517,14 +517,15 @@ class CommitBuffer<K, S extends RemoteTable<K>>
     }
 
     final long endNanos = System.nanoTime();
-    final long flushLatencyNs = endNanos - startNs;
     final long endMs = TimeUnit.NANOSECONDS.toMillis(endNanos);
+    final long flushLatencyMs = TimeUnit.NANOSECONDS.toMillis(endNanos - startNs);
+
     flushSensor.record(1, endMs);
-    flushLatencySensor.record(flushLatencyNs, endMs);
+    flushLatencySensor.record(flushLatencyMs, endMs);
 
     log.debug("Flushed {} records to remote in {}ms (offset={}, writer={}, numSubPartitions={})",
         buffer.getReader().size(),
-        TimeUnit.NANOSECONDS.toMillis(flushLatencyNs),
+        flushLatencyMs,
         consumedOffset,
         writerFactory,
         writers.size()

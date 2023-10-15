@@ -90,17 +90,17 @@ rules:
      flush-latency-avg:
        metric: responsive.kafka.streams.flush.latency.avg
        desc: the average time it took to flush the commit buffer
-       unit: '{nanoseconds}'
+       unit: '{milliseconds}'
      flush-latency-max:
        metric: responsive.kafka.streams.flush.latency.max
        desc: the maximum time it took to flush the commit buffer
-       unit: '{nanoseconds}'
-     commits-fenced-rate:
-       metric: responsive.kafka.streams.commits.fenced.rate
+       unit: '{milliseconds}'
+     flush-fenced-rate:
+       metric: responsive.kafka.streams.flush.fenced.rate
        desc: the rate of commit buffer flushes that were fenced
        unit: '{flushes/s}'
-     commits-fenced-total:
-       metric: responsive.kafka.streams.commits.fenced.total
+     flush-fenced-total:
+       metric: responsive.kafka.streams.flush.fenced.total
        desc: the total number of commit buffer flushes that were fenced
        unit: '{flushes}'
      failed-truncations-rate:

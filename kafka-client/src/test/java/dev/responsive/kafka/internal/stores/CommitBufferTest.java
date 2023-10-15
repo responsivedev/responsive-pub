@@ -16,10 +16,10 @@
 
 package dev.responsive.kafka.internal.stores;
 
-import static dev.responsive.kafka.internal.metrics.StoreMetrics.COMMITS_FENCED_RATE;
-import static dev.responsive.kafka.internal.metrics.StoreMetrics.COMMITS_FENCED_RATE_DESCRIPTION;
-import static dev.responsive.kafka.internal.metrics.StoreMetrics.COMMITS_FENCED_TOTAL;
-import static dev.responsive.kafka.internal.metrics.StoreMetrics.COMMITS_FENCED_TOTAL_DESCRIPTION;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_FENCED_RATE;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_FENCED_RATE_DESCRIPTION;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_FENCED_TOTAL;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_FENCED_TOTAL_DESCRIPTION;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.FAILED_TRUNCATIONS_RATE;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.FAILED_TRUNCATIONS_RATE_DESCRIPTION;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.FAILED_TRUNCATIONS_TOTAL;
@@ -140,7 +140,7 @@ public class CommitBufferTest {
   @Mock
   private Sensor flushLatencySensor;
   @Mock
-  private Sensor commitsFencedSensor;
+  private Sensor flushFencedSensor;
   @Mock
   private Sensor failedTruncationsSensor;
 
@@ -194,7 +194,7 @@ public class CommitBufferTest {
 
     Mockito.when(metrics.sensor("flush-" + changelogTp)).thenReturn(flushSensor);
     Mockito.when(metrics.sensor("flush-latency-" + changelogTp)).thenReturn(flushLatencySensor);
-    Mockito.when(metrics.sensor("commits-fenced-" + changelogTp)).thenReturn(commitsFencedSensor);
+    Mockito.when(metrics.sensor("commits-fenced-" + changelogTp)).thenReturn(flushFencedSensor);
     Mockito.when(metrics.sensor("failed-truncations-" + changelogTp))
         .thenReturn(failedTruncationsSensor);
   }
@@ -233,31 +233,31 @@ public class CommitBufferTest {
         eq(metricName(TIME_SINCE_LAST_FLUSH, TIME_SINCE_LAST_FLUSH_DESCRIPTION)),
         any(Gauge.class));
 
-    Mockito.verify(metrics).addMetric(
+    Mockito.verify(flushSensor).add(
         eq(metricName(FLUSH_RATE, FLUSH_RATE_DESCRIPTION)),
         any(Rate.class));
-    Mockito.verify(metrics).addMetric(
+    Mockito.verify(flushSensor).add(
         eq(metricName(FLUSH_TOTAL, FLUSH_TOTAL_DESCRIPTION)),
         any(CumulativeCount.class));
 
-    Mockito.verify(metrics).addMetric(
+    Mockito.verify(flushLatencySensor).add(
         eq(metricName(FLUSH_LATENCY_AVG, FLUSH_LATENCY_AVG_DESCRIPTION)),
         any(Avg.class));
-    Mockito.verify(metrics).addMetric(
+    Mockito.verify(flushLatencySensor).add(
         eq(metricName(FLUSH_LATENCY_MAX, FLUSH_LATENCY_MAX_DESCRIPTION)),
         any(Max.class));
 
-    Mockito.verify(metrics).addMetric(
-        eq(metricName(COMMITS_FENCED_RATE, COMMITS_FENCED_RATE_DESCRIPTION)),
+    Mockito.verify(flushFencedSensor).add(
+        eq(metricName(FLUSH_FENCED_RATE, FLUSH_FENCED_RATE_DESCRIPTION)),
         any(Rate.class));
-    Mockito.verify(metrics).addMetric(
-        eq(metricName(COMMITS_FENCED_TOTAL, COMMITS_FENCED_TOTAL_DESCRIPTION)),
+    Mockito.verify(flushFencedSensor).add(
+        eq(metricName(FLUSH_FENCED_TOTAL, FLUSH_FENCED_TOTAL_DESCRIPTION)),
         any(CumulativeCount.class));
 
-    Mockito.verify(metrics).addMetric(
+    Mockito.verify(failedTruncationsSensor).add(
         eq(metricName(FAILED_TRUNCATIONS_RATE, FAILED_TRUNCATIONS_RATE_DESCRIPTION)),
         any(Rate.class));
-    Mockito.verify(metrics).addMetric(
+    Mockito.verify(failedTruncationsSensor).add(
         eq(metricName(FAILED_TRUNCATIONS_TOTAL, FAILED_TRUNCATIONS_TOTAL_DESCRIPTION)),
         any(CumulativeCount.class));
   }
@@ -411,7 +411,7 @@ public class CommitBufferTest {
     Mockito.when(metrics.sensor("flush-latency-" + sourceChangelog))
         .thenReturn(flushLatencySensor);
     Mockito.when(metrics.sensor("commits-fenced-" + sourceChangelog))
-        .thenReturn(commitsFencedSensor);
+        .thenReturn(flushFencedSensor);
     Mockito.when(metrics.sensor("failed-truncations-" + sourceChangelog))
         .thenReturn(failedTruncationsSensor);
     final CommitBuffer<Bytes, RemoteKVTable> buffer = new CommitBuffer<>(

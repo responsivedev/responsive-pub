@@ -37,7 +37,7 @@ public class StoreMetrics implements MetricGroup {
   public static final String TIME_RESTORING_DESCRIPTION = "The amount of time (in ms) since this state store started restoration";
 
   public static final String TIME_SINCE_LAST_FLUSH = "time-since-last-flush";
-  public static final String TIME_SINCE_LAST_FLUSH_DESCRIPTION = "The amount of time (in milliseconds) since the last successful flush";
+  public static final String TIME_SINCE_LAST_FLUSH_DESCRIPTION = "The amount of time (in ms) since the last successful flush";
 
   public static final String FLUSH = "flush";
   public static final String FLUSH_DESCRIPTION = "flushes of the commit buffer";
@@ -47,18 +47,18 @@ public class StoreMetrics implements MetricGroup {
   public static final String FLUSH_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + FLUSH_DESCRIPTION;
 
   public static final String FLUSH_LATENCY = "flush-latency";
-  public static final String FLUSH_LATENCY_DESCRIPTION = "amount of time (in nanoseconds) it took to flush the commit buffer";
+  public static final String FLUSH_LATENCY_DESCRIPTION = "amount of time (in ms) it took to flush the commit buffer";
   public static final String FLUSH_LATENCY_AVG = FLUSH_LATENCY + AVG_SUFFIX;
   public static final String FLUSH_LATENCY_AVG_DESCRIPTION = AVG_DESCRIPTION + FLUSH_LATENCY_DESCRIPTION;
   public static final String FLUSH_LATENCY_MAX = FLUSH_LATENCY + MAX_SUFFIX;
   public static final String FLUSH_LATENCY_MAX_DESCRIPTION = MAX_DESCRIPTION + FLUSH_LATENCY_DESCRIPTION;
 
-  public static final String COMMITS_FENCED = "commits-fenced";
-  public static final String COMMITS_FENCED_DESCRIPTION = "flushes that were fenced during the commit";
-  public static final String COMMITS_FENCED_RATE = COMMITS_FENCED + RATE_SUFFIX;
-  public static final String COMMITS_FENCED_RATE_DESCRIPTION = RATE_DESCRIPTION + COMMITS_FENCED_DESCRIPTION;
-  public static final String COMMITS_FENCED_TOTAL = COMMITS_FENCED + TOTAL_SUFFIX;
-  public static final String COMMITS_FENCED_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + COMMITS_FENCED_DESCRIPTION;
+  public static final String FLUSH_FENCED = "flush-fenced";
+  public static final String FLUSH_FENCED_DESCRIPTION = "buffer flushes that were fenced during a commit";
+  public static final String FLUSH_FENCED_RATE = FLUSH_FENCED + RATE_SUFFIX;
+  public static final String FLUSH_FENCED_RATE_DESCRIPTION = RATE_DESCRIPTION + FLUSH_FENCED_DESCRIPTION;
+  public static final String FLUSH_FENCED_TOTAL = FLUSH_FENCED + TOTAL_SUFFIX;
+  public static final String FLUSH_FENCED_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + FLUSH_FENCED_DESCRIPTION;
 
   public static final String FAILED_TRUNCATIONS = "failed-truncations";
   public static final String FAILED_TRUNCATIONS_DESCRIPTION = "changelog truncation attempts that failed";
