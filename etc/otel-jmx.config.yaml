@@ -26,7 +26,6 @@ rules:
        unit: '{stores}'
      num-interrupted-changelogs:
        metric: responsive.kafka.streams.num.interrupted.changelogs
-       type: gauge
        desc: the number of state stores that were interrupted before finishing restoration
        unit: '{stores}'
 
@@ -70,15 +69,10 @@ rules:
      topic: param(topic)
      store: param(store)
    mapping:
-     restore-latency-avg:
-       metric: responsive.kafka.streams.restore.latency.avg
+     time-restoring:
+       metric: responsive.kafka.streams.time.restoring
        type: gauge
-       desc: the average time this task spent in restoration
-       unit: '{milliseconds}'
-     restore-latency-max:
-       metric: responsive.kafka.streams.restore.latency.max
-       type: gauge
-       desc: the average time this task spent in restoration
+       desc: the amount of time since this state store started restoration"
        unit: '{milliseconds}'
 
 

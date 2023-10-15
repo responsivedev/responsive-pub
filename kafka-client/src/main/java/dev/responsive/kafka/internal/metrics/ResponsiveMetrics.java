@@ -115,8 +115,8 @@ public class ResponsiveMetrics implements Closeable {
       return globalThreadMatcher.group(1);
     }
 
-    LOG.error("Unable to parse the thread id from {}", threadName);
-    throw new RuntimeException("Could not extract thread id for " + threadName);
+    LOG.warn("Unable to parse the stream thread id, falling back to thread name {}", threadName);
+    return threadName;
   }
 
   /**
