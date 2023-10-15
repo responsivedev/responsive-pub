@@ -86,13 +86,6 @@ public class ResponsiveRestoreListenerTest {
 
     Mockito.when(metrics.sensor(NUM_INTERRUPTED_CHANGELOGS)).thenReturn(numInterruptedSensor);
     restoreListener = new ResponsiveRestoreListener(responsiveMetrics);
-    Mockito.verify(numInterruptedSensor).add(
-        eq(new MetricName(
-            NUM_INTERRUPTED_CHANGELOGS,
-            "application-metrics",
-            NUM_INTERRUPTED_CHANGELOGS_DESCRIPTION,
-            APPLICATION_TAGS)),
-        any(CumulativeCount.class));
   }
 
   private MetricName numRestoringChangelogsMetricName() {
@@ -116,6 +109,13 @@ public class ResponsiveRestoreListenerTest {
   @Test
   public void shouldAddAndRemoveStoreMetrics() {
     Mockito.verify(metrics).addMetric(eq(numRestoringChangelogsMetricName()), any(Gauge.class));
+    Mockito.verify(numInterruptedSensor).add(
+        eq(new MetricName(
+            NUM_INTERRUPTED_CHANGELOGS,
+            "application-metrics",
+            NUM_INTERRUPTED_CHANGELOGS_DESCRIPTION,
+            APPLICATION_TAGS)),
+        any(CumulativeCount.class));
 
     restoreListener.onRestoreStart(CHANGELOG1, STORE_NAME, 0L, 100L);
     restoreListener.onRestoreStart(CHANGELOG2, STORE_NAME, 0L, 100L);

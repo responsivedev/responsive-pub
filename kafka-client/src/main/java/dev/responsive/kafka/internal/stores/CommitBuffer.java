@@ -106,8 +106,13 @@ class CommitBuffer<K, S extends RemoteTable<K>>
   private final Supplier<Instant> clock;
   private final KeySpec<K> keySpec;
 
+  private final String flushSensorName;
+  private final String flushLatencySensorName;
+  private final String commitsFencedSensorName;
+  private final String failedTruncationsSensorName;
+
   private final MetricName lastFlushMetric;
-  private final Sensor flushesSensor;
+  private final Sensor flushSensor;
   private final Sensor flushLatencySensor;
   private final Sensor commitsFencedSensor;
   private final Sensor failedTruncationsSensor;
@@ -206,6 +211,11 @@ class CommitBuffer<K, S extends RemoteTable<K>>
     logPrefix = String.format("commit-buffer [%s-%d] ", table.name(), changelog.partition());
     log = new LogContext(logPrefix).logger(CommitBuffer.class);
 
+    flushSensorName = getSensorName(FLUSH, changelog);
+    flushLatencySensorName = getSensorName(FLUSH_LATENCY, changelog);
+    commitsFencedSensorName = getSensorName(COMMITS_FENCED, changelog);
+    failedTruncationsSensorName = getSensorName(FAILED_TRUNCATIONS, changelog);
+
     lastFlushMetric = metrics.metricName(
         TIME_SINCE_LAST_FLUSH,
         TIME_SINCE_LAST_FLUSH_DESCRIPTION,
@@ -216,15 +226,15 @@ class CommitBuffer<K, S extends RemoteTable<K>>
         (Gauge<Long>) (config, now) -> now - lastFlush.toEpochMilli()
     );
 
-    flushesSensor = metrics.addSensor(FLUSH);
-    flushesSensor.add(
+    flushSensor = metrics.addSensor(flushSensorName);
+    flushSensor.add(
         metrics.metricName(
             FLUSH_RATE,
             FLUSH_RATE_DESCRIPTION,
             metrics.storeLevelMetric(metrics.computeThreadId(), changelog, storeName)),
         new Rate()
     );
-    flushesSensor.add(
+    flushSensor.add(
         metrics.metricName(
             FLUSH_TOTAL,
             FLUSH_TOTAL_DESCRIPTION,
@@ -232,7 +242,7 @@ class CommitBuffer<K, S extends RemoteTable<K>>
         new CumulativeCount()
     );
 
-    flushLatencySensor = metrics.addSensor(FLUSH_LATENCY);
+    flushLatencySensor = metrics.addSensor(flushLatencySensorName);
     flushLatencySensor.add(
         metrics.metricName(
             FLUSH_LATENCY_AVG,
@@ -248,7 +258,7 @@ class CommitBuffer<K, S extends RemoteTable<K>>
         new Max()
     );
 
-    commitsFencedSensor = metrics.addSensor(COMMITS_FENCED);
+    commitsFencedSensor = metrics.addSensor(commitsFencedSensorName);
     commitsFencedSensor.add(
         metrics.metricName(
             COMMITS_FENCED_RATE,
@@ -264,7 +274,7 @@ class CommitBuffer<K, S extends RemoteTable<K>>
         new CumulativeCount()
     );
 
-    failedTruncationsSensor = metrics.addSensor(FAILED_TRUNCATIONS);
+    failedTruncationsSensor = metrics.addSensor(failedTruncationsSensorName);
 
     if (hasSourceTopicChangelog(changelog.topic())) {
       this.truncateChangelog = false;
@@ -292,6 +302,11 @@ class CommitBuffer<K, S extends RemoteTable<K>>
         );
       }
     }
+  }
+
+  // Attach the changelog topic name & partition to make sure we uniquely name each sensor
+  private static String getSensorName(final String sensorPrefix, final TopicPartition changelog) {
+    return sensorPrefix + "-" + changelog;
   }
 
   private static boolean hasSourceTopicChangelog(final String changelogTopicName) {
@@ -504,7 +519,7 @@ class CommitBuffer<K, S extends RemoteTable<K>>
     final long endNanos = System.nanoTime();
     final long flushLatencyNs = endNanos - startNs;
     final long endMs = TimeUnit.NANOSECONDS.toMillis(endNanos);
-    flushesSensor.record(1, endMs);
+    flushSensor.record(1, endMs);
     flushLatencySensor.record(flushLatencyNs, endMs);
 
     log.debug("Flushed {} records to remote in {}ms (offset={}, writer={}, numSubPartitions={})",
@@ -633,9 +648,9 @@ class CommitBuffer<K, S extends RemoteTable<K>>
   public void close() {
     deleteRecordsFuture.cancel(true);
     metrics.removeMetric(lastFlushMetric);
-    metrics.removeSensor(FLUSH);
-    metrics.removeSensor(FLUSH_LATENCY);
-    metrics.removeSensor(COMMITS_FENCED);
-    metrics.removeSensor(FAILED_TRUNCATIONS);
+    metrics.removeSensor(flushSensorName);
+    metrics.removeSensor(flushLatencySensorName);
+    metrics.removeSensor(commitsFencedSensorName);
+    metrics.removeSensor(failedTruncationsSensorName);
   }
 }
