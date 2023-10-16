@@ -53,12 +53,12 @@ public class StoreMetrics implements MetricGroup {
   public static final String FLUSH_LATENCY_MAX = FLUSH_LATENCY + MAX_SUFFIX;
   public static final String FLUSH_LATENCY_MAX_DESCRIPTION = MAX_DESCRIPTION + FLUSH_LATENCY_DESCRIPTION;
 
-  public static final String FLUSH_FENCED = "flush-fenced";
-  public static final String FLUSH_FENCED_DESCRIPTION = "buffer flushes that were fenced during a commit";
-  public static final String FLUSH_FENCED_RATE = FLUSH_FENCED + RATE_SUFFIX;
-  public static final String FLUSH_FENCED_RATE_DESCRIPTION = RATE_DESCRIPTION + FLUSH_FENCED_DESCRIPTION;
-  public static final String FLUSH_FENCED_TOTAL = FLUSH_FENCED + TOTAL_SUFFIX;
-  public static final String FLUSH_FENCED_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + FLUSH_FENCED_DESCRIPTION;
+  public static final String FLUSH_ERRORS = "flush-errors";
+  public static final String FLUSH_ERRORS_DESCRIPTION = "buffer flush attempts during a commit that failed";
+  public static final String FLUSH_ERRORS_RATE = FLUSH_ERRORS + RATE_SUFFIX;
+  public static final String FLUSH_ERRORS_RATE_DESCRIPTION = RATE_DESCRIPTION + FLUSH_ERRORS_DESCRIPTION;
+  public static final String FLUSH_ERRORS_TOTAL = FLUSH_ERRORS + TOTAL_SUFFIX;
+  public static final String FLUSH_ERRORS_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + FLUSH_ERRORS_DESCRIPTION;
 
   public static final String FAILED_TRUNCATIONS = "failed-truncations";
   public static final String FAILED_TRUNCATIONS_DESCRIPTION = "changelog truncation attempts that failed";

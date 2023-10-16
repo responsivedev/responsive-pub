@@ -20,10 +20,10 @@ import static dev.responsive.kafka.internal.metrics.StoreMetrics.FAILED_TRUNCATI
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.FAILED_TRUNCATIONS_RATE_DESCRIPTION;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.FAILED_TRUNCATIONS_TOTAL;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.FAILED_TRUNCATIONS_TOTAL_DESCRIPTION;
-import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_FENCED_RATE;
-import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_FENCED_RATE_DESCRIPTION;
-import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_FENCED_TOTAL;
-import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_FENCED_TOTAL_DESCRIPTION;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_ERRORS_RATE;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_ERRORS_RATE_DESCRIPTION;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_ERRORS_TOTAL;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_ERRORS_TOTAL_DESCRIPTION;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_LATENCY_AVG;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_LATENCY_AVG_DESCRIPTION;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_LATENCY_MAX;
@@ -248,10 +248,10 @@ public class CommitBufferTest {
         any(Max.class));
 
     Mockito.verify(flushFencedSensor).add(
-        eq(metricName(FLUSH_FENCED_RATE, FLUSH_FENCED_RATE_DESCRIPTION)),
+        eq(metricName(FLUSH_ERRORS_RATE, FLUSH_ERRORS_RATE_DESCRIPTION)),
         any(Rate.class));
     Mockito.verify(flushFencedSensor).add(
-        eq(metricName(FLUSH_FENCED_TOTAL, FLUSH_FENCED_TOTAL_DESCRIPTION)),
+        eq(metricName(FLUSH_ERRORS_TOTAL, FLUSH_ERRORS_TOTAL_DESCRIPTION)),
         any(CumulativeCount.class));
 
     Mockito.verify(failedTruncationsSensor).add(

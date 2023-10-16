@@ -22,11 +22,11 @@ import static dev.responsive.kafka.internal.metrics.StoreMetrics.FAILED_TRUNCATI
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.FAILED_TRUNCATIONS_TOTAL;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.FAILED_TRUNCATIONS_TOTAL_DESCRIPTION;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH;
-import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_FENCED;
-import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_FENCED_RATE;
-import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_FENCED_RATE_DESCRIPTION;
-import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_FENCED_TOTAL;
-import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_FENCED_TOTAL_DESCRIPTION;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_ERRORS;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_ERRORS_RATE;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_ERRORS_RATE_DESCRIPTION;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_ERRORS_TOTAL;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_ERRORS_TOTAL_DESCRIPTION;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_LATENCY;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_LATENCY_AVG;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_LATENCY_AVG_DESCRIPTION;
@@ -108,13 +108,13 @@ class CommitBuffer<K, S extends RemoteTable<K>>
 
   private final String flushSensorName;
   private final String flushLatencySensorName;
-  private final String flushFencedSensorName;
+  private final String flushErrorsSensorName;
   private final String failedTruncationsSensorName;
 
   private final MetricName lastFlushMetric;
   private final Sensor flushSensor;
   private final Sensor flushLatencySensor;
-  private final Sensor flushFencedSensor;
+  private final Sensor flushErrorsSensor;
   private final Sensor failedTruncationsSensor;
 
   // flag to skip further truncation attempts when the changelog is set to 'compact' only
@@ -213,7 +213,7 @@ class CommitBuffer<K, S extends RemoteTable<K>>
 
     flushSensorName = getSensorName(FLUSH, changelog);
     flushLatencySensorName = getSensorName(FLUSH_LATENCY, changelog);
-    flushFencedSensorName = getSensorName(FLUSH_FENCED, changelog);
+    flushErrorsSensorName = getSensorName(FLUSH_ERRORS, changelog);
     failedTruncationsSensorName = getSensorName(FAILED_TRUNCATIONS, changelog);
 
     lastFlushMetric = metrics.metricName(
@@ -258,18 +258,18 @@ class CommitBuffer<K, S extends RemoteTable<K>>
         new Max()
     );
 
-    flushFencedSensor = metrics.addSensor(flushFencedSensorName);
-    flushFencedSensor.add(
+    flushErrorsSensor = metrics.addSensor(flushErrorsSensorName);
+    flushErrorsSensor.add(
         metrics.metricName(
-            FLUSH_FENCED_RATE,
-            FLUSH_FENCED_RATE_DESCRIPTION,
+            FLUSH_ERRORS_RATE,
+            FLUSH_ERRORS_RATE_DESCRIPTION,
             metrics.storeLevelMetric(metrics.computeThreadId(), changelog, storeName)),
         new Rate()
     );
-    flushFencedSensor.add(
+    flushErrorsSensor.add(
         metrics.metricName(
-            FLUSH_FENCED_TOTAL,
-            FLUSH_FENCED_TOTAL_DESCRIPTION,
+            FLUSH_ERRORS_TOTAL,
+            FLUSH_ERRORS_TOTAL_DESCRIPTION,
             metrics.storeLevelMetric(metrics.computeThreadId(), changelog, storeName)),
         new CumulativeCount()
     );
@@ -501,7 +501,7 @@ class CommitBuffer<K, S extends RemoteTable<K>>
 
     final var drainWriteResult = drain(writers.values());
     if (!drainWriteResult.wasApplied()) {
-      throwFencedException(drainWriteResult, consumedOffset);
+      throwFlushException(drainWriteResult, consumedOffset);
     }
 
     // this offset is only used for recovery, so it can (and should) be done only
@@ -513,7 +513,7 @@ class CommitBuffer<K, S extends RemoteTable<K>>
     ).setOffset(consumedOffset);
 
     if (!offsetWriteResult.wasApplied()) {
-      throwFencedException(offsetWriteResult, consumedOffset);
+      throwFlushException(offsetWriteResult, consumedOffset);
     }
 
     final long endNanos = System.nanoTime();
@@ -626,12 +626,13 @@ class CommitBuffer<K, S extends RemoteTable<K>>
     }
   }
 
-  private void throwFencedException(final RemoteWriteResult result, final long consumedOffset) {
+  private void throwFlushException(final RemoteWriteResult result, final long consumedOffset) {
     final MetadataRow stored = table.metadata(result.getPartition());
-    // we were fenced - the only conditional statement is the
-    // offset update, so it's the only failure point
+
+    // this most likely is a fencing error, so just record all the information
+    // that is relevant to fencing in the error message
     final String msg = String.format(
-        "[%d] Fenced while writing batch! Local Epoch: %s, "
+        "[%d] Error while writing batch! Local Epoch: %s, "
             + "Persisted Epoch: %d, Batch Offset: %d, Persisted Offset: %d",
         result.getPartition(),
         writerFactory,
@@ -641,7 +642,7 @@ class CommitBuffer<K, S extends RemoteTable<K>>
     );
     log.warn(msg);
 
-    flushFencedSensor.record();
+    flushErrorsSensor.record();
     throw exceptionSupplier.commitFencedException(logPrefix + msg);
   }
 
@@ -651,7 +652,7 @@ class CommitBuffer<K, S extends RemoteTable<K>>
     metrics.removeMetric(lastFlushMetric);
     metrics.removeSensor(flushSensorName);
     metrics.removeSensor(flushLatencySensorName);
-    metrics.removeSensor(flushFencedSensorName);
+    metrics.removeSensor(flushErrorsSensorName);
     metrics.removeSensor(failedTruncationsSensorName);
   }
 }
