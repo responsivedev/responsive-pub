@@ -16,6 +16,24 @@
 
 package dev.responsive.kafka.internal.stores;
 
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FAILED_TRUNCATIONS_RATE;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FAILED_TRUNCATIONS_RATE_DESCRIPTION;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FAILED_TRUNCATIONS_TOTAL;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FAILED_TRUNCATIONS_TOTAL_DESCRIPTION;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_ERRORS_RATE;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_ERRORS_RATE_DESCRIPTION;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_ERRORS_TOTAL;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_ERRORS_TOTAL_DESCRIPTION;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_LATENCY_AVG;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_LATENCY_AVG_DESCRIPTION;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_LATENCY_MAX;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_LATENCY_MAX_DESCRIPTION;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_RATE;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_RATE_DESCRIPTION;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_TOTAL;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_TOTAL_DESCRIPTION;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.TIME_SINCE_LAST_FLUSH;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.TIME_SINCE_LAST_FLUSH_DESCRIPTION;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
@@ -23,6 +41,7 @@ import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -40,6 +59,8 @@ import dev.responsive.kafka.internal.db.MetadataRow;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.db.spec.BaseTableSpec;
+import dev.responsive.kafka.internal.metrics.ClientVersionMetadata;
+import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.utils.ExceptionSupplier;
 import dev.responsive.kafka.internal.utils.SessionClients;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
@@ -49,6 +70,7 @@ import java.nio.charset.Charset;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -61,10 +83,18 @@ import org.apache.kafka.clients.admin.DeleteRecordsResult;
 import org.apache.kafka.clients.admin.DeletedRecords;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.common.metrics.Gauge;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.Avg;
+import org.apache.kafka.common.metrics.stats.CumulativeCount;
+import org.apache.kafka.common.metrics.stats.Max;
+import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.Bytes;
 import org.junit.jupiter.api.AfterEach;
@@ -91,15 +121,37 @@ public class CommitBufferTest {
   private static final long CURRENT_TS = 100L;
   private static final long MIN_VALID_TS = 0L;
 
-  private CqlSession session;
-  private SessionClients client;
-  private TopicPartition changelogTp;
+  private static final Map<String, String> APPLICATION_TAGS = Map.of(
+      "responsive-version", "1",
+      "responsive-commit-id", "abc",
+      "streams-version", "2",
+      "streams-commit-id", "dfe",
+      "consumer-group", "commit-buffer-test-app",
+      "streams-application-id", "commit-buffer-test-app",
+      "streams-client-id", "commit-buffer-test-app-node-1"
+  );
 
+  @Mock
+  private Admin admin;
+  @Mock
+  private Metrics metrics;
+  @Mock
+  private Sensor flushSensor;
+  @Mock
+  private Sensor flushLatencySensor;
+  @Mock
+  private Sensor flushErrorSensor;
+  @Mock
+  private Sensor failedTruncationsSensor;
+
+  private Map<String, String> storeTags;
+  private CqlSession session;
+  private SessionClients sessionClients;
+  private TopicPartition changelogTp;
   private String name;
-  @Mock private Admin admin;
   private SubPartitioner partitioner;
   private RemoteKVTable table;
-  private CassandraClient cclient;
+  private CassandraClient client;
 
   @BeforeEach
   public void before(
@@ -113,18 +165,47 @@ public class CommitBufferTest {
         .withLocalDatacenter(cassandra.getLocalDatacenter())
         .withKeyspace("responsive_clients") // NOTE: this keyspace is expected to exist
         .build();
-    cclient = new CassandraClient(session, config);
-    client = new SessionClients(
+    client = new CassandraClient(session, config);
+    sessionClients = new SessionClients(
         Optional.empty(),
-        Optional.of(cclient),
+        Optional.of(client),
         admin
     );
-    table = cclient.kvFactory().create(new BaseTableSpec(name));
+    final var responsiveMetrics = new ResponsiveMetrics(metrics);
+    responsiveMetrics.initializeTags(
+        "commit-buffer-test-app",
+        "commit-buffer-test-app-node-1",
+        new ClientVersionMetadata("1", "abc", "2", "dfe"),
+        Collections.emptyMap()
+    );
+    sessionClients.initialize(responsiveMetrics, null);
+    table = client.kvFactory().create(new BaseTableSpec(name));
     changelogTp = new TopicPartition(name + "-changelog", KAFKA_PARTITION);
     partitioner = SubPartitioner.NO_SUBPARTITIONS;
 
     when(admin.deleteRecords(Mockito.any())).thenReturn(new DeleteRecordsResult(Map.of(
             changelogTp, KafkaFuture.completedFuture(new DeletedRecords(100)))));
+
+    storeTags = new HashMap<>(APPLICATION_TAGS);
+    storeTags.put("thread-id", Thread.currentThread().getName());
+    storeTags.put("topic", changelogTp.topic());
+    storeTags.put("partition", Integer.toString(changelogTp.partition()));
+    storeTags.put("store", name);
+
+    Mockito.when(metrics.sensor("flush-" + changelogTp)).thenReturn(flushSensor);
+    Mockito.when(metrics.sensor("flush-latency-" + changelogTp)).thenReturn(flushLatencySensor);
+    Mockito.when(metrics.sensor("flush-errors-" + changelogTp)).thenReturn(flushErrorSensor);
+    Mockito.when(metrics.sensor("failed-truncations-" + changelogTp))
+        .thenReturn(failedTruncationsSensor);
+  }
+
+  private MetricName metricName(final String name, final String description) {
+    return new MetricName(
+        name,
+        "store-metrics",
+        description,
+        storeTags
+    );
   }
 
   private void setPartitioner(final int factor) {
@@ -138,17 +219,83 @@ public class CommitBufferTest {
   }
 
   @Test
+  public void shouldAddAllBufferMetrics() {
+    // Given:
+    setPartitioner(3);
+
+    // When:
+    final CommitBuffer<Bytes, RemoteKVTable> buffer = new CommitBuffer<>(
+        sessionClients, changelogTp, admin, table,
+        KEY_SPEC, true, name, TRIGGERS, EXCEPTION_SUPPLIER, partitioner);
+
+    // Then:
+    Mockito.verify(metrics).addMetric(
+        eq(metricName(TIME_SINCE_LAST_FLUSH, TIME_SINCE_LAST_FLUSH_DESCRIPTION)),
+        any(Gauge.class));
+
+    Mockito.verify(flushSensor).add(
+        eq(metricName(FLUSH_RATE, FLUSH_RATE_DESCRIPTION)),
+        any(Rate.class));
+    Mockito.verify(flushSensor).add(
+        eq(metricName(FLUSH_TOTAL, FLUSH_TOTAL_DESCRIPTION)),
+        any(CumulativeCount.class));
+
+    Mockito.verify(flushLatencySensor).add(
+        eq(metricName(FLUSH_LATENCY_AVG, FLUSH_LATENCY_AVG_DESCRIPTION)),
+        any(Avg.class));
+    Mockito.verify(flushLatencySensor).add(
+        eq(metricName(FLUSH_LATENCY_MAX, FLUSH_LATENCY_MAX_DESCRIPTION)),
+        any(Max.class));
+
+    Mockito.verify(flushErrorSensor).add(
+        eq(metricName(FLUSH_ERRORS_RATE, FLUSH_ERRORS_RATE_DESCRIPTION)),
+        any(Rate.class));
+    Mockito.verify(flushErrorSensor).add(
+        eq(metricName(FLUSH_ERRORS_TOTAL, FLUSH_ERRORS_TOTAL_DESCRIPTION)),
+        any(CumulativeCount.class));
+
+    Mockito.verify(failedTruncationsSensor).add(
+        eq(metricName(FAILED_TRUNCATIONS_RATE, FAILED_TRUNCATIONS_RATE_DESCRIPTION)),
+        any(Rate.class));
+    Mockito.verify(failedTruncationsSensor).add(
+        eq(metricName(FAILED_TRUNCATIONS_TOTAL, FAILED_TRUNCATIONS_TOTAL_DESCRIPTION)),
+        any(CumulativeCount.class));
+  }
+
+  @Test
+  public void shouldRemoveAllBufferMetrics() {
+    // Given:
+    setPartitioner(3);
+    final CommitBuffer<Bytes, RemoteKVTable> buffer = new CommitBuffer<>(
+        sessionClients, changelogTp, admin, table,
+        KEY_SPEC, true, name, TRIGGERS, EXCEPTION_SUPPLIER, partitioner);
+    buffer.init();
+
+    // When:
+    buffer.close();
+
+    // Then:
+    Mockito.verify(metrics).removeMetric(
+        eq(metricName(TIME_SINCE_LAST_FLUSH, TIME_SINCE_LAST_FLUSH_DESCRIPTION)));
+
+    Mockito.verify(metrics).removeSensor("flush-" + changelogTp);
+    Mockito.verify(metrics).removeSensor("flush-latency-" + changelogTp);
+    Mockito.verify(metrics).removeSensor("flush-errors-" + changelogTp);
+    Mockito.verify(metrics).removeSensor("failed-truncations-" + changelogTp);
+  }
+
+  @Test
   public void shouldFlushWithCorrectEpochForPartitionsWithDataAndOffsetForBaseSubpartition() {
     // Given:
     setPartitioner(3);
     final CommitBuffer<Bytes, RemoteKVTable> buffer = new CommitBuffer<>(
-        client, changelogTp, admin, table,
-        KEY_SPEC, true, TRIGGERS, EXCEPTION_SUPPLIER, partitioner);
+        sessionClients, changelogTp, admin, table,
+        KEY_SPEC, true, name, TRIGGERS, EXCEPTION_SUPPLIER, partitioner);
     buffer.init();
 
     // reserve epoch for partition 8 to ensure it doesn't get flushed
     // if it did it would get fenced
-    LwtWriterFactory.reserve(table, cclient, new int[]{8}, KAFKA_PARTITION, 3L, false);
+    LwtWriterFactory.reserve(table, client, new int[]{8}, KAFKA_PARTITION, 3L, false);
 
     final Bytes k0 = Bytes.wrap(ByteBuffer.allocate(4).putInt(0).array());
     final Bytes k1 = Bytes.wrap(ByteBuffer.allocate(4).putInt(1).array());
@@ -175,12 +322,12 @@ public class CommitBufferTest {
     // Given:
     final ExceptionSupplier exceptionSupplier = mock(ExceptionSupplier.class);
     final CommitBuffer<Bytes, RemoteKVTable> buffer = new CommitBuffer<>(
-        client, changelogTp, admin, table,
-        KEY_SPEC, true, TRIGGERS, exceptionSupplier, partitioner);
+        sessionClients, changelogTp, admin, table,
+        KEY_SPEC, true, name, TRIGGERS, exceptionSupplier, partitioner);
     buffer.init();
 
     LwtWriterFactory.reserve(
-        table, cclient, new int[]{KAFKA_PARTITION}, KAFKA_PARTITION, 100L, false);
+        table, client, new int[]{KAFKA_PARTITION}, KAFKA_PARTITION, 100L, false);
 
 
     Mockito.when(exceptionSupplier.commitFencedException(anyString()))
@@ -197,7 +344,7 @@ public class CommitBufferTest {
 
     // Then:
     final String errorMsg = "commit-buffer [" + table.name() + "-2] "
-        + "[2] Fenced while writing batch! Local Epoch: LwtWriterFactory{epoch=1}, "
+        + "[2] Error while writing batch! Local Epoch: LwtWriterFactory{epoch=1}, "
         + "Persisted Epoch: 100, Batch Offset: 100, Persisted Offset: -1";
     assertThat(e.getMessage(), equalTo(errorMsg));
   }
@@ -207,13 +354,13 @@ public class CommitBufferTest {
     // Given:
     setPartitioner(2);
     final CommitBuffer<Bytes, RemoteKVTable> buffer = new CommitBuffer<>(
-        client, changelogTp, admin, table,
-        KEY_SPEC, true, TRIGGERS, EXCEPTION_SUPPLIER, partitioner);
+        sessionClients, changelogTp, admin, table,
+        KEY_SPEC, true, name, TRIGGERS, EXCEPTION_SUPPLIER, partitioner);
     // throwaway init to initialize table
     buffer.init();
 
-    LwtWriterFactory.reserve(table, cclient, new int[]{4}, KAFKA_PARTITION, 100L, false);
-    LwtWriterFactory.reserve(table, cclient, new int[]{5}, KAFKA_PARTITION, 100L, false);
+    LwtWriterFactory.reserve(table, client, new int[]{4}, KAFKA_PARTITION, 100L, false);
+    LwtWriterFactory.reserve(table, client, new int[]{5}, KAFKA_PARTITION, 100L, false);
 
     // When:
     buffer.init();
@@ -227,8 +374,8 @@ public class CommitBufferTest {
   public void shouldTruncateTopicAfterFlushIfTruncateEnabled() {
     // Given:
     final CommitBuffer<Bytes, RemoteKVTable> buffer = new CommitBuffer<>(
-        client, changelogTp, admin, table,
-        KEY_SPEC, true, TRIGGERS, EXCEPTION_SUPPLIER, partitioner);
+        sessionClients, changelogTp, admin, table,
+        KEY_SPEC, true, name, TRIGGERS, EXCEPTION_SUPPLIER, partitioner);
     buffer.init();
     buffer.put(KEY, VALUE, CURRENT_TS);
 
@@ -243,8 +390,8 @@ public class CommitBufferTest {
   public void shouldNotTruncateTopicAfterFlushIfTruncateDisabled() {
     // Given:
     final CommitBuffer<Bytes, RemoteKVTable> buffer = new CommitBuffer<>(
-        client, changelogTp, admin, table,
-        KEY_SPEC, false, TRIGGERS, EXCEPTION_SUPPLIER, partitioner);
+        sessionClients, changelogTp, admin, table,
+        KEY_SPEC, false, name, TRIGGERS, EXCEPTION_SUPPLIER, partitioner);
     buffer.init();
     buffer.put(KEY, VALUE, CURRENT_TS);
 
@@ -258,13 +405,23 @@ public class CommitBufferTest {
   @Test
   public void shouldNotTruncateTopicAfterFlushIfTruncateEnabledForSourceTopicChangelog() {
     // Given:
+    final var sourceChangelog = new TopicPartition("some-source-topic", KAFKA_PARTITION);
+    Mockito.when(metrics.sensor("flush-" + sourceChangelog))
+        .thenReturn(flushSensor);
+    Mockito.when(metrics.sensor("flush-latency-" + sourceChangelog))
+        .thenReturn(flushLatencySensor);
+    Mockito.when(metrics.sensor("flush-errors-" + sourceChangelog))
+        .thenReturn(flushErrorSensor);
+    Mockito.when(metrics.sensor("failed-truncations-" + sourceChangelog))
+        .thenReturn(failedTruncationsSensor);
     final CommitBuffer<Bytes, RemoteKVTable> buffer = new CommitBuffer<>(
-        client,
-        new TopicPartition("some-source-topic", KAFKA_PARTITION),
+        sessionClients,
+        sourceChangelog,
         admin,
         table,
         KEY_SPEC,
         true,
+        name,
         TRIGGERS,
         EXCEPTION_SUPPLIER,
         partitioner
@@ -283,8 +440,8 @@ public class CommitBufferTest {
   public void shouldNotTruncateTopicAfterPolicyViolationException() {
     // Given:
     final CommitBuffer<Bytes, RemoteKVTable> buffer = new CommitBuffer<>(
-        client, changelogTp, admin, table,
-        KEY_SPEC, true, TRIGGERS, EXCEPTION_SUPPLIER, partitioner);
+        sessionClients, changelogTp, admin, table,
+        KEY_SPEC, true, name, TRIGGERS, EXCEPTION_SUPPLIER, partitioner);
     buffer.init();
     buffer.put(KEY, VALUE, CURRENT_TS);
 
@@ -309,12 +466,13 @@ public class CommitBufferTest {
   public void shouldOnlyFlushWhenBufferFullWithRecordsTrigger() {
     // Given:
     final CommitBuffer<Bytes, RemoteKVTable> buffer = new CommitBuffer<>(
-        client,
+        sessionClients,
         changelogTp,
         admin,
         table,
         KEY_SPEC,
         false,
+        name,
         FlushTriggers.ofRecords(10),
         EXCEPTION_SUPPLIER,
         partitioner
@@ -339,12 +497,13 @@ public class CommitBufferTest {
   public void shouldOnlyFlushWhenBufferFullWithBytesTrigger() {
     // Given:
     final CommitBuffer<Bytes, RemoteKVTable> buffer = new CommitBuffer<>(
-        client,
+        sessionClients,
         changelogTp,
         admin,
         table,
         KEY_SPEC,
         false,
+        name,
         FlushTriggers.ofBytes(170),
         EXCEPTION_SUPPLIER,
         partitioner
@@ -371,12 +530,13 @@ public class CommitBufferTest {
     // just use an atomic reference as a mutable reference type
     final AtomicReference<Instant> clock = new AtomicReference<>(Instant.now());
     final CommitBuffer<Bytes, RemoteKVTable> buffer = new CommitBuffer<>(
-        client,
+        sessionClients,
         changelogTp,
         admin,
         table,
         KEY_SPEC,
         false,
+        name,
         FlushTriggers.ofInterval(Duration.ofSeconds(30)),
         EXCEPTION_SUPPLIER,
         100,
@@ -399,10 +559,10 @@ public class CommitBufferTest {
   @Test
   public void shouldDeleteRowInCassandraWithTombstone() {
     // Given:
-    cclient.execute(this.table.insert(KAFKA_PARTITION, KEY, VALUE, CURRENT_TS));
+    client.execute(this.table.insert(KAFKA_PARTITION, KEY, VALUE, CURRENT_TS));
     final CommitBuffer<Bytes, RemoteKVTable> buffer = new CommitBuffer<>(
-        client, changelogTp, admin, this.table,
-        KEY_SPEC, true, TRIGGERS, EXCEPTION_SUPPLIER, partitioner);
+        sessionClients, changelogTp, admin, this.table,
+        KEY_SPEC, true, name, TRIGGERS, EXCEPTION_SUPPLIER, partitioner);
     buffer.init();
 
     // When:
@@ -418,8 +578,8 @@ public class CommitBufferTest {
   public void shouldRestoreRecords() {
     // Given:
     final CommitBuffer<Bytes, RemoteKVTable> buffer = new CommitBuffer<>(
-        client, changelogTp, admin, table,
-        KEY_SPEC, true, TRIGGERS, EXCEPTION_SUPPLIER, partitioner);
+        sessionClients, changelogTp, admin, table,
+        KEY_SPEC, true, name, TRIGGERS, EXCEPTION_SUPPLIER, partitioner);
     buffer.init();
 
     final ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>(
@@ -450,11 +610,11 @@ public class CommitBufferTest {
     // Given:
     final ExceptionSupplier exceptionSupplier = mock(ExceptionSupplier.class);
     final CommitBuffer<Bytes, RemoteKVTable> buffer = new CommitBuffer<>(
-        client, changelogTp, admin, table,
-        KEY_SPEC, true, TRIGGERS, exceptionSupplier, partitioner);
+        sessionClients, changelogTp, admin, table,
+        KEY_SPEC, true, name, TRIGGERS, exceptionSupplier, partitioner);
     buffer.init();
     LwtWriterFactory.reserve(
-        table, cclient, new int[]{KAFKA_PARTITION}, KAFKA_PARTITION, 100L, false);
+        table, client, new int[]{KAFKA_PARTITION}, KAFKA_PARTITION, 100L, false);
 
     final ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>(
         changelogTp.topic(),
@@ -480,7 +640,7 @@ public class CommitBufferTest {
 
     // Then:
     final String errorMsg = "commit-buffer [" + table.name() + "-2] "
-        + "[2] Fenced while writing batch! Local Epoch: LwtWriterFactory{epoch=1}, "
+        + "[2] Error while writing batch! Local Epoch: LwtWriterFactory{epoch=1}, "
         + "Persisted Epoch: 100, Batch Offset: 100, Persisted Offset: -1";
     assertThat(e.getMessage(), equalTo(errorMsg));
   }
@@ -489,12 +649,13 @@ public class CommitBufferTest {
   public void shouldRestoreStreamsBatchLargerThanCassandraBatch() {
     // Given:
     final CommitBuffer<Bytes, RemoteKVTable> buffer = new CommitBuffer<>(
-        client,
+        sessionClients,
         changelogTp,
         admin,
         table,
         KEY_SPEC,
         true,
+        name,
         TRIGGERS,
         EXCEPTION_SUPPLIER,
         3,
@@ -502,7 +663,7 @@ public class CommitBufferTest {
         Instant::now
     );
     buffer.init();
-    cclient.execute(table.setOffset(100, 1));
+    client.execute(table.setOffset(100, 1));
 
     final List<ConsumerRecord<byte[], byte[]>> records = IntStream.range(0, 5)
         .mapToObj(i -> new ConsumerRecord<>(

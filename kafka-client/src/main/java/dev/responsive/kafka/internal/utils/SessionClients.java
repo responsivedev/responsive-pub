@@ -19,6 +19,7 @@ package dev.responsive.kafka.internal.utils;
 import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.mongo.ResponsiveMongoClient;
+import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
 import java.util.Optional;
 import org.apache.kafka.clients.admin.Admin;
@@ -36,8 +37,9 @@ public class SessionClients {
   private final Optional<CassandraClient> cassandraClient;
   private final Admin admin;
 
-  // This is effectively final, but has to be inserted after SessionClients are created
-  // (see the comment above #registerRestoreListener for more details)
+  // These are effectively final, but have to be inserted after the SessionClients is
+  // created (see the comment above #initialize for more details)
+  private ResponsiveMetrics metrics;
   private ResponsiveRestoreListener restoreListener;
 
   public SessionClients(
@@ -50,12 +52,16 @@ public class SessionClients {
     this.admin = admin;
   }
 
-  // We unfortunately can't pass in the restore listener when creating the SessionClients
+  // We unfortunately can't pass these in when creating the SessionClients
   // as we are forced to insert the SessionClients into the StreamsConfig passed in to
-  // the KafkaStreams constructor, while the restore listener depends on some objects
-  // that are created during/after the KafkaStreams is. This should always be registered
-  // before an application is considered fully initialized
-  public void registerRestoreListener(final ResponsiveRestoreListener restoreListener) {
+  // the KafkaStreams constructor, while the metrics & restore listener depend
+  // on some things created during/after the KafkaStreams is. These should always
+  // be registered before an application is considered fully initialized
+  public void initialize(
+      final ResponsiveMetrics metrics,
+      final ResponsiveRestoreListener restoreListener
+  ) {
+    this.metrics = metrics;
     this.restoreListener = restoreListener;
   }
 
@@ -97,6 +103,10 @@ public class SessionClients {
 
   public ResponsiveRestoreListener restoreListener() {
     return restoreListener;
+  }
+
+  public ResponsiveMetrics metrics() {
+    return metrics;
   }
 
   public void closeAll() {

@@ -139,7 +139,8 @@ public class ResponsiveTopologyTestDriver extends TopologyTestDriver {
     final SessionClients sessionClients = new SessionClients(
         Optional.empty(), Optional.of(client), client.mockAdmin()
     );
-    sessionClients.registerRestoreListener(mockRestoreListener(props));
+    final var restoreListener = mockRestoreListener(props);
+    sessionClients.initialize(restoreListener.metrics(), restoreListener);
 
     props.putAll(new InternalSessionConfigs.Builder()
         .withSessionClients(sessionClients)
@@ -172,5 +173,7 @@ public class ResponsiveTopologyTestDriver extends TopologyTestDriver {
     mockTime.setCurrentTimeMs(initialWallClockTimeMs);
     return mockTime;
   }
+
+
 
 }

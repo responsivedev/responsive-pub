@@ -206,7 +206,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     responsiveRestoreListener = new ResponsiveRestoreListener(responsiveMetrics);
     responsiveStateListener = new ResponsiveStateListener(responsiveMetrics);
 
-    sessionClients.registerRestoreListener(responsiveRestoreListener);
+    sessionClients.initialize(responsiveMetrics, responsiveRestoreListener);
     super.setGlobalStateRestoreListener(responsiveRestoreListener);
     super.setStateListener(responsiveStateListener);
   }
@@ -296,12 +296,6 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     return responsiveRestoreListener.userRestoreListener();
   }
 
-  private void closeInternal() {
-    responsiveStateListener.close();
-    responsiveRestoreListener.close();
-    sessionClients.closeAll();
-  }
-
   /**
    * Get read-only handle on the complete responsive metrics registry, which contains all
    * custom Responsive metrics as well as the original Streams metrics (which in turn
@@ -325,6 +319,11 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
 
   public Map<MetricName, ? extends Metric> responsiveMetrics() {
     return responsiveMetrics.metrics();
+  }
+
+  private void closeInternal() {
+    responsiveStateListener.close();
+    sessionClients.closeAll();
   }
 
   @Override

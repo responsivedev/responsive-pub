@@ -97,6 +97,7 @@ public class PartitionedOperations implements KeyValueOperations {
         table,
         new BytesKeySpec(),
         params.truncateChangelog(),
+        params.name().kafkaName(),
         partitioner,
         config
     );

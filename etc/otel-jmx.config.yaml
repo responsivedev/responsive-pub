@@ -55,7 +55,7 @@ rules:
        unit: '{offset}'
 
  # Responsive store metrics
- - bean: dev.responsive:type=topic-metrics,responsive-version=*,responsive-commit-id=*,streams-version=*,streams-commit-id=*,consumer-group=*,streams-application-id=*,streams-client-id=*,thread-id=*,topic=*,partition=*,store=*
+ - bean: dev.responsive:type=store-metrics,responsive-version=*,responsive-commit-id=*,streams-version=*,streams-commit-id=*,consumer-group=*,streams-application-id=*,streams-client-id=*,thread-id=*,topic=*,partition=*,store=*
    metricAttribute:
      responsiveVersion: param(responsive-version)
      responsiveCommitId: param(responsive-commit-id)
@@ -72,8 +72,45 @@ rules:
      time-restoring:
        metric: responsive.kafka.streams.time.restoring
        type: gauge
-       desc: the amount of time since this state store started restoration"
+       desc: the amount of time since this state store started restoration
        unit: '{milliseconds}'
+     time-since-last-flush:
+       metric: responsive.kafka.streams.time.since.last.flush
+       type: gauge
+       desc: the amount of time since the last successful flush
+       unit: '{milliseconds}'
+     flush-rate:
+       metric: responsive.kafka.streams.flush.rate
+       desc: the rate of commit buffer flushes
+       unit: '{flushes/s}'
+     flush-total:
+       metric: responsive.kafka.streams.flush.total
+       desc: the total number of commit buffer flushes
+       unit: '{flushes}'
+     flush-latency-avg:
+       metric: responsive.kafka.streams.flush.latency.avg
+       desc: the average time it took to flush the commit buffer
+       unit: '{milliseconds}'
+     flush-latency-max:
+       metric: responsive.kafka.streams.flush.latency.max
+       desc: the maximum time it took to flush the commit buffer
+       unit: '{milliseconds}'
+     flush-fenced-rate:
+       metric: responsive.kafka.streams.flush.fenced.rate
+       desc: the rate of commit buffer flushes that were fenced
+       unit: '{flushes/s}'
+     flush-fenced-total:
+       metric: responsive.kafka.streams.flush.fenced.total
+       desc: the total number of commit buffer flushes that were fenced
+       unit: '{flushes}'
+     failed-truncations-rate:
+       metric: responsive.kafka.streams.failed.truncations.rate
+       desc: the rate of changelog truncation attempts that failed
+       unit: '{deletes/s}'
+     failed-truncations-total:
+       metric: responsive.kafka.streams.failed.truncations.total
+       desc: the total number of changelog truncation attempts that failed
+       unit: '{deletes}'
 
 
  #### Apache Kafka Metrics ####

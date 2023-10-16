@@ -16,6 +16,28 @@
 
 package dev.responsive.kafka.internal.stores;
 
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FAILED_TRUNCATIONS;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FAILED_TRUNCATIONS_RATE;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FAILED_TRUNCATIONS_RATE_DESCRIPTION;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FAILED_TRUNCATIONS_TOTAL;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FAILED_TRUNCATIONS_TOTAL_DESCRIPTION;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_ERRORS;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_ERRORS_RATE;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_ERRORS_RATE_DESCRIPTION;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_ERRORS_TOTAL;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_ERRORS_TOTAL_DESCRIPTION;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_LATENCY;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_LATENCY_AVG;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_LATENCY_AVG_DESCRIPTION;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_LATENCY_MAX;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_LATENCY_MAX_DESCRIPTION;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_RATE;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_RATE_DESCRIPTION;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_TOTAL;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_TOTAL_DESCRIPTION;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.TIME_SINCE_LAST_FLUSH;
+import static dev.responsive.kafka.internal.metrics.StoreMetrics.TIME_SINCE_LAST_FLUSH_DESCRIPTION;
 import static org.apache.kafka.clients.admin.RecordsToDelete.beforeOffset;
 
 import dev.responsive.kafka.api.config.ResponsiveConfig;
@@ -25,6 +47,7 @@ import dev.responsive.kafka.internal.db.RemoteTable;
 import dev.responsive.kafka.internal.db.RemoteWriter;
 import dev.responsive.kafka.internal.db.WriterFactory;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
+import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.utils.ExceptionSupplier;
 import dev.responsive.kafka.internal.utils.Iterators;
 import dev.responsive.kafka.internal.utils.Result;
@@ -47,8 +70,15 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DeletedRecords;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.PolicyViolationException;
+import org.apache.kafka.common.metrics.Gauge;
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.Avg;
+import org.apache.kafka.common.metrics.stats.CumulativeCount;
+import org.apache.kafka.common.metrics.stats.Max;
+import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
@@ -64,7 +94,8 @@ class CommitBuffer<K, S extends RemoteTable<K>>
   private final String logPrefix;
 
   private final SizeTrackingBuffer<K> buffer;
-  private final SessionClients client;
+  private final SessionClients sessionClients;
+  private final ResponsiveMetrics metrics;
   private final Admin admin;
   private final TopicPartition changelog;
   private final S table;
@@ -74,6 +105,17 @@ class CommitBuffer<K, S extends RemoteTable<K>>
   private final SubPartitioner subPartitioner;
   private final Supplier<Instant> clock;
   private final KeySpec<K> keySpec;
+
+  private final String flushSensorName;
+  private final String flushLatencySensorName;
+  private final String flushErrorsSensorName;
+  private final String failedTruncationsSensorName;
+
+  private final MetricName lastFlushMetric;
+  private final Sensor flushSensor;
+  private final Sensor flushLatencySensor;
+  private final Sensor flushErrorsSensor;
+  private final Sensor failedTruncationsSensor;
 
   // flag to skip further truncation attempts when the changelog is set to 'compact' only
   private boolean isDeleteEnabled = true;
@@ -89,6 +131,7 @@ class CommitBuffer<K, S extends RemoteTable<K>>
       final S schema,
       final KeySpec<K> keySpec,
       final boolean truncateChangelog,
+      final String storeName,
       final SubPartitioner partitioner,
       final ResponsiveConfig config
   ) {
@@ -101,6 +144,7 @@ class CommitBuffer<K, S extends RemoteTable<K>>
         schema,
         keySpec,
         truncateChangelog,
+        storeName,
         FlushTriggers.fromConfig(config),
         ExceptionSupplier.fromConfig(config.originals()),
         partitioner
@@ -108,23 +152,25 @@ class CommitBuffer<K, S extends RemoteTable<K>>
   }
 
   CommitBuffer(
-      final SessionClients client,
+      final SessionClients sessionClients,
       final TopicPartition changelog,
       final Admin admin,
       final S schema,
       final KeySpec<K> keySpec,
       final boolean truncateChangelog,
+      final String storeName,
       final FlushTriggers flushTriggers,
       final ExceptionSupplier exceptionSupplier,
       final SubPartitioner subPartitioner
   ) {
     this(
-        client,
+        sessionClients,
         changelog,
         admin,
         schema,
         keySpec,
         truncateChangelog,
+        storeName,
         flushTriggers,
         exceptionSupplier,
         MAX_BATCH_SIZE,
@@ -134,20 +180,22 @@ class CommitBuffer<K, S extends RemoteTable<K>>
   }
 
   CommitBuffer(
-      final SessionClients client,
+      final SessionClients sessionClients,
       final TopicPartition changelog,
       final Admin admin,
       final S table,
       final KeySpec<K> keySpec,
       final boolean truncateChangelog,
+      final String storeName,
       final FlushTriggers flushTriggers,
       final ExceptionSupplier exceptionSupplier,
       final int maxBatchSize,
       final SubPartitioner subPartitioner,
       final Supplier<Instant> clock
   ) {
-    this.client = client;
+    this.sessionClients = sessionClients;
     this.changelog = changelog;
+    this.metrics = sessionClients.metrics();
     this.admin = admin;
     this.table = table;
 
@@ -158,9 +206,75 @@ class CommitBuffer<K, S extends RemoteTable<K>>
     this.maxBatchSize = maxBatchSize;
     this.subPartitioner = subPartitioner;
     this.clock = clock;
+    this.lastFlush = clock.get();
 
     logPrefix = String.format("commit-buffer [%s-%d] ", table.name(), changelog.partition());
     log = new LogContext(logPrefix).logger(CommitBuffer.class);
+
+    flushSensorName = getSensorName(FLUSH, changelog);
+    flushLatencySensorName = getSensorName(FLUSH_LATENCY, changelog);
+    flushErrorsSensorName = getSensorName(FLUSH_ERRORS, changelog);
+    failedTruncationsSensorName = getSensorName(FAILED_TRUNCATIONS, changelog);
+
+    lastFlushMetric = metrics.metricName(
+        TIME_SINCE_LAST_FLUSH,
+        TIME_SINCE_LAST_FLUSH_DESCRIPTION,
+        metrics.storeLevelMetric(metrics.computeThreadId(), changelog, storeName)
+    );
+    metrics.addMetric(
+        lastFlushMetric,
+        (Gauge<Long>) (config, now) -> now - lastFlush.toEpochMilli()
+    );
+
+    flushSensor = metrics.addSensor(flushSensorName);
+    flushSensor.add(
+        metrics.metricName(
+            FLUSH_RATE,
+            FLUSH_RATE_DESCRIPTION,
+            metrics.storeLevelMetric(metrics.computeThreadId(), changelog, storeName)),
+        new Rate()
+    );
+    flushSensor.add(
+        metrics.metricName(
+            FLUSH_TOTAL,
+            FLUSH_TOTAL_DESCRIPTION,
+            metrics.storeLevelMetric(metrics.computeThreadId(), changelog, storeName)),
+        new CumulativeCount()
+    );
+
+    flushLatencySensor = metrics.addSensor(flushLatencySensorName);
+    flushLatencySensor.add(
+        metrics.metricName(
+            FLUSH_LATENCY_AVG,
+            FLUSH_LATENCY_AVG_DESCRIPTION,
+            metrics.storeLevelMetric(metrics.computeThreadId(), changelog, storeName)),
+        new Avg()
+    );
+    flushLatencySensor.add(
+        metrics.metricName(
+            FLUSH_LATENCY_MAX,
+            FLUSH_LATENCY_MAX_DESCRIPTION,
+            metrics.storeLevelMetric(metrics.computeThreadId(), changelog, storeName)),
+        new Max()
+    );
+
+    flushErrorsSensor = metrics.addSensor(flushErrorsSensorName);
+    flushErrorsSensor.add(
+        metrics.metricName(
+            FLUSH_ERRORS_RATE,
+            FLUSH_ERRORS_RATE_DESCRIPTION,
+            metrics.storeLevelMetric(metrics.computeThreadId(), changelog, storeName)),
+        new Rate()
+    );
+    flushErrorsSensor.add(
+        metrics.metricName(
+            FLUSH_ERRORS_TOTAL,
+            FLUSH_ERRORS_TOTAL_DESCRIPTION,
+            metrics.storeLevelMetric(metrics.computeThreadId(), changelog, storeName)),
+        new CumulativeCount()
+    );
+
+    failedTruncationsSensor = metrics.addSensor(failedTruncationsSensorName);
 
     if (hasSourceTopicChangelog(changelog.topic())) {
       this.truncateChangelog = false;
@@ -170,7 +284,29 @@ class CommitBuffer<K, S extends RemoteTable<K>>
       }
     } else {
       this.truncateChangelog = truncateChangelog;
+
+      if (truncateChangelog) {
+        failedTruncationsSensor.add(
+            metrics.metricName(
+                FAILED_TRUNCATIONS_RATE,
+                FAILED_TRUNCATIONS_RATE_DESCRIPTION,
+                metrics.storeLevelMetric(metrics.computeThreadId(), changelog, storeName)),
+            new Rate()
+        );
+        failedTruncationsSensor.add(
+            metrics.metricName(
+                FAILED_TRUNCATIONS_TOTAL,
+                FAILED_TRUNCATIONS_TOTAL_DESCRIPTION,
+                metrics.storeLevelMetric(metrics.computeThreadId(), changelog, storeName)),
+            new CumulativeCount()
+        );
+      }
     }
+  }
+
+  // Attach the changelog topic name & partition to make sure we uniquely name each sensor
+  private static String getSensorName(final String sensorPrefix, final TopicPartition changelog) {
+    return sensorPrefix + "-" + changelog;
   }
 
   private static boolean hasSourceTopicChangelog(final String changelogTopicName) {
@@ -178,8 +314,6 @@ class CommitBuffer<K, S extends RemoteTable<K>>
   }
 
   public void init() {
-    lastFlush = clock.get();
-
     this.writerFactory = table.init(subPartitioner, changelog.partition());
 
     final int basePartition = subPartitioner.first(changelog.partition());
@@ -353,7 +487,7 @@ class CommitBuffer<K, S extends RemoteTable<K>>
           subPartitioner.partition(changelog.partition(), keySpec.bytes(result.key));
       final RemoteWriter<K> writer = writers
           .computeIfAbsent(subPartition, k -> writerFactory.createWriter(
-              client,
+              sessionClients,
               subPartition,
               batchSize
           ));
@@ -367,7 +501,7 @@ class CommitBuffer<K, S extends RemoteTable<K>>
 
     final var drainWriteResult = drain(writers.values());
     if (!drainWriteResult.wasApplied()) {
-      throwFencedException(drainWriteResult, consumedOffset);
+      throwFlushException(drainWriteResult, consumedOffset);
     }
 
     // this offset is only used for recovery, so it can (and should) be done only
@@ -375,16 +509,23 @@ class CommitBuffer<K, S extends RemoteTable<K>>
     // the first subpartition
     final var offsetWriteResult = writers.computeIfAbsent(
         subPartitioner.first(changelog.partition()),
-        subPartition -> writerFactory.createWriter(client, subPartition, batchSize)
+        subPartition -> writerFactory.createWriter(sessionClients, subPartition, batchSize)
     ).setOffset(consumedOffset);
 
     if (!offsetWriteResult.wasApplied()) {
-      throwFencedException(offsetWriteResult, consumedOffset);
+      throwFlushException(offsetWriteResult, consumedOffset);
     }
+
+    final long endNanos = System.nanoTime();
+    final long endMs = TimeUnit.NANOSECONDS.toMillis(endNanos);
+    final long flushLatencyMs = TimeUnit.NANOSECONDS.toMillis(endNanos - startNs);
+
+    flushSensor.record(1, endMs);
+    flushLatencySensor.record(flushLatencyMs, endMs);
 
     log.debug("Flushed {} records to remote in {}ms (offset={}, writer={}, numSubPartitions={})",
         buffer.getReader().size(),
-        TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNs),
+        flushLatencyMs,
         consumedOffset,
         writerFactory,
         writers.size()
@@ -435,6 +576,8 @@ class CommitBuffer<K, S extends RemoteTable<K>>
     if (throwable == null) {
       log.info("Truncated changelog {} up to offset {}", changelog, deletedRecords.lowWatermark());
     } else {
+      failedTruncationsSensor.record();
+
       if (throwable instanceof PolicyViolationException) {
         // Don't retry and cancel all further attempts since we know they will fail
         log.warn("Disabling further changelog truncation attempts due to topic configuration "
@@ -483,12 +626,13 @@ class CommitBuffer<K, S extends RemoteTable<K>>
     }
   }
 
-  private void throwFencedException(final RemoteWriteResult result, final long consumedOffset) {
+  private void throwFlushException(final RemoteWriteResult result, final long consumedOffset) {
     final MetadataRow stored = table.metadata(result.getPartition());
-    // we were fenced - the only conditional statement is the
-    // offset update, so it's the only failure point
+
+    // this most likely is a fencing error, so just record all the information
+    // that is relevant to fencing in the error message
     final String msg = String.format(
-        "[%d] Fenced while writing batch! Local Epoch: %s, "
+        "[%d] Error while writing batch! Local Epoch: %s, "
             + "Persisted Epoch: %d, Batch Offset: %d, Persisted Offset: %d",
         result.getPartition(),
         writerFactory,
@@ -498,11 +642,17 @@ class CommitBuffer<K, S extends RemoteTable<K>>
     );
     log.warn(msg);
 
+    flushErrorsSensor.record();
     throw exceptionSupplier.commitFencedException(logPrefix + msg);
   }
 
   @Override
   public void close() {
     deleteRecordsFuture.cancel(true);
+    metrics.removeMetric(lastFlushMetric);
+    metrics.removeSensor(flushSensorName);
+    metrics.removeSensor(flushLatencySensorName);
+    metrics.removeSensor(flushErrorsSensorName);
+    metrics.removeSensor(failedTruncationsSensorName);
   }
 }
