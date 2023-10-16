@@ -16,40 +16,54 @@
 
 package dev.responsive.kafka.internal.db.mongo;
 
+import com.mongodb.client.MongoCollection;
+import com.mongodb.client.model.WriteModel;
 import dev.responsive.kafka.internal.db.RemoteTable;
 import dev.responsive.kafka.internal.db.RemoteWriter;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import org.bson.Document;
 
 public class MongoWriter<K> implements RemoteWriter<K> {
 
-  private final RemoteTable<K, Void> table;
+  private final RemoteTable<K, WriteModel<Document>> table;
   private final int partition;
+  private final MongoCollection<Document> collection;
+  private final List<WriteModel<Document>> accumulatedWrites = new ArrayList<>();
 
-  public MongoWriter(final RemoteTable<K, Void> table, final int partition) {
+  public MongoWriter(
+      final RemoteTable<K, WriteModel<Document>> table,
+      final int partition,
+      final MongoCollection<Document> collection
+  ) {
     this.table = table;
     this.partition = partition;
+    this.collection = collection;
   }
 
   @Override
   public void insert(final K key, final byte[] value, final long epochMillis) {
-    table.insert(partition, key, value, epochMillis);
+    accumulatedWrites.add(table.insert(partition, key, value, epochMillis));
   }
 
   @Override
   public void delete(final K key) {
-    table.delete(partition, key);
+    accumulatedWrites.add(table.delete(partition, key));
   }
 
   @Override
   public CompletionStage<RemoteWriteResult> flush() {
+    collection.bulkWrite(accumulatedWrites);
+    accumulatedWrites.clear();
     return CompletableFuture.completedFuture(RemoteWriteResult.success(partition));
   }
 
   @Override
   public RemoteWriteResult setOffset(final long offset) {
-    table.setOffset(partition, offset);
+    collection.bulkWrite(List.of(table.setOffset(partition, offset)));
     return RemoteWriteResult.success(partition);
   }
 }

@@ -16,17 +16,25 @@
 
 package dev.responsive.kafka.internal.db.mongo;
 
+import com.mongodb.client.MongoCollection;
+import com.mongodb.client.model.WriteModel;
 import dev.responsive.kafka.internal.db.RemoteTable;
 import dev.responsive.kafka.internal.db.RemoteWriter;
 import dev.responsive.kafka.internal.db.WriterFactory;
 import dev.responsive.kafka.internal.utils.SessionClients;
+import org.bson.Document;
 
 public class MongoWriterFactory<K> implements WriterFactory<K> {
 
-  private final RemoteTable<K, Void> table;
+  private final RemoteTable<K, WriteModel<Document>> table;
+  private final MongoCollection<Document> genericCollection;
 
-  public MongoWriterFactory(final RemoteTable<K, Void> table) {
+  public MongoWriterFactory(
+      final RemoteTable<K, WriteModel<Document>> table,
+      final MongoCollection<Document> genericCollection
+  ) {
     this.table = table;
+    this.genericCollection = genericCollection;
   }
 
   @Override
@@ -35,7 +43,7 @@ public class MongoWriterFactory<K> implements WriterFactory<K> {
       final int partition,
       final int batchSize
   ) {
-    return new MongoWriter<>(table, partition);
+    return new MongoWriter<>(table, partition, genericCollection);
   }
 
 }

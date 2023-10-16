@@ -523,7 +523,7 @@ class CommitBuffer<K, S extends RemoteTable<K, ?>>
     flushSensor.record(1, endMs);
     flushLatencySensor.record(flushLatencyMs, endMs);
 
-    log.debug("Flushed {} records to remote in {}ms (offset={}, writer={}, numSubPartitions={})",
+    log.info("Flushed {} records to remote in {}ms (offset={}, writer={}, numSubPartitions={})",
         buffer.getReader().size(),
         flushLatencyMs,
         consumedOffset,
