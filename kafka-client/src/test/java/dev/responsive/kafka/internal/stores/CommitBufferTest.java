@@ -140,7 +140,7 @@ public class CommitBufferTest {
   @Mock
   private Sensor flushLatencySensor;
   @Mock
-  private Sensor flushFencedSensor;
+  private Sensor flushErrorSensor;
   @Mock
   private Sensor failedTruncationsSensor;
 
@@ -194,7 +194,7 @@ public class CommitBufferTest {
 
     Mockito.when(metrics.sensor("flush-" + changelogTp)).thenReturn(flushSensor);
     Mockito.when(metrics.sensor("flush-latency-" + changelogTp)).thenReturn(flushLatencySensor);
-    Mockito.when(metrics.sensor("flush-fenced-" + changelogTp)).thenReturn(flushFencedSensor);
+    Mockito.when(metrics.sensor("flush-errors-" + changelogTp)).thenReturn(flushErrorSensor);
     Mockito.when(metrics.sensor("failed-truncations-" + changelogTp))
         .thenReturn(failedTruncationsSensor);
   }
@@ -247,10 +247,10 @@ public class CommitBufferTest {
         eq(metricName(FLUSH_LATENCY_MAX, FLUSH_LATENCY_MAX_DESCRIPTION)),
         any(Max.class));
 
-    Mockito.verify(flushFencedSensor).add(
+    Mockito.verify(flushErrorSensor).add(
         eq(metricName(FLUSH_ERRORS_RATE, FLUSH_ERRORS_RATE_DESCRIPTION)),
         any(Rate.class));
-    Mockito.verify(flushFencedSensor).add(
+    Mockito.verify(flushErrorSensor).add(
         eq(metricName(FLUSH_ERRORS_TOTAL, FLUSH_ERRORS_TOTAL_DESCRIPTION)),
         any(CumulativeCount.class));
 
@@ -280,7 +280,7 @@ public class CommitBufferTest {
 
     Mockito.verify(metrics).removeSensor("flush-" + changelogTp);
     Mockito.verify(metrics).removeSensor("flush-latency-" + changelogTp);
-    Mockito.verify(metrics).removeSensor("flush-fenced-" + changelogTp);
+    Mockito.verify(metrics).removeSensor("flush-errors-" + changelogTp);
     Mockito.verify(metrics).removeSensor("failed-truncations-" + changelogTp);
   }
 
@@ -344,7 +344,7 @@ public class CommitBufferTest {
 
     // Then:
     final String errorMsg = "commit-buffer [" + table.name() + "-2] "
-        + "[2] Fenced while writing batch! Local Epoch: LwtWriterFactory{epoch=1}, "
+        + "[2] Error while writing batch! Local Epoch: LwtWriterFactory{epoch=1}, "
         + "Persisted Epoch: 100, Batch Offset: 100, Persisted Offset: -1";
     assertThat(e.getMessage(), equalTo(errorMsg));
   }
@@ -410,8 +410,8 @@ public class CommitBufferTest {
         .thenReturn(flushSensor);
     Mockito.when(metrics.sensor("flush-latency-" + sourceChangelog))
         .thenReturn(flushLatencySensor);
-    Mockito.when(metrics.sensor("flush-fenced-" + sourceChangelog))
-        .thenReturn(flushFencedSensor);
+    Mockito.when(metrics.sensor("flush-errors-" + sourceChangelog))
+        .thenReturn(flushErrorSensor);
     Mockito.when(metrics.sensor("failed-truncations-" + sourceChangelog))
         .thenReturn(failedTruncationsSensor);
     final CommitBuffer<Bytes, RemoteKVTable> buffer = new CommitBuffer<>(
@@ -640,7 +640,7 @@ public class CommitBufferTest {
 
     // Then:
     final String errorMsg = "commit-buffer [" + table.name() + "-2] "
-        + "[2] Fenced while writing batch! Local Epoch: LwtWriterFactory{epoch=1}, "
+        + "[2] Error while writing batch! Local Epoch: LwtWriterFactory{epoch=1}, "
         + "Persisted Epoch: 100, Batch Offset: 100, Persisted Offset: -1";
     assertThat(e.getMessage(), equalTo(errorMsg));
   }
