@@ -22,12 +22,13 @@ version = project(":kafka-client").version
 
 dependencies {
     implementation(project(":kafka-client"))
+    api(libs.kafka.streams.test.utils)
 
-    implementation(libs.bundles.scylla)
-    implementation(libs.kafka.streams.test.utils)
     implementation(variantOf(libs.kafka.clients) {
         classifier("test")
     })
+
+    implementation(libs.bundles.scylla)
 
     testImplementation(testlibs.bundles.base)
     testImplementation(libs.bundles.logging)
