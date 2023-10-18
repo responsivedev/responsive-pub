@@ -183,7 +183,7 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
 
       // Make sure changelog is even w/ cassandra
       final ResponsiveConfig config = ResponsiveConfig.responsiveConfig(properties);
-      final RemoteKVTable table = remoteKVTable(type, defaultFactory, config);
+      final RemoteKVTable<?> table = remoteKVTable(type, defaultFactory, config);
 
       final long cassandraOffset = table.metadata(0).offset;
       assertThat(cassandraOffset, greaterThan(0L));
@@ -238,7 +238,7 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
 
     // Make sure changelog is ahead of remote
     final ResponsiveConfig config = ResponsiveConfig.responsiveConfig(properties);
-    final RemoteKVTable table;
+    final RemoteKVTable<?> table;
 
     table = remoteKVTable(type, defaultFactory, config);
 
@@ -279,11 +279,11 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
     assertThat(firstOffset(changelog), greaterThan(0L));
   }
 
-  private RemoteKVTable remoteKVTable(final KVSchema type,
+  private RemoteKVTable<?> remoteKVTable(final KVSchema type,
                                       final CassandraClientFactory defaultFactory,
                                       final ResponsiveConfig config)
       throws InterruptedException, TimeoutException {
-    final RemoteKVTable table;
+    final RemoteKVTable<?> table;
     if (EXTENSION.backend == StorageBackend.CASSANDRA) {
       final CassandraClient cassandraClient = defaultFactory.createClient(
           defaultFactory.createCqlSession(config),

@@ -18,6 +18,7 @@ package dev.responsive.kafka.internal.stores;
 
 import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadSessionClients;
 
+import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.CassandraTableSpecFactory;
@@ -45,7 +46,7 @@ public class GlobalOperations implements KeyValueOperations {
 
   private final GlobalProcessorContextImpl context;
   private final CassandraClient client;
-  private final RemoteKVTable table;
+  private final RemoteKVTable<BoundStatement> table;
 
   public static GlobalOperations create(
       final StateStoreContext storeContext,
@@ -80,7 +81,7 @@ public class GlobalOperations implements KeyValueOperations {
       final ResponsiveRestoreListener restoreListener,
       final GlobalProcessorContextImpl context,
       final CassandraClient client,
-      final RemoteKVTable table
+      final RemoteKVTable<BoundStatement> table
   ) {
     this.storeName = storeName;
     this.changelog = changelog;

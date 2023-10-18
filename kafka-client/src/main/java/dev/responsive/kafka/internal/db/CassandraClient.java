@@ -20,6 +20,7 @@ import static dev.responsive.kafka.internal.db.ColumnName.PARTITION_KEY;
 
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.cql.AsyncResultSet;
+import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
 import com.datastax.oss.driver.api.core.cql.ResultSet;
 import com.datastax.oss.driver.api.core.cql.SimpleStatement;
@@ -46,10 +47,10 @@ public class CassandraClient {
   private final CqlSession session;
 
   private final ResponsiveConfig config;
-  private final TableCache<RemoteKVTable> kvFactory;
-  private final TableCache<RemoteKVTable> factFactory;
-  private final TableCache<RemoteWindowedTable> windowedFactory;
-  private final TableCache<RemoteKVTable> globalFactory;
+  private final TableCache<RemoteKVTable<BoundStatement>> kvFactory;
+  private final TableCache<RemoteKVTable<BoundStatement>> factFactory;
+  private final TableCache<RemoteWindowedTable<BoundStatement>> windowedFactory;
+  private final TableCache<RemoteKVTable<BoundStatement>> globalFactory;
 
   /**
    * @param session the Cassandra session, expected to be initialized
@@ -151,19 +152,19 @@ public class CassandraClient {
     session.close();
   }
 
-  public TableCache<RemoteKVTable> globalFactory() {
+  public TableCache<RemoteKVTable<BoundStatement>> globalFactory() {
     return globalFactory;
   }
 
-  public TableCache<RemoteKVTable> kvFactory() {
+  public TableCache<RemoteKVTable<BoundStatement>> kvFactory() {
     return kvFactory;
   }
 
-  public TableCache<RemoteKVTable> factFactory() {
+  public TableCache<RemoteKVTable<BoundStatement>> factFactory() {
     return factFactory;
   }
 
-  public TableCache<RemoteWindowedTable> windowedFactory() {
+  public TableCache<RemoteWindowedTable<BoundStatement>> windowedFactory() {
     return windowedFactory;
   }
 }

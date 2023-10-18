@@ -41,7 +41,7 @@ public class CassandraKVTableIntegrationTest {
   private static final long CURRENT_TS = 100L;
   private static final long MIN_VALID_TS = 0L;
 
-  private RemoteKVTable table;
+  private RemoteKVTable<BoundStatement> table;
   private String name;
   private CassandraClient client;
 

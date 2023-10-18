@@ -73,8 +73,8 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
   private InternalProcessorContext context;
   private TopicPartition changelog;
 
-  private CommitBuffer<Stamped<Bytes>, RemoteWindowedTable> buffer;
-  private RemoteWindowedTable table;
+  private CommitBuffer<Stamped<Bytes>, RemoteWindowedTable<?>> buffer;
+  private RemoteWindowedTable<?> table;
   private ResponsiveStoreRegistry storeRegistry;
   private ResponsiveStoreRegistration registration;
   private ResponsiveRestoreListener restoreListener;

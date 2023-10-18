@@ -16,13 +16,14 @@
 
 package dev.responsive.kafka.internal.db;
 
+import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.kafka.internal.utils.SessionClients;
 
 public class FactWriterFactory<K> implements WriterFactory<K> {
 
-  private final RemoteTable<K> table;
+  private final RemoteTable<K, BoundStatement> table;
 
-  public FactWriterFactory(final RemoteTable<K> table) {
+  public FactWriterFactory(final RemoteTable<K, BoundStatement> table) {
     this.table = table;
   }
 

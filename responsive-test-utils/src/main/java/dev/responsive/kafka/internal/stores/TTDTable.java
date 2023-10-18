@@ -27,7 +27,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import org.apache.kafka.common.utils.Time;
 
-public abstract class TTDTable<K> implements RemoteTable<K> {
+public abstract class TTDTable<K> implements RemoteTable<K, BoundStatement> {
 
   private final TTDCassandraClient client;
   protected final Time time;

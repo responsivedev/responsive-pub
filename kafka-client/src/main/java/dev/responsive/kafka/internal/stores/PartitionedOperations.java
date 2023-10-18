@@ -43,8 +43,8 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 public class PartitionedOperations implements KeyValueOperations {
 
   private final ResponsiveKeyValueParams params;
-  private final RemoteKVTable table;
-  private final CommitBuffer<Bytes, RemoteKVTable> buffer;
+  private final RemoteKVTable<?> table;
+  private final CommitBuffer<Bytes, RemoteKVTable<?>> buffer;
   private final SubPartitioner partitioner;
   private final TopicPartition changelog;
   @SuppressWarnings("rawtypes")
@@ -77,7 +77,7 @@ public class PartitionedOperations implements KeyValueOperations {
         ? SubPartitioner.NO_SUBPARTITIONS
         : config.getSubPartitioner(sessionClients.admin(), name, changelog.topic());
 
-    final RemoteKVTable table;
+    final RemoteKVTable<?> table;
     switch (sessionClients.storageBackend()) {
       case CASSANDRA:
         table = createCassandra(params, sessionClients);
@@ -91,7 +91,7 @@ public class PartitionedOperations implements KeyValueOperations {
 
     log.info("Remote table {} is available for querying.", name.remoteName());
 
-    final var buffer = CommitBuffer.from(
+    final CommitBuffer<Bytes, RemoteKVTable<?>> buffer = CommitBuffer.from(
         sessionClients,
         changelog,
         table,
@@ -122,7 +122,7 @@ public class PartitionedOperations implements KeyValueOperations {
     );
   }
 
-  private static RemoteKVTable createCassandra(
+  private static RemoteKVTable<?> createCassandra(
       final ResponsiveKeyValueParams params,
       final SessionClients clients
   ) throws InterruptedException, TimeoutException {
@@ -138,7 +138,7 @@ public class PartitionedOperations implements KeyValueOperations {
     }
   }
 
-  private static RemoteKVTable createMongo(
+  private static RemoteKVTable<?> createMongo(
       final ResponsiveKeyValueParams params,
       final SessionClients sessionClients
   ) throws InterruptedException, TimeoutException {
@@ -149,7 +149,7 @@ public class PartitionedOperations implements KeyValueOperations {
   public PartitionedOperations(
       final ResponsiveKeyValueParams params,
       final RemoteKVTable table,
-      final CommitBuffer<Bytes, RemoteKVTable> buffer,
+      final CommitBuffer<Bytes, RemoteKVTable<?>> buffer,
       final SubPartitioner partitioner,
       final TopicPartition changelog,
       final InternalProcessorContext context,

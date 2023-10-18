@@ -55,7 +55,7 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class CassandraWindowedTable implements RemoteWindowedTable {
+public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatement> {
 
   private static final Logger LOG = LoggerFactory.getLogger(CassandraWindowedTable.class);
 

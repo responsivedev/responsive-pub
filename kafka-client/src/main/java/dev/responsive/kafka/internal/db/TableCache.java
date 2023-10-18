@@ -28,7 +28,7 @@ import javax.annotation.concurrent.ThreadSafe;
  * table are only prepared once during the lifetime of the application.
  */
 @ThreadSafe
-public class TableCache<T extends RemoteTable<?>> {
+public class TableCache<T extends RemoteTable<?, ?>> {
 
   @FunctionalInterface
   public interface Factory<T> {

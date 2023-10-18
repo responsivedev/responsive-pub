@@ -16,11 +16,10 @@
 
 package dev.responsive.kafka.internal.db;
 
-import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import javax.annotation.CheckReturnValue;
 
-public interface RemoteTable<K> {
+public interface RemoteTable<K, S> {
 
   String name();
 
@@ -51,7 +50,7 @@ public interface RemoteTable<K> {
    * {@code table} with value {@code value}
    */
   @CheckReturnValue
-  BoundStatement insert(
+  S insert(
       final int partitionKey,
       final K key,
       final byte[] value,
@@ -67,7 +66,7 @@ public interface RemoteTable<K> {
    *         {@code table}
    */
   @CheckReturnValue
-  BoundStatement delete(
+  S delete(
       final int partitionKey,
       final K key
   );
@@ -85,7 +84,7 @@ public interface RemoteTable<K> {
    * in the metadata row of {@code table}.
    */
   @CheckReturnValue
-  BoundStatement setOffset(
+  S setOffset(
       final int partition,
       final long offset
   );

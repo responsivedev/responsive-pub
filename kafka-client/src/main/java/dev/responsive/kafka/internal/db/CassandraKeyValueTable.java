@@ -53,7 +53,7 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class CassandraKeyValueTable implements RemoteKVTable {
+public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
 
   private static final Logger LOG = LoggerFactory.getLogger(CassandraKeyValueTable.class);
   private static final String FROM_BIND = "fk";

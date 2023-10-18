@@ -19,6 +19,7 @@ package dev.responsive.kafka.internal.db;
 import com.datastax.oss.driver.api.core.cql.BatchStatementBuilder;
 import com.datastax.oss.driver.api.core.cql.BatchType;
 import com.datastax.oss.driver.api.core.cql.BatchableStatement;
+import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.Statement;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
 import java.util.ArrayList;
@@ -31,7 +32,7 @@ public class LwtWriter<K> implements RemoteWriter<K> {
 
   private final CassandraClient client;
   private final Supplier<BatchableStatement<?>> fencingStatementFactory;
-  private final RemoteTable<K> table;
+  private final RemoteTable<K, BoundStatement> table;
   private final int partition;
   private final int batchSize;
 
@@ -40,7 +41,7 @@ public class LwtWriter<K> implements RemoteWriter<K> {
   public LwtWriter(
       final CassandraClient client,
       final Supplier<BatchableStatement<?>> fencingStatementFactory,
-      final RemoteTable<K> table,
+      final RemoteTable<K, BoundStatement> table,
       final int partition,
       final int batchSize
   ) {

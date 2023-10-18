@@ -24,6 +24,7 @@ import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.nullValue;
 
 import com.datastax.oss.driver.api.core.CqlSession;
+import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
@@ -71,7 +72,7 @@ class CassandraFactTableIntegrationTest {
     // Given:
     params = ResponsiveKeyValueParams.fact(storeName);
     final String tableName = params.name().remoteName();
-    final RemoteKVTable schema = client
+    final RemoteKVTable<BoundStatement> schema = client
         .factFactory()
         .create(CassandraTableSpecFactory.fromKVParams(params));
 
@@ -107,8 +108,7 @@ class CassandraFactTableIntegrationTest {
     final String tableName = params.name().remoteName();
 
     // When:
-    final RemoteKVTable schema = client
-        .factFactory()
+    client.factFactory()
         .create(CassandraTableSpecFactory.fromKVParams(params));
 
     // Then:
@@ -153,7 +153,7 @@ class CassandraFactTableIntegrationTest {
   public void shouldInsertAndDelete() throws Exception {
     // Given:
     params = ResponsiveKeyValueParams.fact(storeName);
-    final RemoteKVTable table = client
+    final RemoteKVTable<BoundStatement> table = client
         .factFactory()
         .create(CassandraTableSpecFactory.fromKVParams(params));
 
@@ -179,7 +179,7 @@ class CassandraFactTableIntegrationTest {
     params = ResponsiveKeyValueParams.fact(storeName);
     final String tableName = params.name().remoteName();
 
-    final RemoteKVTable table = client
+    final RemoteKVTable<BoundStatement> table = client
         .factFactory()
         .create(CassandraTableSpecFactory.fromKVParams(params));
 

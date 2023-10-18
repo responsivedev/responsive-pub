@@ -43,7 +43,6 @@ import dev.responsive.kafka.api.stores.ResponsiveStores;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.CassandraFactTable;
 import dev.responsive.kafka.internal.db.CassandraKeyValueTable;
-import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.partitioning.Hasher;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.db.spec.BaseTableSpec;
@@ -164,7 +163,7 @@ public class SubPartitionIntegrationTest {
           true,
           properties);
       final String cassandraName = new TableName(storeName).remoteName();
-      final RemoteKVTable table = CassandraKeyValueTable.create(
+      final CassandraKeyValueTable table = CassandraKeyValueTable.create(
           new BaseTableSpec(cassandraName), client);
 
       assertThat(client.numPartitions(cassandraName), is(OptionalInt.of(32)));
@@ -220,7 +219,7 @@ public class SubPartitionIntegrationTest {
           true,
           properties);
       final String cassandraName = new TableName(storeName).remoteName();
-      final RemoteKVTable table = CassandraFactTable.create(
+      final CassandraFactTable table = CassandraFactTable.create(
           new BaseTableSpec(cassandraName), client);
 
       final var meta0 = table.metadata(0);
