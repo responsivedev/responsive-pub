@@ -32,7 +32,8 @@ public class ResponsiveMongoClient {
     cache = new TableCache<>(spec -> new MongoKVTable(client, spec.tableName()));
   }
 
-  public RemoteKVTable<Void> kvTable(final String name) throws InterruptedException, TimeoutException {
+  public RemoteKVTable<Void> kvTable(final String name)
+      throws InterruptedException, TimeoutException {
     return cache.create(new BaseTableSpec(name));
   }
 
