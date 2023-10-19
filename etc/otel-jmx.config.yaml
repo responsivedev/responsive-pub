@@ -156,6 +156,51 @@ rules:
        desc: the rate of failed rebalances
        unit: '{rebalances-per-hour}'
 
+ - bean: kafka.consumer:type=consumer-metrics,client-id=*
+   metricAttribute:
+     clientid: param(client-id)
+   mapping:
+     io-wait-time-ns-total:
+       metric: kafka.consumer.io.wait.time.ns.total
+       type: gauge
+       desc: the total time waiting for new records from kafka
+       unit: '{nanoseconds}'
+     io-time-ns-total:
+       metric: kafka.consumer.io.time.ns.total
+       type: gauge
+       desc: the total time waiting for reads from kafka
+       unit: '{nanoseconds}'
+
+ - bean: kafka.producer:type=producer-metrics,client-id=*
+   metricAttribute:
+     clientid: param(client-id)
+   mapping:
+     txn-commit-time-ns-total:
+       metric: kafka.producer.txn.commit.time.ns.total
+       type: gauge
+       desc: the total time spent committing in the producer
+       unit: '{nanoseconds}'
+     bufferpool-wait-time-ns-total:
+       metric: kafka.producer.bufferpool.wait.time.ns.total
+       type: gauge
+       desc: the total time spent waiting on writes to kafka
+       unit: '{nanoseconds}'
+     flush-time-ns-total:
+       metric: kafka.producer.flush.time.ns.total
+       type: gauge
+       desc: the total time spent waiting on producer flush
+       unit: '{nanoseconds}'
+     txn-send-offsets-time-ns-total:
+       metric: kafka.producer.txn.send.offsets.time.ns.total
+       type: gauge
+       desc: the total time spent sending offsets in producer
+       unit: '{nanoseconds}'
+     metadata-wait-time-ns-total:
+        metric: kafka.producer.metadata.wait.time.ns.total
+        type: gauge
+        desc: the total time spent waiting on producer metadata
+        unit: '{nanoseconds}'
+
   # Kafka Streams client metrics
  - bean: kafka.streams:type=stream-metrics,client-id=*
    metricAttribute:
