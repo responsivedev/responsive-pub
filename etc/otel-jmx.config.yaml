@@ -95,13 +95,13 @@ rules:
        metric: responsive.kafka.streams.flush.latency.max
        desc: the maximum time it took to flush the commit buffer
        unit: '{milliseconds}'
-     flush-fenced-rate:
-       metric: responsive.kafka.streams.flush.fenced.rate
-       desc: the rate of commit buffer flushes that were fenced
+     flush-errors-rate:
+       metric: responsive.kafka.streams.flush.errors.rate
+       desc: the rate of commit buffer flushes that failed
        unit: '{flushes/s}'
-     flush-fenced-total:
-       metric: responsive.kafka.streams.flush.fenced.total
-       desc: the total number of commit buffer flushes that were fenced
+     flush-errors-total:
+       metric: responsive.kafka.streams.flush.errors.total
+       desc: the total number of commit buffer flushes that failed
        unit: '{flushes}'
      failed-truncations-rate:
        metric: responsive.kafka.streams.failed.truncations.rate

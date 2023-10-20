@@ -98,9 +98,9 @@ public class ResponsiveKeyValueStore implements KeyValueStore<Bytes, byte[]> {
   }
 
   @Override
-  public void init(final StateStoreContext context, final StateStore root) {
+  public void init(final StateStoreContext storeContext, final StateStore root) {
     try {
-      final TaskType taskType = asInternalProcessorContext(context).taskType();
+      final TaskType taskType = asInternalProcessorContext(storeContext).taskType();
       log = new LogContext(
           String.format(
               "%sstore [%s] ",
@@ -109,16 +109,20 @@ public class ResponsiveKeyValueStore implements KeyValueStore<Bytes, byte[]> {
       ).logger(ResponsiveKeyValueStore.class);
 
       log.info("Initializing state store");
-      this.context = context;
+      context = storeContext;
 
-      this.operations = opsProvider.provide(params, context, taskType);
+      if (taskType == TaskType.STANDBY) {
+        log.warn("Unexpected standby task created, should transition to active shortly");
+      }
+
+      operations = opsProvider.provide(params, storeContext, taskType);
       log.info("Completed initializing state store");
 
-      storeRegistry = registryProvider.apply(context.appConfigs());
+      storeRegistry = registryProvider.apply(storeContext.appConfigs());
       open = true;
       operations.register(storeRegistry);
-      context.register(root, operations);
-    } catch (InterruptedException | TimeoutException e) {
+      storeContext.register(root, operations);
+    } catch (final InterruptedException | TimeoutException e) {
       throw new ProcessorStateException("Failed to initialize store.", e);
     }
   }
