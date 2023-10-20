@@ -17,14 +17,16 @@
 package dev.responsive.kafka.internal.db.mongo;
 
 import com.mongodb.client.MongoClient;
+import com.mongodb.client.model.WriteModel;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.TableCache;
 import dev.responsive.kafka.internal.db.spec.BaseTableSpec;
 import java.util.concurrent.TimeoutException;
+import org.bson.Document;
 
 public class ResponsiveMongoClient {
 
-  private final TableCache<RemoteKVTable<Void>> cache;
+  private final TableCache<RemoteKVTable<WriteModel<Document>>> cache;
   private final MongoClient client;
 
   public ResponsiveMongoClient(final MongoClient client) {
@@ -32,7 +34,7 @@ public class ResponsiveMongoClient {
     cache = new TableCache<>(spec -> new MongoKVTable(client, spec.tableName()));
   }
 
-  public RemoteKVTable<Void> kvTable(final String name)
+  public RemoteKVTable<WriteModel<Document>> kvTable(final String name)
       throws InterruptedException, TimeoutException {
     return cache.create(new BaseTableSpec(name));
   }

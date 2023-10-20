@@ -24,9 +24,12 @@ import static org.bson.codecs.configuration.CodecRegistries.fromRegistries;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
+import com.mongodb.client.model.DeleteOneModel;
 import com.mongodb.client.model.Filters;
+import com.mongodb.client.model.UpdateOneModel;
 import com.mongodb.client.model.UpdateOptions;
 import com.mongodb.client.model.Updates;
+import com.mongodb.client.model.WriteModel;
 import com.mongodb.client.result.UpdateResult;
 import dev.responsive.kafka.internal.db.MetadataRow;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
@@ -36,18 +39,20 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.bson.Document;
 import org.bson.codecs.configuration.CodecProvider;
 import org.bson.codecs.configuration.CodecRegistry;
 import org.bson.codecs.pojo.PojoCodecProvider;
 import org.bson.types.ObjectId;
 
-public class MongoKVTable implements RemoteKVTable<Void> {
+public class MongoKVTable implements RemoteKVTable<WriteModel<Document>> {
 
   private final String name;
   private final MongoCollection<KVDoc> collection;
   private final MongoCollection<MetadataDoc> metadata;
 
   private final ConcurrentMap<Integer, ObjectId> metadataRows = new ConcurrentHashMap<>();
+  private final MongoCollection<Document> generic;
 
   public MongoKVTable(final MongoClient client, final String name) {
     this.name = name;
@@ -58,6 +63,7 @@ public class MongoKVTable implements RemoteKVTable<Void> {
     );
 
     final MongoDatabase database = client.getDatabase(name).withCodecRegistry(pojoCodecRegistry);
+    generic = database.getCollection(name);
     collection = database.getCollection(name, KVDoc.class);
     metadata = database.getCollection(name, MetadataDoc.class);
   }
@@ -89,7 +95,7 @@ public class MongoKVTable implements RemoteKVTable<Void> {
       return metadataPartition.id();
     });
 
-    return new MongoWriterFactory<>(this);
+    return new MongoWriterFactory<>(this, generic);
   }
 
   @Override
@@ -111,23 +117,24 @@ public class MongoKVTable implements RemoteKVTable<Void> {
   }
 
   @Override
-  public Void insert(
+  public WriteModel<Document> insert(
       final int partitionKey,
       final Bytes key,
       final byte[] value,
       final long epochMillis
   ) {
-    collection.updateOne(
+    return new UpdateOneModel<>(
         Filters.eq("key", key.get()),
         Updates.set("value", value),
-        new UpdateOptions().upsert(true));
-    return null;
+        new UpdateOptions().upsert(true)
+    );
   }
 
   @Override
-  public Void delete(final int partitionKey, final Bytes key) {
-    collection.deleteOne(Filters.eq("key", key));
-    return null;
+  public WriteModel<Document> delete(final int partitionKey, final Bytes key) {
+    return new DeleteOneModel<>(
+        Filters.eq("key", key)
+    );
   }
 
   @Override
@@ -142,12 +149,11 @@ public class MongoKVTable implements RemoteKVTable<Void> {
   }
 
   @Override
-  public Void setOffset(final int partition, final long offset) {
-    metadata.updateOne(
+  public WriteModel<Document> setOffset(final int partition, final long offset) {
+    return new UpdateOneModel<>(
         Filters.eq("_id", metadataRows.get(partition)),
         Updates.set("offset", offset)
     );
-    return null;
   }
 
   @Override
