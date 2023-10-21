@@ -32,7 +32,6 @@ import com.datastax.oss.driver.api.core.type.DataTypes;
 import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
 import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
 import com.datastax.oss.driver.api.querybuilder.schema.CreateTableWithOptions;
-import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.db.spec.CassandraTableSpec;
 import java.nio.ByteBuffer;
 import java.time.Instant;
@@ -44,7 +43,7 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
+public class CassandraFactTable implements RemoteKVTable<Integer, BoundStatement> {
 
   private static final Logger LOG = LoggerFactory.getLogger(
       CassandraFactTable.class);
@@ -177,8 +176,7 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
   }
 
   @Override
-  public WriterFactory<Bytes> init(
-      final SubPartitioner partitioner,
+  public WriterFactory<Bytes, Integer> init(
       final int kafkaPartition
   ) {
     client.execute(
@@ -190,51 +188,51 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
             .build()
     );
 
-    return new FactWriterFactory<>(this);
+    return new FactWriterFactory<>(this, client, kafkaPartition);
   }
 
   @Override
-  public MetadataRow metadata(final int partition) {
+  public long fetchOffset(final int kafkaPartition) {
     final BoundStatement bound = getMeta
         .bind()
-        .setInt(PARTITION_KEY.bind(), partition);
+        .setInt(PARTITION_KEY.bind(), kafkaPartition);
     final List<Row> result = client.execute(bound).all();
 
     if (result.size() > 1) {
       throw new IllegalStateException(String.format(
           "Expected at most one offset row for %s[%s] but got %d",
-          name, partition, result.size()));
+          name, kafkaPartition, result.size()));
     } else if (result.isEmpty()) {
-      return new MetadataRow(NO_COMMITTED_OFFSET, -1L);
+      return NO_COMMITTED_OFFSET;
     } else {
       final long offset = result.get(0).getLong(OFFSET.column());
-      LOG.info("Got offset for {}[{}]: {}", name, partition, offset);
-      return new MetadataRow(offset, -1L);
+      LOG.info("Got offset for {}[{}]: {}", name, kafkaPartition, offset);
+      return offset;
     }
   }
 
   @Override
   public BoundStatement setOffset(
-      final int partition,
+      final int kafkaPartition,
       final long offset
   ) {
     LOG.info("Setting offset in metadata table {} for {}[{}] to {}",
-        metadataTable(name), name, partition, offset);
+             metadataTable(name), name, kafkaPartition, offset);
     return setOffset
         .bind()
-        .setInt(PARTITION_KEY.bind(), partition)
+        .setInt(PARTITION_KEY.bind(), kafkaPartition)
         .setLong(OFFSET.bind(), offset);
   }
 
   @Override
-  public long approximateNumEntries(final int partition) {
-    return client.count(name(), partition);
+  public long approximateNumEntries(final int kafkaPartition) {
+    return client.count(name(), kafkaPartition);
   }
 
   @Override
   @CheckReturnValue
   public BoundStatement delete(
-      final int partitionKey,
+      final int kafkaPartition,
       final Bytes key
   ) {
     return delete
@@ -245,7 +243,7 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
   @Override
   @CheckReturnValue
   public BoundStatement insert(
-      final int partitionKey,
+      final int kafkaPartition,
       final Bytes key,
       final byte[] value,
       final long epochMillis
@@ -258,7 +256,7 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
   }
 
   @Override
-  public byte[] get(final int partition, final Bytes key, long minValidTs) {
+  public byte[] get(final int kafkaPartition, final Bytes key, long minValidTs) {
     final BoundStatement get = this.get
         .bind()
         .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
@@ -277,7 +275,7 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
 
   @Override
   public KeyValueIterator<Bytes, byte[]> range(
-      final int partition,
+      final int kafkaPartition,
       final Bytes from,
       final Bytes to,
       long minValidTs) {
@@ -286,7 +284,7 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
 
   @Override
   public KeyValueIterator<Bytes, byte[]> all(
-      final int partition,
+      final int kafkaPartition,
       long minValidTs) {
     throw new UnsupportedOperationException("all is not supported on Idempotent schemas");
   }

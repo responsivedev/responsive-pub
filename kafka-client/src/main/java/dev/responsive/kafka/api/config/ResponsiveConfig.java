@@ -19,6 +19,7 @@ package dev.responsive.kafka.api.config;
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.internal.db.partitioning.Hasher;
 import dev.responsive.kafka.internal.db.partitioning.Murmur3Hasher;
+import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.utils.TableName;
 import java.time.Duration;
@@ -269,44 +270,6 @@ public class ResponsiveConfig extends AbstractConfig {
 
   private ResponsiveConfig(final Map<?, ?> originals, final boolean doLog) {
     super(CONFIG_DEF, originals, doLog);
-  }
-
-  // TODO: encapsulate the SubPartitioner in the RemoteTable class
-  public SubPartitioner getSegmentedSubPartitioner(
-      final Admin admin,
-      final TableName name,
-      final String changelogTopicName
-  ) {
-    throw new UnsupportedOperationException("TODO -- follow up PR");
-  }
-
-  public SubPartitioner getSubPartitioner(
-      final Admin admin,
-      final TableName name,
-      final String changelogTopicName
-  ) {
-    // TODO(agavra): write the actual remote partition count into cassandra
-    final OptionalInt actualRemoteCount = OptionalInt.empty();
-    final int kafkaPartitions;
-    try {
-      kafkaPartitions = admin.describeTopics(List.of(changelogTopicName))
-          .allTopicNames()
-          .get()
-          .get(changelogTopicName)
-          .partitions()
-          .size();
-    } catch (InterruptedException | ExecutionException e) {
-      throw new RuntimeException(e);
-    }
-
-    return SubPartitioner.create(
-        actualRemoteCount,
-        kafkaPartitions,
-        getInt(STORAGE_DESIRED_NUM_PARTITION_CONFIG),
-        name,
-        changelogTopicName,
-        getConfiguredInstance(SUBPARTITION_HASHER_CONFIG, Hasher.class)
-    );
   }
 
   private static class NonEmptyPassword implements Validator {

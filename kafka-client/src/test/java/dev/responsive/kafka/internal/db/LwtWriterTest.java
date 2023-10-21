@@ -144,19 +144,19 @@ class LwtWriterTest {
 
     @Override
     public BoundStatement insert(
-        final int partition,
+        final int kafkaPartition,
         final Bytes key,
         final byte[] value,
         long epochMillis) {
-      return capturingStatement("insertData", new Object[]{name(), partition, key, value});
+      return capturingStatement("insertData", new Object[]{name(), kafkaPartition, key, value});
     }
 
     @Override
     public BoundStatement delete(
-        final int partition,
+        final int kafkaPartition,
         final Bytes key
     ) {
-      return capturingStatement("deleteData", new Object[]{name(), partition, key});
+      return capturingStatement("deleteData", new Object[]{name(), kafkaPartition, key});
     }
   }
 

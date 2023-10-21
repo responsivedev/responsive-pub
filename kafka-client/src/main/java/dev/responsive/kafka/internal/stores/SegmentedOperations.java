@@ -23,12 +23,16 @@ import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadSt
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.changelogFor;
 
+import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.stores.ResponsiveWindowParams;
+import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.CassandraTableSpecFactory;
 import dev.responsive.kafka.internal.db.RemoteWindowedTable;
 import dev.responsive.kafka.internal.db.StampedKeySpec;
-import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
+import dev.responsive.kafka.internal.db.WriterFactory;
+import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner;
+import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.SegmentPartition;
 import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
 import dev.responsive.kafka.internal.utils.Iterators;
 import dev.responsive.kafka.internal.utils.Result;
@@ -54,9 +58,8 @@ public class SegmentedOperations implements WindowOperations {
   private final InternalProcessorContext context;
   private final ResponsiveWindowParams params;
   private final StampedKeySpec keySpec;
-  private final RemoteWindowedTable<?> table;
-  private final CommitBuffer<Stamped<Bytes>, RemoteWindowedTable<?>> buffer;
-  private final SubPartitioner partitioner;
+  private final RemoteWindowedTable<?, ?> table;
+  private final CommitBuffer<Stamped<Bytes>, ?> buffer;
   private final TopicPartition changelog;
 
   private final ResponsiveStoreRegistry storeRegistry;
@@ -86,43 +89,37 @@ public class SegmentedOperations implements WindowOperations {
         changelogFor(storeContext, name.kafkaName(), false),
         context.taskId().partition()
     );
-    final var partitioner = config.getSegmentedSubPartitioner(
-        sessionClients.admin(), 
-        name, 
-        changelog.topic()
-    );
+    final SegmentPartitioner partitioner = SegmentPartitioner.create(params);
 
-    final RemoteWindowedTable<?> table;
+    final RemoteWindowedTable<?, ?> table;
     switch (sessionClients.storageBackend()) {
       case CASSANDRA:
-        table = createCassandra(params, sessionClients);
+        table = createCassandra(params, sessionClients, partitioner);
         break;
       case MONGO_DB:
         throw new UnsupportedOperationException("Window stores are not yet compatible with Mongo");
       default:
         throw new IllegalStateException("Unexpected value: " + sessionClients.storageBackend());
     }
+    final WriterFactory<Stamped<Bytes>, ?> writerFactory = table.init(changelog.partition());
 
     log.info("Remote table {} is available for querying.", name.remoteName());
 
     final StampedKeySpec keySpec = new StampedKeySpec(withinRetention);
-    final CommitBuffer<Stamped<Bytes>, RemoteWindowedTable<?>> buffer = CommitBuffer.from(
+    final CommitBuffer<Stamped<Bytes>, ?> buffer = CommitBuffer.from(
+        writerFactory,
         sessionClients,
         changelog,
-        table,
         keySpec,
         params.truncateChangelog(),
         params.name().kafkaName(),
-        partitioner,
         config
     );
-    buffer.init();
-
-    final long offset = buffer.offset();
+    final long restoreStartOffset = table.fetchOffset(changelog.partition());
     final var registration = new ResponsiveStoreRegistration(
         name.kafkaName(),
         changelog,
-        offset == -1 ? 0 : offset,
+        restoreStartOffset == -1 ? 0 : restoreStartOffset,
         buffer::flush
     );
     storeRegistry.registerStore(registration);
@@ -132,7 +129,6 @@ public class SegmentedOperations implements WindowOperations {
         keySpec,
         table,
         buffer,
-        partitioner,
         changelog,
         context,
         storeRegistry,
@@ -141,12 +137,15 @@ public class SegmentedOperations implements WindowOperations {
     );
   }
 
-  private static RemoteWindowedTable<?> createCassandra(
+  private static RemoteWindowedTable<SegmentPartition, BoundStatement> createCassandra(
       final ResponsiveWindowParams params,
-      final SessionClients clients
+      final SessionClients clients,
+      final SegmentPartitioner partitioner
   ) throws InterruptedException, TimeoutException {
-    final var client = clients.cassandraClient();
-    final var spec = CassandraTableSpecFactory.fromWindowParams(params);
+
+    final CassandraClient client = clients.cassandraClient();
+    final var spec = CassandraTableSpecFactory.fromWindowParams(params, partitioner);
+
     switch (params.schemaType()) {
       case WINDOW:
         return client.windowedFactory().create(spec);
@@ -162,8 +161,7 @@ public class SegmentedOperations implements WindowOperations {
       final ResponsiveWindowParams params,
       final StampedKeySpec keySpec,
       final RemoteWindowedTable table,
-      final CommitBuffer<Stamped<Bytes>, RemoteWindowedTable<?>> buffer,
-      final SubPartitioner partitioner,
+      final CommitBuffer<Stamped<Bytes>, ?> buffer,
       final TopicPartition changelog,
       final InternalProcessorContext context,
       final ResponsiveStoreRegistry storeRegistry,
@@ -174,7 +172,6 @@ public class SegmentedOperations implements WindowOperations {
     this.keySpec = keySpec;
     this.table = table;
     this.buffer = buffer;
-    this.partitioner = partitioner;
     this.changelog = changelog;
     this.context = context;
     this.storeRegistry = storeRegistry;
@@ -194,13 +191,14 @@ public class SegmentedOperations implements WindowOperations {
 
   @Override
   public byte[] fetch(final Bytes key, final long windowStartTime) {
-    final Result<Stamped<Bytes>> localResult = buffer.get(new Stamped<>(key, windowStartTime));
+    final Stamped<Bytes> windowedKey = new Stamped<>(key, windowStartTime);
+    final Result<Stamped<Bytes>> localResult = buffer.get(windowedKey);
     if (localResult != null)  {
       return localResult.isTombstone ? null : localResult.value;
     }
 
     return table.fetch(
-        partitioner.partition(changelog.partition(), key),
+        changelog.partition(),
         key,
         windowStartTime
     );
@@ -215,11 +213,10 @@ public class SegmentedOperations implements WindowOperations {
     final Stamped<Bytes> from = new Stamped<>(key, timeFrom);
     final Stamped<Bytes> to = new Stamped<>(key, timeTo);
 
-    final int subPartition = partitioner.partition(changelog.partition(), key);
     return Iterators.windowed(
         new LocalRemoteKvIterator<>(
             buffer.range(from, to),
-            table.fetch(subPartition, key, timeFrom, timeTo),
+            table.fetch(changelog.partition(), key, timeFrom, timeTo),
             keySpec
         )
     );
@@ -257,11 +254,10 @@ public class SegmentedOperations implements WindowOperations {
     final Stamped<Bytes> from = new Stamped<>(key, timeFrom);
     final Stamped<Bytes> to = new Stamped<>(key, timeTo);
 
-    final int subPartition = partitioner.partition(changelog.partition(), key);
     return Iterators.windowed(
         new LocalRemoteKvIterator<>(
             buffer.backRange(from, to),
-            table.backFetch(subPartition, key, timeFrom, timeTo),
+            table.backFetch(changelog.partition(), key, timeFrom, timeTo),
             keySpec
         )
     );

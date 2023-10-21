@@ -21,28 +21,56 @@ import com.mongodb.client.model.WriteModel;
 import dev.responsive.kafka.internal.db.RemoteTable;
 import dev.responsive.kafka.internal.db.RemoteWriter;
 import dev.responsive.kafka.internal.db.WriterFactory;
-import dev.responsive.kafka.internal.utils.SessionClients;
+import dev.responsive.kafka.internal.db.partitioning.ResponsivePartitioner;
+import dev.responsive.kafka.internal.db.partitioning.ResponsivePartitioner.DefaultPartitioner;
+import dev.responsive.kafka.internal.stores.RemoteWriteResult;
+import java.util.List;
 import org.bson.Document;
 
-public class MongoWriterFactory<K> implements WriterFactory<K> {
+public class MongoWriterFactory<K> extends WriterFactory<K, Integer> {
 
-  private final RemoteTable<K, WriteModel<Document>> table;
+  private final RemoteTable<K, Integer, WriteModel<Document>> table;
   private final MongoCollection<Document> genericCollection;
+  private final ResponsivePartitioner<K, Integer> partitioner;
+  private final int kafkaPartition;
 
   public MongoWriterFactory(
-      final RemoteTable<K, WriteModel<Document>> table,
-      final MongoCollection<Document> genericCollection
+      final RemoteTable<K, Integer, WriteModel<Document>> table,
+      final MongoCollection<Document> genericCollection,
+      final int kafkaPartition
   ) {
+    super(String.format("MongoWriterFactory [%s-%d] ", table.name(), kafkaPartition));
     this.table = table;
     this.genericCollection = genericCollection;
+    this.partitioner = new DefaultPartitioner<>();
+    this.kafkaPartition = kafkaPartition;
   }
 
   @Override
-  public RemoteWriter<K> createWriter(
-      final SessionClients client,
-      final int partition
+  public RemoteWriter<K, Integer> createWriter(
+      final Integer tablePartition
   ) {
-    return new MongoWriter<>(table, partition, genericCollection);
+    return new MongoWriter<>(table, kafkaPartition, genericCollection);
   }
 
+  @Override
+  public String tableName() {
+    return table.name();
+  }
+
+  @Override
+  public Integer tablePartitionForKey(final K key) {
+    return partitioner.tablePartition(kafkaPartition, key);
+  }
+
+  @Override
+  public RemoteWriteResult<Integer> setOffset(final long consumedOffset) {
+    genericCollection.bulkWrite(List.of(table.setOffset(kafkaPartition, consumedOffset)));
+    return RemoteWriteResult.success(kafkaPartition);
+  }
+
+  @Override
+  protected long offset() {
+    return table.fetchOffset(kafkaPartition);
+  }
 }

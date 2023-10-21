@@ -27,43 +27,38 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import org.bson.Document;
 
-public class MongoWriter<K> implements RemoteWriter<K> {
+public class MongoWriter<K> implements RemoteWriter<K, Integer> {
 
   private final RemoteTable<K, WriteModel<Document>> table;
-  private final int partition;
+  private final int kafkaPartition;
   private final MongoCollection<Document> collection;
   private final List<WriteModel<Document>> accumulatedWrites = new ArrayList<>();
 
   public MongoWriter(
       final RemoteTable<K, WriteModel<Document>> table,
-      final int partition,
+      final int kafkaPartition,
       final MongoCollection<Document> collection
   ) {
     this.table = table;
-    this.partition = partition;
+    this.kafkaPartition = kafkaPartition;
     this.collection = collection;
   }
 
   @Override
   public void insert(final K key, final byte[] value, final long epochMillis) {
-    accumulatedWrites.add(table.insert(partition, key, value, epochMillis));
+    accumulatedWrites.add(table.insert(kafkaPartition, key, value, epochMillis));
   }
 
   @Override
   public void delete(final K key) {
-    accumulatedWrites.add(table.delete(partition, key));
+    accumulatedWrites.add(table.delete(kafkaPartition, key));
   }
 
   @Override
-  public CompletionStage<RemoteWriteResult> flush() {
+  public CompletionStage<RemoteWriteResult<Integer>> flush() {
     collection.bulkWrite(accumulatedWrites);
     accumulatedWrites.clear();
-    return CompletableFuture.completedFuture(RemoteWriteResult.success(partition));
+    return CompletableFuture.completedFuture(RemoteWriteResult.success(kafkaPartition));
   }
 
-  @Override
-  public RemoteWriteResult setOffset(final long offset) {
-    collection.bulkWrite(List.of(table.setOffset(partition, offset)));
-    return RemoteWriteResult.success(partition);
-  }
 }

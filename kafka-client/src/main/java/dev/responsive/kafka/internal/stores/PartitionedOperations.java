@@ -18,6 +18,7 @@ package dev.responsive.kafka.internal.stores;
 
 import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadSessionClients;
 import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadStoreRegistry;
+import static dev.responsive.kafka.internal.utils.StoreUtil.numPartitionsForKafkaTopic;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.changelogFor;
 
@@ -26,6 +27,7 @@ import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.internal.db.BytesKeySpec;
 import dev.responsive.kafka.internal.db.CassandraTableSpecFactory;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
+import dev.responsive.kafka.internal.db.WriterFactory;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
 import dev.responsive.kafka.internal.utils.Result;
@@ -47,8 +49,7 @@ public class PartitionedOperations implements KeyValueOperations {
   private final InternalProcessorContext context;
   private final ResponsiveKeyValueParams params;
   private final RemoteKVTable<?> table;
-  private final CommitBuffer<Bytes, RemoteKVTable<?>> buffer;
-  private final SubPartitioner partitioner;
+  private final CommitBuffer<Bytes> buffer;
   private final TopicPartition changelog;
 
   private final ResponsiveStoreRegistry storeRegistry;
@@ -77,14 +78,20 @@ public class PartitionedOperations implements KeyValueOperations {
         changelogFor(storeContext, name.kafkaName(), false),
         context.taskId().partition()
     );
-    final var partitioner = params.schemaType() == SchemaTypes.KVSchema.FACT
-        ? SubPartitioner.NO_SUBPARTITIONS
-        : config.getSubPartitioner(sessionClients.admin(), name, changelog.topic());
+
+    final int numChangelogPartitions =
+        numPartitionsForKafkaTopic(sessionClients.admin(), changelog.topic());
+    final SubPartitioner partitioner = SubPartitioner.create(
+      numChangelogPartitions,
+      params,
+      config,
+      changelog.topic()
+    );
 
     final RemoteKVTable<?> table;
     switch (sessionClients.storageBackend()) {
       case CASSANDRA:
-        table = createCassandra(params, sessionClients);
+        table = createCassandra(params, sessionClients, partitioner);
         break;
       case MONGO_DB:
         table = createMongo(params, sessionClients);
@@ -93,25 +100,25 @@ public class PartitionedOperations implements KeyValueOperations {
         throw new IllegalStateException("Unexpected value: " + sessionClients.storageBackend());
     }
 
+    final WriterFactory<Bytes> writerFactory = table.init(changelog.partition());
+
     log.info("Remote table {} is available for querying.", name.remoteName());
 
-    final CommitBuffer<Bytes, RemoteKVTable<?>> buffer = CommitBuffer.from(
+    final CommitBuffer<Bytes> buffer = CommitBuffer.from(
+        writerFactory,
         sessionClients,
         changelog,
-        table,
         new BytesKeySpec(),
         params.truncateChangelog(),
         params.name().kafkaName(),
-        partitioner,
         config
     );
-    buffer.init();
 
-    final long offset = buffer.offset();
+    final long restoreStartOffset = table.fetchOffset(changelog.partition()).offset;
     final var registration = new ResponsiveStoreRegistration(
         name.kafkaName(),
         changelog,
-        offset == -1 ? 0 : offset,
+        restoreStartOffset == -1 ? 0 : restoreStartOffset,
         buffer::flush
     );
     storeRegistry.registerStore(registration);
@@ -120,7 +127,6 @@ public class PartitionedOperations implements KeyValueOperations {
         params,
         table,
         buffer,
-        partitioner,
         changelog,
         context,
         storeRegistry,
@@ -131,10 +137,11 @@ public class PartitionedOperations implements KeyValueOperations {
 
   private static RemoteKVTable<?> createCassandra(
       final ResponsiveKeyValueParams params,
-      final SessionClients clients
+      final SessionClients clients,
+      final SubPartitioner partitioner
   ) throws InterruptedException, TimeoutException {
     final var client = clients.cassandraClient();
-    final var spec = CassandraTableSpecFactory.fromKVParams(params);
+    final var spec = CassandraTableSpecFactory.fromKVParams(params, partitioner);
     switch (params.schemaType()) {
       case KEY_VALUE:
         return client.kvFactory().create(spec);
@@ -156,8 +163,7 @@ public class PartitionedOperations implements KeyValueOperations {
   public PartitionedOperations(
       final ResponsiveKeyValueParams params,
       final RemoteKVTable table,
-      final CommitBuffer<Bytes, RemoteKVTable<?>> buffer,
-      final SubPartitioner partitioner,
+      final CommitBuffer<Bytes> buffer,
       final TopicPartition changelog,
       final InternalProcessorContext context,
       final ResponsiveStoreRegistry storeRegistry,
@@ -167,7 +173,6 @@ public class PartitionedOperations implements KeyValueOperations {
     this.params = params;
     this.table = table;
     this.buffer = buffer;
-    this.partitioner = partitioner;
     this.changelog = changelog;
     this.context = context;
     this.storeRegistry = storeRegistry;
@@ -206,7 +211,7 @@ public class PartitionedOperations implements KeyValueOperations {
         .orElse(-1L);
 
     return table.get(
-        partitioner.partition(changelog.partition(), key),
+        changelog.partition(),
         key,
         minValidTs
     );
@@ -234,10 +239,7 @@ public class PartitionedOperations implements KeyValueOperations {
 
   @Override
   public long approximateNumEntries() {
-    return partitioner
-        .all(changelog.partition())
-        .mapToLong(table::approximateNumEntries)
-        .sum();
+    return table.approximateNumEntries(changelog.partition());
   }
 
   @Override

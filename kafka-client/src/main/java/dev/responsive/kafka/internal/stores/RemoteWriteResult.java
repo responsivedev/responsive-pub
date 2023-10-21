@@ -18,30 +18,30 @@ package dev.responsive.kafka.internal.stores;
 
 import com.datastax.oss.driver.api.core.cql.AsyncResultSet;
 
-public class RemoteWriteResult {
+public class RemoteWriteResult<P> {
 
-  private final int partition;
+  private final P tablePartition;
   private final boolean applied;
 
-  public static RemoteWriteResult success(final int partition) {
-    return new RemoteWriteResult(partition, true);
+  public static <P> RemoteWriteResult<P> success(final P tablePartition) {
+    return new RemoteWriteResult<P>(tablePartition, true);
   }
 
-  public static RemoteWriteResult failure(final int partition) {
-    return new RemoteWriteResult(partition, false);
+  public static <P> RemoteWriteResult<P> failure(final P tablePartition) {
+    return new RemoteWriteResult<P>(tablePartition, false);
   }
 
-  public static RemoteWriteResult of(final int partition, final AsyncResultSet resp) {
-    return resp.wasApplied() ? success(partition) : failure(partition);
+  public static <P> RemoteWriteResult<P> of(final P tablePartition, final AsyncResultSet resp) {
+    return resp.wasApplied() ? success(tablePartition) : failure(tablePartition);
   }
 
-  private RemoteWriteResult(final int partition, final boolean applied) {
-    this.partition = partition;
+  private RemoteWriteResult(final P tablePartition, final boolean applied) {
+    this.tablePartition = tablePartition;
     this.applied = applied;
   }
 
-  public int getPartition() {
-    return partition;
+  public P tablePartition() {
+    return tablePartition;
   }
 
   public boolean wasApplied() {

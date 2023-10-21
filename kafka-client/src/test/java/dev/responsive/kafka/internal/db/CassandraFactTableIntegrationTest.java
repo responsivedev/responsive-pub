@@ -27,7 +27,6 @@ import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
-import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
 import java.time.Duration;
@@ -77,11 +76,11 @@ class CassandraFactTableIntegrationTest {
         .create(CassandraTableSpecFactory.fromKVParams(params));
 
     // When:
-    final var token = schema.init(SubPartitioner.NO_SUBPARTITIONS, 1);
-    schema.init(SubPartitioner.NO_SUBPARTITIONS, 2);
+    final var token = schema.init(1);
+    schema.init(2);
     client.execute(schema.setOffset(2, 10));
-    final MetadataRow metadata1 = schema.metadata(1);
-    final MetadataRow metadata2 = schema.metadata(2);
+    final MetadataRow metadata1 = schema.fetchOffset(1);
+    final MetadataRow metadata2 = schema.fetchOffset(2);
 
     // Then:
     assertThat(token, instanceOf(FactWriterFactory.class));
@@ -157,7 +156,7 @@ class CassandraFactTableIntegrationTest {
         .factFactory()
         .create(CassandraTableSpecFactory.fromKVParams(params));
 
-    table.init(SubPartitioner.NO_SUBPARTITIONS, 1);
+    table.init(1);
 
     final Bytes key = Bytes.wrap(new byte[]{0});
     final byte[] val = new byte[]{1};
@@ -183,7 +182,7 @@ class CassandraFactTableIntegrationTest {
         .factFactory()
         .create(CassandraTableSpecFactory.fromKVParams(params));
 
-    table.init(SubPartitioner.NO_SUBPARTITIONS, 1);
+    table.init(1);
 
     final Bytes key = Bytes.wrap(new byte[]{0});
     final byte[] val = new byte[]{1};

@@ -177,8 +177,8 @@ public class SubPartitionIntegrationTest {
         assertThat(
             deserializer.deserialize("foo",
                 Arrays.copyOfRange(
-                    table.get(hasher.partition((int) (k % 2), kBytes), kBytes,
-                        MIN_VALID_TS),
+                    table.get(hasher.tablePartition((int) (k % 2), kBytes), kBytes,
+                              MIN_VALID_TS),
                     8,
                     16)),
             is(100L));
@@ -222,14 +222,14 @@ public class SubPartitionIntegrationTest {
       final CassandraFactTable table = CassandraFactTable.create(
           new BaseTableSpec(cassandraName), client);
 
-      final var meta0 = table.metadata(0);
-      final var meta1 = table.metadata(1);
+      final var meta0 = table.fetchOffset(0);
+      final var meta1 = table.fetchOffset(1);
 
       assertThat(meta0.offset, is(notNullValue()));
       assertThat(meta1.offset, is(notNullValue()));
 
       // throws because it doesn't exist
-      Assertions.assertEquals(table.metadata(2).offset, NO_COMMITTED_OFFSET);
+      Assertions.assertEquals(table.fetchOffset(2).offset, NO_COMMITTED_OFFSET);
 
       // these store ValueAndTimestamp, so we need to just pluck the last 8 bytes
       final var hasher = SubPartitioner.NO_SUBPARTITIONS;
@@ -239,7 +239,7 @@ public class SubPartitionIntegrationTest {
             deserializer.deserialize("foo",
                 Arrays.copyOfRange(
                     table.get(
-                        hasher.partition((int) (k % 2), kBytes),
+                        hasher.tablePartition((int) (k % 2), kBytes),
                         kBytes,
                         MIN_VALID_TS),
                     8,

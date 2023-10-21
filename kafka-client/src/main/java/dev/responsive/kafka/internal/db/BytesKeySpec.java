@@ -28,8 +28,8 @@ public class BytesKeySpec implements KeySpec<Bytes> {
   }
 
   @Override
-  public Bytes bytes(final Bytes key) {
-    return key;
+  public int sizeInBytes(final Bytes key) {
+    return key.get().length;
   }
 
   @Override

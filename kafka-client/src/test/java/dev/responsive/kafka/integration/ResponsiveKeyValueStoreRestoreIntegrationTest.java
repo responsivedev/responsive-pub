@@ -63,7 +63,6 @@ import dev.responsive.kafka.internal.db.CassandraClientFactory;
 import dev.responsive.kafka.internal.db.DefaultCassandraClientFactory;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.mongo.MongoKVTable;
-import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.db.spec.BaseTableSpec;
 import dev.responsive.kafka.internal.stores.SchemaTypes.KVSchema;
 import dev.responsive.kafka.internal.utils.SessionUtil;
@@ -185,7 +184,7 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
       final ResponsiveConfig config = ResponsiveConfig.responsiveConfig(properties);
       final RemoteKVTable<?> table = remoteKVTable(type, defaultFactory, config);
 
-      final long cassandraOffset = table.metadata(0).offset;
+      final long cassandraOffset = table.fetchOffset(0).offset;
       assertThat(cassandraOffset, greaterThan(0L));
       final TopicPartition changelog
           = new TopicPartition(name + "-" + aggName() + "-changelog", 0);
@@ -242,7 +241,7 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
 
     table = remoteKVTable(type, defaultFactory, config);
 
-    final long remoteOffset = table.metadata(0).offset;
+    final long remoteOffset = table.fetchOffset(0).offset;
     assertThat(remoteOffset, greaterThan(0L));
     final TopicPartition changelog = new TopicPartition(name + "-" + aggName() + "-changelog", 0);
     final long changelogOffset = admin.listOffsets(Map.of(changelog, OffsetSpec.latest())).all()
@@ -311,7 +310,7 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
           clientSecret == null ? null : clientSecret.value()
       );
       table = new MongoKVTable(mongoClient, aggName());
-      table.init(SubPartitioner.NO_SUBPARTITIONS, 0);
+      table.init(0);
     } else {
       throw new IllegalArgumentException(EXTENSION.backend + " Unsupported");
     }

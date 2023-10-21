@@ -41,7 +41,7 @@ public class Result<K> {
   }
 
   public int size(final KeySpec<K> extractor) {
-    return extractor.bytes(key).get().length
+    return extractor.sizeInBytes(key)
         + (isTombstone ? 0 : value.length)
         + Long.BYTES; // timestamp size
   }

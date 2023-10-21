@@ -19,14 +19,18 @@ package dev.responsive.kafka.internal.db;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
 import java.util.concurrent.CompletionStage;
 
-public interface RemoteWriter<K> {
+/**
+ * An instance of a writer for a single remote table partition
+ *
+ * @param <K> the data key type
+ * @param <P> the table partition type
+ */
+public interface RemoteWriter<K, P> {
 
   void insert(final K key, final byte[] value, long epochMillis);
 
   void delete(final K key);
 
-  CompletionStage<RemoteWriteResult> flush();
-
-  RemoteWriteResult setOffset(final long offset);
+  CompletionStage<RemoteWriteResult<P>> flush();
 
 }

@@ -17,6 +17,7 @@
 package dev.responsive.kafka.internal.utils;
 
 import java.util.Iterator;
+import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -96,6 +97,15 @@ public final class Iterators {
       final long windowSize
   ) {
     return new WindowKeyIterator<>(delegate, windowSize);
+  }
+
+  /**
+   * Returns an iterator that iterates over all delegates in order
+   */
+  public static <T> Iterator<T> wrapped(
+      final List<Iterator<T>> delegates
+  ) {
+    throw new UnsupportedOperationException("Implement for WindowStore range scans");
   }
 
   public static <I, O, V> KeyValueIterator<O, V> mapKeys(

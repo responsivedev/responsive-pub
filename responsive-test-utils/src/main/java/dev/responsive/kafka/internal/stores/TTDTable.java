@@ -22,14 +22,13 @@ import dev.responsive.kafka.internal.db.MetadataRow;
 import dev.responsive.kafka.internal.db.RemoteTable;
 import dev.responsive.kafka.internal.db.RemoteWriter;
 import dev.responsive.kafka.internal.db.WriterFactory;
-import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import org.apache.kafka.common.utils.Time;
 
 public abstract class TTDTable<K> implements RemoteTable<K, BoundStatement> {
 
-  private final TTDCassandraClient client;
+  protected final TTDCassandraClient client;
   protected final Time time;
 
   public TTDTable(final TTDCassandraClient client) {
@@ -45,25 +44,24 @@ public abstract class TTDTable<K> implements RemoteTable<K, BoundStatement> {
 
   @Override
   public WriterFactory<K> init(
-      final SubPartitioner partitioner,
       final int kafkaPartition
   ) {
     return (client, partition) -> new TTDWriter<>(this, partition);
   }
 
   @Override
-  public MetadataRow metadata(final int partition) {
+  public long fetchOffset(final int kafkaPartition) {
     return new MetadataRow(0, 0);
   }
 
   @Override
-  public BoundStatement setOffset(final int partition, final long offset) {
-    return null;
+  public long offset(final int kafkaPartition) {
+    return 0;
   }
 
   @Override
-  public long approximateNumEntries(final int partition) {
-    return client.count(name(), partition);
+  public BoundStatement setOffset(final int kafkaPartition, final long offset) {
+    return null;
   }
 
   private static class TTDWriter<K> implements RemoteWriter<K> {

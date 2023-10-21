@@ -60,10 +60,10 @@ public class GlobalOperations implements KeyValueOperations {
 
     final SessionClients sessionClients = loadSessionClients(appConfigs);
     final var client = sessionClients.cassandraClient();
-    final var spec = CassandraTableSpecFactory.globalSpec(params);
+    final var spec = CassandraTableSpecFactory.globalSpec(params, SubPartitioner.NO_SUBPARTITIONS);
 
     final var table = client.globalFactory().create(spec);
-    table.init(SubPartitioner.NO_SUBPARTITIONS, IGNORED_PARTITION);
+    table.init(IGNORED_PARTITION);
 
     return new GlobalOperations(
         params.name().kafkaName(),
@@ -165,7 +165,7 @@ public class GlobalOperations implements KeyValueOperations {
       // of auto.commit.interval.ms) unlike the changelog equivalent which
       // always restores from scratch
       final int partition = rec.partition();
-      final long offset = table.metadata(partition).offset;
+      final long offset = table.fetchOffset(partition).offset;
       if (rec.offset() < offset) {
         // ignore records that have already been processed - race conditions
         // are not important since the worst case we'll have just not written

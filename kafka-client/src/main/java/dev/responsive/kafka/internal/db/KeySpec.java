@@ -18,14 +18,22 @@ package dev.responsive.kafka.internal.db;
 
 import java.util.Comparator;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.common.utils.Bytes;
 
 public interface KeySpec<K> extends Comparator<K> {
 
   K keyFromRecord(final ConsumerRecord<byte[], byte[]> record);
 
-  Bytes bytes(final K key);
+  int sizeInBytes(final K key);
 
+  /**
+   * Used to determine whether a key is still valid. Window stores for example
+   * will consider a record no longer valid if the windowed key's timestamp is
+   * outside of the state store's retention period.
+   *
+   * @param key the key to test
+   * @return true iff the key should be retained,
+   *         false if it is no longer valid and should be cleaned up.
+   */
   default boolean retain(final K key) {
     return true;
   }

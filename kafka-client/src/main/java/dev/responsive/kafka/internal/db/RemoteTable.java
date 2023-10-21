@@ -16,10 +16,9 @@
 
 package dev.responsive.kafka.internal.db;
 
-import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import javax.annotation.CheckReturnValue;
 
-public interface RemoteTable<K, S> {
+public interface RemoteTable<K, P, S> {
 
   String name();
 
@@ -30,8 +29,7 @@ public interface RemoteTable<K, S> {
    * @return a {@link WriterFactory} that gives the callee access
    * to run statements on {@code table}
    */
-  WriterFactory<K> init(
-      final SubPartitioner partitioner,
+  WriterFactory<K, P> init(
       final int kafkaPartition
   );
 
@@ -39,55 +37,53 @@ public interface RemoteTable<K, S> {
    * Inserts data into {@code table}. Note that this will overwrite
    * any existing entry in the table with the same key.
    *
-   * @param partitionKey  the partitioning key
-   * @param key           the data key
-   * @param value         the data value
-   * @param epochMillis   the event time with which this event
+   * @param kafkaPartition  the kafka partition
+   * @param key             the data key
+   * @param value           the data value
+   * @param epochMillis     the event time with which this event
    *                      was inserted in epochMillis
    *
-   * @return a statement that, when executed, will insert the row
-   * matching {@code partitionKey} and {@code key} in the
-   * {@code table} with value {@code value}
+   * @return a statement that, when executed, will insert the entry
+   *         corresponding to the given {@code kafkaPartition} and
+   *         {@code key} to this {@code table} with value {@code value}
    */
   @CheckReturnValue
   S insert(
-      final int partitionKey,
+      final int kafkaPartition,
       final K key,
       final byte[] value,
       final long epochMillis
   );
 
   /**
-   * @param partitionKey  the partitioning key
-   * @param key           the data key
+   * @param kafkaPartition  the kafka partition
+   * @param key             the data key
    *
-   * @return a statement that, when executed, will delete the row
-   *         matching {@code partitionKey} and {@code key} in the
-   *         {@code table}
+   * @return a statement that, when executed, will delete the entry
+   *         corresponding to the given {@code kafkaPartition} and
+   *         {@code key} in this {@code table}
    */
   @CheckReturnValue
   S delete(
-      final int partitionKey,
+      final int kafkaPartition,
       final K key
   );
 
   /**
-   * Returns the metadata for the given table/partition, note
-   * that implementations may return partially filled metadata
-   * if the schema for that table does not contain such metadata.
+   * @param kafkaPartition the kafka partition
+   * @return the current offset fetched from the metadata table
+   *         partition for the given kafka partition
    */
-  // TODO: we should parameterized RemoteSchema on the metadata type
-  MetadataRow metadata(final int partition);
+  long fetchOffset(final int kafkaPartition);
 
   /**
-   * Generates a statement that can be used to set the offset
-   * in the metadata row of {@code table}.
+   * @param kafkaPartition the kafka partition
+   * @return a statement that can be used to set the offset
+   *         in the metadata row of {@code table}.
    */
   @CheckReturnValue
   S setOffset(
-      final int partition,
+      final int kafkaPartition,
       final long offset
   );
-
-  long approximateNumEntries(int partition);
 }

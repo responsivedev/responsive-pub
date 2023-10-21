@@ -21,8 +21,6 @@ import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.is;
 
-import dev.responsive.kafka.internal.db.partitioning.Hasher;
-import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.utils.TableName;
 import java.util.List;
 import java.util.OptionalInt;
@@ -46,10 +44,10 @@ class SubPartitionerTest {
     final var partitioner = new SubPartitioner(2, SINGLE_BYTE_HASHER);
 
     // When:
-    final int zero = partitioner.partition(0, Bytes.wrap(new byte[]{0}));
-    final int one = partitioner.partition(0, Bytes.wrap(new byte[]{1}));
-    final int two = partitioner.partition(1, Bytes.wrap(new byte[]{2}));
-    final int three = partitioner.partition(1, Bytes.wrap(new byte[]{3}));
+    final int zero = partitioner.tablePartition(0, Bytes.wrap(new byte[]{0}));
+    final int one = partitioner.tablePartition(0, Bytes.wrap(new byte[]{1}));
+    final int two = partitioner.tablePartition(1, Bytes.wrap(new byte[]{2}));
+    final int three = partitioner.tablePartition(1, Bytes.wrap(new byte[]{3}));
 
     // Then:
     assertThat(zero, is(0));
@@ -64,7 +62,7 @@ class SubPartitionerTest {
     final var partitioner = new SubPartitioner(3, SINGLE_BYTE_HASHER);
 
     // When:
-    final List<Integer> result = partitioner.all(2).boxed().collect(Collectors.toList());
+    final List<Integer> result = partitioner.allTablePartitions(2).boxed().collect(Collectors.toList());
 
     // Then:
     assertThat(result, contains(6, 7, 8));

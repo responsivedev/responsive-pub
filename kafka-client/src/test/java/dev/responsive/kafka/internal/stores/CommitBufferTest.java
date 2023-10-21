@@ -296,7 +296,7 @@ public class CommitBufferTest {
 
     // reserve epoch for partition 8 to ensure it doesn't get flushed
     // if it did it would get fenced
-    LwtWriterFactory.reserve(table, cclient, new int[]{8}, KAFKA_PARTITION, 3L, false);
+    LwtWriterFactory.initialize(table, cclient, new int[]{8}, KAFKA_PARTITION, 3L, false);
 
     final Bytes k0 = Bytes.wrap(ByteBuffer.allocate(4).putInt(0).array());
     final Bytes k1 = Bytes.wrap(ByteBuffer.allocate(4).putInt(1).array());
@@ -313,9 +313,9 @@ public class CommitBufferTest {
     // Then:
     assertThat(table.get(6, k0, MIN_VALID_TS), is(VALUE));
     assertThat(table.get(7, k1, MIN_VALID_TS), is(VALUE));
-    assertThat(table.metadata(6), is(new MetadataRow(100L, 1L)));
-    assertThat(table.metadata(7), is(new MetadataRow(-1L, 1L)));
-    assertThat(table.metadata(8), is(new MetadataRow(-1L, 3L)));
+    assertThat(table.fetchOffset(6), is(new MetadataRow(100L, 1L)));
+    assertThat(table.fetchOffset(7), is(new MetadataRow(-1L, 1L)));
+    assertThat(table.fetchOffset(8), is(new MetadataRow(-1L, 3L)));
   }
 
   @Test
@@ -327,7 +327,7 @@ public class CommitBufferTest {
         KEY_SPEC, true, name, TRIGGERS, exceptionSupplier, partitioner);
     buffer.init();
 
-    LwtWriterFactory.reserve(
+    LwtWriterFactory.initialize(
         table, cclient, new int[]{KAFKA_PARTITION}, KAFKA_PARTITION, 100L, false);
 
 
@@ -360,15 +360,15 @@ public class CommitBufferTest {
     // throwaway init to initialize table
     buffer.init();
 
-    LwtWriterFactory.reserve(table, cclient, new int[]{4}, KAFKA_PARTITION, 100L, false);
-    LwtWriterFactory.reserve(table, cclient, new int[]{5}, KAFKA_PARTITION, 100L, false);
+    LwtWriterFactory.initialize(table, cclient, new int[]{4}, KAFKA_PARTITION, 100L, false);
+    LwtWriterFactory.initialize(table, cclient, new int[]{5}, KAFKA_PARTITION, 100L, false);
 
     // When:
     buffer.init();
 
     // Then:
-    assertThat(table.metadata(4).epoch, is(101L));
-    assertThat(table.metadata(5).epoch, is(101L));
+    assertThat(table.fetchOffset(4).epoch, is(101L));
+    assertThat(table.fetchOffset(5).epoch, is(101L));
   }
 
   @Test
@@ -488,10 +488,10 @@ public class CommitBufferTest {
     buffer.flush(9L);
 
     // Then:
-    assertThat(table.metadata(KAFKA_PARTITION).offset, is(-1L));
+    assertThat(table.fetchOffset(KAFKA_PARTITION).offset, is(-1L));
     buffer.put(Bytes.wrap(new byte[]{10}), VALUE, CURRENT_TS);
     buffer.flush(10L);
-    assertThat(table.metadata(KAFKA_PARTITION).offset, is(10L));
+    assertThat(table.fetchOffset(KAFKA_PARTITION).offset, is(10L));
   }
 
   @Test
@@ -519,10 +519,10 @@ public class CommitBufferTest {
     buffer.flush(9L);
 
     // Then:
-    assertThat(table.metadata(KAFKA_PARTITION).offset, is(-1L));
+    assertThat(table.fetchOffset(KAFKA_PARTITION).offset, is(-1L));
     buffer.put(Bytes.wrap(new byte[]{10}), value, CURRENT_TS);
     buffer.flush(10L);
-    assertThat(table.metadata(KAFKA_PARTITION).offset, is(10L));
+    assertThat(table.fetchOffset(KAFKA_PARTITION).offset, is(10L));
   }
 
   @Test
@@ -551,10 +551,10 @@ public class CommitBufferTest {
     buffer.flush(1L);
 
     // Then:
-    assertThat(table.metadata(KAFKA_PARTITION).offset, is(-1L));
+    assertThat(table.fetchOffset(KAFKA_PARTITION).offset, is(-1L));
     clock.set(clock.get().plus(Duration.ofSeconds(35)));
     buffer.flush(5L);
-    assertThat(table.metadata(KAFKA_PARTITION).offset, is(5L));
+    assertThat(table.fetchOffset(KAFKA_PARTITION).offset, is(5L));
   }
 
   @Test
@@ -601,7 +601,7 @@ public class CommitBufferTest {
     buffer.restoreBatch(List.of(record));
 
     // Then:
-    assertThat(table.metadata(KAFKA_PARTITION).offset, is(100L));
+    assertThat(table.fetchOffset(KAFKA_PARTITION).offset, is(100L));
     final byte[] value = table.get(KAFKA_PARTITION, KEY, MIN_VALID_TS);
     assertThat(value, is(VALUE));
   }
@@ -614,7 +614,7 @@ public class CommitBufferTest {
         sessionClients, changelogTp, admin, table,
         KEY_SPEC, true, name, TRIGGERS, exceptionSupplier, partitioner);
     buffer.init();
-    LwtWriterFactory.reserve(
+    LwtWriterFactory.initialize(
         table, cclient, new int[]{KAFKA_PARTITION}, KAFKA_PARTITION, 100L, false);
 
     final ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>(

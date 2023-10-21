@@ -35,7 +35,6 @@ public final class ResponsiveWindowParams {
   private int numSegments = DEFAULT_NUM_SEGMENTS;
   private boolean truncateChangelog = false;
 
-
   private ResponsiveWindowParams(
       final String name,
       final WindowSchema schemaType,

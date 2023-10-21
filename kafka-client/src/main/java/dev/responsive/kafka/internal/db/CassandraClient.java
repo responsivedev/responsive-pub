@@ -27,6 +27,7 @@ import com.datastax.oss.driver.api.core.cql.SimpleStatement;
 import com.datastax.oss.driver.api.core.cql.Statement;
 import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
+import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.SegmentPartition;
 import dev.responsive.kafka.internal.utils.RemoteMonitor;
 import java.time.Duration;
 import java.util.OptionalInt;
@@ -47,10 +48,10 @@ public class CassandraClient {
   private final CqlSession session;
 
   private final ResponsiveConfig config;
-  private final TableCache<RemoteKVTable<BoundStatement>> kvFactory;
-  private final TableCache<RemoteKVTable<BoundStatement>> factFactory;
-  private final TableCache<RemoteWindowedTable<BoundStatement>> windowedFactory;
-  private final TableCache<RemoteKVTable<BoundStatement>> globalFactory;
+  private final TableCache<RemoteKVTable<Integer, BoundStatement>> kvFactory;
+  private final TableCache<RemoteKVTable<Integer, BoundStatement>> factFactory;
+  private final TableCache<RemoteWindowedTable<SegmentPartition, BoundStatement>> windowedFactory;
+  private final TableCache<RemoteKVTable<Integer, BoundStatement>> globalFactory;
 
   /**
    * @param session the Cassandra session, expected to be initialized
@@ -120,19 +121,19 @@ public class CassandraClient {
   }
 
   /**
-   * Counts the number of elements in a partition
+   * Counts the number of elements in a remote table partition
    *
-   * @param tableName the table to count from
-   * @param partition the partition to count
+   * @param tableName      the table to count from
+   * @param tablePartition the remote table partition to count
    *
-   * @return the number of elements in {@code tableName} with {@code partition} as
+   * @return the number of elements in {@code tableName} with {@code tablePartition} as
    *         the partition
    */
-  public long count(final String tableName, final int partition) {
+  public long count(final String tableName, final int tablePartition) {
     final ResultSet result = execute(QueryBuilder
         .selectFrom(tableName)
         .countAll()
-        .where(PARTITION_KEY.relation().isEqualTo(PARTITION_KEY.literal(partition)))
+        .where(PARTITION_KEY.relation().isEqualTo(PARTITION_KEY.literal(tablePartition)))
         .build()
     );
 
@@ -152,19 +153,19 @@ public class CassandraClient {
     session.close();
   }
 
-  public TableCache<RemoteKVTable<BoundStatement>> globalFactory() {
+  public TableCache<RemoteKVTable<Integer, BoundStatement>> globalFactory() {
     return globalFactory;
   }
 
-  public TableCache<RemoteKVTable<BoundStatement>> kvFactory() {
+  public TableCache<RemoteKVTable<Integer, BoundStatement>> kvFactory() {
     return kvFactory;
   }
 
-  public TableCache<RemoteKVTable<BoundStatement>> factFactory() {
+  public TableCache<RemoteKVTable<Integer, BoundStatement>> factFactory() {
     return factFactory;
   }
 
-  public TableCache<RemoteWindowedTable<BoundStatement>> windowedFactory() {
+  public TableCache<RemoteWindowedTable<SegmentPartition, BoundStatement>> windowedFactory() {
     return windowedFactory;
   }
 }

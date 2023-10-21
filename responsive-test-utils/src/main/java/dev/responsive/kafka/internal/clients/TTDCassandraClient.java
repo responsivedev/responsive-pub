@@ -104,7 +104,7 @@ public class TTDCassandraClient extends CassandraClient {
   }
 
   @Override
-  public long count(final String tableName, final int partition) {
+  public long count(final String tableName, final int tablePartition) {
     final var kv = (TTDKeyValueTable) kvFactory.getTable(tableName);
     final var window = (TTDWindowedTable) windowedFactory.getTable(tableName);
     return (kv == null ? 0 : kv.count()) + (window == null ? 0 : window.count());

@@ -17,7 +17,10 @@
 package dev.responsive.kafka.internal.utils;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.config.TopicConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,6 +28,28 @@ import org.slf4j.LoggerFactory;
 public final class StoreUtil {
 
   private static final Logger LOG = LoggerFactory.getLogger(StoreUtil.class);
+
+  // TODO: set up something like MetadataCache so we can cache the kafka partitions counts
+  //  (It might even be possible to extract this from the assignor once we plug in one of our own)
+  public static int numPartitionsForKafkaTopic(
+      final Admin admin,
+      final String topicName
+  ) {
+    try {
+      return admin.describeTopics(List.of(topicName))
+          .allTopicNames()
+          .get()
+          .get(topicName)
+          .partitions()
+          .size();
+    } catch (final InterruptedException | ExecutionException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  public static long computeSegmentInterval(final long retentionPeriod, final int numSegments) {
+    return retentionPeriod / numSegments;
+  }
 
   public static void validateLogConfigs(
       final Map<String, String> config,

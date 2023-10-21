@@ -42,11 +42,8 @@ import static org.apache.kafka.clients.admin.RecordsToDelete.beforeOffset;
 
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.db.KeySpec;
-import dev.responsive.kafka.internal.db.MetadataRow;
-import dev.responsive.kafka.internal.db.RemoteTable;
 import dev.responsive.kafka.internal.db.RemoteWriter;
 import dev.responsive.kafka.internal.db.WriterFactory;
-import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.utils.ExceptionSupplier;
 import dev.responsive.kafka.internal.utils.Iterators;
@@ -57,7 +54,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CancellationException;
@@ -85,7 +81,7 @@ import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCa
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.slf4j.Logger;
 
-public class CommitBuffer<K, S extends RemoteTable<K, ?>>
+public class CommitBuffer<K, P>
     implements RecordBatchingStateRestoreCallback, Closeable {
 
   public static final int MAX_BATCH_SIZE = 1000;
@@ -93,16 +89,14 @@ public class CommitBuffer<K, S extends RemoteTable<K, ?>>
   private final Logger log;
   private final String logPrefix;
 
+  private final WriterFactory<K, P> writerFactory;
   private final SizeTrackingBuffer<K> buffer;
-  private final SessionClients sessionClients;
   private final ResponsiveMetrics metrics;
   private final Admin admin;
   private final TopicPartition changelog;
-  private final S table;
   private final FlushTriggers flushTriggers;
   private final ExceptionSupplier exceptionSupplier;
   private final int maxBatchSize;
-  private final SubPartitioner subPartitioner;
   private final Supplier<Instant> clock;
   private final KeySpec<K> keySpec;
 
@@ -123,92 +117,85 @@ public class CommitBuffer<K, S extends RemoteTable<K, ?>>
   private KafkaFuture<DeletedRecords> deleteRecordsFuture = KafkaFuture.completedFuture(null);
 
   private Instant lastFlush;
-  private WriterFactory<K> writerFactory;
 
-  static <K, S extends RemoteTable<K, ?>> CommitBuffer<K, S> from(
+  static <K, P> CommitBuffer<K, P> from(
+      final WriterFactory<K, P> writerFactory,
       final SessionClients clients,
       final TopicPartition changelog,
-      final S schema,
       final KeySpec<K> keySpec,
       final boolean truncateChangelog,
       final String storeName,
-      final SubPartitioner partitioner,
       final ResponsiveConfig config
   ) {
     final var admin = clients.admin();
 
     return new CommitBuffer<>(
+        writerFactory,
         clients,
         changelog,
         admin,
-        schema,
         keySpec,
         truncateChangelog,
         storeName,
         FlushTriggers.fromConfig(config),
-        ExceptionSupplier.fromConfig(config.originals()),
-        partitioner
+        ExceptionSupplier.fromConfig(config.originals())
     );
   }
 
   CommitBuffer(
+      final WriterFactory<K, P> writerFactory,
       final SessionClients sessionClients,
       final TopicPartition changelog,
       final Admin admin,
-      final S schema,
       final KeySpec<K> keySpec,
       final boolean truncateChangelog,
       final String storeName,
       final FlushTriggers flushTriggers,
-      final ExceptionSupplier exceptionSupplier,
-      final SubPartitioner subPartitioner
+      final ExceptionSupplier exceptionSupplier
   ) {
     this(
+        writerFactory,
         sessionClients,
         changelog,
         admin,
-        schema,
         keySpec,
         truncateChangelog,
         storeName,
         flushTriggers,
         exceptionSupplier,
         MAX_BATCH_SIZE,
-        subPartitioner,
         Instant::now
     );
   }
 
   CommitBuffer(
+      final WriterFactory<K, P> writerFactory,
       final SessionClients sessionClients,
       final TopicPartition changelog,
       final Admin admin,
-      final S table,
       final KeySpec<K> keySpec,
       final boolean truncateChangelog,
       final String storeName,
       final FlushTriggers flushTriggers,
       final ExceptionSupplier exceptionSupplier,
       final int maxBatchSize,
-      final SubPartitioner subPartitioner,
       final Supplier<Instant> clock
   ) {
-    this.sessionClients = sessionClients;
+    this.writerFactory = writerFactory;
     this.changelog = changelog;
     this.metrics = sessionClients.metrics();
     this.admin = admin;
-    this.table = table;
 
     this.buffer = new SizeTrackingBuffer<>(keySpec);
     this.keySpec = keySpec;
     this.flushTriggers = flushTriggers;
     this.exceptionSupplier = exceptionSupplier;
     this.maxBatchSize = maxBatchSize;
-    this.subPartitioner = subPartitioner;
     this.clock = clock;
     this.lastFlush = clock.get();
 
-    logPrefix = String.format("commit-buffer [%s-%d] ", table.name(), changelog.partition());
+    logPrefix = String.format("commit-buffer [%s-%d] ",
+                              writerFactory.tableName(), changelog.partition());
     log = new LogContext(logPrefix).logger(CommitBuffer.class);
 
     flushSensorName = getSensorName(FLUSH, changelog);
@@ -313,14 +300,6 @@ public class CommitBuffer<K, S extends RemoteTable<K, ?>>
     return !changelogTopicName.endsWith("changelog");
   }
 
-  public void init() {
-    this.writerFactory = table.init(subPartitioner, changelog.partition());
-
-    final int basePartition = subPartitioner.first(changelog.partition());
-    log.info("Initialized store with {} for subpartitions in range: {{} -> {}}",
-        writerFactory, basePartition, basePartition + subPartitioner.getFactor() - 1);
-  }
-
   public void put(final K key, final byte[] value, long timestamp) {
     buffer.put(key, Result.value(key, value, timestamp));
   }
@@ -403,11 +382,6 @@ public class CommitBuffer<K, S extends RemoteTable<K, ?>>
     );
   }
 
-  long offset() {
-    final int basePartition = subPartitioner.first(changelog.partition());
-    return table.metadata(basePartition).offset;
-  }
-
   private long totalBytesBuffered() {
     return buffer.getBytes();
   }
@@ -481,15 +455,9 @@ public class CommitBuffer<K, S extends RemoteTable<K, ?>>
         writerFactory
     );
 
-    final var writers = new HashMap<Integer, RemoteWriter<K>>();
+    final WriterFactory<K, P>.PendingFlush pendingFlush = writerFactory.beginNewFlush();
     for (final Result<K> result : buffer.getReader().values()) {
-      final int subPartition =
-          subPartitioner.partition(changelog.partition(), keySpec.bytes(result.key));
-      final RemoteWriter<K> writer = writers
-          .computeIfAbsent(subPartition, k -> writerFactory.createWriter(
-              sessionClients,
-              subPartition
-          ));
+      final RemoteWriter<K, P> writer = pendingFlush.writerForKey(result.key);
 
       if (result.isTombstone) {
         writer.delete(result.key);
@@ -498,21 +466,9 @@ public class CommitBuffer<K, S extends RemoteTable<K, ?>>
       }
     }
 
-    final var drainWriteResult = drain(writers.values());
-    if (!drainWriteResult.wasApplied()) {
-      throwFlushException(drainWriteResult, consumedOffset);
-    }
-
-    // this offset is only used for recovery, so it can (and should) be done only
-    // when all the flushes above have completed and only needs to be written to
-    // the first subpartition
-    final var offsetWriteResult = writers.computeIfAbsent(
-        subPartitioner.first(changelog.partition()),
-        subPartition -> writerFactory.createWriter(sessionClients, subPartition)
-    ).setOffset(consumedOffset);
-
-    if (!offsetWriteResult.wasApplied()) {
-      throwFlushException(offsetWriteResult, consumedOffset);
+    final var flushResult = pendingFlush.completeFlush(consumedOffset);
+    if (!flushResult.wasApplied()) {
+      throwFlushException(flushResult, consumedOffset);
     }
 
     final long endNanos = System.nanoTime();
@@ -523,29 +479,15 @@ public class CommitBuffer<K, S extends RemoteTable<K, ?>>
     flushLatencySensor.record(flushLatencyMs, endMs);
 
     log.info("Flushed {} records to remote in {}ms (offset={}, writer={}, numSubPartitions={})",
-        buffer.getReader().size(),
-        flushLatencyMs,
-        consumedOffset,
-        writerFactory,
-        writers.size()
+             buffer.getReader().size(),
+             flushLatencyMs,
+             consumedOffset,
+             writerFactory,
+             pendingFlush.allWriters().size()
     );
     buffer.clear();
 
     maybeTruncateChangelog(consumedOffset);
-  }
-
-  private RemoteWriteResult drain(final Collection<RemoteWriter<K>> writers) {
-    var result = CompletableFuture.completedStage(RemoteWriteResult.success(changelog.partition()));
-    for (final RemoteWriter<K> writer : writers) {
-      result = result.thenCombine(writer.flush(), (one, two) -> !one.wasApplied() ? one : two);
-    }
-
-    try {
-      return result.toCompletableFuture().get();
-    } catch (final InterruptedException | ExecutionException e) {
-      log.error("Unexpected exception while flushing to remote", e);
-      throw new RuntimeException(logPrefix + "Failed while flushing to remote", e);
-    }
   }
 
   /**
@@ -625,24 +567,13 @@ public class CommitBuffer<K, S extends RemoteTable<K, ?>>
     }
   }
 
-  private void throwFlushException(final RemoteWriteResult result, final long consumedOffset) {
-    final MetadataRow stored = table.metadata(result.getPartition());
-
-    // this most likely is a fencing error, so just record all the information
-    // that is relevant to fencing in the error message
-    final String msg = String.format(
-        "[%d] Error while writing batch! Local Epoch: %s, "
-            + "Persisted Epoch: %d, Batch Offset: %d, Persisted Offset: %d",
-        result.getPartition(),
-        writerFactory,
-        stored.epoch,
-        consumedOffset,
-        stored.offset
-    );
-    log.warn(msg);
-
+  private void throwFlushException(final RemoteWriteResult<P> result, final long consumedOffset) {
     flushErrorsSensor.record();
-    throw exceptionSupplier.commitFencedException(logPrefix + msg);
+
+    final String errorMsg = writerFactory.failedFlushError(result, consumedOffset);
+    log.warn(errorMsg);
+
+    throw exceptionSupplier.commitFencedException(logPrefix + errorMsg);
   }
 
   @Override
