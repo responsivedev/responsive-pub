@@ -16,28 +16,10 @@
 
 package dev.responsive.kafka.internal.stores;
 
-import static dev.responsive.kafka.api.config.ResponsiveConfig.responsiveConfig;
-import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadSessionClients;
-import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
-import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.changelogFor;
-
-import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.stores.ResponsiveWindowParams;
-import dev.responsive.kafka.internal.config.InternalSessionConfigs;
-import dev.responsive.kafka.internal.db.CassandraClient;
-import dev.responsive.kafka.internal.db.CassandraTableSpecFactory;
-import dev.responsive.kafka.internal.db.RemoteWindowedTable;
-import dev.responsive.kafka.internal.db.StampedKeySpec;
-import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
-import dev.responsive.kafka.internal.db.spec.CassandraTableSpec;
-import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
-import dev.responsive.kafka.internal.utils.Iterators;
-import dev.responsive.kafka.internal.utils.Result;
-import dev.responsive.kafka.internal.utils.SessionClients;
 import dev.responsive.kafka.internal.utils.Stamped;
 import dev.responsive.kafka.internal.utils.TableName;
 import java.util.concurrent.TimeoutException;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.ProcessorStateException;
@@ -45,7 +27,6 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
-import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStore;
@@ -54,11 +35,9 @@ import org.apache.kafka.streams.state.internals.StoreQueryUtils;
 import org.slf4j.Logger;
 
 public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
-
   private final Logger log;
 
   private final ResponsiveWindowParams params;
-  private final CassandraTableSpec spec;
   private final TableName name;
   private final long windowSize;
   private final long retentionPeriod;
@@ -68,39 +47,16 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
   private long observedStreamTime;
 
   // All the fields below this are effectively final, we just can't set them until #init is called
-
-  @SuppressWarnings("rawtypes")
-  private InternalProcessorContext context;
-  private TopicPartition changelog;
-
-  private CommitBuffer<Stamped<Bytes>, RemoteWindowedTable<?>> buffer;
-  private RemoteWindowedTable<?> table;
-  private ResponsiveStoreRegistry storeRegistry;
-  private ResponsiveStoreRegistration registration;
-  private ResponsiveRestoreListener restoreListener;
-  private SubPartitioner partitioner;
+  private WindowOperations windowOperations;
+  private StateStoreContext context;
 
   public ResponsiveWindowStore(final ResponsiveWindowParams params) {
     this.params = params;
     this.name = params.name();
-
-    // TODO: figure out how to implement retention period in Cassandra
-    // there are a few options for this: we can use the wall-clock based
-    // TTL feature, but this would be a departure from how Kafka Streams
-    // handles the retention period (based on stream time). Alternatively
-    // we can post-filter from Cassandra and occasionally run a process
-    // that cleans up expired records, this would work well in a background
-    // process but we'd need to figure out where to run that - we could also
-    // run these deletes asynchronously
-    //
-    // for now (so we can get correct behavior) we just post-filter anything
-    // that is past the TTL
     this.retentionPeriod = params.retentionPeriod();
     this.windowSize = params.windowSize();
     this.position = Position.emptyPosition();
-    this.spec = CassandraTableSpecFactory.fromWindowParams(params);
-
-    log = new LogContext(
+    this.log = new LogContext(
         String.format("window-store [%s] ", name.kafkaName())
     ).logger(ResponsiveWindowStore.class);
   }
@@ -126,60 +82,19 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
   public void init(final StateStoreContext storeContext, final StateStore root) {
     try {
       log.info("Initializing state store");
-      context = asInternalProcessorContext(storeContext);
 
-      // Save this so we don't have to rebuild the config map on every access
-      final var appConfigs = storeContext.appConfigs();
-
-      final ResponsiveConfig config = responsiveConfig(appConfigs);
-      final SessionClients sessionClients = loadSessionClients(appConfigs);
-      final CassandraClient client = sessionClients.cassandraClient();
-
-      storeRegistry = InternalSessionConfigs.loadStoreRegistry(appConfigs);
-      restoreListener = sessionClients.restoreListener();
-
-      changelog =  new TopicPartition(
-          changelogFor(storeContext, name.kafkaName(), false),
-          context.taskId().partition()
+      context = storeContext;
+      windowOperations = SegmentedOperations.create(
+          name,
+          storeContext,
+          params,
+          window -> window.stamp >= minValidTimestamp()
       );
-      partitioner = config.getSubPartitioner(sessionClients.admin(), name, changelog.topic());
 
-      switch (params.schemaType()) {
-        case WINDOW:
-          table = client.windowedFactory().create(spec);
-          break;
-        case STREAM:
-          throw new UnsupportedOperationException("Not yet implemented");
-        default:
-          throw new IllegalArgumentException(params.schemaType().name());
-      }
-
-      log.info("Remote table {} is available for querying.", name.remoteName());
-
-      buffer = CommitBuffer.from(
-          sessionClients,
-          changelog,
-          table,
-          new StampedKeySpec(this::withinRetention),
-          params.truncateChangelog(),
-          params.name().kafkaName(),
-          partitioner,
-          config
-      );
-      buffer.init();
+      log.info("Completed initializing state store");
 
       open = true;
-
-      final long offset = buffer.offset();
-      registration = new ResponsiveStoreRegistration(
-          name.kafkaName(),
-          changelog,
-          offset == -1 ? 0 : offset,
-          buffer::flush
-      );
-      storeRegistry.registerStore(registration);
-
-      storeContext.register(root, buffer);
+      storeContext.register(root, windowOperations);
     } catch (InterruptedException | TimeoutException e) {
       throw new ProcessorStateException("Failed to initialize store.", e);
     }
@@ -201,35 +116,25 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
   }
 
   @Override
-  public void put(final Bytes key, final byte[] value, final long windowStartTimestamp) {
-    observedStreamTime = Math.max(observedStreamTime, windowStartTimestamp);
+  public void put(final Bytes key, final byte[] value, final long windowStartTime) {
+    observedStreamTime = Math.max(observedStreamTime, windowStartTime);
 
-    final Stamped<Bytes> windowedKey = new Stamped<>(key, windowStartTimestamp);
-
-    putInternal(windowedKey, value);
-  }
-
-  private void putInternal(final Stamped<Bytes> windowedKey, final byte[] value) {
-    if (value != null) {
-      buffer.put(windowedKey, value, context.timestamp());
+    final Stamped<Bytes> windowedKey = new Stamped<>(key, windowStartTime);
+    if (value == null) {
+      windowOperations.delete(windowedKey);
     } else {
-      buffer.tombstone(windowedKey, context.timestamp());
+      windowOperations.put(windowedKey, value);
     }
     StoreQueryUtils.updatePosition(position, context);
   }
 
   @Override
-  public byte[] fetch(final Bytes key, final long time) {
-    final Result<Stamped<Bytes>> localResult = buffer.get(new Stamped<>(key, time));
-    if (localResult != null)  {
-      return localResult.isTombstone ? null : localResult.value;
+  public byte[] fetch(final Bytes key, final long windowStartTime) {
+    if (windowStartTime >= minValidTimestamp()) {
+      return windowOperations.fetch(key, windowStartTime);
+    } else {
+      return null;
     }
-
-    return table.fetch(
-        partitioner.partition(changelog.partition(), key),
-        key,
-        time
-    );
   }
 
   @Override
@@ -238,18 +143,8 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       final long timeFrom,
       final long timeTo
   ) {
-    final long start = Math.max(observedStreamTime - retentionPeriod, timeFrom);
-    final Stamped<Bytes> from = new Stamped<>(key, start);
-    final Stamped<Bytes> to = new Stamped<>(key, timeTo);
-
-    final int subPartition = partitioner.partition(changelog.partition(), key);
-    return Iterators.windowed(
-        new LocalRemoteKvIterator<>(
-            buffer.range(from, to),
-            table.fetch(subPartition, key, start, timeTo),
-            ResponsiveWindowStore::compareKeys
-        )
-    );
+    final long actualTimeFrom = Math.max(minValidTimestamp(), timeFrom);
+    return windowOperations.fetch(key, actualTimeFrom, timeTo);
   }
 
   @Override
@@ -259,7 +154,22 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       final long timeFrom,
       final long timeTo
   ) {
-    throw new UnsupportedOperationException("Not yet implemented.");
+    final long actualTimeFrom = Math.max(minValidTimestamp(), timeFrom);
+    return windowOperations.fetch(keyFrom, keyTo, actualTimeFrom, timeTo);
+  }
+
+  @Override
+  public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(
+      final long timeFrom,
+      final long timeTo
+  ) {
+    final long actualTimeFrom = Math.max(minValidTimestamp(), timeFrom);
+    return windowOperations.fetchAll(actualTimeFrom, timeTo);
+  }
+
+  @Override
+  public KeyValueIterator<Windowed<Bytes>, byte[]> all() {
+    return windowOperations.all();
   }
 
   @Override
@@ -268,18 +178,8 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       final long timeFrom,
       final long timeTo
   ) {
-    final long start = Math.max(observedStreamTime - retentionPeriod, timeFrom);
-    final Stamped<Bytes> from = new Stamped<>(key, start);
-    final Stamped<Bytes> to = new Stamped<>(key, timeTo);
-
-    final int subPartition = partitioner.partition(changelog.partition(), key);
-    return Iterators.windowed(
-        new LocalRemoteKvIterator<>(
-            buffer.backRange(from, to),
-            table.backFetch(subPartition, key, start, timeTo),
-            ResponsiveWindowStore::compareKeys
-        )
-    );
+    final long actualTimeFrom = Math.max(minValidTimestamp(), timeFrom);
+    return windowOperations.backwardFetch(key, actualTimeFrom, timeTo);
   }
 
   @Override
@@ -289,15 +189,8 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       final long timeFrom,
       final long timeTo
   ) {
-    throw new UnsupportedOperationException("Not yet implemented");
-  }
-
-  @Override
-  public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(
-      final long timeFrom,
-      final long timeTo
-  ) {
-    throw new UnsupportedOperationException("Not yet implemented");
+    final long actualTimeFrom = Math.max(minValidTimestamp(), timeFrom);
+    return windowOperations.backwardFetch(keyFrom, keyTo, actualTimeFrom, timeTo);
   }
 
   @Override
@@ -305,17 +198,13 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       final long timeFrom,
       final long timeTo
   ) {
-    throw new UnsupportedOperationException("Not yet implemented");
-  }
-
-  @Override
-  public KeyValueIterator<Windowed<Bytes>, byte[]> all() {
-    throw new UnsupportedOperationException("Not yet implemented");
+    final long actualTimeFrom = Math.max(minValidTimestamp(), timeFrom);
+    return windowOperations.backwardFetchAll(actualTimeFrom, timeTo);
   }
 
   @Override
   public KeyValueIterator<Windowed<Bytes>, byte[]> backwardAll() {
-    throw new UnsupportedOperationException("Not yet implemented");
+    return windowOperations.backwardAll();
   }
 
   @Override
@@ -324,16 +213,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
 
   @Override
   public void close() {
-    // no need to flush the buffer here, will happen through the kafka client commit as usual
-    if (restoreListener != null) {
-      restoreListener.onStoreClosed(changelog, params.name().kafkaName());
-    }
-    if (storeRegistry != null) {
-      storeRegistry.deregisterStore(registration);
-    }
-    if (buffer != null) {
-      buffer.close();
-    }
+    windowOperations.close();
   }
 
   @Override
@@ -341,17 +221,8 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
     return position;
   }
 
-  private boolean withinRetention(final Stamped<Bytes> key) {
-    return key.stamp > observedStreamTime - retentionPeriod;
-  }
-
-  public static int compareKeys(final Stamped<Bytes> o1, final Stamped<Bytes> o2) {
-    final int key = o1.key.compareTo(o2.key);
-    if (key != 0) {
-      return key;
-    }
-
-    return Long.compare(o1.stamp, o2.stamp);
+  private long minValidTimestamp() {
+    return observedStreamTime - retentionPeriod;
   }
 
 }
