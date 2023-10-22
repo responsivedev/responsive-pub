@@ -40,8 +40,7 @@ public class MongoWriterFactory<K> implements WriterFactory<K> {
   @Override
   public RemoteWriter<K> createWriter(
       final SessionClients client,
-      final int partition,
-      final int batchSize
+      final int partition
   ) {
     return new MongoWriter<>(table, partition, genericCollection);
   }

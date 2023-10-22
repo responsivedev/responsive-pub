@@ -85,7 +85,7 @@ import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCa
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.slf4j.Logger;
 
-class CommitBuffer<K, S extends RemoteTable<K, ?>>
+public class CommitBuffer<K, S extends RemoteTable<K, ?>>
     implements RecordBatchingStateRestoreCallback, Closeable {
 
   public static final int MAX_BATCH_SIZE = 1000;
@@ -488,8 +488,7 @@ class CommitBuffer<K, S extends RemoteTable<K, ?>>
       final RemoteWriter<K> writer = writers
           .computeIfAbsent(subPartition, k -> writerFactory.createWriter(
               sessionClients,
-              subPartition,
-              batchSize
+              subPartition
           ));
 
       if (result.isTombstone) {
@@ -509,7 +508,7 @@ class CommitBuffer<K, S extends RemoteTable<K, ?>>
     // the first subpartition
     final var offsetWriteResult = writers.computeIfAbsent(
         subPartitioner.first(changelog.partition()),
-        subPartition -> writerFactory.createWriter(sessionClients, subPartition, batchSize)
+        subPartition -> writerFactory.createWriter(sessionClients, subPartition)
     ).setOffset(consumedOffset);
 
     if (!offsetWriteResult.wasApplied()) {
