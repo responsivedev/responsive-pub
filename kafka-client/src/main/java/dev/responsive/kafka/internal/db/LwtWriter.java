@@ -16,6 +16,8 @@
 
 package dev.responsive.kafka.internal.db;
 
+import static dev.responsive.kafka.internal.stores.CommitBuffer.MAX_BATCH_SIZE;
+
 import com.datastax.oss.driver.api.core.cql.BatchStatementBuilder;
 import com.datastax.oss.driver.api.core.cql.BatchType;
 import com.datastax.oss.driver.api.core.cql.BatchableStatement;
@@ -34,7 +36,6 @@ public class LwtWriter<K> implements RemoteWriter<K> {
   private final Supplier<BatchableStatement<?>> fencingStatementFactory;
   private final RemoteTable<K, BoundStatement> table;
   private final int partition;
-  private final int batchSize;
 
   private final List<BatchableStatement<?>> statements;
 
@@ -49,7 +50,6 @@ public class LwtWriter<K> implements RemoteWriter<K> {
     this.fencingStatementFactory = fencingStatementFactory;
     this.table = table;
     this.partition = partition;
-    this.batchSize = batchSize;
 
     statements = new ArrayList<>();
   }
@@ -74,7 +74,7 @@ public class LwtWriter<K> implements RemoteWriter<K> {
       builder.setIdempotence(true);
       builder.addStatement(fencingStatementFactory.get());
 
-      for (int i = 0; i < batchSize && it.hasNext(); i++) {
+      for (int i = 0; i < MAX_BATCH_SIZE && it.hasNext(); i++) {
         builder.addStatement(it.next());
       }
 
