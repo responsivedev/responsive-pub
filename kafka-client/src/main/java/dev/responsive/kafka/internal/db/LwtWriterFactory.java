@@ -136,15 +136,13 @@ public class LwtWriterFactory<K> implements WriterFactory<K> {
   @Override
   public RemoteWriter<K> createWriter(
       final SessionClients client,
-      final int partition,
-      final int batchSize
+      final int partition
   ) {
     return new LwtWriter<>(
         client.cassandraClient(),
         () -> ensureEpoch.bind().setInt(PARTITION_KEY.bind(), partition),
         table,
-        partition,
-        batchSize
+        partition
     );
   }
 

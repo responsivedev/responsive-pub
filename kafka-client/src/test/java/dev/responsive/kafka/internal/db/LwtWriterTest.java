@@ -1,20 +1,22 @@
 /*
- * Copyright 2023 Responsive Computing, Inc.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ *  * Copyright 2023 Responsive Computing, Inc.
+ *  *
+ *  * Licensed under the Apache License, Version 2.0 (the "License");
+ *  * you may not use this file except in compliance with the License.
+ *  * You may obtain a copy of the License at
+ *  *
+ *  *     http://www.apache.org/licenses/LICENSE-2.0
+ *  *
+ *  * Unless required by applicable law or agreed to in writing, software
+ *  * distributed under the License is distributed on an "AS IS" BASIS,
+ *  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  * See the License for the specific language governing permissions and
+ *  * limitations under the License.
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
  */
 
-package dev.responsive.kafka.internal.stores;
+package dev.responsive.kafka.internal.db;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
@@ -28,10 +30,6 @@ import com.datastax.oss.driver.api.core.cql.AsyncResultSet;
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.Statement;
 import com.datastax.oss.driver.internal.core.cql.DefaultBatchStatement;
-import dev.responsive.kafka.internal.db.CassandraClient;
-import dev.responsive.kafka.internal.db.CassandraKeyValueTable;
-import dev.responsive.kafka.internal.db.LwtWriter;
-import dev.responsive.kafka.internal.db.WriterFactory;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -51,9 +49,7 @@ import org.mockito.quality.Strictness;
 class LwtWriterTest {
 
   private static final long CURRENT_TS = 100L;
-
-  @Mock
-  private WriterFactory<?> writerFactory;
+  
   @Mock
   private CassandraClient client;
   @Mock

@@ -48,7 +48,7 @@ public abstract class TTDTable<K> implements RemoteTable<K, BoundStatement> {
       final SubPartitioner partitioner,
       final int kafkaPartition
   ) {
-    return (client, partition, batchSize) -> new TTDWriter<>(this, partition);
+    return (client, partition) -> new TTDWriter<>(this, partition);
   }
 
   @Override

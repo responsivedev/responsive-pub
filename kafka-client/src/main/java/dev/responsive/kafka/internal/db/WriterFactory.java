@@ -22,8 +22,7 @@ public interface WriterFactory<K> {
 
   RemoteWriter<K> createWriter(
       final SessionClients client,
-      final int partition,
-      final int batchSize
+      final int partition
   );
 
 }

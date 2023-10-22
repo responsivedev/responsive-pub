@@ -23,6 +23,7 @@ import com.datastax.oss.driver.api.core.cql.BatchType;
 import com.datastax.oss.driver.api.core.cql.BatchableStatement;
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.Statement;
+import com.datastax.oss.driver.shaded.guava.common.annotations.VisibleForTesting;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
 import java.util.ArrayList;
 import java.util.List;
@@ -36,6 +37,7 @@ public class LwtWriter<K> implements RemoteWriter<K> {
   private final Supplier<BatchableStatement<?>> fencingStatementFactory;
   private final RemoteTable<K, BoundStatement> table;
   private final int partition;
+  private final long maxBatchSize;
 
   private final List<BatchableStatement<?>> statements;
 
@@ -43,13 +45,30 @@ public class LwtWriter<K> implements RemoteWriter<K> {
       final CassandraClient client,
       final Supplier<BatchableStatement<?>> fencingStatementFactory,
       final RemoteTable<K, BoundStatement> table,
+      final int partition
+  ) {
+    this(
+        client,
+        fencingStatementFactory,
+        table,
+        partition,
+        MAX_BATCH_SIZE
+    );
+  }
+
+  @VisibleForTesting
+  LwtWriter(
+      final CassandraClient client,
+      final Supplier<BatchableStatement<?>> fencingStatementFactory,
+      final RemoteTable<K, BoundStatement> table,
       final int partition,
-      final int batchSize
+      final long maxBatchSize
   ) {
     this.client = client;
     this.fencingStatementFactory = fencingStatementFactory;
     this.table = table;
     this.partition = partition;
+    this.maxBatchSize = maxBatchSize;
 
     statements = new ArrayList<>();
   }
@@ -74,7 +93,7 @@ public class LwtWriter<K> implements RemoteWriter<K> {
       builder.setIdempotence(true);
       builder.addStatement(fencingStatementFactory.get());
 
-      for (int i = 0; i < MAX_BATCH_SIZE && it.hasNext(); i++) {
+      for (int i = 0; i < maxBatchSize && it.hasNext(); i++) {
         builder.addStatement(it.next());
       }
 
