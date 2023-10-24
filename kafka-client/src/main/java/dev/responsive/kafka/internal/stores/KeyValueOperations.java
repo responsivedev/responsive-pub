@@ -23,10 +23,6 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 
 public interface KeyValueOperations extends Closeable, RecordBatchingStateRestoreCallback {
 
-  void register(ResponsiveStoreRegistry storeRegistry);
-
-  void deregister(ResponsiveStoreRegistry storeRegistry);
-
   void put(final Bytes key, final byte[] value);
 
   byte[] delete(final Bytes key);

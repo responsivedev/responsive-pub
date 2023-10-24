@@ -19,12 +19,9 @@ package dev.responsive.kafka.internal.stores;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
-import dev.responsive.kafka.internal.config.InternalSessionConfigs;
 import dev.responsive.kafka.internal.utils.TableName;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.TimeoutException;
-import java.util.function.Function;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
@@ -43,7 +40,6 @@ public class ResponsiveKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
   private final ResponsiveKeyValueParams params;
   private final TableName name;
-  private final Function<Map<String, Object>, ResponsiveStoreRegistry> registryProvider;
   private final KVOperationsProvider opsProvider;
 
   private Position position; // TODO(IQ): update the position during restoration
@@ -52,26 +48,22 @@ public class ResponsiveKeyValueStore implements KeyValueStore<Bytes, byte[]> {
   // All the fields below this are effectively final, we just can't set them until #init is called
   private Logger log;
   private KeyValueOperations operations;
-  private ResponsiveStoreRegistry storeRegistry;
   private StateStoreContext context;
 
   public ResponsiveKeyValueStore(final ResponsiveKeyValueParams params) {
     this(
         params,
-        ResponsiveKeyValueStore::provideOperations,
-        InternalSessionConfigs::loadStoreRegistry
+        ResponsiveKeyValueStore::provideOperations
     );
   }
  
   // Visible for Testing
   public ResponsiveKeyValueStore(
       final ResponsiveKeyValueParams params,
-      final KVOperationsProvider opsProvider,
-      final Function<Map<String, Object>, ResponsiveStoreRegistry> registryProvider
+      final KVOperationsProvider opsProvider
   ) {
     this.params = params;
     this.name = params.name();
-    this.registryProvider = registryProvider;
     this.position = Position.emptyPosition();
     this.opsProvider = opsProvider;
 
@@ -118,9 +110,7 @@ public class ResponsiveKeyValueStore implements KeyValueStore<Bytes, byte[]> {
       operations = opsProvider.provide(params, storeContext, taskType);
       log.info("Completed initializing state store");
 
-      storeRegistry = registryProvider.apply(storeContext.appConfigs());
       open = true;
-      operations.register(storeRegistry);
       storeContext.register(root, operations);
     } catch (final InterruptedException | TimeoutException e) {
       throw new ProcessorStateException("Failed to initialize store.", e);
@@ -214,9 +204,6 @@ public class ResponsiveKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
   @Override
   public void close() {
-    if (storeRegistry != null) {
-      operations.deregister(storeRegistry);
-    }
     if (operations != null) {
       operations.close();
     }
@@ -232,8 +219,4 @@ public class ResponsiveKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     return operations.reverseAll();
   }
 
-  // Visible for testing
-  KeyValueOperations getOperations() {
-    return operations;
-  }
 }

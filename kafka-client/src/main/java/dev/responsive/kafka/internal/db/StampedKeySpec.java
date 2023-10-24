@@ -18,7 +18,6 @@ package dev.responsive.kafka.internal.db;
 
 import static org.apache.kafka.streams.state.StateSerdes.TIMESTAMP_SIZE;
 
-import dev.responsive.kafka.internal.stores.ResponsiveWindowStore;
 import dev.responsive.kafka.internal.utils.Stamped;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -58,6 +57,16 @@ public class StampedKeySpec implements KeySpec<Stamped<Bytes>> {
 
   @Override
   public int compare(final Stamped<Bytes> o1, final Stamped<Bytes> o2) {
-    return ResponsiveWindowStore.compareKeys(o1, o2);
+    return compareKeys(o1, o2);
+  }
+
+  // TODO remove generic from Stamped<> and just implement Comparable
+  public static int compareKeys(final Stamped<Bytes> o1, final Stamped<Bytes> o2) {
+    final int key = o1.key.compareTo(o2.key);
+    if (key != 0) {
+      return key;
+    }
+
+    return Long.compare(o1.stamp, o2.stamp);
   }
 }

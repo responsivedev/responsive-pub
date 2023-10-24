@@ -271,6 +271,15 @@ public class ResponsiveConfig extends AbstractConfig {
     super(CONFIG_DEF, originals, doLog);
   }
 
+  // TODO: encapsulate the SubPartitioner in the RemoteTable class
+  public SubPartitioner getSegmentedSubPartitioner(
+      final Admin admin,
+      final TableName name,
+      final String changelogTopicName
+  ) {
+    throw new UnsupportedOperationException("TODO -- follow up PR");
+  }
+
   public SubPartitioner getSubPartitioner(
       final Admin admin,
       final TableName name,

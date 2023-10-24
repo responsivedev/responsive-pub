@@ -17,6 +17,7 @@
 package dev.responsive.kafka.internal.stores;
 
 import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadSessionClients;
+import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadStoreRegistry;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.changelogFor;
 
@@ -42,13 +43,15 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 
 public class PartitionedOperations implements KeyValueOperations {
 
+  @SuppressWarnings("rawtypes")
+  private final InternalProcessorContext context;
   private final ResponsiveKeyValueParams params;
   private final RemoteKVTable<?> table;
   private final CommitBuffer<Bytes, RemoteKVTable<?>> buffer;
   private final SubPartitioner partitioner;
   private final TopicPartition changelog;
-  @SuppressWarnings("rawtypes")
-  private final InternalProcessorContext context;
+
+  private final ResponsiveStoreRegistry storeRegistry;
   private final ResponsiveStoreRegistration registration;
   private final ResponsiveRestoreListener restoreListener;
 
@@ -68,6 +71,7 @@ public class PartitionedOperations implements KeyValueOperations {
 
     final ResponsiveConfig config = ResponsiveConfig.responsiveConfig(appConfigs);
     final SessionClients sessionClients = loadSessionClients(appConfigs);
+    final ResponsiveStoreRegistry storeRegistry = loadStoreRegistry(appConfigs);
 
     final TopicPartition changelog = new TopicPartition(
         changelogFor(storeContext, name.kafkaName(), false),
@@ -110,6 +114,8 @@ public class PartitionedOperations implements KeyValueOperations {
         offset == -1 ? 0 : offset,
         buffer::flush
     );
+    storeRegistry.registerStore(registration);
+
     return new PartitionedOperations(
         params,
         table,
@@ -117,6 +123,7 @@ public class PartitionedOperations implements KeyValueOperations {
         partitioner,
         changelog,
         context,
+        storeRegistry,
         registration,
         sessionClients.restoreListener()
     );
@@ -153,6 +160,7 @@ public class PartitionedOperations implements KeyValueOperations {
       final SubPartitioner partitioner,
       final TopicPartition changelog,
       final InternalProcessorContext context,
+      final ResponsiveStoreRegistry storeRegistry,
       final ResponsiveStoreRegistration registration,
       final ResponsiveRestoreListener restoreListener
   ) {
@@ -162,18 +170,9 @@ public class PartitionedOperations implements KeyValueOperations {
     this.partitioner = partitioner;
     this.changelog = changelog;
     this.context = context;
+    this.storeRegistry = storeRegistry;
     this.registration = registration;
     this.restoreListener = restoreListener;
-  }
-
-  @Override
-  public void register(final ResponsiveStoreRegistry storeRegistry) {
-    storeRegistry.registerStore(registration);
-  }
-
-  @Override
-  public void deregister(final ResponsiveStoreRegistry storeRegistry) {
-    storeRegistry.deregisterStore(registration);
   }
 
   @Override
@@ -246,6 +245,7 @@ public class PartitionedOperations implements KeyValueOperations {
     // no need to flush the buffer here, will happen through the kafka client commit as usual
     buffer.close();
     restoreListener.onStoreClosed(changelog, params.name().kafkaName());
+    storeRegistry.deregisterStore(registration);
   }
 
   @Override

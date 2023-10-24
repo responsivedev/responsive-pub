@@ -92,16 +92,6 @@ public class GlobalOperations implements KeyValueOperations {
   }
 
   @Override
-  public void register(final ResponsiveStoreRegistry storeRegistry) {
-    // we don't do anything with global tables
-  }
-
-  @Override
-  public void deregister(final ResponsiveStoreRegistry storeRegistry) {
-    // we don't do anything with global tables
-  }
-
-  @Override
   public void put(final Bytes key, final byte[] value) {
     put(key, value, context.partition(), context.offset(), context.timestamp());
   }
