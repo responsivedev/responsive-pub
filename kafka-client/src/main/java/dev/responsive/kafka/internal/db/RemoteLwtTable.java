@@ -58,4 +58,11 @@ public interface RemoteLwtTable<K, P, S> extends RemoteTable<K, P, S> {
       final P tablePartition,
       final long epoch
   );
+
+  default void advanceStreamTime(
+      final int kafkaPartition,
+      final long epoch
+  ) {
+    // Most underlying table implementations don't need to care about stream-time
+  }
 }

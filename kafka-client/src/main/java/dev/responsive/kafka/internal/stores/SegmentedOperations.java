@@ -178,15 +178,15 @@ public class SegmentedOperations implements WindowOperations {
     this.registration = registration;
     this.restoreListener = restoreListener;
   }
-  
+
   @Override
-  public void put(final Stamped<Bytes> windowedKey, final byte[] value) {
-    buffer.put(windowedKey, value, context.timestamp());
+  public void put(final Bytes key, final byte[] value, final long windowStartTime) {
+    buffer.put(new Stamped<>(key, windowStartTime), value, context.timestamp());
   }
 
   @Override
-  public void delete(final Stamped<Bytes> windowedKey) {
-    buffer.tombstone(windowedKey, context.timestamp());
+  public void delete(final Bytes key, final long windowStartTime) {
+    buffer.tombstone(new Stamped<>(key, windowStartTime), context.timestamp());
   }
 
   @Override

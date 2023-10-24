@@ -57,8 +57,6 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CancellationException;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -466,7 +464,7 @@ public class CommitBuffer<K, P>
       }
     }
 
-    final var flushResult = pendingFlush.completeFlush(consumedOffset);
+    final var flushResult = writerFactory.commitPendingFlush(pendingFlush, consumedOffset);
     if (!flushResult.wasApplied()) {
       throwFlushException(flushResult, consumedOffset);
     }
@@ -483,7 +481,7 @@ public class CommitBuffer<K, P>
              flushLatencyMs,
              consumedOffset,
              writerFactory,
-             pendingFlush.allWriters().size()
+             pendingFlush.numRemoteWriters()
     );
     buffer.clear();
 

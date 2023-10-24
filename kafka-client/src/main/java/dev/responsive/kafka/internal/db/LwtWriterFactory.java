@@ -95,6 +95,18 @@ public class LwtWriterFactory<K, P> extends WriterFactory<K, P> {
   }
 
   @Override
+  public RemoteWriteResult<P> commitPendingFlush(
+      final PendingFlush pendingFlush,
+      final long consumedOffset
+  ) {
+    final var flushResult = super.commitPendingFlush(pendingFlush, consumedOffset);
+    table.advanceStreamTime(kafkaPartition, epoch);
+
+    // TODO: should #advanceStreamTime return a RemoteWriteResult as well?
+    return flushResult;
+  }
+
+  @Override
   public String failedFlushError(
       final RemoteWriteResult<P> result,
       final long consumedOffset

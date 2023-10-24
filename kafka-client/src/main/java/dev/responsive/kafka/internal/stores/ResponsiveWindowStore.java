@@ -17,7 +17,7 @@
 package dev.responsive.kafka.internal.stores;
 
 import dev.responsive.kafka.api.stores.ResponsiveWindowParams;
-import dev.responsive.kafka.internal.utils.Stamped;
+import dev.responsive.kafka.internal.utils.Iterators;
 import dev.responsive.kafka.internal.utils.TableName;
 import java.util.concurrent.TimeoutException;
 import org.apache.kafka.common.utils.Bytes;
@@ -39,7 +39,6 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
 
   private final ResponsiveWindowParams params;
   private final TableName name;
-  private final long windowSize;
   private final long retentionPeriod;
 
   private Position position; // TODO(IQ): update the position during restoration
@@ -54,7 +53,6 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
     this.params = params;
     this.name = params.name();
     this.retentionPeriod = params.retentionPeriod();
-    this.windowSize = params.windowSize();
     this.position = Position.emptyPosition();
     this.log = new LogContext(
         String.format("window-store [%s] ", name.kafkaName())
@@ -119,22 +117,21 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
   public void put(final Bytes key, final byte[] value, final long windowStartTime) {
     observedStreamTime = Math.max(observedStreamTime, windowStartTime);
 
-    final Stamped<Bytes> windowedKey = new Stamped<>(key, windowStartTime);
     if (value == null) {
-      windowOperations.delete(windowedKey);
+      windowOperations.delete(key, windowStartTime);
     } else {
-      windowOperations.put(windowedKey, value);
+      windowOperations.put(key, value, windowStartTime);
     }
     StoreQueryUtils.updatePosition(position, context);
   }
 
   @Override
   public byte[] fetch(final Bytes key, final long windowStartTime) {
-    if (windowStartTime >= minValidTimestamp()) {
-      return windowOperations.fetch(key, windowStartTime);
-    } else {
+    if (windowStartTime < minValidTimestamp()) {
       return null;
     }
+
+    return windowOperations.fetch(key, windowStartTime);
   }
 
   @Override
@@ -143,8 +140,14 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       final long timeFrom,
       final long timeTo
   ) {
-    final long actualTimeFrom = Math.max(minValidTimestamp(), timeFrom);
-    return windowOperations.fetch(key, actualTimeFrom, timeTo);
+    final long minValidTime = minValidTimestamp();
+
+    if (timeTo < minValidTime) {
+      return Iterators.windowed(Iterators.emptyKv());
+    }
+
+    final long boundedTimeFrom = Math.max(minValidTime, timeFrom);
+    return windowOperations.fetch(key, boundedTimeFrom, timeTo);
   }
 
   @Override
@@ -154,7 +157,13 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       final long timeFrom,
       final long timeTo
   ) {
-    final long actualTimeFrom = Math.max(minValidTimestamp(), timeFrom);
+    final long minValidTime = minValidTimestamp();
+
+    if (timeTo < minValidTime) {
+      return Iterators.emptyKv();
+    }
+
+    final long actualTimeFrom = Math.max(minValidTime, timeFrom);
     return windowOperations.fetch(keyFrom, keyTo, actualTimeFrom, timeTo);
   }
 
@@ -163,7 +172,13 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       final long timeFrom,
       final long timeTo
   ) {
-    final long actualTimeFrom = Math.max(minValidTimestamp(), timeFrom);
+    final long minValidTime = minValidTimestamp();
+
+    if (timeTo < minValidTime) {
+      return Iterators.emptyKv();
+    }
+
+    final long actualTimeFrom = Math.max(minValidTime, timeFrom);
     return windowOperations.fetchAll(actualTimeFrom, timeTo);
   }
 
@@ -178,7 +193,13 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       final long timeFrom,
       final long timeTo
   ) {
-    final long actualTimeFrom = Math.max(minValidTimestamp(), timeFrom);
+    final long minValidTime = minValidTimestamp();
+
+    if (timeTo < minValidTime) {
+      return Iterators.windowed(Iterators.emptyKv());
+    }
+
+    final long actualTimeFrom = Math.max(minValidTime, timeFrom);
     return windowOperations.backwardFetch(key, actualTimeFrom, timeTo);
   }
 
@@ -189,7 +210,13 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       final long timeFrom,
       final long timeTo
   ) {
-    final long actualTimeFrom = Math.max(minValidTimestamp(), timeFrom);
+    final long minValidTime = minValidTimestamp();
+
+    if (timeTo < minValidTime) {
+      return Iterators.emptyKv();
+    }
+
+    final long actualTimeFrom = Math.max(minValidTime, timeFrom);
     return windowOperations.backwardFetch(keyFrom, keyTo, actualTimeFrom, timeTo);
   }
 
@@ -198,7 +225,13 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       final long timeFrom,
       final long timeTo
   ) {
-    final long actualTimeFrom = Math.max(minValidTimestamp(), timeFrom);
+    final long minValidTime = minValidTimestamp();
+
+    if (timeTo < minValidTime) {
+      return Iterators.emptyKv();
+    }
+
+    final long actualTimeFrom = Math.max(minValidTime, timeFrom);
     return windowOperations.backwardFetchAll(actualTimeFrom, timeTo);
   }
 
@@ -222,7 +255,8 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
   }
 
   private long minValidTimestamp() {
-    return observedStreamTime - retentionPeriod;
+    // add one b/c records expire exactly {retentionPeriod}ms after created
+    return observedStreamTime - retentionPeriod + 1;
   }
 
 }

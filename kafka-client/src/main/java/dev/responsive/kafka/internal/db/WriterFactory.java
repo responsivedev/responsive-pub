@@ -53,6 +53,13 @@ public abstract class WriterFactory<K, P> {
     return new PendingFlush();
   }
 
+  public RemoteWriteResult<P> commitPendingFlush(
+      final PendingFlush pendingFlush,
+      final long consumedOffset
+  ) {
+    return pendingFlush.completeFlush(consumedOffset);
+  }
+
   public String failedFlushError(
       final RemoteWriteResult<P> result,
       final long consumedOffset
@@ -70,8 +77,8 @@ public abstract class WriterFactory<K, P> {
   public class PendingFlush {
     final Map<P, RemoteWriter<K, P>> activeWriters = new HashMap<>();
 
-    public Collection<RemoteWriter<K, P>> allWriters() {
-      return activeWriters.values();
+    public int numRemoteWriters() {
+      return activeWriters.size();
     }
 
     public RemoteWriter<K, P> writerForKey(
@@ -84,7 +91,7 @@ public abstract class WriterFactory<K, P> {
       );
     }
 
-    public RemoteWriteResult<P> completeFlush(final long consumedOffset) {
+    private RemoteWriteResult<P> completeFlush(final long consumedOffset) {
       final P ignored = null;
       // initialize with null as the first partial result will always fail the !isApplied check and
       // be discarded in favor of the next, and real, WriteResult in the loop below

@@ -22,39 +22,40 @@ import dev.responsive.kafka.api.stores.ResponsiveWindowParams;
 import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.SegmentPartition;
 import dev.responsive.kafka.internal.utils.Stamped;
 import dev.responsive.kafka.internal.utils.StoreUtil;
-import java.util.stream.Stream;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.stream.Collectors;
+import java.util.stream.LongStream;
 import org.apache.kafka.common.utils.Bytes;
 
 /**
  * A segment-based partitioner where kafka partitions are mapped to a subset of remote partitions
- * divided up into "segments" that correspond to a range of timestamps. By deleting subpartitions
- * we can "drop" a full segment at a time, which can be done if (and only if) the stream-time
- * advances such that the highest timestamp in the range is now outside the retention period.
- * This is used by WindowStores.
+ * divided up into "segments" that correspond to a range of timestamps. By deleting a table
+ * partition we can "drop" a full segment at a time, which can be done if (and only if) the
+ * stream-time advances such that the highest timestamp in the range is now outside the retention
+ * period. This is intended for segmented WindowStores, but could be extended in the future to
+ * other timeseries and/or ttl types of state stores.
  * <p>
- * Each logical segment covers a specific time range in milliseconds. If t_n is the start time of
- * the nth segment, then that segment covers all timestamps from t_s - t_s + segmentInterval.
- * For each logical segment there are N physical segments, where N is the number of kafka partitions
+ * Each segment covers a specific time range in milliseconds. If t_n is the start time of the
+ * nth segment, then that segment covers all timestamps from t_s - t_s + segmentInterval.
+ * For each segment id there are N physical table partitions, where N is the number of kafka
+ * partitions. Each physical state store instance should only be interacting with a single kafka
+ * partition, but will generally have multiple active segments for each kafka partition.
  * <p>
- * As such, the overall layout is in repeating sets of N segments and the total number of remote
- * partitions is N * num_segments, where num_segments = retentionPeriod / segmentInterval.
- * Note: the actual number of physical segments/remote partitions is likely to be
- * N * (num_segments + 1), for two reasons. First, if the configured numSegments does not evenly
- * divide the retentionPeriod, an additional partial segment will always be required to cover any
- * remainder of the full retention period left. Second, at any given point in time it's likely that
- * the time range covered by the oldest segment is partially expired and the newest segment is not
- * yet active in full. When stream-time for a given kafka partition advances, a tombstone is sent
- * to delete the entire oldest physical segment. At the same time, a new physical segment will be
- * created and the corresponding remote partition initialized.
+ * For a given kafka partition, the total number of segments/table partitions is determined by
+ * the store-level config for num_segments, which controls the width of each segment according
+ * to the relationship num_segments * segmentInterval = retentionPeriod.
+ * Note: the actual number of physical segments at any given time is likely to be num_segments + 1,
+ * for two reasons. First, if the configured numSegments does not evenly divide the retentionPeriod,
+ * an additional partial segment will always be required to cover any remainder of the full
+ * retention period left. Second, at any given point in time it's likely that the time range
+ * covered by the oldest segment is partially expired, while the upper end of the newest segment
+ * may not yet be active/filled.
  * <p>
- * Note how we specify "physical" segment in the previous statement -- because stream-time advances
- * individually for each kafka partition, the actual physical segments of a given logical segment
- * will be created and dropped out of sync with each other. There is no guarantee that physical
- * segments are aligned or adjacent to other physical segments of the same logical segment. In
- * other words, a given logical segment/timespan may have anywhere between 0 and N physical segments
- * active at any point in time.
- * Within a given kafka partition, however, the active logical segments should always be aligned
- * and adjacent. See the example below for a more concrete analysis
+ * When stream-time for a given kafka partition advances, a tombstone is sent to delete the entire
+ * oldest physical segment (or segments, if it has advanced by more than the segmentInterval).
+ * At the same time, a new physical segment (or segments) will be created and the corresponding
+ * remote partition initialized.
  * <p>
  * Let's look at an example case, at a particular moment in time, with the following configuration:
  * N = 4
@@ -62,25 +63,11 @@ import org.apache.kafka.common.utils.Bytes;
  * numSegments = 3
  * segmentInterval = 33
  * <p>
- * Now we define a few terms:
- * k_p == kafka partition
- * minTs == the minimum valid (unexpired) timestamp
- * logical segments == timestamp range of active segments
- * ls_id == logical segment ids
- * ps_id == physical segment ids, equal to the table partitions at a given point in time
- * <p>
- * || k_p | stream-time | minTs |   logical segments              |   ls_id    |  ps_id  ||
- * ||  0  |   16        |  0    | 0-32                            | 0          |  0
- * ||  1  |   88        |  0    | 0-32, 33-65, 66-98              | 0, 1, 2    | 1, 5, 9
- * ||  2  |   101       |  1    | 0-32, 33-65, 66-98, 99-131      | 0, 1, 2, 3 | 2, 6, 10
- * ||  3  |   168       |  68   | 66-98, 99-131, 132-164, 165-197 | 1, 2, 3, 4 |
- * <p>
- * From the example above, it should be clear that the table partition for a given windowed key
- * can be found by first determining the logical segment range that the timestamp lies in, and
- * converting this to a logical segment id by dividing the timestamp by the segment interval.
- * To get the physical segment id, and thus table partition, you must then multiply the logical
- * segment id by the number of total kafka partitions and then add the specific kafka partition
- * number to get the final table partition at a given time, for a given partition
+ * kafkaPartition | stream-time | minValidTs |    active segment time bounds   |  segmentId ||
+ *           0    |     16      |      0     | 0-32                            | 0          ||
+ *           1    |     88      |      0     | 0-32, 33-65, 66-98              | 0, 1, 2    ||
+ *           2    |     101     |      2     | 0-32, 33-65, 66-98, 99-131      | 0, 1, 2, 3 ||
+ *           3    |     169     |      70    | 66-98, 99-131, 132-164, 165-197 | 1, 2, 3, 4 ||
  * <p>
  * NOTE: because we are already dividing up the partition space into segments, we don't further
  * split things into true sub-partitions based on key. Each kafka partition still maps to multiple
@@ -89,11 +76,12 @@ import org.apache.kafka.common.utils.Bytes;
  * in time, this might result in uneven partitions and a need to further subdivide the partition
  * space.
  * <p>
- * For the time being, however, we simply recommend that users configure the number of segments
+ * For the time being, we simply recommend that users configure the number of segments
  * similarly to how they would configure the number of sub-partitions for a key-value store.
  */
 public class SegmentPartitioner implements ResponsivePartitioner<Stamped<Bytes>, SegmentPartition> {
 
+  private final long retentionPeriodMs;
   private final long segmentIntervalMs;
 
   public static class SegmentPartition {
@@ -111,10 +99,11 @@ public class SegmentPartitioner implements ResponsivePartitioner<Stamped<Bytes>,
   ) {
     final long segmentInterval =
         StoreUtil.computeSegmentInterval(params.retentionPeriod(), params.numSegments());
-    return new SegmentPartitioner(segmentInterval);
+    return new SegmentPartitioner(params.retentionPeriod(), segmentInterval);
   }
 
-  public SegmentPartitioner(final long segmentIntervalMs) {
+  public SegmentPartitioner(final long retentionPeriodMs, final long segmentIntervalMs) {
+    this.retentionPeriodMs = retentionPeriodMs;
     this.segmentIntervalMs = segmentIntervalMs;
   }
 
@@ -128,10 +117,6 @@ public class SegmentPartitioner implements ResponsivePartitioner<Stamped<Bytes>,
   @Override
   public SegmentPartition metadataTablePartition(final int kafkaPartition) {
     return new SegmentPartition(kafkaPartition, METADATA_SEGMENT_ID);
-  }
-
-  private int segmentId(final long windowTimestamp) {
-    return (int) (windowTimestamp / segmentIntervalMs);
   }
 
   /**
@@ -148,8 +133,9 @@ public class SegmentPartitioner implements ResponsivePartitioner<Stamped<Bytes>,
       final long timeFrom,
       final long timeTo
   ) {
-    // TODO
-    throw new UnsupportedOperationException("TODO");
+    return LongStream.range(segmentId(timeFrom), segmentId(timeTo))
+        .mapToObj(segmentId -> new SegmentPartition(kafkaPartition, segmentId))
+        .collect(Collectors.toList());
   }
 
   /**
@@ -166,8 +152,43 @@ public class SegmentPartitioner implements ResponsivePartitioner<Stamped<Bytes>,
       final long timeFrom,
       final long timeTo
   ) {
-    // TODO
-    throw new UnsupportedOperationException("TODO");
+    return LongStream.range(segmentId(timeFrom), segmentId(timeTo))
+        .boxed()
+        .sorted(Collections.reverseOrder())
+        .map(segmentId -> new SegmentPartition(kafkaPartition, segmentId))
+        .collect(Collectors.toList());
   }
 
+  public SegmentRoll rolledSegments(final long oldStreamTime, final long newStreamTime) {
+    final long oldMinValidTs = oldStreamTime - retentionPeriodMs + 1;
+    final long newMinValidTs = newStreamTime - retentionPeriodMs + 1;
+
+    // The lower bound is inclusive and the upper bound exclusive for #range, so we have to
+    // add 1 to the segment id for the range of segments to create
+    return new SegmentRoll(
+        LongStream.range(segmentId(oldMinValidTs), segmentId(newMinValidTs)).toArray(),
+        LongStream.range(segmentId(oldStreamTime) + 1, segmentId(newMinValidTs) + 1).toArray()
+    );
+  }
+
+  private int segmentId(final long windowTimestamp) {
+    return (int) (windowTimestamp / segmentIntervalMs);
+  }
+
+  public static class SegmentRoll {
+    public final long[] segmentsToExpire;
+    public final long[] segmentsToCreate;
+
+    public SegmentRoll(final long[] segmentsToExpire, final long[] segmentsToCreate) {
+      this.segmentsToExpire = segmentsToExpire;
+      this.segmentsToCreate = segmentsToCreate;
+    }
+
+    @Override
+    public String toString() {
+      return String.format("SegmentRoll will remove expired segments: '(%s)'"
+                               + " and creating new segments '(%s)'",
+                           Arrays.toString(segmentsToExpire), Arrays.toString(segmentsToCreate));
+    }
+  }
 }
