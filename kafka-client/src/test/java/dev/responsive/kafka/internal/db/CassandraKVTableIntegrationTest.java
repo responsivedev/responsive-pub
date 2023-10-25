@@ -19,11 +19,13 @@ package dev.responsive.kafka.internal.db;
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
+import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.db.spec.BaseTableSpec;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.OptionalInt;
 import java.util.concurrent.TimeoutException;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -59,8 +61,15 @@ public class CassandraKVTableIntegrationTest {
         .build();
     client = new CassandraClient(session, config);
     name = info.getTestMethod().orElseThrow().getName();
+    final var partitioner = SubPartitioner.create(
+        OptionalInt.empty(),
+        1,
+        name,
+        config,
+        name + "-changelog"
+    );
     table = CassandraKeyValueTable.create(
-        new BaseTableSpec(name), client);
+        new BaseTableSpec(name, partitioner), client);
   }
 
   @Test
@@ -94,7 +103,6 @@ public class CassandraKVTableIntegrationTest {
   @Test
   public void shouldReturnRangeKeysInLexicalOrder() {
     // Given:
-    final String table = name;
     final List<BoundStatement> inserts = List.of(
         this.table.insert(0, Bytes.wrap(new byte[]{0x0, 0x1}), new byte[]{0x1}, CURRENT_TS),
         this.table.insert(0, Bytes.wrap(new byte[]{0x1, 0x0}), new byte[]{0x1}, CURRENT_TS),

@@ -16,6 +16,7 @@
 
 package dev.responsive.kafka.internal.db;
 
+import static dev.responsive.kafka.internal.db.partitioning.TablePartitioner.defaultPartitioner;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.containsStringIgnoringCase;
@@ -73,21 +74,26 @@ class CassandraFactTableIntegrationTest {
     final String tableName = params.name().remoteName();
     final RemoteKVTable<BoundStatement> schema = client
         .factFactory()
-        .create(CassandraTableSpecFactory.fromKVParams(params));
+        .create(CassandraTableSpecFactory.fromKVParams(params, defaultPartitioner()));
 
     // When:
     final var token = schema.init(1);
     schema.init(2);
     client.execute(schema.setOffset(2, 10));
-    final MetadataRow metadata1 = schema.fetchOffset(1);
-    final MetadataRow metadata2 = schema.fetchOffset(2);
+    final long offset1 = schema.fetchOffset(1);
+    final long offset2 = schema.fetchOffset(2);
+
+    @SuppressWarnings("unchecked")
+    final long epoch1 = ((TableMetadata<Integer>) schema).fetchEpoch(1);
+    @SuppressWarnings("unchecked")
+    final long epoch2 = ((TableMetadata<Integer>) schema).fetchEpoch(2);
 
     // Then:
     assertThat(token, instanceOf(FactWriterFactory.class));
-    assertThat(metadata1.offset, is(-1L));
-    assertThat(metadata1.epoch, is(-1L));
-    assertThat(metadata2.offset, is(10L));
-    assertThat(metadata2.epoch, is(-1L));
+    assertThat(offset1, is(-1L));
+    assertThat(epoch1, is(-1L));
+    assertThat(offset2, is(10L));
+    assertThat(epoch2, is(-1L));
 
     // ensure it uses a separate table for metadata
     final var table = session.getMetadata()
@@ -108,7 +114,7 @@ class CassandraFactTableIntegrationTest {
 
     // When:
     client.factFactory()
-        .create(CassandraTableSpecFactory.fromKVParams(params));
+        .create(CassandraTableSpecFactory.fromKVParams(params, defaultPartitioner()));
 
     // Then:
     final var table = session.getMetadata()
@@ -135,7 +141,7 @@ class CassandraFactTableIntegrationTest {
 
     // When:
     client.factFactory()
-        .create(CassandraTableSpecFactory.fromKVParams(params));
+        .create(CassandraTableSpecFactory.fromKVParams(params, defaultPartitioner()));
 
     // Then:
     final var table = session.getMetadata()
@@ -154,7 +160,7 @@ class CassandraFactTableIntegrationTest {
     params = ResponsiveKeyValueParams.fact(storeName);
     final RemoteKVTable<BoundStatement> table = client
         .factFactory()
-        .create(CassandraTableSpecFactory.fromKVParams(params));
+        .create(CassandraTableSpecFactory.fromKVParams(params, defaultPartitioner()));
 
     table.init(1);
 
@@ -180,7 +186,7 @@ class CassandraFactTableIntegrationTest {
 
     final RemoteKVTable<BoundStatement> table = client
         .factFactory()
-        .create(CassandraTableSpecFactory.fromKVParams(params));
+        .create(CassandraTableSpecFactory.fromKVParams(params, defaultPartitioner()));
 
     table.init(1);
 

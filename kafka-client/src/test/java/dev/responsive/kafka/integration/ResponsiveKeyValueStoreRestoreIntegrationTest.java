@@ -63,6 +63,8 @@ import dev.responsive.kafka.internal.db.CassandraClientFactory;
 import dev.responsive.kafka.internal.db.DefaultCassandraClientFactory;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.mongo.MongoKVTable;
+import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
+import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.db.spec.BaseTableSpec;
 import dev.responsive.kafka.internal.stores.SchemaTypes.KVSchema;
 import dev.responsive.kafka.internal.utils.SessionUtil;
@@ -79,6 +81,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -124,6 +127,7 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
   @RegisterExtension
   static ResponsiveExtension EXTENSION = new ResponsiveExtension(BACKEND);
 
+  private static final int NUM_PARTITIONS = 1;
   private static final int MAX_POLL_MS = 5000;
   private static final String INPUT_TOPIC = "input";
   private static final String INPUT_TBL_TOPIC = "input_tbl";
@@ -147,12 +151,12 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
     this.admin = admin;
     final var result = admin.createTopics(
         List.of(
-            new NewTopic(inputTopic(), Optional.of(1), Optional.empty()),
-            new NewTopic(inputTblTopic(), Optional.of(1), Optional.empty())
+            new NewTopic(inputTopic(), Optional.of(NUM_PARTITIONS), Optional.empty()),
+            new NewTopic(inputTblTopic(), Optional.of(NUM_PARTITIONS), Optional.empty())
                 .configs(Map.of(
                     TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)),
-            new NewTopic(outputTopic(), Optional.of(1), Optional.empty()),
-            new NewTopic(outputJoined(), Optional.of(1), Optional.empty())
+            new NewTopic(outputTopic(), Optional.of(NUM_PARTITIONS), Optional.empty()),
+            new NewTopic(outputJoined(), Optional.of(NUM_PARTITIONS), Optional.empty())
         )
     );
     result.all().get();
@@ -180,14 +184,16 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
       // Wait for it to be processed
       waitTillFullyConsumed(input, Duration.ofSeconds(120));
 
-      // Make sure changelog is even w/ cassandra
-      final ResponsiveConfig config = ResponsiveConfig.responsiveConfig(properties);
-      final RemoteKVTable<?> table = remoteKVTable(type, defaultFactory, config);
-
-      final long cassandraOffset = table.fetchOffset(0).offset;
-      assertThat(cassandraOffset, greaterThan(0L));
       final TopicPartition changelog
           = new TopicPartition(name + "-" + aggName() + "-changelog", 0);
+
+      // Make sure changelog is even w/ cassandra
+      final ResponsiveConfig config = ResponsiveConfig.responsiveConfig(properties);
+      final RemoteKVTable<?> table = remoteKVTable(type, defaultFactory, config, changelog);
+
+      final long cassandraOffset = table.fetchOffset(0);
+      assertThat(cassandraOffset, greaterThan(0L));
+
       final List<ConsumerRecord<Long, Long>> changelogRecords
           = slurpPartition(changelog, properties);
       final long last = changelogRecords.get(changelogRecords.size() - 1).offset();
@@ -234,16 +240,17 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
       producer.flush();
       waitTillConsumedPast(input, endInput + 1, Duration.ofSeconds(30));
     }
+    final TopicPartition changelog = new TopicPartition(name + "-" + aggName() + "-changelog", 0);
 
     // Make sure changelog is ahead of remote
     final ResponsiveConfig config = ResponsiveConfig.responsiveConfig(properties);
     final RemoteKVTable<?> table;
 
-    table = remoteKVTable(type, defaultFactory, config);
+    table = remoteKVTable(type, defaultFactory, config, changelog);
 
-    final long remoteOffset = table.fetchOffset(0).offset;
+    final long remoteOffset = table.fetchOffset(0);
     assertThat(remoteOffset, greaterThan(0L));
-    final TopicPartition changelog = new TopicPartition(name + "-" + aggName() + "-changelog", 0);
+
     final long changelogOffset = admin.listOffsets(Map.of(changelog, OffsetSpec.latest())).all()
         .get()
         .get(changelog)
@@ -278,10 +285,12 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
     assertThat(firstOffset(changelog), greaterThan(0L));
   }
 
-  private RemoteKVTable<?> remoteKVTable(final KVSchema type,
-                                      final CassandraClientFactory defaultFactory,
-                                      final ResponsiveConfig config)
-      throws InterruptedException, TimeoutException {
+  private RemoteKVTable<?> remoteKVTable(
+      final KVSchema type,
+      final CassandraClientFactory defaultFactory,
+      final ResponsiveConfig config,
+      final TopicPartition changelog
+  ) throws InterruptedException, TimeoutException {
     final RemoteKVTable<?> table;
     if (EXTENSION.backend == StorageBackend.CASSANDRA) {
       final CassandraClient cassandraClient = defaultFactory.createClient(
@@ -290,12 +299,19 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
 
       switch (type) {
         case KEY_VALUE:
+          final SubPartitioner partitioner = SubPartitioner.create(
+              OptionalInt.empty(),
+              NUM_PARTITIONS,
+              aggName(),
+              config,
+              changelog.topic()
+          );
           table = cassandraClient.kvFactory()
-              .create(new BaseTableSpec(aggName()));
+              .create(new BaseTableSpec(aggName(), partitioner));
           break;
         case FACT:
           table = cassandraClient.factFactory()
-              .create(new BaseTableSpec(aggName()));
+              .create(new BaseTableSpec(aggName(), TablePartitioner.defaultPartitioner()));
           break;
         default:
           throw new IllegalArgumentException("Unexpected type " + type);
@@ -354,7 +370,8 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
       final KafkaClientSupplier clientSupplier,
       final CassandraClientFactory cassandraClientFactory,
       final KVSchema type,
-      final boolean truncateChangelog) {
+      final boolean truncateChangelog
+  ) {
     final Map<String, Object> properties = new HashMap<>(originals);
 
     final StreamsBuilder builder = new StreamsBuilder();

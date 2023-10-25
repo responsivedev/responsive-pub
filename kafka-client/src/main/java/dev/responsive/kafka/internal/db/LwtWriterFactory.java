@@ -21,6 +21,7 @@ import com.datastax.oss.driver.api.core.cql.BatchType;
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
+import java.util.List;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -133,7 +134,7 @@ public class LwtWriterFactory<K, P> extends WriterFactory<K, P> {
       final CassandraClient client,
       final TablePartitioner<K, P> partitioner,
       final int kafkaPartition,
-      final Iterable<P> tablePartitionsToInitialize
+      final List<P> tablePartitionsToInitialize
   ) {
     // attempt to reserve an epoch - all epoch reservations will be done
     // under the metadata table-partition and then "broadcast" to the other

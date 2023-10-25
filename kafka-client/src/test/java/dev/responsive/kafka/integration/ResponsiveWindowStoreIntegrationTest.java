@@ -32,7 +32,6 @@ import static org.apache.kafka.streams.StreamsConfig.NUM_STREAM_THREADS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
@@ -59,7 +58,6 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
-import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serdes.LongSerde;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -69,7 +67,6 @@ import org.apache.kafka.streams.kstream.StreamJoined;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
-import org.apache.kafka.streams.state.Stores;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -78,7 +75,7 @@ import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 @ExtendWith(ResponsiveExtension.class)
-public class ResponsiveWindowIntegrationTest {
+public class ResponsiveWindowStoreIntegrationTest {
 
   private static final String INPUT_TOPIC = "input";
   private static final String OTHER_TOPIC = "other";
@@ -113,33 +110,7 @@ public class ResponsiveWindowIntegrationTest {
     admin.deleteTopics(List.of(inputTopic(), otherTopic(), outputTopic()));
   }
 
-  // Remember to re-enable the tests below when the window stores are ready and we can remove this
   @Test
-  public void shouldThrowUnsupportedOperationException() {
-    final Duration windowSize = Duration.ofMillis(6_000L);
-
-    assertThrows(
-        UnsupportedOperationException.class,
-        () -> ResponsiveStores.windowStoreBuilder(
-            Stores.inMemoryWindowStore(name, windowSize, windowSize, false),
-            Serdes.String(), Serdes.String()
-        )
-    );
-
-    assertThrows(
-        UnsupportedOperationException.class,
-        () -> ResponsiveStores.windowStoreSupplier(name, windowSize, windowSize, false)
-    );
-
-    assertThrows(
-        UnsupportedOperationException.class,
-        () -> ResponsiveStores.windowMaterialized(ResponsiveWindowParams.window(
-            name,
-            Duration.ofMillis(5_000),
-            Duration.ofMillis(1_000))
-    ));
-  }
-
   public void shouldComputeWindowedAggregateWithRetention() throws InterruptedException {
     // Given:
     final Map<String, Object> properties = getMutableProperties();

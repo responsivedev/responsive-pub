@@ -17,6 +17,8 @@
 package dev.responsive.kafka.api;
 
 import static java.lang.Long.parseLong;
+import static java.util.Arrays.asList;
+import static org.hamcrest.Matchers.equalTo;
 
 import dev.responsive.kafka.api.stores.ResponsiveStores;
 import dev.responsive.kafka.api.stores.ResponsiveWindowParams;
@@ -68,11 +70,11 @@ public class ResponsiveTopologyTestDriverWindowStoreTest {
     bids.pipeInput("luna:18", 5L); // streamTime = 18   update <[10-19], 8>
     bids.pipeInput("luna:2", 6L); // streamTime = 18    no update (outside grace)
     bids.pipeInput("luna:23", 7L); // time = 23         update <[20-29], 7>
-    
+
     // Then:
     final List<Long> outputs = output.readValuesToList();
-    MatcherAssert.assertThat(outputs, Matchers.contains(
-       1L, 3L, 3L, 7L, 8L, 7L
+    MatcherAssert.assertThat(outputs, equalTo(
+       asList(1L, 3L, 3L, 7L, 8L, 7L)
     ));
     driver.close();
   }

@@ -35,6 +35,7 @@ import dev.responsive.kafka.internal.utils.Result;
 import dev.responsive.kafka.internal.utils.SessionClients;
 import dev.responsive.kafka.internal.utils.TableName;
 import java.util.Collection;
+import java.util.OptionalInt;
 import java.util.concurrent.TimeoutException;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
@@ -136,12 +137,18 @@ public class PartitionedOperations implements KeyValueOperations {
       final SessionClients sessionClients,
       final String changelogTopicName
   ) throws InterruptedException, TimeoutException {
+
     final int numChangelogPartitions =
         numPartitionsForKafkaTopic(sessionClients.admin(), changelogTopicName);
+
+    // TODO(agavra): write the actual remote partition count into cassandra
+    final OptionalInt actualRemoteCount = OptionalInt.empty();
+
     final TablePartitioner<Bytes, Integer> partitioner =
         params.schemaType() == SchemaTypes.KVSchema.FACT
         ? TablePartitioner.defaultPartitioner()
         : SubPartitioner.create(
+            actualRemoteCount,
             numChangelogPartitions,
             params.name().remoteName(),
             config,

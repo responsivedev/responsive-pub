@@ -143,7 +143,7 @@ public class SubPartitionIntegrationTest {
             simpleDslTopology(ResponsiveStores.materialized(
                 ResponsiveKeyValueParams.keyValue(storeName))), properties);
         final var serializer = new LongSerializer();
-        final var deserializer = new LongDeserializer();
+        final var deserializer = new LongDeserializer()
     ) {
       // When:
       // this will send one key to each virtual partition using the LongBytesHasher
@@ -163,21 +163,21 @@ public class SubPartitionIntegrationTest {
           true,
           properties);
       final String cassandraName = new TableName(storeName).remoteName();
+      final var partitioner = new SubPartitioner(16, new LongBytesHasher());
       final CassandraKeyValueTable table = CassandraKeyValueTable.create(
-          new BaseTableSpec(cassandraName), client);
+          new BaseTableSpec(cassandraName, partitioner), client);
 
       assertThat(client.numPartitions(cassandraName), is(OptionalInt.of(32)));
       assertThat(client.count(cassandraName, 0), is(2L));
       assertThat(client.count(cassandraName, 16), is(2L));
 
       // these store ValueAndTimestamp, so we need to just pluck the last 8 bytes
-      final var hasher = new SubPartitioner(16, new LongBytesHasher());
       for (long k = 0; k < 32; k++) {
         final var kBytes = Bytes.wrap(serializer.serialize("", k));
         assertThat(
             deserializer.deserialize("foo",
                 Arrays.copyOfRange(
-                    table.get(hasher.tablePartition((int) (k % 2), kBytes), kBytes,
+                    table.get(partitioner.tablePartition((int) (k % 2), kBytes), kBytes,
                               MIN_VALID_TS),
                     8,
                     16)),
@@ -219,27 +219,27 @@ public class SubPartitionIntegrationTest {
           true,
           properties);
       final String cassandraName = new TableName(storeName).remoteName();
+      final var partitioner = SubPartitioner.NO_SUBPARTITIONS;
       final CassandraFactTable table = CassandraFactTable.create(
-          new BaseTableSpec(cassandraName), client);
+          new BaseTableSpec(cassandraName, partitioner), client);
 
-      final var meta0 = table.fetchOffset(0);
-      final var meta1 = table.fetchOffset(1);
+      final var offset0 = table.fetchOffset(0);
+      final var offset1 = table.fetchOffset(1);
 
-      assertThat(meta0.offset, is(notNullValue()));
-      assertThat(meta1.offset, is(notNullValue()));
+      assertThat(offset0, is(notNullValue()));
+      assertThat(offset1, is(notNullValue()));
 
       // throws because it doesn't exist
-      Assertions.assertEquals(table.fetchOffset(2).offset, NO_COMMITTED_OFFSET);
+      Assertions.assertEquals(table.fetchOffset(2), NO_COMMITTED_OFFSET);
 
       // these store ValueAndTimestamp, so we need to just pluck the last 8 bytes
-      final var hasher = SubPartitioner.NO_SUBPARTITIONS;
       for (long k = 0; k < 32; k++) {
         final var kBytes = Bytes.wrap(serializer.serialize("", k));
         assertThat(
             deserializer.deserialize("foo",
                 Arrays.copyOfRange(
                     table.get(
-                        hasher.tablePartition((int) (k % 2), kBytes),
+                        partitioner.tablePartition((int) (k % 2), kBytes),
                         kBytes,
                         MIN_VALID_TS),
                     8,

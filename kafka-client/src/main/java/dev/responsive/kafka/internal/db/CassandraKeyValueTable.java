@@ -444,11 +444,10 @@ public class CassandraKeyValueTable
 
   @Override
   public long approximateNumEntries(final int kafkaPartition) {
-    int numEntries = 0;
-    for (final int tablePartition : partitioner.allTablePartitions(kafkaPartition)) {
-      numEntries += client.count(name(), tablePartition);
-    }
-    return numEntries;
+    return partitioner.allTablePartitions(kafkaPartition)
+        .stream()
+        .mapToLong(tablePartition -> client.count(name(), tablePartition))
+        .sum();
   }
 
   private static KeyValue<Bytes, byte[]> rows(final Row row) {

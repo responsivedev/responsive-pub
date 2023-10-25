@@ -20,6 +20,7 @@ import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_DESIRED_N
 import static dev.responsive.kafka.api.config.ResponsiveConfig.SUBPARTITION_HASHER_CONFIG;
 
 import dev.responsive.kafka.api.config.ResponsiveConfig;
+import java.util.List;
 import java.util.OptionalInt;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -59,14 +60,12 @@ public class SubPartitioner implements TablePartitioner<Bytes, Integer> {
   private final Function<Bytes, Integer> hasher;
 
   public static SubPartitioner create(
+      final OptionalInt actualRemoteCount,
       final int numKafkaPartitions,
       final String tableName,
       final ResponsiveConfig config,
       final String changelogTopicName
   ) {
-    // TODO(agavra): write the actual remote partition count into cassandra
-    final OptionalInt actualRemoteCount = OptionalInt.empty();
-
     final int requestedNumSubPartitions = config.getInt(STORAGE_DESIRED_NUM_PARTITION_CONFIG);
 
     final int factor = (requestedNumSubPartitions == ResponsiveConfig.NO_SUBPARTITIONS)
@@ -111,7 +110,7 @@ public class SubPartitioner implements TablePartitioner<Bytes, Integer> {
    *
    * @return all subpartitions that this partition could map to
    */
-  public Iterable<Integer> allTablePartitions(final int kafkaPartition) {
+  public List<Integer> allTablePartitions(final int kafkaPartition) {
     return IntStream
         .range(first(kafkaPartition), first(kafkaPartition) + factor)
         .boxed()

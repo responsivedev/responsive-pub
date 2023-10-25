@@ -16,15 +16,19 @@
 
 package dev.responsive.kafka.internal.db.partitioning;
 
+import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_DESIRED_NUM_PARTITION_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.SUBPARTITION_HASHER_CONFIG;
+import static dev.responsive.kafka.testutils.IntegrationTestUtils.dummyConfig;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.is;
 
+import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.utils.TableName;
 import java.util.List;
+import java.util.Map;
 import java.util.OptionalInt;
-import java.util.stream.Collectors;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Bytes;
 import org.hamcrest.Matchers;
@@ -62,7 +66,7 @@ class SubPartitionerTest {
     final var partitioner = new SubPartitioner(3, SINGLE_BYTE_HASHER);
 
     // When:
-    final List<Integer> result = partitioner.allTablePartitions(2).boxed().collect(Collectors.toList());
+    final List<Integer> result = partitioner.allTablePartitions(2);
 
     // Then:
     assertThat(result, contains(6, 7, 8));
@@ -79,10 +83,9 @@ class SubPartitionerTest {
     final SubPartitioner subPartitioner = SubPartitioner.create(
         actualRemoteCount,
         kafkaPartitions,
-        desiredPartitions,
-        NAME,
-        CHANGELOG_TOPIC_NAME,
-        SINGLE_BYTE_HASHER
+        NAME.remoteName(),
+        responsiveConfig(desiredPartitions),
+        CHANGELOG_TOPIC_NAME
     );
 
     // Then:
@@ -100,10 +103,9 @@ class SubPartitionerTest {
     final SubPartitioner subPartitioner = SubPartitioner.create(
         actualRemoteCount,
         kafkaPartitions,
-        desiredPartitions,
-        NAME,
-        CHANGELOG_TOPIC_NAME,
-        SINGLE_BYTE_HASHER
+        NAME.remoteName(),
+        responsiveConfig(desiredPartitions),
+        CHANGELOG_TOPIC_NAME
     );
 
     // Then:
@@ -123,10 +125,9 @@ class SubPartitionerTest {
         () -> SubPartitioner.create(
             actualRemoteCount,
             kafkaPartitions,
-            desiredPartitions,
-            NAME,
-            CHANGELOG_TOPIC_NAME,
-            SINGLE_BYTE_HASHER
+            NAME.remoteName(),
+            responsiveConfig(desiredPartitions),
+            CHANGELOG_TOPIC_NAME
         )
     );
 
@@ -139,6 +140,13 @@ class SubPartitionerTest {
             containsString("already initialized with 100 partitions")
         )
     );
+  }
+
+  private ResponsiveConfig responsiveConfig(final int desiredNumSubPartitions) {
+    return dummyConfig(Map.of(
+        STORAGE_DESIRED_NUM_PARTITION_CONFIG, desiredNumSubPartitions,
+        SUBPARTITION_HASHER_CONFIG, SINGLE_BYTE_HASHER.getClass().getName()
+    ));
   }
 
 }

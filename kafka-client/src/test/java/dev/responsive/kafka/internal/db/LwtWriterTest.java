@@ -139,7 +139,7 @@ class LwtWriterTest {
   private static class TestRemoteTable extends CassandraKeyValueTable {
 
     public TestRemoteTable(final String tableName, final CassandraClient client) {
-      super(tableName, client, null, null, null, null, null, null);
+      super(tableName, client, null, null, null, null, null, null, null, null, null, null);
     }
 
     @Override
