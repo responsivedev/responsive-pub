@@ -18,11 +18,9 @@ package dev.responsive.kafka.internal.db;
 
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.kafka.internal.clients.TTDCassandraClient;
-import dev.responsive.kafka.internal.stores.RemoteWriteResult;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
 import org.apache.kafka.common.utils.Time;
 
+// TODO: use mock return values instead of null here and in the KV/Window child classes
 public abstract class TTDTable<K> implements RemoteTable<K, BoundStatement> {
 
   protected final TTDCassandraClient client;
@@ -39,12 +37,11 @@ public abstract class TTDTable<K> implements RemoteTable<K, BoundStatement> {
    */
   public abstract long count();
 
-  @SuppressWarnings("unchecked") // see comment on RemoteTable#init
   @Override
   public WriterFactory<K, Integer> init(
       final int kafkaPartition
   ) {
-    return new TTDWriterFactory<>(this, kafkaPartition);
+    return new TTDWriterFactory<>(this);
   }
 
   @Override

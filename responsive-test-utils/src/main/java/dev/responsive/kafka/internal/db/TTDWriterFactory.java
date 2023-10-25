@@ -16,45 +16,42 @@
 
 package dev.responsive.kafka.internal.db;
 
-import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
 public class TTDWriterFactory<K> extends WriterFactory<K, Integer> {
 
-  private final RemoteTable<K, BoundStatement> table;
-  private final int kafkaPartition;
+  private final TTDTable<K> table;
+  private final int dummyPartition = 0; // there are no real partitions in the TTD
 
   public TTDWriterFactory(
-      final RemoteTable<K, BoundStatement> table,
-      final int kafkaPartition
+      final TTDTable<K> table
   ) {
-    super(String.format("FactWriterFactory [%s-%d] ", table.name(), kafkaPartition));
+    super(String.format("TTDWriterFactory [%s] ", table.name()));
     this.table = table;
-    this.kafkaPartition = kafkaPartition;
   }
 
   @Override
   public RemoteWriter<K, Integer> createWriter(final Integer tablePartition) {
-    return null;
+    return new TTDWriter<>(table, tablePartition);
   }
 
   @Override
   public String tableName() {
-    return null;
+    return table.name();
   }
 
   @Override
   protected Integer tablePartitionForKey(final K key) {
-    return 0;
+    return dummyPartition;
   }
 
   @SuppressWarnings("ResultOfMethodCallIgnored")
   @Override
   public RemoteWriteResult<Integer> setOffset(final long offset) {
-    table.setOffset(partition, offset);
-    return RemoteWriteResult.success(partition);
+    table.setOffset(dummyPartition, offset);
+    return RemoteWriteResult.success(dummyPartition);
   }
 
   @Override
@@ -64,28 +61,28 @@ public class TTDWriterFactory<K> extends WriterFactory<K, Integer> {
 
   private static class TTDWriter<K> implements RemoteWriter<K, Integer> {
     private final TTDTable<K> table;
-    private final int partition;
+    private final int tablePartition;
 
-    public TTDWriter(final TTDTable<K> table, final int partition) {
+    public TTDWriter(final TTDTable<K> table, final int tablePartition) {
       this.table = table;
-      this.partition = partition;
+      this.tablePartition = tablePartition;
     }
 
     @SuppressWarnings("ResultOfMethodCallIgnored")
     @Override
     public void insert(final K key, final byte[] value, long epochMillis) {
-      table.insert(partition, key, value, epochMillis);
+      table.insert(tablePartition, key, value, epochMillis);
     }
 
     @SuppressWarnings("ResultOfMethodCallIgnored")
     @Override
     public void delete(final K key) {
-      table.delete(partition, key);
+      table.delete(tablePartition, key);
     }
 
     @Override
     public CompletionStage<RemoteWriteResult<Integer>> flush() {
-      return CompletableFuture.completedStage(RemoteWriteResult.success(partition));
+      return CompletableFuture.completedStage(RemoteWriteResult.success(tablePartition));
     }
 
   }

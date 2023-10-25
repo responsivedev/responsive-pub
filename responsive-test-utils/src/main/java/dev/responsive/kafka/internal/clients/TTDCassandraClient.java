@@ -27,17 +27,16 @@ import com.datastax.oss.driver.api.core.cql.Statement;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.RemoteWindowedTable;
-import dev.responsive.kafka.internal.db.TableCache;
-import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistry;
 import dev.responsive.kafka.internal.db.TTDKeyValueTable;
 import dev.responsive.kafka.internal.db.TTDWindowedTable;
+import dev.responsive.kafka.internal.db.TableCache;
+import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistry;
 import dev.responsive.kafka.internal.utils.RemoteMonitor;
 import java.time.Duration;
 import java.util.OptionalInt;
 import java.util.concurrent.CompletionStage;
 import org.apache.kafka.common.utils.Time;
 
-// TODO: use mock return values instead of null here and in the TTD schemas
 public class TTDCassandraClient extends CassandraClient {
   private final Time time;
   private final ResponsiveStoreRegistry storeRegistry = new ResponsiveStoreRegistry();
