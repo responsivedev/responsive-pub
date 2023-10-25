@@ -103,13 +103,19 @@ public abstract class WriterFactory<K, P> {
             );
       }
 
+      final RemoteWriteResult<P> result;
       try {
-        final RemoteWriteResult<P> result = partialResult.toCompletableFuture().get();
-        log.debug("Successfully flushed writes to table partition {}", result.tablePartition());
+        result = partialResult.toCompletableFuture().get();
       } catch (final InterruptedException | ExecutionException e) {
         log.error("Unexpected exception while flushing to remote", e);
         throw new RuntimeException(logPrefix + "Failed while flushing to remote", e);
       }
+
+      if (!result.wasApplied()) {
+        log.info("Failed to flush writes to table partition {}", result.tablePartition());
+      }
+
+      log.debug("Successfully flushed writes to table partition {}", result.tablePartition());
 
       // this offset is only used for recovery, so it can (and should) be done only
       // if/when all the flushes above have completed successfully

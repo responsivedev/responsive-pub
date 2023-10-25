@@ -17,15 +17,15 @@
 package dev.responsive.kafka.internal.db;
 
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
-import dev.responsive.kafka.internal.db.partitioning.ResponsivePartitioner;
-import dev.responsive.kafka.internal.db.partitioning.ResponsivePartitioner.DefaultPartitioner;
+import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
+import dev.responsive.kafka.internal.db.partitioning.TablePartitioner.DefaultPartitioner;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
 
 public class FactWriterFactory<K> extends WriterFactory<K, Integer> {
 
   private final RemoteTable<K, BoundStatement> table;
   private final CassandraClient client;
-  private final ResponsivePartitioner<K, Integer> partitioner;
+  private final TablePartitioner<K, Integer> partitioner;
   private final int kafkaPartition;
 
   public FactWriterFactory(

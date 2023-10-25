@@ -48,7 +48,7 @@ import org.apache.kafka.common.utils.Utils;
  * function and mods by {@code n}, adding that value to the base
  * mapped partition.
  */
-public class SubPartitioner implements ResponsivePartitioner<Bytes, Integer> {
+public class SubPartitioner implements TablePartitioner<Bytes, Integer> {
 
   public static final SubPartitioner NO_SUBPARTITIONS = new SubPartitioner(1, k -> 0);
 

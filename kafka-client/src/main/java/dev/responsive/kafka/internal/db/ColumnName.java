@@ -43,7 +43,6 @@ public enum ColumnName {
 
   static final Bytes METADATA_KEY
       = Bytes.wrap("_metadata".getBytes(StandardCharsets.UTF_8));
-  public static final long METADATA_SEGMENT_ID = -1L;
   static final long METADATA_TS = -1L;
   private final String column;
   private final String bind;

@@ -597,6 +597,7 @@ public class CassandraWindowedTable implements
       final int kafkaPartition,
       final Stamped<Bytes> key
   ) {
+    pendingFlushStreamTime = Math.max(pendingFlushStreamTime, key.stamp);
     final SegmentPartition segmentPartition = partitioner.tablePartition(kafkaPartition, key);
     return delete
         .bind()

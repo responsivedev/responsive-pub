@@ -20,7 +20,7 @@ import com.mongodb.client.MongoClient;
 import com.mongodb.client.model.WriteModel;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.TableCache;
-import dev.responsive.kafka.internal.db.partitioning.ResponsivePartitioner;
+import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.db.spec.BaseTableSpec;
 import java.util.concurrent.TimeoutException;
 import org.bson.Document;
@@ -37,7 +37,7 @@ public class ResponsiveMongoClient {
 
   public RemoteKVTable<WriteModel<Document>> kvTable(final String name)
       throws InterruptedException, TimeoutException {
-    return cache.create(new BaseTableSpec(name, ResponsivePartitioner.defaultPartitioner()));
+    return cache.create(new BaseTableSpec(name, TablePartitioner.defaultPartitioner()));
   }
 
   public void close() {

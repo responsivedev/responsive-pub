@@ -21,8 +21,8 @@ import com.mongodb.client.model.WriteModel;
 import dev.responsive.kafka.internal.db.RemoteTable;
 import dev.responsive.kafka.internal.db.RemoteWriter;
 import dev.responsive.kafka.internal.db.WriterFactory;
-import dev.responsive.kafka.internal.db.partitioning.ResponsivePartitioner;
-import dev.responsive.kafka.internal.db.partitioning.ResponsivePartitioner.DefaultPartitioner;
+import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
+import dev.responsive.kafka.internal.db.partitioning.TablePartitioner.DefaultPartitioner;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
 import java.util.List;
 import org.bson.Document;
@@ -31,7 +31,7 @@ public class MongoWriterFactory<K> extends WriterFactory<K, Integer> {
 
   private final RemoteTable<K, WriteModel<Document>> table;
   private final MongoCollection<Document> genericCollection;
-  private final ResponsivePartitioner<K, Integer> partitioner;
+  private final TablePartitioner<K, Integer> partitioner;
   private final int kafkaPartition;
 
   public MongoWriterFactory(

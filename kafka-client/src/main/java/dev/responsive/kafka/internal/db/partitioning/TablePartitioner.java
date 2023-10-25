@@ -16,7 +16,7 @@
 
 package dev.responsive.kafka.internal.db.partitioning;
 
-public interface ResponsivePartitioner<K, P> {
+public interface TablePartitioner<K, P> {
 
   /**
    * @param kafkaPartition  the original partition in kafka
@@ -31,7 +31,7 @@ public interface ResponsivePartitioner<K, P> {
    */
   P metadataTablePartition(final int kafkaPartition);
 
-  static <K> ResponsivePartitioner<K, Integer> defaultPartitioner() {
+  static <K> TablePartitioner<K, Integer> defaultPartitioner() {
     return new DefaultPartitioner<>();
   }
 
@@ -41,7 +41,7 @@ public interface ResponsivePartitioner<K, P> {
    *
    * @param <K> the record key type
    */
-  class DefaultPartitioner<K> implements ResponsivePartitioner<K, Integer> {
+  class DefaultPartitioner<K> implements TablePartitioner<K, Integer> {
 
     @Override
     public Integer tablePartition(final int kafkaPartition, final K key) {

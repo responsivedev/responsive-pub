@@ -16,8 +16,6 @@
 
 package dev.responsive.kafka.internal.db.partitioning;
 
-import static dev.responsive.kafka.internal.db.ColumnName.METADATA_SEGMENT_ID;
-
 import dev.responsive.kafka.api.stores.ResponsiveWindowParams;
 import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.SegmentPartition;
 import dev.responsive.kafka.internal.utils.Stamped;
@@ -37,7 +35,7 @@ import org.apache.kafka.common.utils.Bytes;
  * other timeseries and/or ttl types of state stores.
  * <p>
  * Each segment covers a specific time range in milliseconds. If t_n is the start time of the
- * nth segment, then that segment covers all timestamps from t_s - t_s + segmentInterval.
+ * nth segment, then that segment covers all timestamps from t_s -> t_s + segmentInterval.
  * For each segment id there are N physical table partitions, where N is the number of kafka
  * partitions. Each physical state store instance should only be interacting with a single kafka
  * partition, but will generally have multiple active segments for each kafka partition.
@@ -79,7 +77,9 @@ import org.apache.kafka.common.utils.Bytes;
  * For the time being, we simply recommend that users configure the number of segments
  * similarly to how they would configure the number of sub-partitions for a key-value store.
  */
-public class SegmentPartitioner implements ResponsivePartitioner<Stamped<Bytes>, SegmentPartition> {
+public class SegmentPartitioner implements TablePartitioner<Stamped<Bytes>, SegmentPartition> {
+
+  public static final long METADATA_SEGMENT_ID = -1L;
 
   private final long retentionPeriodMs;
   private final long segmentIntervalMs;
@@ -109,8 +109,6 @@ public class SegmentPartitioner implements ResponsivePartitioner<Stamped<Bytes>,
 
   @Override
   public SegmentPartition tablePartition(final int kafkaPartition, final Stamped<Bytes> key) {
-    // We don't subdivide the kafka partition any further since it's assumed there are
-    // sufficient segments to get good parallelism, but we could make both configurable
     return new SegmentPartition(kafkaPartition, segmentId(key.stamp));
   }
 

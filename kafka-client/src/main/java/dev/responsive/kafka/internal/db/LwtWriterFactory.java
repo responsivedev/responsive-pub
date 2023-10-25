@@ -19,7 +19,7 @@ package dev.responsive.kafka.internal.db;
 import com.datastax.oss.driver.api.core.cql.BatchStatementBuilder;
 import com.datastax.oss.driver.api.core.cql.BatchType;
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
-import dev.responsive.kafka.internal.db.partitioning.ResponsivePartitioner;
+import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.slf4j.Logger;
@@ -32,7 +32,7 @@ public class LwtWriterFactory<K, P> extends WriterFactory<K, P> {
   private final RemoteTable<K, BoundStatement> table;
   private final TableMetadata<P> tableMetadata;
   private final CassandraClient client;
-  private final ResponsivePartitioner<K, P> partitioner;
+  private final TablePartitioner<K, P> partitioner;
   private final int kafkaPartition;
   private final long epoch;
 
@@ -40,7 +40,7 @@ public class LwtWriterFactory<K, P> extends WriterFactory<K, P> {
       final RemoteTable<K, BoundStatement> table,
       final TableMetadata<P> tableMetadata,
       final CassandraClient client,
-      final ResponsivePartitioner<K, P> partitioner,
+      final TablePartitioner<K, P> partitioner,
       final int kafkaPartition,
       final long epoch
   ) {
@@ -131,7 +131,7 @@ public class LwtWriterFactory<K, P> extends WriterFactory<K, P> {
       final RemoteTable<K, BoundStatement> table,
       final TableMetadata<P> tableMetadata,
       final CassandraClient client,
-      final ResponsivePartitioner<K, P> partitioner,
+      final TablePartitioner<K, P> partitioner,
       final int kafkaPartition,
       final Iterable<P> tablePartitionsToInitialize
   ) {

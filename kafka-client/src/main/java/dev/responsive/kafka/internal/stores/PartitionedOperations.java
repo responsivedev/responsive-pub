@@ -28,8 +28,8 @@ import dev.responsive.kafka.internal.db.BytesKeySpec;
 import dev.responsive.kafka.internal.db.CassandraTableSpecFactory;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.WriterFactory;
-import dev.responsive.kafka.internal.db.partitioning.ResponsivePartitioner;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
+import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
 import dev.responsive.kafka.internal.utils.Result;
 import dev.responsive.kafka.internal.utils.SessionClients;
@@ -49,8 +49,8 @@ public class PartitionedOperations implements KeyValueOperations {
   @SuppressWarnings("rawtypes")
   private final InternalProcessorContext context;
   private final ResponsiveKeyValueParams params;
-  private final BytesKeySpec keySpec;
   private final RemoteKVTable<?> table;
+  private final BytesKeySpec keySpec;
   private final CommitBuffer<Bytes, ?> buffer;
   private final TopicPartition changelog;
 
@@ -120,8 +120,8 @@ public class PartitionedOperations implements KeyValueOperations {
     return new PartitionedOperations(
         context,
         params,
-        keySpec,
         table,
+        keySpec,
         buffer,
         changelog,
         storeRegistry,
@@ -138,9 +138,9 @@ public class PartitionedOperations implements KeyValueOperations {
   ) throws InterruptedException, TimeoutException {
     final int numChangelogPartitions =
         numPartitionsForKafkaTopic(sessionClients.admin(), changelogTopicName);
-    final ResponsivePartitioner<Bytes, Integer> partitioner =
+    final TablePartitioner<Bytes, Integer> partitioner =
         params.schemaType() == SchemaTypes.KVSchema.FACT
-        ? ResponsivePartitioner.defaultPartitioner()
+        ? TablePartitioner.defaultPartitioner()
         : SubPartitioner.create(
             numChangelogPartitions,
             params.name().remoteName(),
@@ -170,8 +170,8 @@ public class PartitionedOperations implements KeyValueOperations {
   public PartitionedOperations(
       final InternalProcessorContext context,
       final ResponsiveKeyValueParams params,
-      final BytesKeySpec keySpec,
       final RemoteKVTable<?> table,
+      final BytesKeySpec keySpec,
       final CommitBuffer<Bytes, ?> buffer,
       final TopicPartition changelog,
       final ResponsiveStoreRegistry storeRegistry,
@@ -180,8 +180,8 @@ public class PartitionedOperations implements KeyValueOperations {
   ) {
     this.context = context;
     this.params = params;
-    this.keySpec = keySpec;
     this.table = table;
+    this.keySpec = keySpec;
     this.buffer = buffer;
     this.changelog = changelog;
     this.storeRegistry = storeRegistry;
@@ -209,6 +209,9 @@ public class PartitionedOperations implements KeyValueOperations {
     // but this is also necessary for correctness as
     // it is possible that the data is either uncommitted
     // or not yet pushed to the remote store
+    // TODO: strictly speaking we should be filtering the result by timestamp. However
+    //  the lifetime of entries in the CommitBuffer is generally likely to be much
+    //  smaller than the ttl, so it's probably ok to skip this check for now
     final Result<Bytes> result = buffer.get(key);
     if (result != null) {
       return result.isTombstone ? null : result.value;
@@ -232,13 +235,14 @@ public class PartitionedOperations implements KeyValueOperations {
 
   @Override
   public KeyValueIterator<Bytes, byte[]> reverseRange(final Bytes from, final Bytes to) {
+    // TODO: add a reverseRange API to RemoteKVTable (or add an iteration order param to #range)
     throw new UnsupportedOperationException("Not yet implemented.");
   }
 
   @Override
   public KeyValueIterator<Bytes, byte[]> all() {
     return new LocalRemoteKvIterator<>(
-        buffer.all(r -> r.timestamp > minValidTimestamp()),
+        buffer.all(),
         table.all(changelog.partition(), minValidTimestamp()),
         keySpec
     );
@@ -246,6 +250,7 @@ public class PartitionedOperations implements KeyValueOperations {
 
   @Override
   public KeyValueIterator<Bytes, byte[]> reverseAll() {
+    // TODO: add a reverseAll API to RemoteKVTable (or add an iteration order param to #all)
     throw new UnsupportedOperationException("Not yet implemented.");
   }
 
@@ -268,7 +273,8 @@ public class PartitionedOperations implements KeyValueOperations {
   }
 
   private long minValidTimestamp() {
-    return params
+    // TODO: unwrapping the ttl from Duration to millis is somewhat heavy for the hot path
+    return context.timestamp() - params
         .timeToLive()
         .map(ttl -> context.timestamp() - ttl.toMillis())
         .orElse(-1L);

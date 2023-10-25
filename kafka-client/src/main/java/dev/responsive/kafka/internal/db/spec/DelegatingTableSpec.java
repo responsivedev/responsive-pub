@@ -18,7 +18,7 @@ package dev.responsive.kafka.internal.db.spec;
 
 import com.datastax.oss.driver.api.querybuilder.schema.CreateTableWithOptions;
 import dev.responsive.kafka.internal.db.TableOperations;
-import dev.responsive.kafka.internal.db.partitioning.ResponsivePartitioner;
+import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import java.util.EnumSet;
 
 public abstract class DelegatingTableSpec implements CassandraTableSpec {
@@ -35,7 +35,7 @@ public abstract class DelegatingTableSpec implements CassandraTableSpec {
   }
 
   @Override
-  public ResponsivePartitioner<?, ?> partitioner() {
+  public TablePartitioner<?, ?> partitioner() {
     return delegate.partitioner();
   }
 

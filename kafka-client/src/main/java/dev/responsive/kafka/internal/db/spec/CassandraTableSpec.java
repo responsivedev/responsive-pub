@@ -19,7 +19,7 @@ package dev.responsive.kafka.internal.db.spec;
 import com.datastax.oss.driver.api.querybuilder.schema.CreateTableWithOptions;
 import dev.responsive.kafka.internal.db.RemoteTable;
 import dev.responsive.kafka.internal.db.TableOperations;
-import dev.responsive.kafka.internal.db.partitioning.ResponsivePartitioner;
+import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import java.util.EnumSet;
 
 /**
@@ -30,7 +30,7 @@ public interface CassandraTableSpec {
 
   String tableName();
 
-  ResponsivePartitioner<?, ?> partitioner();
+  TablePartitioner<?, ?> partitioner();
 
   /**
    * @return the set of operations that are not supported by this table

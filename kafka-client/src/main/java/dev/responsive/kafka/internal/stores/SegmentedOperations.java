@@ -55,8 +55,8 @@ public class SegmentedOperations implements WindowOperations {
   @SuppressWarnings("rawtypes")
   private final InternalProcessorContext context;
   private final ResponsiveWindowParams params;
-  private final StampedKeySpec keySpec;
   private final RemoteWindowedTable<?> table;
+  private final StampedKeySpec keySpec;
   private final CommitBuffer<Stamped<Bytes>, ?> buffer;
   private final TopicPartition changelog;
 
@@ -123,12 +123,12 @@ public class SegmentedOperations implements WindowOperations {
     storeRegistry.registerStore(registration);
 
     return new SegmentedOperations(
+        context,
         params,
-        keySpec,
         table,
+        keySpec,
         buffer,
         changelog,
-        context,
         storeRegistry,
         registration,
         sessionClients.restoreListener()
@@ -157,22 +157,22 @@ public class SegmentedOperations implements WindowOperations {
 
   @SuppressWarnings("rawtypes")
   public SegmentedOperations(
+      final InternalProcessorContext context,
       final ResponsiveWindowParams params,
-      final StampedKeySpec keySpec,
       final RemoteWindowedTable table,
+      final StampedKeySpec keySpec,
       final CommitBuffer<Stamped<Bytes>, ?> buffer,
       final TopicPartition changelog,
-      final InternalProcessorContext context,
       final ResponsiveStoreRegistry storeRegistry,
       final ResponsiveStoreRegistration registration,
       final ResponsiveRestoreListener restoreListener
   ) {
+    this.context = context;
     this.params = params;
-    this.keySpec = keySpec;
     this.table = table;
+    this.keySpec = keySpec;
     this.buffer = buffer;
     this.changelog = changelog;
-    this.context = context;
     this.storeRegistry = storeRegistry;
     this.registration = registration;
     this.restoreListener = restoreListener;

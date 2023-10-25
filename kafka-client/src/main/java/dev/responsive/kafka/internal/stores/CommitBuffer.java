@@ -314,6 +314,22 @@ public class CommitBuffer<K, P>
     return null;
   }
 
+  // TODO: remove all of the below methods that include a filter param, since
+  //  the predicate should be the same every time and could be consolidated
+  //  with the keySpec similar to keySpec#retain, for example
+  //  In addition to just reducing the API surface area and making things more
+  //  ergonomic by only having to define the filter predicate once, without
+  //  this fix the current system is highly error-prone, mainly because it is
+  //  easy to accidentally invoke one of the identical overloads that don't
+  //  accept a filter parameter by mistake
+  public Result<K> get(final K key, final Predicate<Result<K>> filter) {
+    final Result<K> result = buffer.getReader().get(key);
+    if (result != null && keySpec.retain(result.key) && filter.test(result)) {
+      return result;
+    }
+    return null;
+  }
+
   public KeyValueIterator<K, Result<K>> range(final K from, final K to) {
     return Iterators.kv(
         Iterators.filter(
@@ -326,12 +342,12 @@ public class CommitBuffer<K, P>
   public KeyValueIterator<K, Result<K>> range(
       final K from,
       final K to,
-      final Predicate<K> filter
+      final Predicate<Result<K>> filter
   ) {
     return Iterators.kv(
         Iterators.filter(
             buffer.getReader().subMap(from, to).entrySet().iterator(),
-            e -> keySpec.retain(e.getKey()) && filter.test(e.getKey())
+            e -> keySpec.retain(e.getKey()) && filter.test(e.getValue())
         ),
         result -> new KeyValue<>(result.getKey(), result.getValue())
     );
@@ -465,6 +481,10 @@ public class CommitBuffer<K, P>
     }
 
     final var flushResult = writerFactory.commitPendingFlush(pendingFlush, consumedOffset);
+    // TODO: we could/probably should move the result checking and handling inside the
+    //  #commitPendingFlush method, since we have to go back to the WriterFactory for the
+    //  specific error message anyways. It might also be nice to extract the exception
+    //  supplier so that different tables and/or writers can throw more specific errors
     if (!flushResult.wasApplied()) {
       throwFlushException(flushResult, consumedOffset);
     }
