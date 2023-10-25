@@ -28,6 +28,7 @@ import dev.responsive.kafka.internal.db.BytesKeySpec;
 import dev.responsive.kafka.internal.db.CassandraTableSpecFactory;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.WriterFactory;
+import dev.responsive.kafka.internal.db.partitioning.ResponsivePartitioner;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
 import dev.responsive.kafka.internal.utils.Result;
@@ -48,8 +49,9 @@ public class PartitionedOperations implements KeyValueOperations {
   @SuppressWarnings("rawtypes")
   private final InternalProcessorContext context;
   private final ResponsiveKeyValueParams params;
+  private final BytesKeySpec keySpec;
   private final RemoteKVTable<?> table;
-  private final CommitBuffer<Bytes> buffer;
+  private final CommitBuffer<Bytes, ?> buffer;
   private final TopicPartition changelog;
 
   private final ResponsiveStoreRegistry storeRegistry;
@@ -79,19 +81,10 @@ public class PartitionedOperations implements KeyValueOperations {
         context.taskId().partition()
     );
 
-    final int numChangelogPartitions =
-        numPartitionsForKafkaTopic(sessionClients.admin(), changelog.topic());
-    final SubPartitioner partitioner = SubPartitioner.create(
-      numChangelogPartitions,
-      params,
-      config,
-      changelog.topic()
-    );
-
     final RemoteKVTable<?> table;
     switch (sessionClients.storageBackend()) {
       case CASSANDRA:
-        table = createCassandra(params, sessionClients, partitioner);
+        table = createCassandra(params, config, sessionClients, changelog.topic());
         break;
       case MONGO_DB:
         table = createMongo(params, sessionClients);
@@ -100,21 +93,22 @@ public class PartitionedOperations implements KeyValueOperations {
         throw new IllegalStateException("Unexpected value: " + sessionClients.storageBackend());
     }
 
-    final WriterFactory<Bytes> writerFactory = table.init(changelog.partition());
+    final WriterFactory<Bytes, ?> writerFactory = table.init(changelog.partition());
 
     log.info("Remote table {} is available for querying.", name.remoteName());
 
-    final CommitBuffer<Bytes> buffer = CommitBuffer.from(
+    final BytesKeySpec keySpec = new BytesKeySpec();
+    final CommitBuffer<Bytes, ?> buffer = CommitBuffer.from(
         writerFactory,
         sessionClients,
         changelog,
-        new BytesKeySpec(),
+        keySpec,
         params.truncateChangelog(),
         params.name().kafkaName(),
         config
     );
 
-    final long restoreStartOffset = table.fetchOffset(changelog.partition()).offset;
+    final long restoreStartOffset = table.fetchOffset(changelog.partition());
     final var registration = new ResponsiveStoreRegistration(
         name.kafkaName(),
         changelog,
@@ -124,11 +118,12 @@ public class PartitionedOperations implements KeyValueOperations {
     storeRegistry.registerStore(registration);
 
     return new PartitionedOperations(
+        context,
         params,
+        keySpec,
         table,
         buffer,
         changelog,
-        context,
         storeRegistry,
         registration,
         sessionClients.restoreListener()
@@ -137,10 +132,22 @@ public class PartitionedOperations implements KeyValueOperations {
 
   private static RemoteKVTable<?> createCassandra(
       final ResponsiveKeyValueParams params,
-      final SessionClients clients,
-      final SubPartitioner partitioner
+      final ResponsiveConfig config,
+      final SessionClients sessionClients,
+      final String changelogTopicName
   ) throws InterruptedException, TimeoutException {
-    final var client = clients.cassandraClient();
+    final int numChangelogPartitions =
+        numPartitionsForKafkaTopic(sessionClients.admin(), changelogTopicName);
+    final ResponsivePartitioner<Bytes, Integer> partitioner =
+        params.schemaType() == SchemaTypes.KVSchema.FACT
+        ? ResponsivePartitioner.defaultPartitioner()
+        : SubPartitioner.create(
+            numChangelogPartitions,
+            params.name().remoteName(),
+            config,
+            changelogTopicName
+        );
+    final var client = sessionClients.cassandraClient();
     final var spec = CassandraTableSpecFactory.fromKVParams(params, partitioner);
     switch (params.schemaType()) {
       case KEY_VALUE:
@@ -161,20 +168,22 @@ public class PartitionedOperations implements KeyValueOperations {
 
   @SuppressWarnings("rawtypes")
   public PartitionedOperations(
-      final ResponsiveKeyValueParams params,
-      final RemoteKVTable table,
-      final CommitBuffer<Bytes> buffer,
-      final TopicPartition changelog,
       final InternalProcessorContext context,
+      final ResponsiveKeyValueParams params,
+      final BytesKeySpec keySpec,
+      final RemoteKVTable<?> table,
+      final CommitBuffer<Bytes, ?> buffer,
+      final TopicPartition changelog,
       final ResponsiveStoreRegistry storeRegistry,
       final ResponsiveStoreRegistration registration,
       final ResponsiveRestoreListener restoreListener
   ) {
+    this.context = context;
     this.params = params;
+    this.keySpec = keySpec;
     this.table = table;
     this.buffer = buffer;
     this.changelog = changelog;
-    this.context = context;
     this.storeRegistry = storeRegistry;
     this.registration = registration;
     this.restoreListener = restoreListener;
@@ -205,21 +214,20 @@ public class PartitionedOperations implements KeyValueOperations {
       return result.isTombstone ? null : result.value;
     }
 
-    final long minValidTs = params
-        .timeToLive()
-        .map(ttl -> context.timestamp() - ttl.toMillis())
-        .orElse(-1L);
-
     return table.get(
         changelog.partition(),
         key,
-        minValidTs
+        minValidTimestamp()
     );
   }
 
   @Override
   public KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
-    throw new UnsupportedOperationException("Not yet implemented.");
+    return new LocalRemoteKvIterator<>(
+        buffer.range(from, to),
+        table.range(changelog.partition(), from, to, minValidTimestamp()),
+        keySpec
+    );
   }
 
   @Override
@@ -229,7 +237,11 @@ public class PartitionedOperations implements KeyValueOperations {
 
   @Override
   public KeyValueIterator<Bytes, byte[]> all() {
-    throw new UnsupportedOperationException("Not yet implemented.");
+    return new LocalRemoteKvIterator<>(
+        buffer.all(r -> r.timestamp > minValidTimestamp()),
+        table.all(changelog.partition(), minValidTimestamp()),
+        keySpec
+    );
   }
 
   @Override
@@ -253,5 +265,12 @@ public class PartitionedOperations implements KeyValueOperations {
   @Override
   public void restoreBatch(final Collection<ConsumerRecord<byte[], byte[]>> records) {
     buffer.restoreBatch(records);
+  }
+
+  private long minValidTimestamp() {
+    return params
+        .timeToLive()
+        .map(ttl -> context.timestamp() - ttl.toMillis())
+        .orElse(-1L);
   }
 }

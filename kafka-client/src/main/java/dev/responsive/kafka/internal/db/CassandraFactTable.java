@@ -43,7 +43,7 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class CassandraFactTable implements RemoteKVTable<Integer, BoundStatement> {
+public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
 
   private static final Logger LOG = LoggerFactory.getLogger(
       CassandraFactTable.class);

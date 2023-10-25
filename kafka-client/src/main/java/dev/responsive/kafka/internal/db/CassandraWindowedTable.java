@@ -62,8 +62,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class CassandraWindowedTable implements
-    RemoteWindowedTable<SegmentPartition, BoundStatement>,
-    RemoteLwtTable<Stamped<Bytes>, SegmentPartition, BoundStatement> {
+    RemoteWindowedTable<BoundStatement>, TableMetadata<SegmentPartition> {
 
   private static final Logger LOG = LoggerFactory.getLogger(CassandraWindowedTable.class);
 
@@ -148,9 +147,13 @@ public class CassandraWindowedTable implements
             .build()
     );
 
-    // Note: it is safe to ignore the epoch here as we should only ever drop a segment
-    // after a successful flush that advanced the stream-time such that this segment is
-    // permanently expired
+    // TODO: explore how to guard against accidental resurrection of deleted segments by
+    //  lagging StreamThreads that haven't yet realized they have been fenced.
+    //  We may be able to do something more tricky once we preserve the stream-time in
+    //  the metadata partition/row, by tracking all created segments and making sure to
+    //  clean up any that are expired if/when we get fenced and have fetched the latest
+    //  persisted stream-time. Alternatively, we can just leave around tombstone partitions
+    // that are empty except for the metadata/epoch, rather than deleting them outright
     final var expireSegment = client.prepare(
         QueryBuilder.deleteFrom(name)
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
@@ -428,6 +431,7 @@ public class CassandraWindowedTable implements
 
     return LwtWriterFactory.initialize(
         this,
+        this,
         client,
         partitioner,
         kafkaPartition,
@@ -617,7 +621,9 @@ public class CassandraWindowedTable implements
       final long windowStart
   ) {
     final Stamped<Bytes> windowedKey = new Stamped<>(key, windowStart);
-    final SegmentPartition segmentPartition = partitioner.tablePartition(kafkaPartition, windowedKey);
+    final SegmentPartition segmentPartition =
+        partitioner.tablePartition(kafkaPartition, windowedKey);
+
     final BoundStatement get = fetchSingle
         .bind()
         .setInt(PARTITION_KEY.bind(), segmentPartition.partitionKey)
@@ -692,7 +698,7 @@ public class CassandraWindowedTable implements
       final long timeTo
   ) {
     final List<Iterator<Row>> segmentIterators = new LinkedList<>();
-    for (final SegmentPartition partition : partitioner.reverseRange(kafkaPartition, timeFrom, timeTo)) {
+    for (final var partition : partitioner.reverseRange(kafkaPartition, timeFrom, timeTo)) {
       final BoundStatement get = backFetch
           .bind()
           .setInt(PARTITION_KEY.bind(), partition.partitionKey)

@@ -16,7 +16,7 @@
 
 package dev.responsive.kafka.api;
 
-import static dev.responsive.kafka.internal.clients.TTDRestoreListener.mockRestoreListener;
+import static dev.responsive.kafka.internal.stores.TTDRestoreListener.mockRestoreListener;
 
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.clients.TTDCassandraClient;

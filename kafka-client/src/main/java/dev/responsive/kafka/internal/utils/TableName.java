@@ -47,6 +47,7 @@ public class TableName {
     return kafkaName;
   }
 
+  // TODO: rename this to tableName()
   public String remoteName() {
     return remoteName;
   }

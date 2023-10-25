@@ -31,7 +31,6 @@ import com.mongodb.client.model.UpdateOptions;
 import com.mongodb.client.model.Updates;
 import com.mongodb.client.model.WriteModel;
 import com.mongodb.client.result.UpdateResult;
-import dev.responsive.kafka.internal.db.MetadataRow;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.WriterFactory;
 import java.util.concurrent.ConcurrentHashMap;
@@ -44,7 +43,7 @@ import org.bson.codecs.configuration.CodecRegistry;
 import org.bson.codecs.pojo.PojoCodecProvider;
 import org.bson.types.ObjectId;
 
-public class MongoKVTable implements RemoteKVTable<Integer, WriteModel<Document>> {
+public class MongoKVTable implements RemoteKVTable<WriteModel<Document>> {
 
   private final String name;
   private final MongoCollection<KVDoc> collection;

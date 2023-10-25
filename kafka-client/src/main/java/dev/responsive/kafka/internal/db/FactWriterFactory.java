@@ -23,13 +23,13 @@ import dev.responsive.kafka.internal.stores.RemoteWriteResult;
 
 public class FactWriterFactory<K> extends WriterFactory<K, Integer> {
 
-  private final RemoteTable<K, Integer, BoundStatement> table;
+  private final RemoteTable<K, BoundStatement> table;
   private final CassandraClient client;
   private final ResponsivePartitioner<K, Integer> partitioner;
   private final int kafkaPartition;
 
   public FactWriterFactory(
-      final RemoteTable<K, Integer, BoundStatement> table,
+      final RemoteTable<K, BoundStatement> table,
       final CassandraClient client,
       final int kafkaPartition
   ) {

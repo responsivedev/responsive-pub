@@ -29,13 +29,13 @@ import org.bson.Document;
 
 public class MongoWriterFactory<K> extends WriterFactory<K, Integer> {
 
-  private final RemoteTable<K, Integer, WriteModel<Document>> table;
+  private final RemoteTable<K, WriteModel<Document>> table;
   private final MongoCollection<Document> genericCollection;
   private final ResponsivePartitioner<K, Integer> partitioner;
   private final int kafkaPartition;
 
   public MongoWriterFactory(
-      final RemoteTable<K, Integer, WriteModel<Document>> table,
+      final RemoteTable<K, WriteModel<Document>> table,
       final MongoCollection<Document> genericCollection,
       final int kafkaPartition
   ) {

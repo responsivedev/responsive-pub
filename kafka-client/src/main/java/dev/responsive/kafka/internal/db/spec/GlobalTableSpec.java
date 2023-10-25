@@ -18,9 +18,6 @@ package dev.responsive.kafka.internal.db.spec;
 
 import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
 import com.datastax.oss.driver.api.querybuilder.schema.CreateTableWithOptions;
-import dev.responsive.kafka.internal.db.partitioning.ResponsivePartitioner;
-import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
-import org.apache.kafka.common.utils.Bytes;
 
 public class GlobalTableSpec extends DelegatingTableSpec {
 

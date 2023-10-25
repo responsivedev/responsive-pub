@@ -31,6 +31,10 @@ public interface ResponsivePartitioner<K, P> {
    */
   P metadataTablePartition(final int kafkaPartition);
 
+  static <K> ResponsivePartitioner<K, Integer> defaultPartitioner() {
+    return new DefaultPartitioner<>();
+  }
+
   /**
    * A default, no-op partitioner that is one-to-one with the Kafka partition
    * and has only a single dimension to the partitioning key

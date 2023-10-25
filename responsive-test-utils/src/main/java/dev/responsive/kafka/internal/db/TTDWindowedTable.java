@@ -14,13 +14,12 @@
  * limitations under the License.
  */
 
-package dev.responsive.kafka.internal.stores;
+package dev.responsive.kafka.internal.db;
 
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.kafka.internal.clients.TTDCassandraClient;
-import dev.responsive.kafka.internal.db.CassandraClient;
-import dev.responsive.kafka.internal.db.RemoteWindowedTable;
 import dev.responsive.kafka.internal.db.spec.CassandraTableSpec;
+import dev.responsive.kafka.internal.stores.WindowStoreStub;
 import dev.responsive.kafka.internal.utils.Stamped;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueIterator;

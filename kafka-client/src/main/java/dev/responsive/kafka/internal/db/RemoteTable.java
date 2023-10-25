@@ -18,7 +18,7 @@ package dev.responsive.kafka.internal.db;
 
 import javax.annotation.CheckReturnValue;
 
-public interface RemoteTable<K, P, S> {
+public interface RemoteTable<K, S> {
 
   String name();
 
@@ -28,8 +28,18 @@ public interface RemoteTable<K, P, S> {
    *
    * @return a {@link WriterFactory} that gives the callee access
    * to run statements on {@code table}
+   *
+   * TODO: this is the only place where the partition type is needed so it
+   *  doesn't make sense to generic-ify the entire RemoteTable class just for
+   *  this. Of course it's also not ideal to leave the generic as a ? because we
+   *  now have to cast/suppress "unchecked" warnings everywhere this is used.
+   *  We should explore cleaning up partition types in general, and move this
+   *  this method out of RemoteTable either by creating the WriterFactory up
+   *  front and passing it in as a param, or possibly moving it to the
+   *  {@link TableMetadata} interface which is already parameterized by table
+   *  partition type
    */
-  WriterFactory<K, P> init(
+  WriterFactory<K, ?> init(
       final int kafkaPartition
   );
 

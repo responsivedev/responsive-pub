@@ -359,12 +359,12 @@ public class CommitBuffer<K, P>
   }
 
   public KeyValueIterator<K, Result<K>> all(
-      final Predicate<K> filter
+      final Predicate<Result<K>> filter
   ) {
     return Iterators.kv(
         Iterators.filter(
             buffer.getReader().entrySet().iterator(),
-            kv -> keySpec.retain(kv.getKey()) && filter.test(kv.getKey())),
+            kv -> keySpec.retain(kv.getKey()) && filter.test(kv.getValue())),
         result -> new KeyValue<>(result.getKey(), result.getValue())
     );
   }

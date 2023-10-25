@@ -27,7 +27,6 @@ import com.datastax.oss.driver.api.core.cql.SimpleStatement;
 import com.datastax.oss.driver.api.core.cql.Statement;
 import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
-import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.SegmentPartition;
 import dev.responsive.kafka.internal.utils.RemoteMonitor;
 import java.time.Duration;
 import java.util.OptionalInt;
@@ -48,10 +47,10 @@ public class CassandraClient {
   private final CqlSession session;
 
   private final ResponsiveConfig config;
-  private final TableCache<RemoteKVTable<Integer, BoundStatement>> kvFactory;
-  private final TableCache<RemoteKVTable<Integer, BoundStatement>> factFactory;
-  private final TableCache<RemoteWindowedTable<SegmentPartition, BoundStatement>> windowedFactory;
-  private final TableCache<RemoteKVTable<Integer, BoundStatement>> globalFactory;
+  private final TableCache<RemoteKVTable<BoundStatement>> kvFactory;
+  private final TableCache<RemoteKVTable<BoundStatement>> factFactory;
+  private final TableCache<RemoteWindowedTable<BoundStatement>> windowedFactory;
+  private final TableCache<RemoteKVTable<BoundStatement>> globalFactory;
 
   /**
    * @param session the Cassandra session, expected to be initialized
@@ -153,19 +152,19 @@ public class CassandraClient {
     session.close();
   }
 
-  public TableCache<RemoteKVTable<Integer, BoundStatement>> globalFactory() {
+  public TableCache<RemoteKVTable<BoundStatement>> globalFactory() {
     return globalFactory;
   }
 
-  public TableCache<RemoteKVTable<Integer, BoundStatement>> kvFactory() {
+  public TableCache<RemoteKVTable<BoundStatement>> kvFactory() {
     return kvFactory;
   }
 
-  public TableCache<RemoteKVTable<Integer, BoundStatement>> factFactory() {
+  public TableCache<RemoteKVTable<BoundStatement>> factFactory() {
     return factFactory;
   }
 
-  public TableCache<RemoteWindowedTable<SegmentPartition, BoundStatement>> windowedFactory() {
+  public TableCache<RemoteWindowedTable<BoundStatement>> windowedFactory() {
     return windowedFactory;
   }
 }

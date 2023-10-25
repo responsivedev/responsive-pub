@@ -19,7 +19,7 @@ package dev.responsive.kafka.internal.db;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.api.stores.ResponsiveWindowParams;
 import dev.responsive.kafka.internal.db.partitioning.ResponsivePartitioner;
-import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
+import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.SegmentPartition;
 import dev.responsive.kafka.internal.db.spec.BaseTableSpec;
 import dev.responsive.kafka.internal.db.spec.CassandraTableSpec;
 import dev.responsive.kafka.internal.db.spec.GlobalTableSpec;
@@ -42,14 +42,14 @@ public class CassandraTableSpecFactory {
 
   public static CassandraTableSpec globalSpec(
       final ResponsiveKeyValueParams params,
-      final ResponsivePartitioner<Bytes> partitioner
+      final ResponsivePartitioner<Bytes, Integer> partitioner
   ) {
     return new GlobalTableSpec(new BaseTableSpec(params.name().remoteName(), partitioner));
   }
 
   public static CassandraTableSpec fromKVParams(
       final ResponsiveKeyValueParams params,
-      final ResponsivePartitioner<Bytes> partitioner
+      final ResponsivePartitioner<Bytes, Integer> partitioner
   ) {
     CassandraTableSpec spec = new BaseTableSpec(params.name().remoteName(), partitioner);
 
@@ -66,7 +66,7 @@ public class CassandraTableSpecFactory {
 
   public static CassandraTableSpec fromWindowParams(
       final ResponsiveWindowParams params,
-      final ResponsivePartitioner<Stamped<Bytes>> partitioner
+      final ResponsivePartitioner<Stamped<Bytes>, SegmentPartition> partitioner
   ) {
     return new BaseTableSpec(params.name().remoteName(), partitioner);
   }

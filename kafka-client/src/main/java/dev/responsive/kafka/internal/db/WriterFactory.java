@@ -17,7 +17,6 @@
 package dev.responsive.kafka.internal.db;
 
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -66,11 +65,10 @@ public abstract class WriterFactory<K, P> {
   ) {
     final long offset = offset();
     return String.format(
-        "%sError while writing batch for table partition %s! Batch Offset: %d, Persisted Offset: %d",
-        logPrefix,
-        result.tablePartition(),
-        consumedOffset,
-        offset
+        "%sError while writing batch for table partition %s! "
+            + "Batch Offset: %d, Persisted Offset: %d",
+        logPrefix, result.tablePartition(),
+        consumedOffset, offset
     );
   }
 
@@ -98,15 +96,19 @@ public abstract class WriterFactory<K, P> {
       CompletionStage<RemoteWriteResult<P>> partialResult =
           CompletableFuture.completedStage(RemoteWriteResult.success(ignored));
       for (final RemoteWriter<K, P> writer : activeWriters.values()) {
-        partialResult = partialResult.thenCombine(writer.flush(), (one, two) -> !one.wasApplied() ? one : two);
+        partialResult =
+            partialResult.thenCombine(writer.flush(), (one, two) -> !one.wasApplied()
+                ? one
+                : two
+            );
       }
 
       try {
         final RemoteWriteResult<P> result = partialResult.toCompletableFuture().get();
-        log.debug("Succesfully flushed writes to table partition {}", result.tablePartition());
+        log.debug("Successfully flushed writes to table partition {}", result.tablePartition());
       } catch (final InterruptedException | ExecutionException e) {
         log.error("Unexpected exception while flushing to remote", e);
-        throw new RuntimeException(logPrefix+ "Failed while flushing to remote", e);
+        throw new RuntimeException(logPrefix + "Failed while flushing to remote", e);
       }
 
       // this offset is only used for recovery, so it can (and should) be done only

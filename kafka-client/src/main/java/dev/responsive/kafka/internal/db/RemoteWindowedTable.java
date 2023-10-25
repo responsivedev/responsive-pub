@@ -20,7 +20,7 @@ import dev.responsive.kafka.internal.utils.Stamped;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
-public interface RemoteWindowedTable<P, S> extends RemoteTable<Stamped<Bytes>, P, S> {
+public interface RemoteWindowedTable<S> extends RemoteTable<Stamped<Bytes>, S> {
 
   byte[] fetch(
       int kafkaPartition,

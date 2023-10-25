@@ -18,7 +18,6 @@ package dev.responsive.kafka.internal.db;
 
 import com.datastax.oss.driver.api.core.cql.BatchStatementBuilder;
 import com.datastax.oss.driver.api.core.cql.BatchType;
-import com.datastax.oss.driver.api.core.cql.BatchableStatement;
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.kafka.internal.db.partitioning.ResponsivePartitioner;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
@@ -30,14 +29,16 @@ public class LwtWriterFactory<K, P> extends WriterFactory<K, P> {
 
   private static final Logger LOG = LoggerFactory.getLogger(LwtWriterFactory.class);
 
-  private final RemoteLwtTable<K, P, BoundStatement> table;
+  private final RemoteTable<K, BoundStatement> table;
+  private final TableMetadata<P> tableMetadata;
   private final CassandraClient client;
   private final ResponsivePartitioner<K, P> partitioner;
   private final int kafkaPartition;
   private final long epoch;
 
   public LwtWriterFactory(
-      final RemoteLwtTable<K, P, BoundStatement> table,
+      final RemoteTable<K, BoundStatement> table,
+      final TableMetadata<P> tableMetadata,
       final CassandraClient client,
       final ResponsivePartitioner<K, P> partitioner,
       final int kafkaPartition,
@@ -48,6 +49,7 @@ public class LwtWriterFactory<K, P> extends WriterFactory<K, P> {
                       table.name(), kafkaPartition, epoch)
     );
     this.table = table;
+    this.tableMetadata = tableMetadata;
     this.client = client;
     this.partitioner = partitioner;
     this.kafkaPartition = kafkaPartition;
@@ -58,10 +60,10 @@ public class LwtWriterFactory<K, P> extends WriterFactory<K, P> {
   public RemoteWriter<K, P> createWriter(final P tablePartition) {
     return new LwtWriter<>(
         client,
+        () -> tableMetadata.ensureEpoch(tablePartition, epoch),
         table,
         kafkaPartition,
-        tablePartition,
-        epoch
+        tablePartition
     );
   }
 
@@ -100,7 +102,7 @@ public class LwtWriterFactory<K, P> extends WriterFactory<K, P> {
       final long consumedOffset
   ) {
     final var flushResult = super.commitPendingFlush(pendingFlush, consumedOffset);
-    table.advanceStreamTime(kafkaPartition, epoch);
+    tableMetadata.advanceStreamTime(kafkaPartition, epoch);
 
     // TODO: should #advanceStreamTime return a RemoteWriteResult as well?
     return flushResult;
@@ -113,20 +115,21 @@ public class LwtWriterFactory<K, P> extends WriterFactory<K, P> {
   ) {
     final String baseErrorMsg = super.failedFlushError(result, consumedOffset);
 
-    final long storedEpoch = table.fetchEpoch(result.tablePartition());
+    final long storedEpoch = tableMetadata.fetchEpoch(result.tablePartition());
 
     // this most likely is a fencing error, so make sure to add on all the information
     // that is relevant to fencing in the error message
-    return baseErrorMsg +
-        String.format(", Local Epoch: %s, Persisted Epoch: %d", epoch, storedEpoch);
+    return baseErrorMsg
+        + String.format(", Local Epoch: %s, Persisted Epoch: %d", epoch, storedEpoch);
   }
 
-  private BatchableStatement<?> fencingStatement(final P tablePartition) {
-    return table.ensureEpoch(tablePartition, epoch);
+  private BoundStatement fencingStatement(final P tablePartition) {
+    return tableMetadata.ensureEpoch(tablePartition, epoch);
   }
 
   public static <K, P> LwtWriterFactory<K, P> initialize(
-      final RemoteLwtTable<K, P, BoundStatement> table,
+      final RemoteTable<K, BoundStatement> table,
+      final TableMetadata<P> tableMetadata,
       final CassandraClient client,
       final ResponsivePartitioner<K, P> partitioner,
       final int kafkaPartition,
@@ -136,13 +139,13 @@ public class LwtWriterFactory<K, P> extends WriterFactory<K, P> {
     // under the metadata table-partition and then "broadcast" to the other
     // partitions
     final P metadataPartition = partitioner.metadataTablePartition(kafkaPartition);
-    final long epoch = table.fetchEpoch(metadataPartition) + 1;
+    final long epoch = tableMetadata.fetchEpoch(metadataPartition) + 1;
 
     for (final P tablePartition : tablePartitionsToInitialize) {
-      final var setEpoch = client.execute(table.reserveEpoch(tablePartition, epoch));
+      final var setEpoch = client.execute(tableMetadata.reserveEpoch(tablePartition, epoch));
 
       if (!setEpoch.wasApplied()) {
-        final long otherEpoch = table.fetchEpoch(tablePartition);
+        final long otherEpoch = tableMetadata.fetchEpoch(tablePartition);
         final var msg = String.format(
             "Could not initialize commit buffer [%s-%d] - attempted to claim epoch %d, "
                 + "but was fenced by a writer that claimed epoch %d on table partition %s",
@@ -160,6 +163,7 @@ public class LwtWriterFactory<K, P> extends WriterFactory<K, P> {
 
     return new LwtWriterFactory<>(
         table,
+        tableMetadata,
         client,
         partitioner,
         kafkaPartition,

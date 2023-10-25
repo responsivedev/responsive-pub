@@ -165,7 +165,7 @@ public class GlobalOperations implements KeyValueOperations {
       // of auto.commit.interval.ms) unlike the changelog equivalent which
       // always restores from scratch
       final int partition = rec.partition();
-      final long offset = table.fetchOffset(partition).offset;
+      final long offset = table.fetchOffset(partition);
       if (rec.offset() < offset) {
         // ignore records that have already been processed - race conditions
         // are not important since the worst case we'll have just not written

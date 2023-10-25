@@ -20,7 +20,6 @@ import static dev.responsive.kafka.internal.stores.CommitBuffer.MAX_BATCH_SIZE;
 
 import com.datastax.oss.driver.api.core.cql.BatchStatementBuilder;
 import com.datastax.oss.driver.api.core.cql.BatchType;
-import com.datastax.oss.driver.api.core.cql.BatchableStatement;
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.Statement;
 import com.datastax.oss.driver.shaded.guava.common.annotations.VisibleForTesting;
@@ -29,49 +28,50 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.function.Supplier;
 
 public class LwtWriter<K, P> implements RemoteWriter<K, P> {
 
-  private final RemoteLwtTable<K, P, BoundStatement> table;
   private final CassandraClient client;
+  private final Supplier<BoundStatement> ensureEpoch;
+  private final RemoteTable<K, BoundStatement> table;
   private final int kafkaPartition;
   private final P tablePartition;
-  private final long epoch;
   private final long maxBatchSize;
 
-  private final List<BatchableStatement<?>> statements;
+  private final List<BoundStatement> statements;
 
   public LwtWriter(
       final CassandraClient client,
-      final RemoteLwtTable<K, P, BoundStatement> table,
+      final Supplier<BoundStatement> ensureEpoch,
+      final RemoteTable<K, BoundStatement> table,
       final int kafkaPartition,
-      final P tablePartition,
-      final long epoch
+      final P tablePartition
   ) {
     this(
-        table,
         client,
+        ensureEpoch,
+        table,
         kafkaPartition,
         tablePartition,
-        epoch,
         MAX_BATCH_SIZE
     );
   }
 
   @VisibleForTesting
   LwtWriter(
-      final RemoteLwtTable<K, P, BoundStatement> table,
       final CassandraClient client,
+      final Supplier<BoundStatement> ensureEpoch,
+      final RemoteTable<K, BoundStatement> table,
       final int kafkaPartition,
       final P tablePartition,
-      final long epoch,
       final long maxBatchSize
   ) {
     this.client = client;
+    this.ensureEpoch = ensureEpoch;
     this.table = table;
     this.kafkaPartition = kafkaPartition;
     this.tablePartition = tablePartition;
-    this.epoch = epoch;
     this.maxBatchSize = maxBatchSize;
 
     statements = new ArrayList<>();
@@ -96,7 +96,7 @@ public class LwtWriter<K, P> implements RemoteWriter<K, P> {
     while (it.hasNext()) {
       final var builder = new BatchStatementBuilder(BatchType.UNLOGGED);
       builder.setIdempotence(true);
-      builder.addStatement(table.ensureEpoch(tablePartition, epoch));
+      builder.addStatement(ensureEpoch.get());
 
       for (int i = 0; i < maxBatchSize && it.hasNext(); i++) {
         builder.addStatement(it.next());

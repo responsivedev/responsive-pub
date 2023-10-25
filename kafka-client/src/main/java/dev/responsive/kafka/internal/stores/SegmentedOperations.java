@@ -23,7 +23,6 @@ import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadSt
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.changelogFor;
 
-import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.stores.ResponsiveWindowParams;
 import dev.responsive.kafka.internal.db.CassandraClient;
@@ -32,7 +31,6 @@ import dev.responsive.kafka.internal.db.RemoteWindowedTable;
 import dev.responsive.kafka.internal.db.StampedKeySpec;
 import dev.responsive.kafka.internal.db.WriterFactory;
 import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner;
-import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.SegmentPartition;
 import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
 import dev.responsive.kafka.internal.utils.Iterators;
 import dev.responsive.kafka.internal.utils.Result;
@@ -58,7 +56,7 @@ public class SegmentedOperations implements WindowOperations {
   private final InternalProcessorContext context;
   private final ResponsiveWindowParams params;
   private final StampedKeySpec keySpec;
-  private final RemoteWindowedTable<?, ?> table;
+  private final RemoteWindowedTable<?> table;
   private final CommitBuffer<Stamped<Bytes>, ?> buffer;
   private final TopicPartition changelog;
 
@@ -89,18 +87,18 @@ public class SegmentedOperations implements WindowOperations {
         changelogFor(storeContext, name.kafkaName(), false),
         context.taskId().partition()
     );
-    final SegmentPartitioner partitioner = SegmentPartitioner.create(params);
 
-    final RemoteWindowedTable<?, ?> table;
+    final RemoteWindowedTable<?> table;
     switch (sessionClients.storageBackend()) {
       case CASSANDRA:
-        table = createCassandra(params, sessionClients, partitioner);
+        table = createCassandra(params, sessionClients);
         break;
       case MONGO_DB:
         throw new UnsupportedOperationException("Window stores are not yet compatible with Mongo");
       default:
         throw new IllegalStateException("Unexpected value: " + sessionClients.storageBackend());
     }
+
     final WriterFactory<Stamped<Bytes>, ?> writerFactory = table.init(changelog.partition());
 
     log.info("Remote table {} is available for querying.", name.remoteName());
@@ -137,13 +135,14 @@ public class SegmentedOperations implements WindowOperations {
     );
   }
 
-  private static RemoteWindowedTable<SegmentPartition, BoundStatement> createCassandra(
+  private static RemoteWindowedTable<?> createCassandra(
       final ResponsiveWindowParams params,
-      final SessionClients clients,
-      final SegmentPartitioner partitioner
+      final SessionClients clients
   ) throws InterruptedException, TimeoutException {
 
     final CassandraClient client = clients.cassandraClient();
+    final SegmentPartitioner partitioner = SegmentPartitioner.create(params);
+
     final var spec = CassandraTableSpecFactory.fromWindowParams(params, partitioner);
 
     switch (params.schemaType()) {

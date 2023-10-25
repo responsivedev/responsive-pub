@@ -14,14 +14,11 @@
  * limitations under the License.
  */
 
-package dev.responsive.kafka.internal.stores;
+package dev.responsive.kafka.internal.db;
 
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.kafka.internal.clients.TTDCassandraClient;
-import dev.responsive.kafka.internal.db.MetadataRow;
-import dev.responsive.kafka.internal.db.RemoteTable;
-import dev.responsive.kafka.internal.db.RemoteWriter;
-import dev.responsive.kafka.internal.db.WriterFactory;
+import dev.responsive.kafka.internal.stores.RemoteWriteResult;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import org.apache.kafka.common.utils.Time;
@@ -42,61 +39,22 @@ public abstract class TTDTable<K> implements RemoteTable<K, BoundStatement> {
    */
   public abstract long count();
 
+  @SuppressWarnings("unchecked") // see comment on RemoteTable#init
   @Override
-  public WriterFactory<K> init(
+  public WriterFactory<K, Integer> init(
       final int kafkaPartition
   ) {
-    return (client, partition) -> new TTDWriter<>(this, partition);
+    return new TTDWriterFactory<>(this, kafkaPartition);
   }
 
   @Override
   public long fetchOffset(final int kafkaPartition) {
-    return new MetadataRow(0, 0);
-  }
-
-  @Override
-  public long offset(final int kafkaPartition) {
     return 0;
   }
 
   @Override
   public BoundStatement setOffset(final int kafkaPartition, final long offset) {
     return null;
-  }
-
-  private static class TTDWriter<K> implements RemoteWriter<K> {
-    private final TTDTable<K> table;
-    private final int partition;
-
-    public TTDWriter(final TTDTable<K> table, final int partition) {
-      this.table = table;
-      this.partition = partition;
-    }
-
-    @SuppressWarnings("ResultOfMethodCallIgnored")
-    @Override
-    public void insert(final K key, final byte[] value, long epochMillis) {
-      table.insert(partition, key, value, epochMillis);
-    }
-
-    @SuppressWarnings("ResultOfMethodCallIgnored")
-    @Override
-    public void delete(final K key) {
-      table.delete(partition, key);
-    }
-
-    @Override
-    public CompletionStage<RemoteWriteResult> flush() {
-      return CompletableFuture.completedStage(RemoteWriteResult.success(partition));
-    }
-
-    @SuppressWarnings("ResultOfMethodCallIgnored")
-    @Override
-    public RemoteWriteResult setOffset(final long offset) {
-      table.setOffset(partition, offset);
-      return RemoteWriteResult.success(partition);
-    }
-
   }
 
 }

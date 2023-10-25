@@ -35,7 +35,7 @@ public abstract class DelegatingTableSpec implements CassandraTableSpec {
   }
 
   @Override
-  public ResponsivePartitioner<?> partitioner() {
+  public ResponsivePartitioner<?, ?> partitioner() {
     return delegate.partitioner();
   }
 

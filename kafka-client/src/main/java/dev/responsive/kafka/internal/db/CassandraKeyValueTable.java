@@ -53,9 +53,8 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class CassandraKeyValueTable implements
-    RemoteKVTable<Integer, BoundStatement>,
-    RemoteLwtTable<Bytes, Integer, BoundStatement>{
+public class CassandraKeyValueTable
+    implements RemoteKVTable<BoundStatement>, TableMetadata<Integer> {
 
   private static final Logger LOG = LoggerFactory.getLogger(CassandraKeyValueTable.class);
   private static final String FROM_BIND = "fk";
@@ -266,6 +265,7 @@ public class CassandraKeyValueTable implements
     });
     final WriterFactory<Bytes, Integer> writerFactory = LwtWriterFactory.initialize(
         this,
+        this,
         client,
         partitioner,
         kafkaPartition,
@@ -311,6 +311,7 @@ public class CassandraKeyValueTable implements
       final long minValidTs
   ) {
     // TODO: need to scan a range of sub-partitions to correctly implement range
+    //  Note that we also need to make sure the ordering matches up with the CommitBuffer
     final int tablePartitionFrom = partitioner.tablePartition(kafkaPartition, from);
     final int tablePartitionTo = partitioner.tablePartition(kafkaPartition, from);
 
@@ -324,7 +325,8 @@ public class CassandraKeyValueTable implements
         .setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(minValidTs));
 
     final ResultSet result = client.execute(range);
-    return Iterators.kv(result.iterator(), CassandraKeyValueTable::rows);
+    final var ret = Iterators.kv(result.iterator(), CassandraKeyValueTable::rows);
+    throw new UnsupportedOperationException("Key range scans are not yet supported");
   }
 
   @Override
@@ -332,6 +334,9 @@ public class CassandraKeyValueTable implements
       final int kafkaPartition,
       final long minValidTs
   ) {
+    // TODO: need to scan a range of sub-partitions to correctly implement range
+    //  Note that we also need to make sure the ordering matches up with the CommitBuffer
+
     final ResultSet result = client.execute(QueryBuilder
         .selectFrom(name)
         .columns(DATA_KEY.column(), DATA_VALUE.column(), TIMESTAMP.column())
@@ -343,7 +348,8 @@ public class CassandraKeyValueTable implements
         .build()
     );
 
-    return Iterators.kv(result.iterator(), CassandraKeyValueTable::rows);
+    final var ret = Iterators.kv(result.iterator(), CassandraKeyValueTable::rows);
+    throw new UnsupportedOperationException("Key range scans are not yet supported");
   }
 
   @Override

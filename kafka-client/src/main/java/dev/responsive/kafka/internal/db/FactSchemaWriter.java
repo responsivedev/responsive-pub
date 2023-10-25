@@ -17,7 +17,6 @@
 package dev.responsive.kafka.internal.db;
 
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
-import com.datastax.oss.driver.api.core.cql.Statement;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
 import java.util.ArrayList;
 import java.util.List;
@@ -31,7 +30,7 @@ public class FactSchemaWriter<K> implements RemoteWriter<K, Integer> {
   private final RemoteTable<K, BoundStatement> table;
   private final int tablePartition;
 
-  private final List<Statement<?>> statements;
+  private final List<BoundStatement> statements;
 
   public FactSchemaWriter(
       final CassandraClient client,
@@ -75,7 +74,7 @@ public class FactSchemaWriter<K> implements RemoteWriter<K, Integer> {
     return result;
   }
 
-  private CompletionStage<RemoteWriteResult<Integer>> executeAsync(final Statement<?> statement) {
+  private CompletionStage<RemoteWriteResult<Integer>> executeAsync(final BoundStatement statement) {
     return client.executeAsync(statement)
         .thenApply(resp -> RemoteWriteResult.of(tablePartition, resp));
   }

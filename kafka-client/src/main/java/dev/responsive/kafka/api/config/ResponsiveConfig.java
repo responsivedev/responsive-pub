@@ -17,17 +17,9 @@
 package dev.responsive.kafka.api.config;
 
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
-import dev.responsive.kafka.internal.db.partitioning.Hasher;
 import dev.responsive.kafka.internal.db.partitioning.Murmur3Hasher;
-import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner;
-import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
-import dev.responsive.kafka.internal.utils.TableName;
 import java.time.Duration;
-import java.util.List;
 import java.util.Map;
-import java.util.OptionalInt;
-import java.util.concurrent.ExecutionException;
-import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;

@@ -16,11 +16,20 @@
 
 package dev.responsive.kafka.internal.db;
 
+import com.datastax.oss.driver.api.core.cql.BoundStatement;
+
 /**
- * A special kind of remote table that supports epoch-based fencing
- * via transactions or atomic write batches of some kind.
+ * An add-on for a special kind of remote table that supports epoch-based fencing
+ * via transactions or atomic write batches of some kind, such as LWT in C*
+ * <p>
+ * TODO: does it make sense to refactor this so it integrates with the EOS Mongo
+ *  table, which uses an epoch per write rather than per table-partition like C*
+ *  Similarly, we might want/need to split off the stream-time functionality 
+ *  into a separate interface or completely pull it into the RemoteWindowedTable
+ *  class for two reasons: for when we persist the stream-time in the remote
+ *  table, and for the eventual MongoDB-based window store implementation.
  */
-public interface RemoteLwtTable<K, P, S> extends RemoteTable<K, P, S> {
+public interface TableMetadata<P> {
 
   /**
    * @param tablePartition the table partition to fetch the epoch for
@@ -40,7 +49,7 @@ public interface RemoteLwtTable<K, P, S> extends RemoteTable<K, P, S> {
    *          corresponding to this kafka partition, and succeed if and only
    *          the existing epoch is strictly less than the passed-in {@code epoch}
    */
-  S reserveEpoch(
+  BoundStatement reserveEpoch(
       final P tablePartition,
       final long epoch
   );
@@ -54,7 +63,7 @@ public interface RemoteLwtTable<K, P, S> extends RemoteTable<K, P, S> {
    *          epoch in the metadata row of this remote table partition is exactly
    *          equal to the passed-in {@code epoch}
    */
-  S ensureEpoch(
+  BoundStatement ensureEpoch(
       final P tablePartition,
       final long epoch
   );

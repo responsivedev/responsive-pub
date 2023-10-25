@@ -20,13 +20,10 @@ import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_DESIRED_N
 import static dev.responsive.kafka.api.config.ResponsiveConfig.SUBPARTITION_HASHER_CONFIG;
 
 import dev.responsive.kafka.api.config.ResponsiveConfig;
-import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
-import dev.responsive.kafka.internal.stores.SchemaTypes;
 import java.util.OptionalInt;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import java.util.stream.Stream;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
@@ -63,37 +60,35 @@ public class SubPartitioner implements ResponsivePartitioner<Bytes, Integer> {
 
   public static SubPartitioner create(
       final int numKafkaPartitions,
-      final ResponsiveKeyValueParams params,
+      final String tableName,
       final ResponsiveConfig config,
       final String changelogTopicName
   ) {
-    if (params.schemaType() == SchemaTypes.KVSchema.FACT) {
-      return NO_SUBPARTITIONS;
-    } else {
-      // TODO(agavra): write the actual remote partition count into cassandra
-      final OptionalInt actualRemoteCount = OptionalInt.empty();
+    // TODO(agavra): write the actual remote partition count into cassandra
+    final OptionalInt actualRemoteCount = OptionalInt.empty();
 
-      final int requestedNumSubPartitions = config.getInt(STORAGE_DESIRED_NUM_PARTITION_CONFIG);
+    final int requestedNumSubPartitions = config.getInt(STORAGE_DESIRED_NUM_PARTITION_CONFIG);
 
-      final int factor = (requestedNumSubPartitions == ResponsiveConfig.NO_SUBPARTITIONS)
-          ? 1 : (int) Math.ceil((double) requestedNumSubPartitions / numKafkaPartitions);
-      final int computedRemoteNum = factor * numKafkaPartitions;
+    final int factor = (requestedNumSubPartitions == ResponsiveConfig.NO_SUBPARTITIONS)
+        ? 1 : (int) Math.ceil((double) requestedNumSubPartitions / numKafkaPartitions);
+    final int computedRemoteNum = factor * numKafkaPartitions;
 
-      if (actualRemoteCount.isPresent() && actualRemoteCount.getAsInt() != computedRemoteNum) {
-        throw new ConfigException(String.format("%s was configured to %d, which "
-                                                    + "given %s partitions in kafka topic %s would result in %d remote partitions "
-                                                    + "for table %s (remote partitions must be a multiple of the kafka partitions). "
-                                                    + "The remote store is already initialized with %d partitions - it is backwards "
-                                                    + "incompatible to change this. Please set %s to %d.",
-                                                STORAGE_DESIRED_NUM_PARTITION_CONFIG, requestedNumSubPartitions, numKafkaPartitions,
-                                                changelogTopicName, computedRemoteNum, params.name().kafkaName(),
-                                                actualRemoteCount.getAsInt(), STORAGE_DESIRED_NUM_PARTITION_CONFIG,
-                                                actualRemoteCount.getAsInt()));
-      }
-
-      final var hasher = config.getConfiguredInstance(SUBPARTITION_HASHER_CONFIG, Hasher.class);
-      return new SubPartitioner(factor, hasher);
+    if (actualRemoteCount.isPresent() && actualRemoteCount.getAsInt() != computedRemoteNum) {
+      throw new ConfigException(
+          String.format(
+              "%s was configured to %d, which "
+                  + "given %s partitions in kafka topic %s would result in %d remote partitions "
+                  + "for table %s (remote partitions must be a multiple of the kafka partitions). "
+                  + "The remote store is already initialized with %d partitions - it is backwards "
+                  + "incompatible to change this. Please set %s to %d.",
+              STORAGE_DESIRED_NUM_PARTITION_CONFIG, requestedNumSubPartitions, numKafkaPartitions,
+              changelogTopicName, computedRemoteNum, tableName,
+              actualRemoteCount.getAsInt(), STORAGE_DESIRED_NUM_PARTITION_CONFIG,
+              actualRemoteCount.getAsInt()));
     }
+
+    final var hasher = config.getConfiguredInstance(SUBPARTITION_HASHER_CONFIG, Hasher.class);
+    return new SubPartitioner(factor, hasher);
   }
 
   public SubPartitioner(final int factor, final Function<Bytes, Integer> hasher) {

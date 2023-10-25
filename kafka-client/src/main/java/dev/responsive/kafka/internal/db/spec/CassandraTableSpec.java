@@ -30,7 +30,7 @@ public interface CassandraTableSpec {
 
   String tableName();
 
-  ResponsivePartitioner<?> partitioner();
+  ResponsivePartitioner<?, ?> partitioner();
 
   /**
    * @return the set of operations that are not supported by this table
