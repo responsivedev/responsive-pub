@@ -81,6 +81,7 @@ class LwtWriterTest {
         () -> capturingStatement("fencingStatement", new Object[]{}),
         new TestRemoteTable("foo", client),
         0,
+        0,
         2
     );
 
@@ -122,6 +123,7 @@ class LwtWriterTest {
         client,
         () -> capturingStatement("fencingStatement", new Object[]{}),
         new TestRemoteTable("foo", client),
+        0,
         0,
         2
     );

@@ -38,15 +38,16 @@ import static org.hamcrest.Matchers.notNullValue;
 
 import com.datastax.oss.driver.api.core.CqlSession;
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
+import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.api.stores.ResponsiveStores;
+import dev.responsive.kafka.api.stores.ResponsiveWindowParams;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.CassandraFactTable;
 import dev.responsive.kafka.internal.db.CassandraKeyValueTable;
 import dev.responsive.kafka.internal.db.partitioning.Hasher;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.db.spec.BaseTableSpec;
-import dev.responsive.kafka.internal.stores.ResponsiveMaterialized;
 import dev.responsive.kafka.internal.utils.TableName;
 import dev.responsive.kafka.testutils.IntegrationTestUtils;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
@@ -73,8 +74,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.kstream.TimeWindows;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -84,10 +84,15 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.testcontainers.containers.CassandraContainer;
 
 @ExtendWith(ResponsiveExtension.class)
-public class SubPartitionIntegrationTest {
+public class TablePartitionerIntegrationTest {
+
+  private static final int NUM_PARTITIONS_INPUT = 2;
+  private static final int NUM_PARTITIONS_OUTPUT = 1;
 
   private static final int FLUSH_THRESHOLD = 1;
   private static final long MIN_VALID_TS = 0L;
+  private static final Duration WINDOW_SIZE = Duration.ofDays(1);
+  private static final Duration GRACE_PERIOD = Duration.ZERO;
 
   private static final String INPUT_TOPIC = "input";
   private static final String OUTPUT_TOPIC = "output";
@@ -114,8 +119,8 @@ public class SubPartitionIntegrationTest {
     this.admin = admin;
     admin.createTopics(
         List.of(
-            new NewTopic(inputTopic(), Optional.of(2), Optional.empty()),
-            new NewTopic(outputTopic(), Optional.of(1), Optional.empty())
+            new NewTopic(inputTopic(), Optional.of(NUM_PARTITIONS_INPUT), Optional.empty()),
+            new NewTopic(outputTopic(), Optional.of(NUM_PARTITIONS_OUTPUT), Optional.empty())
         )
     ).all().get();
 
@@ -133,15 +138,15 @@ public class SubPartitionIntegrationTest {
   }
 
   @Test
-  public void shouldFlushToRemoteEvery10kRecords() throws Exception {
+  public void shouldFlushToRemoteTableWithSubpartitions() throws Exception {
     // Given:
     final Map<String, Object> properties = getMutableProperties();
     final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties);
 
     try (
         final var streams = new ResponsiveKafkaStreams(
-            simpleDslTopology(ResponsiveStores.materialized(
-                ResponsiveKeyValueParams.keyValue(storeName))), properties);
+            keyValueStoreTopology(ResponsiveKeyValueParams.keyValue(storeName)),
+            properties);
         final var serializer = new LongSerializer();
         final var deserializer = new LongDeserializer()
     ) {
@@ -149,7 +154,7 @@ public class SubPartitionIntegrationTest {
       // this will send one key to each virtual partition using the LongBytesHasher
       IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(20), streams);
       IntegrationTestUtils.pipeInput(
-          inputTopic(), 2, producer, System::currentTimeMillis, 0, 100L,
+          inputTopic(), NUM_PARTITIONS_INPUT, producer, System::currentTimeMillis, 0, 100L,
           LongStream.range(0, 32).toArray());
 
       // Then
@@ -161,9 +166,16 @@ public class SubPartitionIntegrationTest {
               .map(k -> new KeyValue<>(k, 100L))
               .collect(Collectors.toSet()),
           true,
-          properties);
+          properties
+      );
       final String cassandraName = new TableName(storeName).remoteName();
-      final var partitioner = new SubPartitioner(16, new LongBytesHasher());
+      final var partitioner = SubPartitioner.create(
+          OptionalInt.empty(),
+          NUM_PARTITIONS_INPUT,
+          cassandraName,
+          ResponsiveConfig.responsiveConfig(properties),
+          storeName + "-changelog"
+      );
       final CassandraKeyValueTable table = CassandraKeyValueTable.create(
           new BaseTableSpec(cassandraName, partitioner), client);
 
@@ -177,8 +189,10 @@ public class SubPartitionIntegrationTest {
         assertThat(
             deserializer.deserialize("foo",
                 Arrays.copyOfRange(
-                    table.get(partitioner.tablePartition((int) (k % 2), kBytes), kBytes,
-                              MIN_VALID_TS),
+                    table.get(
+                        partitioner.tablePartition((int) (k % NUM_PARTITIONS_INPUT), kBytes),
+                        kBytes,
+                        MIN_VALID_TS),
                     8,
                     16)),
             is(100L));
@@ -187,17 +201,16 @@ public class SubPartitionIntegrationTest {
   }
 
   @Test
-  public void shouldIgnoreSubPartitionerOnFactSchema() throws Exception {
+  public void shouldFlushToRemoteTableWithoutSubpartitions() throws Exception {
     // Given:
     final Map<String, Object> properties = getMutableProperties();
     final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties);
 
     try (
         final var streams = new ResponsiveKafkaStreams(
-            simpleDslTopology(new ResponsiveMaterialized<>(
-                Materialized.as(ResponsiveStores.factStore(storeName)),
-                false
-            )), properties);
+            keyValueStoreTopology(ResponsiveKeyValueParams.fact(storeName)),
+            properties
+        );
         final var serializer = new LongSerializer();
         final var deserializer = new LongDeserializer();
     ) {
@@ -205,7 +218,7 @@ public class SubPartitionIntegrationTest {
       // this will send one key to each virtual partition using the LongBytesHasher
       IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(10), streams);
       IntegrationTestUtils.pipeInput(
-          inputTopic(), 2, producer, System::currentTimeMillis, 0, 100L,
+          inputTopic(), NUM_PARTITIONS_INPUT, producer, System::currentTimeMillis, 0, 100L,
           LongStream.range(0, 32).toArray());
 
       // Then
@@ -217,7 +230,8 @@ public class SubPartitionIntegrationTest {
               .map(k -> new KeyValue<>(k, 100L))
               .collect(Collectors.toSet()),
           true,
-          properties);
+          properties
+      );
       final String cassandraName = new TableName(storeName).remoteName();
       final var partitioner = SubPartitioner.NO_SUBPARTITIONS;
       final CassandraFactTable table = CassandraFactTable.create(
@@ -236,10 +250,11 @@ public class SubPartitionIntegrationTest {
       for (long k = 0; k < 32; k++) {
         final var kBytes = Bytes.wrap(serializer.serialize("", k));
         assertThat(
-            deserializer.deserialize("foo",
+            deserializer.deserialize(
+                "foo",
                 Arrays.copyOfRange(
                     table.get(
-                        partitioner.tablePartition((int) (k % 2), kBytes),
+                        partitioner.tablePartition((int) (k % NUM_PARTITIONS_INPUT), kBytes),
                         kBytes,
                         MIN_VALID_TS),
                     8,
@@ -249,14 +264,93 @@ public class SubPartitionIntegrationTest {
     }
   }
 
-  private Topology simpleDslTopology(
-      final Materialized<Long, Long, KeyValueStore<Bytes, byte[]>> materialized
+  @Test
+  public void shouldFlushToRemoteTableWithSegmentPartitions() throws Exception {
+    // Given:
+    final Map<String, Object> properties = getMutableProperties();
+    final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties);
+
+    try (
+        final var streams = new ResponsiveKafkaStreams(
+            windowStoreTopology(ResponsiveWindowParams.window(storeName, WINDOW_SIZE, GRACE_PERIOD)),
+            properties);
+        final var serializer = new LongSerializer();
+        final var deserializer = new LongDeserializer()
+    ) {
+      // When:
+      // this will send one key to each virtual partition using the LongBytesHasher
+      IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(20), streams);
+      IntegrationTestUtils.pipeInput(
+          inputTopic(), NUM_PARTITIONS_INPUT, producer, System::currentTimeMillis, 0, 100L,
+          LongStream.range(0, 32).toArray());
+
+      // Then
+      IntegrationTestUtils.awaitOutput(
+          outputTopic(),
+          0,
+          LongStream.range(0, 32)
+              .boxed()
+              .map(k -> new KeyValue<>(k, 100L))
+              .collect(Collectors.toSet()),
+          true,
+          properties
+      );
+      final String cassandraName = new TableName(storeName).remoteName();
+      final var partitioner = SubPartitioner.create(
+          OptionalInt.empty(),
+          NUM_PARTITIONS_INPUT,
+          cassandraName,
+          ResponsiveConfig.responsiveConfig(properties),
+          storeName + "-changelog"
+      );
+      final CassandraKeyValueTable table = CassandraKeyValueTable.create(
+          new BaseTableSpec(cassandraName, partitioner), client);
+
+      assertThat(client.numPartitions(cassandraName), is(OptionalInt.of(32)));
+      assertThat(client.count(cassandraName, 0), is(2L));
+      assertThat(client.count(cassandraName, 16), is(2L));
+
+      // these store ValueAndTimestamp, so we need to just pluck the last 8 bytes
+      for (long k = 0; k < 32; k++) {
+        final var kBytes = Bytes.wrap(serializer.serialize("", k));
+        assertThat(
+            deserializer.deserialize("foo",
+                                     Arrays.copyOfRange(
+                                         table.get(
+                                             partitioner.tablePartition((int) (k % NUM_PARTITIONS_INPUT), kBytes),
+                                             kBytes,
+                                             MIN_VALID_TS),
+                                         8,
+                                         16)),
+            is(100L));
+      }
+    }
+  }
+
+  private Topology windowStoreTopology(
+      final ResponsiveWindowParams params
   ) {
     final var builder = new StreamsBuilder();
 
     final KStream<Long, Long> stream = builder.stream(inputTopic());
     stream.groupByKey()
-        .count(materialized)
+        .windowedBy(TimeWindows.ofSizeAndGrace(WINDOW_SIZE, GRACE_PERIOD))
+        .count(ResponsiveStores.windowMaterialized(params))
+        .toStream()
+        .selectKey((k, v) -> k.key())
+        .to(outputTopic());
+
+    return builder.build();
+  }
+
+  private Topology keyValueStoreTopology(
+      final ResponsiveKeyValueParams params
+  ) {
+    final var builder = new StreamsBuilder();
+
+    final KStream<Long, Long> stream = builder.stream(inputTopic());
+    stream.groupByKey()
+        .count(ResponsiveStores.materialized(params))
         .toStream()
         .to(outputTopic());
 
@@ -303,7 +397,7 @@ public class SubPartitionIntegrationTest {
     @Override
     public Integer apply(final Bytes bytes) {
       return Optional.ofNullable(deserializer.deserialize("ignored", bytes.get()))
-          .map(k -> k / 2) // we want 0 -> 0, 1 -> 16, 2 -> 1, 3 -> 17 ...
+          .map(k -> k / NUM_PARTITIONS_INPUT) // we want 0 -> 0, 1 -> 16, 2 -> 1, 3 -> 17 ...
           .map(Long::intValue)
           .orElse(null);
     }

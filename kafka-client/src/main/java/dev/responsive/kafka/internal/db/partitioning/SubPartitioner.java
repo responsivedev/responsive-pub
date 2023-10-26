@@ -90,7 +90,7 @@ public class SubPartitioner implements TablePartitioner<Bytes, Integer> {
     return new SubPartitioner(factor, hasher);
   }
 
-  public SubPartitioner(final int factor, final Function<Bytes, Integer> hasher) {
+  SubPartitioner(final int factor, final Function<Bytes, Integer> hasher) {
     this.factor = factor;
     this.hasher = hasher;
   }

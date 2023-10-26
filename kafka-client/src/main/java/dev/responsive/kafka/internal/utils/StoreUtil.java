@@ -47,7 +47,7 @@ public final class StoreUtil {
     }
   }
 
-  public static long computeSegmentInterval(final long retentionPeriod, final int numSegments) {
+  public static long computeSegmentInterval(final long retentionPeriod, final long numSegments) {
     return retentionPeriod / numSegments;
   }
 

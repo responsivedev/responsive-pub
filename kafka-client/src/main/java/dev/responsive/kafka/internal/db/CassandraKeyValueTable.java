@@ -382,12 +382,12 @@ public class CassandraKeyValueTable
 
   @Override
   public long fetchOffset(final int kafkaPartition) {
-    final int metadataPartition = partitioner.metadataTablePartition(kafkaPartition);
+    final int metadataTablePartition = partitioner.metadataTablePartition(kafkaPartition);
 
     final List<Row> result = client.execute(
         fetchOffset
             .bind()
-            .setInt(PARTITION_KEY.bind(), metadataPartition))
+            .setInt(PARTITION_KEY.bind(), metadataTablePartition))
         .all();
 
     if (result.size() > 1) {
@@ -403,9 +403,10 @@ public class CassandraKeyValueTable
 
   @Override
   public BoundStatement setOffset(final int kafkaPartition, final long offset) {
+    final int metadataTablePartition = partitioner.metadataTablePartition(kafkaPartition);
     return setOffset
         .bind()
-        .setInt(PARTITION_KEY.bind(), kafkaPartition)
+        .setInt(PARTITION_KEY.bind(), metadataTablePartition)
         .setLong(OFFSET.bind(), offset);
   }
 

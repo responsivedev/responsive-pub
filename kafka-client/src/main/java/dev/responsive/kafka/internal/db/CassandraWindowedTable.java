@@ -40,6 +40,8 @@ import com.datastax.oss.driver.api.core.type.DataTypes;
 import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
 import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
 import com.datastax.oss.driver.api.querybuilder.schema.CreateTableWithOptions;
+import com.datastax.oss.driver.api.querybuilder.schema.compaction.LeveledCompactionStrategy;
+import com.datastax.oss.driver.internal.querybuilder.schema.compaction.DefaultLeveledCompactionStrategy;
 import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner;
 import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.SegmentPartition;
 import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.SegmentRoll;
@@ -370,7 +372,8 @@ public class CassandraWindowedTable implements
         .withClusteringColumn(WINDOW_START.column(), DataTypes.TIMESTAMP)
         .withColumn(DATA_VALUE.column(), DataTypes.BLOB)
         .withColumn(OFFSET.column(), DataTypes.BIGINT)
-        .withColumn(EPOCH.column(), DataTypes.BIGINT);
+        .withColumn(EPOCH.column(), DataTypes.BIGINT)
+        .withCompaction(new DefaultLeveledCompactionStrategy()); // TODO: create a LCSTableSpec?
   }
 
   public CassandraWindowedTable(

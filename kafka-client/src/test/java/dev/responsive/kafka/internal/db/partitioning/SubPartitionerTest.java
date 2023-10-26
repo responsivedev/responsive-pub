@@ -40,12 +40,10 @@ class SubPartitionerTest {
   private static final TableName NAME = new TableName("table");
   private static final String CHANGELOG_TOPIC_NAME = "changelog";
 
-  private static final Hasher SINGLE_BYTE_HASHER = k -> (int) k.get()[0];
-
   @Test
   public void shouldMapPartitionsToLargerSpace() {
     // Given:
-    final var partitioner = new SubPartitioner(2, SINGLE_BYTE_HASHER);
+    final var partitioner = new SubPartitioner(2, new SingleByteHasher());
 
     // When:
     final int zero = partitioner.tablePartition(0, Bytes.wrap(new byte[]{0}));
@@ -63,7 +61,7 @@ class SubPartitionerTest {
   @Test
   public void shouldIterateAllSubPartitionsInOrder() {
     // Given:
-    final var partitioner = new SubPartitioner(3, SINGLE_BYTE_HASHER);
+    final var partitioner = new SubPartitioner(3, new SingleByteHasher());
 
     // When:
     final List<Integer> result = partitioner.allTablePartitions(2);
@@ -142,10 +140,18 @@ class SubPartitionerTest {
     );
   }
 
+  public static class SingleByteHasher implements Hasher {
+
+    @Override
+    public Integer apply(final Bytes bytes) {
+      return (int) bytes.get()[0];
+    }
+  }
+
   private ResponsiveConfig responsiveConfig(final int desiredNumSubPartitions) {
     return dummyConfig(Map.of(
         STORAGE_DESIRED_NUM_PARTITION_CONFIG, desiredNumSubPartitions,
-        SUBPARTITION_HASHER_CONFIG, SINGLE_BYTE_HASHER.getClass().getName()
+        SUBPARTITION_HASHER_CONFIG, SingleByteHasher.class
     ));
   }
 
