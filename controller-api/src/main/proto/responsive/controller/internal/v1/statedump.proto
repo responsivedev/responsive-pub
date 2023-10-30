@@ -5,13 +5,8 @@ package responsive.controller.internal.v1.statedump.proto;
 import "responsive/controller/internal/v1/controller.proto";
 
 message StateDump {
-  message ApplicationId {
-    string tenant = 1;
-    string application = 2;
-  }
-
   message ApplicationState {
-    ApplicationId application_id = 1;
+    responsive.controller.internal.v1.controller.proto.ApplicationId application_id = 1;
     responsive.controller.internal.v1.controller.proto.PolicyState state = 2;
   }
 
@@ -34,7 +29,7 @@ message StateDump {
     }
 
     message ApplicationMetrics {
-      ApplicationId application_id = 1;
+      responsive.controller.internal.v1.controller.proto.ApplicationId application_id = 1;
       repeated MetricSeries series = 2;
     }
 

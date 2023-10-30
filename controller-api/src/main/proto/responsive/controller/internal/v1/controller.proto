@@ -35,3 +35,13 @@ message Action {
 message ChangeApplicationState {
   responsive.controller.v1.controller.proto.ApplicationState target_state = 1;
 }
+
+message ApplicationId {
+  string tenant = 1;
+  string application = 2;
+}
+
+message PolicyOverride {
+  ApplicationId application_id = 1;
+  responsive.controller.v1.controller.proto.ApplicationPolicySpec policy = 2;
+}
