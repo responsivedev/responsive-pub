@@ -3,13 +3,23 @@ syntax = "proto3";
 package responsive.controller.internal.v1.internal.proto;
 
 import "responsive/controller/internal/v1/controller.proto";
+import "responsive/controller/v1/controller.proto";
 
 service Internal {
   rpc DumpState(DumpStateRequest) returns (EmptyResponse) {}
+  rpc GetPolicy(GetPolicyRequest) returns (GetPolicyResponse) {}
 }
 
 message DumpStateRequest {
   optional string path = 1;
+}
+
+message GetPolicyRequest {
+  responsive.controller.internal.v1.controller.proto.ApplicationId application_id = 1;
+}
+
+message GetPolicyResponse {
+  responsive.controller.v1.controller.proto.ApplicationPolicySpec policy = 1;
 }
 
 message EmptyResponse {
