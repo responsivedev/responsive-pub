@@ -31,6 +31,7 @@ import static org.apache.kafka.streams.StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_C
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_V2;
 import static org.apache.kafka.streams.StreamsConfig.NUM_STREAM_THREADS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.PROCESSING_GUARANTEE_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
@@ -47,6 +48,7 @@ import dev.responsive.kafka.internal.db.CassandraFactTable;
 import dev.responsive.kafka.internal.db.CassandraKeyValueTable;
 import dev.responsive.kafka.internal.db.partitioning.Hasher;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
+import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.db.spec.BaseTableSpec;
 import dev.responsive.kafka.internal.utils.TableName;
 import dev.responsive.kafka.testutils.IntegrationTestUtils;
@@ -60,6 +62,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
 import org.apache.kafka.clients.admin.Admin;
@@ -91,7 +94,9 @@ public class TablePartitionerIntegrationTest {
 
   private static final int FLUSH_THRESHOLD = 1;
   private static final long MIN_VALID_TS = 0L;
-  private static final Duration WINDOW_SIZE = Duration.ofDays(1);
+
+  private static final long NUM_SEGMENTS = 10L;
+  private static final Duration WINDOW_SIZE = Duration.ofSeconds(10);
   private static final Duration GRACE_PERIOD = Duration.ZERO;
 
   private static final String INPUT_TOPIC = "input";
@@ -183,14 +188,15 @@ public class TablePartitionerIntegrationTest {
       assertThat(client.count(cassandraName, 0), is(2L));
       assertThat(client.count(cassandraName, 16), is(2L));
 
-      // these store ValueAndTimestamp, so we need to just pluck the last 8 bytes
-      for (long k = 0; k < 32; k++) {
-        final var kBytes = Bytes.wrap(serializer.serialize("", k));
+      for (long tp = 0; tp < 32; ++tp) {
+        final var kBytes = Bytes.wrap(serializer.serialize("", tp));
         assertThat(
-            deserializer.deserialize("foo",
+            deserializer.deserialize(
+                "foo",
+                // these store ValueAndTimestamp, so we need to just pluck the last 8 bytes
                 Arrays.copyOfRange(
                     table.get(
-                        partitioner.tablePartition((int) (k % NUM_PARTITIONS_INPUT), kBytes),
+                        (int) (tp % NUM_PARTITIONS_INPUT),
                         kBytes,
                         MIN_VALID_TS),
                     8,
@@ -233,7 +239,7 @@ public class TablePartitionerIntegrationTest {
           properties
       );
       final String cassandraName = new TableName(storeName).remoteName();
-      final var partitioner = SubPartitioner.NO_SUBPARTITIONS;
+      final var partitioner = TablePartitioner.defaultPartitioner();
       final CassandraFactTable table = CassandraFactTable.create(
           new BaseTableSpec(cassandraName, partitioner), client);
 
@@ -254,7 +260,7 @@ public class TablePartitionerIntegrationTest {
                 "foo",
                 Arrays.copyOfRange(
                     table.get(
-                        partitioner.tablePartition((int) (k % NUM_PARTITIONS_INPUT), kBytes),
+                        (int) k % NUM_PARTITIONS_INPUT,
                         kBytes,
                         MIN_VALID_TS),
                     8,
@@ -270,19 +276,37 @@ public class TablePartitionerIntegrationTest {
     final Map<String, Object> properties = getMutableProperties();
     final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties);
 
+    final var params = ResponsiveWindowParams
+        .window(storeName, WINDOW_SIZE, GRACE_PERIOD)
+        .withNumSegments(NUM_SEGMENTS);
     try (
         final var streams = new ResponsiveKafkaStreams(
-            windowStoreTopology(ResponsiveWindowParams.window(storeName, WINDOW_SIZE, GRACE_PERIOD)),
-            properties);
+            windowStoreTopology(params),
+            properties
+        );
         final var serializer = new LongSerializer();
         final var deserializer = new LongDeserializer()
     ) {
       // When:
-      // this will send one key to each virtual partition using the LongBytesHasher
       IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(20), streams);
+
+      // this will send one key to each kafka partition, with 100 records across 10s
+      // tumbling windows that count the number of records per window
+      // equally across the same 10 active segments for key=0, and across 20 rolling
+      // segments for key=1
+      final Function<KeyValue<Long, Long>, Long> timestampForValue = kv -> {
+        if (kv.key == 0) {
+          return kv.value % 10;
+        } else if (kv.key == 1) {
+          return kv.value % 5;
+        } else {
+          throw new IllegalStateException("Key should be only 0 or 1");
+        }
+      };
+
       IntegrationTestUtils.pipeInput(
-          inputTopic(), NUM_PARTITIONS_INPUT, producer, System::currentTimeMillis, 0, 100L,
-          LongStream.range(0, 32).toArray());
+          inputTopic(), NUM_PARTITIONS_INPUT, producer, timestampForValue, 0, 100L,
+          LongStream.range(0, NUM_PARTITIONS_INPUT).toArray());
 
       // Then
       IntegrationTestUtils.awaitOutput(
@@ -364,12 +388,13 @@ public class TablePartitionerIntegrationTest {
     properties.put(VALUE_SERIALIZER_CLASS_CONFIG, LongSerializer.class);
     properties.put(KEY_DESERIALIZER_CLASS_CONFIG, LongDeserializer.class);
     properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, LongDeserializer.class);
-
-    properties.put(APPLICATION_ID_CONFIG, name);
     properties.put(DEFAULT_KEY_SERDE_CLASS_CONFIG, LongSerde.class.getName());
     properties.put(DEFAULT_VALUE_SERDE_CLASS_CONFIG, LongSerde.class.getName());
+
+    properties.put(APPLICATION_ID_CONFIG, name);
     properties.put(NUM_STREAM_THREADS_CONFIG, 1);
     properties.put(PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_V2);
+    properties.put(STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
 
     properties.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 1);
     properties.put(consumerPrefix(ConsumerConfig.METADATA_MAX_AGE_CONFIG), "1000");

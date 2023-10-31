@@ -83,17 +83,10 @@ class CassandraFactTableIntegrationTest {
     final long offset1 = schema.fetchOffset(1);
     final long offset2 = schema.fetchOffset(2);
 
-    @SuppressWarnings("unchecked")
-    final long epoch1 = ((TableMetadata<Integer>) schema).fetchEpoch(1);
-    @SuppressWarnings("unchecked")
-    final long epoch2 = ((TableMetadata<Integer>) schema).fetchEpoch(2);
-
     // Then:
     assertThat(token, instanceOf(FactWriterFactory.class));
     assertThat(offset1, is(-1L));
-    assertThat(epoch1, is(-1L));
     assertThat(offset2, is(10L));
-    assertThat(epoch2, is(-1L));
 
     // ensure it uses a separate table for metadata
     final var table = session.getMetadata()

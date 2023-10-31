@@ -44,6 +44,7 @@ import dev.responsive.kafka.internal.utils.Iterators;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.TimeoutException;
@@ -66,6 +67,7 @@ public class CassandraKeyValueTable
 
   private final PreparedStatement get;
   private final PreparedStatement range;
+  private final PreparedStatement all;
   private final PreparedStatement insert;
   private final PreparedStatement delete;
   private final PreparedStatement fetchOffset;
@@ -115,7 +117,19 @@ public class CassandraKeyValueTable
             .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
             .where(DATA_KEY.relation().isGreaterThanOrEqualTo(bindMarker(FROM_BIND)))
-            .where(DATA_KEY.relation().isLessThan(bindMarker(TO_BIND)))
+            .where(DATA_KEY.relation().isLessThanOrEqualTo(bindMarker(TO_BIND)))
+            .where(TIMESTAMP.relation().isGreaterThanOrEqualTo(bindMarker(TIMESTAMP.bind())))
+            // ALLOW FILTERING is OK b/c the query only scans one partition
+            .allowFiltering()
+            .build()
+    );
+
+    final var all = client.prepare(
+        QueryBuilder
+            .selectFrom(name)
+            .columns(DATA_KEY.column(), DATA_VALUE.column(), TIMESTAMP.column())
+            .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
+            .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
             .where(TIMESTAMP.relation().isGreaterThanOrEqualTo(bindMarker(TIMESTAMP.bind())))
             // ALLOW FILTERING is OK b/c the query only scans one partition
             .allowFiltering()
@@ -189,6 +203,7 @@ public class CassandraKeyValueTable
         (SubPartitioner) spec.partitioner(),
         get,
         range,
+        all,
         insert,
         delete,
         fetchOffset,
@@ -219,6 +234,7 @@ public class CassandraKeyValueTable
       final SubPartitioner partitioner,
       final PreparedStatement get,
       final PreparedStatement range,
+      final PreparedStatement all,
       final PreparedStatement insert,
       final PreparedStatement delete,
       final PreparedStatement fetchOffset,
@@ -232,6 +248,7 @@ public class CassandraKeyValueTable
     this.partitioner = partitioner;
     this.get = get;
     this.range = range;
+    this.all = all;
     this.insert = insert;
     this.delete = delete;
     this.fetchOffset = fetchOffset;
@@ -310,23 +327,24 @@ public class CassandraKeyValueTable
       final Bytes to,
       final long minValidTs
   ) {
-    // TODO: need to scan a range of sub-partitions to correctly implement range
-    //  Note that we also need to make sure the ordering matches up with the CommitBuffer
-    final int tablePartitionFrom = partitioner.tablePartition(kafkaPartition, from);
-    final int tablePartitionTo = partitioner.tablePartition(kafkaPartition, from);
+    // TODO: explore more efficient ways to serve bounded range queries, for now we have to
+    //  iterate over all subpartitions and merge the results since we don't know which subpartitions
+    //  hold keys within the given range
+    //  One option would be to configure the partitioner with an alternative hasher that's optimized
+    //  for range queries with a Comparator-aware key-->subpartition mapping strategy.
+    final List<KeyValueIterator<Bytes, byte[]>> resultsPerPartition = new LinkedList<>();
+    for (final int partition : partitioner.allTablePartitions(kafkaPartition)) {
+      final BoundStatement range = this.range
+          .bind()
+          .setInt(PARTITION_KEY.bind(), partition)
+          .setByteBuffer(FROM_BIND, ByteBuffer.wrap(from.get()))
+          .setByteBuffer(TO_BIND, ByteBuffer.wrap(to.get()))
+          .setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(minValidTs));
 
-    final BoundStatement range = this.range
-        .bind()
-        // we need to scan across all sub-partitions in this range, leave this as placeholder code
-        //.setInt(PARTITION_KEY_FROM.bind(), tablePartitionFrom)
-        //.setInt(PARTITION_KEY_TO.bind(), tablePartitionTo)
-        .setByteBuffer(FROM_BIND, ByteBuffer.wrap(from.get()))
-        .setByteBuffer(TO_BIND, ByteBuffer.wrap(to.get()))
-        .setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(minValidTs));
-
-    final ResultSet result = client.execute(range);
-    final var ret = Iterators.kv(result.iterator(), CassandraKeyValueTable::rows);
-    throw new UnsupportedOperationException("Key range scans are not yet supported");
+      final ResultSet result = client.execute(range);
+      resultsPerPartition.add(Iterators.kv(result.iterator(), CassandraKeyValueTable::rows));
+    }
+    return Iterators.wrapped(resultsPerPartition);
   }
 
   @Override
@@ -334,22 +352,17 @@ public class CassandraKeyValueTable
       final int kafkaPartition,
       final long minValidTs
   ) {
-    // TODO: need to scan a range of sub-partitions to correctly implement range
-    //  Note that we also need to make sure the ordering matches up with the CommitBuffer
+    final List<KeyValueIterator<Bytes, byte[]>> resultsPerPartition = new LinkedList<>();
+    for (final int partition : partitioner.allTablePartitions(kafkaPartition)) {
+      final BoundStatement range = this.all
+          .bind()
+          .setInt(PARTITION_KEY.bind(), partition)
+          .setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(minValidTs));
 
-    final ResultSet result = client.execute(QueryBuilder
-        .selectFrom(name)
-        .columns(DATA_KEY.column(), DATA_VALUE.column(), TIMESTAMP.column())
-        // we need to scan across all sub-partitions, just leave this as placeholder code
-        //.where(PARTITION_KEY.relation().isEqualTo(PARTITION_KEY.literal(kafkaPartition)))
-        .where(TIMESTAMP.relation().isGreaterThanOrEqualTo(TIMESTAMP.literal(minValidTs)))
-        // since all() scans all the data anyway, allowing filtering is no worse
-        .allowFiltering()
-        .build()
-    );
-
-    final var ret = Iterators.kv(result.iterator(), CassandraKeyValueTable::rows);
-    throw new UnsupportedOperationException("Key range scans are not yet supported");
+      final ResultSet result = client.execute(range);
+      resultsPerPartition.add(Iterators.kv(result.iterator(), CassandraKeyValueTable::rows));
+    }
+    return Iterators.wrapped(resultsPerPartition);
   }
 
   @Override

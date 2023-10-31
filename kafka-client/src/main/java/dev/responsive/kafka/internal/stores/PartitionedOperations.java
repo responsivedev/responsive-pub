@@ -44,8 +44,11 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.slf4j.Logger;
 
 public class PartitionedOperations implements KeyValueOperations {
+
+  private final Logger log;
 
   @SuppressWarnings("rawtypes")
   private final InternalProcessorContext context;
@@ -119,6 +122,7 @@ public class PartitionedOperations implements KeyValueOperations {
     storeRegistry.registerStore(registration);
 
     return new PartitionedOperations(
+        log,
         context,
         params,
         table,
@@ -175,6 +179,7 @@ public class PartitionedOperations implements KeyValueOperations {
 
   @SuppressWarnings("rawtypes")
   public PartitionedOperations(
+      final Logger log,
       final InternalProcessorContext context,
       final ResponsiveKeyValueParams params,
       final RemoteKVTable<?> table,
@@ -185,6 +190,7 @@ public class PartitionedOperations implements KeyValueOperations {
       final ResponsiveStoreRegistration registration,
       final ResponsiveRestoreListener restoreListener
   ) {
+    this.log = log;
     this.context = context;
     this.params = params;
     this.table = table;
@@ -233,6 +239,18 @@ public class PartitionedOperations implements KeyValueOperations {
 
   @Override
   public KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
+    if (from == null && to == null) {
+      return all();
+    } else if (from == null || to == null) {
+      log.error("Unable to serve range query with undefined bounds. Found {}=null",
+                from == null ? "from" : "to");
+      throw new UnsupportedOperationException(
+          "Open-ended range queries are not yet supported, please pass in non-null values for the "
+              + "lower and upper bounds or else use all() and filter the results. If your use case "
+              + "requires the ability to issue range queries with an undefined upper/lower bound, "
+              + "please reach out to us about supporting this feature.");
+    }
+
     return new LocalRemoteKvIterator<>(
         buffer.range(from, to),
         table.range(changelog.partition(), from, to, minValidTimestamp()),

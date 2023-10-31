@@ -51,8 +51,6 @@ import org.apache.kafka.common.utils.Utils;
  */
 public class SubPartitioner implements TablePartitioner<Bytes, Integer> {
 
-  public static final SubPartitioner NO_SUBPARTITIONS = new SubPartitioner(1, k -> 0);
-
   /**
    * the number of subpartitions is: {@code kafka_partitions * n}
    */

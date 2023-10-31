@@ -21,6 +21,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
@@ -61,6 +62,15 @@ public final class IntegrationTestUtils {
     }
   }
 
+  public static ResponsiveConfig copyConfigWithOverrides(
+      final ResponsiveConfig original,
+      final Map<String, Object> overrides
+  ) {
+    final var configMap = original.originals();
+    configMap.putAll(overrides);
+    return ResponsiveConfig.responsiveConfig(configMap);
+  }
+
   public static ResponsiveConfig dummyConfig() {
     final Properties props = new Properties();
     props.put(ResponsiveConfig.STORAGE_DATACENTER_CONFIG, "responsive");
@@ -69,7 +79,6 @@ public final class IntegrationTestUtils {
     props.put(ResponsiveConfig.TENANT_ID_CONFIG, "responsive-test");
     return ResponsiveConfig.responsiveConfig(props);
   }
-
 
   public static ResponsiveConfig dummyConfig(final Map<?, ?> overrides) {
     final Properties props = new Properties();
@@ -154,6 +163,29 @@ public final class IntegrationTestUtils {
             topic,
             (int) k % partitions,
             timestamp.get(),
+            k,
+            v
+        ));
+      }
+    }
+    producer.flush();
+  }
+
+  public static void pipeInput(
+      final String topic,
+      final int partitions,
+      final KafkaProducer<Long, Long> producer,
+      final Function<KeyValue<Long, Long>, Long> timestampForKV,
+      final long valFrom,
+      final long valTo,
+      final long... keys
+  ) {
+    for (final long k : keys) {
+      for (long v = valFrom; v < valTo; v++) {
+        producer.send(new ProducerRecord<>(
+            topic,
+            (int) k % partitions,
+            timestampForKV.apply(new KeyValue<>(k, v)),
             k,
             v
         ));

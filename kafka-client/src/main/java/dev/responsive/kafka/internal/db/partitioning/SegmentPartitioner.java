@@ -84,6 +84,10 @@ public class SegmentPartitioner implements TablePartitioner<Stamped<Bytes>, Segm
   private final long retentionPeriodMs;
   private final long segmentIntervalMs;
 
+  // TODO: partitioner doesn't actually need the window size, we just pass it to the table this way
+  //  We should find a better way to pass parameters from the StateStore to the RemoteTable
+  private final long windowSizeMs;
+
   public static class SegmentPartition {
     public final int partitionKey;
     public final long segmentId;
@@ -92,6 +96,14 @@ public class SegmentPartitioner implements TablePartitioner<Stamped<Bytes>, Segm
       this.partitionKey = partitionKey;
       this.segmentId = segmentId;
     }
+
+    @Override
+    public String toString() {
+      return "SegmentPartition{" +
+          "partitionKey=" + partitionKey +
+          ", segmentId=" + segmentId +
+          '}';
+    }
   }
 
   public static SegmentPartitioner create(
@@ -99,12 +111,17 @@ public class SegmentPartitioner implements TablePartitioner<Stamped<Bytes>, Segm
   ) {
     final long segmentInterval =
         StoreUtil.computeSegmentInterval(params.retentionPeriod(), params.numSegments());
-    return new SegmentPartitioner(params.retentionPeriod(), segmentInterval);
+    return new SegmentPartitioner(params.retentionPeriod(), segmentInterval, params.windowSize());
   }
 
-  public SegmentPartitioner(final long retentionPeriodMs, final long segmentIntervalMs) {
+  public SegmentPartitioner(
+      final long retentionPeriodMs,
+      final long segmentIntervalMs,
+      final long windowSizeMs
+  ) {
     this.retentionPeriodMs = retentionPeriodMs;
     this.segmentIntervalMs = segmentIntervalMs;
+    this.windowSizeMs = windowSizeMs;
   }
 
   @Override
@@ -170,7 +187,7 @@ public class SegmentPartitioner implements TablePartitioner<Stamped<Bytes>, Segm
   }
 
   private int segmentId(final long windowTimestamp) {
-    return (int) (windowTimestamp / segmentIntervalMs);
+    return Integer.max(0, (int) (windowTimestamp / segmentIntervalMs));
   }
 
   public static class SegmentRoll {
@@ -184,9 +201,10 @@ public class SegmentPartitioner implements TablePartitioner<Stamped<Bytes>, Segm
 
     @Override
     public String toString() {
-      return String.format("SegmentRoll will remove expired segments: '(%s)'"
-                               + " and creating new segments '(%s)'",
-                           Arrays.toString(segmentsToExpire), Arrays.toString(segmentsToCreate));
+      return String.format("SegmentRoll: expired segment(s)=[%d-%d], new segments(s)=[%d-%d]",
+                           segmentsToExpire[0], segmentsToExpire[segmentsToExpire.length - 1],
+                           segmentsToCreate[0], segmentsToCreate[segmentsToCreate.length - 1]
+      );
     }
   }
 }

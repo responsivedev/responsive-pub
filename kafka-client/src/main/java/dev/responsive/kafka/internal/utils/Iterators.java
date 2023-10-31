@@ -108,10 +108,10 @@ public final class Iterators {
   /**
    * Returns an iterator that iterates over all delegates in order
    */
-  public static <T> Iterator<T> wrapped(
-      final List<Iterator<T>> delegates
+  public static <K, V> KeyValueIterator<K, V> wrapped(
+      final List<KeyValueIterator<K, V>> delegates
   ) {
-    throw new UnsupportedOperationException("Implement for WindowStore range scans");
+    return new MultiPartitionRangeIterator<>(delegates);
   }
 
   public static <I, O, V> KeyValueIterator<O, V> mapKeys(
