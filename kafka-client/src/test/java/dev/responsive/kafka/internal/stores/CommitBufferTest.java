@@ -56,10 +56,7 @@ import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.CassandraKeyValueTable;
 import dev.responsive.kafka.internal.db.KeySpec;
 import dev.responsive.kafka.internal.db.LwtWriterFactory;
-import dev.responsive.kafka.internal.db.MetadataRow;
-import dev.responsive.kafka.internal.db.WriterFactory;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
-import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.db.spec.BaseTableSpec;
 import dev.responsive.kafka.internal.metrics.ClientVersionMetadata;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
@@ -89,6 +86,7 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.PolicyViolationException;
+import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.metrics.Gauge;
@@ -154,7 +152,7 @@ public class CommitBufferTest {
   private SessionClients sessionClients;
   private TopicPartition changelog;
   private String name;
-  private TablePartitioner<Bytes, Integer> partitioner;
+  private SubPartitioner partitioner;
   private CassandraKeyValueTable table;
   private CassandraClient client;
 
@@ -184,13 +182,12 @@ public class CommitBufferTest {
         Collections.emptyMap()
     );
     partitioner = new SubPartitioner(
-        3,
-        k -> {
-          final byte arr = k.get()[0];
-          return (int) arr;
-        });
+        4,
+        k -> (int) k.get()[0]);
+
     sessionClients.initialize(responsiveMetrics, null);
-    table = client.kvFactory().create(new BaseTableSpec(name, partitioner));
+    table = (CassandraKeyValueTable) client.kvFactory().create(
+        new BaseTableSpec(name, partitioner));
     changelog = new TopicPartition(name + "-changelog", KAFKA_PARTITION);
 
     when(admin.deleteRecords(Mockito.any())).thenReturn(new DeleteRecordsResult(Map.of(
@@ -210,8 +207,10 @@ public class CommitBufferTest {
   }
 
   private CommitBuffer<Bytes, Integer> createCommitBuffer(final boolean truncateChangelog) {
+    final var writerFactory = table.init(changelog.partition());
+
     return new CommitBuffer<>(
-        initializeLwtWriterFactory(1),
+        writerFactory,
         sessionClients,
         changelog,
         admin,
@@ -249,18 +248,6 @@ public class CommitBufferTest {
         "store-metrics",
         description,
         storeTags
-    );
-  }
-
-  private WriterFactory<Bytes, Integer> initializeLwtWriterFactory(final int subPartitioningFactor) {
-    final SubPartitioner partitioner = new SubPartitioner(
-        subPartitioningFactor,
-        k -> ByteBuffer.wrap(k.get()).getInt());
-
-    final int kafkaPartition = changelog.partition();
-    return LwtWriterFactory.initialize(
-        table, table, client,
-        partitioner, kafkaPartition, partitioner.allTablePartitions(kafkaPartition)
     );
   }
 
@@ -328,37 +315,38 @@ public class CommitBufferTest {
   }
 
   @Test
-  public void shouldFlushWithCorrectEpochForPartitionsWithDataAndOffsetForBaseSubpartition() {
+  public void shouldFenceOffsetFlushBasedOnMetadataRowEpoch() {
     // Given:
     try (final CommitBuffer<Bytes, Integer> buffer = createCommitBuffer(false)) {
-
-      final SubPartitioner partitioner = new SubPartitioner(
-          3,
-          k -> ByteBuffer.wrap(k.get()).getInt());
 
       // reserve epoch for partition 8 to ensure it doesn't get flushed
       // if it did it would get fenced
       LwtWriterFactory.initialize(
-          table, table, client, partitioner, KAFKA_PARTITION, Collections.singletonList(8));
+          table, table, client, partitioner, changelog.partition(), List.of(8, 9));
 
-      final Bytes k0 = Bytes.wrap(ByteBuffer.allocate(4).putInt(0).array());
-      final Bytes k1 = Bytes.wrap(ByteBuffer.allocate(4).putInt(1).array());
+      final Bytes k1 = Bytes.wrap(new byte[]{1});
+      final Bytes k2 = Bytes.wrap(new byte[]{2});
 
       // When:
-      // key 0 -> subpartition 2 * 3 + 0 % 3 = 6
-      // key 1 -> subpartition 2 * 3 + 1 % 3 =  7
-      // nothing in subpartition 8, should not be flushed - if it did
-      // then an error would be thrown with invalid epoch
-      buffer.put(k0, VALUE, CURRENT_TS);
-      buffer.put(k1, VALUE, CURRENT_TS);
-      buffer.flush(100L);
+      buffer.put(k1, VALUE, CURRENT_TS); // insert into subpartition 9
+      buffer.put(k2, VALUE, CURRENT_TS); // insert into subpartition 10
+
+      // flush with partial epoch fencing: only subpartition 8 and 9 have been bumped
+      // so the offset update and k1 write will fail but k2 write will get through
+      try {
+        buffer.flush(100L);
+      } catch (final ProducerFencedException expected) {
+
+      }
 
       // Then:
-      assertThat(table.get(6, k0, MIN_VALID_TS), is(VALUE));
-      assertThat(table.get(7, k1, MIN_VALID_TS), is(VALUE));
-      assertThat(table.fetchOffset(6), is(new MetadataRow(100L, 1L)));
-      assertThat(table.fetchOffset(7), is(new MetadataRow(-1L, 1L)));
-      assertThat(table.fetchOffset(8), is(new MetadataRow(-1L, 3L)));
+      assertThat(table.get(changelog.partition(), k1, MIN_VALID_TS), nullValue());
+      assertThat(table.get(changelog.partition(), k2, MIN_VALID_TS), is(VALUE));
+
+      assertThat(table.fetchEpoch(8), is(2L));
+      assertThat(table.fetchEpoch(9), is(2L));
+      assertThat(table.fetchEpoch(10), is(1L));
+      assertThat(table.fetchOffset(changelog.partition()), is(-1L));
     }
   }
 
@@ -366,13 +354,16 @@ public class CommitBufferTest {
   public void shouldNotFlushWithExpiredEpoch() {
     // Given:
     final ExceptionSupplier exceptionSupplier = mock(ExceptionSupplier.class);
-    final var writerFactory = initializeLwtWriterFactory(3);
+    final var writerFactory = table.init(changelog.partition());
     try (final CommitBuffer<Bytes, Integer> buffer = new CommitBuffer<>(
         writerFactory, sessionClients, changelog, admin,
         KEY_SPEC, true, name, TRIGGERS, exceptionSupplier)) {
 
       Mockito.when(exceptionSupplier.commitFencedException(anyString()))
           .thenAnswer(msg -> new RuntimeException(msg.getArgument(0).toString()));
+
+      // init again to advance the epoch
+      table.init(changelog.partition());
 
       // When:
       final var e = assertThrows(
@@ -385,8 +376,9 @@ public class CommitBufferTest {
 
       // Then:
       final String errorMsg = "commit-buffer [" + table.name() + "-2] "
-          + "[2] Error while writing batch! Local Epoch: LwtWriterFactory{epoch=1}, "
-          + "Persisted Epoch: 100, Batch Offset: 100, Persisted Offset: -1";
+          + "Error while writing batch for table partition 8! "
+          + "Batch Offset: 100, Persisted Offset: -1, "
+          + "Local Epoch: 1, Persisted Epoch: 2";
       assertThat(e.getMessage(), equalTo(errorMsg));
     }
   }
@@ -394,18 +386,22 @@ public class CommitBufferTest {
   @Test
   public void shouldIncrementEpochAndReserveForAllSubpartitionsOnInit() {
     // Given:
-    final var writerFactory = initializeLwtWriterFactory(2);
+    final var writerFactory = table.init(changelog.partition());
     new CommitBuffer<>(
         writerFactory, sessionClients, changelog, admin,
         KEY_SPEC, true, name, TRIGGERS, EXCEPTION_SUPPLIER);
 
+    for (final int tp : partitioner.allTablePartitions(changelog.partition())) {
+      assertThat(table.fetchEpoch(tp), is(1L));
+    }
+
     // When:
-    initializeLwtWriterFactory(2);
+    table.init(changelog.partition());
 
     // Then:
-    assertThat(table.fetchEpoch(0), is(101L));
-    assertThat(table.fetchEpoch(1), is(101L));
-    assertThat(table.fetchEpoch(2), is(101L));
+    for (final int tp : partitioner.allTablePartitions(changelog.partition())) {
+      assertThat(table.fetchEpoch(tp), is(2L));
+    }
   }
 
   @Test
@@ -451,7 +447,7 @@ public class CommitBufferTest {
     Mockito.when(metrics.sensor("failed-truncations-" + sourceChangelog))
         .thenReturn(failedTruncationsSensor);
     final CommitBuffer<Bytes, Integer> buffer = new CommitBuffer<>(
-        initializeLwtWriterFactory(3),
+        table.init(changelog.partition()),
         sessionClients,
         sourceChangelog,
         admin,
@@ -614,12 +610,13 @@ public class CommitBufferTest {
   public void shouldNotRestoreRecordsWhenFencedByEpoch() {
     // Given:
     final ExceptionSupplier exceptionSupplier = mock(ExceptionSupplier.class);
+    final var writerFactory = table.init(changelog.partition());
     final CommitBuffer<Bytes, Integer> buffer = new CommitBuffer<>(
-        initializeLwtWriterFactory(3), sessionClients, changelog, admin,
+        writerFactory, sessionClients, changelog, admin,
         KEY_SPEC, true, name, TRIGGERS, exceptionSupplier);
 
     // initialize a new writer to bump the epoch
-    initializeLwtWriterFactory(3);
+    table.init(changelog.partition());
 
     final ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>(
         changelog.topic(),
@@ -645,16 +642,18 @@ public class CommitBufferTest {
 
     // Then:
     final String errorMsg = "commit-buffer [" + table.name() + "-2] "
-        + "[2] Error while writing batch! Local Epoch: LwtWriterFactory{epoch=1}, "
-        + "Persisted Epoch: 100, Batch Offset: 100, Persisted Offset: -1";
+        + "Error while writing batch for table partition 8! "
+        + "Batch Offset: 100, Persisted Offset: -1, "
+        + "Local Epoch: 1, Persisted Epoch: 2";
     assertThat(e.getMessage(), equalTo(errorMsg));
   }
 
   @Test
   public void shouldRestoreStreamsBatchLargerThanCassandraBatch() {
     // Given:
+    final var writerFactory = table.init(changelog.partition());
     final CommitBuffer<Bytes, Integer> buffer = new CommitBuffer<>(
-        initializeLwtWriterFactory(1),
+        writerFactory,
         sessionClients,
         changelog,
         admin,

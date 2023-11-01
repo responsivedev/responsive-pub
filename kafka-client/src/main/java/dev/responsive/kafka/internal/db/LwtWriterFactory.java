@@ -46,8 +46,7 @@ public class LwtWriterFactory<K, P> extends WriterFactory<K, P> {
       final long epoch
   ) {
     super(
-        String.format("LwtWriterFactory [%s-%d] (epoch:%d) ",
-                      table.name(), kafkaPartition, epoch)
+        String.format("LwtWriterFactory{epoch=%d} ", epoch)
     );
     this.table = table;
     this.tableMetadata = tableMetadata;

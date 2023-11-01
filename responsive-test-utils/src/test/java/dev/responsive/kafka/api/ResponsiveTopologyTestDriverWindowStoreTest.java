@@ -31,7 +31,6 @@ import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
@@ -42,7 +41,6 @@ import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.hamcrest.MatcherAssert;
-import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
 
 public class ResponsiveTopologyTestDriverWindowStoreTest {
@@ -74,7 +72,7 @@ public class ResponsiveTopologyTestDriverWindowStoreTest {
     // Then:
     final List<Long> outputs = output.readValuesToList();
     MatcherAssert.assertThat(outputs, equalTo(
-       asList(1L, 3L, 3L, 7L, 8L, 7L)
+        asList(1L, 3L, 3L, 7L, 8L, 7L)
     ));
     driver.close();
   }

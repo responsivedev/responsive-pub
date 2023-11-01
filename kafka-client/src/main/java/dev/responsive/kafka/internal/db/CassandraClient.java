@@ -47,9 +47,9 @@ public class CassandraClient {
   private final CqlSession session;
 
   private final ResponsiveConfig config;
-  private final TableCache<CassandraKeyValueTable> kvFactory;
-  private final TableCache<CassandraFactTable> factFactory;
-  private final TableCache<CassandraWindowedTable> windowedFactory;
+  private final TableCache<RemoteKVTable<BoundStatement>> kvFactory;
+  private final TableCache<RemoteKVTable<BoundStatement>> factFactory;
+  private final TableCache<RemoteWindowedTable<BoundStatement>> windowedFactory;
   private final TableCache<RemoteKVTable<BoundStatement>> globalFactory;
 
   /**
@@ -156,15 +156,15 @@ public class CassandraClient {
     return globalFactory;
   }
 
-  public TableCache<CassandraKeyValueTable> kvFactory() {
+  public TableCache<RemoteKVTable<BoundStatement>> kvFactory() {
     return kvFactory;
   }
 
-  public TableCache<CassandraFactTable> factFactory() {
+  public TableCache<RemoteKVTable<BoundStatement>> factFactory() {
     return factFactory;
   }
 
-  public TableCache<CassandraWindowedTable> windowedFactory() {
+  public TableCache<RemoteWindowedTable<BoundStatement>> windowedFactory() {
     return windowedFactory;
   }
 }

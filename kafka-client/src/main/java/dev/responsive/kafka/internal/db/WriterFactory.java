@@ -65,10 +65,9 @@ public abstract class WriterFactory<K, P> {
   ) {
     final long offset = offset();
     return String.format(
-        "%sError while writing batch for table partition %s! "
+        "Error while writing batch for table partition %s! "
             + "Batch Offset: %d, Persisted Offset: %d",
-        logPrefix, result.tablePartition(),
-        consumedOffset, offset
+        result.tablePartition(), consumedOffset, offset
     );
   }
 

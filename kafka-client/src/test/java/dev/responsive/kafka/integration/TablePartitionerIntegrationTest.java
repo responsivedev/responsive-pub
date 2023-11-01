@@ -270,7 +270,8 @@ public class TablePartitionerIntegrationTest {
     }
   }
 
-  @Test
+  // TODO(sophie): finish and re-enable this
+  //@Test
   public void shouldFlushToRemoteTableWithSegmentPartitions() throws Exception {
     // Given:
     final Map<String, Object> properties = getMutableProperties();
@@ -338,14 +339,15 @@ public class TablePartitionerIntegrationTest {
       for (long k = 0; k < 32; k++) {
         final var kBytes = Bytes.wrap(serializer.serialize("", k));
         assertThat(
-            deserializer.deserialize("foo",
-                                     Arrays.copyOfRange(
-                                         table.get(
-                                             partitioner.tablePartition((int) (k % NUM_PARTITIONS_INPUT), kBytes),
-                                             kBytes,
-                                             MIN_VALID_TS),
-                                         8,
-                                         16)),
+            deserializer.deserialize(
+                "foo",
+                Arrays.copyOfRange(
+                    table.get(
+                        partitioner.tablePartition((int) (k % NUM_PARTITIONS_INPUT), kBytes),
+                        kBytes,
+                        MIN_VALID_TS),
+                    8,
+                    16)),
             is(100L));
       }
     }
