@@ -148,6 +148,7 @@ public class PartitionedOperations implements KeyValueOperations {
     // TODO(agavra): write the actual remote partition count into cassandra
     final OptionalInt actualRemoteCount = OptionalInt.empty();
 
+
     final TablePartitioner<Bytes, Integer> partitioner =
         params.schemaType() == SchemaTypes.KVSchema.FACT
         ? TablePartitioner.defaultPartitioner()

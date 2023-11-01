@@ -26,7 +26,6 @@ import static dev.responsive.kafka.internal.db.ColumnName.OFFSET;
 import static dev.responsive.kafka.internal.db.ColumnName.PARTITION_KEY;
 import static dev.responsive.kafka.internal.db.ColumnName.ROW_TYPE;
 import static dev.responsive.kafka.internal.db.ColumnName.SEGMENT_ID;
-import static dev.responsive.kafka.internal.db.ColumnName.TIMESTAMP;
 import static dev.responsive.kafka.internal.db.ColumnName.WINDOW_START;
 import static dev.responsive.kafka.internal.db.RowType.DATA_ROW;
 import static dev.responsive.kafka.internal.db.RowType.METADATA_ROW;

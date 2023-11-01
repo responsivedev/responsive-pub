@@ -19,6 +19,7 @@ package dev.responsive.kafka.internal.db.partitioning;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_DESIRED_NUM_PARTITION_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.SUBPARTITION_HASHER_CONFIG;
 
+import com.datastax.oss.driver.shaded.guava.common.annotations.VisibleForTesting;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import java.util.List;
 import java.util.OptionalInt;
@@ -88,7 +89,8 @@ public class SubPartitioner implements TablePartitioner<Bytes, Integer> {
     return new SubPartitioner(factor, hasher);
   }
 
-  SubPartitioner(final int factor, final Function<Bytes, Integer> hasher) {
+  @VisibleForTesting
+  public SubPartitioner(final int factor, final Function<Bytes, Integer> hasher) {
     this.factor = factor;
     this.hasher = hasher;
   }

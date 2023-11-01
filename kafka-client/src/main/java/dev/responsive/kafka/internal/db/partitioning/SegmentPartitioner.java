@@ -20,7 +20,6 @@ import dev.responsive.kafka.api.stores.ResponsiveWindowParams;
 import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.SegmentPartition;
 import dev.responsive.kafka.internal.utils.Stamped;
 import dev.responsive.kafka.internal.utils.StoreUtil;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
@@ -99,10 +98,10 @@ public class SegmentPartitioner implements TablePartitioner<Stamped<Bytes>, Segm
 
     @Override
     public String toString() {
-      return "SegmentPartition{" +
-          "partitionKey=" + partitionKey +
-          ", segmentId=" + segmentId +
-          '}';
+      return "SegmentPartition{"
+          + "partitionKey=" + partitionKey
+          + ", segmentId=" + segmentId
+          + '}';
     }
   }
 
