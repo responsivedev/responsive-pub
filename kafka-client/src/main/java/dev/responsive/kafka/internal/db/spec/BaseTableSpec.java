@@ -18,19 +18,27 @@ package dev.responsive.kafka.internal.db.spec;
 
 import com.datastax.oss.driver.api.querybuilder.schema.CreateTableWithOptions;
 import dev.responsive.kafka.internal.db.TableOperations;
+import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import java.util.EnumSet;
 
 public class BaseTableSpec implements CassandraTableSpec {
 
   private final String name;
+  final TablePartitioner<?, ?> partitioner;
 
-  public BaseTableSpec(final String name) {
+  public BaseTableSpec(final String name, final TablePartitioner<?, ?> partitioner) {
     this.name = name;
+    this.partitioner = partitioner;
   }
 
   @Override
   public String tableName() {
     return name;
+  }
+
+  @Override
+  public TablePartitioner<?, ?> partitioner() {
+    return partitioner;
   }
 
   @Override

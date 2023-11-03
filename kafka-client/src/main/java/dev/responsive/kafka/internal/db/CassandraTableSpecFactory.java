@@ -18,12 +18,16 @@ package dev.responsive.kafka.internal.db;
 
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.api.stores.ResponsiveWindowParams;
+import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.SegmentPartition;
+import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.db.spec.BaseTableSpec;
 import dev.responsive.kafka.internal.db.spec.CassandraTableSpec;
 import dev.responsive.kafka.internal.db.spec.GlobalTableSpec;
 import dev.responsive.kafka.internal.db.spec.TimeWindowedCompactionTableSpec;
 import dev.responsive.kafka.internal.db.spec.TtlTableSpec;
 import dev.responsive.kafka.internal.stores.SchemaTypes;
+import dev.responsive.kafka.internal.utils.Stamped;
+import org.apache.kafka.common.utils.Bytes;
 
 /**
  * Translates {@link dev.responsive.kafka.api.stores.ResponsiveKeyValueParams}
@@ -36,12 +40,18 @@ import dev.responsive.kafka.internal.stores.SchemaTypes;
  */
 public class CassandraTableSpecFactory {
 
-  public static CassandraTableSpec globalSpec(final ResponsiveKeyValueParams params) {
-    return new GlobalTableSpec(new BaseTableSpec(params.name().remoteName()));
+  public static CassandraTableSpec globalSpec(
+      final ResponsiveKeyValueParams params,
+      final TablePartitioner<Bytes, Integer> partitioner
+  ) {
+    return new GlobalTableSpec(new BaseTableSpec(params.name().remoteName(), partitioner));
   }
 
-  public static CassandraTableSpec fromKVParams(final ResponsiveKeyValueParams params) {
-    CassandraTableSpec spec = new BaseTableSpec(params.name().remoteName());
+  public static CassandraTableSpec fromKVParams(
+      final ResponsiveKeyValueParams params,
+      final TablePartitioner<Bytes, Integer> partitioner
+  ) {
+    CassandraTableSpec spec = new BaseTableSpec(params.name().remoteName(), partitioner);
 
     if (params.timeToLive().isPresent()) {
       spec = new TtlTableSpec(spec, params.timeToLive().get());
@@ -54,8 +64,11 @@ public class CassandraTableSpecFactory {
     return spec;
   }
 
-  public static CassandraTableSpec fromWindowParams(final ResponsiveWindowParams params) {
-    return new BaseTableSpec(params.name().remoteName());
+  public static CassandraTableSpec fromWindowParams(
+      final ResponsiveWindowParams params,
+      final TablePartitioner<Stamped<Bytes>, SegmentPartition> partitioner
+  ) {
+    return new BaseTableSpec(params.name().remoteName(), partitioner);
   }
 
 }

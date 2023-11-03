@@ -17,30 +17,63 @@
 package dev.responsive.kafka.internal.db;
 
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
-import dev.responsive.kafka.internal.utils.SessionClients;
+import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
+import dev.responsive.kafka.internal.db.partitioning.TablePartitioner.DefaultPartitioner;
+import dev.responsive.kafka.internal.stores.RemoteWriteResult;
 
-public class FactWriterFactory<K> implements WriterFactory<K> {
+public class FactWriterFactory<K> extends WriterFactory<K, Integer> {
 
   private final RemoteTable<K, BoundStatement> table;
+  private final CassandraClient client;
+  private final TablePartitioner<K, Integer> partitioner;
+  private final int kafkaPartition;
 
-  public FactWriterFactory(final RemoteTable<K, BoundStatement> table) {
+  public FactWriterFactory(
+      final RemoteTable<K, BoundStatement> table,
+      final CassandraClient client,
+      final int kafkaPartition
+  ) {
+    super(String.format("FactWriterFactory [%s-%d] ", table.name(), kafkaPartition));
     this.table = table;
+    this.client = client;
+    this.partitioner = new DefaultPartitioner<>();
+    this.kafkaPartition = kafkaPartition;
   }
 
   @Override
-  public RemoteWriter<K> createWriter(
-      final SessionClients client,
-      final int partition
+  public RemoteWriter<K, Integer> createWriter(
+      final Integer tablePartition
   ) {
     return new FactSchemaWriter<>(
-        client.cassandraClient(),
+        client,
         table,
-        partition
+        kafkaPartition,
+        tablePartition
     );
   }
 
   @Override
-  public String toString() {
-    return "FactWriterFactory{}";
+  public String tableName() {
+    return table.name();
   }
+
+  @Override
+  public Integer tablePartitionForKey(final K key) {
+    return partitioner.tablePartition(kafkaPartition, key);
+  }
+
+  @Override
+  public RemoteWriteResult<Integer> setOffset(final long offset) {
+    final int metadataPartition = partitioner.metadataTablePartition(kafkaPartition);
+    final var result = client.execute(table.setOffset(kafkaPartition, offset));
+    return result.wasApplied()
+        ? RemoteWriteResult.success(metadataPartition)
+        : RemoteWriteResult.failure(metadataPartition);
+  }
+
+  @Override
+  protected long offset() {
+    return table.fetchOffset(kafkaPartition);
+  }
+
 }

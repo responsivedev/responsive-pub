@@ -14,27 +14,15 @@
  * limitations under the License.
  */
 
-package dev.responsive.kafka.internal.db;
+package dev.responsive.kafka.internal.db.partitioning;
 
-import java.util.Objects;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.common.utils.Bytes;
+import dev.responsive.kafka.internal.utils.TableName;
 
-public class BytesKeySpec implements KeySpec<Bytes> {
+public class SegmentPartitionerTest {
 
-  @Override
-  public Bytes keyFromRecord(final ConsumerRecord<byte[], byte[]> record) {
-    return Bytes.wrap(record.key());
-  }
+  private static final TableName NAME = new TableName("table");
+  private static final String CHANGELOG_TOPIC_NAME = "changelog";
 
-  @Override
-  public int sizeInBytes(final Bytes key) {
-    return key.get().length;
-  }
 
-  @Override
-  public int compare(final Bytes o1, final Bytes o2) {
-    return Objects.compare(o1, o2, Bytes::compareTo);
-  }
 
 }

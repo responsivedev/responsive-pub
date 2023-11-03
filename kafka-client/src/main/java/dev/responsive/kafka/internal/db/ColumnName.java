@@ -30,6 +30,7 @@ public enum ColumnName {
 
   // shared partition key column
   PARTITION_KEY("partitionKey", "partitionkey"),
+  SEGMENT_ID("segmentId", "segmentid"),
 
   // columns for the data tables
   ROW_TYPE("type", "type"),

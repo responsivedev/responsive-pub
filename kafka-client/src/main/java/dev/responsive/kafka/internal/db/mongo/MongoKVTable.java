@@ -31,10 +31,8 @@ import com.mongodb.client.model.UpdateOptions;
 import com.mongodb.client.model.Updates;
 import com.mongodb.client.model.WriteModel;
 import com.mongodb.client.result.UpdateResult;
-import dev.responsive.kafka.internal.db.MetadataRow;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.WriterFactory;
-import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import org.apache.kafka.common.utils.Bytes;
@@ -74,7 +72,7 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<Document>> {
   }
 
   @Override
-  public WriterFactory<Bytes> init(final SubPartitioner partitioner, final int kafkaPartition) {
+  public WriterFactory<Bytes, Integer> init(final int kafkaPartition) {
     metadataRows.computeIfAbsent(kafkaPartition, kp -> {
       final UpdateResult updateResult = metadata.updateOne(
           Filters.eq("partition", kafkaPartition),
@@ -95,30 +93,30 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<Document>> {
       return metadataPartition.id();
     });
 
-    return new MongoWriterFactory<>(this, generic);
+    return new MongoWriterFactory<>(this, generic, kafkaPartition);
   }
 
   @Override
-  public byte[] get(final int partition, final Bytes key, final long minValidTs) {
+  public byte[] get(final int kafkaPartition, final Bytes key, final long minValidTs) {
     final KVDoc v = collection.find(Filters.eq("key", key.get())).first();
     return v == null ? null : v.getValue();
   }
 
   @Override
-  public KeyValueIterator<Bytes, byte[]> range(final int partition, final Bytes from,
+  public KeyValueIterator<Bytes, byte[]> range(final int kafkaPartition, final Bytes from,
                                                final Bytes to,
                                                final long minValidTs) {
     throw new UnsupportedOperationException();
   }
 
   @Override
-  public KeyValueIterator<Bytes, byte[]> all(final int partition, final long minValidTs) {
+  public KeyValueIterator<Bytes, byte[]> all(final int kafkaPartition, final long minValidTs) {
     throw new UnsupportedOperationException();
   }
 
   @Override
   public WriteModel<Document> insert(
-      final int partitionKey,
+      final int kafkaPartition,
       final Bytes key,
       final byte[] value,
       final long epochMillis
@@ -131,33 +129,33 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<Document>> {
   }
 
   @Override
-  public WriteModel<Document> delete(final int partitionKey, final Bytes key) {
+  public WriteModel<Document> delete(final int kafkaPartition, final Bytes key) {
     return new DeleteOneModel<>(
         Filters.eq("key", key)
     );
   }
 
   @Override
-  public MetadataRow metadata(final int partition) {
+  public long fetchOffset(final int kafkaPartition) {
     final MetadataDoc result = metadata.find(
-        Filters.eq("_id", metadataRows.get(partition))
+        Filters.eq("_id", metadataRows.get(kafkaPartition))
     ).first();
     if (result == null) {
       throw new IllegalStateException("Expected to find metadata row");
     }
-    return new MetadataRow(result.offset, -1L);
+    return result.offset;
   }
 
   @Override
-  public WriteModel<Document> setOffset(final int partition, final long offset) {
+  public WriteModel<Document> setOffset(final int kafkaPartition, final long offset) {
     return new UpdateOneModel<>(
-        Filters.eq("_id", metadataRows.get(partition)),
+        Filters.eq("_id", metadataRows.get(kafkaPartition)),
         Updates.set("offset", offset)
     );
   }
 
   @Override
-  public long approximateNumEntries(final int partition) {
+  public long approximateNumEntries(final int kafkaPartition) {
     return 0;
   }
 

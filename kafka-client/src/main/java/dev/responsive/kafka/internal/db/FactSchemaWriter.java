@@ -17,7 +17,6 @@
 package dev.responsive.kafka.internal.db;
 
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
-import com.datastax.oss.driver.api.core.cql.Statement;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
 import java.util.ArrayList;
 import java.util.List;
@@ -25,39 +24,42 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.stream.Collectors;
 
-public class FactSchemaWriter<K> implements RemoteWriter<K> {
+public class FactSchemaWriter<K> implements RemoteWriter<K, Integer> {
 
   private final CassandraClient client;
   private final RemoteTable<K, BoundStatement> table;
-  private final int partition;
+  private final int kafkaPartition;
+  private final int tablePartition;
 
-  private final List<Statement<?>> statements;
+  private final List<BoundStatement> statements;
 
   public FactSchemaWriter(
       final CassandraClient client,
       final RemoteTable<K, BoundStatement> table,
-      final int partition
+      final int kafkaPartition,
+      final int tablePartition
   ) {
     this.client = client;
     this.table = table;
-    this.partition = partition;
+    this.kafkaPartition = kafkaPartition;
+    this.tablePartition = tablePartition;
 
     statements = new ArrayList<>();
   }
 
   @Override
   public void insert(final K key, final byte[] value, long epochMillis) {
-    statements.add(table.insert(partition, key, value, epochMillis));
+    statements.add(table.insert(kafkaPartition, key, value, epochMillis));
   }
 
   @Override
   public void delete(final K key) {
-    statements.add(table.delete(partition, key));
+    statements.add(table.delete(kafkaPartition, key));
   }
 
   @Override
-  public CompletionStage<RemoteWriteResult> flush() {
-    final List<CompletionStage<RemoteWriteResult>> results = statements.stream()
+  public CompletionStage<RemoteWriteResult<Integer>> flush() {
+    final List<CompletionStage<RemoteWriteResult<Integer>>> results = statements.stream()
         .map(this::executeAsync)
         .collect(Collectors.toList());
 
@@ -67,24 +69,16 @@ public class FactSchemaWriter<K> implements RemoteWriter<K> {
     // it's safe to run these in parallel w/o a guaranteed ordering because commit
     // buffer only maintains the latest value per key, and we only flush that, also
     // fact schema expects immutable values
-    var result = CompletableFuture.completedStage(RemoteWriteResult.success(partition));
-    for (final CompletionStage<RemoteWriteResult> future : results) {
+    var result = CompletableFuture.completedStage(RemoteWriteResult.success(tablePartition));
+    for (final CompletionStage<RemoteWriteResult<Integer>> future : results) {
       result = result.thenCombine(future, (one, two) -> !one.wasApplied() ? one : two);
     }
 
     return result;
   }
 
-  @Override
-  public RemoteWriteResult setOffset(final long offset) {
-    final var result = client.execute(table.setOffset(partition, offset));
-    return result.wasApplied()
-        ? RemoteWriteResult.success(partition)
-        : RemoteWriteResult.failure(partition);
-  }
-
-  private CompletionStage<RemoteWriteResult> executeAsync(final Statement<?> statement) {
+  private CompletionStage<RemoteWriteResult<Integer>> executeAsync(final BoundStatement statement) {
     return client.executeAsync(statement)
-        .thenApply(resp -> RemoteWriteResult.of(partition, resp));
+        .thenApply(resp -> RemoteWriteResult.of(tablePartition, resp));
   }
 }

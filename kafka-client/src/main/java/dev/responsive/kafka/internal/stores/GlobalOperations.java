@@ -17,13 +17,13 @@
 package dev.responsive.kafka.internal.stores;
 
 import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadSessionClients;
+import static dev.responsive.kafka.internal.db.partitioning.TablePartitioner.defaultPartitioner;
 
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.CassandraTableSpecFactory;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
-import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
 import dev.responsive.kafka.internal.utils.SessionClients;
 import java.util.Collection;
@@ -60,10 +60,10 @@ public class GlobalOperations implements KeyValueOperations {
 
     final SessionClients sessionClients = loadSessionClients(appConfigs);
     final var client = sessionClients.cassandraClient();
-    final var spec = CassandraTableSpecFactory.globalSpec(params);
+    final var spec = CassandraTableSpecFactory.globalSpec(params, defaultPartitioner());
 
     final var table = client.globalFactory().create(spec);
-    table.init(SubPartitioner.NO_SUBPARTITIONS, IGNORED_PARTITION);
+    table.init(IGNORED_PARTITION);
 
     return new GlobalOperations(
         params.name().kafkaName(),
@@ -165,7 +165,7 @@ public class GlobalOperations implements KeyValueOperations {
       // of auto.commit.interval.ms) unlike the changelog equivalent which
       // always restores from scratch
       final int partition = rec.partition();
-      final long offset = table.metadata(partition).offset;
+      final long offset = table.fetchOffset(partition);
       if (rec.offset() < offset) {
         // ignore records that have already been processed - race conditions
         // are not important since the worst case we'll have just not written

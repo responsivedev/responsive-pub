@@ -16,6 +16,7 @@
 
 package dev.responsive.kafka.internal.stores;
 
+import dev.responsive.kafka.internal.stores.CommitBuffer;
 import dev.responsive.kafka.internal.utils.Iterators;
 import dev.responsive.kafka.internal.utils.Result;
 import java.util.Comparator;

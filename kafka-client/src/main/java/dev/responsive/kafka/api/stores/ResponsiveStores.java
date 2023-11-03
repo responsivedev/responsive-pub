@@ -167,7 +167,10 @@ public final class ResponsiveStores {
   public static <K, V> Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized(
       final ResponsiveKeyValueParams params
   ) {
-    return new ResponsiveMaterialized<>(Materialized.as(keyValueStore(params)), false);
+    return new ResponsiveMaterialized<>(
+        Materialized.as(keyValueStore(params)),
+        params.truncateChangelog()
+    );
   }
 
   //////////////////////////// Window Stores ////////////////////////////
@@ -184,8 +187,7 @@ public final class ResponsiveStores {
    *         that uses Responsive's storage for its backend
    */
   public static WindowBytesStoreSupplier windowStoreSupplier(final ResponsiveWindowParams params) {
-    final var ret = new ResponsiveWindowedStoreSupplier(params);
-    throw new UnsupportedOperationException("Not yet implemented");
+    return new ResponsiveWindowedStoreSupplier(params);
   }
 
   /**
@@ -212,17 +214,16 @@ public final class ResponsiveStores {
       throw new IllegalArgumentException("Retention period cannot be less than window size");
     }
 
-    final ResponsiveWindowedStoreSupplier ret;
     if (!retainDuplicates) {
-      ret = new ResponsiveWindowedStoreSupplier(
+      return new ResponsiveWindowedStoreSupplier(
           ResponsiveWindowParams.window(name, windowSize, gracePeriod)
       );
     } else {
-      ret = new ResponsiveWindowedStoreSupplier(
+      final ResponsiveWindowedStoreSupplier ret = new ResponsiveWindowedStoreSupplier(
           ResponsiveWindowParams.streamStreamJoin(name, windowSize, gracePeriod)
       );
+      throw new UnsupportedOperationException("Stream-stream join stores not yet implemented");
     }
-    throw new UnsupportedOperationException("Not yet implemented");
   }
 
   /**
@@ -243,13 +244,10 @@ public final class ResponsiveStores {
       final Serde<K> keySerde,
       final Serde<V> valueSerde
   ) {
-    final StoreBuilder<WindowStore<K, V>> ret = new ResponsiveStoreBuilder<>(
+    return new ResponsiveStoreBuilder<>(
         Stores.windowStoreBuilder(storeSupplier, keySerde, valueSerde),
         false
     );
-    throw new UnsupportedOperationException(
-        "Window store implementation is incomplete, please contact the Responsive team if you "
-            + "require this feature");
   }
 
   /**
@@ -270,16 +268,13 @@ public final class ResponsiveStores {
       final Serde<K> keySerde,
       final Serde<V> valueSerde
   ) {
-    final StoreBuilder<TimestampedWindowStore<K, V>> ret = new ResponsiveStoreBuilder<>(
+    return new ResponsiveStoreBuilder<>(
         Stores.timestampedWindowStoreBuilder(
             storeSupplier,
             keySerde,
             valueSerde),
         false
     );
-    throw new UnsupportedOperationException(
-        "Window store implementation is incomplete, please contact the Responsive team if you "
-            + "require this feature");
   }
 
   /**
@@ -294,18 +289,10 @@ public final class ResponsiveStores {
   public static <K, V> Materialized<K, V, WindowStore<Bytes, byte[]>> windowMaterialized(
       final ResponsiveWindowParams params
   ) {
-    final Materialized<K, V, WindowStore<Bytes, byte[]>> materialized = Materialized.as(
-        new ResponsiveWindowedStoreSupplier(params)
+    return new ResponsiveMaterialized<>(
+        Materialized.as(new ResponsiveWindowedStoreSupplier(params)),
+        params.truncateChangelog()
     );
-
-    final ResponsiveMaterialized<K, V, WindowStore<Bytes, byte[]>> ret =
-        new ResponsiveMaterialized<>(
-            materialized,
-            false
-    );
-    throw new UnsupportedOperationException(
-        "Window store implementation is incomplete, please contact the Responsive team if you "
-            + "require this feature");
   }
 
   private ResponsiveStores() { }

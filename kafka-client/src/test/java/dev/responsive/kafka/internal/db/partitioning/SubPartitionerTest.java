@@ -16,17 +16,19 @@
 
 package dev.responsive.kafka.internal.db.partitioning;
 
+import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_DESIRED_NUM_PARTITION_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.SUBPARTITION_HASHER_CONFIG;
+import static dev.responsive.kafka.testutils.IntegrationTestUtils.dummyConfig;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.is;
 
-import dev.responsive.kafka.internal.db.partitioning.Hasher;
-import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
+import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.utils.TableName;
 import java.util.List;
+import java.util.Map;
 import java.util.OptionalInt;
-import java.util.stream.Collectors;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Bytes;
 import org.hamcrest.Matchers;
@@ -38,18 +40,16 @@ class SubPartitionerTest {
   private static final TableName NAME = new TableName("table");
   private static final String CHANGELOG_TOPIC_NAME = "changelog";
 
-  private static final Hasher SINGLE_BYTE_HASHER = k -> (int) k.get()[0];
-
   @Test
   public void shouldMapPartitionsToLargerSpace() {
     // Given:
-    final var partitioner = new SubPartitioner(2, SINGLE_BYTE_HASHER);
+    final var partitioner = new SubPartitioner(2, new SingleByteHasher());
 
     // When:
-    final int zero = partitioner.partition(0, Bytes.wrap(new byte[]{0}));
-    final int one = partitioner.partition(0, Bytes.wrap(new byte[]{1}));
-    final int two = partitioner.partition(1, Bytes.wrap(new byte[]{2}));
-    final int three = partitioner.partition(1, Bytes.wrap(new byte[]{3}));
+    final int zero = partitioner.tablePartition(0, Bytes.wrap(new byte[]{0}));
+    final int one = partitioner.tablePartition(0, Bytes.wrap(new byte[]{1}));
+    final int two = partitioner.tablePartition(1, Bytes.wrap(new byte[]{2}));
+    final int three = partitioner.tablePartition(1, Bytes.wrap(new byte[]{3}));
 
     // Then:
     assertThat(zero, is(0));
@@ -61,10 +61,10 @@ class SubPartitionerTest {
   @Test
   public void shouldIterateAllSubPartitionsInOrder() {
     // Given:
-    final var partitioner = new SubPartitioner(3, SINGLE_BYTE_HASHER);
+    final var partitioner = new SubPartitioner(3, new SingleByteHasher());
 
     // When:
-    final List<Integer> result = partitioner.all(2).boxed().collect(Collectors.toList());
+    final List<Integer> result = partitioner.allTablePartitions(2);
 
     // Then:
     assertThat(result, contains(6, 7, 8));
@@ -81,10 +81,9 @@ class SubPartitionerTest {
     final SubPartitioner subPartitioner = SubPartitioner.create(
         actualRemoteCount,
         kafkaPartitions,
-        desiredPartitions,
-        NAME,
-        CHANGELOG_TOPIC_NAME,
-        SINGLE_BYTE_HASHER
+        NAME.remoteName(),
+        responsiveConfig(desiredPartitions),
+        CHANGELOG_TOPIC_NAME
     );
 
     // Then:
@@ -102,10 +101,9 @@ class SubPartitionerTest {
     final SubPartitioner subPartitioner = SubPartitioner.create(
         actualRemoteCount,
         kafkaPartitions,
-        desiredPartitions,
-        NAME,
-        CHANGELOG_TOPIC_NAME,
-        SINGLE_BYTE_HASHER
+        NAME.remoteName(),
+        responsiveConfig(desiredPartitions),
+        CHANGELOG_TOPIC_NAME
     );
 
     // Then:
@@ -125,10 +123,9 @@ class SubPartitionerTest {
         () -> SubPartitioner.create(
             actualRemoteCount,
             kafkaPartitions,
-            desiredPartitions,
-            NAME,
-            CHANGELOG_TOPIC_NAME,
-            SINGLE_BYTE_HASHER
+            NAME.remoteName(),
+            responsiveConfig(desiredPartitions),
+            CHANGELOG_TOPIC_NAME
         )
     );
 
@@ -141,6 +138,21 @@ class SubPartitionerTest {
             containsString("already initialized with 100 partitions")
         )
     );
+  }
+
+  public static class SingleByteHasher implements Hasher {
+
+    @Override
+    public Integer apply(final Bytes bytes) {
+      return (int) bytes.get()[0];
+    }
+  }
+
+  private ResponsiveConfig responsiveConfig(final int desiredNumSubPartitions) {
+    return dummyConfig(Map.of(
+        STORAGE_DESIRED_NUM_PARTITION_CONFIG, desiredNumSubPartitions,
+        SUBPARTITION_HASHER_CONFIG, SingleByteHasher.class
+    ));
   }
 
 }

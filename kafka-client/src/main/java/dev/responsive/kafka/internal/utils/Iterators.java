@@ -16,7 +16,10 @@
 
 package dev.responsive.kafka.internal.utils;
 
+import static java.util.Collections.emptyIterator;
+
 import java.util.Iterator;
+import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -32,6 +35,10 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
 public final class Iterators {
 
   private Iterators() {}
+
+  public static <K, V> KeyValueIterator<K, V> emptyKv() {
+    return Iterators.kv(emptyIterator(), e -> new KeyValue<>(null, null));
+  }
 
   /**
    * Returns an iterator that caches the last value returned by
@@ -96,6 +103,15 @@ public final class Iterators {
       final long windowSize
   ) {
     return new WindowKeyIterator<>(delegate, windowSize);
+  }
+
+  /**
+   * Returns an iterator that iterates over all delegates in order
+   */
+  public static <K, V> KeyValueIterator<K, V> wrapped(
+      final List<KeyValueIterator<K, V>> delegates
+  ) {
+    return new MultiPartitionRangeIterator<>(delegates);
   }
 
   public static <I, O, V> KeyValueIterator<O, V> mapKeys(

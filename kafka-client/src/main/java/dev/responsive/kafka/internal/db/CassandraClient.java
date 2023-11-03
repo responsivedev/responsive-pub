@@ -120,19 +120,19 @@ public class CassandraClient {
   }
 
   /**
-   * Counts the number of elements in a partition
+   * Counts the number of elements in a remote table partition
    *
-   * @param tableName the table to count from
-   * @param partition the partition to count
+   * @param tableName      the table to count from
+   * @param tablePartition the remote table partition to count
    *
-   * @return the number of elements in {@code tableName} with {@code partition} as
+   * @return the number of elements in {@code tableName} with {@code tablePartition} as
    *         the partition
    */
-  public long count(final String tableName, final int partition) {
+  public long count(final String tableName, final int tablePartition) {
     final ResultSet result = execute(QueryBuilder
         .selectFrom(tableName)
         .countAll()
-        .where(PARTITION_KEY.relation().isEqualTo(PARTITION_KEY.literal(partition)))
+        .where(PARTITION_KEY.relation().isEqualTo(PARTITION_KEY.literal(tablePartition)))
         .build()
     );
 

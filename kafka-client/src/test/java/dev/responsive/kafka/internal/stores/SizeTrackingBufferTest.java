@@ -4,7 +4,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 
 import dev.responsive.kafka.internal.db.KeySpec;
-import dev.responsive.kafka.internal.stores.SizeTrackingBuffer;
 import dev.responsive.kafka.internal.utils.Result;
 import java.util.List;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -22,8 +21,8 @@ class SizeTrackingBufferTest {
     }
 
     @Override
-    public Bytes bytes(final Bytes key) {
-      return key;
+    public int sizeInBytes(final Bytes key) {
+      return key.get().length;
     }
 
     @Override

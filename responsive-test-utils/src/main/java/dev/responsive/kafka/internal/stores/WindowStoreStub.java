@@ -25,18 +25,25 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 
 public class WindowStoreStub {
   final Comparator<Stamped<Bytes>> keyComparator = Comparator.comparing(k -> k.key);
+
   private final NavigableMap<Stamped<Bytes>, byte[]> records =
       new TreeMap<>(keyComparator.thenComparingLong(k -> k.stamp));
 
-  public long count() {
-    return records.size();
+  private final long retentionPeriod;
+  private long observedStreamTime = 0L;
+
+  public WindowStoreStub() {
+    // TODO: how can we pass the actual retention period through to the store stub?
+    this.retentionPeriod = 15L;
   }
 
   public void put(final Stamped<Bytes> key, final byte[] value) {
+    observedStreamTime = Math.max(observedStreamTime, key.stamp);
     records.put(key, value);
   }
 
   public void delete(final Stamped<Bytes> key) {
+    observedStreamTime = Math.max(observedStreamTime, key.stamp);
     records.remove(key);
   }
 
@@ -44,7 +51,12 @@ public class WindowStoreStub {
       final Bytes key,
       final long windowStart
   ) {
-    throw new UnsupportedOperationException("Not yet implemented.");
+    final Stamped<Bytes> windowedKey = new Stamped<>(key, windowStart);
+    if (windowStart < minValidTimestamp() && records.containsKey(windowedKey)) {
+      return records.get(windowedKey);
+    } else {
+      return null;
+    }
   }
 
   public KeyValueIterator<Stamped<Bytes>, byte[]> fetch(
@@ -93,5 +105,9 @@ public class WindowStoreStub {
       final long timeTo
   ) {
     throw new UnsupportedOperationException("Not yet implemented.");
+  }
+
+  private long minValidTimestamp() {
+    return observedStreamTime - retentionPeriod + 1;
   }
 }

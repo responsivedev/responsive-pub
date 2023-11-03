@@ -3,6 +3,7 @@ package dev.responsive.kafka.testutils;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_CONFIG;
 
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
+import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.db.CassandraClientFactory;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -13,12 +14,14 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
@@ -57,6 +60,34 @@ public final class IntegrationTestUtils {
               .build()
       );
     }
+  }
+
+  public static ResponsiveConfig copyConfigWithOverrides(
+      final ResponsiveConfig original,
+      final Map<String, Object> overrides
+  ) {
+    final var configMap = original.originals();
+    configMap.putAll(overrides);
+    return ResponsiveConfig.responsiveConfig(configMap);
+  }
+
+  public static ResponsiveConfig dummyConfig() {
+    final Properties props = new Properties();
+    props.put(ResponsiveConfig.STORAGE_DATACENTER_CONFIG, "responsive");
+    props.put(ResponsiveConfig.STORAGE_HOSTNAME_CONFIG, "localhost");
+    props.put(ResponsiveConfig.STORAGE_PORT_CONFIG, 666);
+    props.put(ResponsiveConfig.TENANT_ID_CONFIG, "responsive-test");
+    return ResponsiveConfig.responsiveConfig(props);
+  }
+
+  public static ResponsiveConfig dummyConfig(final Map<?, ?> overrides) {
+    final Properties props = new Properties();
+    props.put(ResponsiveConfig.STORAGE_DATACENTER_CONFIG, "responsive");
+    props.put(ResponsiveConfig.STORAGE_HOSTNAME_CONFIG, "localhost");
+    props.put(ResponsiveConfig.STORAGE_PORT_CONFIG, 666);
+    props.put(ResponsiveConfig.TENANT_ID_CONFIG, "TTD");
+    props.putAll(overrides);
+    return ResponsiveConfig.responsiveConfig(props);
   }
 
   public static String getCassandraValidName(final TestInfo info) {
@@ -132,6 +163,29 @@ public final class IntegrationTestUtils {
             topic,
             (int) k % partitions,
             timestamp.get(),
+            k,
+            v
+        ));
+      }
+    }
+    producer.flush();
+  }
+
+  public static void pipeInput(
+      final String topic,
+      final int partitions,
+      final KafkaProducer<Long, Long> producer,
+      final Function<KeyValue<Long, Long>, Long> timestampForKV,
+      final long valFrom,
+      final long valTo,
+      final long... keys
+  ) {
+    for (final long k : keys) {
+      for (long v = valFrom; v < valTo; v++) {
+        producer.send(new ProducerRecord<>(
+            topic,
+            (int) k % partitions,
+            timestampForKV.apply(new KeyValue<>(k, v)),
             k,
             v
         ));

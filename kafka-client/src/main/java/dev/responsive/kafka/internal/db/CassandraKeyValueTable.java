@@ -44,6 +44,7 @@ import dev.responsive.kafka.internal.utils.Iterators;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.TimeoutException;
@@ -53,7 +54,8 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
+public class CassandraKeyValueTable
+    implements RemoteKVTable<BoundStatement>, TableMetadata<Integer> {
 
   private static final Logger LOG = LoggerFactory.getLogger(CassandraKeyValueTable.class);
   private static final String FROM_BIND = "fk";
@@ -61,13 +63,18 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
 
   private final String name;
   private final CassandraClient client;
+  private final SubPartitioner partitioner;
 
   private final PreparedStatement get;
   private final PreparedStatement range;
+  private final PreparedStatement all;
   private final PreparedStatement insert;
   private final PreparedStatement delete;
-  private final PreparedStatement getMeta;
+  private final PreparedStatement fetchOffset;
   private final PreparedStatement setOffset;
+  private final PreparedStatement fetchEpoch;
+  private final PreparedStatement reserveEpoch;
+  private final PreparedStatement ensureEpoch;
 
   public static CassandraKeyValueTable create(
       final CassandraTableSpec spec,
@@ -110,7 +117,19 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
             .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
             .where(DATA_KEY.relation().isGreaterThanOrEqualTo(bindMarker(FROM_BIND)))
-            .where(DATA_KEY.relation().isLessThan(bindMarker(TO_BIND)))
+            .where(DATA_KEY.relation().isLessThanOrEqualTo(bindMarker(TO_BIND)))
+            .where(TIMESTAMP.relation().isGreaterThanOrEqualTo(bindMarker(TIMESTAMP.bind())))
+            // ALLOW FILTERING is OK b/c the query only scans one partition
+            .allowFiltering()
+            .build()
+    );
+
+    final var all = client.prepare(
+        QueryBuilder
+            .selectFrom(name)
+            .columns(DATA_KEY.column(), DATA_VALUE.column(), TIMESTAMP.column())
+            .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
+            .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
             .where(TIMESTAMP.relation().isGreaterThanOrEqualTo(bindMarker(TIMESTAMP.bind())))
             // ALLOW FILTERING is OK b/c the query only scans one partition
             .allowFiltering()
@@ -126,10 +145,9 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
             .build()
     );
 
-    final var getMeta = client.prepare(
+    final var fetchOffset = client.prepare(
         QueryBuilder
             .selectFrom(name)
-            .column(EPOCH.column())
             .column(OFFSET.column())
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
             .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
@@ -147,15 +165,52 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
             .build()
     );
 
+    final var fetchEpoch = client.prepare(
+        QueryBuilder
+            .selectFrom(name)
+            .column(EPOCH.column())
+            .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
+            .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
+            .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
+            .build()
+    );
+
+    final var reserveEpoch = client.prepare(
+        QueryBuilder
+            .update(name)
+            .setColumn(EPOCH.column(), bindMarker(EPOCH.bind()))
+            .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
+            .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
+            .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
+            .ifColumn(EPOCH.column()).isLessThan(bindMarker(EPOCH.bind()))
+            .build()
+    );
+
+    final var ensureEpoch = client.prepare(
+        QueryBuilder
+            .update(name)
+            .setColumn(EPOCH.column(), bindMarker(EPOCH.bind()))
+            .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
+            .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
+            .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
+            .ifColumn(EPOCH.column()).isEqualTo(bindMarker(EPOCH.bind()))
+            .build()
+    );
+
     return new CassandraKeyValueTable(
         name,
         client,
+        (SubPartitioner) spec.partitioner(),
         get,
         range,
+        all,
         insert,
         delete,
-        getMeta,
-        setOffset
+        fetchOffset,
+        setOffset,
+        fetchEpoch,
+        reserveEpoch,
+        ensureEpoch
     );
   }
 
@@ -176,21 +231,31 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
   public CassandraKeyValueTable(
       final String name,
       final CassandraClient client,
+      final SubPartitioner partitioner,
       final PreparedStatement get,
       final PreparedStatement range,
+      final PreparedStatement all,
       final PreparedStatement insert,
       final PreparedStatement delete,
-      final PreparedStatement getMeta,
-      final PreparedStatement setOffset
+      final PreparedStatement fetchOffset,
+      final PreparedStatement setOffset,
+      final PreparedStatement fetchEpoch,
+      final PreparedStatement reserveEpoch,
+      final PreparedStatement ensureEpoch
   ) {
     this.name = name;
     this.client = client;
+    this.partitioner = partitioner;
     this.get = get;
     this.range = range;
+    this.all = all;
     this.insert = insert;
     this.delete = delete;
-    this.getMeta = getMeta;
+    this.fetchOffset = fetchOffset;
     this.setOffset = setOffset;
+    this.fetchEpoch = fetchEpoch;
+    this.reserveEpoch = reserveEpoch;
+    this.ensureEpoch = ensureEpoch;
   }
 
   @Override
@@ -199,11 +264,10 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
   }
 
   @Override
-  public WriterFactory<Bytes> init(
-      final SubPartitioner partitioner,
+  public WriterFactory<Bytes, Integer> init(
       final int kafkaPartition
   ) {
-    partitioner.all(kafkaPartition).forEach(sub -> {
+    partitioner.allTablePartitions(kafkaPartition).forEach(sub -> {
       client.execute(
           QueryBuilder.insertInto(name)
               .value(PARTITION_KEY.column(), PARTITION_KEY.literal(sub))
@@ -216,18 +280,32 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
               .build()
       );
     });
-    return LwtWriterFactory.reserve(this, client, partitioner, kafkaPartition);
+    final WriterFactory<Bytes, Integer> writerFactory = LwtWriterFactory.initialize(
+        this,
+        this,
+        client,
+        partitioner,
+        kafkaPartition,
+        partitioner.allTablePartitions(kafkaPartition));
+
+    final int basePartition = partitioner.metadataTablePartition(kafkaPartition);
+    LOG.info("Initialized store {} with {} for subpartitions in range: {{} -> {}}",
+             name, writerFactory, basePartition, basePartition + partitioner.getFactor() - 1);
+
+    return writerFactory;
   }
 
   @Override
   public byte[] get(
-      final int partition,
+      final int kafkaPartition,
       final Bytes key,
       final long minValidTs
   ) {
+    final int tablePartition = partitioner.tablePartition(kafkaPartition, key);
+
     final BoundStatement get = this.get
         .bind()
-        .setInt(PARTITION_KEY.bind(), partition)
+        .setInt(PARTITION_KEY.bind(), tablePartition)
         .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
         .setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(minValidTs));
 
@@ -244,50 +322,60 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
 
   @Override
   public KeyValueIterator<Bytes, byte[]> range(
-      final int partition,
+      final int kafkaPartition,
       final Bytes from,
       final Bytes to,
       final long minValidTs
   ) {
-    final BoundStatement range = this.range
-        .bind()
-        .setInt(PARTITION_KEY.bind(), partition)
-        .setByteBuffer(FROM_BIND, ByteBuffer.wrap(from.get()))
-        .setByteBuffer(TO_BIND, ByteBuffer.wrap(to.get()))
-        .setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(minValidTs));
+    // TODO: explore more efficient ways to serve bounded range queries, for now we have to
+    //  iterate over all subpartitions and merge the results since we don't know which subpartitions
+    //  hold keys within the given range
+    //  One option would be to configure the partitioner with an alternative hasher that's optimized
+    //  for range queries with a Comparator-aware key-->subpartition mapping strategy.
+    final List<KeyValueIterator<Bytes, byte[]>> resultsPerPartition = new LinkedList<>();
+    for (final int partition : partitioner.allTablePartitions(kafkaPartition)) {
+      final BoundStatement range = this.range
+          .bind()
+          .setInt(PARTITION_KEY.bind(), partition)
+          .setByteBuffer(FROM_BIND, ByteBuffer.wrap(from.get()))
+          .setByteBuffer(TO_BIND, ByteBuffer.wrap(to.get()))
+          .setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(minValidTs));
 
-    final ResultSet result = client.execute(range);
-    return Iterators.kv(result.iterator(), CassandraKeyValueTable::rows);
+      final ResultSet result = client.execute(range);
+      resultsPerPartition.add(Iterators.kv(result.iterator(), CassandraKeyValueTable::rows));
+    }
+    return Iterators.wrapped(resultsPerPartition);
   }
 
   @Override
   public KeyValueIterator<Bytes, byte[]> all(
-      final int partition,
+      final int kafkaPartition,
       final long minValidTs
   ) {
-    final ResultSet result = client.execute(QueryBuilder
-        .selectFrom(name)
-        .columns(DATA_KEY.column(), DATA_VALUE.column(), TIMESTAMP.column())
-        .where(PARTITION_KEY.relation().isEqualTo(PARTITION_KEY.literal(partition)))
-        .where(TIMESTAMP.relation().isGreaterThanOrEqualTo(TIMESTAMP.literal(minValidTs)))
-        // since all() scans all the data anyway, allowing filtering is no worse
-        .allowFiltering()
-        .build()
-    );
+    final List<KeyValueIterator<Bytes, byte[]>> resultsPerPartition = new LinkedList<>();
+    for (final int partition : partitioner.allTablePartitions(kafkaPartition)) {
+      final BoundStatement range = this.all
+          .bind()
+          .setInt(PARTITION_KEY.bind(), partition)
+          .setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(minValidTs));
 
-    return Iterators.kv(result.iterator(), CassandraKeyValueTable::rows);
+      final ResultSet result = client.execute(range);
+      resultsPerPartition.add(Iterators.kv(result.iterator(), CassandraKeyValueTable::rows));
+    }
+    return Iterators.wrapped(resultsPerPartition);
   }
 
   @Override
   public BoundStatement insert(
-      final int partitionKey,
+      final int kafkaPartition,
       final Bytes key,
       final byte[] value,
       final long epochMillis
   ) {
+    final int tablePartition = partitioner.tablePartition(kafkaPartition, key);
     return insert
         .bind()
-        .setInt(PARTITION_KEY.bind(), partitionKey)
+        .setInt(PARTITION_KEY.bind(), tablePartition)
         .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
         .setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(epochMillis))
         .setByteBuffer(DATA_VALUE.bind(), ByteBuffer.wrap(value));
@@ -295,47 +383,85 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
 
   @Override
   public BoundStatement delete(
-      final int partitionKey,
+      final int kafkaPartition,
       final Bytes key
   ) {
+    final int tablePartition = partitioner.tablePartition(kafkaPartition, key);
     return delete
         .bind()
-        .setInt(PARTITION_KEY.bind(), partitionKey)
+        .setInt(PARTITION_KEY.bind(), tablePartition)
         .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()));
   }
 
   @Override
-  public MetadataRow metadata(final int partition) {
-    final BoundStatement bound = getMeta
-        .bind()
-        .setInt(PARTITION_KEY.bind(), partition);
-    final List<Row> result = client.execute(bound).all();
+  public long fetchOffset(final int kafkaPartition) {
+    final int metadataTablePartition = partitioner.metadataTablePartition(kafkaPartition);
+
+    final List<Row> result = client.execute(
+        fetchOffset
+            .bind()
+            .setInt(PARTITION_KEY.bind(), metadataTablePartition))
+        .all();
 
     if (result.size() > 1) {
       throw new IllegalStateException(String.format(
           "Expected at most one offset row for %s[%s] but got %d",
-          name, partition, result.size()));
+          name, kafkaPartition, result.size()));
     } else if (result.isEmpty()) {
-      return new MetadataRow(NO_COMMITTED_OFFSET, -1L);
+      return NO_COMMITTED_OFFSET;
     } else {
-      return new MetadataRow(
-          result.get(0).getLong(OFFSET.column()),
-          result.get(0).getLong(EPOCH.column())
-      );
+      return result.get(0).getLong(OFFSET.column());
     }
   }
 
   @Override
-  public BoundStatement setOffset(final int partition, final long offset) {
+  public BoundStatement setOffset(final int kafkaPartition, final long offset) {
+    final int metadataTablePartition = partitioner.metadataTablePartition(kafkaPartition);
     return setOffset
         .bind()
-        .setInt(PARTITION_KEY.bind(), partition)
+        .setInt(PARTITION_KEY.bind(), metadataTablePartition)
         .setLong(OFFSET.bind(), offset);
   }
 
   @Override
-  public long approximateNumEntries(final int partition) {
-    return client.count(name(), partition);
+  public long fetchEpoch(final Integer tablePartition) {
+    final List<Row> result = client.execute(
+            fetchEpoch
+                .bind()
+                .setInt(PARTITION_KEY.bind(), tablePartition))
+        .all();
+
+    if (result.size() != 1) {
+      throw new IllegalStateException(String.format(
+          "Expected exactly one epoch metadata row for %s[%s] but got %d",
+          name, tablePartition, result.size()));
+    } else {
+      return result.get(0).getLong(EPOCH.column());
+    }
+  }
+
+  @Override
+  public BoundStatement reserveEpoch(final Integer tablePartition, final long epoch) {
+    return reserveEpoch
+        .bind()
+        .setInt(PARTITION_KEY.bind(), tablePartition)
+        .setLong(EPOCH.bind(), epoch);
+  }
+
+  @Override
+  public BoundStatement ensureEpoch(final Integer tablePartition, final long epoch) {
+    return ensureEpoch
+        .bind()
+        .setInt(PARTITION_KEY.bind(), tablePartition)
+        .setLong(EPOCH.bind(), epoch);
+  }
+
+  @Override
+  public long approximateNumEntries(final int kafkaPartition) {
+    return partitioner.allTablePartitions(kafkaPartition)
+        .stream()
+        .mapToLong(tablePartition -> client.count(name(), tablePartition))
+        .sum();
   }
 
   private static KeyValue<Bytes, byte[]> rows(final Row row) {

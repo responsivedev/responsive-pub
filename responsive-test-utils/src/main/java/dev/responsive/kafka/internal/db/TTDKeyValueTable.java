@@ -14,15 +14,14 @@
  * limitations under the License.
  */
 
-package dev.responsive.kafka.internal.stores;
+package dev.responsive.kafka.internal.db;
 
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.kafka.internal.clients.TTDCassandraClient;
-import dev.responsive.kafka.internal.db.CassandraClient;
-import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.spec.CassandraTableSpec;
 import dev.responsive.kafka.internal.db.spec.DelegatingTableSpec;
 import dev.responsive.kafka.internal.db.spec.TtlTableSpec;
+import dev.responsive.kafka.internal.stores.KVStoreStub;
 import java.time.Duration;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -70,7 +69,7 @@ public class TTDKeyValueTable extends TTDTable<Bytes> implements RemoteKVTable<B
 
   @Override
   public BoundStatement insert(
-      final int partitionKey,
+      final int kafkaPartition,
       final Bytes key,
       final byte[] value,
       final long epochMillis
@@ -80,30 +79,37 @@ public class TTDKeyValueTable extends TTDTable<Bytes> implements RemoteKVTable<B
   }
 
   @Override
-  public BoundStatement delete(final int partitionKey, final Bytes key) {
+  public BoundStatement delete(final int kafkaPartition, final Bytes key) {
     stub.delete(key);
     return null;
   }
 
   @Override
-  public byte[] get(final int partition, final Bytes key, long minValidTs) {
+  public byte[] get(final int kafkaPartition, final Bytes key, long minValidTs) {
     return stub.get(key);
   }
 
   @Override
   public KeyValueIterator<Bytes, byte[]> range(
-      final int partition,
+      final int kafkaPartition,
       Bytes from,
       final Bytes to,
-      long minValidTs) {
+      long minValidTs
+  ) {
     return stub.range(from, to);
   }
 
   @Override
   public KeyValueIterator<Bytes, byte[]> all(
-      final int partition,
+      final int kafkaPartition,
       long minValidTs
   ) {
     return stub.all();
   }
+
+  @Override
+  public long approximateNumEntries(final int kafkaPartition) {
+    return client.count(name(), kafkaPartition);
+  }
+
 }

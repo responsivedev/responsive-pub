@@ -23,35 +23,20 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 public interface RemoteWindowedTable<S> extends RemoteTable<Stamped<Bytes>, S> {
 
   byte[] fetch(
-      int partition,
+      int kafkaPartition,
       Bytes key,
       long windowStart
   );
 
   KeyValueIterator<Stamped<Bytes>, byte[]> fetch(
-      int partition,
-      Bytes key,
-      long timeFrom,
-      long timeTo
-  );
-
-  KeyValueIterator<Stamped<Bytes>, byte[]> backFetch(
-      int partition,
+      int kafkaPartition,
       Bytes key,
       long timeFrom,
       long timeTo
   );
 
   KeyValueIterator<Stamped<Bytes>, byte[]> fetchRange(
-      int partition,
-      Bytes fromKey,
-      Bytes toKey,
-      long timeFrom,
-      long timeTo
-  );
-
-  KeyValueIterator<Stamped<Bytes>, byte[]> backFetchRange(
-      int partition,
+      int kafkaPartition,
       Bytes fromKey,
       Bytes toKey,
       long timeFrom,
@@ -59,13 +44,29 @@ public interface RemoteWindowedTable<S> extends RemoteTable<Stamped<Bytes>, S> {
   );
 
   KeyValueIterator<Stamped<Bytes>, byte[]> fetchAll(
-      int partition,
+      int kafkaPartition,
+      long timeFrom,
+      long timeTo
+  );
+
+
+  KeyValueIterator<Stamped<Bytes>, byte[]> backFetch(
+      int kafkaPartition,
+      Bytes key,
+      long timeFrom,
+      long timeTo
+  );
+
+  KeyValueIterator<Stamped<Bytes>, byte[]> backFetchRange(
+      int kafkaPartition,
+      Bytes fromKey,
+      Bytes toKey,
       long timeFrom,
       long timeTo
   );
 
   KeyValueIterator<Stamped<Bytes>, byte[]> backFetchAll(
-      int partition,
+      int kafkaPartition,
       long timeFrom,
       long timeTo
   );

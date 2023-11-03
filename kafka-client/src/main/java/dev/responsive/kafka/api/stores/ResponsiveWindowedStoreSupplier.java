@@ -16,6 +16,8 @@
 
 package dev.responsive.kafka.api.stores;
 
+import static dev.responsive.kafka.internal.utils.StoreUtil.computeSegmentInterval;
+
 import dev.responsive.kafka.internal.stores.ResponsiveWindowStore;
 import java.util.Locale;
 import org.apache.kafka.common.utils.Bytes;
@@ -29,7 +31,7 @@ public class ResponsiveWindowedStoreSupplier implements WindowBytesStoreSupplier
 
   public ResponsiveWindowedStoreSupplier(final ResponsiveWindowParams params) {
     this.params = params;
-    this.segmentIntervalMs = params.retentionPeriod() / params.numSegments();
+    this.segmentIntervalMs = computeSegmentInterval(params.retentionPeriod(), params.numSegments());
   }
 
   @Override

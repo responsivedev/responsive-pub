@@ -18,7 +18,6 @@ package dev.responsive.kafka.internal.stores;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 
-import dev.responsive.kafka.internal.stores.LocalRemoteKvIterator;
 import dev.responsive.kafka.internal.utils.Result;
 import java.util.ArrayList;
 import java.util.List;

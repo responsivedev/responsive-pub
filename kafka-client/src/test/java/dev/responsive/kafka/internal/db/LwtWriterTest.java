@@ -81,6 +81,7 @@ class LwtWriterTest {
         () -> capturingStatement("fencingStatement", new Object[]{}),
         new TestRemoteTable("foo", client),
         0,
+        0,
         2
     );
 
@@ -123,6 +124,7 @@ class LwtWriterTest {
         () -> capturingStatement("fencingStatement", new Object[]{}),
         new TestRemoteTable("foo", client),
         0,
+        0,
         2
     );
 
@@ -139,24 +141,24 @@ class LwtWriterTest {
   private static class TestRemoteTable extends CassandraKeyValueTable {
 
     public TestRemoteTable(final String tableName, final CassandraClient client) {
-      super(tableName, client, null, null, null, null, null, null);
+      super(tableName, client, null, null, null, null, null, null, null, null, null, null, null);
     }
 
     @Override
     public BoundStatement insert(
-        final int partition,
+        final int kafkaPartition,
         final Bytes key,
         final byte[] value,
         long epochMillis) {
-      return capturingStatement("insertData", new Object[]{name(), partition, key, value});
+      return capturingStatement("insertData", new Object[]{name(), kafkaPartition, key, value});
     }
 
     @Override
     public BoundStatement delete(
-        final int partition,
+        final int kafkaPartition,
         final Bytes key
     ) {
-      return capturingStatement("deleteData", new Object[]{name(), partition, key});
+      return capturingStatement("deleteData", new Object[]{name(), kafkaPartition, key});
     }
   }
 

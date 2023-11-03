@@ -34,8 +34,8 @@ public class StampedKeySpec implements KeySpec<Stamped<Bytes>> {
   }
 
   @Override
-  public Bytes bytes(final Stamped<Bytes> key) {
-    return key.key;
+  public int sizeInBytes(final Stamped<Bytes> key) {
+    return key.key.get().length + Long.BYTES;
   }
 
   @Override

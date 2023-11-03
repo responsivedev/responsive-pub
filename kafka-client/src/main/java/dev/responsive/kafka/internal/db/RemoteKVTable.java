@@ -25,14 +25,14 @@ public interface RemoteKVTable<S> extends RemoteTable<Bytes, S> {
    * Retrieves the value of the given {@code partitionKey} and {@code key}
    * from {@code table}.
    *
-   * @param partition  the partition
-   * @param key        the data key
-   * @param minValidTs the minimum valid timestamp to apply semantic TTL,
-   *                   in epochMillis
+   * @param kafkaPartition  the kafka partition
+   * @param key             the data key
+   * @param minValidTs      the minimum valid timestamp to apply semantic TTL,
+   *                        in epochMillis
    *
    * @return the value previously set
    */
-  byte[] get(int partition, Bytes key, long minValidTs);
+  byte[] get(int kafkaPartition, Bytes key, long minValidTs);
 
   /**
    * Retrieves a range of key value pairs from the given {@code partitionKey} and
@@ -43,16 +43,15 @@ public interface RemoteKVTable<S> extends RemoteTable<Bytes, S> {
    * as it's iterated (data fetching is handling by the underlying Cassandra
    * session).
    *
-   * @param partition  the partition
-   * @param from       the starting key (inclusive)
-   * @param to         the ending key (exclusive)
-   * @param minValidTs the minimum timestamp, in epochMillis, to consider
-   *                   valid
+   * @param kafkaPartition  the kafka partition
+   * @param from            the starting key (inclusive)
+   * @param to              the ending key (exclusive)
+   * @param minValidTs      the minimum timestamp, in epochMillis, to consider valid
    *
    * @return an iterator of all key-value pairs in the range
    */
   KeyValueIterator<Bytes, byte[]> range(
-      int partition,
+      int kafkaPartition,
       Bytes from,
       Bytes to,
       long minValidTs
@@ -66,11 +65,19 @@ public interface RemoteKVTable<S> extends RemoteTable<Bytes, S> {
    * as it's iterated (data fetching is handling by the underlying Cassandra
    * session).
    *
-   * @param partition  the partition
-   * @param minValidTs the minimum valid timestamp, in epochMilliis, to return
+   * @param kafkaPartition  the kafka partition
+   * @param minValidTs      the minimum valid timestamp, in epochMilliis, to return
    *
    * @return an iterator of all key-value pairs
    */
-  KeyValueIterator<Bytes, byte[]> all(int partition, long minValidTs);
+  KeyValueIterator<Bytes, byte[]> all(int kafkaPartition, long minValidTs);
 
+  /**
+   *  An approximate count of the total number of entries across all sub-partitions
+   *  in the remote table that correspond to this kafka partition
+   *
+   * @param kafkaPartition the kafka partition to count entries for
+   * @return the approximate number of entries for this kafka partition
+   */
+  long approximateNumEntries(int kafkaPartition);
 }

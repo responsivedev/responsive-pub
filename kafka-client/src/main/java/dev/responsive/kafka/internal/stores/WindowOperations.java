@@ -18,7 +18,6 @@
 
 package dev.responsive.kafka.internal.stores;
 
-import dev.responsive.kafka.internal.utils.Stamped;
 import java.io.Closeable;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -28,9 +27,9 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
 
 public interface WindowOperations extends Closeable, RecordBatchingStateRestoreCallback {
 
-  void put(final Stamped<Bytes> windowedKey, final byte[] value);
+  void put(final Bytes key, final byte[] value, final long windowStartTime);
 
-  void delete(final Stamped<Bytes> windowedKey);
+  void delete(final Bytes key, final long windowStartTime);
 
   byte[] fetch(final Bytes key, final long windowStartTime);
 
