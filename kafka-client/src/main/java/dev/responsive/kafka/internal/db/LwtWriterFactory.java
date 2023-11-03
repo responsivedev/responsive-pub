@@ -101,7 +101,7 @@ public class LwtWriterFactory<K, P> extends WriterFactory<K, P> {
       final PendingFlush pendingFlush,
       final long consumedOffset
   ) {
-    tableMetadata.postCommit(kafkaPartition, epoch);
+    tableMetadata.preCommit(kafkaPartition, epoch);
 
     final var flushResult = super.commitPendingFlush(pendingFlush, consumedOffset);
     tableMetadata.postCommit(kafkaPartition, epoch);

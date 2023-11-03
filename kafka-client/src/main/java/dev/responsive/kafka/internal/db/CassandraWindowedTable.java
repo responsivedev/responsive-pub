@@ -29,6 +29,7 @@ import static dev.responsive.kafka.internal.db.ColumnName.SEGMENT_ID;
 import static dev.responsive.kafka.internal.db.ColumnName.WINDOW_START;
 import static dev.responsive.kafka.internal.db.RowType.DATA_ROW;
 import static dev.responsive.kafka.internal.db.RowType.METADATA_ROW;
+import static dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.UNINITIALIZED_STREAM_TIME;
 import static dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration.NO_COMMITTED_OFFSET;
 import static java.util.Collections.singletonList;
 
@@ -97,8 +98,8 @@ public class CassandraWindowedTable implements
   // as these entities have different views of the current time and should not be unified.
   // (Specifically, this table will always lag the view of stream-time that is shared by the
   // ResponsiveWindowStore and CommitBuffer due to buffering/batching of writes)
-  private long lastFlushStreamTime = 0L;
-  private long pendingFlushStreamTime = 0L;
+  private long lastFlushStreamTime = UNINITIALIZED_STREAM_TIME;
+  private long pendingFlushStreamTime = UNINITIALIZED_STREAM_TIME;
   private SegmentRoll activeRoll;
 
   public static CassandraWindowedTable create(
@@ -537,7 +538,6 @@ public class CassandraWindowedTable implements
 
   @Override
   public long fetchEpoch(final SegmentPartition segmentPartition) {
-
     final List<Row> result = client.execute(
             fetchEpoch
                 .bind()

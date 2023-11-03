@@ -83,6 +83,7 @@ public class SegmentPartitioner implements TablePartitioner<Stamped<Bytes>, Segm
   private static final Logger LOG = LoggerFactory.getLogger(SegmentPartitioner.class);
 
   public static final long METADATA_SEGMENT_ID = -1L;
+  public static final long UNINITIALIZED_STREAM_TIME = -1L;
 
   private final long retentionPeriodMs;
   private final long segmentIntervalMs;
@@ -189,7 +190,7 @@ public class SegmentPartitioner implements TablePartitioner<Stamped<Bytes>, Segm
     final long newMinActiveSegment = segmentId(newStreamTime - retentionPeriodMs + 1);
 
     // Special case where this is the first record we've received
-    if (oldStreamTime == -1L) {
+    if (oldStreamTime == UNINITIALIZED_STREAM_TIME) {
       final long[] segmentsToExpire = new long[]{};
 
       final long[] segmentsToCreate = LongStream.range(
