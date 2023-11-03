@@ -24,6 +24,8 @@ import java.util.Collections;
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
 import org.apache.kafka.common.utils.Bytes;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * A segment-based partitioner where kafka partitions are mapped to a subset of remote partitions
@@ -77,6 +79,8 @@ import org.apache.kafka.common.utils.Bytes;
  * similarly to how they would configure the number of sub-partitions for a key-value store.
  */
 public class SegmentPartitioner implements TablePartitioner<Stamped<Bytes>, SegmentPartition> {
+
+  private static final Logger LOG = LoggerFactory.getLogger(SegmentPartitioner.class);
 
   public static final long METADATA_SEGMENT_ID = -1L;
 
@@ -173,16 +177,55 @@ public class SegmentPartitioner implements TablePartitioner<Stamped<Bytes>, Segm
         .collect(Collectors.toList());
   }
 
-  public SegmentRoll rolledSegments(final long oldStreamTime, final long newStreamTime) {
-    final long oldMinValidTs = oldStreamTime - retentionPeriodMs + 1;
-    final long newMinValidTs = newStreamTime - retentionPeriodMs + 1;
+  public SegmentRoll rolledSegments(
+      final String tableName,
+      final long oldStreamTime,
+      final long newStreamTime
+  ) {
+    final long oldMaxActiveSegment = segmentId(oldStreamTime);
+    final long newMaxActiveSegment = segmentId(newStreamTime);
 
-    // The lower bound is inclusive and the upper bound exclusive for #range, so we have to
-    // add 1 to the segment id for the range of segments to create
-    return new SegmentRoll(
-        LongStream.range(segmentId(oldMinValidTs), segmentId(newMinValidTs)).toArray(),
-        LongStream.range(segmentId(oldStreamTime) + 1, segmentId(newMinValidTs) + 1).toArray()
-    );
+    final long oldMinActiveSegment = segmentId(oldStreamTime - retentionPeriodMs + 1);
+    final long newMinActiveSegment = segmentId(newStreamTime - retentionPeriodMs + 1);
+
+    // Special case where this is the first record we've received
+    if (oldStreamTime == -1L) {
+      final long[] segmentsToExpire = new long[]{};
+
+      final long[] segmentsToCreate = LongStream.range(
+          newMinActiveSegment,
+          newMaxActiveSegment + 1 // add 1 since the upper bound is exclusive
+      ).toArray();
+
+      LOG.info("Initializing stream-time for table {} to {}ms and creating segments: [{}-{}]",
+                 tableName, newStreamTime, newMinActiveSegment, newMaxActiveSegment);
+
+      return new SegmentRoll(
+          segmentsToExpire,
+          segmentsToCreate
+      );
+    } else {
+      final long[] segmentsToExpire = LongStream.range(
+          oldMinActiveSegment,
+          newMinActiveSegment
+      ).toArray();
+
+      final long[] segmentsToCreate = LongStream.range(
+          oldMaxActiveSegment + 1, // inclusive: add 1 b/c the old max segment should already exist
+          newMaxActiveSegment + 1  // exclusive: add 1 to create segment for highest valid timestamp
+      ).toArray();
+
+      if (segmentsToCreate.length > 0) {
+        LOG.info("Advancing stream-time for table {} from {}ms to {}ms and rolling segments with "
+                     + "expiredSegments: [{}-{}] and newSegments: [{}-{}]",
+                 tableName, oldStreamTime, newStreamTime, oldMinActiveSegment, newMinActiveSegment,
+                 oldMaxActiveSegment + 1, newMaxActiveSegment);
+      }
+      return new SegmentRoll(
+          segmentsToExpire,
+          segmentsToCreate
+      );
+    }
   }
 
   private int segmentId(final long windowTimestamp) {

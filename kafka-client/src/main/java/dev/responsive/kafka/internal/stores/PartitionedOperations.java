@@ -300,7 +300,7 @@ public class PartitionedOperations implements KeyValueOperations {
 
   private long minValidTimestamp() {
     // TODO: unwrapping the ttl from Duration to millis is somewhat heavy for the hot path
-    return context.timestamp() - params
+    return params
         .timeToLive()
         .map(ttl -> context.timestamp() - ttl.toMillis())
         .orElse(-1L);

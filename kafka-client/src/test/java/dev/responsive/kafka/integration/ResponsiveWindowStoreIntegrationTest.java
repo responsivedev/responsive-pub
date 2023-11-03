@@ -110,8 +110,7 @@ public class ResponsiveWindowStoreIntegrationTest {
     admin.deleteTopics(List.of(inputTopic(), otherTopic(), outputTopic()));
   }
 
-  // TODO(sophie): re-enable when fully implemented
-  //@Test
+  @Test
   public void shouldComputeWindowedAggregateWithRetention() throws InterruptedException {
     // Given:
     final Map<String, Object> properties = getMutableProperties();

@@ -47,6 +47,7 @@ public class FactWriterFactory<K> extends WriterFactory<K, Integer> {
     return new FactSchemaWriter<>(
         client,
         table,
+        kafkaPartition,
         tablePartition
     );
   }

@@ -101,8 +101,10 @@ public class LwtWriterFactory<K, P> extends WriterFactory<K, P> {
       final PendingFlush pendingFlush,
       final long consumedOffset
   ) {
+    tableMetadata.postCommit(kafkaPartition, epoch);
+
     final var flushResult = super.commitPendingFlush(pendingFlush, consumedOffset);
-    tableMetadata.advanceStreamTime(kafkaPartition, epoch);
+    tableMetadata.postCommit(kafkaPartition, epoch);
 
     // TODO: should #advanceStreamTime return a RemoteWriteResult as well?
     return flushResult;

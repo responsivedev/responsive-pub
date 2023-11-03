@@ -68,10 +68,19 @@ public interface TableMetadata<P> {
       final long epoch
   );
 
-  default void advanceStreamTime(
+  default void preCommit(
       final int kafkaPartition,
       final long epoch
   ) {
-    // Most underlying table implementations don't need to care about stream-time
+    // Only needs to be implemented if the table needs to prepare for the commit in some way,
+    // for example by creating/reserving new segments in window stores
+  }
+
+  default void postCommit(
+      final int kafkaPartition,
+      final long epoch
+  ) {
+    // Only needs to be implemented if the table needs to clean up after the commit in some way,
+    // for example by expiring/removing old segments in window stores
   }
 }

@@ -54,7 +54,7 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
   private final PreparedStatement get;
   private final PreparedStatement insert;
   private final PreparedStatement delete;
-  private final PreparedStatement getMeta;
+  private final PreparedStatement fetchOffset;
   private final PreparedStatement setOffset;
 
   public CassandraFactTable(
@@ -63,7 +63,7 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
       final PreparedStatement get,
       final PreparedStatement insert,
       final PreparedStatement delete,
-      final PreparedStatement getMeta,
+      final PreparedStatement fetchOffset,
       final PreparedStatement setOffset
   ) {
     this.name = name;
@@ -71,7 +71,7 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
     this.get = get;
     this.insert = insert;
     this.delete = delete;
-    this.getMeta = getMeta;
+    this.fetchOffset = fetchOffset;
     this.setOffset = setOffset;
   }
 
@@ -131,7 +131,7 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
             .build()
     );
 
-    final var getMeta = client.prepare(
+    final var fetchOffset = client.prepare(
         QueryBuilder
             .selectFrom(metadataTable(name))
             .column(OFFSET.column())
@@ -155,7 +155,7 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
         get,
         insert,
         delete,
-        getMeta,
+        fetchOffset,
         setOffset
     );
   }
@@ -193,7 +193,7 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
 
   @Override
   public long fetchOffset(final int kafkaPartition) {
-    final BoundStatement bound = getMeta
+    final BoundStatement bound = fetchOffset
         .bind()
         .setInt(PARTITION_KEY.bind(), kafkaPartition);
     final List<Row> result = client.execute(bound).all();

@@ -28,6 +28,7 @@ public class FactSchemaWriter<K> implements RemoteWriter<K, Integer> {
 
   private final CassandraClient client;
   private final RemoteTable<K, BoundStatement> table;
+  private final int kafkaPartition;
   private final int tablePartition;
 
   private final List<BoundStatement> statements;
@@ -35,10 +36,12 @@ public class FactSchemaWriter<K> implements RemoteWriter<K, Integer> {
   public FactSchemaWriter(
       final CassandraClient client,
       final RemoteTable<K, BoundStatement> table,
+      final int kafkaPartition,
       final int tablePartition
   ) {
     this.client = client;
     this.table = table;
+    this.kafkaPartition = kafkaPartition;
     this.tablePartition = tablePartition;
 
     statements = new ArrayList<>();
@@ -46,12 +49,12 @@ public class FactSchemaWriter<K> implements RemoteWriter<K, Integer> {
 
   @Override
   public void insert(final K key, final byte[] value, long epochMillis) {
-    statements.add(table.insert(tablePartition, key, value, epochMillis));
+    statements.add(table.insert(kafkaPartition, key, value, epochMillis));
   }
 
   @Override
   public void delete(final K key) {
-    statements.add(table.delete(tablePartition, key));
+    statements.add(table.delete(kafkaPartition, key));
   }
 
   @Override

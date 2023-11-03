@@ -99,6 +99,7 @@ public class CassandraWindowedTable implements
   // ResponsiveWindowStore and CommitBuffer due to buffering/batching of writes)
   private long lastFlushStreamTime = 0L;
   private long pendingFlushStreamTime = 0L;
+  private SegmentRoll activeRoll;
 
   public static CassandraWindowedTable create(
       final CassandraTableSpec spec,
@@ -455,26 +456,31 @@ public class CassandraWindowedTable implements
   }
 
   @Override
-  public void advanceStreamTime(
+  public void preCommit(
       final int kafkaPartition,
       final long epoch
   ) {
     if (pendingFlushStreamTime > lastFlushStreamTime) {
-      final SegmentRoll roll =
-          partitioner.rolledSegments(lastFlushStreamTime, pendingFlushStreamTime);
+      activeRoll = partitioner.rolledSegments(name, lastFlushStreamTime, pendingFlushStreamTime);
 
-      LOG.info("Advancing stream-time for table {} from {}ms to {}ms and rolling segments: {}",
-               name, lastFlushStreamTime, pendingFlushStreamTime, roll);
-
-      for (final long segmentId : roll.segmentsToExpire) {
-        expireSegment(new SegmentPartition(kafkaPartition, segmentId));
-      }
-
-      for (final long segmentId : roll.segmentsToCreate) {
+      for (final long segmentId : activeRoll.segmentsToCreate) {
         initSegment(new SegmentPartition(kafkaPartition, segmentId), epoch);
       }
 
       lastFlushStreamTime = pendingFlushStreamTime;
+    }
+  }
+
+  @Override
+  public void postCommit(
+      final int kafkaPartition,
+      final long epoch
+  ) {
+    if (activeRoll != null) {
+      for (final long segmentId : activeRoll.segmentsToExpire) {
+        expireSegment(new SegmentPartition(kafkaPartition, segmentId));
+      }
+      activeRoll = null;
     }
   }
 

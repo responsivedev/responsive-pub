@@ -110,15 +110,15 @@ public abstract class WriterFactory<K, P> {
         throw new RuntimeException(logPrefix + "Failed while flushing to remote", e);
       }
 
+      // the offset is only used for recovery, so it can (and should) be set only
+      // if/when all the flushes above have completed successfully
       if (!result.wasApplied()) {
         log.info("Failed to flush writes to table partition {}", result.tablePartition());
+        return result;
+      } else {
+        log.debug("Successfully flushed writes to table partition {}", result.tablePartition());
+        return setOffset(consumedOffset);
       }
-
-      log.debug("Successfully flushed writes to table partition {}", result.tablePartition());
-
-      // this offset is only used for recovery, so it can (and should) be done only
-      // if/when all the flushes above have completed successfully
-      return setOffset(consumedOffset);
     }
   }
 

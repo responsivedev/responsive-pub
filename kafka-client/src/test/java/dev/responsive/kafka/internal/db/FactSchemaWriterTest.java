@@ -30,9 +30,6 @@ import com.datastax.oss.driver.api.core.cql.AsyncResultSet;
 import com.datastax.oss.driver.api.core.cql.BatchStatement;
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.Statement;
-import dev.responsive.kafka.internal.db.CassandraClient;
-import dev.responsive.kafka.internal.db.FactSchemaWriter;
-import dev.responsive.kafka.internal.db.RemoteTable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
@@ -70,6 +67,7 @@ class FactSchemaWriterTest {
     final FactSchemaWriter<Bytes> writer = new FactSchemaWriter<>(
         client,
         table,
+        0,
         0
     );
     writer.insert(Bytes.wrap(new byte[]{0}), new byte[]{1}, CURRENT_TS);
@@ -109,6 +107,7 @@ class FactSchemaWriterTest {
     final FactSchemaWriter<Bytes> writer = new FactSchemaWriter<>(
         client,
         table,
+        0,
         0
     );
 
