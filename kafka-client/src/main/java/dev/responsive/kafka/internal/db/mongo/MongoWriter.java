@@ -16,6 +16,7 @@
 
 package dev.responsive.kafka.internal.db.mongo;
 
+import com.mongodb.MongoBulkWriteException;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.model.WriteModel;
 import dev.responsive.kafka.internal.db.RemoteTable;
@@ -26,8 +27,12 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import org.bson.Document;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class MongoWriter<K> implements RemoteWriter<K, Integer> {
+
+  private static final Logger LOG = LoggerFactory.getLogger(MongoWriter.class);
 
   private final RemoteTable<K, WriteModel<Document>> table;
   private final int kafkaPartition;
@@ -56,9 +61,16 @@ public class MongoWriter<K> implements RemoteWriter<K, Integer> {
 
   @Override
   public CompletionStage<RemoteWriteResult<Integer>> flush() {
-    collection.bulkWrite(accumulatedWrites);
-    accumulatedWrites.clear();
-    return CompletableFuture.completedFuture(RemoteWriteResult.success(kafkaPartition));
+    try {
+      collection.bulkWrite(accumulatedWrites);
+      accumulatedWrites.clear();
+      return CompletableFuture.completedFuture(RemoteWriteResult.success(kafkaPartition));
+    } catch (final MongoBulkWriteException e) {
+      LOG.error("Failed to flush to {}[{}]. If the exception contains 'E11000 duplicate key', "
+                    + "then it was likely this writer was fenced",
+                table.name(), kafkaPartition, e);
+      return CompletableFuture.completedFuture(RemoteWriteResult.failure(kafkaPartition));
+    }
   }
 
 }

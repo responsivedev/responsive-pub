@@ -24,32 +24,44 @@ import static org.bson.codecs.configuration.CodecRegistries.fromRegistries;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
-import com.mongodb.client.model.DeleteOneModel;
 import com.mongodb.client.model.Filters;
+import com.mongodb.client.model.FindOneAndUpdateOptions;
+import com.mongodb.client.model.IndexOptions;
+import com.mongodb.client.model.Indexes;
+import com.mongodb.client.model.ReturnDocument;
 import com.mongodb.client.model.UpdateOneModel;
 import com.mongodb.client.model.UpdateOptions;
 import com.mongodb.client.model.Updates;
 import com.mongodb.client.model.WriteModel;
-import com.mongodb.client.result.UpdateResult;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.WriterFactory;
+import java.time.Instant;
+import java.util.Date;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.TimeUnit;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.bson.Document;
 import org.bson.codecs.configuration.CodecProvider;
 import org.bson.codecs.configuration.CodecRegistry;
 import org.bson.codecs.pojo.PojoCodecProvider;
-import org.bson.types.ObjectId;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class MongoKVTable implements RemoteKVTable<WriteModel<Document>> {
+
+  private static final Logger LOG = LoggerFactory.getLogger(MongoKVTable.class);
 
   private final String name;
   private final MongoCollection<KVDoc> collection;
   private final MongoCollection<MetadataDoc> metadata;
 
-  private final ConcurrentMap<Integer, ObjectId> metadataRows = new ConcurrentHashMap<>();
+  // this map contains the initialized value of the metadata document,
+  // for which the epoch and object ID will never change. it is likely
+  // that after a few writes to MongoDB the cached MetadataDoc.offset value
+  // will be out of date, so it should not be used beyond initialization
+  private final ConcurrentMap<Integer, MetadataDoc> metadataRows = new ConcurrentHashMap<>();
   private final MongoCollection<Document> generic;
 
   public MongoKVTable(final MongoClient client, final String name) {
@@ -64,6 +76,13 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<Document>> {
     generic = database.getCollection(name);
     collection = database.getCollection(name, KVDoc.class);
     metadata = database.getCollection(name, MetadataDoc.class);
+
+    // TODO(agavra): make the tombstone retention configurable
+    // this is idempotent
+    collection.createIndex(
+        Indexes.descending(KVDoc.TOMBSTONE_TS),
+        new IndexOptions().expireAfter(12L, TimeUnit.HOURS)
+    );
   }
 
   @Override
@@ -74,23 +93,25 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<Document>> {
   @Override
   public WriterFactory<Bytes, Integer> init(final int kafkaPartition) {
     metadataRows.computeIfAbsent(kafkaPartition, kp -> {
-      final UpdateResult updateResult = metadata.updateOne(
-          Filters.eq("partition", kafkaPartition),
-          Updates.setOnInsert("offset", NO_COMMITTED_OFFSET),
-          new UpdateOptions().upsert(true));
+      final MetadataDoc metaDoc = metadata.findOneAndUpdate(
+          Filters.eq(MetadataDoc.PARTITION, kafkaPartition),
+          Updates.combine(
+              Updates.setOnInsert(MetadataDoc.PARTITION, kafkaPartition),
+              Updates.setOnInsert(MetadataDoc.OFFSET, NO_COMMITTED_OFFSET),
+              Updates.inc(MetadataDoc.EPOCH, 1) // will set the value to 1 if it doesn't exist
+          ),
+          new FindOneAndUpdateOptions()
+              .upsert(true)
+              .returnDocument(ReturnDocument.AFTER)
+      );
 
-      if (updateResult.getUpsertedId() != null) {
-        return updateResult.getUpsertedId().asObjectId().getValue();
+      if (metaDoc == null) {
+        throw new IllegalStateException("Uninitialized metadata for partition " + kafkaPartition);
       }
 
-      // find existing one
-      final MetadataDoc metadataPartition = metadata.find(
-          Filters.eq("partition", kafkaPartition)
-      ).first();
-      if (metadataPartition == null) {
-        throw new IllegalStateException("No metadata partition despite upsert");
-      }
-      return metadataPartition.id();
+      LOG.info("Retrieved initial metadata {}", metaDoc);
+
+      return metaDoc;
     });
 
     return new MongoWriterFactory<>(this, generic, kafkaPartition);
@@ -98,7 +119,7 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<Document>> {
 
   @Override
   public byte[] get(final int kafkaPartition, final Bytes key, final long minValidTs) {
-    final KVDoc v = collection.find(Filters.eq("key", key.get())).first();
+    final KVDoc v = collection.find(Filters.eq(KVDoc.ID, key.get())).first();
     return v == null ? null : v.getValue();
   }
 
@@ -121,24 +142,42 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<Document>> {
       final byte[] value,
       final long epochMillis
   ) {
+    final long epoch = metadataRows.get(kafkaPartition).epoch;
     return new UpdateOneModel<>(
-        Filters.eq("key", key.get()),
-        Updates.set("value", value),
+        Filters.and(
+            Filters.eq(KVDoc.ID, key.get()),
+            Filters.lte(KVDoc.EPOCH, epoch)
+        ),
+        Updates.combine(
+            Updates.set(KVDoc.VALUE, value),
+            Updates.set(KVDoc.EPOCH, epoch),
+            Updates.unset(KVDoc.TOMBSTONE_TS)
+        ),
         new UpdateOptions().upsert(true)
     );
   }
 
   @Override
   public WriteModel<Document> delete(final int kafkaPartition, final Bytes key) {
-    return new DeleteOneModel<>(
-        Filters.eq("key", key)
+    final long epoch = metadataRows.get(kafkaPartition).epoch;
+    return new UpdateOneModel<>(
+        Filters.and(
+            Filters.eq(KVDoc.ID, key.get()),
+            Filters.lte(KVDoc.EPOCH, epoch)
+        ),
+        Updates.combine(
+            Updates.unset(KVDoc.VALUE),
+            Updates.set(KVDoc.TOMBSTONE_TS, Date.from(Instant.now())),
+            Updates.set(KVDoc.EPOCH, epoch)
+        ),
+        new UpdateOptions().upsert(true)
     );
   }
 
   @Override
   public long fetchOffset(final int kafkaPartition) {
     final MetadataDoc result = metadata.find(
-        Filters.eq("_id", metadataRows.get(kafkaPartition))
+        Filters.eq(MetadataDoc.ID, metadataRows.get(kafkaPartition).id())
     ).first();
     if (result == null) {
       throw new IllegalStateException("Expected to find metadata row");
@@ -148,9 +187,16 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<Document>> {
 
   @Override
   public WriteModel<Document> setOffset(final int kafkaPartition, final long offset) {
+    final long epoch = metadataRows.get(kafkaPartition).epoch;
     return new UpdateOneModel<>(
-        Filters.eq("_id", metadataRows.get(kafkaPartition)),
-        Updates.set("offset", offset)
+        Filters.and(
+            Filters.eq(MetadataDoc.ID, metadataRows.get(kafkaPartition).id()),
+            Filters.lte(MetadataDoc.EPOCH, epoch)
+        ),
+        Updates.combine(
+            Updates.set(MetadataDoc.OFFSET, offset),
+            Updates.set(MetadataDoc.EPOCH, epoch)
+        )
     );
   }
 

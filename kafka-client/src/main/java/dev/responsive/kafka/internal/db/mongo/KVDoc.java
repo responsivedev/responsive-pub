@@ -16,36 +16,39 @@
 
 package dev.responsive.kafka.internal.db.mongo;
 
+import java.util.Arrays;
+import java.util.Date;
+import java.util.Objects;
 import org.bson.codecs.pojo.annotations.BsonId;
-import org.bson.types.ObjectId;
 
 public class KVDoc {
 
+  // TODO(agavra): figure out if we can use @BsonProperty to set the names explicitly
+  public static final String ID = "_id";
+  public static final String VALUE = "value";
+  public static final String EPOCH = "epoch";
+  public static final String TOMBSTONE_TS = "tombstoneTs";
+
   @BsonId
-  ObjectId id;
-  byte[] key;
+  byte[] id;
   byte[] value;
   long epoch;
+  Date tombstoneTs;
 
   public KVDoc() {
   }
 
   public KVDoc(final byte[] key, final byte[] value, final long epoch) {
-    this.key = key;
     this.value = value;
     this.epoch = epoch;
   }
 
-  public ObjectId getId() {
+  public byte[] getKey() {
     return id;
   }
 
-  public void setId(final ObjectId id) {
+  public void setKey(final byte[] id) {
     this.id = id;
-  }
-
-  public void setKey(final byte[] key) {
-    this.key = key;
   }
 
   public void setValue(final byte[] value) {
@@ -56,15 +59,51 @@ public class KVDoc {
     this.epoch = epoch;
   }
 
-  public byte[] getKey() {
-    return key;
-  }
-
   public byte[] getValue() {
     return value;
   }
 
   public long getEpoch() {
     return epoch;
+  }
+
+  public Date getTombstoneTs() {
+    return tombstoneTs;
+  }
+
+  public void setTombstoneTs(final Date tombstoneTs) {
+    this.tombstoneTs = tombstoneTs;
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    final KVDoc kvDoc = (KVDoc) o;
+    return epoch == kvDoc.epoch
+        && Arrays.equals(id, kvDoc.id)
+        && Arrays.equals(value, kvDoc.value)
+        && Objects.equals(tombstoneTs, kvDoc.tombstoneTs);
+  }
+
+  @Override
+  public int hashCode() {
+    int result = Objects.hash(id, epoch, tombstoneTs);
+    result = 31 * result + Arrays.hashCode(value);
+    return result;
+  }
+
+  @Override
+  public String toString() {
+    return "KVDoc{"
+        + "id=" + Arrays.toString(id)
+        + ", value=" + Arrays.toString(value)
+        + ", epoch=" + epoch
+        + ", tombstoneTs=" + tombstoneTs
+        + '}';
   }
 }

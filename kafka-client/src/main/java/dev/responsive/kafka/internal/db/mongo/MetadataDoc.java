@@ -16,15 +16,22 @@
 
 package dev.responsive.kafka.internal.db.mongo;
 
+import java.util.Objects;
 import org.bson.codecs.pojo.annotations.BsonId;
 import org.bson.types.ObjectId;
 
 public class MetadataDoc {
 
+  public static final String ID = "_id";
+  public static final String PARTITION = "partition";
+  public static final String OFFSET = "offset";
+  public static final String EPOCH = "epoch";
+
   @BsonId
   ObjectId id;
   int partition;
   long offset;
+  long epoch;
 
   public MetadataDoc() {
   }
@@ -51,5 +58,44 @@ public class MetadataDoc {
 
   public void setOffset(final long offset) {
     this.offset = offset;
+  }
+
+  public long epoch() {
+    return epoch;
+  }
+
+  public void setEpoch(final long epoch) {
+    this.epoch = epoch;
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    final MetadataDoc that = (MetadataDoc) o;
+    return partition == that.partition
+        && offset == that.offset
+        && epoch == that.epoch
+        && Objects.equals(id, that.id);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(id, partition, epoch, offset);
+  }
+
+  @Override
+  public String toString() {
+    return "MetadataDoc{"
+        + "id=" + id
+        + ", partition=" + partition
+        + ", offset=" + offset
+        + ", epoch=" + epoch
+        + '}';
+
   }
 }
