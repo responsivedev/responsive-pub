@@ -52,17 +52,20 @@ import org.slf4j.LoggerFactory;
 public class MongoKVTable implements RemoteKVTable<WriteModel<Document>> {
 
   private static final Logger LOG = LoggerFactory.getLogger(MongoKVTable.class);
+  private static final String METADATA_COLLECTION_SUFFIX = "_md";
 
   private final String name;
-  private final MongoCollection<KVDoc> collection;
+  private final MongoCollection<KVDoc> docs;
   private final MongoCollection<MetadataDoc> metadata;
+
+  private final MongoCollection<Document> genericDocs;
+  private final MongoCollection<Document> genericMetadata;
 
   // this map contains the initialized value of the metadata document,
   // for which the epoch and object ID will never change. it is likely
   // that after a few writes to MongoDB the cached MetadataDoc.offset value
   // will be out of date, so it should not be used beyond initialization
   private final ConcurrentMap<Integer, MetadataDoc> metadataRows = new ConcurrentHashMap<>();
-  private final MongoCollection<Document> generic;
 
   public MongoKVTable(final MongoClient client, final String name) {
     this.name = name;
@@ -73,13 +76,15 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<Document>> {
     );
 
     final MongoDatabase database = client.getDatabase(name).withCodecRegistry(pojoCodecRegistry);
-    generic = database.getCollection(name);
-    collection = database.getCollection(name, KVDoc.class);
-    metadata = database.getCollection(name, MetadataDoc.class);
+    genericDocs = database.getCollection(name);
+    docs = database.getCollection(name, KVDoc.class);
+
+    genericMetadata = database.getCollection(name + METADATA_COLLECTION_SUFFIX);
+    metadata = database.getCollection(name + METADATA_COLLECTION_SUFFIX, MetadataDoc.class);
 
     // TODO(agavra): make the tombstone retention configurable
     // this is idempotent
-    collection.createIndex(
+    docs.createIndex(
         Indexes.descending(KVDoc.TOMBSTONE_TS),
         new IndexOptions().expireAfter(12L, TimeUnit.HOURS)
     );
@@ -114,12 +119,12 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<Document>> {
       return metaDoc;
     });
 
-    return new MongoWriterFactory<>(this, generic, kafkaPartition);
+    return new MongoWriterFactory<>(this, genericDocs, genericMetadata, kafkaPartition);
   }
 
   @Override
   public byte[] get(final int kafkaPartition, final Bytes key, final long minValidTs) {
-    final KVDoc v = collection.find(Filters.eq(KVDoc.ID, key.get())).first();
+    final KVDoc v = docs.find(Filters.eq(KVDoc.ID, key.get())).first();
     return v == null ? null : v.getValue();
   }
 
