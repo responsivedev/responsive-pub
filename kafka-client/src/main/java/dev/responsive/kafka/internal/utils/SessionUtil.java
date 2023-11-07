@@ -90,8 +90,11 @@ public final class SessionUtil {
   ) {
     final String connectionString;
     if (clientId != null && clientSecret != null) {
+      // TODO(agavra): consider allowing configuration of the read consideration
+      // some situations (such as non-EOS) could benefit from performance of non-majority
+      // reads if they're ok with the risks
       connectionString = String.format(
-          "mongodb+srv://%s:%s@%s/?retryWrites=true&w=majority",
+          "mongodb+srv://%s:%s@%s/?retryWrites=true&w=majority&r=majority",
           clientId,
           clientSecret,
           hostname

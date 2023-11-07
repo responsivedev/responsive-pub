@@ -30,18 +30,21 @@ import org.bson.Document;
 public class MongoWriterFactory<K> extends WriterFactory<K, Integer> {
 
   private final RemoteTable<K, WriteModel<Document>> table;
-  private final MongoCollection<Document> genericCollection;
+  private final MongoCollection<Document> genericDocs;
+  private final MongoCollection<Document> genericMetadata;
   private final TablePartitioner<K, Integer> partitioner;
   private final int kafkaPartition;
 
   public MongoWriterFactory(
       final RemoteTable<K, WriteModel<Document>> table,
-      final MongoCollection<Document> genericCollection,
+      final MongoCollection<Document> genericDocs,
+      final MongoCollection<Document> genericMetadata,
       final int kafkaPartition
   ) {
     super(String.format("MongoWriterFactory [%s-%d] ", table.name(), kafkaPartition));
     this.table = table;
-    this.genericCollection = genericCollection;
+    this.genericDocs = genericDocs;
+    this.genericMetadata = genericMetadata;
     this.partitioner = new DefaultPartitioner<>();
     this.kafkaPartition = kafkaPartition;
   }
@@ -50,7 +53,7 @@ public class MongoWriterFactory<K> extends WriterFactory<K, Integer> {
   public RemoteWriter<K, Integer> createWriter(
       final Integer tablePartition
   ) {
-    return new MongoWriter<>(table, kafkaPartition, genericCollection);
+    return new MongoWriter<>(table, kafkaPartition, genericDocs);
   }
 
   @Override
@@ -65,7 +68,7 @@ public class MongoWriterFactory<K> extends WriterFactory<K, Integer> {
 
   @Override
   public RemoteWriteResult<Integer> setOffset(final long consumedOffset) {
-    genericCollection.bulkWrite(List.of(table.setOffset(kafkaPartition, consumedOffset)));
+    genericMetadata.bulkWrite(List.of(table.setOffset(kafkaPartition, consumedOffset)));
     return RemoteWriteResult.success(kafkaPartition);
   }
 
