@@ -17,6 +17,7 @@
 package dev.responsive.kafka.integration;
 
 
+import static dev.responsive.kafka.testutils.IntegrationTestUtils.startAppAndAwaitRunning;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.MAX_POLL_RECORDS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG;
@@ -50,6 +51,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 import org.apache.kafka.clients.admin.Admin;
@@ -69,6 +72,7 @@ import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.ExtendWith;
 
@@ -108,35 +112,36 @@ public class ResponsiveWindowStoreIntegrationTest {
     admin.deleteTopics(List.of(inputTopic(), otherTopic(), outputTopic()));
   }
 
-  // TODO(sophie): debug and re-enable this test
-  //@Test
-  public void shouldComputeWindowedAggregateWithRetention() throws InterruptedException {
+  @Test
+  public void shouldComputeWindowedAggregateWithRetention() throws Exception {
     // Given:
     final Map<String, Object> properties = getMutableProperties();
     final StreamsBuilder builder = new StreamsBuilder();
 
     final ConcurrentMap<Windowed<Long>, Long> collect = new ConcurrentHashMap<>();
-    final CountDownLatch latch1 = new CountDownLatch(2);
+    final CountdownLatchWrapper inputLatch = new CountdownLatchWrapper(0);
+    final CountdownLatchWrapper outputLatch = new CountdownLatchWrapper(0);
+
     final CountDownLatch latch2 = new CountDownLatch(2);
     final KStream<Long, Long> input = builder.stream(inputTopic());
-    input.groupByKey()
-        .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofSeconds(5), Duration.ofMillis(1_000)))
+    input.peek((k, v) -> inputLatch.countDown())
+        .groupByKey()
+        .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofSeconds(5), Duration.ofSeconds(1)))
         .aggregate(
             () -> 0L,
             (k, v, agg) -> agg + v,
             ResponsiveStores.windowMaterialized(
                 ResponsiveWindowParams.window(
                     name,
-                    Duration.ofMillis(5_000),
-                    Duration.ofMillis(1_000))
+                    Duration.ofSeconds(5),
+                    Duration.ofSeconds(1))
             ))
         .toStream()
         .peek((k, v) -> {
           collect.put(k, v);
+          outputLatch.countDown();
 
-          if (v == 3) {
-            latch1.countDown();
-          } else if (v == 1000) {
+          if (v == 1000) {
             latch2.countDown();
           }
         })
@@ -148,7 +153,7 @@ public class ResponsiveWindowStoreIntegrationTest {
     // When:
     // use a base timestamp that is aligned with a minute boundary to
     // ensure predictable test results
-    final long baseTs = System.currentTimeMillis() / 60000 * 60000;
+    final long baseTs = (System.currentTimeMillis() / 60_000) * 60_000;
     final AtomicLong timestamp = new AtomicLong(baseTs);
     properties.put(APPLICATION_SERVER_CONFIG, "host1:1024");
     try (
@@ -156,13 +161,14 @@ public class ResponsiveWindowStoreIntegrationTest {
             new ResponsiveKafkaStreams(builder.build(), properties);
         final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties)
     ) {
-      kafkaStreams.start();
+      startAppAndAwaitRunning(Duration.ofSeconds(15), kafkaStreams);
 
       // produce two keys each having values 0-2 that are 100ms apart
       // which should result in just one window (per key) with the sum
       // of 3 after the first Streams instance is closed
+      inputLatch.resetCountdown(6);
       pipeInput(producer, inputTopic(), () -> timestamp.getAndAdd(100), 0, 3, 0, 1);
-      latch1.await();
+      inputLatch.await();
       assertThat(collect, Matchers.hasEntry(windowed(0, baseTs, 5000), 3L));
     }
 
@@ -176,18 +182,23 @@ public class ResponsiveWindowStoreIntegrationTest {
         );
         final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties)
     ) {
-      kafkaStreams.start();
+      startAppAndAwaitRunning(Duration.ofSeconds(15), kafkaStreams);
+
+      inputLatch.resetCountdown(4);
       // Produce another two records with values 3-4, still within the first window
       pipeInput(producer, inputTopic(), () -> timestamp.getAndAdd(100), 3, 5, 0, 1);
 
+      inputLatch.await();
       assertThat(collect, Matchers.hasEntry(windowed(0, baseTs, 5000), 10L));
 
       // Produce another set with values 5-10 in new window that advances stream-time
       // enough to expire the first window
+      inputLatch.resetCountdown(10);
       final long secondWindowStart = baseTs + 10_000L;
       timestamp.set(secondWindowStart);
       pipeInput(producer, inputTopic(), () -> timestamp.getAndAdd(100), 5, 10, 0, 1);
 
+      inputLatch.await();
       assertThat(collect, Matchers.hasEntry(windowed(0, secondWindowStart, 5000), 35L));
 
       // at this point the records produced by this pipe should be
@@ -216,6 +227,30 @@ public class ResponsiveWindowStoreIntegrationTest {
 
     assertThat(collect, Matchers.hasEntry(windowed(0, baseTs + 15_000, 5000), 1000L));
     assertThat(collect, Matchers.hasEntry(windowed(1, baseTs + 15_000, 5000), 1000L));
+  }
+
+  class CountdownLatchWrapper {
+    private CountDownLatch currentLatch;
+
+    public CountdownLatchWrapper(final int initialCountdown) {
+      currentLatch = new CountDownLatch(initialCountdown);
+    }
+
+    public void countDown() {
+      currentLatch.countDown();
+    }
+
+    public void resetCountdown(final int countdown) {
+      currentLatch = new CountDownLatch(countdown);
+    }
+
+    public boolean await() {
+      try {
+        return currentLatch.await(15, TimeUnit.SECONDS);
+      } catch (final Exception e) {
+        return false;
+      }
+    }
   }
 
   public void shouldComputeWindowedJoinUsingRanges() throws InterruptedException {

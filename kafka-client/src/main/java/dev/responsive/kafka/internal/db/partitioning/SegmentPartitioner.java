@@ -93,18 +93,18 @@ public class SegmentPartitioner implements TablePartitioner<Stamped<Bytes>, Segm
   private final long windowSizeMs;
 
   public static class SegmentPartition {
-    public final int partitionKey;
+    public final int tablePartition;
     public final long segmentId;
 
-    public SegmentPartition(final int partitionKey, final long segmentId) {
-      this.partitionKey = partitionKey;
+    public SegmentPartition(final int tablePartition, final long segmentId) {
+      this.tablePartition = tablePartition;
       this.segmentId = segmentId;
     }
 
     @Override
     public String toString() {
       return "SegmentPartition{"
-          + "partitionKey=" + partitionKey
+          + "partitionKey=" + tablePartition
           + ", segmentId=" + segmentId
           + '}';
     }
@@ -126,6 +126,8 @@ public class SegmentPartitioner implements TablePartitioner<Stamped<Bytes>, Segm
     this.retentionPeriodMs = retentionPeriodMs;
     this.segmentIntervalMs = segmentIntervalMs;
     this.windowSizeMs = windowSizeMs;
+    LOG.info("Created segment partitioner with retentionPeriod={}ms, segmentInterval={}ms,"
+                 + " and windowSize={}ms", retentionPeriodMs, segmentIntervalMs, windowSizeMs);
   }
 
   @Override
@@ -229,8 +231,8 @@ public class SegmentPartitioner implements TablePartitioner<Stamped<Bytes>, Segm
     }
   }
 
-  private int segmentId(final long windowTimestamp) {
-    return Integer.max(0, (int) (windowTimestamp / segmentIntervalMs));
+  private long segmentId(final long windowTimestamp) {
+    return Long.max(0, windowTimestamp / segmentIntervalMs);
   }
 
   public static class SegmentRoll {

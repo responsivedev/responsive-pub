@@ -435,7 +435,7 @@ public class CassandraWindowedTable implements
 
     client.execute(
         QueryBuilder.insertInto(name)
-            .value(PARTITION_KEY.column(), PARTITION_KEY.literal(metadataPartition.partitionKey))
+            .value(PARTITION_KEY.column(), PARTITION_KEY.literal(metadataPartition.tablePartition))
             .value(SEGMENT_ID.column(), SEGMENT_ID.literal(metadataPartition.segmentId))
             .value(ROW_TYPE.column(), METADATA_ROW.literal())
             .value(DATA_KEY.column(), DATA_KEY.literal(METADATA_KEY))
@@ -489,7 +489,7 @@ public class CassandraWindowedTable implements
     client.execute(
         initSegment
             .bind()
-            .setInt(PARTITION_KEY.bind(), segmentToCreate.partitionKey)
+            .setInt(PARTITION_KEY.bind(), segmentToCreate.tablePartition)
             .setLong(SEGMENT_ID.bind(), segmentToCreate.segmentId)
             .setLong(EPOCH.bind(), epoch)
     );
@@ -499,7 +499,7 @@ public class CassandraWindowedTable implements
     client.execute(
         expireSegment
             .bind()
-            .setInt(PARTITION_KEY.bind(), segmentToDelete.partitionKey)
+            .setInt(PARTITION_KEY.bind(), segmentToDelete.tablePartition)
             .setLong(SEGMENT_ID.bind(), segmentToDelete.segmentId)
     );
   }
@@ -510,7 +510,7 @@ public class CassandraWindowedTable implements
     final List<Row> result = client.execute(
         fetchOffset
             .bind()
-            .setInt(PARTITION_KEY.bind(), metadataPartition.partitionKey)
+            .setInt(PARTITION_KEY.bind(), metadataPartition.tablePartition)
             .setLong(SEGMENT_ID.bind(), metadataPartition.segmentId))
         .all();
 
@@ -531,7 +531,7 @@ public class CassandraWindowedTable implements
     final SegmentPartition metadataPartition = partitioner.metadataTablePartition(kafkaPartition);
     return setOffset
         .bind()
-        .setInt(PARTITION_KEY.bind(), metadataPartition.partitionKey)
+        .setInt(PARTITION_KEY.bind(), metadataPartition.tablePartition)
         .setLong(SEGMENT_ID.bind(), metadataPartition.segmentId)
         .setLong(OFFSET.bind(), offset);
   }
@@ -541,7 +541,7 @@ public class CassandraWindowedTable implements
     final List<Row> result = client.execute(
             fetchEpoch
                 .bind()
-                .setInt(PARTITION_KEY.bind(), segmentPartition.partitionKey)
+                .setInt(PARTITION_KEY.bind(), segmentPartition.tablePartition)
                 .setLong(SEGMENT_ID.bind(), segmentPartition.segmentId))
         .all();
 
@@ -558,7 +558,7 @@ public class CassandraWindowedTable implements
   public BoundStatement reserveEpoch(final SegmentPartition segmentPartition, final long epoch) {
     return reserveEpoch
         .bind()
-        .setInt(PARTITION_KEY.bind(), segmentPartition.partitionKey)
+        .setInt(PARTITION_KEY.bind(), segmentPartition.tablePartition)
         .setLong(SEGMENT_ID.bind(), segmentPartition.segmentId)
         .setLong(EPOCH.bind(), epoch);
   }
@@ -567,7 +567,7 @@ public class CassandraWindowedTable implements
   public BoundStatement ensureEpoch(final SegmentPartition segmentPartition, final long epoch) {
     return ensureEpoch
         .bind()
-        .setInt(PARTITION_KEY.bind(), segmentPartition.partitionKey)
+        .setInt(PARTITION_KEY.bind(), segmentPartition.tablePartition)
         .setLong(SEGMENT_ID.bind(), segmentPartition.segmentId)
         .setLong(EPOCH.bind(), epoch);
   }
@@ -598,7 +598,7 @@ public class CassandraWindowedTable implements
     final SegmentPartition remotePartition = partitioner.tablePartition(kafkaPartition, key);
     return insert
         .bind()
-        .setInt(PARTITION_KEY.bind(), remotePartition.partitionKey)
+        .setInt(PARTITION_KEY.bind(), remotePartition.tablePartition)
         .setLong(SEGMENT_ID.bind(), remotePartition.segmentId)
         .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.key.get()))
         .setInstant(WINDOW_START.bind(), Instant.ofEpochMilli(key.stamp))
@@ -625,7 +625,7 @@ public class CassandraWindowedTable implements
     final SegmentPartition segmentPartition = partitioner.tablePartition(kafkaPartition, key);
     return delete
         .bind()
-        .setInt(PARTITION_KEY.bind(), segmentPartition.partitionKey)
+        .setInt(PARTITION_KEY.bind(), segmentPartition.tablePartition)
         .setLong(SEGMENT_ID.bind(), segmentPartition.segmentId)
         .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.key.get()))
         .setInstant(WINDOW_START.bind(), Instant.ofEpochMilli(key.stamp));
@@ -651,7 +651,7 @@ public class CassandraWindowedTable implements
 
     final BoundStatement get = fetchSingle
         .bind()
-        .setInt(PARTITION_KEY.bind(), segmentPartition.partitionKey)
+        .setInt(PARTITION_KEY.bind(), segmentPartition.tablePartition)
         .setLong(SEGMENT_ID.bind(), segmentPartition.segmentId)
         .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
         .setInstant(WINDOW_START.bind(), Instant.ofEpochMilli(windowStart));
@@ -688,7 +688,7 @@ public class CassandraWindowedTable implements
     for (final SegmentPartition partition : partitioner.range(kafkaPartition, timeFrom, timeTo)) {
       final BoundStatement get = fetch
           .bind()
-          .setInt(PARTITION_KEY.bind(), partition.partitionKey)
+          .setInt(PARTITION_KEY.bind(), partition.tablePartition)
           .setLong(SEGMENT_ID.bind(), partition.segmentId)
           .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
           .setInstant(WINDOW_FROM_BIND, Instant.ofEpochMilli(timeFrom))
@@ -723,7 +723,7 @@ public class CassandraWindowedTable implements
     for (final var partition : partitioner.reverseRange(kafkaPartition, timeFrom, timeTo)) {
       final BoundStatement get = backFetch
           .bind()
-          .setInt(PARTITION_KEY.bind(), partition.partitionKey)
+          .setInt(PARTITION_KEY.bind(), partition.tablePartition)
           .setLong(SEGMENT_ID.bind(), partition.segmentId)
           .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
           .setInstant(WINDOW_FROM_BIND, Instant.ofEpochMilli(timeFrom))
@@ -761,7 +761,7 @@ public class CassandraWindowedTable implements
     for (final SegmentPartition partition : partitioner.range(kafkaPartition, timeFrom, timeTo)) {
       final BoundStatement get = fetchRange
           .bind()
-          .setInt(PARTITION_KEY.bind(), partition.partitionKey)
+          .setInt(PARTITION_KEY.bind(), partition.tablePartition)
           .setLong(SEGMENT_ID.bind(), partition.segmentId)
           .setByteBuffer(KEY_FROM_BIND, ByteBuffer.wrap(fromKey.get()))
           .setByteBuffer(KEY_TO_BIND, ByteBuffer.wrap(toKey.get()));
@@ -801,7 +801,7 @@ public class CassandraWindowedTable implements
     for (final var partition : partitioner.reverseRange(kafkaPartition, timeFrom, timeTo)) {
       final BoundStatement get = backFetchRange
           .bind()
-          .setInt(PARTITION_KEY.bind(), partition.partitionKey)
+          .setInt(PARTITION_KEY.bind(), partition.tablePartition)
           .setLong(SEGMENT_ID.bind(), partition.segmentId)
           .setByteBuffer(KEY_FROM_BIND, ByteBuffer.wrap(fromKey.get()))
           .setByteBuffer(KEY_TO_BIND, ByteBuffer.wrap(toKey.get()));
@@ -836,7 +836,7 @@ public class CassandraWindowedTable implements
     for (final SegmentPartition partition : partitioner.range(kafkaPartition, timeFrom, timeTo)) {
       final BoundStatement get = fetchAll
           .bind()
-          .setInt(PARTITION_KEY.bind(), partition.partitionKey)
+          .setInt(PARTITION_KEY.bind(), partition.tablePartition)
           .setLong(SEGMENT_ID.bind(), partition.segmentId)
           .setInstant(KEY_FROM_BIND, Instant.ofEpochMilli(timeFrom))
           .setInstant(KEY_TO_BIND, Instant.ofEpochMilli(timeTo));
@@ -871,7 +871,7 @@ public class CassandraWindowedTable implements
     for (final var partition : partitioner.reverseRange(kafkaPartition, timeFrom, timeTo)) {
       final BoundStatement get = backFetchAll
           .bind()
-          .setInt(PARTITION_KEY.bind(), partition.partitionKey)
+          .setInt(PARTITION_KEY.bind(), partition.tablePartition)
           .setLong(SEGMENT_ID.bind(), partition.segmentId)
           .setInstant(KEY_FROM_BIND, Instant.ofEpochMilli(timeFrom))
           .setInstant(KEY_TO_BIND, Instant.ofEpochMilli(timeTo));
