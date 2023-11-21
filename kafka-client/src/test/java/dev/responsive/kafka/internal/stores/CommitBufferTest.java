@@ -321,8 +321,7 @@ public class CommitBufferTest {
 
       // reserve epoch for partition 8 to ensure it doesn't get flushed
       // if it did it would get fenced
-      LwtWriterFactory.initialize(
-          table, table, client, partitioner, changelog.partition(), List.of(8, 9));
+      table.init(KAFKA_PARTITION);
 
       final Bytes k1 = Bytes.wrap(new byte[]{1});
       final Bytes k2 = Bytes.wrap(new byte[]{2});

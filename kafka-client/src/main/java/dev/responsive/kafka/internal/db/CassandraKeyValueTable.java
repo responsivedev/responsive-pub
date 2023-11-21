@@ -268,9 +268,9 @@ public class CassandraKeyValueTable
   public WriterFactory<Bytes, Integer> init(
       final int kafkaPartition
   ) {
-    partitioner.allTablePartitions(kafkaPartition).forEach(sub -> client.execute(
+    partitioner.allTablePartitions(kafkaPartition).forEach(tablePartition -> client.execute(
         QueryBuilder.insertInto(name)
-            .value(PARTITION_KEY.column(), PARTITION_KEY.literal(sub))
+            .value(PARTITION_KEY.column(), PARTITION_KEY.literal(tablePartition))
             .value(ROW_TYPE.column(), METADATA_ROW.literal())
             .value(DATA_KEY.column(), DATA_KEY.literal(METADATA_KEY))
             .value(TIMESTAMP.column(), TIMESTAMP.literal(METADATA_TS))

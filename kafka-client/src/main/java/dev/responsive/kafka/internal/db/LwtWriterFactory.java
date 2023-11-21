@@ -85,6 +85,12 @@ public class LwtWriterFactory<K, P> extends WriterFactory<K, P> {
     builder.addStatement(fencingStatement(tablePartition));
     builder.addStatement(table.setOffset(kafkaPartition, offset));
 
+    // TODO(sophie): clean up this hack, perhaps by combining the offset and stream-time into
+    //  a single metadata row update
+    if (table instanceof CassandraWindowedTable) {
+      builder.addStatement(((CassandraWindowedTable) table).setStreamTime(kafkaPartition, epoch));
+    }
+
     final var result = client.execute(builder.build());
     return result.wasApplied()
         ? RemoteWriteResult.success(tablePartition)
@@ -106,7 +112,6 @@ public class LwtWriterFactory<K, P> extends WriterFactory<K, P> {
     final var flushResult = super.commitPendingFlush(pendingFlush, consumedOffset);
     tableMetadata.postCommit(kafkaPartition, epoch);
 
-    // TODO: should #advanceStreamTime return a RemoteWriteResult as well?
     return flushResult;
   }
 
