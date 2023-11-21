@@ -107,20 +107,26 @@ public class CassandraWindowedTable implements
 
   // TODO: move this into the LWTWriter/Factory to keep this class stateless
   private static class PendingFlushInfo {
-    private long lastFlushStreamTime = UNINITIALIZED_STREAM_TIME;
-    private long pendingFlushStreamTime = UNINITIALIZED_STREAM_TIME;
-    private SegmentRoll pendingSegmentRoll;
+
+    private long lastFlushStreamTime;
+    private long pendingFlushStreamTime;
+    private SegmentRoll segmentRoll;
+
+    public PendingFlushInfo(final long persistedStreamTime) {
+      this.lastFlushStreamTime = persistedStreamTime;
+      this.pendingFlushStreamTime = persistedStreamTime;
+    }
 
     void maybeUpdatePendingStreamTime(final long recordTimestamp) {
       this.pendingFlushStreamTime = Math.max(pendingFlushStreamTime, recordTimestamp);
     }
 
     void initSegmentRoll(final SegmentRoll pendingSegmentRoll) {
-      this.pendingSegmentRoll = pendingSegmentRoll;
+      this.segmentRoll = pendingSegmentRoll;
     }
 
     void finalizeFlush() {
-      pendingSegmentRoll = null;
+      segmentRoll = null;
       lastFlushStreamTime = pendingFlushStreamTime;
     }
   }
@@ -482,10 +488,9 @@ public class CassandraWindowedTable implements
   public WriterFactory<Stamped<Bytes>, SegmentPartition> init(
       final int kafkaPartition
   ) {
-    kafkaPartitionToPendingFlushInfo.put(kafkaPartition, new PendingFlushInfo());
     final SegmentPartition metadataPartition = partitioner.metadataTablePartition(kafkaPartition);
 
-    client.execute(
+    final var initMetadata = client.execute(
         QueryBuilder.insertInto(name)
             .value(PARTITION_KEY.column(), PARTITION_KEY.literal(metadataPartition.tablePartition))
             .value(SEGMENT_ID.column(), SEGMENT_ID.literal(metadataPartition.segmentId))
@@ -499,6 +504,10 @@ public class CassandraWindowedTable implements
             .build()
     );
 
+    if (initMetadata.wasApplied()) {
+      LOG.info("Created new metadata segment for kafka partition {}", kafkaPartition);
+    }
+
     final long epoch = fetchEpoch(metadataPartition) + 1;
     final var reserveMetadataEpoch = client.execute(reserveEpoch(metadataPartition, epoch));
     if (!reserveMetadataEpoch.wasApplied()) {
@@ -506,6 +515,9 @@ public class CassandraWindowedTable implements
     }
 
     final long streamTime = fetchStreamTime(kafkaPartition);
+    kafkaPartitionToPendingFlushInfo.put(kafkaPartition, new PendingFlushInfo(streamTime));
+    LOG.info("Initialized stream-time to {} with epoch {} for kafka partition {}",
+             streamTime, epoch, kafkaPartition);
 
     // since the active data segments depend on the current stream-time for the windowed table,
     // which we won't know until we initialize it from the remote, the metadata like epoch and
@@ -518,6 +530,9 @@ public class CassandraWindowedTable implements
 
       if (!reserveSegmentEpoch.wasApplied()) {
         handleEpochFencing(kafkaPartition, tablePartition, epoch);
+      } else {
+        LOG.info("SOPHIE: reserved epoch {} for kafka partition {} and segment {}",
+                 epoch, kafkaPartition, tablePartition);
       }
     }
 
@@ -562,6 +577,7 @@ public class CassandraWindowedTable implements
     final SegmentRoll pendingRoll = partitioner.rolledSegments(
         name, pendingFlush.lastFlushStreamTime, pendingFlush.pendingFlushStreamTime
     );
+
     pendingFlush.initSegmentRoll(pendingRoll);
     for (final long segmentId : pendingRoll.segmentsToCreate) {
       final SegmentPartition segment = new SegmentPartition(kafkaPartition, segmentId);
@@ -587,7 +603,7 @@ public class CassandraWindowedTable implements
       final long epoch
   ) {
     final PendingFlushInfo pendingFlush = kafkaPartitionToPendingFlushInfo.get(kafkaPartition);
-    for (final long segmentId : pendingFlush.pendingSegmentRoll.segmentsToExpire) {
+    for (final long segmentId : pendingFlush.segmentRoll.segmentsToExpire) {
       expireSegment(new SegmentPartition(kafkaPartition, segmentId));
     }
     pendingFlush.finalizeFlush();
@@ -667,6 +683,9 @@ public class CassandraWindowedTable implements
       final long epoch
   ) {
     final PendingFlushInfo pendingFlush = kafkaPartitionToPendingFlushInfo.get(kafkaPartition);
+
+    LOG.debug("Updating stream-time to {} with epoch {} for kafkaPartition {}",
+             pendingFlush.pendingFlushStreamTime, epoch, kafkaPartition);
 
     final SegmentPartition metadataPartition = partitioner.metadataTablePartition(kafkaPartition);
     return setStreamTime

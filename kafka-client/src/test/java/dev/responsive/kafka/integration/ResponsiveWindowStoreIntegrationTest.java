@@ -252,7 +252,8 @@ public class ResponsiveWindowStoreIntegrationTest {
       }
     }
   }
-
+  
+  //@Test
   public void shouldComputeWindowedJoinUsingRanges() throws InterruptedException {
     // Given:
     final Map<String, Object> properties = getMutableProperties();

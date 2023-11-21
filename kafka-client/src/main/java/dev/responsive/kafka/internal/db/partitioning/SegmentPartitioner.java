@@ -16,6 +16,8 @@
 
 package dev.responsive.kafka.internal.db.partitioning;
 
+import static java.util.Collections.emptyList;
+
 import dev.responsive.kafka.api.stores.ResponsiveWindowParams;
 import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.SegmentPartition;
 import dev.responsive.kafka.internal.utils.Stamped;
@@ -105,6 +107,7 @@ public class SegmentPartitioner implements TablePartitioner<Stamped<Bytes>, Segm
     public String toString() {
       return "SegmentPartition{"
           + "partitionKey=" + tablePartition
+          + "tablePartition=" + tablePartition
           + ", segmentId=" + segmentId
           + '}';
     }
@@ -151,7 +154,11 @@ public class SegmentPartitioner implements TablePartitioner<Stamped<Bytes>, Segm
       final int kafkaPartition,
       final long streamTime
   ) {
-    return range(kafkaPartition, minValidTs(streamTime), streamTime);
+    if (streamTime == UNINITIALIZED_STREAM_TIME) {
+      return emptyList();
+    } else {
+      return range(kafkaPartition, minValidTs(streamTime), streamTime);
+    }
   }
 
   /**
@@ -168,7 +175,7 @@ public class SegmentPartitioner implements TablePartitioner<Stamped<Bytes>, Segm
       final long timeFrom,
       final long timeTo
   ) {
-    return LongStream.range(segmentId(timeFrom), segmentId(timeTo))
+    return LongStream.range(segmentId(timeFrom), segmentId(timeTo) + 1)
         .mapToObj(segmentId -> new SegmentPartition(kafkaPartition, segmentId))
         .collect(Collectors.toList());
   }
@@ -188,7 +195,7 @@ public class SegmentPartitioner implements TablePartitioner<Stamped<Bytes>, Segm
       final long timeFrom,
       final long timeTo
   ) {
-    return LongStream.range(segmentId(timeFrom), segmentId(timeTo))
+    return LongStream.range(segmentId(timeFrom), segmentId(timeTo) + 1)
         .boxed()
         .sorted(Collections.reverseOrder())
         .map(segmentId -> new SegmentPartition(kafkaPartition, segmentId))
@@ -265,10 +272,18 @@ public class SegmentPartitioner implements TablePartitioner<Stamped<Bytes>, Segm
 
     @Override
     public String toString() {
-      return String.format("SegmentRoll: expired segment(s)=[%d-%d], new segments(s)=[%d-%d]",
-                           segmentsToExpire[0], segmentsToExpire[segmentsToExpire.length - 1],
-                           segmentsToCreate[0], segmentsToCreate[segmentsToCreate.length - 1]
-      );
+      final int numExpired = segmentsToExpire.length;
+      final String expired = numExpired == 0
+          ? "[]"
+          : String.format("[%d-%d]", segmentsToExpire[0], segmentsToExpire[numExpired - 1]);
+
+      final int numCreated = segmentsToCreate.length;
+      final String created = numCreated == 0
+          ? "[]"
+          : String.format("[%d-%d]", segmentsToCreate[0], segmentsToCreate[numCreated - 1]);
+
+      return String.format("SegmentRoll: expired segment(s)=%s, new segments(s)=%s",
+                           expired, created);
     }
   }
 }
