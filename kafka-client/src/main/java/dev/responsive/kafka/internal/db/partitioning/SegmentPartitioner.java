@@ -141,12 +141,26 @@ public class SegmentPartitioner implements TablePartitioner<Stamped<Bytes>, Segm
   }
 
   /**
-   * Return all possible table partitions that could hold data.
-   * Note, the {@code timeFrom} parameter should already account for the retention
+   * Return all active segments for the given stream-time and retention period
    *
    * @param kafkaPartition the original partition in kafka
-   * @param timeFrom       the lowest timestamp in the fetched range
-   * @param timeTo         the highest timestamp in the fetched range
+   * @param streamTime       the lowest timestamp in the fetched range
+   * @return               all remote partitions for active segments of this kafka partition
+   */
+  public Iterable<SegmentPartition> activeSegments(
+      final int kafkaPartition,
+      final long streamTime
+  ) {
+    return range(kafkaPartition, minValidTs(streamTime), streamTime);
+  }
+
+  /**
+   * Return all active segments that could contain data with a timestamp in the specified range
+   * The {@code timeFrom} parameter should already account for the retention
+   *
+   * @param kafkaPartition the original partition in kafka
+   * @param timeFrom       the lowest timestamp in the fetched range (inclusive)
+   * @param timeTo         the highest timestamp in the fetched range (inclusive)
    * @return               all remote partitions for segments in this range for this kafka partition
    */
   public Iterable<SegmentPartition> range(
@@ -160,8 +174,9 @@ public class SegmentPartitioner implements TablePartitioner<Stamped<Bytes>, Segm
   }
 
   /**
-   * Return all possible table partitions that could hold data in reverse order.
-   * Note,the {@code timeFrom} parameter should already account for the retention
+   * Return all active segments that could contain data with a timestamp in the specified range,
+   * in reverse order
+   * The{@code timeFrom} parameter should already account for the retention
    *
    * @param kafkaPartition the original partition in kafka
    * @param timeFrom       the lowest timestamp in the fetched range
@@ -188,8 +203,8 @@ public class SegmentPartitioner implements TablePartitioner<Stamped<Bytes>, Segm
     final long oldMaxActiveSegment = segmentId(oldStreamTime);
     final long newMaxActiveSegment = segmentId(newStreamTime);
 
-    final long oldMinActiveSegment = segmentId(oldStreamTime - retentionPeriodMs + 1);
-    final long newMinActiveSegment = segmentId(newStreamTime - retentionPeriodMs + 1);
+    final long oldMinActiveSegment = segmentId(minValidTs(oldStreamTime));
+    final long newMinActiveSegment = segmentId(minValidTs(newStreamTime));
 
     // Special case where this is the first record we've received
     if (oldStreamTime == UNINITIALIZED_STREAM_TIME) {
@@ -233,6 +248,10 @@ public class SegmentPartitioner implements TablePartitioner<Stamped<Bytes>, Segm
 
   private long segmentId(final long windowTimestamp) {
     return Long.max(0, windowTimestamp / segmentIntervalMs);
+  }
+
+  private long minValidTs(final long streamTime) {
+    return streamTime - retentionPeriodMs + 1;
   }
 
   public static class SegmentRoll {

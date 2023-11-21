@@ -38,6 +38,7 @@ public enum ColumnName {
   DATA_VALUE("value", "value", b -> bytes((byte[]) b)),
   OFFSET("offset", "offset"),
   EPOCH("epoch", "epoch"),
+  STREAM_TIME("streamTime", "streamtime", ts -> timestamp((long) ts)),
   WINDOW_START("windowStart", "windowstart", ts -> timestamp((long) ts)),
   TIMESTAMP("ts", "ts", ts -> timestamp((long) ts));
 

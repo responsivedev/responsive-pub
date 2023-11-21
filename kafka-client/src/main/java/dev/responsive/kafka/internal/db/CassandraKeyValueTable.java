@@ -50,6 +50,7 @@ import java.util.Objects;
 import java.util.concurrent.TimeoutException;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -267,26 +268,58 @@ public class CassandraKeyValueTable
   public WriterFactory<Bytes, Integer> init(
       final int kafkaPartition
   ) {
-    partitioner.allTablePartitions(kafkaPartition).forEach(sub -> {
-      client.execute(
-          QueryBuilder.insertInto(name)
-              .value(PARTITION_KEY.column(), PARTITION_KEY.literal(sub))
-              .value(ROW_TYPE.column(), METADATA_ROW.literal())
-              .value(DATA_KEY.column(), DATA_KEY.literal(METADATA_KEY))
-              .value(TIMESTAMP.column(), TIMESTAMP.literal(METADATA_TS))
-              .value(OFFSET.column(), OFFSET.literal(NO_COMMITTED_OFFSET))
-              .value(EPOCH.column(), EPOCH.literal(0L))
-              .ifNotExists()
-              .build()
-      );
-    });
-    final WriterFactory<Bytes, Integer> writerFactory = LwtWriterFactory.initialize(
+    partitioner.allTablePartitions(kafkaPartition).forEach(sub -> client.execute(
+        QueryBuilder.insertInto(name)
+            .value(PARTITION_KEY.column(), PARTITION_KEY.literal(sub))
+            .value(ROW_TYPE.column(), METADATA_ROW.literal())
+            .value(DATA_KEY.column(), DATA_KEY.literal(METADATA_KEY))
+            .value(TIMESTAMP.column(), TIMESTAMP.literal(METADATA_TS))
+            .value(OFFSET.column(), OFFSET.literal(NO_COMMITTED_OFFSET))
+            .value(EPOCH.column(), EPOCH.literal(0L))
+            .ifNotExists()
+            .build()
+    ));
+
+    // attempt to reserve an epoch - the epoch is only fetched from the metadata
+    // table-partition and then "broadcast" to the other partitions.
+    // this works because we are guaranteed that:
+    // (a) for this kind of table,the metadata partition is included in the set of all
+    // data table-partitions, and
+    // (b) the same epoch is written to all table partitions (unless it was fenced by
+    // another writer before reserving the epoch for all table-partitions, in which case
+    // it doesn't matter because that writer will overwrite the epoch for all the
+    // partitions to the same newer value
+    final int metadataPartition = partitioner.metadataTablePartition(kafkaPartition);
+    final long epoch = fetchEpoch(metadataPartition) + 1;
+
+    for (final int tablePartition : partitioner.allTablePartitions(kafkaPartition)) {
+      final var setEpoch = client.execute(reserveEpoch(tablePartition, epoch));
+
+      if (!setEpoch.wasApplied()) {
+        final long otherEpoch = fetchEpoch(tablePartition);
+        final var msg = String.format(
+            "Could not initialize commit buffer [%s-%d] - attempted to claim epoch %d, "
+                + "but was fenced by a writer that claimed epoch %d on table partition %s",
+            name(),
+            kafkaPartition,
+            epoch,
+            otherEpoch,
+            tablePartition
+        );
+        final var e = new TaskMigratedException(msg);
+        LOG.warn(msg, e);
+        throw e;
+      }
+    }
+
+    final WriterFactory<Bytes, Integer> writerFactory = new LwtWriterFactory<>(
         this,
         this,
         client,
         partitioner,
         kafkaPartition,
-        partitioner.allTablePartitions(kafkaPartition));
+        epoch
+    );
 
     final int basePartition = partitioner.metadataTablePartition(kafkaPartition);
     LOG.info("Initialized store {} with {} for subpartitions in range: {{} -> {}}",

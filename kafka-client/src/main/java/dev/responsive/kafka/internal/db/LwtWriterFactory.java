@@ -128,48 +128,4 @@ public class LwtWriterFactory<K, P> extends WriterFactory<K, P> {
   private BoundStatement fencingStatement(final P tablePartition) {
     return tableMetadata.ensureEpoch(tablePartition, epoch);
   }
-
-  public static <K, P> LwtWriterFactory<K, P> initialize(
-      final RemoteTable<K, BoundStatement> table,
-      final TableMetadata<P> tableMetadata,
-      final CassandraClient client,
-      final TablePartitioner<K, P> partitioner,
-      final int kafkaPartition,
-      final List<P> tablePartitionsToInitialize
-  ) {
-    // attempt to reserve an epoch - all epoch reservations will be done
-    // under the metadata table-partition and then "broadcast" to the other
-    // partitions
-    final P metadataPartition = partitioner.metadataTablePartition(kafkaPartition);
-    final long epoch = tableMetadata.fetchEpoch(metadataPartition) + 1;
-
-    for (final P tablePartition : tablePartitionsToInitialize) {
-      final var setEpoch = client.execute(tableMetadata.reserveEpoch(tablePartition, epoch));
-
-      if (!setEpoch.wasApplied()) {
-        final long otherEpoch = tableMetadata.fetchEpoch(tablePartition);
-        final var msg = String.format(
-            "Could not initialize commit buffer [%s-%d] - attempted to claim epoch %d, "
-                + "but was fenced by a writer that claimed epoch %d on table partition %s",
-            table.name(),
-            kafkaPartition,
-            epoch,
-            otherEpoch,
-            tablePartition
-        );
-        final var e = new TaskMigratedException(msg);
-        LOG.warn(msg, e);
-        throw e;
-      }
-    }
-
-    return new LwtWriterFactory<>(
-        table,
-        tableMetadata,
-        client,
-        partitioner,
-        kafkaPartition,
-        epoch
-    );
-  }
 }
