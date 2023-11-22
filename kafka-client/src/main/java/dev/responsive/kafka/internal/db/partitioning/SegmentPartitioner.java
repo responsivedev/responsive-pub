@@ -16,11 +16,14 @@
 
 package dev.responsive.kafka.internal.db.partitioning;
 
+import static java.util.Collections.emptyList;
+
 import dev.responsive.kafka.api.stores.ResponsiveWindowParams;
 import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.SegmentPartition;
 import dev.responsive.kafka.internal.utils.Stamped;
 import dev.responsive.kafka.internal.utils.StoreUtil;
 import java.util.Collections;
+import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
 import org.apache.kafka.common.utils.Bytes;
@@ -36,7 +39,7 @@ import org.slf4j.LoggerFactory;
  * other timeseries and/or ttl types of state stores.
  * <p>
  * Each segment covers a specific time range in milliseconds. If t_n is the start time of the
- * nth segment, then that segment covers all timestamps from t_s -> t_s + segmentInterval.
+ * nth segment, then that segment covers all timestamps from t_s - t_s + segmentInterval.
  * For each segment id there are N physical table partitions, where N is the number of kafka
  * partitions. Each physical state store instance should only be interacting with a single kafka
  * partition, but will generally have multiple active segments for each kafka partition.
@@ -93,18 +96,19 @@ public class SegmentPartitioner implements TablePartitioner<Stamped<Bytes>, Segm
   private final long windowSizeMs;
 
   public static class SegmentPartition {
-    public final int partitionKey;
+    public final int tablePartition;
     public final long segmentId;
 
-    public SegmentPartition(final int partitionKey, final long segmentId) {
-      this.partitionKey = partitionKey;
+    public SegmentPartition(final int tablePartition, final long segmentId) {
+      this.tablePartition = tablePartition;
       this.segmentId = segmentId;
     }
 
     @Override
     public String toString() {
       return "SegmentPartition{"
-          + "partitionKey=" + partitionKey
+          + "partitionKey=" + tablePartition
+          + "tablePartition=" + tablePartition
           + ", segmentId=" + segmentId
           + '}';
     }
@@ -126,6 +130,15 @@ public class SegmentPartitioner implements TablePartitioner<Stamped<Bytes>, Segm
     this.retentionPeriodMs = retentionPeriodMs;
     this.segmentIntervalMs = segmentIntervalMs;
     this.windowSizeMs = windowSizeMs;
+    if (retentionPeriodMs <= 0L || segmentIntervalMs <= 0L || windowSizeMs <= 0L) {
+      LOG.error("Segment values should all be positive, got retentionPeriod={}ms, "
+                    + "segmentInterval={}ms, and windowSize={}ms",
+                retentionPeriodMs, segmentIntervalMs, windowSizeMs);
+      throw new IllegalStateException("Segment partitioner received a negative or zero value");
+    }
+
+    LOG.info("Created segment partitioner with retentionPeriod={}ms, segmentInterval={}ms,"
+                 + " and windowSize={}ms", retentionPeriodMs, segmentIntervalMs, windowSizeMs);
   }
 
   @Override
@@ -139,39 +152,58 @@ public class SegmentPartitioner implements TablePartitioner<Stamped<Bytes>, Segm
   }
 
   /**
-   * Return all possible table partitions that could hold data.
-   * Note, the {@code timeFrom} parameter should already account for the retention
+   * Return all active segments for the given stream-time and retention period
    *
    * @param kafkaPartition the original partition in kafka
-   * @param timeFrom       the lowest timestamp in the fetched range
-   * @param timeTo         the highest timestamp in the fetched range
+   * @param streamTime       the lowest timestamp in the fetched range
+   * @return               all remote partitions for active segments of this kafka partition
+   */
+  public List<SegmentPartition> activeSegments(
+      final int kafkaPartition,
+      final long streamTime
+  ) {
+    if (streamTime == UNINITIALIZED_STREAM_TIME) {
+      return emptyList();
+    } else {
+      return range(kafkaPartition, minValidTs(streamTime), streamTime);
+    }
+  }
+
+  /**
+   * Return all active segments that could contain data with a timestamp in the specified range
+   * The {@code timeFrom} parameter should already account for the retention
+   *
+   * @param kafkaPartition the original partition in kafka
+   * @param timeFrom       the lowest timestamp in the fetched range (inclusive)
+   * @param timeTo         the highest timestamp in the fetched range (inclusive)
    * @return               all remote partitions for segments in this range for this kafka partition
    */
-  public Iterable<SegmentPartition> range(
+  public List<SegmentPartition> range(
       final int kafkaPartition,
       final long timeFrom,
       final long timeTo
   ) {
-    return LongStream.range(segmentId(timeFrom), segmentId(timeTo))
+    return LongStream.range(segmentId(timeFrom), segmentId(timeTo) + 1)
         .mapToObj(segmentId -> new SegmentPartition(kafkaPartition, segmentId))
         .collect(Collectors.toList());
   }
 
   /**
-   * Return all possible table partitions that could hold data in reverse order.
-   * Note,the {@code timeFrom} parameter should already account for the retention
+   * Return all active segments that could contain data with a timestamp in the specified range,
+   * in reverse order
+   * The{@code timeFrom} parameter should already account for the retention
    *
    * @param kafkaPartition the original partition in kafka
    * @param timeFrom       the lowest timestamp in the fetched range
    * @param timeTo         the highest timestamp in the fetched range
    * @return               all remote partitions for segments in this range for this kafka partition
    */
-  public Iterable<SegmentPartition> reverseRange(
+  public List<SegmentPartition> reverseRange(
       final int kafkaPartition,
       final long timeFrom,
       final long timeTo
   ) {
-    return LongStream.range(segmentId(timeFrom), segmentId(timeTo))
+    return LongStream.range(segmentId(timeFrom), segmentId(timeTo) + 1)
         .boxed()
         .sorted(Collections.reverseOrder())
         .map(segmentId -> new SegmentPartition(kafkaPartition, segmentId))
@@ -186,8 +218,8 @@ public class SegmentPartitioner implements TablePartitioner<Stamped<Bytes>, Segm
     final long oldMaxActiveSegment = segmentId(oldStreamTime);
     final long newMaxActiveSegment = segmentId(newStreamTime);
 
-    final long oldMinActiveSegment = segmentId(oldStreamTime - retentionPeriodMs + 1);
-    final long newMinActiveSegment = segmentId(newStreamTime - retentionPeriodMs + 1);
+    final long oldMinActiveSegment = segmentId(minValidTs(oldStreamTime));
+    final long newMinActiveSegment = segmentId(minValidTs(newStreamTime));
 
     // Special case where this is the first record we've received
     if (oldStreamTime == UNINITIALIZED_STREAM_TIME) {
@@ -229,8 +261,12 @@ public class SegmentPartitioner implements TablePartitioner<Stamped<Bytes>, Segm
     }
   }
 
-  private int segmentId(final long windowTimestamp) {
-    return Integer.max(0, (int) (windowTimestamp / segmentIntervalMs));
+  private long segmentId(final long windowTimestamp) {
+    return Long.max(0, windowTimestamp / segmentIntervalMs);
+  }
+
+  private long minValidTs(final long streamTime) {
+    return streamTime - retentionPeriodMs + 1;
   }
 
   public static class SegmentRoll {
@@ -244,10 +280,18 @@ public class SegmentPartitioner implements TablePartitioner<Stamped<Bytes>, Segm
 
     @Override
     public String toString() {
-      return String.format("SegmentRoll: expired segment(s)=[%d-%d], new segments(s)=[%d-%d]",
-                           segmentsToExpire[0], segmentsToExpire[segmentsToExpire.length - 1],
-                           segmentsToCreate[0], segmentsToCreate[segmentsToCreate.length - 1]
-      );
+      final int numExpired = segmentsToExpire.length;
+      final String expired = numExpired == 0
+          ? "[]"
+          : String.format("[%d-%d]", segmentsToExpire[0], segmentsToExpire[numExpired - 1]);
+
+      final int numCreated = segmentsToCreate.length;
+      final String created = numCreated == 0
+          ? "[]"
+          : String.format("[%d-%d]", segmentsToCreate[0], segmentsToCreate[numCreated - 1]);
+
+      return String.format("SegmentRoll: expired segment(s)=%s, new segments(s)=%s",
+                           expired, created);
     }
   }
 }

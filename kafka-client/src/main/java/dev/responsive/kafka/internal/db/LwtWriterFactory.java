@@ -21,14 +21,8 @@ import com.datastax.oss.driver.api.core.cql.BatchType;
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
-import java.util.List;
-import org.apache.kafka.streams.errors.TaskMigratedException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class LwtWriterFactory<K, P> extends WriterFactory<K, P> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(LwtWriterFactory.class);
 
   private final RemoteTable<K, BoundStatement> table;
   private final TableMetadata<P> tableMetadata;
@@ -85,6 +79,12 @@ public class LwtWriterFactory<K, P> extends WriterFactory<K, P> {
     builder.addStatement(fencingStatement(tablePartition));
     builder.addStatement(table.setOffset(kafkaPartition, offset));
 
+    // TODO(sophie): clean up this hack, perhaps by combining the offset and stream-time into
+    //  a single metadata row update
+    if (table instanceof CassandraWindowedTable) {
+      builder.addStatement(((CassandraWindowedTable) table).setStreamTime(kafkaPartition, epoch));
+    }
+
     final var result = client.execute(builder.build());
     return result.wasApplied()
         ? RemoteWriteResult.success(tablePartition)
@@ -106,7 +106,6 @@ public class LwtWriterFactory<K, P> extends WriterFactory<K, P> {
     final var flushResult = super.commitPendingFlush(pendingFlush, consumedOffset);
     tableMetadata.postCommit(kafkaPartition, epoch);
 
-    // TODO: should #advanceStreamTime return a RemoteWriteResult as well?
     return flushResult;
   }
 
@@ -127,49 +126,5 @@ public class LwtWriterFactory<K, P> extends WriterFactory<K, P> {
 
   private BoundStatement fencingStatement(final P tablePartition) {
     return tableMetadata.ensureEpoch(tablePartition, epoch);
-  }
-
-  public static <K, P> LwtWriterFactory<K, P> initialize(
-      final RemoteTable<K, BoundStatement> table,
-      final TableMetadata<P> tableMetadata,
-      final CassandraClient client,
-      final TablePartitioner<K, P> partitioner,
-      final int kafkaPartition,
-      final List<P> tablePartitionsToInitialize
-  ) {
-    // attempt to reserve an epoch - all epoch reservations will be done
-    // under the metadata table-partition and then "broadcast" to the other
-    // partitions
-    final P metadataPartition = partitioner.metadataTablePartition(kafkaPartition);
-    final long epoch = tableMetadata.fetchEpoch(metadataPartition) + 1;
-
-    for (final P tablePartition : tablePartitionsToInitialize) {
-      final var setEpoch = client.execute(tableMetadata.reserveEpoch(tablePartition, epoch));
-
-      if (!setEpoch.wasApplied()) {
-        final long otherEpoch = tableMetadata.fetchEpoch(tablePartition);
-        final var msg = String.format(
-            "Could not initialize commit buffer [%s-%d] - attempted to claim epoch %d, "
-                + "but was fenced by a writer that claimed epoch %d on table partition %s",
-            table.name(),
-            kafkaPartition,
-            epoch,
-            otherEpoch,
-            tablePartition
-        );
-        final var e = new TaskMigratedException(msg);
-        LOG.warn(msg, e);
-        throw e;
-      }
-    }
-
-    return new LwtWriterFactory<>(
-        table,
-        tableMetadata,
-        client,
-        partitioner,
-        kafkaPartition,
-        epoch
-    );
   }
 }

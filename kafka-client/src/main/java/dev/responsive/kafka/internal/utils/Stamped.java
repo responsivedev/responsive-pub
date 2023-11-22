@@ -26,4 +26,11 @@ public class Stamped<K> {
     this.stamp = stamp;
   }
 
+  @Override
+  public String toString() {
+    return "Stamped{"
+        + "key=" + key
+        + ", windowStart=" + stamp
+        + '}';
+  }
 }

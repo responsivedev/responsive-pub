@@ -48,7 +48,7 @@ public final class StoreUtil {
   }
 
   public static long computeSegmentInterval(final long retentionPeriod, final long numSegments) {
-    return retentionPeriod / numSegments;
+    return Math.max(1, retentionPeriod / numSegments);
   }
 
   public static void validateLogConfigs(

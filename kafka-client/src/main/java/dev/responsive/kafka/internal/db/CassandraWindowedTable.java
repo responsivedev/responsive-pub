@@ -26,12 +26,12 @@ import static dev.responsive.kafka.internal.db.ColumnName.OFFSET;
 import static dev.responsive.kafka.internal.db.ColumnName.PARTITION_KEY;
 import static dev.responsive.kafka.internal.db.ColumnName.ROW_TYPE;
 import static dev.responsive.kafka.internal.db.ColumnName.SEGMENT_ID;
+import static dev.responsive.kafka.internal.db.ColumnName.STREAM_TIME;
 import static dev.responsive.kafka.internal.db.ColumnName.WINDOW_START;
 import static dev.responsive.kafka.internal.db.RowType.DATA_ROW;
 import static dev.responsive.kafka.internal.db.RowType.METADATA_ROW;
 import static dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.UNINITIALIZED_STREAM_TIME;
 import static dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration.NO_COMMITTED_OFFSET;
-import static java.util.Collections.singletonList;
 
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
@@ -52,13 +52,16 @@ import dev.responsive.kafka.internal.utils.Stamped;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.TimeoutException;
 import javax.annotation.CheckReturnValue;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -77,7 +80,7 @@ public class CassandraWindowedTable implements
   private final CassandraClient client;
   private final SegmentPartitioner partitioner;
 
-  private final PreparedStatement initSegment;
+  private final PreparedStatement createSegment;
   private final PreparedStatement expireSegment;
   private final PreparedStatement insert;
   private final PreparedStatement delete;
@@ -90,6 +93,8 @@ public class CassandraWindowedTable implements
   private final PreparedStatement backFetchAll;
   private final PreparedStatement fetchOffset;
   private final PreparedStatement setOffset;
+  private final PreparedStatement fetchStreamTime;
+  private final PreparedStatement setStreamTime;
   private final PreparedStatement fetchEpoch;
   private final PreparedStatement reserveEpoch;
   private final PreparedStatement ensureEpoch;
@@ -98,9 +103,33 @@ public class CassandraWindowedTable implements
   // as these entities have different views of the current time and should not be unified.
   // (Specifically, this table will always lag the view of stream-time that is shared by the
   // ResponsiveWindowStore and CommitBuffer due to buffering/batching of writes)
-  private long lastFlushStreamTime = UNINITIALIZED_STREAM_TIME;
-  private long pendingFlushStreamTime = UNINITIALIZED_STREAM_TIME;
-  private SegmentRoll activeRoll;
+  private final Map<Integer, PendingFlushInfo> kafkaPartitionToPendingFlushInfo = new HashMap<>();
+
+  // TODO: move this into the LWTWriter/Factory to keep this class stateless
+  private static class PendingFlushInfo {
+
+    private long lastFlushStreamTime;
+    private long pendingFlushStreamTime;
+    private SegmentRoll segmentRoll;
+
+    public PendingFlushInfo(final long persistedStreamTime) {
+      this.lastFlushStreamTime = persistedStreamTime;
+      this.pendingFlushStreamTime = persistedStreamTime;
+    }
+
+    void maybeUpdatePendingStreamTime(final long recordTimestamp) {
+      this.pendingFlushStreamTime = Math.max(pendingFlushStreamTime, recordTimestamp);
+    }
+
+    void initSegmentRoll(final SegmentRoll pendingSegmentRoll) {
+      this.segmentRoll = pendingSegmentRoll;
+    }
+
+    void finalizeFlush() {
+      segmentRoll = null;
+      lastFlushStreamTime = pendingFlushStreamTime;
+    }
+  }
 
   public static CassandraWindowedTable create(
       final CassandraTableSpec spec,
@@ -135,15 +164,13 @@ public class CassandraWindowedTable implements
     client.execute(createTable.build());
     client.awaitTable(name).await(Duration.ofSeconds(60));
 
-    // TODO: consolidate the #init method into the constructor and create the
-    //  LwtWriterFactory before preparing the statements so we can just plug
-    //  in the epoch directly without having to bind it later/on each request
-    final var initSegment = client.prepare(
-        QueryBuilder.insertInto(name)
+    final var createSegment = client.prepare(
+        QueryBuilder
+            .insertInto(name)
             .value(PARTITION_KEY.column(), bindMarker(PARTITION_KEY.bind()))
             .value(SEGMENT_ID.column(), bindMarker(SEGMENT_ID.bind()))
             .value(ROW_TYPE.column(), METADATA_ROW.literal())
-            .value(DATA_KEY.column(), DATA_KEY.literal(ColumnName.METADATA_KEY))
+            .value(DATA_KEY.column(), DATA_KEY.literal(METADATA_KEY))
             .value(WINDOW_START.column(), WINDOW_START.literal(METADATA_TS))
             .value(EPOCH.column(), bindMarker(EPOCH.bind()))
             .ifNotExists()
@@ -287,15 +314,40 @@ public class CassandraWindowedTable implements
             .build()
     );
 
-    final var setOffset = client.prepare(QueryBuilder
-        .update(name)
-        .setColumn(OFFSET.column(), bindMarker(OFFSET.bind()))
-        .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
-        .where(SEGMENT_ID.relation().isEqualTo(bindMarker(SEGMENT_ID.bind())))
-        .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
-        .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
-        .where(WINDOW_START.relation().isEqualTo(WINDOW_START.literal(METADATA_TS)))
-        .build()
+    final var setOffset = client.prepare(
+        QueryBuilder
+            .update(name)
+            .setColumn(OFFSET.column(), bindMarker(OFFSET.bind()))
+            .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
+            .where(SEGMENT_ID.relation().isEqualTo(bindMarker(SEGMENT_ID.bind())))
+            .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
+            .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
+            .where(WINDOW_START.relation().isEqualTo(WINDOW_START.literal(METADATA_TS)))
+            .build()
+    );
+
+    final var fetchStreamTime = client.prepare(
+        QueryBuilder
+            .selectFrom(name)
+            .column(STREAM_TIME.column())
+            .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
+            .where(SEGMENT_ID.relation().isEqualTo(bindMarker(SEGMENT_ID.bind())))
+            .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
+            .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
+            .where(WINDOW_START.relation().isEqualTo(WINDOW_START.literal(METADATA_TS)))
+            .build()
+    );
+
+    final var setStreamTime = client.prepare(
+        QueryBuilder
+            .update(name)
+            .setColumn(STREAM_TIME.column(), bindMarker(STREAM_TIME.bind()))
+            .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
+            .where(SEGMENT_ID.relation().isEqualTo(bindMarker(SEGMENT_ID.bind())))
+            .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
+            .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
+            .where(WINDOW_START.relation().isEqualTo(WINDOW_START.literal(METADATA_TS)))
+            .build()
     );
 
     final var fetchEpoch = client.prepare(
@@ -343,7 +395,7 @@ public class CassandraWindowedTable implements
         name,
         client,
         partitioner,
-        initSegment,
+        createSegment,
         expireSegment,
         insert,
         delete,
@@ -356,6 +408,8 @@ public class CassandraWindowedTable implements
         backFetchRange,
         fetchOffset,
         setOffset,
+        fetchStreamTime,
+        setStreamTime,
         fetchEpoch,
         reserveEpoch,
         ensureEpoch
@@ -374,6 +428,7 @@ public class CassandraWindowedTable implements
         .withColumn(DATA_VALUE.column(), DataTypes.BLOB)
         .withColumn(OFFSET.column(), DataTypes.BIGINT)
         .withColumn(EPOCH.column(), DataTypes.BIGINT)
+        .withColumn(STREAM_TIME.column(), DataTypes.BIGINT)
         .withCompaction(new DefaultLeveledCompactionStrategy()); // TODO: create a LCSTableSpec?
   }
 
@@ -381,7 +436,7 @@ public class CassandraWindowedTable implements
       final String name,
       final CassandraClient client,
       final SegmentPartitioner partitioner,
-      final PreparedStatement initSegment,
+      final PreparedStatement createSegment,
       final PreparedStatement expireSegment,
       final PreparedStatement insert,
       final PreparedStatement delete,
@@ -394,6 +449,8 @@ public class CassandraWindowedTable implements
       final PreparedStatement backFetchRange,
       final PreparedStatement fetchOffset,
       final PreparedStatement setOffset,
+      final PreparedStatement fetchStreamTime,
+      final PreparedStatement setStreamTime,
       final PreparedStatement fetchEpoch,
       final PreparedStatement reserveEpoch,
       final PreparedStatement ensureEpoch
@@ -401,7 +458,7 @@ public class CassandraWindowedTable implements
     this.name = name;
     this.client = client;
     this.partitioner = partitioner;
-    this.initSegment = initSegment;
+    this.createSegment = createSegment;
     this.expireSegment = expireSegment;
     this.insert = insert;
     this.delete = delete;
@@ -414,6 +471,8 @@ public class CassandraWindowedTable implements
     this.backFetchRange = backFetchRange;
     this.fetchOffset = fetchOffset;
     this.setOffset = setOffset;
+    this.fetchStreamTime = fetchStreamTime;
+    this.setStreamTime = setStreamTime;
     this.fetchEpoch = fetchEpoch;
     this.reserveEpoch = reserveEpoch;
     this.ensureEpoch = ensureEpoch;
@@ -428,32 +487,92 @@ public class CassandraWindowedTable implements
   public WriterFactory<Stamped<Bytes>, SegmentPartition> init(
       final int kafkaPartition
   ) {
-    // TODO(sophie): store the stream-time in the offset metadata row and retrieve it to
-    //  initialize the state store's tracked stream-time and reserve the epoch for all
-    //  currently active segments
     final SegmentPartition metadataPartition = partitioner.metadataTablePartition(kafkaPartition);
 
-    client.execute(
+    final var initMetadata = client.execute(
         QueryBuilder.insertInto(name)
-            .value(PARTITION_KEY.column(), PARTITION_KEY.literal(metadataPartition.partitionKey))
+            .value(PARTITION_KEY.column(), PARTITION_KEY.literal(metadataPartition.tablePartition))
             .value(SEGMENT_ID.column(), SEGMENT_ID.literal(metadataPartition.segmentId))
             .value(ROW_TYPE.column(), METADATA_ROW.literal())
             .value(DATA_KEY.column(), DATA_KEY.literal(METADATA_KEY))
             .value(WINDOW_START.column(), WINDOW_START.literal(METADATA_TS))
             .value(OFFSET.column(), OFFSET.literal(NO_COMMITTED_OFFSET))
             .value(EPOCH.column(), EPOCH.literal(0L))
+            .value(STREAM_TIME.column(), STREAM_TIME.literal(UNINITIALIZED_STREAM_TIME))
             .ifNotExists()
             .build()
     );
 
-    return LwtWriterFactory.initialize(
+    if (initMetadata.wasApplied()) {
+      LOG.info("Created new metadata segment for kafka partition {}", kafkaPartition);
+    }
+
+    final long epoch = fetchEpoch(metadataPartition) + 1;
+    final var reserveMetadataEpoch = client.execute(reserveEpoch(metadataPartition, epoch));
+    if (!reserveMetadataEpoch.wasApplied()) {
+      handleEpochFencing(kafkaPartition, metadataPartition, epoch);
+    }
+
+    final long streamTime = fetchStreamTime(kafkaPartition);
+    kafkaPartitionToPendingFlushInfo.put(kafkaPartition, new PendingFlushInfo(streamTime));
+    LOG.info("Initialized stream-time to {} with epoch {} for kafka partition {}",
+             streamTime, epoch, kafkaPartition);
+
+    // since the active data segments depend on the current stream-time for the windowed table,
+    // which we won't know until we initialize it from the remote, the metadata like epoch and
+    // stream-time are stored in a special metadata partition/segment that's separate from the
+    // regular data partitions/segments and never expired
+    // therefore we initialize from the metadata partition and then broadcast the epoch to
+    // all the other partitions containing data for active segments
+    final var activeSegments = partitioner.activeSegments(kafkaPartition, streamTime);
+    if (activeSegments.isEmpty()) {
+      LOG.info("Skipping reservation of epoch {} for kafka partition {} due to no active segments",
+               epoch, kafkaPartition);
+    } else {
+      final long firstSegmentId = activeSegments.get(0).segmentId;
+      long lastSegmentId = firstSegmentId;
+      for (final SegmentPartition tablePartition : activeSegments) {
+        final var reserveSegmentEpoch = client.execute(reserveEpoch(tablePartition, epoch));
+
+        if (!reserveSegmentEpoch.wasApplied()) {
+          handleEpochFencing(kafkaPartition, tablePartition, epoch);
+        }
+        lastSegmentId = tablePartition.segmentId;
+      }
+      LOG.info("Reserved epoch {} for kafka partition {} across active segments in range {} - {}",
+               epoch, kafkaPartition, firstSegmentId, lastSegmentId);
+    }
+
+    return new LwtWriterFactory<>(
         this,
         this,
         client,
         partitioner,
         kafkaPartition,
-        singletonList(metadataPartition)
+        epoch
     );
+  }
+
+  // TODO: check whether we need to throw a CommitFailedException or ProducerFencedException
+  //  instead, or whether TaskMigratedException thrown here will be properly handled by Streams
+  private void handleEpochFencing(
+      final int kafkaPartition,
+      final SegmentPartition tablePartition,
+      final long epoch
+  ) {
+    final long otherEpoch = fetchEpoch(tablePartition);
+    final var msg = String.format(
+        "Could not initialize commit buffer [%s-%d] - attempted to claim epoch %d, "
+            + "but was fenced by a writer that claimed epoch %d on table partition %s",
+        name(),
+        kafkaPartition,
+        epoch,
+        otherEpoch,
+        tablePartition
+    );
+    final var e = new TaskMigratedException(msg);
+    LOG.warn(msg, e);
+    throw e;
   }
 
   @Override
@@ -461,14 +580,26 @@ public class CassandraWindowedTable implements
       final int kafkaPartition,
       final long epoch
   ) {
-    if (pendingFlushStreamTime > lastFlushStreamTime) {
-      activeRoll = partitioner.rolledSegments(name, lastFlushStreamTime, pendingFlushStreamTime);
+    final PendingFlushInfo pendingFlush = kafkaPartitionToPendingFlushInfo.get(kafkaPartition);
+    final SegmentRoll pendingRoll = partitioner.rolledSegments(
+        name, pendingFlush.lastFlushStreamTime, pendingFlush.pendingFlushStreamTime
+    );
 
-      for (final long segmentId : activeRoll.segmentsToCreate) {
-        initSegment(new SegmentPartition(kafkaPartition, segmentId), epoch);
+    pendingFlush.initSegmentRoll(pendingRoll);
+    for (final long segmentId : pendingRoll.segmentsToCreate) {
+      final SegmentPartition segment = new SegmentPartition(kafkaPartition, segmentId);
+      final var createSegment = createSegment(segment, epoch);
+
+      // If the segment creation failed because the table partition already exists, attempt to
+      // update the epoch in case we are fencing an older writer -- if that fails it means we're
+      // the ones being fenced
+      if (!createSegment.wasApplied()) {
+        final var reserveEpoch = client.execute(reserveEpoch(segment, epoch));
+
+        if (!reserveEpoch.wasApplied()) {
+          handleEpochFencing(kafkaPartition, segment, epoch);
+        }
       }
-
-      lastFlushStreamTime = pendingFlushStreamTime;
     }
   }
 
@@ -477,19 +608,18 @@ public class CassandraWindowedTable implements
       final int kafkaPartition,
       final long epoch
   ) {
-    if (activeRoll != null) {
-      for (final long segmentId : activeRoll.segmentsToExpire) {
-        expireSegment(new SegmentPartition(kafkaPartition, segmentId));
-      }
-      activeRoll = null;
+    final PendingFlushInfo pendingFlush = kafkaPartitionToPendingFlushInfo.get(kafkaPartition);
+    for (final long segmentId : pendingFlush.segmentRoll.segmentsToExpire) {
+      expireSegment(new SegmentPartition(kafkaPartition, segmentId));
     }
+    pendingFlush.finalizeFlush();
   }
 
-  private void initSegment(final SegmentPartition segmentToCreate, final long epoch) {
-    client.execute(
-        initSegment
+  private ResultSet createSegment(final SegmentPartition segmentToCreate, final long epoch) {
+    return client.execute(
+        createSegment
             .bind()
-            .setInt(PARTITION_KEY.bind(), segmentToCreate.partitionKey)
+            .setInt(PARTITION_KEY.bind(), segmentToCreate.tablePartition)
             .setLong(SEGMENT_ID.bind(), segmentToCreate.segmentId)
             .setLong(EPOCH.bind(), epoch)
     );
@@ -499,7 +629,7 @@ public class CassandraWindowedTable implements
     client.execute(
         expireSegment
             .bind()
-            .setInt(PARTITION_KEY.bind(), segmentToDelete.partitionKey)
+            .setInt(PARTITION_KEY.bind(), segmentToDelete.tablePartition)
             .setLong(SEGMENT_ID.bind(), segmentToDelete.segmentId)
     );
   }
@@ -510,7 +640,7 @@ public class CassandraWindowedTable implements
     final List<Row> result = client.execute(
         fetchOffset
             .bind()
-            .setInt(PARTITION_KEY.bind(), metadataPartition.partitionKey)
+            .setInt(PARTITION_KEY.bind(), metadataPartition.tablePartition)
             .setLong(SEGMENT_ID.bind(), metadataPartition.segmentId))
         .all();
 
@@ -531,9 +661,44 @@ public class CassandraWindowedTable implements
     final SegmentPartition metadataPartition = partitioner.metadataTablePartition(kafkaPartition);
     return setOffset
         .bind()
-        .setInt(PARTITION_KEY.bind(), metadataPartition.partitionKey)
+        .setInt(PARTITION_KEY.bind(), metadataPartition.tablePartition)
         .setLong(SEGMENT_ID.bind(), metadataPartition.segmentId)
         .setLong(OFFSET.bind(), offset);
+  }
+
+  public long fetchStreamTime(final int kafkaPartition) {
+    final SegmentPartition metadataPartition = partitioner.metadataTablePartition(kafkaPartition);
+    final List<Row> result = client.execute(
+            fetchStreamTime
+                .bind()
+                .setInt(PARTITION_KEY.bind(), metadataPartition.tablePartition)
+                .setLong(SEGMENT_ID.bind(), metadataPartition.segmentId))
+        .all();
+
+    if (result.size() != 1) {
+      throw new IllegalStateException(String.format(
+          "Expected exactly one stream-time row for %s[%s] but got %d",
+          name, kafkaPartition, result.size()));
+    } else {
+      return result.get(0).getLong(STREAM_TIME.column());
+    }
+  }
+
+  public BoundStatement setStreamTime(
+      final int kafkaPartition,
+      final long epoch
+  ) {
+    final PendingFlushInfo pendingFlush = kafkaPartitionToPendingFlushInfo.get(kafkaPartition);
+
+    LOG.debug("Updating stream-time to {} with epoch {} for kafkaPartition {}",
+             pendingFlush.pendingFlushStreamTime, epoch, kafkaPartition);
+
+    final SegmentPartition metadataPartition = partitioner.metadataTablePartition(kafkaPartition);
+    return setStreamTime
+        .bind()
+        .setInt(PARTITION_KEY.bind(), metadataPartition.tablePartition)
+        .setLong(SEGMENT_ID.bind(), metadataPartition.segmentId)
+        .setLong(STREAM_TIME.bind(), pendingFlush.pendingFlushStreamTime);
   }
 
   @Override
@@ -541,7 +706,7 @@ public class CassandraWindowedTable implements
     final List<Row> result = client.execute(
             fetchEpoch
                 .bind()
-                .setInt(PARTITION_KEY.bind(), segmentPartition.partitionKey)
+                .setInt(PARTITION_KEY.bind(), segmentPartition.tablePartition)
                 .setLong(SEGMENT_ID.bind(), segmentPartition.segmentId))
         .all();
 
@@ -558,7 +723,7 @@ public class CassandraWindowedTable implements
   public BoundStatement reserveEpoch(final SegmentPartition segmentPartition, final long epoch) {
     return reserveEpoch
         .bind()
-        .setInt(PARTITION_KEY.bind(), segmentPartition.partitionKey)
+        .setInt(PARTITION_KEY.bind(), segmentPartition.tablePartition)
         .setLong(SEGMENT_ID.bind(), segmentPartition.segmentId)
         .setLong(EPOCH.bind(), epoch);
   }
@@ -567,7 +732,7 @@ public class CassandraWindowedTable implements
   public BoundStatement ensureEpoch(final SegmentPartition segmentPartition, final long epoch) {
     return ensureEpoch
         .bind()
-        .setInt(PARTITION_KEY.bind(), segmentPartition.partitionKey)
+        .setInt(PARTITION_KEY.bind(), segmentPartition.tablePartition)
         .setLong(SEGMENT_ID.bind(), segmentPartition.segmentId)
         .setLong(EPOCH.bind(), epoch);
   }
@@ -594,11 +759,12 @@ public class CassandraWindowedTable implements
       final byte[] value,
       final long epochMillis
   ) {
-    pendingFlushStreamTime = Math.max(pendingFlushStreamTime, key.stamp);
+    kafkaPartitionToPendingFlushInfo.get(kafkaPartition).maybeUpdatePendingStreamTime(key.stamp);
+
     final SegmentPartition remotePartition = partitioner.tablePartition(kafkaPartition, key);
     return insert
         .bind()
-        .setInt(PARTITION_KEY.bind(), remotePartition.partitionKey)
+        .setInt(PARTITION_KEY.bind(), remotePartition.tablePartition)
         .setLong(SEGMENT_ID.bind(), remotePartition.segmentId)
         .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.key.get()))
         .setInstant(WINDOW_START.bind(), Instant.ofEpochMilli(key.stamp))
@@ -621,11 +787,12 @@ public class CassandraWindowedTable implements
       final int kafkaPartition,
       final Stamped<Bytes> key
   ) {
-    pendingFlushStreamTime = Math.max(pendingFlushStreamTime, key.stamp);
+    kafkaPartitionToPendingFlushInfo.get(kafkaPartition).maybeUpdatePendingStreamTime(key.stamp);
+
     final SegmentPartition segmentPartition = partitioner.tablePartition(kafkaPartition, key);
     return delete
         .bind()
-        .setInt(PARTITION_KEY.bind(), segmentPartition.partitionKey)
+        .setInt(PARTITION_KEY.bind(), segmentPartition.tablePartition)
         .setLong(SEGMENT_ID.bind(), segmentPartition.segmentId)
         .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.key.get()))
         .setInstant(WINDOW_START.bind(), Instant.ofEpochMilli(key.stamp));
@@ -651,7 +818,7 @@ public class CassandraWindowedTable implements
 
     final BoundStatement get = fetchSingle
         .bind()
-        .setInt(PARTITION_KEY.bind(), segmentPartition.partitionKey)
+        .setInt(PARTITION_KEY.bind(), segmentPartition.tablePartition)
         .setLong(SEGMENT_ID.bind(), segmentPartition.segmentId)
         .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
         .setInstant(WINDOW_START.bind(), Instant.ofEpochMilli(windowStart));
@@ -688,7 +855,7 @@ public class CassandraWindowedTable implements
     for (final SegmentPartition partition : partitioner.range(kafkaPartition, timeFrom, timeTo)) {
       final BoundStatement get = fetch
           .bind()
-          .setInt(PARTITION_KEY.bind(), partition.partitionKey)
+          .setInt(PARTITION_KEY.bind(), partition.tablePartition)
           .setLong(SEGMENT_ID.bind(), partition.segmentId)
           .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
           .setInstant(WINDOW_FROM_BIND, Instant.ofEpochMilli(timeFrom))
@@ -723,7 +890,7 @@ public class CassandraWindowedTable implements
     for (final var partition : partitioner.reverseRange(kafkaPartition, timeFrom, timeTo)) {
       final BoundStatement get = backFetch
           .bind()
-          .setInt(PARTITION_KEY.bind(), partition.partitionKey)
+          .setInt(PARTITION_KEY.bind(), partition.tablePartition)
           .setLong(SEGMENT_ID.bind(), partition.segmentId)
           .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
           .setInstant(WINDOW_FROM_BIND, Instant.ofEpochMilli(timeFrom))
@@ -761,7 +928,7 @@ public class CassandraWindowedTable implements
     for (final SegmentPartition partition : partitioner.range(kafkaPartition, timeFrom, timeTo)) {
       final BoundStatement get = fetchRange
           .bind()
-          .setInt(PARTITION_KEY.bind(), partition.partitionKey)
+          .setInt(PARTITION_KEY.bind(), partition.tablePartition)
           .setLong(SEGMENT_ID.bind(), partition.segmentId)
           .setByteBuffer(KEY_FROM_BIND, ByteBuffer.wrap(fromKey.get()))
           .setByteBuffer(KEY_TO_BIND, ByteBuffer.wrap(toKey.get()));
@@ -801,7 +968,7 @@ public class CassandraWindowedTable implements
     for (final var partition : partitioner.reverseRange(kafkaPartition, timeFrom, timeTo)) {
       final BoundStatement get = backFetchRange
           .bind()
-          .setInt(PARTITION_KEY.bind(), partition.partitionKey)
+          .setInt(PARTITION_KEY.bind(), partition.tablePartition)
           .setLong(SEGMENT_ID.bind(), partition.segmentId)
           .setByteBuffer(KEY_FROM_BIND, ByteBuffer.wrap(fromKey.get()))
           .setByteBuffer(KEY_TO_BIND, ByteBuffer.wrap(toKey.get()));
@@ -836,7 +1003,7 @@ public class CassandraWindowedTable implements
     for (final SegmentPartition partition : partitioner.range(kafkaPartition, timeFrom, timeTo)) {
       final BoundStatement get = fetchAll
           .bind()
-          .setInt(PARTITION_KEY.bind(), partition.partitionKey)
+          .setInt(PARTITION_KEY.bind(), partition.tablePartition)
           .setLong(SEGMENT_ID.bind(), partition.segmentId)
           .setInstant(KEY_FROM_BIND, Instant.ofEpochMilli(timeFrom))
           .setInstant(KEY_TO_BIND, Instant.ofEpochMilli(timeTo));
@@ -871,7 +1038,7 @@ public class CassandraWindowedTable implements
     for (final var partition : partitioner.reverseRange(kafkaPartition, timeFrom, timeTo)) {
       final BoundStatement get = backFetchAll
           .bind()
-          .setInt(PARTITION_KEY.bind(), partition.partitionKey)
+          .setInt(PARTITION_KEY.bind(), partition.tablePartition)
           .setLong(SEGMENT_ID.bind(), partition.segmentId)
           .setInstant(KEY_FROM_BIND, Instant.ofEpochMilli(timeFrom))
           .setInstant(KEY_TO_BIND, Instant.ofEpochMilli(timeTo));
