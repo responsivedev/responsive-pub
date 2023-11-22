@@ -136,7 +136,7 @@ public class SegmentPartitioner implements TablePartitioner<Stamped<Bytes>, Segm
                 retentionPeriodMs, segmentIntervalMs, windowSizeMs);
       throw new IllegalStateException("Segment partitioner received a negative or zero value");
     }
-    
+
     LOG.info("Created segment partitioner with retentionPeriod={}ms, segmentInterval={}ms,"
                  + " and windowSize={}ms", retentionPeriodMs, segmentIntervalMs, windowSizeMs);
   }

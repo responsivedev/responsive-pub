@@ -21,14 +21,8 @@ import com.datastax.oss.driver.api.core.cql.BatchType;
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
-import java.util.List;
-import org.apache.kafka.streams.errors.TaskMigratedException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class LwtWriterFactory<K, P> extends WriterFactory<K, P> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(LwtWriterFactory.class);
 
   private final RemoteTable<K, BoundStatement> table;
   private final TableMetadata<P> tableMetadata;

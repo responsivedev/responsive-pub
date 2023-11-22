@@ -28,9 +28,9 @@ public class Stamped<K> {
 
   @Override
   public String toString() {
-    return "Stamped{" +
-        "key=" + key +
-        ", windowStart=" + stamp +
-        '}';
+    return "Stamped{"
+        + "key=" + key
+        + ", windowStart=" + stamp
+        + '}';
   }
 }
