@@ -347,7 +347,6 @@ public class CassandraWindowedTable implements
             .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
             .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
             .where(WINDOW_START.relation().isEqualTo(WINDOW_START.literal(METADATA_TS)))
-            .ifColumn(EPOCH.column()).isEqualTo(bindMarker(EPOCH.bind()))
             .build()
     );
 
@@ -525,15 +524,23 @@ public class CassandraWindowedTable implements
     // regular data partitions/segments and never expired
     // therefore we initialize from the metadata partition and then broadcast the epoch to
     // all the other partitions containing data for active segments
-    for (final SegmentPartition tablePartition : partitioner.activeSegments(kafkaPartition, streamTime)) {
-      final var reserveSegmentEpoch = client.execute(reserveEpoch(tablePartition, epoch));
+    final var activeSegments = partitioner.activeSegments(kafkaPartition, streamTime);
+    if (activeSegments.isEmpty()) {
+      LOG.info("Skipping reservation of epoch {} for kafka partition {} due to no active segments",
+               epoch, kafkaPartition);
+    } else {
+      final long firstSegmentId = activeSegments.get(0).segmentId;
+      long lastSegmentId = firstSegmentId;
+      for (final SegmentPartition tablePartition : activeSegments) {
+        final var reserveSegmentEpoch = client.execute(reserveEpoch(tablePartition, epoch));
 
-      if (!reserveSegmentEpoch.wasApplied()) {
-        handleEpochFencing(kafkaPartition, tablePartition, epoch);
-      } else {
-        LOG.info("SOPHIE: reserved epoch {} for kafka partition {} and segment {}",
-                 epoch, kafkaPartition, tablePartition);
+        if (!reserveSegmentEpoch.wasApplied()) {
+          handleEpochFencing(kafkaPartition, tablePartition, epoch);
+        }
+        lastSegmentId = tablePartition.segmentId;
       }
+      LOG.info("Reserved epoch {} for kafka partition {} across active segments in range {} - {}",
+               epoch, kafkaPartition, firstSegmentId, lastSegmentId);
     }
 
     return new LwtWriterFactory<>(
@@ -586,7 +593,6 @@ public class CassandraWindowedTable implements
       // If the segment creation failed because the table partition already exists, attempt to
       // update the epoch in case we are fencing an older writer -- if that fails it means we're
       // the ones being fenced
-      // TODO: what if the segment creation failed for a reason besides already existing?
       if (!createSegment.wasApplied()) {
         final var reserveEpoch = client.execute(reserveEpoch(segment, epoch));
 

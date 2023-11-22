@@ -23,6 +23,7 @@ import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.SegmentP
 import dev.responsive.kafka.internal.utils.Stamped;
 import dev.responsive.kafka.internal.utils.StoreUtil;
 import java.util.Collections;
+import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
 import org.apache.kafka.common.utils.Bytes;
@@ -38,7 +39,7 @@ import org.slf4j.LoggerFactory;
  * other timeseries and/or ttl types of state stores.
  * <p>
  * Each segment covers a specific time range in milliseconds. If t_n is the start time of the
- * nth segment, then that segment covers all timestamps from t_s -> t_s + segmentInterval.
+ * nth segment, then that segment covers all timestamps from t_s - t_s + segmentInterval.
  * For each segment id there are N physical table partitions, where N is the number of kafka
  * partitions. Each physical state store instance should only be interacting with a single kafka
  * partition, but will generally have multiple active segments for each kafka partition.
@@ -129,6 +130,13 @@ public class SegmentPartitioner implements TablePartitioner<Stamped<Bytes>, Segm
     this.retentionPeriodMs = retentionPeriodMs;
     this.segmentIntervalMs = segmentIntervalMs;
     this.windowSizeMs = windowSizeMs;
+    if (retentionPeriodMs <= 0L || segmentIntervalMs <= 0L || windowSizeMs <= 0L) {
+      LOG.error("Segment values should all be positive, got retentionPeriod={}ms, "
+                    + "segmentInterval={}ms, and windowSize={}ms",
+                retentionPeriodMs, segmentIntervalMs, windowSizeMs);
+      throw new IllegalStateException("Segment partitioner received a negative or zero value");
+    }
+    
     LOG.info("Created segment partitioner with retentionPeriod={}ms, segmentInterval={}ms,"
                  + " and windowSize={}ms", retentionPeriodMs, segmentIntervalMs, windowSizeMs);
   }
@@ -150,7 +158,7 @@ public class SegmentPartitioner implements TablePartitioner<Stamped<Bytes>, Segm
    * @param streamTime       the lowest timestamp in the fetched range
    * @return               all remote partitions for active segments of this kafka partition
    */
-  public Iterable<SegmentPartition> activeSegments(
+  public List<SegmentPartition> activeSegments(
       final int kafkaPartition,
       final long streamTime
   ) {
@@ -170,7 +178,7 @@ public class SegmentPartitioner implements TablePartitioner<Stamped<Bytes>, Segm
    * @param timeTo         the highest timestamp in the fetched range (inclusive)
    * @return               all remote partitions for segments in this range for this kafka partition
    */
-  public Iterable<SegmentPartition> range(
+  public List<SegmentPartition> range(
       final int kafkaPartition,
       final long timeFrom,
       final long timeTo
@@ -190,7 +198,7 @@ public class SegmentPartitioner implements TablePartitioner<Stamped<Bytes>, Segm
    * @param timeTo         the highest timestamp in the fetched range
    * @return               all remote partitions for segments in this range for this kafka partition
    */
-  public Iterable<SegmentPartition> reverseRange(
+  public List<SegmentPartition> reverseRange(
       final int kafkaPartition,
       final long timeFrom,
       final long timeTo
