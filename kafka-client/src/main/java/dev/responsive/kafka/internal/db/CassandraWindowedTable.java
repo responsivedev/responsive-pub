@@ -698,8 +698,7 @@ public class CassandraWindowedTable implements
         .bind()
         .setInt(PARTITION_KEY.bind(), metadataPartition.tablePartition)
         .setLong(SEGMENT_ID.bind(), metadataPartition.segmentId)
-        .setLong(STREAM_TIME.bind(), pendingFlush.pendingFlushStreamTime)
-        .setLong(EPOCH.bind(), epoch);
+        .setLong(STREAM_TIME.bind(), pendingFlush.pendingFlushStreamTime);
   }
 
   @Override
