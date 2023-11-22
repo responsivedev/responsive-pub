@@ -318,9 +318,9 @@ public class CommitBufferTest {
     // Given:
     try (final CommitBuffer<Bytes, Integer> buffer = createCommitBuffer(false)) {
 
-      // reserve epoch for partition 8 to ensure it doesn't get flushed
-      // if it did it would get fenced
-      table.init(KAFKA_PARTITION);
+      // reserve epoch 2 for partition 9 to ensure the flush attempt fails
+      // to write for that partition
+      client.execute(table.reserveEpoch(9, 2));
 
       final Bytes k1 = Bytes.wrap(new byte[]{1});
       final Bytes k2 = Bytes.wrap(new byte[]{2});
@@ -329,7 +329,7 @@ public class CommitBufferTest {
       buffer.put(k1, VALUE, CURRENT_TS); // insert into subpartition 9
       buffer.put(k2, VALUE, CURRENT_TS); // insert into subpartition 10
 
-      // flush with partial epoch fencing: only subpartition 8 and 9 have been bumped
+      // flush with partial epoch fencing: only subpartition 9 has been bumped
       // so the offset update and k1 write will fail but k2 write will get through
       try {
         buffer.flush(100L);
@@ -341,7 +341,7 @@ public class CommitBufferTest {
       assertThat(table.get(changelog.partition(), k1, MIN_VALID_TS), nullValue());
       assertThat(table.get(changelog.partition(), k2, MIN_VALID_TS), is(VALUE));
 
-      assertThat(table.fetchEpoch(8), is(2L));
+      assertThat(table.fetchEpoch(8), is(1L));
       assertThat(table.fetchEpoch(9), is(2L));
       assertThat(table.fetchEpoch(10), is(1L));
       assertThat(table.fetchOffset(changelog.partition()), is(-1L));
