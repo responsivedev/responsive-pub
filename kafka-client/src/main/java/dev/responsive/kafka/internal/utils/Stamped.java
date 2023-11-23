@@ -16,21 +16,33 @@
 
 package dev.responsive.kafka.internal.utils;
 
-public class Stamped<K> {
+import org.apache.kafka.common.utils.Bytes;
 
-  public final K key;
-  public final long stamp;
+public class Stamped implements Comparable<Stamped> {
 
-  public Stamped(final K key, final long stamp) {
+  public final Bytes key;
+  public final long timestamp;
+
+  public Stamped(final Bytes key, final long timestamp) {
     this.key = key;
-    this.stamp = stamp;
+    this.timestamp = timestamp;
   }
 
   @Override
   public String toString() {
     return "Stamped{"
         + "key=" + key
-        + ", windowStart=" + stamp
+        + ", windowStart=" + timestamp
         + '}';
+  }
+
+  @Override
+  public int compareTo(final Stamped o) {
+    final int compareKeys = this.key.compareTo(o.key);
+    if (compareKeys != 0) {
+      return compareKeys;
+    } else {
+      return Long.compare(this.timestamp, o.timestamp);
+    }
   }
 }

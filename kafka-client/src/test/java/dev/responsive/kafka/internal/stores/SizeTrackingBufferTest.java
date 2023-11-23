@@ -3,10 +3,9 @@ package dev.responsive.kafka.internal.stores;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 
-import dev.responsive.kafka.internal.db.KeySpec;
+import dev.responsive.kafka.internal.db.BytesKeySpec;
 import dev.responsive.kafka.internal.utils.Result;
 import java.util.List;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.utils.Bytes;
 import org.junit.jupiter.api.Test;
 
@@ -14,22 +13,7 @@ class SizeTrackingBufferTest {
 
   private static final long TIMESTAMP = 100L;
 
-  private final SizeTrackingBuffer<Bytes> buffer = new SizeTrackingBuffer<>(new KeySpec<>() {
-    @Override
-    public Bytes keyFromRecord(final ConsumerRecord<byte[], byte[]> record) {
-      return Bytes.wrap(record.key());
-    }
-
-    @Override
-    public int sizeInBytes(final Bytes key) {
-      return key.get().length;
-    }
-
-    @Override
-    public int compare(final Bytes o1, final Bytes o2) {
-      return o1.compareTo(o2);
-    }
-  });
+  private final SizeTrackingBuffer<Bytes> buffer = new SizeTrackingBuffer<>(new BytesKeySpec());
 
   @Test
   public void shouldReturnSizeZeroOnEmptyBuffer() {

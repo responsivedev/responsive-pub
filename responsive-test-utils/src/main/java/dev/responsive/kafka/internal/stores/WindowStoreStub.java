@@ -24,10 +24,10 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
 public class WindowStoreStub {
-  final Comparator<Stamped<Bytes>> keyComparator = Comparator.comparing(k -> k.key);
+  final Comparator<Stamped> keyComparator = Comparator.comparing(k -> k.key);
 
-  private final NavigableMap<Stamped<Bytes>, byte[]> records =
-      new TreeMap<>(keyComparator.thenComparingLong(k -> k.stamp));
+  private final NavigableMap<Stamped, byte[]> records =
+      new TreeMap<>(keyComparator.thenComparingLong(k -> k.timestamp));
 
   private final long retentionPeriod;
   private long observedStreamTime = 0L;
@@ -37,13 +37,13 @@ public class WindowStoreStub {
     this.retentionPeriod = 15L;
   }
 
-  public void put(final Stamped<Bytes> key, final byte[] value) {
-    observedStreamTime = Math.max(observedStreamTime, key.stamp);
+  public void put(final Stamped key, final byte[] value) {
+    observedStreamTime = Math.max(observedStreamTime, key.timestamp);
     records.put(key, value);
   }
 
-  public void delete(final Stamped<Bytes> key) {
-    observedStreamTime = Math.max(observedStreamTime, key.stamp);
+  public void delete(final Stamped key) {
+    observedStreamTime = Math.max(observedStreamTime, key.timestamp);
     records.remove(key);
   }
 
@@ -51,7 +51,7 @@ public class WindowStoreStub {
       final Bytes key,
       final long windowStart
   ) {
-    final Stamped<Bytes> windowedKey = new Stamped<>(key, windowStart);
+    final Stamped windowedKey = new Stamped(key, windowStart);
     if (windowStart < minValidTimestamp() && records.containsKey(windowedKey)) {
       return records.get(windowedKey);
     } else {
@@ -59,7 +59,7 @@ public class WindowStoreStub {
     }
   }
 
-  public KeyValueIterator<Stamped<Bytes>, byte[]> fetch(
+  public KeyValueIterator<Stamped, byte[]> fetch(
       final Bytes key,
       long timeFrom,
       final long timeTo
@@ -67,7 +67,7 @@ public class WindowStoreStub {
     throw new UnsupportedOperationException("Not yet implemented.");
   }
 
-  public KeyValueIterator<Stamped<Bytes>, byte[]> backFetch(
+  public KeyValueIterator<Stamped, byte[]> backFetch(
       final Bytes key,
       final long timeFrom,
       final long timeTo
@@ -75,7 +75,7 @@ public class WindowStoreStub {
     throw new UnsupportedOperationException("Not yet implemented.");
   }
 
-  public KeyValueIterator<Stamped<Bytes>, byte[]> fetchRange(
+  public KeyValueIterator<Stamped, byte[]> fetchRange(
       final Bytes fromKey,
       final Bytes toKey,
       final long timeFrom,
@@ -84,7 +84,7 @@ public class WindowStoreStub {
     throw new UnsupportedOperationException("Not yet implemented.");
   }
 
-  public KeyValueIterator<Stamped<Bytes>, byte[]> backFetchRange(
+  public KeyValueIterator<Stamped, byte[]> backFetchRange(
       final Bytes fromKey,
       final Bytes toKey,
       final long timeFrom,
@@ -93,14 +93,14 @@ public class WindowStoreStub {
     throw new UnsupportedOperationException("Not yet implemented.");
   }
 
-  public KeyValueIterator<Stamped<Bytes>, byte[]> fetchAll(
+  public KeyValueIterator<Stamped, byte[]> fetchAll(
       final long timeFrom,
       final long timeTo
   ) {
     throw new UnsupportedOperationException("Not yet implemented.");
   }
 
-  public KeyValueIterator<Stamped<Bytes>, byte[]> backFetchAll(
+  public KeyValueIterator<Stamped, byte[]> backFetchAll(
       final long timeFrom,
       final long timeTo
   ) {

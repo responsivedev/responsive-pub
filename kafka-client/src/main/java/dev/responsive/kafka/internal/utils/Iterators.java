@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
@@ -88,27 +89,27 @@ public final class Iterators {
    * {@link WindowStoreIterator} requires but using {@link Stamped}
    * instead of {@code Long}.
    */
-  public static <K, V> WindowStoreIterator<V> windowed(
-      final KeyValueIterator<Stamped<K>, V> delegate
+  public static WindowStoreIterator<byte[]> windowed(
+      final KeyValueIterator<Stamped, byte[]> delegate
   ) {
-    return new WindowIterator<>(delegate);
+    return new WindowIterator(delegate);
   }
 
   /**
    * Returns an iterator that contains window ends instead of just
    * the stamped start timestamp.
    */
-  public static <K, V> KeyValueIterator<Windowed<K>, V> windowedKey(
-      final KeyValueIterator<Stamped<K>, V> delegate,
+  public static KeyValueIterator<Windowed<Bytes>, byte[]> windowedKey(
+      final KeyValueIterator<Stamped, byte[]> delegate,
       final long windowSize
   ) {
-    return new WindowKeyIterator<>(delegate, windowSize);
+    return new WindowKeyIterator(delegate, windowSize);
   }
 
   /**
    * Returns an iterator that iterates over all delegates in order
    */
-  public static <K, V> KeyValueIterator<K, V> wrapped(
+  public static <K extends Comparable<K>, V> KeyValueIterator<K, V> wrapped(
       final List<KeyValueIterator<K, V>> delegates
   ) {
     return new MultiPartitionRangeIterator<>(delegates);
@@ -193,11 +194,11 @@ public final class Iterators {
     }
   }
 
-  private static class WindowIterator<K, V> implements WindowStoreIterator<V> {
+  private static class WindowIterator implements WindowStoreIterator<byte[]> {
 
-    private final KeyValueIterator<Stamped<K>, V> delegate;
+    private final KeyValueIterator<Stamped, byte[]> delegate;
 
-    public WindowIterator(final KeyValueIterator<Stamped<K>, V> delegate) {
+    public WindowIterator(final KeyValueIterator<Stamped, byte[]> delegate) {
       this.delegate = delegate;
     }
 
@@ -208,7 +209,7 @@ public final class Iterators {
 
     @Override
     public Long peekNextKey() {
-      return delegate.peekNextKey().stamp;
+      return delegate.peekNextKey().timestamp;
     }
 
     @Override
@@ -217,9 +218,9 @@ public final class Iterators {
     }
 
     @Override
-    public KeyValue<Long, V> next() {
-      final KeyValue<Stamped<K>, V> next = delegate.next();
-      return new KeyValue<>(next.key.stamp, next.value);
+    public KeyValue<Long, byte[]> next() {
+      final KeyValue<Stamped, byte[]> next = delegate.next();
+      return new KeyValue<>(next.key.timestamp, next.value);
     }
   }
 
@@ -342,13 +343,13 @@ public final class Iterators {
     }
   }
 
-  private static class WindowKeyIterator<K, V> implements KeyValueIterator<Windowed<K>, V> {
+  private static class WindowKeyIterator implements KeyValueIterator<Windowed<Bytes>, byte[]> {
 
-    private final KeyValueIterator<Stamped<K>, V> delegate;
+    private final KeyValueIterator<Stamped, byte[]> delegate;
     private final long windowSize;
 
     private WindowKeyIterator(
-        final KeyValueIterator<Stamped<K>, V> delegate,
+        final KeyValueIterator<Stamped, byte[]> delegate,
         final long windowSize
     ) {
       this.delegate = delegate;
@@ -361,7 +362,7 @@ public final class Iterators {
     }
 
     @Override
-    public Windowed<K> peekNextKey() {
+    public Windowed<Bytes> peekNextKey() {
       return fromStamp(delegate.peekNextKey());
     }
 
@@ -371,18 +372,18 @@ public final class Iterators {
     }
 
     @Override
-    public KeyValue<Windowed<K>, V> next() {
-      final KeyValue<Stamped<K>, V> next = delegate.next();
+    public KeyValue<Windowed<Bytes>, byte[]> next() {
+      final KeyValue<Stamped, byte[]> next = delegate.next();
       return new KeyValue<>(
           fromStamp(next.key),
           next.value
       );
     }
 
-    private Windowed<K> fromStamp(final Stamped<K> stamped) {
+    private Windowed<Bytes> fromStamp(final Stamped stamped) {
       return new Windowed<>(
           stamped.key,
-          new TimeWindow(stamped.stamp, endTs(stamped.stamp))
+          new TimeWindow(stamped.timestamp, endTs(stamped.timestamp))
       );
     }
 

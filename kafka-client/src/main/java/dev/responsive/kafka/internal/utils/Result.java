@@ -18,22 +18,29 @@ package dev.responsive.kafka.internal.utils;
 
 import dev.responsive.kafka.internal.db.KeySpec;
 
-public class Result<K> {
+public class Result<K extends Comparable<K>> {
 
   public final K key;
   public final byte[] value;
   public final boolean isTombstone;
   public final long timestamp;
 
-  public static <K> Result<K> value(final K key, final byte[] value, long timestamp) {
+  public static <K extends Comparable<K>> Result<K> value(
+      final K key,
+      final byte[] value,
+      final long timestamp
+  ) {
     return new Result<>(key, value, false, timestamp);
   }
 
-  public static <K> Result<K> tombstone(final K key, long timestamp) {
+  public static <K extends Comparable<K>> Result<K> tombstone(
+      final K key,
+      final long timestamp
+  ) {
     return new Result<>(key, null, true, timestamp);
   }
 
-  private Result(final K key, final byte[] value, final boolean isTombstone, long timestamp) {
+  private Result(final K key, final byte[] value, final boolean isTombstone, final long timestamp) {
     this.key = key;
     this.value = value;
     this.isTombstone = isTombstone;

@@ -16,10 +16,9 @@
 
 package dev.responsive.kafka.internal.db;
 
-import java.util.Comparator;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 
-public interface KeySpec<K> extends Comparator<K> {
+public interface KeySpec<K extends Comparable<K>> {
 
   K keyFromRecord(final ConsumerRecord<byte[], byte[]> record);
 

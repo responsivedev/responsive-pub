@@ -26,7 +26,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
-import org.apache.kafka.common.utils.Bytes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -81,7 +80,7 @@ import org.slf4j.LoggerFactory;
  * For the time being, we simply recommend that users configure the number of segments
  * similarly to how they would configure the number of sub-partitions for a key-value store.
  */
-public class SegmentPartitioner implements TablePartitioner<Stamped<Bytes>, SegmentPartition> {
+public class SegmentPartitioner implements TablePartitioner<Stamped, SegmentPartition> {
 
   private static final Logger LOG = LoggerFactory.getLogger(SegmentPartitioner.class);
 
@@ -142,8 +141,8 @@ public class SegmentPartitioner implements TablePartitioner<Stamped<Bytes>, Segm
   }
 
   @Override
-  public SegmentPartition tablePartition(final int kafkaPartition, final Stamped<Bytes> key) {
-    return new SegmentPartition(kafkaPartition, segmentId(key.stamp));
+  public SegmentPartition tablePartition(final int kafkaPartition, final Stamped key) {
+    return new SegmentPartition(kafkaPartition, segmentId(key.timestamp));
   }
 
   @Override

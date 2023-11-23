@@ -66,7 +66,7 @@ public class CassandraTableSpecFactory {
 
   public static CassandraTableSpec fromWindowParams(
       final ResponsiveWindowParams params,
-      final TablePartitioner<Stamped<Bytes>, SegmentPartition> partitioner
+      final TablePartitioner<Stamped, SegmentPartition> partitioner
   ) {
     return new BaseTableSpec(params.name().remoteName(), partitioner);
   }

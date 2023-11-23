@@ -7,7 +7,7 @@ import java.util.NavigableMap;
 import java.util.Objects;
 import java.util.TreeMap;
 
-public class SizeTrackingBuffer<K> {
+public class SizeTrackingBuffer<K extends Comparable<K>> {
   private final NavigableMap<K, Result<K>> buffer;
   private final NavigableMap<K, Result<K>> reader;
   private final KeySpec<K> extractor;
@@ -15,7 +15,7 @@ public class SizeTrackingBuffer<K> {
 
   public SizeTrackingBuffer(final KeySpec<K> extractor) {
     this.extractor = Objects.requireNonNull(extractor);
-    buffer = new TreeMap<>(extractor);
+    buffer = new TreeMap<>();
     reader = Collections.unmodifiableNavigableMap(buffer);
   }
 

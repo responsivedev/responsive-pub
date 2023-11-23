@@ -16,7 +16,6 @@
 
 package dev.responsive.kafka.internal.db;
 
-import java.util.Objects;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.utils.Bytes;
 
@@ -30,11 +29,6 @@ public class BytesKeySpec implements KeySpec<Bytes> {
   @Override
   public int sizeInBytes(final Bytes key) {
     return key.get().length;
-  }
-
-  @Override
-  public int compare(final Bytes o1, final Bytes o2) {
-    return Objects.compare(o1, o2, Bytes::compareTo);
   }
 
 }

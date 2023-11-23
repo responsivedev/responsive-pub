@@ -50,7 +50,7 @@ public class LocalRemoteKvIteratorTest {
 
     // When:
     final List<Bytes> flushed = new ArrayList<>();
-    new LocalRemoteKvIterator<>(buffered, remote, Bytes::compareTo)
+    new LocalRemoteKvIterator<>(buffered, remote)
         .forEachRemaining(kv -> flushed.add(kv.key));
 
     // Then:
@@ -78,7 +78,7 @@ public class LocalRemoteKvIteratorTest {
 
     // When:
     final List<byte[]> flushed = new ArrayList<>();
-    new LocalRemoteKvIterator<>(buffered, remote, Bytes::compareTo)
+    new LocalRemoteKvIterator<>(buffered, remote)
         .forEachRemaining(kv -> flushed.add(kv.value));
 
     // Then:
@@ -105,7 +105,7 @@ public class LocalRemoteKvIteratorTest {
 
     // When:
     final List<Bytes> flushed = new ArrayList<>();
-    new LocalRemoteKvIterator<>(buffered, remote, Bytes::compareTo)
+    new LocalRemoteKvIterator<>(buffered, remote)
         .forEachRemaining(kv -> flushed.add(kv.key));
 
     // Then:
@@ -132,7 +132,7 @@ public class LocalRemoteKvIteratorTest {
 
     // When:
     final List<Bytes> flushed = new ArrayList<>();
-    new LocalRemoteKvIterator<>(buffered, remote, Bytes::compareTo)
+    new LocalRemoteKvIterator<>(buffered, remote)
         .forEachRemaining(kv -> flushed.add(kv.key));
 
     // Then:
@@ -159,7 +159,7 @@ public class LocalRemoteKvIteratorTest {
 
     // When:
     final List<Bytes> flushed = new ArrayList<>();
-    new LocalRemoteKvIterator<>(buffered, remote, Bytes::compareTo)
+    new LocalRemoteKvIterator<>(buffered, remote)
         .forEachRemaining(kv -> flushed.add(kv.key));
 
     // Then:
@@ -183,7 +183,7 @@ public class LocalRemoteKvIteratorTest {
 
     // When:
     final List<Bytes> flushed = new ArrayList<>();
-    new LocalRemoteKvIterator<>(buffered, remote, Bytes::compareTo)
+    new LocalRemoteKvIterator<>(buffered, remote)
         .forEachRemaining(kv -> flushed.add(kv.key));
 
     // Then:
