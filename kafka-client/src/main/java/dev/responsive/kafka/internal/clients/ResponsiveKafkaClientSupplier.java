@@ -354,7 +354,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
         final ResponsiveMetrics metrics,
         final KafkaClientSupplier clientSupplier
     ) {
-      return new EndOffsetsPoller(config, metrics, clientSupplier);
+      return new EndOffsetsPoller(config, metrics, clientSupplier::getAdmin);
     }
 
     default <K, V> ResponsiveProducer<K, V> createResponsiveProducer(
