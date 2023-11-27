@@ -16,10 +16,8 @@
 
 package dev.responsive.kafka.internal.stores;
 
-import dev.responsive.kafka.internal.stores.CommitBuffer;
 import dev.responsive.kafka.internal.utils.Iterators;
 import dev.responsive.kafka.internal.utils.Result;
-import java.util.Comparator;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
@@ -38,22 +36,19 @@ import org.apache.kafka.streams.state.KeyValueIterator;
  *           it requires detailed knowledge about {@link CommitBuffer} and
  *           the way that it works
  */
-class LocalRemoteKvIterator<K> implements KeyValueIterator<K, byte[]> {
+class LocalRemoteKvIterator<K extends Comparable<K>> implements KeyValueIterator<K, byte[]> {
 
   private final KeyValueIterator<K, Result<K>> buffered;
-  private final Comparator<K> keyComparator;
   private final KeyValueIterator<K, byte[]> remote;
 
   private KeyValue<K, byte[]> next;
 
   public LocalRemoteKvIterator(
       final KeyValueIterator<K, Result<K>> buffered,
-      final KeyValueIterator<K, byte[]> remote,
-      final Comparator<K> keyComparator
+      final KeyValueIterator<K, byte[]> remote
   ) {
     this.remote = remote;
     this.buffered = buffered;
-    this.keyComparator = keyComparator;
     next = null;
   }
 
@@ -121,11 +116,11 @@ class LocalRemoteKvIterator<K> implements KeyValueIterator<K, byte[]> {
     K cachedKey = buffered.peekNextKey();
     K remoteKey = remote.peekNextKey();
 
-    if (keyComparator.compare(remoteKey, cachedKey) < 0) {
+    if (remoteKey.compareTo(cachedKey) < 0) {
       // if the remote is smaller, we can just immediately
       // return that
       return remote.next();
-    } else if (keyComparator.compare(remoteKey, cachedKey) == 0) {
+    } else if (remoteKey.compareTo(cachedKey) == 0) {
       // if they're the same, then there are two options:
       // (1) the value is a tombstone, in which case we
       // discard both keys and move on or (2) the cached

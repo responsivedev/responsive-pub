@@ -54,7 +54,6 @@ public class PartitionedOperations implements KeyValueOperations {
   private final InternalProcessorContext context;
   private final ResponsiveKeyValueParams params;
   private final RemoteKVTable<?> table;
-  private final BytesKeySpec keySpec;
   private final CommitBuffer<Bytes, ?> buffer;
   private final TopicPartition changelog;
 
@@ -126,7 +125,6 @@ public class PartitionedOperations implements KeyValueOperations {
         context,
         params,
         table,
-        keySpec,
         buffer,
         changelog,
         storeRegistry,
@@ -184,7 +182,6 @@ public class PartitionedOperations implements KeyValueOperations {
       final InternalProcessorContext context,
       final ResponsiveKeyValueParams params,
       final RemoteKVTable<?> table,
-      final BytesKeySpec keySpec,
       final CommitBuffer<Bytes, ?> buffer,
       final TopicPartition changelog,
       final ResponsiveStoreRegistry storeRegistry,
@@ -195,7 +192,6 @@ public class PartitionedOperations implements KeyValueOperations {
     this.context = context;
     this.params = params;
     this.table = table;
-    this.keySpec = keySpec;
     this.buffer = buffer;
     this.changelog = changelog;
     this.storeRegistry = storeRegistry;
@@ -254,8 +250,7 @@ public class PartitionedOperations implements KeyValueOperations {
 
     return new LocalRemoteKvIterator<>(
         buffer.range(from, to),
-        table.range(changelog.partition(), from, to, minValidTimestamp()),
-        keySpec
+        table.range(changelog.partition(), from, to, minValidTimestamp())
     );
   }
 
@@ -269,8 +264,7 @@ public class PartitionedOperations implements KeyValueOperations {
   public KeyValueIterator<Bytes, byte[]> all() {
     return new LocalRemoteKvIterator<>(
         buffer.all(),
-        table.all(changelog.partition(), minValidTimestamp()),
-        keySpec
+        table.all(changelog.partition(), minValidTimestamp())
     );
   }
 

@@ -56,8 +56,7 @@ public class SegmentedOperations implements WindowOperations {
   private final InternalProcessorContext context;
   private final ResponsiveWindowParams params;
   private final RemoteWindowedTable<?> table;
-  private final StampedKeySpec keySpec;
-  private final CommitBuffer<Stamped<Bytes>, ?> buffer;
+  private final CommitBuffer<Stamped, ?> buffer;
   private final TopicPartition changelog;
 
   private final ResponsiveStoreRegistry storeRegistry;
@@ -68,7 +67,7 @@ public class SegmentedOperations implements WindowOperations {
       final TableName name,
       final StateStoreContext storeContext,
       final ResponsiveWindowParams params,
-      final Predicate<Stamped<Bytes>> withinRetention
+      final Predicate<Stamped> withinRetention
   ) throws InterruptedException, TimeoutException {
 
     final var log = new LogContext(
@@ -99,12 +98,12 @@ public class SegmentedOperations implements WindowOperations {
         throw new IllegalStateException("Unexpected value: " + sessionClients.storageBackend());
     }
 
-    final WriterFactory<Stamped<Bytes>, ?> writerFactory = table.init(changelog.partition());
+    final WriterFactory<Stamped, ?> writerFactory = table.init(changelog.partition());
 
     log.info("Remote table {} is available for querying.", name.remoteName());
 
     final StampedKeySpec keySpec = new StampedKeySpec(withinRetention);
-    final CommitBuffer<Stamped<Bytes>, ?> buffer = CommitBuffer.from(
+    final CommitBuffer<Stamped, ?> buffer = CommitBuffer.from(
         writerFactory,
         sessionClients,
         changelog,
@@ -126,7 +125,6 @@ public class SegmentedOperations implements WindowOperations {
         context,
         params,
         table,
-        keySpec,
         buffer,
         changelog,
         storeRegistry,
@@ -160,8 +158,7 @@ public class SegmentedOperations implements WindowOperations {
       final InternalProcessorContext context,
       final ResponsiveWindowParams params,
       final RemoteWindowedTable table,
-      final StampedKeySpec keySpec,
-      final CommitBuffer<Stamped<Bytes>, ?> buffer,
+      final CommitBuffer<Stamped, ?> buffer,
       final TopicPartition changelog,
       final ResponsiveStoreRegistry storeRegistry,
       final ResponsiveStoreRegistration registration,
@@ -170,7 +167,6 @@ public class SegmentedOperations implements WindowOperations {
     this.context = context;
     this.params = params;
     this.table = table;
-    this.keySpec = keySpec;
     this.buffer = buffer;
     this.changelog = changelog;
     this.storeRegistry = storeRegistry;
@@ -180,18 +176,18 @@ public class SegmentedOperations implements WindowOperations {
 
   @Override
   public void put(final Bytes key, final byte[] value, final long windowStartTime) {
-    buffer.put(new Stamped<>(key, windowStartTime), value, context.timestamp());
+    buffer.put(new Stamped(key, windowStartTime), value, context.timestamp());
   }
 
   @Override
   public void delete(final Bytes key, final long windowStartTime) {
-    buffer.tombstone(new Stamped<>(key, windowStartTime), context.timestamp());
+    buffer.tombstone(new Stamped(key, windowStartTime), context.timestamp());
   }
 
   @Override
   public byte[] fetch(final Bytes key, final long windowStartTime) {
-    final Stamped<Bytes> windowedKey = new Stamped<>(key, windowStartTime);
-    final Result<Stamped<Bytes>> localResult = buffer.get(windowedKey);
+    final Stamped windowedKey = new Stamped(key, windowStartTime);
+    final Result<Stamped> localResult = buffer.get(windowedKey);
     if (localResult != null)  {
       return localResult.isTombstone ? null : localResult.value;
     }
@@ -209,14 +205,13 @@ public class SegmentedOperations implements WindowOperations {
       final long timeFrom,
       final long timeTo
   ) {
-    final Stamped<Bytes> from = new Stamped<>(key, timeFrom);
-    final Stamped<Bytes> to = new Stamped<>(key, timeTo);
+    final Stamped from = new Stamped(key, timeFrom);
+    final Stamped to = new Stamped(key, timeTo);
 
     return Iterators.windowed(
         new LocalRemoteKvIterator<>(
             buffer.range(from, to),
-            table.fetch(changelog.partition(), key, timeFrom, timeTo),
-            keySpec
+            table.fetch(changelog.partition(), key, timeFrom, timeTo)
         )
     );
   }
@@ -250,14 +245,13 @@ public class SegmentedOperations implements WindowOperations {
       final long timeFrom,
       final long timeTo
   ) {
-    final Stamped<Bytes> from = new Stamped<>(key, timeFrom);
-    final Stamped<Bytes> to = new Stamped<>(key, timeTo);
+    final Stamped from = new Stamped(key, timeFrom);
+    final Stamped to = new Stamped(key, timeTo);
 
     return Iterators.windowed(
         new LocalRemoteKvIterator<>(
             buffer.backRange(from, to),
-            table.backFetch(changelog.partition(), key, timeFrom, timeTo),
-            keySpec
+            table.backFetch(changelog.partition(), key, timeFrom, timeTo)
         )
     );
   }

@@ -25,21 +25,21 @@ import java.util.function.Predicate;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.utils.Bytes;
 
-public class StampedKeySpec implements KeySpec<Stamped<Bytes>> {
+public class StampedKeySpec implements KeySpec<Stamped> {
 
-  private final Predicate<Stamped<Bytes>> withinRetention;
+  private final Predicate<Stamped> withinRetention;
 
-  public StampedKeySpec(final Predicate<Stamped<Bytes>> withinRetention) {
+  public StampedKeySpec(final Predicate<Stamped> withinRetention) {
     this.withinRetention = withinRetention;
   }
 
   @Override
-  public int sizeInBytes(final Stamped<Bytes> key) {
+  public int sizeInBytes(final Stamped key) {
     return key.key.get().length + Long.BYTES;
   }
 
   @Override
-  public Stamped<Bytes> keyFromRecord(final ConsumerRecord<byte[], byte[]> record) {
+  public Stamped keyFromRecord(final ConsumerRecord<byte[], byte[]> record) {
     final byte[] key = record.key();
     final int size = key.length - TIMESTAMP_SIZE;
 
@@ -47,26 +47,11 @@ public class StampedKeySpec implements KeySpec<Stamped<Bytes>> {
     final long startTs = buffer.getLong(size);
     final Bytes kBytes = Bytes.wrap(Arrays.copyOfRange(key, 0, size));
 
-    return new Stamped<>(kBytes, startTs);
+    return new Stamped(kBytes, startTs);
   }
 
   @Override
-  public boolean retain(final Stamped<Bytes> key) {
+  public boolean retain(final Stamped key) {
     return withinRetention.test(key);
-  }
-
-  @Override
-  public int compare(final Stamped<Bytes> o1, final Stamped<Bytes> o2) {
-    return compareKeys(o1, o2);
-  }
-
-  // TODO remove generic from Stamped<> and just implement Comparable
-  public static int compareKeys(final Stamped<Bytes> o1, final Stamped<Bytes> o2) {
-    final int key = o1.key.compareTo(o2.key);
-    if (key != 0) {
-      return key;
-    }
-
-    return Long.compare(o1.stamp, o2.stamp);
   }
 }

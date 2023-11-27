@@ -86,7 +86,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
           name,
           storeContext,
           params,
-          window -> window.stamp >= minValidTimestamp()
+          window -> window.timestamp >= minValidTimestamp()
       );
 
       log.info("Completed initializing state store");

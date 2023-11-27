@@ -16,12 +16,8 @@
 
 package dev.responsive.kafka.internal.utils;
 
-import dev.responsive.kafka.internal.db.BytesKeySpec;
-import dev.responsive.kafka.internal.db.StampedKeySpec;
-import java.util.Comparator;
 import java.util.List;
 import java.util.PriorityQueue;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
@@ -29,37 +25,12 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 //  basically the same exact thing but with one remote partition iterator and
 //  one local commit buffer iterator, assuming we can extract all the commit buffer
 //  specific implementation details (which should probably be done anyways)
-public class MultiPartitionRangeIterator<K, V> implements KeyValueIterator<K, V> {
+public class MultiPartitionRangeIterator<K extends Comparable<K>, V>
+    implements KeyValueIterator<K, V> {
 
-  private final Comparator<K> compareKeys;
   private final PriorityQueue<NextResult> nextResults = new PriorityQueue<>();
 
-  @SuppressWarnings("unchecked")
   public MultiPartitionRangeIterator(final List<KeyValueIterator<K, V>> delegates) {
-    K firstKey = null;
-    for (final var iter : delegates) {
-      if (iter.hasNext()) {
-        firstKey = iter.peekNextKey();
-        break;
-      }
-    }
-    // TODO: once we hardcode Stamped<K> as Stamped<Bytes> we can just use <K extends Comparable>
-    //  here and remove the explicit comparator param, this ridiculously hacky way to initialize
-    //  the comparator, and consolidate the two loops above & below this into a single one
-    if (firstKey != null) {
-      if (firstKey instanceof Bytes) {
-        compareKeys = (Comparator<K>) new BytesKeySpec();
-      } else if (firstKey instanceof Stamped) {
-        compareKeys = (Comparator<K>) new StampedKeySpec(null);
-      } else {
-        throw new IllegalStateException("Unrecognized key type when we expected only Bytes or"
-                                            + " Stamped. Got " + peekNextKey().getClass());
-      }
-    } else {
-      // If there aren't any results, we'll never call the comparator
-      compareKeys = null;
-    }
-
     for (final var iter : delegates) {
       if (iter.hasNext()) {
         final NextResult next = new NextResult(iter.next(), iter);
@@ -108,7 +79,7 @@ public class MultiPartitionRangeIterator<K, V> implements KeyValueIterator<K, V>
 
     @Override
     public int compareTo(final NextResult o) {
-      return compareKeys.compare(result.key, o.result.key);
+      return result.key.compareTo(o.result.key);
     }
   }
 }

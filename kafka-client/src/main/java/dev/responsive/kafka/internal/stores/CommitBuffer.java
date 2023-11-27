@@ -79,7 +79,7 @@ import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCa
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.slf4j.Logger;
 
-public class CommitBuffer<K, P>
+public class CommitBuffer<K extends Comparable<K>, P>
     implements RecordBatchingStateRestoreCallback, Closeable {
 
   public static final int MAX_BATCH_SIZE = 1000;
@@ -116,7 +116,7 @@ public class CommitBuffer<K, P>
 
   private Instant lastFlush;
 
-  static <K, P> CommitBuffer<K, P> from(
+  static <K extends Comparable<K>, P> CommitBuffer<K, P> from(
       final WriterFactory<K, P> writerFactory,
       final SessionClients clients,
       final TopicPartition changelog,
