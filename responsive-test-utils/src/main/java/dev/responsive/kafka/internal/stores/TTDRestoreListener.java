@@ -17,6 +17,7 @@
 package dev.responsive.kafka.internal.stores;
 
 import dev.responsive.kafka.internal.metrics.ClientVersionMetadata;
+import dev.responsive.kafka.internal.metrics.OtelMetricsService;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
 import java.util.Collections;
@@ -35,7 +36,7 @@ public class TTDRestoreListener extends ResponsiveRestoreListener {
 
   public static TTDRestoreListener mockRestoreListener(final Properties props) {
     final String appId = props.getProperty(StreamsConfig.APPLICATION_ID_CONFIG);
-    final var metrics = new ResponsiveMetrics(new Metrics());
+    final var metrics = new ResponsiveMetrics(new Metrics(), OtelMetricsService.noop());
     metrics.initializeTags(
         appId,
         appId + "-client",

@@ -16,10 +16,13 @@
 
 package dev.responsive.kafka.internal.config;
 
+import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_APPLICATION_ID_CONFIG;
+
 import dev.responsive.kafka.api.config.CompatibilityMode;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.StorageBackend;
 import java.util.Locale;
+import org.apache.kafka.streams.StreamsConfig;
 
 /**
  * Internal utility to make it easier to extract some values from {@link ResponsiveConfig}
@@ -47,6 +50,17 @@ public class ConfigUtils {
         .toUpperCase(Locale.ROOT);
 
     return CompatibilityMode.valueOf(backend);
+  }
+
+  public static String responsiveAppId(
+      final StreamsConfig streamsConfig,
+      final ResponsiveConfig responsiveConfig
+  ) {
+    if (responsiveConfig.originals().containsKey(RESPONSIVE_APPLICATION_ID_CONFIG)) {
+      return responsiveConfig.getString(RESPONSIVE_APPLICATION_ID_CONFIG);
+    }
+
+    return streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG);
   }
 
 }

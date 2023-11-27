@@ -70,6 +70,28 @@ public class ResponsiveConfig extends AbstractConfig {
   private static final String STORAGE_BACKEND_TYPE_DOC = "The storage backend";
   private static final StorageBackend STORAGE_BACKEND_TYPE_DEFAULT = StorageBackend.CASSANDRA;
 
+  // ------------------ metrics configurations --------------------------------
+
+  public static final String RESPONSIVE_APPLICATION_ID_CONFIG = "responsive.application.id";
+  private static final String RESPONSIVE_APPLICATION_ID_DOC = "The application ID that uniquely "
+      + "identifies this application with Responsive. This defaults to the configured Kafka "
+      + "Streams application.id but can be overridden in the case you have multiple applications "
+      + "with the same application.id configured to run in the same responsive.tenant.id";
+
+  public static final String METRICS_ENABLED_CONFIG = "responsive.metrics.enabled";
+  private static final String METRICS_ENABLED_DOC = "Whether or not metrics should be sent to Responsive Cloud";
+
+  public static final String CONTROLLER_ENDPOINT_CONFIG = "responsive.controller.endpoint";
+  private static final String CONTROLLER_ENDPOINT_DOC = "The endpoint of the running responsive "
+      + "cloud controller. If enabled, metrics will be sent to this endpoint.";
+
+  // TODO(agavra): we should consolidate API keys, but for now it's OK to use different ones
+  public static final String METRICS_API_KEY_CONFIG = "responsive.metrics.api.key";
+  private static final String METRICS_API_KEY_DOC = "The API Key provided for Metrics access.";
+
+  public static final String METRICS_SECRET_CONFIG = "responsive.metrics.secret";
+  private static final String METRICS_SECRET_DOC = "The Secret provided for Metrics access.";
+
   // ------------------ request configurations --------------------------------
 
   public static final String REQUEST_TIMEOUT_MS_CONFIG = "responsive.request.timeout.ms";
@@ -204,6 +226,36 @@ public class ResponsiveConfig extends AbstractConfig {
           ConfigDef.CaseInsensitiveValidString.in(StorageBackend.names()),
           Importance.HIGH,
           STORAGE_BACKEND_TYPE_DOC
+      ).define(
+          RESPONSIVE_APPLICATION_ID_CONFIG,
+          Type.STRING,
+          "",
+          Importance.MEDIUM,
+          RESPONSIVE_APPLICATION_ID_DOC
+      ).define(
+          METRICS_ENABLED_CONFIG,
+          Type.BOOLEAN,
+          false,
+          Importance.MEDIUM,
+          METRICS_ENABLED_DOC
+      ).define(
+          CONTROLLER_ENDPOINT_CONFIG,
+          Type.STRING,
+          "",
+          Importance.HIGH,
+          CONTROLLER_ENDPOINT_DOC
+      ). define(
+          METRICS_API_KEY_CONFIG,
+          Type.STRING,
+          "",
+          Importance.HIGH,
+          METRICS_API_KEY_DOC
+      ).define(
+          METRICS_SECRET_CONFIG,
+          Type.PASSWORD,
+          "",
+          Importance.HIGH,
+          METRICS_SECRET_DOC
       ).define(
           REQUEST_TIMEOUT_MS_CONFIG,
           Type.LONG,

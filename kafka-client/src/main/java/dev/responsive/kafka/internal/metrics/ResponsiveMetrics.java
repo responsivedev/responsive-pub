@@ -48,10 +48,12 @@ public class ResponsiveMetrics implements Closeable {
   private static final Pattern GLOBAL_THREAD_REGEX = Pattern.compile(".*-(GlobalStreamThread+)");
 
   private OrderedTagsSupplier orderedTagsSupplier;
+  private final OtelMetricsService otelService;
   private final Metrics metrics;
 
-  public ResponsiveMetrics(final Metrics metrics) {
+  public ResponsiveMetrics(final Metrics metrics, final OtelMetricsService otelService) {
     this.metrics = metrics;
+    this.otelService = otelService;
   }
 
   /**
@@ -176,5 +178,6 @@ public class ResponsiveMetrics implements Closeable {
       LOG.warn("Not all metrics were cleaned up before close: {}", metrics().keySet());
     }
     metrics.close();
+    otelService.close();
   }
 }

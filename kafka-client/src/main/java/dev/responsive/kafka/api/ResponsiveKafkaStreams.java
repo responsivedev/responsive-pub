@@ -21,6 +21,7 @@ import static dev.responsive.kafka.api.config.ResponsiveConfig.CLIENT_SECRET_CON
 import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_HOSTNAME_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.TASK_ASSIGNOR_CLASS_OVERRIDE;
 import static dev.responsive.kafka.internal.metrics.ResponsiveMetrics.RESPONSIVE_METRICS_NAMESPACE;
+import static org.apache.kafka.streams.StreamsConfig.*;
 
 import dev.responsive.kafka.api.config.CompatibilityMode;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
@@ -32,6 +33,7 @@ import dev.responsive.kafka.internal.db.CassandraClientFactory;
 import dev.responsive.kafka.internal.db.DefaultCassandraClientFactory;
 import dev.responsive.kafka.internal.db.mongo.ResponsiveMongoClient;
 import dev.responsive.kafka.internal.metrics.ClientVersionMetadata;
+import dev.responsive.kafka.internal.metrics.OtelMetricsService;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
 import dev.responsive.kafka.internal.metrics.ResponsiveStateListener;
@@ -198,7 +200,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     LOG.info("Responsive Client commit ID: {}", versionMetadata.responsiveClientCommitId);
 
     responsiveMetrics.initializeTags(
-        applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG),
+        applicationConfigs.getString(APPLICATION_ID_CONFIG),
         clientId,
         versionMetadata,
         applicationConfigs.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX)
@@ -212,24 +214,34 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     super.setStateListener(responsiveStateListener);
   }
 
-  private static ResponsiveMetrics createMetrics(final StreamsConfig config) {
+  private static ResponsiveMetrics createMetrics(
+      final StreamsConfig streamsConfig,
+      final ResponsiveConfig responsiveConfig
+  ) {
+    final OtelMetricsService otel;
+    if (responsiveConfig.getBoolean(ResponsiveConfig.METRICS_ENABLED_CONFIG)) {
+       otel = OtelMetricsService.create(streamsConfig, responsiveConfig);
+    } else {
+      otel = OtelMetricsService.noop();
+    }
+    otel.start();
+
     final MetricConfig metricConfig = new MetricConfig()
-        .samples(config.getInt(StreamsConfig.METRICS_NUM_SAMPLES_CONFIG))
+        .samples(streamsConfig.getInt(METRICS_NUM_SAMPLES_CONFIG))
         .recordLevel(Sensor.RecordingLevel.forName(
-            config.getString(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG)))
-        .timeWindow(
-            config.getLong(StreamsConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS);
+            streamsConfig.getString(METRICS_RECORDING_LEVEL_CONFIG)))
+        .timeWindow(streamsConfig.getLong(METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS);
 
     final JmxReporter jmxReporter = new JmxReporter();
-    jmxReporter.configure(config.originals());
+    jmxReporter.configure(streamsConfig.originals());
     return new ResponsiveMetrics(new Metrics(
         metricConfig,
         Collections.singletonList(jmxReporter),
         Time.SYSTEM,
         new KafkaMetricsContext(
             RESPONSIVE_METRICS_NAMESPACE,
-            config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX))
-    ));
+            streamsConfig.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX))
+    ), otel);
   }
 
   /**
@@ -376,7 +388,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       this.responsiveConfig = ResponsiveConfig.loggedConfig(configs);
       this.streamsConfig = ResponsiveStreamsConfig.streamsConfig(configs);
 
-      this.metrics = createMetrics(streamsConfig);
+      this.metrics = createMetrics(streamsConfig, responsiveConfig);
       this.storeRegistry = new ResponsiveStoreRegistry();
       this.compatibilityMode = ConfigUtils.compatibilityMode(responsiveConfig);
     }
