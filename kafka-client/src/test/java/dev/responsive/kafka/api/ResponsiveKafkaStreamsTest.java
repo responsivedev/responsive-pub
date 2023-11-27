@@ -16,6 +16,7 @@
 
 package dev.responsive.kafka.api;
 
+import static dev.responsive.kafka.api.config.ResponsiveConfig.COMPATIBILITY_MODE_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.TENANT_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
@@ -31,7 +32,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.when;
 
 import com.datastax.oss.driver.api.core.CqlSession;
-import com.typesafe.config.ConfigException;
 import dev.responsive.kafka.api.config.CompatibilityMode;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.db.CassandraClient;
@@ -151,7 +151,7 @@ class ResponsiveKafkaStreamsTest {
   @Test
   public void shouldCreateResponsiveKafkaStreamsInMetricsOnlyModeWithUnverifiedConfigs() {
     // Given:
-    properties.put(ResponsiveConfig.COMPATIBILITY_MODE_CONFIG, CompatibilityMode.METRICS_ONLY.name());
+    properties.put(COMPATIBILITY_MODE_CONFIG, CompatibilityMode.METRICS_ONLY.name());
     properties.put(NUM_STANDBY_REPLICAS_CONFIG, 2); // a config that would cause failure
 
     // When:

@@ -265,7 +265,10 @@ class ResponsiveKafkaClientSupplierTest {
   }
 
   @NotNull
-  private ResponsiveKafkaClientSupplier supplier(final Map<String, Object> configs, final CompatibilityMode compat) {
+  private ResponsiveKafkaClientSupplier supplier(
+      final Map<String, Object> configs,
+      final CompatibilityMode compat
+  ) {
     return new ResponsiveKafkaClientSupplier(
         factories,
         wrapped,

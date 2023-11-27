@@ -74,7 +74,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
       final ResponsiveStoreRegistry storeRegistry,
       final ResponsiveMetrics metrics,
       final CompatibilityMode compatibilityMode
-      ) {
+  ) {
     this(new Factories() {}, clientSupplier, configs, storeRegistry, metrics, compatibilityMode);
   }
 

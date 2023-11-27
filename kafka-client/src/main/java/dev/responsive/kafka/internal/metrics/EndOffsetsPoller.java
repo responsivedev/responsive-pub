@@ -66,7 +66,7 @@ public class EndOffsetsPoller {
       final Map<String, ?> configs,
       final ResponsiveMetrics metrics,
       final KafkaClientSupplier clientSupplier
-      ) {
+  ) {
     this(
         configs,
         metrics,
