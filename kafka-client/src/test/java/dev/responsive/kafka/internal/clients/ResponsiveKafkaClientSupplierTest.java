@@ -25,6 +25,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import dev.responsive.kafka.api.config.CompatibilityMode;
 import dev.responsive.kafka.internal.clients.ResponsiveKafkaClientSupplier.Factories;
 import dev.responsive.kafka.internal.metrics.EndOffsetsPoller;
 import dev.responsive.kafka.internal.metrics.MetricPublishingCommitListener;
@@ -42,12 +43,14 @@ import org.apache.kafka.common.serialization.BytesSerializer;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
 import org.hamcrest.Matchers;
+import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
@@ -105,7 +108,7 @@ class ResponsiveKafkaClientSupplierTest {
   @BeforeEach
   @SuppressWarnings("unchecked")
   public void setup() {
-    when(factories.createEndOffsetPoller(any(), any())).thenReturn(endOffsetsPoller);
+    when(factories.createEndOffsetPoller(any(), any(), any())).thenReturn(endOffsetsPoller);
     lenient().when(endOffsetsPoller.addForThread(any())).thenReturn(consumerEndOffsetsPollListener);
     lenient().when(wrapped.getConsumer(any())).thenReturn(wrappedConsumer);
     lenient().when(wrapped.getProducer(any())).thenReturn(wrappedProducer);
@@ -119,13 +122,7 @@ class ResponsiveKafkaClientSupplierTest {
         .thenReturn(commitMetricListener);
     lenient().when(factories.createOffsetRecorder(anyBoolean())).thenReturn(offsetRecorder);
 
-    supplier = new ResponsiveKafkaClientSupplier(
-        factories,
-        wrapped,
-        new StreamsConfig(CONFIGS),
-        storeRegistry,
-        metrics
-    );
+    supplier = supplier(CONFIGS, CompatibilityMode.FULL);
   }
 
   @Test
@@ -134,13 +131,7 @@ class ResponsiveKafkaClientSupplierTest {
     final var config = configsWithOverrides(
         PRODUCER_CONFIGS,
         Map.of(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.AT_LEAST_ONCE));
-    final var supplier = new ResponsiveKafkaClientSupplier(
-        factories,
-        wrapped,
-        new StreamsConfig(config),
-        storeRegistry,
-        metrics
-    );
+    final var supplier = supplier(config, CompatibilityMode.FULL);
 
     // when:
     final var producer = supplier.getProducer(config);
@@ -155,13 +146,7 @@ class ResponsiveKafkaClientSupplierTest {
     final var config = configsWithOverrides(
         CONSUMER_CONFIGS,
         Map.of(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.AT_LEAST_ONCE));
-    final var supplier = new ResponsiveKafkaClientSupplier(
-        factories,
-        wrapped,
-        new StreamsConfig(config),
-        storeRegistry,
-        metrics
-    );
+    final var supplier = supplier(config, CompatibilityMode.FULL);
 
     // when:
     final var consumer = supplier.getConsumer(config);
@@ -249,6 +234,46 @@ class ResponsiveKafkaClientSupplierTest {
     verify(factories).createResponsiveProducer(any(), any(), producerListenerCaptor.capture());
     producerListenerCaptor.getValue().forEach(ResponsiveProducer.Listener::onClose);
     verify(commitMetricListener).close();
+  }
+
+  @Test
+  public void shouldCreateGlobalAndRestoreConsumerInFullCompatibilityMode() {
+    // given:
+    supplier = supplier(CONFIGS, CompatibilityMode.FULL);
+
+    // when:
+    supplier.getRestoreConsumer(new HashMap<>(CONSUMER_CONFIGS));
+    supplier.getGlobalConsumer(new HashMap<>(PRODUCER_CONFIGS));
+
+    // then:
+    verify(factories, Mockito.atLeastOnce()).createGlobalConsumer(any(), any(), any());
+    verify(factories, Mockito.atLeastOnce()).createRestoreConsumer(any(), any(), any());
+  }
+
+  @Test
+  public void shouldNotCreateGlobalOrRestoreConsumerInMetricsCompatibilityMode() {
+    // given:
+    supplier = supplier(CONFIGS, CompatibilityMode.METRICS_ONLY);
+
+    // when:
+    supplier.getRestoreConsumer(new HashMap<>(CONSUMER_CONFIGS));
+    supplier.getGlobalConsumer(new HashMap<>(PRODUCER_CONFIGS));
+
+    // then:
+    verify(factories, Mockito.never()).createGlobalConsumer(any(), any(), any());
+    verify(factories, Mockito.never()).createRestoreConsumer(any(), any(), any());
+  }
+
+  @NotNull
+  private ResponsiveKafkaClientSupplier supplier(final Map<String, Object> configs, final CompatibilityMode compat) {
+    return new ResponsiveKafkaClientSupplier(
+        factories,
+        wrapped,
+        new StreamsConfig(CONFIGS),
+        storeRegistry,
+        metrics,
+        compat
+    );
   }
 
   private static Map<String, Object> configsWithOverrides(final Map<String, Object> overrides) {

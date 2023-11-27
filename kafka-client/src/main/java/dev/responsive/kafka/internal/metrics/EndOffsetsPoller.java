@@ -41,6 +41,7 @@ import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Gauge;
+import org.apache.kafka.streams.KafkaClientSupplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -63,8 +64,9 @@ public class EndOffsetsPoller {
 
   public EndOffsetsPoller(
       final Map<String, ?> configs,
-      final ResponsiveMetrics metrics
-  ) {
+      final ResponsiveMetrics metrics,
+      final KafkaClientSupplier clientSupplier
+      ) {
     this(
         configs,
         metrics,
@@ -74,7 +76,12 @@ public class EndOffsetsPoller {
           t.setName("responsive-end-offsets-poller");
           return t;
         }),
-        new Factories() {}
+        new Factories() {
+          @Override
+          public Admin createAdminClient(final Map<String, Object> configs) {
+            return clientSupplier.getAdmin(configs);
+          }
+        }
     );
   }
 

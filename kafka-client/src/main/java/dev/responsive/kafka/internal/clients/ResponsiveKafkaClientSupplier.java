@@ -18,6 +18,7 @@ package dev.responsive.kafka.internal.clients;
 
 import static org.apache.kafka.streams.StreamsConfig.AT_LEAST_ONCE;
 
+import dev.responsive.kafka.api.config.CompatibilityMode;
 import dev.responsive.kafka.internal.metrics.EndOffsetsPoller;
 import dev.responsive.kafka.internal.metrics.MetricPublishingCommitListener;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
@@ -29,6 +30,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalLong;
+import java.util.function.Function;
 import java.util.regex.Pattern;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
@@ -36,6 +39,7 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
@@ -62,14 +66,16 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
   private final EndOffsetsPoller endOffsetsPoller;
   private final String applicationId;
   private final boolean eos;
+  private final CompatibilityMode compatibilityMode;
 
   public ResponsiveKafkaClientSupplier(
       final KafkaClientSupplier clientSupplier,
       final StreamsConfig configs,
       final ResponsiveStoreRegistry storeRegistry,
-      final ResponsiveMetrics metrics
-  ) {
-    this(new Factories() {}, clientSupplier, configs, storeRegistry, metrics);
+      final ResponsiveMetrics metrics,
+      final CompatibilityMode compatibilityMode
+      ) {
+    this(new Factories() {}, clientSupplier, configs, storeRegistry, metrics, compatibilityMode);
   }
 
   ResponsiveKafkaClientSupplier(
@@ -77,17 +83,23 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
       final KafkaClientSupplier wrapped,
       final StreamsConfig configs,
       final ResponsiveStoreRegistry storeRegistry,
-      final ResponsiveMetrics metrics
+      final ResponsiveMetrics metrics,
+      final CompatibilityMode compatibilityMode
   ) {
     this.factories = factories;
     this.wrapped = wrapped;
     this.storeRegistry = storeRegistry;
     this.metrics = metrics;
+    this.compatibilityMode = compatibilityMode;
 
     eos = !(AT_LEAST_ONCE.equals(
         configs.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)));
 
-    endOffsetsPoller = factories.createEndOffsetPoller(configs.originals(), metrics);
+    endOffsetsPoller = factories.createEndOffsetPoller(
+        configs.originals(),
+        metrics,
+        this
+    );
     applicationId = configs.getString(StreamsConfig.APPLICATION_ID_CONFIG);
   }
 
@@ -153,26 +165,35 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
 
   @Override
   public Consumer<byte[], byte[]> getRestoreConsumer(final Map<String, Object> config) {
+    if (compatibilityMode == CompatibilityMode.METRICS_ONLY) {
+      return wrapped.getRestoreConsumer(config);
+    }
+
     final String clientId = (String) config.get(ConsumerConfig.CLIENT_ID_CONFIG);
     LOG.info("Creating responsive restore consumer: {}", clientId);
-    return new ResponsiveRestoreConsumer<>(
+    return factories.createRestoreConsumer(
         clientId,
         wrapped.getRestoreConsumer(config),
         storeRegistry::getCommittedOffset
     );
+
   }
 
   @Override
   public Consumer<byte[], byte[]> getGlobalConsumer(final Map<String, Object> config) {
+    if (compatibilityMode == CompatibilityMode.METRICS_ONLY) {
+      return wrapped.getGlobalConsumer(config);
+    }
+
     LOG.info("Creating responsive global consumer");
 
     config.put(ConsumerConfig.GROUP_ID_CONFIG, applicationId + "-global");
     config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
     config.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, true);
 
-    return new ResponsiveGlobalConsumer(
+    return factories.createGlobalConsumer(
         config,
-        wrapped.getGlobalConsumer(config),
+        wrapped,
         getAdmin(config)
     );
   }
@@ -330,9 +351,10 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
   interface Factories {
     default EndOffsetsPoller createEndOffsetPoller(
         final Map<String, ?> config,
-        final ResponsiveMetrics metrics
+        final ResponsiveMetrics metrics,
+        final KafkaClientSupplier clientSupplier
     ) {
-      return new EndOffsetsPoller(config, metrics);
+      return new EndOffsetsPoller(config, metrics, clientSupplier);
     }
 
     default <K, V> ResponsiveProducer<K, V> createResponsiveProducer(
@@ -350,6 +372,18 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
       return new ResponsiveConsumer<>(clientId, wrapped, listeners);
     }
 
+    default <K, V> ResponsiveGlobalConsumer createGlobalConsumer(
+        final Map<String, Object> config,
+        final KafkaClientSupplier wrapped,
+        final Admin admin
+    ) {
+      return new ResponsiveGlobalConsumer(
+          config,
+          wrapped.getGlobalConsumer(config),
+          admin
+      );
+    }
+
     default OffsetRecorder createOffsetRecorder(boolean eos) {
       return new OffsetRecorder(eos);
     }
@@ -363,6 +397,18 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
           metrics,
           threadId,
           offsetRecorder
+      );
+    }
+
+    default ResponsiveRestoreConsumer<byte[], byte[]> createRestoreConsumer(
+        final String clientId,
+        final Consumer<byte[], byte[]> restoreConsumer,
+        final Function<TopicPartition, OptionalLong> getCommittedOffset
+    ) {
+      return new ResponsiveRestoreConsumer<>(
+          clientId,
+          restoreConsumer,
+          getCommittedOffset
       );
     }
   }

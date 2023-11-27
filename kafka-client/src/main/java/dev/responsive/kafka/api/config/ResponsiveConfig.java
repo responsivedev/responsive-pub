@@ -37,6 +37,11 @@ public class ResponsiveConfig extends AbstractConfig {
 
   // ------------------ connection configurations -----------------------------
 
+  public static final String COMPATIBILITY_MODE_CONFIG = "responsive.compatibility.mode";
+  private static final String COMPATIBILITY_MODE_DOC = "This configuration enables running Responsive "
+      + "in compatibility mode, disabling certain features.";
+  private static final CompatibilityMode COMPATIBILITY_MODE_DEFAULT = CompatibilityMode.FULL;
+
   public static final String STORAGE_HOSTNAME_CONFIG = "responsive.storage.hostname";
   private static final String STORAGE_HOSTNAME_DOC = "The hostname of the storage server.";
 
@@ -138,6 +143,14 @@ public class ResponsiveConfig extends AbstractConfig {
   public static final String TASK_ASSIGNOR_CLASS_OVERRIDE = StickyTaskAssignor.class.getName();
 
   private static final ConfigDef CONFIG_DEF = new ConfigDef()
+      .define(
+          COMPATIBILITY_MODE_CONFIG,
+          Type.STRING,
+          COMPATIBILITY_MODE_DEFAULT.name(),
+          ConfigDef.CaseInsensitiveValidString.in(CompatibilityMode.names()),
+          Importance.MEDIUM,
+          COMPATIBILITY_MODE_DOC
+      )
       .define(
           STORAGE_HOSTNAME_CONFIG,
           Type.STRING,

@@ -18,14 +18,14 @@ package dev.responsive.kafka.api;
 
 import static dev.responsive.kafka.api.config.ResponsiveConfig.CLIENT_ID_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.CLIENT_SECRET_CONFIG;
-import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_BACKEND_TYPE_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_HOSTNAME_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.TASK_ASSIGNOR_CLASS_OVERRIDE;
 import static dev.responsive.kafka.internal.metrics.ResponsiveMetrics.RESPONSIVE_METRICS_NAMESPACE;
 
+import dev.responsive.kafka.api.config.CompatibilityMode;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
-import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.internal.clients.ResponsiveKafkaClientSupplier;
+import dev.responsive.kafka.internal.config.ConfigUtils;
 import dev.responsive.kafka.internal.config.InternalSessionConfigs;
 import dev.responsive.kafka.internal.config.ResponsiveStreamsConfig;
 import dev.responsive.kafka.internal.db.CassandraClientFactory;
@@ -41,7 +41,6 @@ import dev.responsive.kafka.internal.utils.SessionUtil;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.LinkedHashMap;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
@@ -174,7 +173,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     super(
         params.topology,
         propsWithOverrides(
-            params.responsiveConfig.originals(),
+            params.responsiveConfig,
             params.sessionClients,
             params.storeRegistry,
             params.topology.describe()),
@@ -182,10 +181,12 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
         params.time
     );
 
-    try {
-      ResponsiveStreamsConfig.validateStreamsConfig(applicationConfigs);
-    } catch (final ConfigException e) {
-      throw new StreamsException("Configuration error, please check your properties");
+    if (params.compatibilityMode == CompatibilityMode.FULL) {
+      try {
+        ResponsiveStreamsConfig.validateStreamsConfig(applicationConfigs);
+      } catch (final ConfigException e) {
+        throw new StreamsException("Configuration error, please check your properties", e);
+      }
     }
 
     this.responsiveMetrics = params.metrics;
@@ -236,21 +237,25 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
    * before these get finalized as a {@link StreamsConfig} object
    */
   private static Properties propsWithOverrides(
-      final Map<?, ?> configs,
+      final ResponsiveConfig configs,
       final SessionClients sessionClients,
       final ResponsiveStoreRegistry storeRegistry,
       final TopologyDescription topologyDescription
   ) {
     final Properties propsWithOverrides = new Properties();
 
-    propsWithOverrides.putAll(configs);
+    propsWithOverrides.putAll(configs.originals());
     propsWithOverrides.putAll(new InternalSessionConfigs.Builder()
             .withSessionClients(sessionClients)
             .withStoreRegistry(storeRegistry)
             .withTopologyDescription(topologyDescription)
             .build());
 
-    final Object o = configs.get(InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS);
+    if (ConfigUtils.compatibilityMode(configs) == CompatibilityMode.METRICS_ONLY) {
+      return propsWithOverrides;
+    }
+
+    final Object o = configs.originals().get(InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS);
     if (o == null) {
       propsWithOverrides.put(
           InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS,
@@ -353,6 +358,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     final StreamsConfig streamsConfig;
     final ResponsiveMetrics metrics;
     final ResponsiveStoreRegistry storeRegistry;
+    final CompatibilityMode compatibilityMode;
 
     // can be set during construction
     private Time time = Time.SYSTEM;
@@ -372,6 +378,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
 
       this.metrics = createMetrics(streamsConfig);
       this.storeRegistry = new ResponsiveStoreRegistry();
+      this.compatibilityMode = ConfigUtils.compatibilityMode(responsiveConfig);
     }
 
     public Params withClientSupplier(final KafkaClientSupplier clientSupplier) {
@@ -397,15 +404,17 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
           clientSupplier,
           streamsConfig,
           storeRegistry,
-          metrics
+          metrics,
+          compatibilityMode
       );
+
       final var admin = responsiveKafkaClientSupplier.getAdmin(responsiveConfig.originals());
+      if (compatibilityMode == CompatibilityMode.METRICS_ONLY) {
+        sessionClients = new SessionClients(Optional.empty(), Optional.empty(), admin);
+        return this;
+      }
 
-      final var backendType = StorageBackend.valueOf(responsiveConfig
-          .getString(STORAGE_BACKEND_TYPE_CONFIG)
-          .toUpperCase(Locale.ROOT)
-      );
-
+      final var backendType = ConfigUtils.storageBackend(responsiveConfig);
       switch (backendType) {
         case CASSANDRA:
           final var cqlSession = cassandraFactory.createCqlSession(responsiveConfig);
