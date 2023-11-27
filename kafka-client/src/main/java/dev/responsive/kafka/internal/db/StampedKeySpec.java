@@ -16,11 +16,8 @@
 
 package dev.responsive.kafka.internal.db;
 
-import static org.apache.kafka.streams.state.StateSerdes.TIMESTAMP_SIZE;
-
 import dev.responsive.kafka.internal.utils.Stamped;
 import java.nio.ByteBuffer;
-import java.util.Arrays;
 import java.util.function.Predicate;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.utils.Bytes;
@@ -41,13 +38,13 @@ public class StampedKeySpec implements KeySpec<Stamped> {
   @Override
   public Stamped keyFromRecord(final ConsumerRecord<byte[], byte[]> record) {
     final byte[] key = record.key();
-    final int size = key.length - TIMESTAMP_SIZE;
+    final byte[] val = record.value();
 
-    final ByteBuffer buffer = ByteBuffer.wrap(key);
-    final long startTs = buffer.getLong(size);
-    final Bytes kBytes = Bytes.wrap(Arrays.copyOfRange(key, 0, size));
+    // the timestamp is encoded in the value as the first 8 bytes
+    final ByteBuffer buffer = ByteBuffer.wrap(val);
+    final long startTs = buffer.getLong(0);
 
-    return new Stamped(kBytes, startTs);
+    return new Stamped(Bytes.wrap(key), startTs);
   }
 
   @Override
