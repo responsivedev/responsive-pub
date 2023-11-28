@@ -63,7 +63,8 @@ public class EndOffsetsPoller {
 
   public EndOffsetsPoller(
       final Map<String, ?> configs,
-      final ResponsiveMetrics metrics
+      final ResponsiveMetrics metrics,
+      final Factories factories
   ) {
     this(
         configs,
@@ -74,7 +75,7 @@ public class EndOffsetsPoller {
           t.setName("responsive-end-offsets-poller");
           return t;
         }),
-        new Factories() {}
+        factories
     );
   }
 
@@ -268,9 +269,8 @@ public class EndOffsetsPoller {
     }
   }
 
+  @FunctionalInterface
   public interface Factories {
-    default Admin createAdminClient(final Map<String, Object> configs) {
-      return Admin.create(configs);
-    }
+    Admin createAdminClient(final Map<String, Object> configs);
   }
 }

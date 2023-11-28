@@ -16,6 +16,8 @@
 
 package dev.responsive.kafka.internal.utils;
 
+import dev.responsive.kafka.api.config.CompatibilityMode;
+import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.mongo.ResponsiveMongoClient;
@@ -71,7 +73,11 @@ public class SessionClients {
     } else if (cassandraClient.isPresent()) {
       return StorageBackend.CASSANDRA;
     } else {
-      throw new IllegalArgumentException("Invalid Shared Clients Configuration");
+      throw new IllegalArgumentException("Invalid Shared Clients Configuration. "
+          + "If you have configured " + ResponsiveConfig.COMPATIBILITY_MODE_CONFIG
+          + "=" + CompatibilityMode.METRICS_ONLY + " you cannot use Responsive storage. "
+          + "See https://docs.responsive.dev/getting-started/quickstart for a how-to guide for "
+          + "getting started with Responsive stores.");
     }
   }
 
