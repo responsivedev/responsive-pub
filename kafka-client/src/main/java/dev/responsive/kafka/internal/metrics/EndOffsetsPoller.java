@@ -41,7 +41,6 @@ import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Gauge;
-import org.apache.kafka.streams.KafkaClientSupplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
