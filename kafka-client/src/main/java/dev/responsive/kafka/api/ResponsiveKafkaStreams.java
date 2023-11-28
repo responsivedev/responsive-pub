@@ -21,7 +21,10 @@ import static dev.responsive.kafka.api.config.ResponsiveConfig.CLIENT_SECRET_CON
 import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_HOSTNAME_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.TASK_ASSIGNOR_CLASS_OVERRIDE;
 import static dev.responsive.kafka.internal.metrics.ResponsiveMetrics.RESPONSIVE_METRICS_NAMESPACE;
-import static org.apache.kafka.streams.StreamsConfig.*;
+import static org.apache.kafka.streams.StreamsConfig.APPLICATION_ID_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.METRICS_NUM_SAMPLES_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG;
 
 import dev.responsive.kafka.api.config.CompatibilityMode;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
@@ -220,7 +223,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
   ) {
     final OtelMetricsService otel;
     if (responsiveConfig.getBoolean(ResponsiveConfig.METRICS_ENABLED_CONFIG)) {
-       otel = OtelMetricsService.create(streamsConfig, responsiveConfig);
+      otel = OtelMetricsService.create(streamsConfig, responsiveConfig);
     } else {
       otel = OtelMetricsService.noop();
     }
@@ -240,7 +243,8 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
         Time.SYSTEM,
         new KafkaMetricsContext(
             RESPONSIVE_METRICS_NAMESPACE,
-            streamsConfig.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX))
+            streamsConfig.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX)
+        )
     ), otel);
   }
 
