@@ -48,7 +48,7 @@ import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.SegmentP
 import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.SegmentRoll;
 import dev.responsive.kafka.internal.db.spec.CassandraTableSpec;
 import dev.responsive.kafka.internal.utils.Iterators;
-import dev.responsive.kafka.internal.utils.Stamped;
+import dev.responsive.kafka.internal.utils.WindowedKey;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.time.Instant;
@@ -484,7 +484,7 @@ public class CassandraWindowedTable implements
   }
 
   @Override
-  public WriterFactory<Stamped, SegmentPartition> init(
+  public WriterFactory<WindowedKey, SegmentPartition> init(
       final int kafkaPartition
   ) {
     final SegmentPartition metadataPartition = partitioner.metadataTablePartition(kafkaPartition);
@@ -755,11 +755,11 @@ public class CassandraWindowedTable implements
   @CheckReturnValue
   public BoundStatement insert(
       final int kafkaPartition,
-      final Stamped key,
+      final WindowedKey key,
       final byte[] value,
       final long epochMillis
   ) {
-    maybeUpdateStreamTime(kafkaPartition, key.timestamp);
+    maybeUpdateStreamTime(kafkaPartition, key.windowStartMs);
 
     final SegmentPartition remotePartition = partitioner.tablePartition(kafkaPartition, key);
     return insert
@@ -767,7 +767,7 @@ public class CassandraWindowedTable implements
         .setInt(PARTITION_KEY.bind(), remotePartition.tablePartition)
         .setLong(SEGMENT_ID.bind(), remotePartition.segmentId)
         .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.key.get()))
-        .setInstant(WINDOW_START.bind(), Instant.ofEpochMilli(key.timestamp))
+        .setInstant(WINDOW_START.bind(), Instant.ofEpochMilli(key.windowStartMs))
         .setByteBuffer(DATA_VALUE.bind(), ByteBuffer.wrap(value));
   }
 
@@ -785,9 +785,9 @@ public class CassandraWindowedTable implements
   @CheckReturnValue
   public BoundStatement delete(
       final int kafkaPartition,
-      final Stamped key
+      final WindowedKey key
   ) {
-    maybeUpdateStreamTime(kafkaPartition, key.timestamp);
+    maybeUpdateStreamTime(kafkaPartition, key.windowStartMs);
 
     final SegmentPartition segmentPartition = partitioner.tablePartition(kafkaPartition, key);
     return delete
@@ -795,7 +795,7 @@ public class CassandraWindowedTable implements
         .setInt(PARTITION_KEY.bind(), segmentPartition.tablePartition)
         .setLong(SEGMENT_ID.bind(), segmentPartition.segmentId)
         .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.key.get()))
-        .setInstant(WINDOW_START.bind(), Instant.ofEpochMilli(key.timestamp));
+        .setInstant(WINDOW_START.bind(), Instant.ofEpochMilli(key.windowStartMs));
   }
 
   /**
@@ -812,7 +812,7 @@ public class CassandraWindowedTable implements
       final Bytes key,
       final long windowStart
   ) {
-    final Stamped windowedKey = new Stamped(key, windowStart);
+    final WindowedKey windowedKey = new WindowedKey(key, windowStart);
     final SegmentPartition segmentPartition =
         partitioner.tablePartition(kafkaPartition, windowedKey);
 
@@ -845,13 +845,13 @@ public class CassandraWindowedTable implements
    * @return the windows previously stored
    */
   @Override
-  public KeyValueIterator<Stamped, byte[]> fetch(
+  public KeyValueIterator<WindowedKey, byte[]> fetch(
       final int kafkaPartition,
       final Bytes key,
       final long timeFrom,
       final long timeTo
   ) {
-    final List<KeyValueIterator<Stamped, byte[]>> segmentIterators = new LinkedList<>();
+    final List<KeyValueIterator<WindowedKey, byte[]>> segmentIterators = new LinkedList<>();
     for (final SegmentPartition partition : partitioner.range(kafkaPartition, timeFrom, timeTo)) {
       final BoundStatement get = fetch
           .bind()
@@ -880,13 +880,13 @@ public class CassandraWindowedTable implements
    * @return the value previously set
    */
   @Override
-  public KeyValueIterator<Stamped, byte[]> backFetch(
+  public KeyValueIterator<WindowedKey, byte[]> backFetch(
       final int kafkaPartition,
       final Bytes key,
       final long timeFrom,
       final long timeTo
   ) {
-    final List<KeyValueIterator<Stamped, byte[]>> segmentIterators = new LinkedList<>();
+    final List<KeyValueIterator<WindowedKey, byte[]>> segmentIterators = new LinkedList<>();
     for (final var partition : partitioner.reverseRange(kafkaPartition, timeFrom, timeTo)) {
       final BoundStatement get = backFetch
           .bind()
@@ -917,14 +917,14 @@ public class CassandraWindowedTable implements
    * @return the value previously set
    */
   @Override
-  public KeyValueIterator<Stamped, byte[]> fetchRange(
+  public KeyValueIterator<WindowedKey, byte[]> fetchRange(
       final int kafkaPartition,
       final Bytes fromKey,
       final Bytes toKey,
       final long timeFrom,
       final long timeTo
   ) {
-    final List<KeyValueIterator<Stamped, byte[]>> segmentIterators = new LinkedList<>();
+    final List<KeyValueIterator<WindowedKey, byte[]>> segmentIterators = new LinkedList<>();
     for (final SegmentPartition partition : partitioner.range(kafkaPartition, timeFrom, timeTo)) {
       final BoundStatement get = fetchRange
           .bind()
@@ -939,7 +939,7 @@ public class CassandraWindowedTable implements
 
     return Iterators.filterKv(
         Iterators.wrapped(segmentIterators),
-        k -> k.timestamp >= timeFrom && k.timestamp < timeTo
+        k -> k.windowStartMs >= timeFrom && k.windowStartMs < timeTo
     );
   }
 
@@ -957,14 +957,14 @@ public class CassandraWindowedTable implements
    * @return the value previously set
    */
   @Override
-  public KeyValueIterator<Stamped, byte[]> backFetchRange(
+  public KeyValueIterator<WindowedKey, byte[]> backFetchRange(
       final int kafkaPartition,
       final Bytes fromKey,
       final Bytes toKey,
       final long timeFrom,
       final long timeTo
   ) {
-    final List<KeyValueIterator<Stamped, byte[]>> segmentIterators = new LinkedList<>();
+    final List<KeyValueIterator<WindowedKey, byte[]>> segmentIterators = new LinkedList<>();
     for (final var partition : partitioner.reverseRange(kafkaPartition, timeFrom, timeTo)) {
       final BoundStatement get = backFetchRange
           .bind()
@@ -979,7 +979,7 @@ public class CassandraWindowedTable implements
 
     return Iterators.filterKv(
         Iterators.wrapped(segmentIterators),
-        k -> k.timestamp >= timeFrom && k.timestamp < timeTo
+        k -> k.windowStartMs >= timeFrom && k.windowStartMs < timeTo
     );
   }
 
@@ -994,12 +994,12 @@ public class CassandraWindowedTable implements
    * @return the value previously set
    */
   @Override
-  public KeyValueIterator<Stamped, byte[]> fetchAll(
+  public KeyValueIterator<WindowedKey, byte[]> fetchAll(
       final int kafkaPartition,
       final long timeFrom,
       final long timeTo
   ) {
-    final List<KeyValueIterator<Stamped, byte[]>> segmentIterators = new LinkedList<>();
+    final List<KeyValueIterator<WindowedKey, byte[]>> segmentIterators = new LinkedList<>();
     for (final SegmentPartition partition : partitioner.range(kafkaPartition, timeFrom, timeTo)) {
       final BoundStatement get = fetchAll
           .bind()
@@ -1014,7 +1014,7 @@ public class CassandraWindowedTable implements
 
     return Iterators.filterKv(
         Iterators.wrapped(segmentIterators),
-        k -> k.timestamp >= timeFrom && k.timestamp < timeTo
+        k -> k.windowStartMs >= timeFrom && k.windowStartMs < timeTo
     );
   }
 
@@ -1029,12 +1029,12 @@ public class CassandraWindowedTable implements
    * @return the value previously set
    */
   @Override
-  public KeyValueIterator<Stamped, byte[]> backFetchAll(
+  public KeyValueIterator<WindowedKey, byte[]> backFetchAll(
       final int kafkaPartition,
       final long timeFrom,
       final long timeTo
   ) {
-    final List<KeyValueIterator<Stamped, byte[]>> segmentIterators = new LinkedList<>();
+    final List<KeyValueIterator<WindowedKey, byte[]>> segmentIterators = new LinkedList<>();
     for (final var partition : partitioner.reverseRange(kafkaPartition, timeFrom, timeTo)) {
       final BoundStatement get = backFetchAll
           .bind()
@@ -1049,7 +1049,7 @@ public class CassandraWindowedTable implements
 
     return Iterators.filterKv(
         Iterators.wrapped(segmentIterators),
-        k -> k.timestamp >= timeFrom && k.timestamp < timeTo
+        k -> k.windowStartMs >= timeFrom && k.windowStartMs < timeTo
     );
   }
 
@@ -1057,12 +1057,12 @@ public class CassandraWindowedTable implements
     kafkaPartitionToPendingFlushInfo.get(kafkaPartition).maybeUpdatePendingStreamTime(timestamp);
   }
 
-  private static KeyValue<Stamped, byte[]> windowRows(final Row row) {
+  private static KeyValue<WindowedKey, byte[]> windowRows(final Row row) {
     final long startTs = row.getInstant(WINDOW_START.column()).toEpochMilli();
     final Bytes key = Bytes.wrap(row.getByteBuffer(DATA_KEY.column()).array());
 
     return new KeyValue<>(
-        new Stamped(key, startTs),
+        new WindowedKey(key, startTs),
         row.getByteBuffer(DATA_VALUE.column()).array()
     );
   }

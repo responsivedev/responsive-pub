@@ -86,11 +86,11 @@ public final class Iterators {
 
   /**
    * Wraps a {@link KeyValueIterator} that already returns what the
-   * {@link WindowStoreIterator} requires but using {@link Stamped}
+   * {@link WindowStoreIterator} requires but using {@link WindowedKey}
    * instead of {@code Long}.
    */
   public static WindowStoreIterator<byte[]> windowed(
-      final KeyValueIterator<Stamped, byte[]> delegate
+      final KeyValueIterator<WindowedKey, byte[]> delegate
   ) {
     return new WindowIterator(delegate);
   }
@@ -100,7 +100,7 @@ public final class Iterators {
    * the stamped start timestamp.
    */
   public static KeyValueIterator<Windowed<Bytes>, byte[]> windowedKey(
-      final KeyValueIterator<Stamped, byte[]> delegate,
+      final KeyValueIterator<WindowedKey, byte[]> delegate,
       final long windowSize
   ) {
     return new WindowKeyIterator(delegate, windowSize);
@@ -196,9 +196,9 @@ public final class Iterators {
 
   private static class WindowIterator implements WindowStoreIterator<byte[]> {
 
-    private final KeyValueIterator<Stamped, byte[]> delegate;
+    private final KeyValueIterator<WindowedKey, byte[]> delegate;
 
-    public WindowIterator(final KeyValueIterator<Stamped, byte[]> delegate) {
+    public WindowIterator(final KeyValueIterator<WindowedKey, byte[]> delegate) {
       this.delegate = delegate;
     }
 
@@ -209,7 +209,7 @@ public final class Iterators {
 
     @Override
     public Long peekNextKey() {
-      return delegate.peekNextKey().timestamp;
+      return delegate.peekNextKey().windowStartMs;
     }
 
     @Override
@@ -219,8 +219,8 @@ public final class Iterators {
 
     @Override
     public KeyValue<Long, byte[]> next() {
-      final KeyValue<Stamped, byte[]> next = delegate.next();
-      return new KeyValue<>(next.key.timestamp, next.value);
+      final KeyValue<WindowedKey, byte[]> next = delegate.next();
+      return new KeyValue<>(next.key.windowStartMs, next.value);
     }
   }
 
@@ -345,11 +345,11 @@ public final class Iterators {
 
   private static class WindowKeyIterator implements KeyValueIterator<Windowed<Bytes>, byte[]> {
 
-    private final KeyValueIterator<Stamped, byte[]> delegate;
+    private final KeyValueIterator<WindowedKey, byte[]> delegate;
     private final long windowSize;
 
     private WindowKeyIterator(
-        final KeyValueIterator<Stamped, byte[]> delegate,
+        final KeyValueIterator<WindowedKey, byte[]> delegate,
         final long windowSize
     ) {
       this.delegate = delegate;
@@ -373,17 +373,17 @@ public final class Iterators {
 
     @Override
     public KeyValue<Windowed<Bytes>, byte[]> next() {
-      final KeyValue<Stamped, byte[]> next = delegate.next();
+      final KeyValue<WindowedKey, byte[]> next = delegate.next();
       return new KeyValue<>(
           fromStamp(next.key),
           next.value
       );
     }
 
-    private Windowed<Bytes> fromStamp(final Stamped stamped) {
+    private Windowed<Bytes> fromStamp(final WindowedKey windowedKey) {
       return new Windowed<>(
-          stamped.key,
-          new TimeWindow(stamped.timestamp, endTs(stamped.timestamp))
+          windowedKey.key,
+          new TimeWindow(windowedKey.windowStartMs, endTs(windowedKey.windowStartMs))
       );
     }
 
