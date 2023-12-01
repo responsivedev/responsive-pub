@@ -85,6 +85,21 @@ dependencyResolutionManagement {
 
             library("slf4j-api", "org.slf4j", "slf4j-api").versionRef("slf4j")
 
+            library("otel-api", "io.opentelemetry:opentelemetry-api:1.32.0");
+            library("otel-sdk", "io.opentelemetry:opentelemetry-sdk:1.32.0");
+            library("otel-sdk-metrics", "io.opentelemetry:opentelemetry-sdk-metrics:1.32.0");
+            library("otel-exporter-logging", "io.opentelemetry:opentelemetry-exporter-logging:1.32.0");
+            library("otel-exporter-otlp", "io.opentelemetry:opentelemetry-exporter-otlp:1.32.0");
+            library("otel-jmx", "io.opentelemetry.instrumentation:opentelemetry-jmx-metrics:1.32.0-alpha")
+            bundle("otel", listOf(
+                    "otel-api",
+                    "otel-sdk",
+                    "otel-sdk-metrics",
+                    "otel-exporter-logging",
+                    "otel-exporter-otlp",
+                    "otel-jmx",
+            ))
+
             // do not include these in jars that are distributed - these
             // should only be used when the distributed artifact is deployable (e.g.
             // a docker image)

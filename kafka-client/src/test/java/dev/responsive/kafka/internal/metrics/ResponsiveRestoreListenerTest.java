@@ -68,7 +68,7 @@ public class ResponsiveRestoreListenerTest {
 
   @BeforeEach
   public void setup() {
-    responsiveMetrics = new ResponsiveMetrics(metrics);
+    responsiveMetrics = new ResponsiveMetrics(metrics, OtelMetricsService.noop());
     responsiveMetrics.initializeTags(
         APP_ID,
         CLIENT_ID,
