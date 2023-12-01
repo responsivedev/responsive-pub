@@ -18,31 +18,31 @@ package dev.responsive.kafka.internal.utils;
 
 import org.apache.kafka.common.utils.Bytes;
 
-public class Stamped implements Comparable<Stamped> {
+public class WindowedKey implements Comparable<WindowedKey> {
 
   public final Bytes key;
-  public final long timestamp;
+  public final long windowStartMs;
 
-  public Stamped(final Bytes key, final long timestamp) {
+  public WindowedKey(final Bytes key, final long windowStartMs) {
     this.key = key;
-    this.timestamp = timestamp;
+    this.windowStartMs = windowStartMs;
   }
 
   @Override
   public String toString() {
-    return "Stamped{"
+    return "WindowedKey{"
         + "key=" + key
-        + ", windowStart=" + timestamp
+        + ", windowStartMs=" + windowStartMs
         + '}';
   }
 
   @Override
-  public int compareTo(final Stamped o) {
+  public int compareTo(final WindowedKey o) {
     final int compareKeys = this.key.compareTo(o.key);
     if (compareKeys != 0) {
       return compareKeys;
     } else {
-      return Long.compare(this.timestamp, o.timestamp);
+      return Long.compare(this.windowStartMs, o.windowStartMs);
     }
   }
 }

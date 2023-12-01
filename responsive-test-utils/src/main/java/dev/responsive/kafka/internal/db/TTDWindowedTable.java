@@ -20,11 +20,11 @@ import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.kafka.internal.clients.TTDCassandraClient;
 import dev.responsive.kafka.internal.db.spec.CassandraTableSpec;
 import dev.responsive.kafka.internal.stores.WindowStoreStub;
-import dev.responsive.kafka.internal.utils.Stamped;
+import dev.responsive.kafka.internal.utils.WindowedKey;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
-public class TTDWindowedTable extends TTDTable<Stamped>
+public class TTDWindowedTable extends TTDTable<WindowedKey>
     implements RemoteWindowedTable<BoundStatement>  {
 
   private final String name;
@@ -51,7 +51,7 @@ public class TTDWindowedTable extends TTDTable<Stamped>
   @Override
   public BoundStatement insert(
       final int kafkaPartition,
-      final Stamped key,
+      final WindowedKey key,
       final byte[] value,
       final long epochMillis
   ) {
@@ -62,7 +62,7 @@ public class TTDWindowedTable extends TTDTable<Stamped>
   @Override
   public BoundStatement delete(
       final int kafkaPartition,
-      final Stamped key
+      final WindowedKey key
   ) {
     stub.delete(key);
     return null;
@@ -78,7 +78,7 @@ public class TTDWindowedTable extends TTDTable<Stamped>
   }
 
   @Override
-  public KeyValueIterator<Stamped, byte[]> fetch(
+  public KeyValueIterator<WindowedKey, byte[]> fetch(
       final int kafkaPartition,
       final Bytes key,
       final long timeFrom,
@@ -88,7 +88,7 @@ public class TTDWindowedTable extends TTDTable<Stamped>
   }
 
   @Override
-  public KeyValueIterator<Stamped, byte[]> backFetch(
+  public KeyValueIterator<WindowedKey, byte[]> backFetch(
       final int kafkaPartition,
       final Bytes key,
       final long timeFrom,
@@ -98,7 +98,7 @@ public class TTDWindowedTable extends TTDTable<Stamped>
   }
 
   @Override
-  public KeyValueIterator<Stamped, byte[]> fetchRange(
+  public KeyValueIterator<WindowedKey, byte[]> fetchRange(
       final int kafkaPartition,
       final Bytes fromKey,
       final Bytes toKey,
@@ -109,7 +109,7 @@ public class TTDWindowedTable extends TTDTable<Stamped>
   }
 
   @Override
-  public KeyValueIterator<Stamped, byte[]> backFetchRange(
+  public KeyValueIterator<WindowedKey, byte[]> backFetchRange(
       final int kafkaPartition,
       final Bytes fromKey,
       final Bytes toKey,
@@ -120,7 +120,7 @@ public class TTDWindowedTable extends TTDTable<Stamped>
   }
 
   @Override
-  public KeyValueIterator<Stamped, byte[]> fetchAll(
+  public KeyValueIterator<WindowedKey, byte[]> fetchAll(
       final int kafkaPartition,
       final long timeFrom,
       final long timeTo
@@ -129,7 +129,7 @@ public class TTDWindowedTable extends TTDTable<Stamped>
   }
 
   @Override
-  public KeyValueIterator<Stamped, byte[]> backFetchAll(
+  public KeyValueIterator<WindowedKey, byte[]> backFetchAll(
       final int kafkaPartition,
       final long timeFrom,
       final long timeTo

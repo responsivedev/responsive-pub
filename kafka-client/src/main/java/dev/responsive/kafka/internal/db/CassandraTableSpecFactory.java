@@ -26,7 +26,7 @@ import dev.responsive.kafka.internal.db.spec.GlobalTableSpec;
 import dev.responsive.kafka.internal.db.spec.TimeWindowedCompactionTableSpec;
 import dev.responsive.kafka.internal.db.spec.TtlTableSpec;
 import dev.responsive.kafka.internal.stores.SchemaTypes;
-import dev.responsive.kafka.internal.utils.Stamped;
+import dev.responsive.kafka.internal.utils.WindowedKey;
 import org.apache.kafka.common.utils.Bytes;
 
 /**
@@ -66,7 +66,7 @@ public class CassandraTableSpecFactory {
 
   public static CassandraTableSpec fromWindowParams(
       final ResponsiveWindowParams params,
-      final TablePartitioner<Stamped, SegmentPartition> partitioner
+      final TablePartitioner<WindowedKey, SegmentPartition> partitioner
   ) {
     return new BaseTableSpec(params.name().remoteName(), partitioner);
   }

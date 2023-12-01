@@ -16,11 +16,11 @@
 
 package dev.responsive.kafka.internal.db;
 
-import dev.responsive.kafka.internal.utils.Stamped;
+import dev.responsive.kafka.internal.utils.WindowedKey;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
-public interface RemoteWindowedTable<S> extends RemoteTable<Stamped, S> {
+public interface RemoteWindowedTable<S> extends RemoteTable<WindowedKey, S> {
 
   byte[] fetch(
       int partition,
@@ -28,21 +28,21 @@ public interface RemoteWindowedTable<S> extends RemoteTable<Stamped, S> {
       long windowStart
   );
 
-  KeyValueIterator<Stamped, byte[]> fetch(
+  KeyValueIterator<WindowedKey, byte[]> fetch(
       int partition,
       Bytes key,
       long timeFrom,
       long timeTo
   );
 
-  KeyValueIterator<Stamped, byte[]> backFetch(
+  KeyValueIterator<WindowedKey, byte[]> backFetch(
       int partition,
       Bytes key,
       long timeFrom,
       long timeTo
   );
 
-  KeyValueIterator<Stamped, byte[]> fetchRange(
+  KeyValueIterator<WindowedKey, byte[]> fetchRange(
       int partition,
       Bytes fromKey,
       Bytes toKey,
@@ -50,7 +50,7 @@ public interface RemoteWindowedTable<S> extends RemoteTable<Stamped, S> {
       long timeTo
   );
 
-  KeyValueIterator<Stamped, byte[]> backFetchRange(
+  KeyValueIterator<WindowedKey, byte[]> backFetchRange(
       int partition,
       Bytes fromKey,
       Bytes toKey,
@@ -58,13 +58,13 @@ public interface RemoteWindowedTable<S> extends RemoteTable<Stamped, S> {
       long timeTo
   );
 
-  KeyValueIterator<Stamped, byte[]> fetchAll(
+  KeyValueIterator<WindowedKey, byte[]> fetchAll(
       int partition,
       long timeFrom,
       long timeTo
   );
 
-  KeyValueIterator<Stamped, byte[]> backFetchAll(
+  KeyValueIterator<WindowedKey, byte[]> backFetchAll(
       int partition,
       long timeFrom,
       long timeTo
