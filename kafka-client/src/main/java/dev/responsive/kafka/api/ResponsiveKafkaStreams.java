@@ -18,6 +18,7 @@ package dev.responsive.kafka.api;
 
 import static dev.responsive.kafka.api.config.ResponsiveConfig.CLIENT_ID_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.CLIENT_SECRET_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.METRICS_ENABLED_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_HOSTNAME_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.TASK_ASSIGNOR_CLASS_OVERRIDE;
 import static dev.responsive.kafka.internal.metrics.ResponsiveMetrics.RESPONSIVE_METRICS_NAMESPACE;
@@ -36,10 +37,12 @@ import dev.responsive.kafka.internal.db.CassandraClientFactory;
 import dev.responsive.kafka.internal.db.DefaultCassandraClientFactory;
 import dev.responsive.kafka.internal.db.mongo.ResponsiveMongoClient;
 import dev.responsive.kafka.internal.metrics.ClientVersionMetadata;
-import dev.responsive.kafka.internal.metrics.OtelMetricsService;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
 import dev.responsive.kafka.internal.metrics.ResponsiveStateListener;
+import dev.responsive.kafka.internal.metrics.exporter.MetricsExportService;
+import dev.responsive.kafka.internal.metrics.exporter.NoopMetricsExporterService;
+import dev.responsive.kafka.internal.metrics.exporter.otel.OtelMetricsService;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistry;
 import dev.responsive.kafka.internal.utils.SessionClients;
 import dev.responsive.kafka.internal.utils.SessionUtil;
@@ -221,13 +224,11 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       final StreamsConfig streamsConfig,
       final ResponsiveConfig responsiveConfig
   ) {
-    final OtelMetricsService otel;
-    if (responsiveConfig.getBoolean(ResponsiveConfig.METRICS_ENABLED_CONFIG)) {
-      otel = OtelMetricsService.create(streamsConfig, responsiveConfig);
-    } else {
-      otel = OtelMetricsService.noop();
-    }
-    otel.start();
+    final boolean metricsEnabled = responsiveConfig.getBoolean(METRICS_ENABLED_CONFIG);
+    final MetricsExportService exportService = metricsEnabled
+            ? OtelMetricsService.create(streamsConfig, responsiveConfig)
+            : new NoopMetricsExporterService();
+    exportService.start();
 
     final MetricConfig metricConfig = new MetricConfig()
         .samples(streamsConfig.getInt(METRICS_NUM_SAMPLES_CONFIG))
@@ -245,7 +246,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
             RESPONSIVE_METRICS_NAMESPACE,
             streamsConfig.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX)
         )
-    ), otel);
+    ), exportService);
   }
 
   /**

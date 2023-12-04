@@ -91,7 +91,7 @@ class EndOffsetsPollerTest {
     lenient().when(executor.scheduleAtFixedRate(any(), anyLong(), anyLong(), any()))
         .thenReturn((ScheduledFuture) pollFuture);
 
-    final var responsiveMetrics = new ResponsiveMetrics(metrics, OtelMetricsService.noop());
+    final var responsiveMetrics = new ResponsiveMetrics(metrics);
     responsiveMetrics.initializeTags(
         GROUP, CLIENT, new ClientVersionMetadata("1", "abc", "2", "dfe"), Collections.emptyMap());
 

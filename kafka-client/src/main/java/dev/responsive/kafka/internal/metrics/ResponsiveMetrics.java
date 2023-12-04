@@ -16,6 +16,8 @@
 
 package dev.responsive.kafka.internal.metrics;
 
+import dev.responsive.kafka.internal.metrics.exporter.MetricsExportService;
+import dev.responsive.kafka.internal.metrics.exporter.NoopMetricsExporterService;
 import java.io.Closeable;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -48,12 +50,16 @@ public class ResponsiveMetrics implements Closeable {
   private static final Pattern GLOBAL_THREAD_REGEX = Pattern.compile(".*-(GlobalStreamThread+)");
 
   private OrderedTagsSupplier orderedTagsSupplier;
-  private final OtelMetricsService otelService;
+  private final MetricsExportService exportService;
   private final Metrics metrics;
 
-  public ResponsiveMetrics(final Metrics metrics, final OtelMetricsService otelService) {
+  public ResponsiveMetrics(final Metrics metrics) {
+    this(metrics, new NoopMetricsExporterService());
+  }
+
+  public ResponsiveMetrics(final Metrics metrics, final MetricsExportService exportService) {
     this.metrics = metrics;
-    this.otelService = otelService;
+    this.exportService = exportService;
   }
 
   /**
@@ -178,6 +184,6 @@ public class ResponsiveMetrics implements Closeable {
       LOG.warn("Not all metrics were cleaned up before close: {}", metrics().keySet());
     }
     metrics.close();
-    otelService.close();
+    exportService.close();
   }
 }
