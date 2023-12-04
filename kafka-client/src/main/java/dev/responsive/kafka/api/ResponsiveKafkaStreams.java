@@ -31,6 +31,8 @@ import dev.responsive.kafka.internal.config.ResponsiveStreamsConfig;
 import dev.responsive.kafka.internal.db.CassandraClientFactory;
 import dev.responsive.kafka.internal.db.DefaultCassandraClientFactory;
 import dev.responsive.kafka.internal.db.mongo.ResponsiveMongoClient;
+import dev.responsive.kafka.internal.db.otterpocket.KVOtterPocketGrpcClient;
+import dev.responsive.kafka.internal.db.otterpocket.OtterPocketGrpcClient;
 import dev.responsive.kafka.internal.metrics.ClientVersionMetadata;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
@@ -410,7 +412,12 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
 
       final var admin = responsiveKafkaClientSupplier.getAdmin(responsiveConfig.originals());
       if (compatibilityMode == CompatibilityMode.METRICS_ONLY) {
-        sessionClients = new SessionClients(Optional.empty(), Optional.empty(), admin);
+        sessionClients = new SessionClients(
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            admin
+        );
         return this;
       }
 
@@ -421,6 +428,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
           sessionClients = new SessionClients(
               Optional.empty(),
               Optional.of(cassandraFactory.createClient(cqlSession, responsiveConfig)),
+              Optional.empty(),
               admin
           );
           break;
@@ -436,6 +444,16 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
           sessionClients = new SessionClients(
               Optional.of(new ResponsiveMongoClient(mongoClient)),
               Optional.empty(),
+              Optional.empty(),
+              admin
+          );
+          break;
+        case OTTER_POCKET:
+          final var opHostname = responsiveConfig.getString(STORAGE_HOSTNAME_CONFIG);
+          sessionClients = new SessionClients(
+              Optional.empty(),
+              Optional.empty(),
+              Optional.of(new KVOtterPocketGrpcClient(new OtterPocketGrpcClient<>(opHostname))),
               admin
           );
           break;

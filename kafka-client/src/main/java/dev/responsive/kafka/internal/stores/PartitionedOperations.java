@@ -28,6 +28,7 @@ import dev.responsive.kafka.internal.db.BytesKeySpec;
 import dev.responsive.kafka.internal.db.CassandraTableSpecFactory;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.WriterFactory;
+import dev.responsive.kafka.internal.db.otterpocket.OtterPocketKVTable;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
@@ -92,6 +93,9 @@ public class PartitionedOperations implements KeyValueOperations {
       case MONGO_DB:
         table = createMongo(params, sessionClients);
         break;
+      case OTTER_POCKET:
+        table = createOtterPocket(params, sessionClients);
+        break;
       default:
         throw new IllegalStateException("Unexpected value: " + sessionClients.storageBackend());
     }
@@ -131,6 +135,13 @@ public class PartitionedOperations implements KeyValueOperations {
         registration,
         sessionClients.restoreListener()
     );
+  }
+
+  private static RemoteKVTable<?> createOtterPocket(
+      final ResponsiveKeyValueParams params,
+      final SessionClients sessionClients
+  ) {
+    return new OtterPocketKVTable(sessionClients.otterPocketCLient());
   }
 
   private static RemoteKVTable<?> createCassandra(

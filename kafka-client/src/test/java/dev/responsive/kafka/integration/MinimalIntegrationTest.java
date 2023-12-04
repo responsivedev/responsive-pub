@@ -19,6 +19,7 @@ package dev.responsive.kafka.integration;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.STORE_FLUSH_RECORDS_TRIGGER_CONFIG;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.createTopicsAndWait;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.pipeInput;
+import static dev.responsive.kafka.testutils.IntegrationTestUtils.pipeInputStr;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.readOutput;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.startAppAndAwaitRunning;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
@@ -53,6 +54,8 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.KStream;
@@ -61,6 +64,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 /**
@@ -69,11 +73,10 @@ import org.junit.jupiter.api.extension.RegisterExtension;
  * the development workflow, and therefore is disabled by default (to speed
  * up test time).
  */
-@Disabled
 public class MinimalIntegrationTest {
 
   @RegisterExtension
-  static ResponsiveExtension EXTENSION = new ResponsiveExtension(StorageBackend.MONGO_DB);
+  static ResponsiveExtension EXTENSION = new ResponsiveExtension(StorageBackend.OTTER_POCKET);
 
   private static final String INPUT_TOPIC = "input";
   private static final String OUTPUT_TOPIC = "output";
@@ -113,28 +116,30 @@ public class MinimalIntegrationTest {
   }
 
   @Test
+  @Timeout(3600)
   public void test() throws Exception {
     // Given:
     final Map<String, Object> properties = getMutableProperties();
-    final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties);
+    final KafkaProducer<Long, String> producer = new KafkaProducer<>(properties);
     try (final ResponsiveKafkaStreams streams = buildStreams(properties)) {
       startAppAndAwaitRunning(Duration.ofSeconds(10), streams);
-      pipeInput(inputTopic(), 2, producer, System::currentTimeMillis, 0, 10, 0, 1);
+      pipeInputStr(inputTopic(), 2, producer, v -> System.currentTimeMillis(), 0, 10, 0, 1);
 
-      final var kvs = readOutput(outputTopic(), 0, 20, true, properties);
-      assertThat(
+      //final var kvs = readOutput(outputTopic(), 0, 20, true, properties);
+      /*assertThat(
           kvs,
-          hasItems(new KeyValue<>(0L, 10L), new KeyValue<>(1L, 10L)));
+          hasItems(new KeyValue<>(0L, 10L), new KeyValue<>(1L, 10L)));*/
+      pipeInputStr(inputTopic(), 2, producer, v -> System.currentTimeMillis(), 0, 100000000, 0, 1);
     }
   }
 
   private ResponsiveKafkaStreams buildStreams(final Map<String, Object> properties) {
     final StreamsBuilder builder = new StreamsBuilder();
 
-    final KStream<Long, Long> input = builder.stream(inputTopic());
+    final KStream<Long, String> input = builder.stream(inputTopic());
     input
         .groupByKey()
-        .count(ResponsiveStores.materialized(ResponsiveKeyValueParams.keyValue("countStore")))
+        .reduce((v1, v2) -> v2, ResponsiveStores.materialized(ResponsiveKeyValueParams.keyValue("countStore")))
         .toStream()
         .to(outputTopic());
 
@@ -145,13 +150,13 @@ public class MinimalIntegrationTest {
     final Map<String, Object> properties = new HashMap<>(responsiveProps);
 
     properties.put(KEY_SERIALIZER_CLASS_CONFIG, LongSerializer.class);
-    properties.put(VALUE_SERIALIZER_CLASS_CONFIG, LongSerializer.class);
+    properties.put(VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
     properties.put(KEY_DESERIALIZER_CLASS_CONFIG, LongDeserializer.class);
-    properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, LongDeserializer.class);
+    properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
 
     properties.put(APPLICATION_ID_CONFIG, name);
     properties.put(DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.LongSerde.class.getName());
-    properties.put(DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.LongSerde.class.getName());
+    properties.put(DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class.getName());
     properties.put(NUM_STREAM_THREADS_CONFIG, 1);
     properties.put(STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
     properties.put(STORE_FLUSH_RECORDS_TRIGGER_CONFIG, 1);

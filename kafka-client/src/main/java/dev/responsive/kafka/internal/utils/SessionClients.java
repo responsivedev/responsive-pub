@@ -21,6 +21,7 @@ import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.mongo.ResponsiveMongoClient;
+import dev.responsive.kafka.internal.db.otterpocket.KVOtterPocketClient;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
 import java.util.Optional;
@@ -37,6 +38,7 @@ public class SessionClients {
 
   private final Optional<ResponsiveMongoClient> mongoClient;
   private final Optional<CassandraClient> cassandraClient;
+  private final Optional<KVOtterPocketClient> otterPocketClient;
   private final Admin admin;
 
   // These are effectively final, but have to be inserted after the SessionClients is
@@ -47,10 +49,12 @@ public class SessionClients {
   public SessionClients(
       final Optional<ResponsiveMongoClient> mongoClient,
       final Optional<CassandraClient> cassandraClient,
+      final Optional<KVOtterPocketClient> otterPocketClient,
       final Admin admin
   ) {
     this.mongoClient = mongoClient;
     this.cassandraClient = cassandraClient;
+    this.otterPocketClient = otterPocketClient;
     this.admin = admin;
   }
 
@@ -72,6 +76,8 @@ public class SessionClients {
       return StorageBackend.MONGO_DB;
     } else if (cassandraClient.isPresent()) {
       return StorageBackend.CASSANDRA;
+    } else if (otterPocketClient.isPresent()) {
+      return StorageBackend.OTTER_POCKET;
     } else {
       throw new IllegalArgumentException("Invalid Shared Clients Configuration. "
           + "If you have configured " + ResponsiveConfig.COMPATIBILITY_MODE_CONFIG
@@ -79,6 +85,17 @@ public class SessionClients {
           + "See https://docs.responsive.dev/getting-started/quickstart for a how-to guide for "
           + "getting started with Responsive stores.");
     }
+  }
+
+  public KVOtterPocketClient otterPocketCLient() {
+    if (otterPocketClient.isEmpty()) {
+      final IllegalStateException fatalException =
+          new IllegalStateException("OtterPocket client was missing");
+      LOG.error(fatalException.getMessage(), fatalException);
+      throw fatalException;
+    }
+
+    return otterPocketClient.get();
   }
 
   public ResponsiveMongoClient mongoClient() {

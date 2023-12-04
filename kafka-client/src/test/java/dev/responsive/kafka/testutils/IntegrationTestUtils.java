@@ -6,6 +6,7 @@ import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.db.CassandraClientFactory;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -15,6 +16,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -39,6 +41,7 @@ import org.apache.kafka.streams.KafkaStreams.StateListener;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.Topology;
 import org.junit.jupiter.api.TestInfo;
+import org.testcontainers.shaded.org.apache.commons.lang3.RandomStringUtils;
 
 public final class IntegrationTestUtils {
 
@@ -163,13 +166,46 @@ public final class IntegrationTestUtils {
             topic,
             (int) k % partitions,
             timestamp.get(),
-            k,
+            v,
             v
+        ));
+        if (v % 1000 == 0) {
+          producer.flush();
+        }
+      }
+    }
+    producer.flush();
+  }
+
+  private static String genStr() {
+    return RandomStringUtils.random(512, true, true);
+  }
+
+  public static void pipeInputStr(
+      final String topic,
+      final int partitions,
+      final KafkaProducer<Long, String> producer,
+      final Function<KeyValue<Long, String>, Long> timestampForKV,
+      final long valFrom,
+      final long valTo,
+      final long... keys
+  ) {
+    for (final long k : keys) {
+      for (long v = valFrom; v < valTo; v++) {
+        final String vstr = genStr();
+        producer.send(new ProducerRecord<>(
+            topic,
+            (int) k % partitions,
+            timestampForKV.apply(new KeyValue<>(k, vstr)),
+            (long) Instant.now().getNano() % 10000000,
+            vstr
         ));
       }
     }
     producer.flush();
   }
+
+  private static final Random rand = new Random();
 
   public static void pipeInput(
       final String topic,

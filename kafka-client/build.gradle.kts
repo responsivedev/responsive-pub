@@ -67,8 +67,10 @@ tasks.publish {
 dependencies {
     api(libs.kafka.streams)
 
+    implementation(libs.bundles.grpc)
     implementation(libs.bundles.scylla)
     implementation(libs.mongodb.driver.sync)
+    implementation(project(":controller-api"))
 
     testImplementation(libs.kafka.clients) {
         artifact {

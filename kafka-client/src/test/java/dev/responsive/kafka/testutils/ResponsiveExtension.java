@@ -76,6 +76,8 @@ public class ResponsiveExtension implements BeforeAllCallback, AfterAllCallback,
       case MONGO_DB:
         mongo.start();
         break;
+      case OTTER_POCKET:
+        break;
       default:
         throw new IllegalStateException("Unexpected value: " + backend);
     }
@@ -132,6 +134,10 @@ public class ResponsiveExtension implements BeforeAllCallback, AfterAllCallback,
         case MONGO_DB:
           map.put(STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.MONGO_DB.name());
           map.put(STORAGE_HOSTNAME_CONFIG, mongo.getConnectionString());
+          break;
+        case OTTER_POCKET:
+          map.put(STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.OTTER_POCKET.name());
+          map.put(STORAGE_HOSTNAME_CONFIG, "localhost:4242");
           break;
         default:
           throw new IllegalStateException("Unexpected value: " + backend);

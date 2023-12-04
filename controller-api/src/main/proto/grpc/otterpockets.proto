@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+package responsive.otterpocket.v1.service;
+
+service OtterPocketGrpcService {
+  rpc WriteWALSegment(stream WriteWALSegmentRequest) returns (WriteWALSegmentResult);
+  rpc GetCurrentEndOffset(GetCurrentEndOffsetRequest) returns (GetCurrentEndOffsetResult);
+  rpc Query(QueryRequest) returns (QueryResult);
+}
+
+message GetCurrentEndOffsetRequest {
+  int32 lss_id = 1;
+}
+
+message GetCurrentEndOffsetResult {
+  int64 current_end_offset = 1;
+}
+
+message WriteWALSegmentRequest {
+  int32 lss_id = 1;              // the lss we're writing to
+  int64 end_offset = 2;          // the end offset of the segment (same for all msgs in stream)
+  int64 current_end_offset = 3;  // the expected end offset of the log (same for all msgs in stream)
+  bytes data = 4;
+}
+
+message WriteWALSegmentResult {
+  int64 last_flushed_offset = 1;  // the current last flushed offset for the lss
+}
+
+message QueryRequest {
+  int32 lss_id = 1;
+  optional int64 last_offset = 2;
+  bytes query = 3;
+}
+
+message QueryResult {
+  optional bytes data = 1;
+}
+
+message RocksDBCloudQuery {
+  bytes key = 1;
+}
+
+message RocksDBCloudChange {
+  bytes key = 1;
+  optional bytes value = 2;
+}
