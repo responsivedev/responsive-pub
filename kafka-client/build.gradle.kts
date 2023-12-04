@@ -67,6 +67,7 @@ tasks.publish {
 dependencies {
     api(libs.kafka.streams)
 
+    implementation(project(":controller-api"))
     implementation(libs.bundles.scylla)
     implementation(libs.mongodb.driver.sync)
     implementation(libs.bundles.otel)

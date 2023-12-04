@@ -64,8 +64,7 @@ class MetricPublishingCommitListenerTest {
 
   @BeforeEach
   public void setup() {
-    final ResponsiveMetrics responsiveMetrics
-        = new ResponsiveMetrics(metrics, OtelMetricsService.noop());
+    final ResponsiveMetrics responsiveMetrics = new ResponsiveMetrics(metrics);
     responsiveMetrics.initializeTags(
         GROUP, CLIENT, new ClientVersionMetadata("1", "abc", "2", "dfe"), Collections.emptyMap());
     listener = new MetricPublishingCommitListener(responsiveMetrics, THREAD_ID, offsetRecorder);

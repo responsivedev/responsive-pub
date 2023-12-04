@@ -58,7 +58,6 @@ import dev.responsive.kafka.internal.db.KeySpec;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.db.spec.BaseTableSpec;
 import dev.responsive.kafka.internal.metrics.ClientVersionMetadata;
-import dev.responsive.kafka.internal.metrics.OtelMetricsService;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.utils.ExceptionSupplier;
 import dev.responsive.kafka.internal.utils.SessionClients;
@@ -174,7 +173,7 @@ public class CommitBufferTest {
         Optional.of(client),
         admin
     );
-    final var responsiveMetrics = new ResponsiveMetrics(metrics, OtelMetricsService.noop());
+    final var responsiveMetrics = new ResponsiveMetrics(metrics);
     responsiveMetrics.initializeTags(
         "commit-buffer-test-app",
         "commit-buffer-test-app-node-1",
