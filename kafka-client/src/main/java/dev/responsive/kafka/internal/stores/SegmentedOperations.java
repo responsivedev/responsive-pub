@@ -20,6 +20,7 @@ package dev.responsive.kafka.internal.stores;
 
 import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadSessionClients;
 import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadStoreRegistry;
+import static dev.responsive.kafka.internal.utils.StoreUtil.numPartitionsForKafkaTopic;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.changelogFor;
 
@@ -31,6 +32,7 @@ import dev.responsive.kafka.internal.db.RemoteWindowedTable;
 import dev.responsive.kafka.internal.db.StampedKeySpec;
 import dev.responsive.kafka.internal.db.WriterFactory;
 import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner;
+import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
 import dev.responsive.kafka.internal.utils.Iterators;
 import dev.responsive.kafka.internal.utils.Result;
@@ -38,6 +40,7 @@ import dev.responsive.kafka.internal.utils.SessionClients;
 import dev.responsive.kafka.internal.utils.Stamped;
 import dev.responsive.kafka.internal.utils.TableName;
 import java.util.Collection;
+import java.util.OptionalInt;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Predicate;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -135,11 +138,27 @@ public class SegmentedOperations implements WindowOperations {
 
   private static RemoteWindowedTable<?> createCassandra(
       final ResponsiveWindowParams params,
-      final SessionClients clients
+      final ResponsiveConfig config,
+      final SessionClients sessionClients,
+      final String changelogTopicName
   ) throws InterruptedException, TimeoutException {
 
-    final CassandraClient client = clients.cassandraClient();
-    final SegmentPartitioner partitioner = SegmentPartitioner.create(params);
+    final int numChangelogPartitions =
+        numPartitionsForKafkaTopic(sessionClients.admin(), changelogTopicName);
+
+    // TODO: write the actual remote partition count into cassandra
+    final OptionalInt actualRemoteCount = OptionalInt.empty();
+
+    final CassandraClient client = sessionClients.cassandraClient();
+    final SubPartitioner innerSubPartitioner =
+            SubPartitioner.create(
+                actualRemoteCount,
+                numChangelogPartitions,
+                params.name().remoteName(),
+                config,
+                changelogTopicName
+            );
+    final SegmentPartitioner partitioner = SegmentPartitioner.create(params, innerSubPartitioner);
 
     final var spec = CassandraTableSpecFactory.fromWindowParams(params, partitioner);
 

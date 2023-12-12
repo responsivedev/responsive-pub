@@ -22,6 +22,7 @@ import dev.responsive.kafka.api.stores.ResponsiveWindowParams;
 import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.SegmentPartition;
 import dev.responsive.kafka.internal.utils.Stamped;
 import dev.responsive.kafka.internal.utils.StoreUtil;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -69,16 +70,6 @@ import org.slf4j.LoggerFactory;
  *           1    |     88      |      0     | 0-32, 33-65, 66-98              | 0, 1, 2    ||
  *           2    |     101     |      2     | 0-32, 33-65, 66-98, 99-131      | 0, 1, 2, 3 ||
  *           3    |     169     |      70    | 66-98, 99-131, 132-164, 165-197 | 1, 2, 3, 4 ||
- * <p>
- * NOTE: because we are already dividing up the partition space into segments, we don't further
- * split things into true sub-partitions based on key. Each kafka partition still maps to multiple
- * table partitions which should help with the parallelism, but unlike the subpartitioner, the
- * segment-partitioning scheme is not static and temporal rather than key-based. If data is skewed
- * in time, this might result in uneven partitions and a need to further subdivide the partition
- * space.
- * <p>
- * For the time being, we simply recommend that users configure the number of segments
- * similarly to how they would configure the number of sub-partitions for a key-value store.
  */
 public class SegmentPartitioner implements TablePartitioner<Stamped, SegmentPartition> {
 
@@ -87,6 +78,7 @@ public class SegmentPartitioner implements TablePartitioner<Stamped, SegmentPart
   public static final long METADATA_SEGMENT_ID = -1L;
   public static final long UNINITIALIZED_STREAM_TIME = -1L;
 
+  private final SubPartitioner innerSubPartitioner;
   private final long retentionPeriodMs;
   private final long segmentIntervalMs;
 
@@ -95,37 +87,45 @@ public class SegmentPartitioner implements TablePartitioner<Stamped, SegmentPart
   private final long windowSizeMs;
 
   public static class SegmentPartition {
-    public final int tablePartition;
+    public final int subPartition;
     public final long segmentId;
 
-    public SegmentPartition(final int tablePartition, final long segmentId) {
-      this.tablePartition = tablePartition;
+    public SegmentPartition(final int subPartition, final long segmentId) {
+      this.subPartition = subPartition;
       this.segmentId = segmentId;
     }
 
     @Override
     public String toString() {
       return "SegmentPartition{"
-          + "partitionKey=" + tablePartition
-          + "tablePartition=" + tablePartition
+          + "partitionKey=" + subPartition
+          + "subPartition=" + subPartition
           + ", segmentId=" + segmentId
           + '}';
     }
   }
 
   public static SegmentPartitioner create(
-      final ResponsiveWindowParams params
+      final ResponsiveWindowParams params,
+      final SubPartitioner innerSubPartitioner
   ) {
     final long segmentInterval =
         StoreUtil.computeSegmentInterval(params.retentionPeriod(), params.numSegments());
-    return new SegmentPartitioner(params.retentionPeriod(), segmentInterval, params.windowSize());
+    return new SegmentPartitioner(
+        innerSubPartitioner,
+        params.retentionPeriod(),
+        segmentInterval,
+        params.windowSize()
+    );
   }
 
   public SegmentPartitioner(
+      final SubPartitioner innerSubPartitioner,
       final long retentionPeriodMs,
       final long segmentIntervalMs,
       final long windowSizeMs
   ) {
+    this.innerSubPartitioner = innerSubPartitioner;
     this.retentionPeriodMs = retentionPeriodMs;
     this.segmentIntervalMs = segmentIntervalMs;
     this.windowSizeMs = windowSizeMs;
@@ -142,12 +142,18 @@ public class SegmentPartitioner implements TablePartitioner<Stamped, SegmentPart
 
   @Override
   public SegmentPartition tablePartition(final int kafkaPartition, final Stamped key) {
-    return new SegmentPartition(kafkaPartition, segmentId(key.timestamp));
+    return new SegmentPartition(
+        innerSubPartitioner.tablePartition(kafkaPartition, key.key),
+        segmentId(key.timestamp)
+    );
   }
 
   @Override
   public SegmentPartition metadataTablePartition(final int kafkaPartition) {
-    return new SegmentPartition(kafkaPartition, METADATA_SEGMENT_ID);
+    return new SegmentPartition(
+        innerSubPartitioner.metadataTablePartition(kafkaPartition),
+        METADATA_SEGMENT_ID
+    );
   }
 
   /**
@@ -182,9 +188,16 @@ public class SegmentPartitioner implements TablePartitioner<Stamped, SegmentPart
       final long timeFrom,
       final long timeTo
   ) {
-    return LongStream.range(segmentId(timeFrom), segmentId(timeTo) + 1)
-        .mapToObj(segmentId -> new SegmentPartition(kafkaPartition, segmentId))
-        .collect(Collectors.toList());
+    final List<Integer> allSubPartitions = innerSubPartitioner.allTablePartitions(kafkaPartition);
+    final long[] allSegmentIds = LongStream.range(segmentId(timeFrom), segmentId(timeTo) + 1).toArray();
+
+    final List<SegmentPartition> segmentPartitions = new ArrayList<>();
+    for (final int subpartition : allSubPartitions) {
+      for (final long segmentId : allSegmentIds) {
+        segmentPartitions.add(new SegmentPartition(subpartition, segmentId));
+      }
+    }
+    return segmentPartitions;
   }
 
   /**
@@ -202,11 +215,7 @@ public class SegmentPartitioner implements TablePartitioner<Stamped, SegmentPart
       final long timeFrom,
       final long timeTo
   ) {
-    return LongStream.range(segmentId(timeFrom), segmentId(timeTo) + 1)
-        .boxed()
-        .sorted(Collections.reverseOrder())
-        .map(segmentId -> new SegmentPartition(kafkaPartition, segmentId))
-        .collect(Collectors.toList());
+    throw new UnsupportedOperationException();
   }
 
   public SegmentRoll rolledSegments(

@@ -40,7 +40,7 @@ public class LwtWriterFactory<K, P> extends WriterFactory<K, P> {
       final long epoch
   ) {
     super(
-        String.format("LwtWriterFactory{epoch=%d} ", epoch)
+        String.format("LwtWriterFactory[%s]{epoch=%d} ", kafkaPartition, epoch)
     );
     this.table = table;
     this.tableMetadata = tableMetadata;
@@ -126,5 +126,13 @@ public class LwtWriterFactory<K, P> extends WriterFactory<K, P> {
 
   private BoundStatement fencingStatement(final P tablePartition) {
     return tableMetadata.ensureEpoch(tablePartition, epoch);
+  }
+
+  @Override
+  public String toString() {
+    return "LwtWriterFactory{" +
+        "kafkaPartition=" + kafkaPartition +
+        ", epoch=" + epoch +
+        '}';
   }
 }
