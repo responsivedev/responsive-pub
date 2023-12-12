@@ -586,18 +586,21 @@ public class CassandraWindowedTable implements
     );
 
     pendingFlush.initSegmentRoll(pendingRoll);
-    for (final long segmentId : pendingRoll.segmentsToCreate) {
-      final SegmentPartition segment = new SegmentPartition(kafkaPartition, segmentId);
-      final var createSegment = createSegment(segment, epoch);
+    for (final int subPartition : partitioner.allSubPartitions(kafkaPartition)) {
 
-      // If the segment creation failed because the table partition already exists, attempt to
-      // update the epoch in case we are fencing an older writer -- if that fails it means we're
-      // the ones being fenced
-      if (!createSegment.wasApplied()) {
-        final var reserveEpoch = client.execute(reserveEpoch(segment, epoch));
+      for (final long segmentId : pendingRoll.segmentsToCreate) {
+        final SegmentPartition segment = new SegmentPartition(subPartition, segmentId);
+        final var createSegment = createSegment(segment, epoch);
 
-        if (!reserveEpoch.wasApplied()) {
-          handleEpochFencing(kafkaPartition, segment, epoch);
+        // If the segment creation failed because the table partition already exists, attempt to
+        // update the epoch in case we are fencing an older writer -- if that fails it means we're
+        // the ones being fenced
+        if (!createSegment.wasApplied()) {
+          final var reserveEpoch = client.execute(reserveEpoch(segment, epoch));
+
+          if (!reserveEpoch.wasApplied()) {
+            handleEpochFencing(kafkaPartition, segment, epoch);
+          }
         }
       }
     }
@@ -609,8 +612,11 @@ public class CassandraWindowedTable implements
       final long epoch
   ) {
     final PendingFlushInfo pendingFlush = kafkaPartitionToPendingFlushInfo.get(kafkaPartition);
-    for (final long segmentId : pendingFlush.segmentRoll.segmentsToExpire) {
-      expireSegment(new SegmentPartition(kafkaPartition, segmentId));
+
+    for (final int subPartition : partitioner.allSubPartitions(kafkaPartition)) {
+      for (final long segmentId : pendingFlush.segmentRoll.segmentsToExpire) {
+        expireSegment(new SegmentPartition(subPartition, segmentId));
+      }
     }
     pendingFlush.finalizeFlush();
   }

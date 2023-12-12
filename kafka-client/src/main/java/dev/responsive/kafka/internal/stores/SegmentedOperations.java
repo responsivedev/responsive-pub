@@ -93,7 +93,7 @@ public class SegmentedOperations implements WindowOperations {
     final RemoteWindowedTable<?> table;
     switch (sessionClients.storageBackend()) {
       case CASSANDRA:
-        table = createCassandra(params, sessionClients);
+        table = createCassandra(params, config, sessionClients, changelog.topic());
         break;
       case MONGO_DB:
         throw new UnsupportedOperationException("Window stores are not yet compatible with Mongo");

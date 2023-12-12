@@ -98,7 +98,6 @@ public class SegmentPartitioner implements TablePartitioner<WindowedKey, Segment
     @Override
     public String toString() {
       return "SegmentPartition{"
-          + "partitionKey=" + subPartition
           + "subPartition=" + subPartition
           + ", segmentId=" + segmentId
           + '}';
@@ -174,6 +173,10 @@ public class SegmentPartitioner implements TablePartitioner<WindowedKey, Segment
     }
   }
 
+  public List<Integer> allSubPartitions(final int kafkaPartition) {
+    return innerSubPartitioner.allTablePartitions(kafkaPartition);
+  }
+
   /**
    * Return all active segments that could contain data with a timestamp in the specified range
    * The {@code timeFrom} parameter should already account for the retention
@@ -188,7 +191,7 @@ public class SegmentPartitioner implements TablePartitioner<WindowedKey, Segment
       final long timeFrom,
       final long timeTo
   ) {
-    final List<Integer> allSubPartitions = innerSubPartitioner.allTablePartitions(kafkaPartition);
+    final List<Integer> allSubPartitions = allSubPartitions(kafkaPartition);
     final long[] allSegmentIds = LongStream.range(segmentId(timeFrom), segmentId(timeTo) + 1).toArray();
 
     final List<SegmentPartition> segmentPartitions = new ArrayList<>();
