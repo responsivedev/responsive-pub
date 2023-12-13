@@ -35,6 +35,17 @@ controllerEndpoint: dns:///controller:4242
 
 controllerSecret: ctl-secret
 
+securityContext:
+  capabilities:
+    add: ["NET_ADMIN", "SYS_TIME"]
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+
+podSecurityContext:
+  runAsRoot: false
+  seccompProfile:
+    type: RuntimeDefault
+
 podAnnotations: {}
 
 resources: {}
