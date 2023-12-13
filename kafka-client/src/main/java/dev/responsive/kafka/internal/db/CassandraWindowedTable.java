@@ -588,7 +588,7 @@ public class CassandraWindowedTable implements
     pendingFlush.initSegmentRoll(pendingRoll);
     for (final long segmentId : pendingRoll.segmentsToCreate) {
       final SegmentPartition segment = new SegmentPartition(kafkaPartition, segmentId);
-      final var createSegment = createSegment(segment, epoch);
+      final var createSegment = client.execute(createSegment(segment, epoch));
 
       // If the segment creation failed because the table partition already exists, attempt to
       // update the epoch in case we are fencing an older writer -- if that fails it means we're
@@ -610,28 +610,27 @@ public class CassandraWindowedTable implements
   ) {
     final PendingFlushInfo pendingFlush = kafkaPartitionToPendingFlushInfo.get(kafkaPartition);
     for (final long segmentId : pendingFlush.segmentRoll.segmentsToExpire) {
-      expireSegment(new SegmentPartition(kafkaPartition, segmentId));
+      // TODO: check result of expiration
+      client.execute(expireSegment(new SegmentPartition(kafkaPartition, segmentId)));
     }
     pendingFlush.finalizeFlush();
   }
 
-  private ResultSet createSegment(final SegmentPartition segmentToCreate, final long epoch) {
-    return client.execute(
-        createSegment
-            .bind()
-            .setInt(PARTITION_KEY.bind(), segmentToCreate.tablePartition)
-            .setLong(SEGMENT_ID.bind(), segmentToCreate.segmentId)
-            .setLong(EPOCH.bind(), epoch)
-    );
+  private BoundStatement createSegment(final SegmentPartition segmentToCreate, final long epoch) {
+    return createSegment
+        .bind()
+        .setInt(PARTITION_KEY.bind(), segmentToCreate.tablePartition)
+        .setLong(SEGMENT_ID.bind(), segmentToCreate.segmentId)
+        .setLong(EPOCH.bind(), epoch)
+        .setIdempotent(true);
   }
 
-  private void expireSegment(final SegmentPartition segmentToDelete) {
-    client.execute(
-        expireSegment
-            .bind()
-            .setInt(PARTITION_KEY.bind(), segmentToDelete.tablePartition)
-            .setLong(SEGMENT_ID.bind(), segmentToDelete.segmentId)
-    );
+  private BoundStatement expireSegment(final SegmentPartition segmentToDelete) {
+    return expireSegment
+        .bind()
+        .setInt(PARTITION_KEY.bind(), segmentToDelete.tablePartition)
+        .setLong(SEGMENT_ID.bind(), segmentToDelete.segmentId)
+        .setIdempotent(true);
   }
 
   @Override

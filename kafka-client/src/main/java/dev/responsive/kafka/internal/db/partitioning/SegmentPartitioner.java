@@ -106,7 +106,6 @@ public class SegmentPartitioner implements TablePartitioner<WindowedKey, Segment
     @Override
     public String toString() {
       return "SegmentPartition{"
-          + "partitionKey=" + tablePartition
           + "tablePartition=" + tablePartition
           + ", segmentId=" + segmentId
           + '}';
