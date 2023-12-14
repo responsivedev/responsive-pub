@@ -85,7 +85,7 @@ public class OtelMetricsService implements MetricsExportService  {
 
     final var appId = ConfigUtils.responsiveAppId(streamsConfig, config);
     final var resource = Resource
-        .getDefault()
+        .empty() // the .default() one has attributes we don't care about
         .merge(ContainerResource.get())
         .merge(Resource.create(
             Attributes.builder()
