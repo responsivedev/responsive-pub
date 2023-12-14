@@ -91,6 +91,7 @@ dependencyResolutionManagement {
             library("otel-exporter-logging", "io.opentelemetry:opentelemetry-exporter-logging:1.32.0");
             library("otel-exporter-otlp", "io.opentelemetry:opentelemetry-exporter-otlp:1.32.0");
             library("otel-jmx", "io.opentelemetry.instrumentation:opentelemetry-jmx-metrics:1.32.0-alpha")
+            library("otel-resource", "io.opentelemetry.instrumentation:opentelemetry-resources:1.32.0-alpha")
             bundle("otel", listOf(
                     "otel-api",
                     "otel-sdk",
@@ -98,6 +99,7 @@ dependencyResolutionManagement {
                     "otel-exporter-logging",
                     "otel-exporter-otlp",
                     "otel-jmx",
+                    "otel-resource"
             ))
 
             // do not include these in jars that are distributed - these
