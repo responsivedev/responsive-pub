@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package responsive.metrics.v1.kafka.proto;
+
+import "opentelemetry/proto/common/v1/common.proto";
+import "opentelemetry/proto/resource/v1/resource.proto";
+import "opentelemetry/proto/metrics/v1/metrics.proto";
+
+option java_multiple_files = true;
+option java_package = "dev.responsive.metrics.v1.kafka";
+
+message KafkaMetricKey {
+  opentelemetry.proto.resource.v1.Resource resource = 1;
+  repeated opentelemetry.proto.common.v1.KeyValue attributes = 2;
+}
+
+message KafkaMetricValue {
+  opentelemetry.proto.metrics.v1.ResourceMetrics metrics = 1;
+}
