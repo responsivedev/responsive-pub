@@ -31,6 +31,7 @@ import io.opentelemetry.instrumentation.jmx.engine.MetricConfiguration;
 import io.opentelemetry.instrumentation.jmx.yaml.JmxConfig;
 import io.opentelemetry.instrumentation.jmx.yaml.JmxRule;
 import io.opentelemetry.instrumentation.jmx.yaml.RuleParser;
+import io.opentelemetry.instrumentation.resources.ContainerResource;
 import io.opentelemetry.sdk.OpenTelemetrySdk;
 import io.opentelemetry.sdk.metrics.SdkMeterProvider;
 import io.opentelemetry.sdk.metrics.export.PeriodicMetricReader;
@@ -83,15 +84,18 @@ public class OtelMetricsService implements MetricsExportService  {
         .build();
 
     final var appId = ConfigUtils.responsiveAppId(streamsConfig, config);
-    final var attributes = Attributes
-        .builder()
-        .put(SERVICE_NAME_ATTR, appId + "-otel")
-        .put(RESPONSIVE_APPLICATION_ID_ATTR, appId)
-        .build();
+    final var resource = Resource
+        .empty() // the .default() one has attributes we don't care about
+        .merge(ContainerResource.get())
+        .merge(Resource.create(
+            Attributes.builder()
+                .put(SERVICE_NAME_ATTR, appId + "-otel")
+                .put(RESPONSIVE_APPLICATION_ID_ATTR, appId)
+                .build()));
 
     final var meterProvider = SdkMeterProvider
         .builder()
-        .setResource(Resource.create(attributes))
+        .setResource(resource)
         .registerMetricReader(metricReader)
         .build();
 

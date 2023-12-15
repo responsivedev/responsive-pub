@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package responsive.metrics.v1.metrics.proto;
+
+import "opentelemetry/proto/resource/v1/resource.proto";
+import "opentelemetry/proto/metrics/v1/metrics.proto";
+
+option java_multiple_files = true;
+option java_package = "dev.responsive.metrics.v1";
+
+// a globally unique identifier for a resource in Responsive's
+// metrics ecosystem
+message TenantResource {
+  // the tenant in our system (organization ID) - we can always
+  // create a dedicated internal tenant for metrics that do not
+  // belong to any particular tenant
+  string tenant = 1;
+
+  // the resource (the entity in the system that reported the
+  // metrics that are collected)
+  opentelemetry.proto.resource.v1.Resource resource = 2;
+}
+
+// a metric that is reported from Responsive, for now this is
+// just a simple wrapper over the open telemetry definition of
+// a Resource Metrics. It is expected, though not enforced, that
+// the metrics.resource here matches the TenantResource.resource
+message ExportedMetric {
+  opentelemetry.proto.metrics.v1.ResourceMetrics metrics = 1;
+}
