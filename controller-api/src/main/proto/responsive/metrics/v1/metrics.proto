@@ -17,8 +17,11 @@ message TenantResource {
   string tenant = 1;
 
   // the resource (the entity in the system that reported the
-  // metrics that are collected)
-  opentelemetry.proto.resource.v1.Resource resource = 2;
+  // metrics that are collected) - we use oneof in order to
+  // allow for different types of resources in the future
+  oneof resource {
+    string applicationId = 2;
+  }
 }
 
 // a metric that is reported from Responsive, for now this is
