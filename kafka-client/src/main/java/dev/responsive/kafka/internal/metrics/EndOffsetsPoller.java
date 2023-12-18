@@ -53,6 +53,7 @@ import org.slf4j.LoggerFactory;
  */
 public class EndOffsetsPoller {
   private static final Logger LOG = LoggerFactory.getLogger(EndOffsetsPoller.class);
+  private static final int ADMIN_RECREATE_THRESHOLD = 3;
 
   private final Map<String, Listener> threadIdToMetrics = new HashMap<>();
   private final ResponsiveMetrics metrics;
@@ -148,7 +149,9 @@ public class EndOffsetsPoller {
   }
 
   private static class Poller {
-    private final Admin adminClient;
+    private Admin adminClient;
+    private int failuresWithoutReinit = 0;
+    private final Supplier<Admin> adminSupplier;
     private final ScheduledFuture<?> future;
     private final ScheduledExecutorService executor;
     private final Supplier<Collection<Listener>> threadMetricsSupplier;
@@ -158,19 +161,39 @@ public class EndOffsetsPoller {
         final ScheduledExecutorService executor,
         final Supplier<Collection<Listener>> threadMetricsSupplier
     ) {
-      this.adminClient = adminClientSupplier.get();
+      this.adminSupplier = adminClientSupplier;
       this.executor = executor;
       this.threadMetricsSupplier = threadMetricsSupplier;
+      init();
       this.future = executor.scheduleAtFixedRate(this::pollEndOffsets, 0, 30, TimeUnit.SECONDS);
     }
 
     private void stop() {
       future.cancel(true);
-      executor.schedule(() -> adminClient.close(Duration.ofNanos(0)), 0, TimeUnit.SECONDS);
+      executor.schedule(this::close, 0, TimeUnit.SECONDS);
     }
 
-    private void pollEndOffsets() {
+    private void init() {
+      adminClient = adminSupplier.get();
+      failuresWithoutReinit = 0;
+    }
+
+    private void close() {
+      adminClient.close(Duration.ofNanos(0));
+    }
+
+    private void maybeReinit() {
+      if (failuresWithoutReinit >= ADMIN_RECREATE_THRESHOLD) {
+        LOG.info("reinitializing admin client");
+        close();
+        init();
+      }
+    }
+
+    private void doPollEndOffsets() {
       LOG.info("Polling end offsets");
+
+      maybeReinit();
 
       final var partitions = new HashMap<TopicPartition, OffsetSpec>();
       final Collection<Listener> threadMetrics = threadMetricsSupplier.get();
@@ -188,7 +211,18 @@ public class EndOffsetsPoller {
       }
       threadMetrics.forEach(tm -> tm.update(endOffsets));
 
+      failuresWithoutReinit = 0;
+
       LOG.info("Finished updating end offsets");
+    }
+
+    private void pollEndOffsets() {
+      try {
+        doPollEndOffsets();
+      } catch (final RuntimeException e) {
+        LOG.error("error polling end offsets. will retry at next poll interval", e);
+        failuresWithoutReinit += 1;
+      }
     }
   }
 
