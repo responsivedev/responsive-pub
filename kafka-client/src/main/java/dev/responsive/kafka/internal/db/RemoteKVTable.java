@@ -45,7 +45,7 @@ public interface RemoteKVTable<S> extends RemoteTable<Bytes, S> {
    *
    * @param kafkaPartition  the kafka partition
    * @param from            the starting key (inclusive)
-   * @param to              the ending key (exclusive)
+   * @param to              the ending key (inclusive)
    * @param minValidTs      the minimum timestamp, in epochMillis, to consider valid
    *
    * @return an iterator of all key-value pairs in the range

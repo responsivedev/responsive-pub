@@ -333,7 +333,7 @@ public class CommitBuffer<K extends Comparable<K>, P>
   public KeyValueIterator<K, Result<K>> range(final K from, final K to) {
     return Iterators.kv(
         Iterators.filter(
-            buffer.getReader().subMap(from, to).entrySet().iterator(),
+            buffer.getReader().subMap(from, true, to, true).entrySet().iterator(),
             e -> keySpec.retain(e.getKey())),
         result -> new KeyValue<>(result.getKey(), result.getValue())
     );
@@ -346,7 +346,7 @@ public class CommitBuffer<K extends Comparable<K>, P>
   ) {
     return Iterators.kv(
         Iterators.filter(
-            buffer.getReader().subMap(from, to).entrySet().iterator(),
+            buffer.getReader().subMap(from, true, to, true).entrySet().iterator(),
             e -> keySpec.retain(e.getKey()) && filter.test(e.getValue())
         ),
         result -> new KeyValue<>(result.getKey(), result.getValue())
