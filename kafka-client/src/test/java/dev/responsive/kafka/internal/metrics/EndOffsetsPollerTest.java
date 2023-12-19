@@ -140,6 +140,40 @@ class EndOffsetsPollerTest {
   }
 
   @Test
+  public void shouldNotBubbleErrorsUpToExecutor() {
+    // given:
+    when(adminClient.listOffsets(anyMap())).thenThrow(new RuntimeException("oops"));
+    final var callback = endOffsetsPoller.addForThread(THREAD_ID);
+    callback.onPartitionsAssigned(List.of(PARTITION1, PARTITION2));
+    verify(executor).scheduleAtFixedRate(taskCaptor.capture(), eq(0L), anyLong(), any());
+    final var task = taskCaptor.getValue();
+
+    // when/then:
+    task.run();
+    task.run();
+  }
+
+  @Test
+  public void shouldRecreateAdminClientAfterRepeatedFailures() {
+    // given:
+    when(adminClient.listOffsets(anyMap())).thenThrow(new RuntimeException("oops"));
+    final var callback = endOffsetsPoller.addForThread(THREAD_ID);
+    callback.onPartitionsAssigned(List.of(PARTITION1, PARTITION2));
+    verify(executor).scheduleAtFixedRate(taskCaptor.capture(), eq(0L), anyLong(), any());
+    final var task = taskCaptor.getValue();
+
+    // when:
+    task.run();
+    task.run();
+    task.run();
+    task.run();
+
+    // then:
+    verify(factories, times(2)).createAdminClient(anyMap());
+  }
+
+
+  @Test
   public void shouldPollAllEndOffsetsForThread() {
     // given:
     final var result = completedOffsetListing(Map.of(
