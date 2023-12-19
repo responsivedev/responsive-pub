@@ -18,7 +18,6 @@ package dev.responsive.kafka.integration;
 
 import static dev.responsive.kafka.api.config.ResponsiveConfig.STORE_FLUSH_RECORDS_TRIGGER_CONFIG;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.createTopicsAndWait;
-import static dev.responsive.kafka.testutils.IntegrationTestUtils.pipeInput;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.pipeRecords;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.readOutput;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.startAppAndAwaitRunning;
@@ -54,9 +53,9 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.KStream;
@@ -190,10 +189,11 @@ public class StoreQueryIntegrationTest {
 
     final KStream<String, String> input = builder.stream(inputTopic());
 
-    final StoreBuilder<KeyValueStore<String, String>> storeBuilder = ResponsiveStores.keyValueStoreBuilder(
-        ResponsiveStores.keyValueStore(ResponsiveKeyValueParams.keyValue(kvStoreName())),
-        Serdes.String(),
-        Serdes.String());
+    final StoreBuilder<KeyValueStore<String, String>> storeBuilder =
+        ResponsiveStores.keyValueStoreBuilder(
+            ResponsiveStores.keyValueStore(ResponsiveKeyValueParams.keyValue(kvStoreName())),
+            Serdes.String(),
+            Serdes.String());
     input
         .processValues(new TransformerSupplier(range, storeBuilder), kvStoreName())
         .to(outputTopic(), Produced.valueSerde(Serdes.Integer()));
