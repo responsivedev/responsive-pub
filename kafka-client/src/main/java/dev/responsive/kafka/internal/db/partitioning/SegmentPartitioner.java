@@ -20,8 +20,8 @@ import static java.util.Collections.emptyList;
 
 import dev.responsive.kafka.api.stores.ResponsiveWindowParams;
 import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.SegmentPartition;
-import dev.responsive.kafka.internal.utils.WindowedKey;
 import dev.responsive.kafka.internal.utils.StoreUtil;
+import dev.responsive.kafka.internal.utils.WindowedKey;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
