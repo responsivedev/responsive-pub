@@ -20,8 +20,8 @@ import static java.util.Collections.emptyList;
 
 import dev.responsive.kafka.api.stores.ResponsiveWindowParams;
 import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.SegmentPartition;
-import dev.responsive.kafka.internal.utils.Stamped;
 import dev.responsive.kafka.internal.utils.StoreUtil;
+import dev.responsive.kafka.internal.utils.WindowedKey;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -80,7 +80,7 @@ import org.slf4j.LoggerFactory;
  * For the time being, we simply recommend that users configure the number of segments
  * similarly to how they would configure the number of sub-partitions for a key-value store.
  */
-public class SegmentPartitioner implements TablePartitioner<Stamped, SegmentPartition> {
+public class SegmentPartitioner implements TablePartitioner<WindowedKey, SegmentPartition> {
 
   private static final Logger LOG = LoggerFactory.getLogger(SegmentPartitioner.class);
 
@@ -106,7 +106,6 @@ public class SegmentPartitioner implements TablePartitioner<Stamped, SegmentPart
     @Override
     public String toString() {
       return "SegmentPartition{"
-          + "partitionKey=" + tablePartition
           + "tablePartition=" + tablePartition
           + ", segmentId=" + segmentId
           + '}';
@@ -141,8 +140,8 @@ public class SegmentPartitioner implements TablePartitioner<Stamped, SegmentPart
   }
 
   @Override
-  public SegmentPartition tablePartition(final int kafkaPartition, final Stamped key) {
-    return new SegmentPartition(kafkaPartition, segmentId(key.timestamp));
+  public SegmentPartition tablePartition(final int kafkaPartition, final WindowedKey key) {
+    return new SegmentPartition(kafkaPartition, segmentId(key.windowStartMs));
   }
 
   @Override
