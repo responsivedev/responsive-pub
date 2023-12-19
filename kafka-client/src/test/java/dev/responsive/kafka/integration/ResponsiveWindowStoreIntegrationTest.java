@@ -135,8 +135,8 @@ public class ResponsiveWindowStoreIntegrationTest {
 
     final ConcurrentMap<Windowed<Long>, Long> collect = new ConcurrentHashMap<>();
     final CountdownLatchWrapper outputLatch = new CountdownLatchWrapper(0);
-
     final CountDownLatch finalLatch = new CountDownLatch(2);
+
     final KStream<Long, Long> input = builder.stream(inputTopic());
     
     input
