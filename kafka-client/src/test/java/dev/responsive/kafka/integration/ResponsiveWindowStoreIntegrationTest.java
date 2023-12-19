@@ -130,7 +130,6 @@ public class ResponsiveWindowStoreIntegrationTest {
     final CountdownLatchWrapper inputLatch = new CountdownLatchWrapper(0);
     final CountdownLatchWrapper outputLatch = new CountdownLatchWrapper(0);
 
-    final CountDownLatch latch2 = new CountDownLatch(2);
     final KStream<Long, Long> input = builder.stream(inputTopic());
     input.peek((k, v) -> inputLatch.countDown())
         .groupByKey()
@@ -148,10 +147,6 @@ public class ResponsiveWindowStoreIntegrationTest {
         .peek((k, v) -> {
           collect.put(k, v);
           outputLatch.countDown();
-
-          if (v == 1000) {
-            latch2.countDown();
-          }
         })
         // discard the window, so we don't have to serialize it
         // we're not checking the output topic anyway
@@ -175,8 +170,11 @@ public class ResponsiveWindowStoreIntegrationTest {
       // which should result in just one window (per key) with the sum
       // of 3 after the first Streams instance is closed
       inputLatch.resetCountdown(6);
+      outputLatch.resetCountdown(6);
       pipeInput(producer, inputTopic(), () -> timestamp.getAndAdd(100), 0, 3, 0, 1);
+
       inputLatch.await();
+      outputLatch.await();
       assertThat(collect, Matchers.hasEntry(windowed(0, baseTs, 5000), 3L));
     }
 
@@ -193,36 +191,48 @@ public class ResponsiveWindowStoreIntegrationTest {
       startAppAndAwaitRunning(Duration.ofSeconds(15), kafkaStreams);
 
       inputLatch.resetCountdown(4);
+      outputLatch.resetCountdown(4);
       // Produce another two records with values 3-4, still within the first window
       pipeInput(producer, inputTopic(), () -> timestamp.getAndAdd(100), 3, 5, 0, 1);
 
       inputLatch.await();
+      outputLatch.await();
       assertThat(collect, Matchers.hasEntry(windowed(0, baseTs, 5000), 10L));
 
       // Produce another set with values 5-10 in new window that advances stream-time
       // enough to expire the first window
       inputLatch.resetCountdown(10);
+      outputLatch.resetCountdown(10);
       final long secondWindowStart = baseTs + 10_000L;
       timestamp.set(secondWindowStart);
       pipeInput(producer, inputTopic(), () -> timestamp.getAndAdd(100), 5, 10, 0, 1);
 
       inputLatch.await();
+      outputLatch.await();
       assertThat(collect, Matchers.hasEntry(windowed(0, secondWindowStart, 5000), 35L));
 
       // at this point the records produced by this pipe should be
       // past the retention period and therefore be ignored from the
       // first window
+      inputLatch.resetCountdown(2);
+      outputLatch.resetCountdown(2);
       timestamp.set(baseTs);
       pipeInput(producer, inputTopic(), timestamp::get, 100, 101, 0, 1);
 
+      inputLatch.await();
+      outputLatch.await();
       assertThat(collect, Matchers.hasEntry(windowed(0, baseTs, 5000), 10L));
 
       // use this to signify that we're done processing and count
       // down the latch
+      inputLatch.resetCountdown(2);
+      outputLatch.resetCountdown(2);
       timestamp.set(baseTs + 15000);
       pipeInput(producer, inputTopic(), timestamp::get, 1000, 1001, 0, 1);
-      latch2.await();
     }
+
+    inputLatch.await();
+    outputLatch.await();
 
     // Then:
     assertThat(collect.size(), Matchers.is(6));
