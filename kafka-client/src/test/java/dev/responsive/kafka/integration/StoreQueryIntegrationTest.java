@@ -114,7 +114,7 @@ public class StoreQueryIntegrationTest {
   }
 
   @Test
-  public void testKeyValueStoreAllQuery() throws Exception {
+  public void shouldReturnAllStoreDataOnAllQuery() throws Exception {
     // Given:
     final Map<String, Object> properties = getMutableProperties();
     final KafkaProducer<String, String> producer = new KafkaProducer<>(properties);
