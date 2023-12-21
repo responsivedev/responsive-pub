@@ -274,6 +274,7 @@ public class ResponsiveWindowStoreIntegrationTest {
         .toStream()
         .peek((k, v) -> {
           results.put(k, v);
+          System.out.println("record: [" + k + ", " + v + "]");
           outputLatch.countDown();
         })
         // discard the window, so we don't have to serialize it
@@ -309,11 +310,48 @@ public class ResponsiveWindowStoreIntegrationTest {
       inputLatch.await();
       outputLatch.await();
 
+      System.out.println("Checking output records");
       assertThat(results.size(), equalTo(4));
       assertThat(results, Matchers.hasEntry(windowedKey(0L), "abc"));    // [0, 10s]
       assertThat(results, Matchers.hasEntry(windowedKey(5000L), "bcegh")); // [5, 15s]
       assertThat(results, Matchers.hasEntry(windowedKey(10000L), "dg"));  // [10s, 20s]
       assertThat(results, Matchers.hasEntry(windowedKey(15000L), "d"));   // [15s, 25s]
+    }
+
+    // force a commit/flush so that we can test Cassandra by closing
+    // the old Kafka Streams and creating a new one
+    properties.put(APPLICATION_SERVER_CONFIG, "host2:1024");
+    try (
+        final ResponsiveKafkaStreams kafkaStreams = new ResponsiveKafkaStreams(
+            builder.build(),
+            properties
+        );
+    ) {
+      startAppAndAwaitRunning(Duration.ofSeconds(15), kafkaStreams);
+      inputLatch.resetCountdown(6);
+      outputLatch.resetCountdown(10);
+
+      final List<KeyValueTimestamp<String, String>> input1 = asList(
+          new KeyValueTimestamp<>("key", "i", 10_000L), // updates [5, 15s] and [10, 20s] windows
+          new KeyValueTimestamp<>("key", "j", 16_000L), // updates [10, 20s] and [15, 25s] windows
+          new KeyValueTimestamp<>("key", "k", 35_000L), // closes all open windows
+          new KeyValueTimestamp<>("key", "l", 16_000),  // outside grace for all windows
+          new KeyValueTimestamp<>("key", "m", 32_000L),
+          new KeyValueTimestamp<>("key", "n", 39_000L)
+      );
+
+      pipeRecords(producer, inputTopic(), input1);
+      inputLatch.await();
+
+      assertThat(results.size(), equalTo(7));
+      assertThat(results, Matchers.hasEntry(windowedKey(0L), "abc"));    // [0, 10s]
+      assertThat(results, Matchers.hasEntry(windowedKey(5_000L), "bceghi")); // [5, 15s]
+      assertThat(results, Matchers.hasEntry(windowedKey(10_000L), "dgij"));  // [10s, 20s]
+      assertThat(results, Matchers.hasEntry(windowedKey(15_000L), "dj"));   // [15s, 25s]
+
+      assertThat(results, Matchers.hasEntry(windowedKey(25_000L), "m"));   // [25s, 35s]
+      assertThat(results, Matchers.hasEntry(windowedKey(30_000L), "kmn"));   // [30s, 40s]
+      assertThat(results, Matchers.hasEntry(windowedKey(35_000L), "kn"));   // [35s, 45s]
     }
   }
 
