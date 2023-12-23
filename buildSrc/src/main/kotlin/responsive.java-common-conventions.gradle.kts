@@ -67,6 +67,10 @@ allprojects {
 
         versionIncrementer("incrementMinor")
 
+        branchVersionIncrementer.putAll( mapOf<String, String>(
+            "patch/.*" to "incrementPatch"
+        ))
+
         snapshotCreator({ _, _ -> "-SNAPSHOT" })
         ignoreUncommittedChanges.set(false)
     }
