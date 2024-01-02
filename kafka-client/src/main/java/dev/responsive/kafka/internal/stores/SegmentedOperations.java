@@ -30,6 +30,7 @@ import dev.responsive.kafka.internal.db.CassandraTableSpecFactory;
 import dev.responsive.kafka.internal.db.RemoteWindowedTable;
 import dev.responsive.kafka.internal.db.WindowedKeySpec;
 import dev.responsive.kafka.internal.db.WriterFactory;
+import dev.responsive.kafka.internal.db.mongo.ResponsiveMongoClient;
 import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner;
 import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
 import dev.responsive.kafka.internal.utils.Iterators;
@@ -87,13 +88,16 @@ public class SegmentedOperations implements WindowOperations {
         context.taskId().partition()
     );
 
+    final SegmentPartitioner partitioner = SegmentPartitioner.create(params);
+
     final RemoteWindowedTable<?> table;
     switch (sessionClients.storageBackend()) {
       case CASSANDRA:
-        table = createCassandra(params, sessionClients);
+        table = createCassandra(params, sessionClients, partitioner);
         break;
       case MONGO_DB:
-        throw new UnsupportedOperationException("Window stores are not yet compatible with Mongo");
+        table = createMongo(params, sessionClients, partitioner);
+        break;
       default:
         throw new IllegalStateException("Unexpected value: " + sessionClients.storageBackend());
     }
@@ -135,17 +139,33 @@ public class SegmentedOperations implements WindowOperations {
 
   private static RemoteWindowedTable<?> createCassandra(
       final ResponsiveWindowParams params,
-      final SessionClients clients
+      final SessionClients clients,
+      final SegmentPartitioner partitioner
   ) throws InterruptedException, TimeoutException {
-
     final CassandraClient client = clients.cassandraClient();
-    final SegmentPartitioner partitioner = SegmentPartitioner.create(params);
 
     final var spec = CassandraTableSpecFactory.fromWindowParams(params, partitioner);
 
     switch (params.schemaType()) {
       case WINDOW:
         return client.windowedFactory().create(spec);
+      case STREAM:
+        throw new UnsupportedOperationException("Not yet implemented");
+      default:
+        throw new IllegalArgumentException(params.schemaType().name());
+    }
+  }
+
+  private static RemoteWindowedTable<?> createMongo(
+      final ResponsiveWindowParams params,
+      final SessionClients clients,
+      final SegmentPartitioner partitioner
+  ) throws InterruptedException, TimeoutException {
+    final ResponsiveMongoClient client = clients.mongoClient();
+
+    switch (params.schemaType()) {
+      case WINDOW:
+        return client.windowedTable(params.name().remoteName(), partitioner);
       case STREAM:
         throw new UnsupportedOperationException("Not yet implemented");
       default:
