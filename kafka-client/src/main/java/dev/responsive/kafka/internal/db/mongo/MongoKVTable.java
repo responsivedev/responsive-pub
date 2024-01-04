@@ -35,7 +35,6 @@ import com.mongodb.client.model.Updates;
 import com.mongodb.client.model.WriteModel;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.WriterFactory;
-import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.Date;
 import java.util.concurrent.ConcurrentHashMap;
@@ -47,7 +46,6 @@ import org.bson.Document;
 import org.bson.codecs.configuration.CodecProvider;
 import org.bson.codecs.configuration.CodecRegistry;
 import org.bson.codecs.pojo.PojoCodecProvider;
-import org.bson.types.ObjectId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -95,11 +93,10 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<Document>> {
 
   @Override
   public WriterFactory<Bytes, Integer> init(final int kafkaPartition) {
-
     final MetadataDoc metaDoc = metadata.findOneAndUpdate(
-        Filters.eq(MetadataDoc.PARTITION, kafkaPartition),
+        Filters.eq(MetadataDoc.ID, kafkaPartition),
         Updates.combine(
-            Updates.setOnInsert(MetadataDoc.ID, idForKafkaPartition(kafkaPartition)),
+            Updates.setOnInsert(MetadataDoc.ID, kafkaPartition),
             Updates.setOnInsert(MetadataDoc.PARTITION, kafkaPartition),
             Updates.setOnInsert(MetadataDoc.OFFSET, NO_COMMITTED_OFFSET),
             Updates.inc(MetadataDoc.EPOCH, 1) // will set the value to 1 if it doesn't exist
@@ -179,7 +176,7 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<Document>> {
   @Override
   public long fetchOffset(final int kafkaPartition) {
     final MetadataDoc result = metadata.find(
-        Filters.eq(MetadataDoc.ID, idForKafkaPartition(kafkaPartition))
+        Filters.eq(MetadataDoc.ID, kafkaPartition)
     ).first();
     if (result == null) {
       throw new IllegalStateException("Expected to find metadata row");
@@ -205,13 +202,6 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<Document>> {
   @Override
   public long approximateNumEntries(final int kafkaPartition) {
     return 0;
-  }
-
-  private ObjectId idForKafkaPartition(final int kafkaPartition) {
-    // allocate 16 bytes total since ObjectId needs 12 for internal stuff
-    byte[] bytes = new byte[16];
-    final ByteBuffer buffer = ByteBuffer.wrap(bytes).putInt(kafkaPartition);
-    return new ObjectId(buffer);
   }
 
 }
