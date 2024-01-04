@@ -17,8 +17,6 @@
 package dev.responsive.kafka.internal.db.mongo;
 
 import java.util.Objects;
-import org.bson.codecs.pojo.annotations.BsonId;
-import org.bson.types.ObjectId;
 
 public class MetadataDoc {
 
@@ -27,8 +25,7 @@ public class MetadataDoc {
   public static final String OFFSET = "offset";
   public static final String EPOCH = "epoch";
 
-  @BsonId
-  ObjectId id;
+  int id;
   int partition;
   long offset;
   long epoch;
@@ -36,11 +33,11 @@ public class MetadataDoc {
   public MetadataDoc() {
   }
 
-  public ObjectId id() {
+  public int id() {
     return id;
   }
 
-  public void setId(final ObjectId id) {
+  public void setId(final int id) {
     this.id = id;
   }
 
