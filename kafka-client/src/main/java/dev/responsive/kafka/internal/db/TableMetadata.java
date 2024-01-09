@@ -32,15 +32,6 @@ import com.datastax.oss.driver.api.core.cql.BoundStatement;
 public interface TableMetadata<P> {
 
   /**
-   * @param tablePartition the table partition to fetch the epoch for
-   *
-   * @return the current epoch associated with this table partition
-   */
-  long fetchEpoch(
-      final P tablePartition
-  );
-
-  /**
    * @param tablePartition  the table partition to reserve the epoch for
    * @param epoch           the intended epoch for this partition
    *

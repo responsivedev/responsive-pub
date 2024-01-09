@@ -456,7 +456,11 @@ public class CassandraKeyValueTable
         .setLong(OFFSET.bind(), offset);
   }
 
-  @Override
+  /**
+   * @param tablePartition the table partition to fetch the epoch for
+   *
+   * @return the current epoch associated with this table partition
+   */
   public long fetchEpoch(final Integer tablePartition) {
     final List<Row> result = client.execute(
             fetchEpoch

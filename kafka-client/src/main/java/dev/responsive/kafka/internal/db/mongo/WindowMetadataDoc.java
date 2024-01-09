@@ -19,20 +19,20 @@
 package dev.responsive.kafka.internal.db.mongo;
 
 import java.util.Objects;
-import org.bson.codecs.pojo.annotations.BsonId;
-import org.bson.types.ObjectId;
 
+/**
+ * The 'id' of a window metadata doc corresponds to the kafka partition,
+ * which is why we don't have to include the partition as a separate
+ * field for the metadata docs the way we do for the data docs
+ */
 public class WindowMetadataDoc {
 
   public static final String ID = "_id";
-  public static final String PARTITION = "partition";
   public static final String OFFSET = "offset";
   public static final String EPOCH = "epoch";
   public static final String STREAM_TIME = "streamTime";
 
-  @BsonId
-  ObjectId id;
-  int partition;
+  int id;
   long offset;
   long epoch;
   long streamTime;
@@ -40,20 +40,12 @@ public class WindowMetadataDoc {
   public WindowMetadataDoc() {
   }
 
-  public ObjectId id() {
+  public int id() {
     return id;
   }
 
-  public void setId(final ObjectId id) {
+  public void setId(final int id) {
     this.id = id;
-  }
-
-  public int partition() {
-    return partition;
-  }
-
-  public void setPartition(final int partition) {
-    this.partition = partition;
   }
 
   public long offset() {
@@ -89,23 +81,21 @@ public class WindowMetadataDoc {
       return false;
     }
     final WindowMetadataDoc that = (WindowMetadataDoc) o;
-    return partition == that.partition
+    return id == that.id
         && offset == that.offset
         && epoch == that.epoch
-        && streamTime == that.streamTime
-        && Objects.equals(id, that.id);
+        && streamTime == that.streamTime;
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(id, partition, epoch, offset, streamTime);
+    return Objects.hash(id, epoch, offset, streamTime);
   }
 
   @Override
   public String toString() {
     return "WindowMetadataDoc{"
         + "id=" + id
-        + ", partition=" + partition
         + ", offset=" + offset
         + ", epoch=" + epoch
         + ", streamTime=" + streamTime

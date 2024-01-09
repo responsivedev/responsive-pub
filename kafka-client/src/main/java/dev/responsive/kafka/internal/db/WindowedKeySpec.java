@@ -51,7 +51,7 @@ public class WindowedKeySpec implements KeySpec<WindowedKey> {
 
     final long windowStartTs = ByteBuffer.wrap(key).getLong(dataKeySize);
 
-    return new WindowedKey(Bytes.wrap(dataKeyBytes), windowStartTs);
+    return new WindowedKey(dataKeyBytes, windowStartTs);
   }
 
   @Override

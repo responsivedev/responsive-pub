@@ -57,6 +57,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeoutException;
 import javax.annotation.CheckReturnValue;
 import org.apache.kafka.common.utils.Bytes;
@@ -103,7 +104,8 @@ public class CassandraWindowedTable implements
   // as these entities have different views of the current time and should not be unified.
   // (Specifically, this table will always lag the view of stream-time that is shared by the
   // ResponsiveWindowStore and CommitBuffer due to buffering/batching of writes)
-  private final Map<Integer, PendingFlushInfo> kafkaPartitionToPendingFlushInfo = new HashMap<>();
+  private final Map<Integer, PendingFlushInfo> kafkaPartitionToPendingFlushInfo =
+      new ConcurrentHashMap<>();
 
   // TODO: move this into the LWTWriter/Factory to keep this class stateless
   private static class PendingFlushInfo {
@@ -700,7 +702,11 @@ public class CassandraWindowedTable implements
         .setLong(STREAM_TIME.bind(), pendingFlush.pendingFlushStreamTime);
   }
 
-  @Override
+  /**
+   * @param tablePartition the table partition to fetch the epoch for
+   *
+   * @return the current epoch associated with this table partition
+   */
   public long fetchEpoch(final SegmentPartition segmentPartition) {
     final List<Row> result = client.execute(
             fetchEpoch
@@ -797,14 +803,6 @@ public class CassandraWindowedTable implements
         .setInstant(WINDOW_START.bind(), Instant.ofEpochMilli(key.windowStartMs));
   }
 
-  /**
-   * Retrieves the value of the given {@code partitionKey} and {@code key} from {@code table}.
-   *
-   * @param kafkaPartition  the partition
-   * @param key             the data key
-   * @param windowStart     the start time of the window
-   * @return the value previously set
-   */
   @Override
   public byte[] fetch(
       final int kafkaPartition,
@@ -833,16 +831,6 @@ public class CassandraWindowedTable implements
     }
   }
 
-  /**
-   * Retrieves the range of windows of the given {@code partitionKey} and {@code key} with a
-   * start time between {@code timeFrom} and {@code timeTo} from {@code table}.
-   *
-   * @param kafkaPartition the partition
-   * @param key            the data key
-   * @param timeFrom       the min timestamp (inclusive)
-   * @param timeTo         the max timestamp (exclusive)
-   * @return the windows previously stored
-   */
   @Override
   public KeyValueIterator<WindowedKey, byte[]> fetch(
       final int kafkaPartition,
@@ -867,17 +855,6 @@ public class CassandraWindowedTable implements
     return Iterators.wrapped(segmentIterators);
   }
 
-  /**
-   * Retrieves the range of window of the given {@code partitionKey} and {@code key} with a
-   * start time between {@code timeFrom} and {@code timeTo} from {@code table}.
-   *
-   * @param kafkaPartition the partition
-   * @param key            the data key
-   * @param timeFrom       the min timestamp (inclusive)
-   * @param timeTo         the max timestamp (exclusive)
-   *
-   * @return the value previously set
-   */
   @Override
   public KeyValueIterator<WindowedKey, byte[]> backFetch(
       final int kafkaPartition,
@@ -902,19 +879,6 @@ public class CassandraWindowedTable implements
     return Iterators.wrapped(segmentIterators);
   }
 
-  /**
-   * Retrieves the range of windows of the given {@code partitionKey} for all keys between
-   * {@code fromKey} and {@code toKey} with a start time between {@code timeFrom} and {@code timeTo}
-   * from {@code table}.
-   *
-   * @param kafkaPartition the partition
-   * @param fromKey        the min data key (inclusive)
-   * @param toKey          the max data key (exclusive)
-   * @param timeFrom       the min timestamp (inclusive)
-   * @param timeTo         the max timestamp (exclusive)
-   *
-   * @return the value previously set
-   */
   @Override
   public KeyValueIterator<WindowedKey, byte[]> fetchRange(
       final int kafkaPartition,
@@ -942,19 +906,6 @@ public class CassandraWindowedTable implements
     );
   }
 
-  /**
-   * Retrieves the range of windows of the given {@code partitionKey} for all keys between
-   * {@code fromKey} and {@code toKey} with a start time between {@code timeFrom} and {@code timeTo}
-   * from {@code table}.
-   *
-   * @param kafkaPartition the partition
-   * @param fromKey        the min data key (inclusive)
-   * @param toKey          the max data key (exclusive)
-   * @param timeFrom       the min timestamp (inclusive)
-   * @param timeTo         the max timestamp (exclusive)
-   *
-   * @return the value previously set
-   */
   @Override
   public KeyValueIterator<WindowedKey, byte[]> backFetchRange(
       final int kafkaPartition,
@@ -982,16 +933,6 @@ public class CassandraWindowedTable implements
     );
   }
 
-  /**
-   * Retrieves the windows of the given {@code partitionKey} across all keys and times
-   * from {@code table}.
-   *
-   * @param kafkaPartition the partition
-   * @param timeFrom       the min timestamp (inclusive)
-   * @param timeTo         the max timestamp (exclusive)
-   *
-   * @return the value previously set
-   */
   @Override
   public KeyValueIterator<WindowedKey, byte[]> fetchAll(
       final int kafkaPartition,
@@ -1017,16 +958,6 @@ public class CassandraWindowedTable implements
     );
   }
 
-  /**
-   * Retrieves the windows of the given {@code partitionKey} across all keys and times
-   * from {@code table}.
-   *
-   * @param kafkaPartition the partition
-   * @param timeFrom       the min timestamp (inclusive)
-   * @param timeTo         the max timestamp (exclusive)
-   *
-   * @return the value previously set
-   */
   @Override
   public KeyValueIterator<WindowedKey, byte[]> backFetchAll(
       final int kafkaPartition,

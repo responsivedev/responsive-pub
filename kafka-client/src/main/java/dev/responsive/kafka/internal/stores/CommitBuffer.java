@@ -469,24 +469,16 @@ public class CommitBuffer<K extends Comparable<K>, P>
         writerFactory
     );
 
-    final WriterFactory<K, P>.PendingFlush pendingFlush = writerFactory.beginNewFlush();
-    for (final Result<K> result : buffer.getReader().values()) {
-      final RemoteWriter<K, P> writer = pendingFlush.writerForKey(result.key);
+    final RemoteWriteResult<P> flushResult = writeManager.flushWriteBatch(
+        buffer.getReader().values(), consumedOffset);
 
-      if (result.isTombstone) {
-        writer.delete(result.key);
-      } else if (keySpec.retain(result.key)) {
-        writer.insert(result.key, result.value, result.timestamp);
-      }
-    }
-
-    final var flushResult = writerFactory.commitPendingFlush(pendingFlush, consumedOffset);
-    // TODO: we could/probably should move the result checking and handling inside the
-    //  #commitPendingFlush method, since we have to go back to the WriterFactory for the
-    //  specific error message anyways. It might also be nice to extract the exception
-    //  supplier so that different tables and/or writers can throw more specific errors
     if (!flushResult.wasApplied()) {
-      throwFlushException(flushResult, consumedOffset);
+      flushErrorsSensor.record();
+
+      final String errorMsg = writeManager.failedFlushError(flushResult, consumedOffset);
+      log.warn(errorMsg);
+
+      throw exceptionSupplier.commitFencedException(logPrefix + errorMsg);
     }
 
     final long endNanos = System.nanoTime();
@@ -501,7 +493,7 @@ public class CommitBuffer<K extends Comparable<K>, P>
              flushLatencyMs,
              consumedOffset,
              writerFactory,
-             pendingFlush.numRemoteWriters()
+             numTablePartitionsFlushed  // TODO(sophie): log this inside writeManager#flushBatch
     );
     buffer.clear();
 
@@ -583,15 +575,6 @@ public class CommitBuffer<K extends Comparable<K>, P>
     if (consumedOffset >= 0) {
       doFlush(consumedOffset, records.size());
     }
-  }
-
-  private void throwFlushException(final RemoteWriteResult<P> result, final long consumedOffset) {
-    flushErrorsSensor.record();
-
-    final String errorMsg = writerFactory.failedFlushError(result, consumedOffset);
-    log.warn(errorMsg);
-
-    throw exceptionSupplier.commitFencedException(logPrefix + errorMsg);
   }
 
   @Override

@@ -18,6 +18,7 @@ package dev.responsive.kafka.internal.db.mongo;
 
 import java.util.Objects;
 
+// TODO (sophie): rename to KVMetadataDoc and eliminate redundant partition field
 public class MetadataDoc {
 
   public static final String ID = "_id";

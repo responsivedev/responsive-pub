@@ -55,6 +55,7 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<Document>> {
   private static final String METADATA_COLLECTION_SUFFIX = "_md";
 
   private final String name;
+
   private final MongoCollection<KVDoc> docs;
   private final MongoCollection<MetadataDoc> metadata;
 

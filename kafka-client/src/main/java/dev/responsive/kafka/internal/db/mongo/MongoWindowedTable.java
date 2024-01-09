@@ -28,16 +28,25 @@ import static dev.responsive.kafka.internal.db.ColumnName.PARTITION_KEY;
 import static dev.responsive.kafka.internal.db.ColumnName.SEGMENT_ID;
 import static dev.responsive.kafka.internal.db.ColumnName.STREAM_TIME;
 import static dev.responsive.kafka.internal.db.ColumnName.WINDOW_START;
+import static dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.UNINITIALIZED_STREAM_TIME;
+import static dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration.NO_COMMITTED_OFFSET;
 import static org.bson.codecs.configuration.CodecRegistries.fromProviders;
 import static org.bson.codecs.configuration.CodecRegistries.fromRegistries;
 
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.ResultSet;
 import com.datastax.oss.driver.api.core.cql.Row;
+import com.mongodb.client.FindIterable;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
+import com.mongodb.client.model.Filters;
+import com.mongodb.client.model.FindOneAndUpdateOptions;
 import com.mongodb.client.model.Indexes;
+import com.mongodb.client.model.ReturnDocument;
+import com.mongodb.client.model.UpdateOneModel;
+import com.mongodb.client.model.UpdateOptions;
+import com.mongodb.client.model.Updates;
 import com.mongodb.client.model.WriteModel;
 import dev.responsive.kafka.internal.db.CassandraWindowedTable;
 import dev.responsive.kafka.internal.db.LwtWriterFactory;
@@ -74,6 +83,8 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Docume
   private static final Logger LOG = LoggerFactory.getLogger(MongoWindowedTable.class);
   private static final String METADATA_COLLECTION_SUFFIX = "_md";
 
+  private static final UpdateOptions UPSERT_OPTIONS = new UpdateOptions().upsert(true);
+
   private final String name;
   private final SegmentPartitioner partitioner;
 
@@ -83,17 +94,16 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Docume
   private final MongoCollection<Document> genericWindows;
   private final MongoCollection<Document> genericMetadata;
 
-  // this map contains the initialized value of the metadata document,
-  // for which the epoch and object ID will never change. it is likely
-  // that after a few writes to MongoDB the cached MetadataDoc.offset value
-  // will be out of date, so it should not be used beyond initialization
-  private final ConcurrentMap<Integer, MetadataDoc> metadataRows = new ConcurrentHashMap<>();
-
   // Note: we intentionally track stream-time separately here and in the state store itself
   // as these entities have different views of the current time and should not be unified.
   // (Specifically, this table will always lag the view of stream-time that is shared by the
   // ResponsiveWindowStore and CommitBuffer due to buffering/batching of writes)
-  private final Map<Integer, PendingFlushInfo> kafkaPartitionToPendingFlushInfo = new HashMap<>();
+  private final Map<Integer, PendingFlushInfo> kafkaPartitionToPendingFlushInfo =
+      new ConcurrentHashMap<>();
+  private final ConcurrentMap<Integer, Long> kafkaPartitionToEpoch = new ConcurrentHashMap<>();
+
+  // Recommended to keep the total number of collections (and thus segments) under 10,000
+  private final ConcurrentMap<SegmentPartition, >
 
   // TODO: move this into the Writer/Factory or new class to keep the table stateless
   private static class PendingFlushInfo {
@@ -156,47 +166,29 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Docume
   public WriterFactory<WindowedKey, SegmentPartition> init(
       final int kafkaPartition
   ) {
-    final SegmentPartition metadataPartition = partitioner.metadataTablePartition(kafkaPartition);
-/*
-    final var initMetadata = client.execute(
-        QueryBuilder.insertInto(name)
-            .value(PARTITION_KEY.column(), PARTITION_KEY.literal(metadataPartition.tablePartition))
-            .value(SEGMENT_ID.column(), SEGMENT_ID.literal(metadataPartition.segmentId))
-            .value(ROW_TYPE.column(), METADATA_ROW.literal())
-            .value(DATA_KEY.column(), DATA_KEY.literal(METADATA_KEY))
-            .value(WINDOW_START.column(), WINDOW_START.literal(METADATA_TS))
-            .value(OFFSET.column(), OFFSET.literal(NO_COMMITTED_OFFSET))
-            .value(EPOCH.column(), EPOCH.literal(0L))
-            .value(STREAM_TIME.column(), STREAM_TIME.literal(UNINITIALIZED_STREAM_TIME))
-            .ifNotExists()
-            .build()
+    final WindowMetadataDoc metaDoc = metadata.findOneAndUpdate(
+        Filters.eq(WindowMetadataDoc.ID, kafkaPartition),
+        Updates.combine(
+            Updates.setOnInsert(WindowMetadataDoc.ID, kafkaPartition),
+            Updates.setOnInsert(WindowMetadataDoc.OFFSET, NO_COMMITTED_OFFSET),
+            Updates.setOnInsert(WindowMetadataDoc.STREAM_TIME, UNINITIALIZED_STREAM_TIME),
+            Updates.inc(WindowMetadataDoc.EPOCH, 1) // will set the value to 1 if it doesn't exist
+        ),
+        new FindOneAndUpdateOptions()
+            .upsert(true)
+            .returnDocument(ReturnDocument.AFTER)
     );
 
-
-
-    if (initMetadata.wasApplied()) {
-      LOG.info("Created new metadata segment for kafka partition {}", kafkaPartition);
+    if (metaDoc == null) {
+      throw new IllegalStateException("Uninitialized metadata for partition " + kafkaPartition);
     }
 
- */
+    LOG.info("Retrieved initial metadata {}", metaDoc);
 
-    final long epoch = fetchEpoch(metadataPartition) + 1;
-    final var reserveMetadataEpoch = client.execute(reserveEpoch(metadataPartition, epoch));
-    if (!reserveMetadataEpoch.wasApplied()) {
-      handleEpochFencing(kafkaPartition, metadataPartition, epoch);
-    }
+    kafkaPartitionToEpoch.put(kafkaPartition, metaDoc.epoch);
+    kafkaPartitionToPendingFlushInfo.put(kafkaPartition, new PendingFlushInfo(metaDoc.streamTime));
 
-    final long streamTime = fetchStreamTime(kafkaPartition);
-    kafkaPartitionToPendingFlushInfo.put(kafkaPartition, new PendingFlushInfo(streamTime));
-    LOG.info("Initialized stream-time to {} with epoch {} for kafka partition {}",
-             streamTime, epoch, kafkaPartition);
-
-    // since the active data segments depend on the current stream-time for the windowed table,
-    // which we won't know until we initialize it from the remote, the metadata like epoch and
-    // stream-time are stored in a special metadata partition/segment that's separate from the
-    // regular data partitions/segments and never expired
-    // therefore we initialize from the metadata partition and then broadcast the epoch to
-    // all the other partitions containing data for active segments
+    // TODO - remove below
     final var activeSegments = partitioner.activeSegments(kafkaPartition, streamTime);
     if (activeSegments.isEmpty()) {
       LOG.info("Skipping reservation of epoch {} for kafka partition {} due to no active segments",
@@ -215,37 +207,10 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Docume
       LOG.info("Reserved epoch {} for kafka partition {} across active segments in range {} - {}",
                epoch, kafkaPartition, firstSegmentId, lastSegmentId);
     }
+    
+    // TODO - remove above
 
-    return new LwtWriterFactory<>(
-        this,
-        this,
-        client,
-        partitioner,
-        kafkaPartition,
-        epoch
-    );
-  }
-
-  // TODO: check whether we need to throw a CommitFailedException or ProducerFencedException
-  //  instead, or whether TaskMigratedException thrown here will be properly handled by Streams
-  private void handleEpochFencing(
-      final int kafkaPartition,
-      final SegmentPartition tablePartition,
-      final long epoch
-  ) {
-    final long otherEpoch = fetchEpoch(tablePartition);
-    final var msg = String.format(
-        "Could not initialize commit buffer [%s-%d] - attempted to claim epoch %d, "
-            + "but was fenced by a writer that claimed epoch %d on table partition %s",
-        name(),
-        kafkaPartition,
-        epoch,
-        otherEpoch,
-        tablePartition
-    );
-    final var e = new TaskMigratedException(msg);
-    LOG.warn(msg, e);
-    throw e;
+    return new MongoWriterFactory<>(this, genericWindows, genericMetadata, kafkaPartition);
   }
 
   @Override
@@ -308,55 +273,36 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Docume
 
   @Override
   public long fetchOffset(final int kafkaPartition) {
-    final SegmentPartition metadataPartition = partitioner.metadataTablePartition(kafkaPartition);
-    final List<Row> result = client.execute(
-            fetchOffset
-                .bind()
-                .setInt(PARTITION_KEY.bind(), metadataPartition.tablePartition)
-                .setLong(SEGMENT_ID.bind(), metadataPartition.segmentId))
-        .all();
-
-    if (result.size() != 1) {
-      throw new IllegalStateException(String.format(
-          "Expected exactly one offset row for %s[%s] but got %d",
-          name, kafkaPartition, result.size()));
-    } else {
-      return result.get(0).getLong(OFFSET.column());
+    final WindowMetadataDoc result = metadata.find(
+        Filters.eq(WindowMetadataDoc.ID, kafkaPartition)
+    ).first();
+    if (result == null) {
+      LOG.error("Offset fetch failed due to missing metadata row for partition {}", kafkaPartition);
+      throw new IllegalStateException("No metadata row found for partition " + kafkaPartition);
     }
+    return result.offset;
   }
 
   @Override
-  public BoundStatement setOffset(
+  public WriteModel<Document> setOffset(
       final int kafkaPartition,
       final long offset
   ) {
-    final SegmentPartition metadataPartition = partitioner.metadataTablePartition(kafkaPartition);
-    return setOffset
-        .bind()
-        .setInt(PARTITION_KEY.bind(), metadataPartition.tablePartition)
-        .setLong(SEGMENT_ID.bind(), metadataPartition.segmentId)
-        .setLong(OFFSET.bind(), offset);
+    final long epoch = kafkaPartitionToEpoch.get(kafkaPartition);
+    return new UpdateOneModel<>(
+        Filters.and(
+            Filters.eq(WindowMetadataDoc.ID, kafkaPartition),
+            Filters.lte(WindowMetadataDoc.EPOCH, epoch)
+        ),
+        Updates.combine(
+            Updates.set(WindowMetadataDoc.OFFSET, offset),
+            Updates.set(WindowMetadataDoc.EPOCH, epoch)
+        )
+    );
   }
 
-  public long fetchStreamTime(final int kafkaPartition) {
-    final SegmentPartition metadataPartition = partitioner.metadataTablePartition(kafkaPartition);
-    final List<Row> result = client.execute(
-            fetchStreamTime
-                .bind()
-                .setInt(PARTITION_KEY.bind(), metadataPartition.tablePartition)
-                .setLong(SEGMENT_ID.bind(), metadataPartition.segmentId))
-        .all();
-
-    if (result.size() != 1) {
-      throw new IllegalStateException(String.format(
-          "Expected exactly one stream-time row for %s[%s] but got %d",
-          name, kafkaPartition, result.size()));
-    } else {
-      return result.get(0).getLong(STREAM_TIME.column());
-    }
-  }
-
-  public BoundStatement setStreamTime(
+  // TODO(sophie): combine with setOffset
+  public WriteModel<Document> setStreamTime(
       final int kafkaPartition,
       final long epoch
   ) {
@@ -365,157 +311,93 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Docume
     LOG.debug("Updating stream-time to {} with epoch {} for kafkaPartition {}",
               pendingFlush.pendingFlushStreamTime, epoch, kafkaPartition);
 
-    final SegmentPartition metadataPartition = partitioner.metadataTablePartition(kafkaPartition);
-    return setStreamTime
-        .bind()
-        .setInt(PARTITION_KEY.bind(), metadataPartition.tablePartition)
-        .setLong(SEGMENT_ID.bind(), metadataPartition.segmentId)
-        .setLong(STREAM_TIME.bind(), pendingFlush.pendingFlushStreamTime);
-  }
-
-  @Override
-  public long fetchEpoch(final SegmentPartition segmentPartition) {
-    final List<Row> result = client.execute(
-            fetchEpoch
-                .bind()
-                .setInt(PARTITION_KEY.bind(), segmentPartition.tablePartition)
-                .setLong(SEGMENT_ID.bind(), segmentPartition.segmentId))
-        .all();
-
-    if (result.size() != 1) {
-      throw new IllegalStateException(String.format(
-          "Expected exactly one epoch metadata row for %s[%s] but got %d",
-          name, segmentPartition, result.size()));
-    } else {
-      return result.get(0).getLong(EPOCH.column());
-    }
-  }
-
-  @Override
-  public BoundStatement reserveEpoch(final SegmentPartition segmentPartition, final long epoch) {
-    return reserveEpoch
-        .bind()
-        .setInt(PARTITION_KEY.bind(), segmentPartition.tablePartition)
-        .setLong(SEGMENT_ID.bind(), segmentPartition.segmentId)
-        .setLong(EPOCH.bind(), epoch);
-  }
-
-  @Override
-  public BoundStatement ensureEpoch(final SegmentPartition segmentPartition, final long epoch) {
-    return ensureEpoch
-        .bind()
-        .setInt(PARTITION_KEY.bind(), segmentPartition.tablePartition)
-        .setLong(SEGMENT_ID.bind(), segmentPartition.segmentId)
-        .setLong(EPOCH.bind(), epoch);
+    return new UpdateOneModel<>(
+        Filters.and(
+            Filters.eq(WindowMetadataDoc.ID, kafkaPartition),
+            Filters.lte(WindowMetadataDoc.EPOCH, epoch)
+        ),
+        Updates.combine(
+            Updates.set(WindowMetadataDoc.STREAM_TIME, pendingFlush.pendingFlushStreamTime),
+            Updates.set(WindowMetadataDoc.EPOCH, epoch)
+        )
+    );    
   }
 
   /**
-   * Inserts data into {@code table}. Note that this will overwrite
+   * Inserts data into this table. Note that this will overwrite
    * any existing entry in the table with the same key.
    *
    * @param kafkaPartition the kafka partition
-   * @param key            the data key
+   * @param windowedKey    the windowed data key
    * @param value          the data value
    * @param epochMillis    the timestamp of the event
-   * @return a statement that, when executed, will insert the row
-   *         matching {@code partitionKey} and {@code key} in the
-   *         {@code table} with value {@code value}. Note that the
-   *         {@code key} here is the "windowed key" which includes
-   *         both the record key and also the windowStart timestamp
+   * @return a statement that, when executed, will insert the value
+   *         for this key and partition into the table.
+   *         Note that the key in this case is a "windowed" key, where
+   *         {@code windowedKey} includes both the record key and
+   *         the windowStart timestamp
    */
   @Override
-  @CheckReturnValue
-  public BoundStatement insert(
+  public WriteModel<Document> insert(
       final int kafkaPartition,
-      final WindowedKey key,
+      final WindowedKey windowedKey,
       final byte[] value,
       final long epochMillis
   ) {
-    maybeUpdateStreamTime(kafkaPartition, key.windowStartMs);
+    // TODO(sophie): implement segments via Collections
+    final SegmentPartition segmentPartition = partitioner.tablePartition(kafkaPartition, windowedKey);
 
-    final SegmentPartition remotePartition = partitioner.tablePartition(kafkaPartition, key);
-    return insert
-        .bind()
-        .setInt(PARTITION_KEY.bind(), remotePartition.tablePartition)
-        .setLong(SEGMENT_ID.bind(), remotePartition.segmentId)
-        .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.key.get()))
-        .setInstant(WINDOW_START.bind(), Instant.ofEpochMilli(key.windowStartMs))
-        .setByteBuffer(DATA_VALUE.bind(), ByteBuffer.wrap(value));
+    kafkaPartitionToPendingFlushInfo.get(kafkaPartition)
+        .maybeUpdatePendingStreamTime(windowedKey.windowStartMs);
+
+    final long epoch = kafkaPartitionToEpoch.get(kafkaPartition);
+    return new UpdateOneModel<>(
+        Filters.and(
+            Filters.eq(WindowDoc.ID, windowedKey.key.get()),
+            Filters.eq(WindowDoc.WINDOW_START_TS, windowedKey.windowStartMs),
+            Filters.lte(WindowDoc.EPOCH, epoch)
+        ),
+        Updates.combine(
+            Updates.set(WindowDoc.VALUE, value),
+            Updates.set(WindowDoc.EPOCH, epoch),
+            Updates.unset(WindowDoc.TOMBSTONE_TS) // TODO(sophie) -- how do we want to handle this?
+        ),
+        UPSERT_OPTIONS
+    );
   }
 
   /**
    * @param kafkaPartition  the kafka partition
-   * @param key             the data key
+   * @param windowedKey    the windowed data key
    *
-   * @return a statement that, when executed, will delete the row
-   *         matching {@code kafkaPartition} and {@code key} in the
-   *         {@code table}. Note that the {@code key} here is the
-   *         "windowed key" which includes both the record key and
-   *         also the window start timestamp
+   * @return a statement that, when executed, will delete the value
+   *         for this key and partition in the table.
+   *         Note that the key in this case is a "windowed" key, where
+   *         {@code windowedKey} includes both the record key and
+   *         the windowStart timestamp
    */
   @Override
-  @CheckReturnValue
-  public BoundStatement delete(
+  public WriteModel<Document> delete(
       final int kafkaPartition,
-      final WindowedKey key
+      final WindowedKey windowedKey
   ) {
-    maybeUpdateStreamTime(kafkaPartition, key.windowStartMs);
-
-    final SegmentPartition segmentPartition = partitioner.tablePartition(kafkaPartition, key);
-    return delete
-        .bind()
-        .setInt(PARTITION_KEY.bind(), segmentPartition.tablePartition)
-        .setLong(SEGMENT_ID.bind(), segmentPartition.segmentId)
-        .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.key.get()))
-        .setInstant(WINDOW_START.bind(), Instant.ofEpochMilli(key.windowStartMs));
+    throw new UnsupportedOperationException("Deletes not yet supported for MongoDB window stores");
   }
 
-  /**
-   * Retrieves the value of the given {@code partitionKey} and {@code key} from {@code table}.
-   *
-   * @param kafkaPartition  the partition
-   * @param key             the data key
-   * @param windowStart     the start time of the window
-   * @return the value previously set
-   */
   @Override
   public byte[] fetch(
       final int kafkaPartition,
       final Bytes key,
       final long windowStart
   ) {
-    final WindowedKey windowedKey = new WindowedKey(key, windowStart);
-    final SegmentPartition segmentPartition =
-        partitioner.tablePartition(kafkaPartition, windowedKey);
-
-    final BoundStatement get = fetchSingle
-        .bind()
-        .setInt(PARTITION_KEY.bind(), segmentPartition.tablePartition)
-        .setLong(SEGMENT_ID.bind(), segmentPartition.segmentId)
-        .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
-        .setInstant(WINDOW_START.bind(), Instant.ofEpochMilli(windowStart));
-
-    final List<Row> result = client.execute(get).all();
-    if (result.size() > 1) {
-      throw new IllegalStateException("Unexpected multiple results for point lookup");
-    } else if (result.isEmpty()) {
-      return null;
-    } else {
-      final ByteBuffer value = result.get(0).getByteBuffer(DATA_VALUE.column());
-      return Objects.requireNonNull(value).array();
-    }
+    final WindowDoc windowDoc = windows.find(
+        Filters.and(
+            Filters.eq(WindowDoc.ID, key.get()),
+            Filters.eq(WindowDoc.WINDOW_START_TS, windowStart)))
+        .first();
+    return windowDoc == null ? null : windowDoc.getValue();
   }
 
-  /**
-   * Retrieves the range of windows of the given {@code partitionKey} and {@code key} with a
-   * start time between {@code timeFrom} and {@code timeTo} from {@code table}.
-   *
-   * @param kafkaPartition the partition
-   * @param key            the data key
-   * @param timeFrom       the min timestamp (inclusive)
-   * @param timeTo         the max timestamp (exclusive)
-   * @return the windows previously stored
-   */
   @Override
   public KeyValueIterator<WindowedKey, byte[]> fetch(
       final int kafkaPartition,
@@ -523,34 +405,18 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Docume
       final long timeFrom,
       final long timeTo
   ) {
-    final List<KeyValueIterator<WindowedKey, byte[]>> segmentIterators = new LinkedList<>();
-    for (final SegmentPartition partition : partitioner.range(kafkaPartition, timeFrom, timeTo)) {
-      final BoundStatement get = fetch
-          .bind()
-          .setInt(PARTITION_KEY.bind(), partition.tablePartition)
-          .setLong(SEGMENT_ID.bind(), partition.segmentId)
-          .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
-          .setInstant(WINDOW_FROM_BIND, Instant.ofEpochMilli(timeFrom))
-          .setInstant(WINDOW_TO_BIND, Instant.ofEpochMilli(timeTo));
+    final FindIterable<WindowDoc> fetchResults = windows.find(
+            Filters.and(
+                Filters.eq(WindowDoc.ID, key.get()),
+                Filters.gte(WindowDoc.WINDOW_START_TS, timeFrom),
+                Filters.lte(WindowDoc.WINDOW_START_TS, timeTo)));
 
-      final ResultSet result = client.execute(get);
-      segmentIterators.add(Iterators.kv(result.iterator(), CassandraWindowedTable::windowRows));
-    }
-
-    return Iterators.wrapped(segmentIterators);
+    return Iterators.kv(
+        fetchResults.iterator(),
+        doc -> new KeyValue<>(new WindowedKey(doc.id, doc.windowStartTs), doc.value)
+    );
   }
 
-  /**
-   * Retrieves the range of window of the given {@code partitionKey} and {@code key} with a
-   * start time between {@code timeFrom} and {@code timeTo} from {@code table}.
-   *
-   * @param kafkaPartition the partition
-   * @param key            the data key
-   * @param timeFrom       the min timestamp (inclusive)
-   * @param timeTo         the max timestamp (exclusive)
-   *
-   * @return the value previously set
-   */
   @Override
   public KeyValueIterator<WindowedKey, byte[]> backFetch(
       final int kafkaPartition,
@@ -558,36 +424,12 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Docume
       final long timeFrom,
       final long timeTo
   ) {
-    final List<KeyValueIterator<WindowedKey, byte[]>> segmentIterators = new LinkedList<>();
-    for (final var partition : partitioner.reverseRange(kafkaPartition, timeFrom, timeTo)) {
-      final BoundStatement get = backFetch
-          .bind()
-          .setInt(PARTITION_KEY.bind(), partition.tablePartition)
-          .setLong(SEGMENT_ID.bind(), partition.segmentId)
-          .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
-          .setInstant(WINDOW_FROM_BIND, Instant.ofEpochMilli(timeFrom))
-          .setInstant(WINDOW_TO_BIND, Instant.ofEpochMilli(timeTo));
-
-      final ResultSet result = client.execute(get);
-      segmentIterators.add(Iterators.kv(result.iterator(), CassandraWindowedTable::windowRows));
-    }
-
-    return Iterators.wrapped(segmentIterators);
+    // TODO: Mongo supports efficient reverse iteration if you set up a descending index
+    //  We could expose an API for this so users can configure the store optimally if they
+    //  plan to utilize any of the backwards fetches
+    throw new UnsupportedOperationException("backFetch not yet supported for MongoDB backends");
   }
 
-  /**
-   * Retrieves the range of windows of the given {@code partitionKey} for all keys between
-   * {@code fromKey} and {@code toKey} with a start time between {@code timeFrom} and {@code timeTo}
-   * from {@code table}.
-   *
-   * @param kafkaPartition the partition
-   * @param fromKey        the min data key (inclusive)
-   * @param toKey          the max data key (exclusive)
-   * @param timeFrom       the min timestamp (inclusive)
-   * @param timeTo         the max timestamp (exclusive)
-   *
-   * @return the value previously set
-   */
   @Override
   public KeyValueIterator<WindowedKey, byte[]> fetchRange(
       final int kafkaPartition,
@@ -596,38 +438,19 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Docume
       final long timeFrom,
       final long timeTo
   ) {
-    final List<KeyValueIterator<WindowedKey, byte[]>> segmentIterators = new LinkedList<>();
-    for (final SegmentPartition partition : partitioner.range(kafkaPartition, timeFrom, timeTo)) {
-      final BoundStatement get = fetchRange
-          .bind()
-          .setInt(PARTITION_KEY.bind(), partition.tablePartition)
-          .setLong(SEGMENT_ID.bind(), partition.segmentId)
-          .setByteBuffer(KEY_FROM_BIND, ByteBuffer.wrap(fromKey.get()))
-          .setByteBuffer(KEY_TO_BIND, ByteBuffer.wrap(toKey.get()));
+    final FindIterable<WindowDoc> fetchResults = windows.find(
+        Filters.and(
+            Filters.gte(WindowDoc.ID, fromKey.get()),
+            Filters.lte(WindowDoc.ID, toKey.get()),
+            Filters.gte(WindowDoc.WINDOW_START_TS, timeFrom),
+            Filters.lte(WindowDoc.WINDOW_START_TS, timeTo)));
 
-      final ResultSet result = client.execute(get);
-      segmentIterators.add(Iterators.kv(result.iterator(), CassandraWindowedTable::windowRows));
-    }
-
-    return Iterators.filterKv(
-        Iterators.wrapped(segmentIterators),
-        k -> k.windowStartMs >= timeFrom && k.windowStartMs < timeTo
+    return Iterators.kv(
+        fetchResults.iterator(),
+        doc -> new KeyValue<>(new WindowedKey(doc.id, doc.windowStartTs), doc.value)
     );
   }
 
-  /**
-   * Retrieves the range of windows of the given {@code partitionKey} for all keys between
-   * {@code fromKey} and {@code toKey} with a start time between {@code timeFrom} and {@code timeTo}
-   * from {@code table}.
-   *
-   * @param kafkaPartition the partition
-   * @param fromKey        the min data key (inclusive)
-   * @param toKey          the max data key (exclusive)
-   * @param timeFrom       the min timestamp (inclusive)
-   * @param timeTo         the max timestamp (exclusive)
-   *
-   * @return the value previously set
-   */
   @Override
   public KeyValueIterator<WindowedKey, byte[]> backFetchRange(
       final int kafkaPartition,
@@ -636,107 +459,33 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Docume
       final long timeFrom,
       final long timeTo
   ) {
-    final List<KeyValueIterator<WindowedKey, byte[]>> segmentIterators = new LinkedList<>();
-    for (final var partition : partitioner.reverseRange(kafkaPartition, timeFrom, timeTo)) {
-      final BoundStatement get = backFetchRange
-          .bind()
-          .setInt(PARTITION_KEY.bind(), partition.tablePartition)
-          .setLong(SEGMENT_ID.bind(), partition.segmentId)
-          .setByteBuffer(KEY_FROM_BIND, ByteBuffer.wrap(fromKey.get()))
-          .setByteBuffer(KEY_TO_BIND, ByteBuffer.wrap(toKey.get()));
-
-      final ResultSet result = client.execute(get);
-      segmentIterators.add(Iterators.kv(result.iterator(), CassandraWindowedTable::windowRows));
-    }
-
-    return Iterators.filterKv(
-        Iterators.wrapped(segmentIterators),
-        k -> k.windowStartMs >= timeFrom && k.windowStartMs < timeTo
-    );
+    throw new UnsupportedOperationException("backFetchRange not yet supported for MongoDB backends");
   }
 
-  /**
-   * Retrieves the windows of the given {@code partitionKey} across all keys and times
-   * from {@code table}.
-   *
-   * @param kafkaPartition the partition
-   * @param timeFrom       the min timestamp (inclusive)
-   * @param timeTo         the max timestamp (exclusive)
-   *
-   * @return the value previously set
-   */
   @Override
   public KeyValueIterator<WindowedKey, byte[]> fetchAll(
       final int kafkaPartition,
       final long timeFrom,
       final long timeTo
   ) {
-    final List<KeyValueIterator<WindowedKey, byte[]>> segmentIterators = new LinkedList<>();
-    for (final SegmentPartition partition : partitioner.range(kafkaPartition, timeFrom, timeTo)) {
-      final BoundStatement get = fetchAll
-          .bind()
-          .setInt(PARTITION_KEY.bind(), partition.tablePartition)
-          .setLong(SEGMENT_ID.bind(), partition.segmentId)
-          .setInstant(KEY_FROM_BIND, Instant.ofEpochMilli(timeFrom))
-          .setInstant(KEY_TO_BIND, Instant.ofEpochMilli(timeTo));
+    final FindIterable<WindowDoc> fetchResults = windows.find(
+        Filters.and(
+            Filters.gte(WindowDoc.WINDOW_START_TS, timeFrom),
+            Filters.lte(WindowDoc.WINDOW_START_TS, timeTo)));
 
-      final ResultSet result = client.execute(get);
-      segmentIterators.add(Iterators.kv(result.iterator(), CassandraWindowedTable::windowRows));
-    }
-
-    return Iterators.filterKv(
-        Iterators.wrapped(segmentIterators),
-        k -> k.windowStartMs >= timeFrom && k.windowStartMs < timeTo
+    return Iterators.kv(
+        fetchResults.iterator(),
+        doc -> new KeyValue<>(new WindowedKey(doc.id, doc.windowStartTs), doc.value)
     );
   }
 
-  /**
-   * Retrieves the windows of the given {@code partitionKey} across all keys and times
-   * from {@code table}.
-   *
-   * @param kafkaPartition the partition
-   * @param timeFrom       the min timestamp (inclusive)
-   * @param timeTo         the max timestamp (exclusive)
-   *
-   * @return the value previously set
-   */
   @Override
   public KeyValueIterator<WindowedKey, byte[]> backFetchAll(
       final int kafkaPartition,
       final long timeFrom,
       final long timeTo
   ) {
-    final List<KeyValueIterator<WindowedKey, byte[]>> segmentIterators = new LinkedList<>();
-    for (final var partition : partitioner.reverseRange(kafkaPartition, timeFrom, timeTo)) {
-      final BoundStatement get = backFetchAll
-          .bind()
-          .setInt(PARTITION_KEY.bind(), partition.tablePartition)
-          .setLong(SEGMENT_ID.bind(), partition.segmentId)
-          .setInstant(KEY_FROM_BIND, Instant.ofEpochMilli(timeFrom))
-          .setInstant(KEY_TO_BIND, Instant.ofEpochMilli(timeTo));
-
-      final ResultSet result = client.execute(get);
-      segmentIterators.add(Iterators.kv(result.iterator(), CassandraWindowedTable::windowRows));
-    }
-
-    return Iterators.filterKv(
-        Iterators.wrapped(segmentIterators),
-        k -> k.windowStartMs >= timeFrom && k.windowStartMs < timeTo
-    );
-  }
-
-  private void maybeUpdateStreamTime(final int kafkaPartition, final long timestamp) {
-    kafkaPartitionToPendingFlushInfo.get(kafkaPartition).maybeUpdatePendingStreamTime(timestamp);
-  }
-
-  private static KeyValue<WindowedKey, byte[]> windowRows(final Row row) {
-    final long startTs = row.getInstant(WINDOW_START.column()).toEpochMilli();
-    final Bytes key = Bytes.wrap(row.getByteBuffer(DATA_KEY.column()).array());
-
-    return new KeyValue<>(
-        new WindowedKey(key, startTs),
-        row.getByteBuffer(DATA_VALUE.column()).array()
-    );
+    throw new UnsupportedOperationException("backFetchAll not yet supported for MongoDB backends");
   }
 
 }

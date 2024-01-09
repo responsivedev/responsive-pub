@@ -16,6 +16,9 @@
 
 package dev.responsive.kafka.internal.db.mongo;
 
+import com.mongodb.MongoBulkWriteException;
+import com.mongodb.MongoException;
+import com.mongodb.bulk.WriteConcernError;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.model.WriteModel;
 import dev.responsive.kafka.internal.db.RemoteTable;
@@ -25,10 +28,14 @@ import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner.DefaultPartitioner;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
 import java.util.List;
+import org.apache.kafka.common.utils.LogContext;
 import org.bson.Document;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class MongoWriterFactory<K> extends WriterFactory<K, Integer> {
 
+  private final Logger log;
   private final RemoteTable<K, WriteModel<Document>> table;
   private final MongoCollection<Document> genericDocs;
   private final MongoCollection<Document> genericMetadata;
@@ -42,6 +49,9 @@ public class MongoWriterFactory<K> extends WriterFactory<K, Integer> {
       final int kafkaPartition
   ) {
     super(String.format("MongoWriterFactory [%s-%d] ", table.name(), kafkaPartition));
+    this.log =
+        new LogContext(String.format("MongoWriterFactory [%s-%d] ", table.name(), kafkaPartition))
+            .logger(MongoWriterFactory.class);
     this.table = table;
     this.genericDocs = genericDocs;
     this.genericMetadata = genericMetadata;
@@ -68,7 +78,23 @@ public class MongoWriterFactory<K> extends WriterFactory<K, Integer> {
 
   @Override
   public RemoteWriteResult<Integer> setOffset(final long consumedOffset) {
-    genericMetadata.bulkWrite(List.of(table.setOffset(kafkaPartition, consumedOffset)));
+    try {
+      // TODO: should we check result.wasAcknowledged()/use a write concern?
+      genericMetadata.bulkWrite(List.of(table.setOffset(kafkaPartition, consumedOffset)));
+    } catch (final MongoBulkWriteException e) {
+      log.warn("Bulk write operation failed", e);
+      final WriteConcernError writeConcernError = e.getWriteConcernError();
+      if (writeConcernError != null) {
+        log.warn("Bulk write operation failed due to write concern error {}", writeConcernError);
+      } else {
+        log.warn("Bulk write operation failed due to error(s): {}", e.getWriteErrors());
+      }
+      return RemoteWriteResult.failure(kafkaPartition);
+    } catch (final MongoException e) {
+      log.error("Unexpected exception running the bulk write operation", e);
+      throw new RuntimeException("Bulk write operation failed", e);
+    }
+
     return RemoteWriteResult.success(kafkaPartition);
   }
 
