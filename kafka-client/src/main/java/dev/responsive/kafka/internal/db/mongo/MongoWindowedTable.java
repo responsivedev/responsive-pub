@@ -115,11 +115,11 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
     // In fact we may want to move all the segment expiration to a background process since there's
     // no async way to drop a collection but the stream thread doesn't actually need to wait for it
     void expireSegment(final SegmentPartition segmentToDelete) {
-      final var expiredDocs = segmentWindows.get(segmentToDelete);
-      // TODO: what happens if this fails?
-      expiredDocs.drop();
+      LOG.info("{}[{}] Expiring segment id {}",
+               name, segmentToDelete.tablePartition, segmentToDelete.segmentId);
 
-      LOG.debug("{}[{}] Expired segment id {}", name, segmentToDelete.tablePartition, segmentToDelete.segmentId);
+      final var expiredDocs = segmentWindows.get(segmentToDelete);
+      expiredDocs.drop();
     }
   }
 

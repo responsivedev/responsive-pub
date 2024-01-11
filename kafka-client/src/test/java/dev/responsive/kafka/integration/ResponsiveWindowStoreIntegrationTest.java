@@ -139,12 +139,8 @@ public class ResponsiveWindowStoreIntegrationTest {
     final CountdownLatchWrapper outputLatch = new CountdownLatchWrapper(0);
 
     final CountDownLatch latch2 = new CountDownLatch(2);
-    final KStream<Long, Long> input = builder.stream(
-        inputTopic(),
-        Consumed.with((record, partitionTime) -> {
-          System.out.println("SOPHIE: reading record " + record);
-          return record.timestamp();
-        }));
+    final KStream<Long, Long> input = builder.stream(inputTopic());
+    
     input.peek((k, v) -> inputLatch.countDown())
         .groupByKey()
         .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofSeconds(5), Duration.ofSeconds(1)))
