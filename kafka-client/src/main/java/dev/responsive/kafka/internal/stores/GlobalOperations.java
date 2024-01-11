@@ -104,7 +104,8 @@ public class GlobalOperations implements KeyValueOperations {
       final long timestamp
   ) {
     client.execute(table.insert(IGNORED_PARTITION, key, value, timestamp));
-    client.execute(table.setOffset(partition, offset));
+    // TODO(sophie) FIXME!!
+    // client.execute(table.setOffset(partition, offset));
   }
 
   @Override
@@ -115,7 +116,8 @@ public class GlobalOperations implements KeyValueOperations {
   private byte[] delete(final Bytes key, final int partition, final long offset) {
     final byte[] bytes = get(key);
     client.execute(table.delete(IGNORED_PARTITION, key));
-    client.execute(table.setOffset(partition, offset));
+    // TODO(sophie) FIXME!!
+    //client.execute(table.setOffset(partition, offset));
     return bytes;
   }
 

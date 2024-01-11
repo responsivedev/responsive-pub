@@ -27,9 +27,10 @@ import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.stores.ResponsiveWindowParams;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.CassandraTableSpecFactory;
+import dev.responsive.kafka.internal.db.FlushManager;
 import dev.responsive.kafka.internal.db.RemoteWindowedTable;
 import dev.responsive.kafka.internal.db.WindowedKeySpec;
-import dev.responsive.kafka.internal.db.WriterFactory;
+import dev.responsive.kafka.internal.db.WriteBatcher;
 import dev.responsive.kafka.internal.db.mongo.ResponsiveMongoClient;
 import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner;
 import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
@@ -102,18 +103,23 @@ public class SegmentedOperations implements WindowOperations {
         throw new IllegalStateException("Unexpected value: " + sessionClients.storageBackend());
     }
 
-    final WriterFactory<WindowedKey, ?> writerFactory = table.init(changelog.partition());
+    final FlushManager<WindowedKey, ?> flushManager = table.init(changelog.partition());
 
     log.info("Remote table {} is available for querying.", name.remoteName());
 
     final WindowedKeySpec keySpec = new WindowedKeySpec(withinRetention);
+    final WriteBatcher<WindowedKey, ?> writeBatcher = new WriteBatcher<>(
+        keySpec,
+        changelog.partition(),
+        flushManager
+    );
     final CommitBuffer<WindowedKey, ?> buffer = CommitBuffer.from(
-        writerFactory,
+        writeBatcher,
         sessionClients,
         changelog,
         keySpec,
         params.truncateChangelog(),
-        params.name().kafkaName(),
+        params.name(),
         config
     );
     final long restoreStartOffset = table.fetchOffset(changelog.partition());

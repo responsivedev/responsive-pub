@@ -55,12 +55,14 @@ import dev.responsive.kafka.internal.db.BytesKeySpec;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.CassandraKeyValueTable;
 import dev.responsive.kafka.internal.db.KeySpec;
+import dev.responsive.kafka.internal.db.WriteBatcher;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.db.spec.BaseTableSpec;
 import dev.responsive.kafka.internal.metrics.ClientVersionMetadata;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.utils.ExceptionSupplier;
 import dev.responsive.kafka.internal.utils.SessionClients;
+import dev.responsive.kafka.internal.utils.TableName;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
 import java.nio.ByteBuffer;
@@ -151,6 +153,7 @@ public class CommitBufferTest {
   private SessionClients sessionClients;
   private TopicPartition changelog;
   private String name;
+  private TableName tableName;
   private SubPartitioner partitioner;
   private CassandraKeyValueTable table;
   private CassandraClient client;
@@ -162,6 +165,7 @@ public class CommitBufferTest {
       @ResponsiveConfigParam final ResponsiveConfig config
   ) throws InterruptedException, TimeoutException {
     name = info.getTestMethod().orElseThrow().getName();
+    tableName = new TableName(name);
     session = CqlSession.builder()
         .addContactPoint(cassandra.getContactPoint())
         .withLocalDatacenter(cassandra.getLocalDatacenter())
@@ -206,16 +210,21 @@ public class CommitBufferTest {
   }
 
   private CommitBuffer<Bytes, Integer> createCommitBuffer(final boolean truncateChangelog) {
-    final var writerFactory = table.init(changelog.partition());
+    final var flushManager = table.init(changelog.partition());
+    final WriteBatcher<Bytes, Integer> writeBatcher = new WriteBatcher<>(
+        KEY_SPEC,
+        changelog.partition(),
+        flushManager
+    );
 
     return new CommitBuffer<>(
-        writerFactory,
+        writeBatcher,
         sessionClients,
         changelog,
         admin,
         KEY_SPEC,
         truncateChangelog,
-        name,
+        tableName,
         TRIGGERS,
         EXCEPTION_SUPPLIER
     );
@@ -227,13 +236,13 @@ public class CommitBufferTest {
       final Supplier<Instant> clock
   ) {
     return new CommitBuffer<>(
-        table.init(KAFKA_PARTITION),
+        new WriteBatcher<>(KEY_SPEC, changelog.partition(), table.init(KAFKA_PARTITION)),
         sessionClients,
         changelog,
         admin,
         KEY_SPEC,
         true,
-        name,
+        tableName,
         flushTriggers,
         EXCEPTION_SUPPLIER,
         maxBatchSize,
@@ -352,10 +361,17 @@ public class CommitBufferTest {
   public void shouldNotFlushWithExpiredEpoch() {
     // Given:
     final ExceptionSupplier exceptionSupplier = mock(ExceptionSupplier.class);
-    final var writerFactory = table.init(changelog.partition());
+    final var flushManager = table.init(changelog.partition());
     try (final CommitBuffer<Bytes, Integer> buffer = new CommitBuffer<>(
-        writerFactory, sessionClients, changelog, admin,
-        KEY_SPEC, true, name, TRIGGERS, exceptionSupplier)) {
+        new WriteBatcher<>(KEY_SPEC, changelog.partition(), flushManager),
+        sessionClients,
+        changelog,
+        admin,
+        KEY_SPEC,
+        true,
+        tableName,
+        TRIGGERS,
+        exceptionSupplier)) {
 
       Mockito.when(exceptionSupplier.commitFencedException(anyString()))
           .thenAnswer(msg -> new RuntimeException(msg.getArgument(0).toString()));
@@ -384,10 +400,11 @@ public class CommitBufferTest {
   @Test
   public void shouldIncrementEpochAndReserveForAllSubpartitionsOnInit() {
     // Given:
-    final var writerFactory = table.init(changelog.partition());
+    final var flushManager = table.init(changelog.partition());
     new CommitBuffer<>(
-        writerFactory, sessionClients, changelog, admin,
-        KEY_SPEC, true, name, TRIGGERS, EXCEPTION_SUPPLIER);
+        new WriteBatcher<>(KEY_SPEC, changelog.partition(), flushManager),
+        sessionClients, changelog, admin,
+        KEY_SPEC, true, tableName, TRIGGERS, EXCEPTION_SUPPLIER);
 
     for (final int tp : partitioner.allTablePartitions(changelog.partition())) {
       assertThat(table.fetchEpoch(tp), is(1L));
@@ -444,14 +461,15 @@ public class CommitBufferTest {
         .thenReturn(flushErrorSensor);
     Mockito.when(metrics.sensor("failed-truncations-" + sourceChangelog))
         .thenReturn(failedTruncationsSensor);
+    final var flushManager = table.init(changelog.partition());
     final CommitBuffer<Bytes, Integer> buffer = new CommitBuffer<>(
-        table.init(changelog.partition()),
+        new WriteBatcher<>(KEY_SPEC, changelog.partition(), flushManager),
         sessionClients,
         sourceChangelog,
         admin,
         KEY_SPEC,
         true,
-        name,
+        tableName,
         TRIGGERS,
         EXCEPTION_SUPPLIER
     );
@@ -608,10 +626,11 @@ public class CommitBufferTest {
   public void shouldNotRestoreRecordsWhenFencedByEpoch() {
     // Given:
     final ExceptionSupplier exceptionSupplier = mock(ExceptionSupplier.class);
-    final var writerFactory = table.init(changelog.partition());
+    final var flushManager = table.init(changelog.partition());
     final CommitBuffer<Bytes, Integer> buffer = new CommitBuffer<>(
-        writerFactory, sessionClients, changelog, admin,
-        KEY_SPEC, true, name, TRIGGERS, exceptionSupplier);
+        new WriteBatcher<>(KEY_SPEC, changelog.partition(), flushManager),
+        sessionClients, changelog, admin,
+        KEY_SPEC, true, tableName, TRIGGERS, exceptionSupplier);
 
     // initialize a new writer to bump the epoch
     table.init(changelog.partition());
@@ -649,15 +668,15 @@ public class CommitBufferTest {
   @Test
   public void shouldRestoreStreamsBatchLargerThanCassandraBatch() {
     // Given:
-    final var writerFactory = table.init(changelog.partition());
+    final var flushManager = table.init(changelog.partition());
     final CommitBuffer<Bytes, Integer> buffer = new CommitBuffer<>(
-        writerFactory,
+        new WriteBatcher<>(KEY_SPEC, changelog.partition(), flushManager),
         sessionClients,
         changelog,
         admin,
         KEY_SPEC,
         true,
-        name,
+        tableName,
         TRIGGERS,
         EXCEPTION_SUPPLIER,
         3,

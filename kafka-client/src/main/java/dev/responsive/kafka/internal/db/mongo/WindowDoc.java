@@ -19,7 +19,6 @@
 package dev.responsive.kafka.internal.db.mongo;
 
 import java.util.Arrays;
-import java.util.Date;
 import java.util.Objects;
 import org.bson.codecs.pojo.annotations.BsonId;
 

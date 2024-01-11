@@ -51,7 +51,7 @@ public class WriteBatch<K extends Comparable<K>, P> {
       final int kafkaPartition,
       final TablePartitioner<K, P> partitioner,
       final Collection<Result<K>> bufferedWrites
-    ) {
+  ) {
     this.log = new LogContext(String.format("[%d]", kafkaPartition)).logger(WriteBatch.class);
     this.writerFactory = writerFactory;
     this.kafkaPartition = kafkaPartition;
@@ -65,6 +65,10 @@ public class WriteBatch<K extends Comparable<K>, P> {
         writer.insert(result.key, result.value, result.timestamp);
       }
     }
+  }
+
+  public int numTablePartitionsInBatch() {
+    return batchWriters.size();
   }
 
   private RemoteWriter<K, P> writerForKey(
@@ -97,8 +101,8 @@ public class WriteBatch<K extends Comparable<K>, P> {
       return partialResult.toCompletableFuture().get();
     } catch (final InterruptedException | ExecutionException e) {
       log.error("Unexpected exception while flushing to remote", e);
-      throw new RuntimeException("Failed while flushing batch for kafka partition " +
-                                     kafkaPartition + " to remote", e);
+      throw new RuntimeException("Failed while flushing batch for kafka partition "
+                                     + kafkaPartition + " to remote", e);
     }
   }
 }

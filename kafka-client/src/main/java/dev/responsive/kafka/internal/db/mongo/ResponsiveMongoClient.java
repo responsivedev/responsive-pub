@@ -25,30 +25,33 @@ import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.db.spec.BaseTableSpec;
 import java.util.concurrent.TimeoutException;
-import org.bson.Document;
 
 public class ResponsiveMongoClient {
 
-  private final TableCache<RemoteKVTable<WriteModel<Document>>> kvTableCache;
-  private final TableCache<RemoteWindowedTable<WriteModel<Document>>> windowTableCache;
+  private final TableCache<MongoKVTable> kvTableCache;
+  private final TableCache<MongoWindowedTable> windowTableCache;
   private final MongoClient client;
 
   public ResponsiveMongoClient(final MongoClient client) {
     this.client = client;
     kvTableCache = new TableCache<>(spec -> new MongoKVTable(client, spec.tableName()));
     windowTableCache = new TableCache<>(
-        spec -> new MongoWindowedTable(client, spec.tableName(), (SegmentPartitioner) spec.partitioner()));
+        spec -> new MongoWindowedTable(
+            client,
+            spec.tableName(),
+            (SegmentPartitioner) spec.partitioner())
+    );
   }
 
-  public RemoteKVTable<WriteModel<Document>> kvTable(final String name)
+  public RemoteKVTable<WriteModel<KVDoc>> kvTable(final String name)
       throws InterruptedException, TimeoutException {
     return kvTableCache.create(new BaseTableSpec(name, TablePartitioner.defaultPartitioner()));
   }
 
-  public RemoteWindowedTable<WriteModel<Document>> windowedTable(
+  public RemoteWindowedTable<WriteModel<WindowDoc>> windowedTable(
       final String name,
       final SegmentPartitioner partitioner
-      ) throws InterruptedException, TimeoutException {
+  ) throws InterruptedException, TimeoutException {
     return windowTableCache.create(new BaseTableSpec(name, partitioner));
   }
 

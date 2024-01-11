@@ -38,20 +38,15 @@ public abstract class TTDTable<K> implements RemoteTable<K, BoundStatement> {
   public abstract long count();
 
   @Override
-  public WriterFactory<K, Integer> init(
+  public TTDFlushManager<K> init(
       final int kafkaPartition
   ) {
-    return new TTDWriterFactory<>(this);
+    return new TTDFlushManager<>(this);
   }
 
   @Override
   public long fetchOffset(final int kafkaPartition) {
     return 0;
-  }
-
-  @Override
-  public BoundStatement setOffset(final int kafkaPartition, final long offset) {
-    return null;
   }
 
 }

@@ -20,7 +20,6 @@ import static dev.responsive.kafka.internal.db.partitioning.TablePartitioner.def
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.containsStringIgnoringCase;
-import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.nullValue;
 
@@ -72,7 +71,7 @@ class CassandraFactTableIntegrationTest {
     // Given:
     params = ResponsiveKeyValueParams.fact(storeName);
     final String tableName = params.name().remoteName();
-    final RemoteKVTable<BoundStatement> schema = client
+    final CassandraFactTable schema = (CassandraFactTable) client
         .factFactory()
         .create(CassandraTableSpecFactory.fromKVParams(params, defaultPartitioner()));
 
@@ -84,7 +83,6 @@ class CassandraFactTableIntegrationTest {
     final long offset2 = schema.fetchOffset(2);
 
     // Then:
-    assertThat(token, instanceOf(FactWriterFactory.class));
     assertThat(offset1, is(-1L));
     assertThat(offset2, is(10L));
 

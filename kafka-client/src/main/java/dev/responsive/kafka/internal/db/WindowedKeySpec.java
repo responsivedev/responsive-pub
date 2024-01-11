@@ -22,7 +22,6 @@ import dev.responsive.kafka.internal.utils.WindowedKey;
 import java.nio.ByteBuffer;
 import java.util.function.Predicate;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.common.utils.Bytes;
 
 public class WindowedKeySpec implements KeySpec<WindowedKey> {
 
