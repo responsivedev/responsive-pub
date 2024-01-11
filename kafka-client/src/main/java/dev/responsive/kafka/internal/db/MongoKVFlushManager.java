@@ -68,7 +68,7 @@ public class MongoKVFlushManager implements FlushManager<Bytes, Integer> {
 
   @Override
   public RemoteWriter<Bytes, Integer> createWriter(final Integer tablePartition) {
-    return new MongoWriter<>(table, kafkaPartition, tablePartition, kvDocs);
+    return new MongoWriter<>(table, kafkaPartition, tablePartition, () -> kvDocs);
   }
 
   @Override

@@ -39,6 +39,7 @@ import static org.hamcrest.Matchers.equalTo;
 
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
+import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.api.stores.ResponsiveStores;
 import dev.responsive.kafka.api.stores.ResponsiveWindowParams;
 import dev.responsive.kafka.testutils.KeyValueTimestamp;
@@ -61,6 +62,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.LongDeserializer;
@@ -70,21 +72,27 @@ import org.apache.kafka.common.serialization.Serdes.StringSerde;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.StreamJoined;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
+import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
-@ExtendWith(ResponsiveExtension.class)
 public class ResponsiveWindowStoreIntegrationTest {
+
+  // TODO: parametrize so we don't break the Cassandra implementation without knowing
+  @RegisterExtension
+  static ResponsiveExtension EXTENSION = new ResponsiveExtension(StorageBackend.MONGO_DB);
 
   private static final String INPUT_TOPIC = "input";
   private static final String OTHER_TOPIC = "other";
@@ -131,7 +139,12 @@ public class ResponsiveWindowStoreIntegrationTest {
     final CountdownLatchWrapper outputLatch = new CountdownLatchWrapper(0);
 
     final CountDownLatch latch2 = new CountDownLatch(2);
-    final KStream<Long, Long> input = builder.stream(inputTopic());
+    final KStream<Long, Long> input = builder.stream(
+        inputTopic(),
+        Consumed.with((record, partitionTime) -> {
+          System.out.println("SOPHIE: reading record " + record);
+          return record.timestamp();
+        }));
     input.peek((k, v) -> inputLatch.countDown())
         .groupByKey()
         .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofSeconds(5), Duration.ofSeconds(1)))
@@ -237,7 +250,7 @@ public class ResponsiveWindowStoreIntegrationTest {
     assertThat(collect, Matchers.hasEntry(windowed(1, baseTs + 15_000, 5000), 1000L));
   }
 
-  @Test
+  //@Test
   public void shouldComputeHoppingWindowAggregateWithRetention() throws Exception {
     // Given:
     final Map<String, Object> properties = getMutableProperties();

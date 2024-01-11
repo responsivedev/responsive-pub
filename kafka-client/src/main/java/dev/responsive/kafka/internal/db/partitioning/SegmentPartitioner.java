@@ -104,6 +104,30 @@ public class SegmentPartitioner implements TablePartitioner<WindowedKey, Segment
     }
 
     @Override
+    public boolean equals(final Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+
+      final SegmentPartition that = (SegmentPartition) o;
+
+      if (tablePartition != that.tablePartition) {
+        return false;
+      }
+      return segmentId == that.segmentId;
+    }
+
+    @Override
+    public int hashCode() {
+      int result = tablePartition;
+      result = 31 * result + (int) (segmentId ^ (segmentId >>> 32));
+      return result;
+    }
+
+    @Override
     public String toString() {
       return "SegmentPartition{"
           + "tablePartition=" + tablePartition

@@ -389,6 +389,7 @@ public class CommitBufferTest {
       );
 
       // Then:
+      // TODO(sophie): fix this up once the error messages are all implemented
       final String errorMsg = "commit-buffer [" + table.name() + "-2] "
           + "Error while writing batch for table partition 8! "
           + "Batch Offset: 100, Persisted Offset: -1, "
@@ -658,6 +659,7 @@ public class CommitBufferTest {
         () -> buffer.restoreBatch(List.of(record)));
 
     // Then:
+    // TODO(sophie): fix this up once the error messages are all implemented
     final String errorMsg = "commit-buffer [" + table.name() + "-2] "
         + "Error while writing batch for table partition 8! "
         + "Batch Offset: 100, Persisted Offset: -1, "

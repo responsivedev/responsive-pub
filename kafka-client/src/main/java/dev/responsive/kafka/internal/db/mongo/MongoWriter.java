@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,14 +37,14 @@ public class MongoWriter<K, P, D> implements RemoteWriter<K, P> {
   private final RemoteTable<K, WriteModel<D>> table;
   private final int kafkaPartition;
   private final P tablePartition;
-  private final MongoCollection<D> collection;
+  private final Supplier<MongoCollection<D>> collection;
   private final List<WriteModel<D>> accumulatedWrites = new ArrayList<>();
 
   public MongoWriter(
       final RemoteTable<K, WriteModel<D>> table,
       final int kafkaPartition,
       final P tablePartition,
-      final MongoCollection<D> collection
+      final Supplier<MongoCollection<D>> collection
   ) {
     this.table = table;
     this.kafkaPartition = kafkaPartition;
@@ -63,8 +64,13 @@ public class MongoWriter<K, P, D> implements RemoteWriter<K, P> {
 
   @Override
   public CompletionStage<RemoteWriteResult<P>> flush() {
+    if (accumulatedWrites.isEmpty()) {
+      LOG.info("Skipping empty bulk write for partition {}", tablePartition);
+      return CompletableFuture.completedFuture(RemoteWriteResult.success(tablePartition));
+    }
+
     try {
-      collection.bulkWrite(accumulatedWrites);
+      collection.get().bulkWrite(accumulatedWrites);
       accumulatedWrites.clear();
       return CompletableFuture.completedFuture(RemoteWriteResult.success(tablePartition));
     } catch (final MongoBulkWriteException e) {

@@ -73,8 +73,17 @@ public class MongoWindowFlushManager implements FlushManager<WindowedKey, Segmen
 
   @Override
   public RemoteWriter<WindowedKey, SegmentPartition> createWriter(final SegmentPartition segment) {
-    final var windowDocs = windowsForSegment.apply(segment);
-    return new MongoWriter<>(table, kafkaPartition, segment, windowDocs);
+    log.debug("Creating writer for segment {}", segment);
+    log.info("SOPHIE: creating writer for segment {}", segment);
+
+    return new MongoWriter<>(
+        table,
+        kafkaPartition,
+        segment,
+        () -> {
+          log.info("SOPHIE: getting windows for segment {}", segment);
+          return windowsForSegment.apply(segment);}
+    );
   }
 
   @Override

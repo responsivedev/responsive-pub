@@ -48,6 +48,8 @@ public class WriteBatcher<K extends Comparable<K>, P> {
       final Collection<Result<K>> bufferedWrites,
       final long consumedOffset
   ) {
+    log.info("SOPHIE: beginning new write batch");
+
     final WriteBatch<K, P> writeBatch = new WriteBatch<>(
         flushManager::createWriter,
         keySpec,
@@ -55,6 +57,8 @@ public class WriteBatcher<K extends Comparable<K>, P> {
         flushManager.partitioner(),
         bufferedWrites
     );
+    log.info("SOPHIE: created write batch, about to prepare flush");
+
     numTablePartitionsInBatch = writeBatch.numTablePartitionsInBatch();
 
     final var preFlushResult = flushManager.preFlush();
@@ -62,6 +66,8 @@ public class WriteBatcher<K extends Comparable<K>, P> {
       log.warn("Failed on pre-flush callback for write batch (consumedOffset={})", consumedOffset);
       return preFlushResult;
     }
+
+    log.info("SOPHIE: finished prep and ready to flush write batch");
 
     final var flushResult = writeBatch.flushBatch();
     // the offset is only used for recovery, so it can (and should) be set only
@@ -71,6 +77,7 @@ public class WriteBatcher<K extends Comparable<K>, P> {
                consumedOffset, flushResult.tablePartition());
       return flushResult;
     } else {
+      log.info("SOPHIE: finished flushing write batch and executing postFlush");
 
       final var postFlushResult = flushManager.postFlush(consumedOffset);
       if (!postFlushResult.wasApplied()) {
