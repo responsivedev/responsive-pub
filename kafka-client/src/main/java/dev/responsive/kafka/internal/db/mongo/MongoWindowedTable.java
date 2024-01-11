@@ -92,8 +92,8 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
     }
 
     void createSegment(final SegmentPartition segmentToCreate) {
-      LOG.info("SOPHIE {}[{}] Creating segment id {}", name, segmentToCreate.tablePartition, segmentToCreate.segmentId);
-
+      LOG.info("{}[{}] Creating segment id {}",
+               name, segmentToCreate.tablePartition, segmentToCreate.segmentId);
 
       final MongoCollection<WindowDoc> windowDocs =
           database.getCollection(collectionNameForSegment(segmentToCreate), WindowDoc.class);
@@ -102,7 +102,6 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
       );
 
       segmentWindows.put(segmentToCreate, windowDocs);
-      LOG.debug("{}[{}] Created segment id {}", name, segmentToCreate.tablePartition, segmentToCreate.segmentId);
     }
 
     // Note: it is always safe to drop a segment, even without validating the epoch, since we only
@@ -219,18 +218,6 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
       final int kafkaPartition,
       final SegmentPartition segment
   ) {
-    LOG.info("SOPHIE: getting windows for kafkaPartition {} and segment {}", kafkaPartition, segment);
-
-
-    final var segments = kafkaPartitionToSegments.get(kafkaPartition);
-
-    LOG.info("SOPHIE: current active segments are {}", segments.segmentWindows.keySet());
-    LOG.info("SOPHIE: does segmentWindows contain segment? {}", segments.segmentWindows.containsKey(segment));
-
-    final var ret = kafkaPartitionToSegments.get(kafkaPartition).segmentWindows.get(segment);
-
-    LOG.info("SOPHIE: ret = {}", ret);
-
     return kafkaPartitionToSegments.get(kafkaPartition).segmentWindows.get(segment);
   }
 
@@ -325,9 +312,6 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
       final byte[] value,
       final long epochMillis
   ) {
-    LOG.info("SOPHIE: inserting key {} with windowStart={} for partition {}",
-             windowedKey.key, windowedKey.windowStartMs, kafkaPartition);
-
     final var partitionSegments = kafkaPartitionToSegments.get(kafkaPartition);
     partitionSegments.segmentBatch.updateStreamTime(windowedKey.windowStartMs);
 

@@ -250,7 +250,7 @@ public class ResponsiveWindowStoreIntegrationTest {
     assertThat(collect, Matchers.hasEntry(windowed(1, baseTs + 15_000, 5000), 1000L));
   }
 
-  //@Test
+  @Test
   public void shouldComputeHoppingWindowAggregateWithRetention() throws Exception {
     // Given:
     final Map<String, Object> properties = getMutableProperties();
