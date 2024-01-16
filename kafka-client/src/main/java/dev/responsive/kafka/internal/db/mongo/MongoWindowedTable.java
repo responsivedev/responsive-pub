@@ -19,6 +19,7 @@
 package dev.responsive.kafka.internal.db.mongo;
 
 import static com.mongodb.MongoClientSettings.getDefaultCodecRegistry;
+import static dev.responsive.kafka.internal.db.mongo.WindowDoc.compositeKey;
 import static dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.UNINITIALIZED_STREAM_TIME;
 import static dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration.NO_COMMITTED_OFFSET;
 import static org.bson.codecs.configuration.CodecRegistries.fromProviders;
@@ -318,8 +319,7 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
     final long epoch = partitionSegments.epoch;
     return new UpdateOneModel<>(
         Filters.and(
-            Filters.eq(WindowDoc.ID, windowedKey.key.get()),
-            Filters.eq(WindowDoc.WINDOW_START_TS, windowedKey.windowStartMs),
+            Filters.eq(WindowDoc.ID, compositeKey(windowedKey)),
             Filters.lte(WindowDoc.EPOCH, epoch)
         ),
         Updates.combine(
@@ -367,8 +367,7 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
 
     final WindowDoc windowDoc = segmentWindows.find(
         Filters.and(
-            Filters.eq(WindowDoc.ID, key.get()),
-            Filters.eq(WindowDoc.WINDOW_START_TS, windowStart)))
+            Filters.eq(WindowDoc.ID, compositeKey(key.get(), windowStart))))
         .first();
     return windowDoc == null ? null : windowDoc.getValue();
   }
@@ -387,9 +386,8 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
       final var segmentWindows = partitionSegments.segmentWindows.get(segment);
       final FindIterable<WindowDoc> fetchResults = segmentWindows.find(
           Filters.and(
-              Filters.eq(WindowDoc.ID, key.get()),
-              Filters.gte(WindowDoc.WINDOW_START_TS, timeFrom),
-              Filters.lte(WindowDoc.WINDOW_START_TS, timeTo)));
+              Filters.gte(WindowDoc.ID, compositeKey(key.get(), timeFrom)),
+              Filters.lte(WindowDoc.ID, compositeKey(key.get(), timeTo))));
 
       segmentIterators.add(
           Iterators.kv(fetchResults.iterator(), MongoWindowedTable::windowFromDoc)
@@ -419,23 +417,8 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
       final long timeFrom,
       final long timeTo
   ) {
-    final List<KeyValueIterator<WindowedKey, byte[]>> segmentIterators = new LinkedList<>();
-    final var partitionSegments = kafkaPartitionToSegments.get(kafkaPartition);
+    throw new UnsupportedOperationException("fetchRange not yet supported for Mongo backends");
 
-    for (final var segment : partitioner.range(kafkaPartition, timeFrom, timeTo)) {
-      final var segmentWindows = partitionSegments.segmentWindows.get(segment);
-      final FindIterable<WindowDoc> fetchResults = segmentWindows.find(
-          Filters.and(
-              Filters.gte(WindowDoc.ID, fromKey.get()),
-              Filters.lte(WindowDoc.ID, toKey.get()),
-              Filters.gte(WindowDoc.WINDOW_START_TS, timeFrom),
-              Filters.lte(WindowDoc.WINDOW_START_TS, timeTo)));
-
-      segmentIterators.add(
-          Iterators.kv(fetchResults.iterator(), MongoWindowedTable::windowFromDoc)
-      );
-    }
-    return Iterators.wrapped(segmentIterators);
   }
 
   @Override
@@ -455,21 +438,7 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
       final long timeFrom,
       final long timeTo
   ) {
-    final List<KeyValueIterator<WindowedKey, byte[]>> segmentIterators = new LinkedList<>();
-    final var partitionSegments = kafkaPartitionToSegments.get(kafkaPartition);
-
-    for (final var segment : partitioner.range(kafkaPartition, timeFrom, timeTo)) {
-      final var segmentWindows = partitionSegments.segmentWindows.get(segment);
-      final FindIterable<WindowDoc> fetchResults = segmentWindows.find(
-          Filters.and(
-              Filters.gte(WindowDoc.WINDOW_START_TS, timeFrom),
-              Filters.lte(WindowDoc.WINDOW_START_TS, timeTo)));
-      segmentIterators.add(
-          Iterators.kv(fetchResults.iterator(), MongoWindowedTable::windowFromDoc)
-      );
-    }
-
-    return Iterators.wrapped(segmentIterators);
+    throw new UnsupportedOperationException("fetchAll not yet supported for Mongo backends");
   }
 
   @Override
@@ -482,7 +451,7 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
   }
 
   private static KeyValue<WindowedKey, byte[]> windowFromDoc(final WindowDoc windowDoc) {
-    return new KeyValue<>(new WindowedKey(windowDoc.id, windowDoc.windowStartTs), windowDoc.value);
+    return new KeyValue<>(WindowDoc.windowedKey(windowDoc.id), windowDoc.value);
   }
 
 }

@@ -18,36 +18,34 @@
 
 package dev.responsive.kafka.internal.db.mongo;
 
+import com.mongodb.BasicDBObject;
+import dev.responsive.kafka.internal.utils.WindowedKey;
 import java.util.Arrays;
 import java.util.Objects;
-import org.bson.codecs.pojo.annotations.BsonId;
+import org.apache.kafka.common.utils.Bytes;
 
 public class WindowDoc {
 
   public static final String ID = "_id";
   public static final String VALUE = "value";
   public static final String EPOCH = "epoch";
+
+  // Subfields of the composite key _id
+  public static final String DATA_KEY = "key";
   public static final String WINDOW_START_TS = "windowStartTs";
 
-  @BsonId
-  byte[] id;
+  BasicDBObject id;
   byte[] value;
   long epoch;
-  long windowStartTs;
 
   public WindowDoc() {
   }
 
-  public WindowDoc(final byte[] key, final byte[] value, final long epoch) {
-    this.value = value;
-    this.epoch = epoch;
-  }
-
-  public byte[] getKey() {
+  public BasicDBObject getKey() {
     return id;
   }
 
-  public void setKey(final byte[] id) {
+  public void setKey(final BasicDBObject id) {
     this.id = id;
   }
 
@@ -67,12 +65,21 @@ public class WindowDoc {
     return epoch;
   }
 
-  public long getWindowStartTs() {
-    return windowStartTs;
+  public static WindowedKey windowedKey(final BasicDBObject compositeKey) {
+    final byte[] key = (byte[]) compositeKey.get(DATA_KEY);
+    final long windowStartTimestamp = (long) compositeKey.get(WINDOW_START_TS);
+
+    return new WindowedKey(Bytes.wrap(key), windowStartTimestamp);
   }
 
-  public void setWindowStartTs(final long windowStartTs) {
-    this.windowStartTs = windowStartTs;
+  public static BasicDBObject compositeKey(final WindowedKey windowedKey) {
+    return compositeKey(windowedKey.key.get(), windowedKey.windowStartMs);
+  }
+
+  public static BasicDBObject compositeKey(final byte[] key, final long windowStartTs) {
+    // IMPORTANT: DO NOT CHANGE THE ORDER OF KEY FIELDS
+    final BasicDBObject compositeKey = new BasicDBObject(DATA_KEY, key);
+    return compositeKey.append(WINDOW_START_TS, windowStartTs);
   }
 
   @Override
@@ -85,25 +92,25 @@ public class WindowDoc {
     }
     final WindowDoc windowDoc = (WindowDoc) o;
     return epoch == windowDoc.epoch
-        && Arrays.equals(id, windowDoc.id)
-        && Arrays.equals(value, windowDoc.value)
-        && Objects.equals(windowStartTs, windowDoc.windowStartTs);
+        && Objects.equals(id, windowDoc.id)
+        && Arrays.equals(value, windowDoc.value);
   }
 
   @Override
   public int hashCode() {
-    int result = Objects.hash(id, epoch, windowStartTs);
+    int result = Objects.hash(id, epoch);
     result = 31 * result + Arrays.hashCode(value);
     return result;
   }
 
   @Override
   public String toString() {
+    final WindowedKey windowedKey = windowedKey(id);
     return "WindowDoc{"
-        + "id=" + Arrays.toString(id)
+        + "id=" + Arrays.toString(windowedKey.key.get())
+        + ", windowStartTs=" + windowedKey.windowStartMs
         + ", value=" + Arrays.toString(value)
         + ", epoch=" + epoch
-        + ", windowStartTs=" + windowStartTs
         + '}';
   }
 }

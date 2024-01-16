@@ -90,6 +90,10 @@ public final class IntegrationTestUtils {
     return ResponsiveConfig.responsiveConfig(props);
   }
 
+  public static long minutesToMillis(final long minutes) {
+    return minutes * 60 * 1000L;
+  }
+
   public static String getCassandraValidName(final TestInfo info) {
     // add displayName to name to account for parameterized tests
     return info.getTestMethod().orElseThrow().getName().toLowerCase(Locale.ROOT)
