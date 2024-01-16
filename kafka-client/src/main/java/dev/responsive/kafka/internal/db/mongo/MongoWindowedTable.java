@@ -138,6 +138,7 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
         fromProviders(pojoCodecProvider)
     );
 
+    // TODO: should we include the application.id in the db name?
     this.database = client.getDatabase(name).withCodecRegistry(pojoCodecRegistry);
     this.metadata = database.getCollection(
         name + METADATA_COLLECTION_SUFFIX,
@@ -210,8 +211,8 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
 
   public String collectionNameForSegment(final SegmentPartition segmentPartition) {
     return String.format(
-        "%s-%d-%d",
-        name, segmentPartition.tablePartition, segmentPartition.segmentId
+        "%d-%d",
+        segmentPartition.tablePartition, segmentPartition.segmentId
     );
   }
 
