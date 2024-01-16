@@ -63,7 +63,7 @@ import org.slf4j.LoggerFactory;
 public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<WindowDoc>> {
 
   private static final Logger LOG = LoggerFactory.getLogger(MongoWindowedTable.class);
-  private static final String METADATA_COLLECTION_SUFFIX = "_md";
+  private static final String METADATA_COLLECTION_NAME = "window_metadata";
 
   private static final UpdateOptions UPSERT_OPTIONS = new UpdateOptions().upsert(true);
 
@@ -141,7 +141,7 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
     // TODO: should we include the application.id in the db name?
     this.database = client.getDatabase(name).withCodecRegistry(pojoCodecRegistry);
     this.metadata = database.getCollection(
-        name + METADATA_COLLECTION_SUFFIX,
+        METADATA_COLLECTION_NAME,
         WindowMetadataDoc.class
     );
   }
