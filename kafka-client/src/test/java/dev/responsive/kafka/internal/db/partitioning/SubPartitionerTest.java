@@ -81,7 +81,7 @@ class SubPartitionerTest {
     final SubPartitioner subPartitioner = SubPartitioner.create(
         actualRemoteCount,
         kafkaPartitions,
-        NAME.remoteName(),
+        NAME.tableName(),
         responsiveConfig(desiredPartitions),
         CHANGELOG_TOPIC_NAME
     );
@@ -101,7 +101,7 @@ class SubPartitionerTest {
     final SubPartitioner subPartitioner = SubPartitioner.create(
         actualRemoteCount,
         kafkaPartitions,
-        NAME.remoteName(),
+        NAME.tableName(),
         responsiveConfig(desiredPartitions),
         CHANGELOG_TOPIC_NAME
     );
@@ -123,7 +123,7 @@ class SubPartitionerTest {
         () -> SubPartitioner.create(
             actualRemoteCount,
             kafkaPartitions,
-            NAME.remoteName(),
+            NAME.tableName(),
             responsiveConfig(desiredPartitions),
             CHANGELOG_TOPIC_NAME
         )

@@ -100,7 +100,7 @@ public class SegmentedOperations implements WindowOperations {
 
     final WriterFactory<WindowedKey, ?> writerFactory = table.init(changelog.partition());
 
-    log.info("Remote table {} is available for querying.", name.remoteName());
+    log.info("Remote table {} is available for querying.", name.tableName());
 
     final WindowedKeySpec keySpec = new WindowedKeySpec(withinRetention);
     final CommitBuffer<WindowedKey, ?> buffer = CommitBuffer.from(

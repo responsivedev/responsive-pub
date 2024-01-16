@@ -44,14 +44,14 @@ public class CassandraTableSpecFactory {
       final ResponsiveKeyValueParams params,
       final TablePartitioner<Bytes, Integer> partitioner
   ) {
-    return new GlobalTableSpec(new BaseTableSpec(params.name().remoteName(), partitioner));
+    return new GlobalTableSpec(new BaseTableSpec(params.name().tableName(), partitioner));
   }
 
   public static CassandraTableSpec fromKVParams(
       final ResponsiveKeyValueParams params,
       final TablePartitioner<Bytes, Integer> partitioner
   ) {
-    CassandraTableSpec spec = new BaseTableSpec(params.name().remoteName(), partitioner);
+    CassandraTableSpec spec = new BaseTableSpec(params.name().tableName(), partitioner);
 
     if (params.timeToLive().isPresent()) {
       spec = new TtlTableSpec(spec, params.timeToLive().get());
@@ -68,7 +68,7 @@ public class CassandraTableSpecFactory {
       final ResponsiveWindowParams params,
       final TablePartitioner<WindowedKey, SegmentPartition> partitioner
   ) {
-    return new BaseTableSpec(params.name().remoteName(), partitioner);
+    return new BaseTableSpec(params.name().tableName(), partitioner);
   }
 
 }
