@@ -46,7 +46,7 @@ spec:
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           securityContext:
-            {{- toYaml .Values.securityContext | nindent 10 }}
+            {{- toYaml .Values.securityContext | nindent 12 }}
           volumeMounts:
             - name: cfg
               mountPath: /etc/responsive-operator/

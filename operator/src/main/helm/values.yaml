@@ -38,8 +38,8 @@ controllerSecret: ctl-secret
 securityContext:
   capabilities:
     add: ["NET_ADMIN", "SYS_TIME"]
-    allowPrivilegeEscalation: false
-    readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
 
 podSecurityContext:
   runAsRoot: false

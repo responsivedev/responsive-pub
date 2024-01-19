@@ -1,4 +1,4 @@
-FROM debian:12.2 as getjava
+FROM debian:12.4 as getjava
 LABEL stage=getjava
 
 ARG TARGETPLATFORM
@@ -10,7 +10,7 @@ RUN echo $TARGETPLATFORM
 RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then wget https://download.oracle.com/java/21/latest/jdk-21_linux-x64_bin.tar.gz -O jdk-21.tar.gz; fi
 RUN if [ "$TARGETPLATFORM" = "linux/arm64" ]; then wget https://download.oracle.com/java/21/latest/jdk-21_linux-aarch64_bin.tar.gz -O jdk-21.tar.gz; fi
 
-FROM debian:12.2
+FROM debian:12.4
 LABEL stage=final
 
 COPY --from=getjava jdk-21.tar.gz jdk-21.tar.gz
