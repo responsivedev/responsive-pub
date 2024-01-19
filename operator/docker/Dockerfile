@@ -16,7 +16,7 @@ LABEL stage=final
 COPY --from=getjava jdk-21.tar.gz jdk-21.tar.gz
 
 RUN mkdir /usr/lib/jvm && tar zxvf jdk-21.tar.gz --directory /usr/lib/jvm
-RUN update-alternatives --install /usr/bin/java java /usr/lib/jvm/jdk-21.0.1/bin/java 1
+RUN update-alternatives --install /usr/bin/java java /usr/lib/jvm/jdk-21.0.2/bin/java 1
 
 COPY libs/*.jar /usr/share/java/responsive-operator/
 COPY scripts/* /
