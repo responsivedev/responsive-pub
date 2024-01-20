@@ -52,11 +52,12 @@ import org.slf4j.LoggerFactory;
 public class MongoKVTable implements RemoteKVTable<WriteModel<Document>> {
 
   private static final Logger LOG = LoggerFactory.getLogger(MongoKVTable.class);
-  private static final String METADATA_COLLECTION_SUFFIX = "_md";
+  private static final String KV_COLLECTION_NAME = "kv_data";
+  private static final String METADATA_COLLECTION_NAME = "kv_metadata";
 
   private final String name;
   private final MongoCollection<KVDoc> docs;
-  private final MongoCollection<MetadataDoc> metadata;
+  private final MongoCollection<KVMetadataDoc> metadata;
 
   private final MongoCollection<Document> genericDocs;
   private final MongoCollection<Document> genericMetadata;
@@ -72,11 +73,11 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<Document>> {
     );
 
     final MongoDatabase database = client.getDatabase(name).withCodecRegistry(pojoCodecRegistry);
-    genericDocs = database.getCollection(name);
-    docs = database.getCollection(name, KVDoc.class);
+    genericDocs = database.getCollection(KV_COLLECTION_NAME);
+    docs = database.getCollection(KV_COLLECTION_NAME, KVDoc.class);
 
-    genericMetadata = database.getCollection(name + METADATA_COLLECTION_SUFFIX);
-    metadata = database.getCollection(name + METADATA_COLLECTION_SUFFIX, MetadataDoc.class);
+    genericMetadata = database.getCollection(METADATA_COLLECTION_NAME);
+    metadata = database.getCollection(METADATA_COLLECTION_NAME, KVMetadataDoc.class);
 
     // TODO(agavra): make the tombstone retention configurable
     // this is idempotent
@@ -93,13 +94,13 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<Document>> {
 
   @Override
   public WriterFactory<Bytes, Integer> init(final int kafkaPartition) {
-    final MetadataDoc metaDoc = metadata.findOneAndUpdate(
-        Filters.eq(MetadataDoc.ID, kafkaPartition),
+    final KVMetadataDoc metaDoc = metadata.findOneAndUpdate(
+        Filters.eq(KVMetadataDoc.PARTITION, kafkaPartition),
         Updates.combine(
-            Updates.setOnInsert(MetadataDoc.ID, kafkaPartition),
-            Updates.setOnInsert(MetadataDoc.PARTITION, kafkaPartition),
-            Updates.setOnInsert(MetadataDoc.OFFSET, NO_COMMITTED_OFFSET),
-            Updates.inc(MetadataDoc.EPOCH, 1) // will set the value to 1 if it doesn't exist
+            Updates.setOnInsert(KVMetadataDoc.PARTITION, kafkaPartition),
+            Updates.setOnInsert(KVMetadataDoc.PARTITION, kafkaPartition),
+            Updates.setOnInsert(KVMetadataDoc.OFFSET, NO_COMMITTED_OFFSET),
+            Updates.inc(KVMetadataDoc.EPOCH, 1) // will set the value to 1 if it doesn't exist
         ),
         new FindOneAndUpdateOptions()
             .upsert(true)
@@ -175,8 +176,8 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<Document>> {
 
   @Override
   public long fetchOffset(final int kafkaPartition) {
-    final MetadataDoc result = metadata.find(
-        Filters.eq(MetadataDoc.ID, kafkaPartition)
+    final KVMetadataDoc result = metadata.find(
+        Filters.eq(KVMetadataDoc.PARTITION, kafkaPartition)
     ).first();
     if (result == null) {
       throw new IllegalStateException("Expected to find metadata row");
@@ -189,12 +190,12 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<Document>> {
     final long epoch = kafkaPartitionToEpoch.get(kafkaPartition);
     return new UpdateOneModel<>(
         Filters.and(
-            Filters.eq(MetadataDoc.ID, kafkaPartition),
-            Filters.lte(MetadataDoc.EPOCH, epoch)
+            Filters.eq(KVMetadataDoc.PARTITION, kafkaPartition),
+            Filters.lte(KVMetadataDoc.EPOCH, epoch)
         ),
         Updates.combine(
-            Updates.set(MetadataDoc.OFFSET, offset),
-            Updates.set(MetadataDoc.EPOCH, epoch)
+            Updates.set(KVMetadataDoc.OFFSET, offset),
+            Updates.set(KVMetadataDoc.EPOCH, epoch)
         )
     );
   }
