@@ -51,6 +51,7 @@ public class TableName {
     if (tableName.length() > MAXIMUM_LENGTH) {
       LOG.error("Invalid table name for state store {}, must be no more than {} characters long"
                     + " but length was {}", tableName, MAXIMUM_LENGTH, tableName.length());
+      throw new IllegalArgumentException("Table name exceeds 65 character limit: " + tableName);
     }
   }
 
