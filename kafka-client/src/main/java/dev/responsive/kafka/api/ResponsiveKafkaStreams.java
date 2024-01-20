@@ -21,6 +21,7 @@ import static dev.responsive.kafka.api.config.ResponsiveConfig.CLIENT_SECRET_CON
 import static dev.responsive.kafka.api.config.ResponsiveConfig.METRICS_ENABLED_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_HOSTNAME_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.TASK_ASSIGNOR_CLASS_OVERRIDE;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.TIMESTAMP_FIRST_WINDOWED_KEY_CONFIG;
 import static dev.responsive.kafka.internal.metrics.ResponsiveMetrics.RESPONSIVE_METRICS_NAMESPACE;
 import static org.apache.kafka.streams.StreamsConfig.APPLICATION_ID_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.METRICS_NUM_SAMPLES_CONFIG;
@@ -450,8 +451,11 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
               clientId,
               clientSecret == null ? null : clientSecret.value()
           );
+          final boolean timestampFirstOrder =
+              responsiveConfig.getBoolean(TIMESTAMP_FIRST_WINDOWED_KEY_CONFIG);
+
           sessionClients = new SessionClients(
-              Optional.of(new ResponsiveMongoClient(mongoClient)),
+              Optional.of(new ResponsiveMongoClient(mongoClient, timestampFirstOrder)),
               Optional.empty(),
               admin
           );

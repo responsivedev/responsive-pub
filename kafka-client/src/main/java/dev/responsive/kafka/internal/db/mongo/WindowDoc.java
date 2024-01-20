@@ -72,14 +72,18 @@ public class WindowDoc {
     return new WindowedKey(Bytes.wrap(key), windowStartTimestamp);
   }
 
-  public static BasicDBObject compositeKey(final WindowedKey windowedKey) {
-    return compositeKey(windowedKey.key.get(), windowedKey.windowStartMs);
-  }
-
-  public static BasicDBObject compositeKey(final byte[] key, final long windowStartTs) {
-    // IMPORTANT: DO NOT CHANGE THE ORDER OF KEY FIELDS
-    final BasicDBObject compositeKey = new BasicDBObject(DATA_KEY, key);
-    return compositeKey.append(WINDOW_START_TS, windowStartTs);
+  public static BasicDBObject compositeKey(
+      final byte[] key,
+      final long windowStartTs,
+      final boolean timestampFirstOrder
+  ) {
+    if (timestampFirstOrder) {
+      final BasicDBObject compositeKey = new BasicDBObject(WINDOW_START_TS, windowStartTs);
+      return compositeKey.append(DATA_KEY, key);
+    } else {
+      final BasicDBObject compositeKey = new BasicDBObject(DATA_KEY, key);
+      return compositeKey.append(WINDOW_START_TS, windowStartTs);
+    }
   }
 
   @Override

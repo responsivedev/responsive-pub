@@ -25,6 +25,7 @@ import static dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration.N
 import static org.bson.codecs.configuration.CodecRegistries.fromProviders;
 import static org.bson.codecs.configuration.CodecRegistries.fromRegistries;
 
+import com.mongodb.BasicDBObject;
 import com.mongodb.client.FindIterable;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoCollection;
@@ -69,6 +70,9 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
 
   private final String name;
   private final SegmentPartitioner partitioner;
+
+  // whether to put windowStartMs first in the composite windowed key format in WindowDoc
+  private final boolean timestampFirstOrder;
 
   private final MongoDatabase database;
   private final MongoCollection<WindowMetadataDoc> metadata;
@@ -127,10 +131,12 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
   public MongoWindowedTable(
       final MongoClient client,
       final String name,
-      final SegmentPartitioner partitioner
+      final SegmentPartitioner partitioner,
+      final boolean timestampFirstOrder
   ) {
     this.name = name;
     this.partitioner = partitioner;
+    this.timestampFirstOrder = timestampFirstOrder;
 
     final CodecProvider pojoCodecProvider = PojoCodecProvider.builder().automatic(true).build();
     final CodecRegistry pojoCodecRegistry = fromRegistries(
@@ -138,7 +144,6 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
         fromProviders(pojoCodecProvider)
     );
 
-    // TODO: should we include the application.id in the db name?
     this.database = client.getDatabase(name).withCodecRegistry(pojoCodecRegistry);
     this.metadata = database.getCollection(
         METADATA_COLLECTION_NAME,
@@ -357,9 +362,10 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
       final Bytes key,
       final long windowStart
   ) {
+    final WindowedKey windowedKey = new WindowedKey(key, windowStart);
     final var segment = partitioner.tablePartition(
         kafkaPartition,
-        new WindowedKey(key, windowStart)
+        windowedKey
     );
     final var segmentWindows = windowsForSegmentPartition(kafkaPartition, segment);
     if (segmentWindows == null) {
@@ -368,7 +374,7 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
 
     final WindowDoc windowDoc = segmentWindows.find(
         Filters.and(
-            Filters.eq(WindowDoc.ID, compositeKey(key.get(), windowStart))))
+            Filters.eq(WindowDoc.ID, compositeKey(windowedKey))))
         .first();
     return windowDoc == null ? null : windowDoc.getValue();
   }
@@ -387,8 +393,8 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
       final var segmentWindows = partitionSegments.segmentWindows.get(segment);
       final FindIterable<WindowDoc> fetchResults = segmentWindows.find(
           Filters.and(
-              Filters.gte(WindowDoc.ID, compositeKey(key.get(), timeFrom)),
-              Filters.lte(WindowDoc.ID, compositeKey(key.get(), timeTo))));
+              Filters.gte(WindowDoc.ID, compositeKey(key, timeFrom)),
+              Filters.lte(WindowDoc.ID, compositeKey(key, timeTo))));
 
       segmentIterators.add(
           Iterators.kv(fetchResults.iterator(), MongoWindowedTable::windowFromDoc)
@@ -449,6 +455,18 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
       final long timeTo
   ) {
     throw new UnsupportedOperationException("backFetchAll not yet supported for MongoDB backends");
+  }
+
+  public BasicDBObject compositeKey(final WindowedKey windowedKey) {
+    return compositeKey(windowedKey.key, windowedKey.windowStartMs);
+  }
+
+  public BasicDBObject compositeKey(final Bytes key, final long windowStartMs) {
+    return WindowDoc.compositeKey(
+        key.get(),
+        windowStartMs,
+        timestampFirstOrder
+    );
   }
 
   private static KeyValue<WindowedKey, byte[]> windowFromDoc(final WindowDoc windowDoc) {

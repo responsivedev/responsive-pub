@@ -157,6 +157,15 @@ public class ResponsiveConfig extends AbstractConfig {
   private static final String SUBPARTITION_HASHER_DOC = "Hasher to use for sub-partitioning.";
   private static final Class<?> SUBPARTITION_HASHER_DEFAULT = Murmur3Hasher.class;
 
+  public static final String TIMESTAMP_FIRST_WINDOWED_KEY_CONFIG = "responsive.timestamp.first.windowed.key";
+  private static final boolean TIMESTAMP_FIRST_WINDOWED_KEY_DEFAULT = false;
+  private static final String TIMESTAMP_FIRST_WINDOWED_KEY_DOC = "Whether to put the window start timestamp "
+      + "first in the format of a composite windowed key. This can be toggled true/false to get better "
+      + "performance depending on the density of unique keys per window, and should be experimented "
+      + "with for best results. However it is important to note that this cannot be changed for "
+      + "an active application. Messing with this can corrupt existing state!";
+
+
   // ------------------ StreamsConfig overrides ----------------------
 
   // These configuration values are required by Responsive, and a ConfigException will
@@ -304,6 +313,12 @@ public class ResponsiveConfig extends AbstractConfig {
           REMOTE_TABLE_CHECK_INTERVAL_MS_DEFAULT,
           Importance.LOW,
           REMOTE_TABLE_CHECK_INTERVAL_MS_DOC
+      ).define(
+          TIMESTAMP_FIRST_WINDOWED_KEY_CONFIG,
+          Type.BOOLEAN,
+          TIMESTAMP_FIRST_WINDOWED_KEY_DEFAULT,
+          Importance.LOW,
+          TIMESTAMP_FIRST_WINDOWED_KEY_DOC
       );
 
   /**

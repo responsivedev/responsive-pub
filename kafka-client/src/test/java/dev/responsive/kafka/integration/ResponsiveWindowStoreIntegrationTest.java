@@ -87,7 +87,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 
 public class ResponsiveWindowStoreIntegrationTest {
 
-  // TODO: parametrize so we don't break the Cassandra implementation without knowing
+  // TODO: parametrize to run with both C* and Mongo backends
   @RegisterExtension
   static ResponsiveExtension EXTENSION = new ResponsiveExtension(StorageBackend.MONGO_DB);
 
