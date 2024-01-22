@@ -16,6 +16,8 @@
 
 package dev.responsive.kafka.internal.stores;
 
+import com.google.common.hash.BloomFilter;
+import com.google.common.hash.Funnels;
 import dev.responsive.kafka.api.stores.ResponsiveWindowParams;
 import dev.responsive.kafka.internal.utils.Iterators;
 import dev.responsive.kafka.internal.utils.TableName;
@@ -113,9 +115,20 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
     return open;
   }
 
+  private long filterWindowStartTime = -1;
+  private BloomFilter<byte[]> filter = null;
+
   @Override
   public void put(final Bytes key, final byte[] value, final long windowStartTime) {
     observedStreamTime = Math.max(observedStreamTime, windowStartTime);
+    if (filterWindowStartTime == -1 || windowStartTime > filterWindowStartTime) {
+      filterWindowStartTime = windowStartTime;
+      filter = BloomFilter.create(Funnels.byteArrayFunnel(), 200000, .01);
+    }
+
+    if (windowStartTime == filterWindowStartTime) {
+      filter.put(key.get());
+    }
 
     if (value == null) {
       windowOperations.delete(key, windowStartTime);
@@ -131,6 +144,11 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       return null;
     }
 
+    if (windowStartTime == filterWindowStartTime) {
+      if (!filter.mightContain(key.get())) {
+        return null;
+      }
+    }
     return windowOperations.fetch(key, windowStartTime);
   }
 

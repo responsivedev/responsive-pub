@@ -67,6 +67,7 @@ tasks.publish {
 dependencies {
     api(libs.kafka.streams)
 
+    implementation("com.google.guava:guava:32.1.3-jre")
     implementation(project(":controller-api"))
     implementation(libs.bundles.scylla)
     implementation(libs.mongodb.driver.sync)

@@ -98,9 +98,9 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
 
       final MongoCollection<WindowDoc> windowDocs =
           database.getCollection(collectionNameForSegment(segmentToCreate), WindowDoc.class);
-      windowDocs.createIndex(
-          Indexes.ascending(WindowDoc.WINDOW_START_TS)
-      );
+      //windowDocs.createIndex(
+      //    Indexes.ascending(WindowDoc.WINDOW_START_TS)
+      //);
 
       segmentWindows.put(segmentToCreate, windowDocs);
     }
