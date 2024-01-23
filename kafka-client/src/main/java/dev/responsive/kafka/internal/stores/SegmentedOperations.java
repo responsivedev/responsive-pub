@@ -40,6 +40,7 @@ import dev.responsive.kafka.internal.utils.SessionClients;
 import dev.responsive.kafka.internal.utils.TableName;
 import dev.responsive.kafka.internal.utils.WindowedKey;
 import java.util.Collection;
+import java.util.Map;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Predicate;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -69,6 +70,8 @@ public class SegmentedOperations implements WindowOperations {
       final TableName name,
       final StateStoreContext storeContext,
       final ResponsiveWindowParams params,
+      final Map<String, Object> appConfigs,
+      final ResponsiveConfig responsiveConfig,
       final Predicate<WindowedKey> withinRetention
   ) throws InterruptedException, TimeoutException {
 
@@ -77,10 +80,7 @@ public class SegmentedOperations implements WindowOperations {
     ).logger(SegmentedOperations.class);
     final var context = asInternalProcessorContext(storeContext);
 
-    // Save this so we don't have to rebuild the config map on every access
-    final var appConfigs = storeContext.appConfigs();
 
-    final ResponsiveConfig config = ResponsiveConfig.responsiveConfig(appConfigs);
     final SessionClients sessionClients = loadSessionClients(appConfigs);
     final ResponsiveStoreRegistry storeRegistry = loadStoreRegistry(appConfigs);
 
@@ -120,7 +120,7 @@ public class SegmentedOperations implements WindowOperations {
         keySpec,
         params.truncateChangelog(),
         params.name(),
-        config
+        responsiveConfig
     );
     final long restoreStartOffset = table.fetchOffset(changelog.partition());
     final var registration = new ResponsiveStoreRegistration(

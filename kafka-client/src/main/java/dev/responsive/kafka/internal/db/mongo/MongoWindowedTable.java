@@ -19,7 +19,6 @@
 package dev.responsive.kafka.internal.db.mongo;
 
 import static com.mongodb.MongoClientSettings.getDefaultCodecRegistry;
-import static dev.responsive.kafka.internal.db.mongo.WindowDoc.compositeKey;
 import static dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.UNINITIALIZED_STREAM_TIME;
 import static dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration.NO_COMMITTED_OFFSET;
 import static org.bson.codecs.configuration.CodecRegistries.fromProviders;
@@ -32,7 +31,6 @@ import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
 import com.mongodb.client.model.Filters;
 import com.mongodb.client.model.FindOneAndUpdateOptions;
-import com.mongodb.client.model.Indexes;
 import com.mongodb.client.model.ReturnDocument;
 import com.mongodb.client.model.UpdateOneModel;
 import com.mongodb.client.model.UpdateOptions;
@@ -102,9 +100,6 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
 
       final MongoCollection<WindowDoc> windowDocs =
           database.getCollection(collectionNameForSegment(segmentToCreate), WindowDoc.class);
-      windowDocs.createIndex(
-          Indexes.ascending(WindowDoc.WINDOW_START_TS)
-      );
 
       segmentWindows.put(segmentToCreate, windowDocs);
     }
