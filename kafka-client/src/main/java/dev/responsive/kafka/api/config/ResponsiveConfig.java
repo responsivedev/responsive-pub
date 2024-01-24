@@ -157,31 +157,6 @@ public class ResponsiveConfig extends AbstractConfig {
   private static final String SUBPARTITION_HASHER_DOC = "Hasher to use for sub-partitioning.";
   private static final Class<?> SUBPARTITION_HASHER_DEFAULT = Murmur3Hasher.class;
 
-
-  // ------------------ WindowStore configurations ----------------------
-
-  public static final String WINDOW_BLOOM_FILTER_ENABLED_CONFIG = "responsive.window.bloom.filter.enabled";
-  private static final boolean WINDOW_BLOOM_FILTER_ENABLED_DEFAULT = false;
-  private static final String WINDOW_BLOOM_FILTER_ENABLED_DOC = "Whether to enable a bloom filter for "
-      + "the most recent active window of a window aggregate. Only applies to hopping and tumbling "
-      + "windowed aggregations. If enabled, we highly recommend configuring the expected number of "
-      + "keys per partition with responsive.window.bloom.filter.expected.keys";
-
-  public static final String WINDOW_BLOOM_FILTER_EXPECTED_KEYS_CONFIG = "responsive.window.bloom.filter.expected.keys";
-  private static final long WINDOW_BLOOM_FILTER_EXPECTED_KEYS_DEFAULT = 1_000L;
-  private static final String WINDOW_BLOOM_FILTER_EXPECTED_KEYS_DOC = "Expected number of elements for "
-      + "the WindowStore bloom filters, or the approximate number of unique keys per partition that "
-      + "will be present in the most recent window of a hopping or tumbling windowed aggregation. "
-      + "For loads that vary over time, use the maximum keys per partition that may appear in a window. "
-      + "An overestimate will use slightly more memory, but an underestimate will significantly degrade "
-      + "the bloom filter's performance";
-
-  public static final String WINDOW_BLOOM_FILTER_FPP_CONFIG = "responsive.window.bloom.filter.fpp";
-  private static final double WINDOW_BLOOM_FILTER_FPP_DEFAULT = 0.03d;
-  private static final String WINDOW_BLOOM_FILTER_FPP_DOC = "A double representing the desired false "
-      + "positive percentage for the WindowStore bloom filters. A smaller value means fewer unnecessary "
-      + "lookups but requires more heap memory";
-
   public static final String TIMESTAMP_FIRST_WINDOWED_KEY_CONFIG = "responsive.timestamp.first.windowed.key";
   private static final boolean TIMESTAMP_FIRST_WINDOWED_KEY_DEFAULT = false;
   private static final String TIMESTAMP_FIRST_WINDOWED_KEY_DOC = "Whether to put the window start timestamp "
@@ -338,24 +313,6 @@ public class ResponsiveConfig extends AbstractConfig {
           REMOTE_TABLE_CHECK_INTERVAL_MS_DEFAULT,
           Importance.LOW,
           REMOTE_TABLE_CHECK_INTERVAL_MS_DOC
-      ).define(
-          WINDOW_BLOOM_FILTER_ENABLED_CONFIG,
-          Type.BOOLEAN,
-          WINDOW_BLOOM_FILTER_ENABLED_DEFAULT,
-          Importance.LOW,
-          WINDOW_BLOOM_FILTER_ENABLED_DOC
-      ).define(
-          WINDOW_BLOOM_FILTER_EXPECTED_KEYS_CONFIG,
-          Type.LONG,
-          WINDOW_BLOOM_FILTER_EXPECTED_KEYS_DEFAULT,
-          Importance.LOW,
-          WINDOW_BLOOM_FILTER_EXPECTED_KEYS_DOC
-      ).define(
-          WINDOW_BLOOM_FILTER_FPP_CONFIG,
-          Type.DOUBLE,
-          WINDOW_BLOOM_FILTER_FPP_DEFAULT,
-          Importance.LOW,
-          WINDOW_BLOOM_FILTER_FPP_DOC
       ).define(
           TIMESTAMP_FIRST_WINDOWED_KEY_CONFIG,
           Type.BOOLEAN,

@@ -79,8 +79,6 @@ dependencyResolutionManagement {
             library("protobuf-java-util", "com.google.protobuf", "protobuf-java-util").versionRef("protobuf-java")
             library("crd-generator-atp", "io.fabric8", "crd-generator-apt").version("6.5.1")
 
-            library("guava", "com.google.guava:guava:32.1.3-jre")
-
             library("commons-cli", "commons-cli:commons-cli:1.5.0")
             library("commons-beanutils", "commons-beanutils:commons-beanutils:1.9.4")
             bundle("commons", listOf("commons-cli", "commons-beanutils"))

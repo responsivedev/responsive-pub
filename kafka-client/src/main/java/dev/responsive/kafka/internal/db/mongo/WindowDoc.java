@@ -31,8 +31,8 @@ public class WindowDoc {
   public static final String EPOCH = "epoch";
 
   // Subfields of the composite key _id
-  public static final String ID_RECORD_KEY = "key";
-  public static final String ID_WINDOW_START_TS = "windowStartTs";
+  public static final String DATA_KEY = "key";
+  public static final String WINDOW_START_TS = "windowStartTs";
 
   BasicDBObject id;
   byte[] value;
@@ -66,8 +66,8 @@ public class WindowDoc {
   }
 
   public static WindowedKey windowedKey(final BasicDBObject compositeKey) {
-    final byte[] key = (byte[]) compositeKey.get(ID_RECORD_KEY);
-    final long windowStartTimestamp = (long) compositeKey.get(ID_WINDOW_START_TS);
+    final byte[] key = (byte[]) compositeKey.get(DATA_KEY);
+    final long windowStartTimestamp = (long) compositeKey.get(WINDOW_START_TS);
 
     return new WindowedKey(Bytes.wrap(key), windowStartTimestamp);
   }
@@ -78,11 +78,11 @@ public class WindowDoc {
       final boolean timestampFirstOrder
   ) {
     if (timestampFirstOrder) {
-      final BasicDBObject compositeKey = new BasicDBObject(ID_WINDOW_START_TS, windowStartTs);
-      return compositeKey.append(ID_RECORD_KEY, key);
+      final BasicDBObject compositeKey = new BasicDBObject(WINDOW_START_TS, windowStartTs);
+      return compositeKey.append(DATA_KEY, key);
     } else {
-      final BasicDBObject compositeKey = new BasicDBObject(ID_RECORD_KEY, key);
-      return compositeKey.append(ID_WINDOW_START_TS, windowStartTs);
+      final BasicDBObject compositeKey = new BasicDBObject(DATA_KEY, key);
+      return compositeKey.append(WINDOW_START_TS, windowStartTs);
     }
   }
 

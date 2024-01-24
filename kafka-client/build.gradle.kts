@@ -71,7 +71,6 @@ dependencies {
     implementation(libs.bundles.scylla)
     implementation(libs.mongodb.driver.sync)
     implementation(libs.bundles.otel)
-    implementation(libs.guava)
 
     testImplementation(libs.kafka.clients) {
         artifact {
