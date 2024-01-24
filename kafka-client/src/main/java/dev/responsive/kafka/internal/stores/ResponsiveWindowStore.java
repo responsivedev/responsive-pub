@@ -189,7 +189,10 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
     }
 
     if (enableBloomFilter && windowStartTime == observedStreamTime) {
-      return bloomFilter.mightContain(key.get())
+      final boolean readRequired =
+          windowOperations.brokenWindow() || bloomFilter.mightContain(key.get());
+
+      return readRequired
           ? windowOperations.fetch(key, windowStartTime)
           : null;
     } else {

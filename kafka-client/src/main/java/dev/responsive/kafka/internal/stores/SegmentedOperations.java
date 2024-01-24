@@ -306,6 +306,11 @@ public class SegmentedOperations implements WindowOperations {
   }
 
   @Override
+  public boolean brokenWindow() {
+
+  }
+
+  @Override
   public void close() {
     // no need to flush the buffer here, will happen through the kafka client commit as usual
     buffer.close();

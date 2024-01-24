@@ -73,6 +73,14 @@ public interface WindowOperations extends Closeable, RecordBatchingStateRestoreC
 
   KeyValueIterator<Windowed<Bytes>, byte[]> backwardAll();
 
+  /**
+   * @return true if the latest window (ie windowStartMs == observedStreamTime) is "broken" up
+   *  by the store having been closed and reopened, for example due to restarts and rebalances.
+   *  If true, things tracked in memory such as the active window bloom filter cannot be covering
+   *  the entire window and will be missing some elements, so they should not be trusted.
+   */
+  boolean brokenWindow();
+
   @Override
   void close();
 }
