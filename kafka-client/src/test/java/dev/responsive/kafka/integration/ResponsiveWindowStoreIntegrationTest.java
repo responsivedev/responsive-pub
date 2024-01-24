@@ -109,7 +109,7 @@ public class ResponsiveWindowStoreIntegrationTest {
     name = info.getTestMethod().orElseThrow().getName() + "-" + new Random().nextInt();
 
     this.responsiveProps.putAll(responsiveProps);
-    this.responsiveProps.put(ResponsiveConfig.WINDOW_BLOOM_FILTER_ENABLED_CONFIG, true);
+    this.responsiveProps.put(ResponsiveConfig.WINDOW_BLOOM_FILTER_COUNT_CONFIG, 1);
     this.responsiveProps.put(ResponsiveConfig.WINDOW_BLOOM_FILTER_EXPECTED_KEYS_CONFIG, 10);
 
     this.admin = admin;

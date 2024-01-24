@@ -16,6 +16,8 @@
 
 package dev.responsive.kafka.api.config;
 
+import static org.apache.kafka.common.config.ConfigDef.Range.between;
+
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.internal.db.partitioning.Murmur3Hasher;
 import java.time.Duration;
@@ -168,12 +170,14 @@ public class ResponsiveConfig extends AbstractConfig {
       + "with for best results. However it is important to note that this cannot be changed for "
       + "an active application. Messing with this can corrupt existing state!";
 
-  public static final String WINDOW_BLOOM_FILTER_ENABLED_CONFIG = "responsive.window.bloom.filter.enabled";
-  private static final boolean WINDOW_BLOOM_FILTER_ENABLED_DEFAULT = false;
-  private static final String WINDOW_BLOOM_FILTER_ENABLED_DOC = "Whether to enable a bloom filter for "
-      + "the most recent active window of a window aggregate. Only applies to hopping and tumbling "
-      + "windowed aggregations. If enabled, we highly recommend configuring the expected number of "
-      + "keys per partition with responsive.window.bloom.filter.expected.keys";
+  public static final String WINDOW_BLOOM_FILTER_COUNT_CONFIG = "responsive.window.bloom.filter.enabled";
+  private static final int WINDOW_BLOOM_FILTER_COUNT_DEFAULT = 0;
+  private static final String WINDOW_BLOOM_FILTER_COUNT_DOC = "How many of the most recent windows to "
+      + "to build a bloom filter for in order to minimize unnecessary negative remote lookups. Enable bloom "
+      + "filters for windowed aggregations by setting this to a value of 1 or higher* (multiple bloom filters "
+      + "not yet supported. Only applies to hopping and tumbling windowed aggregations. "
+      + "If enabled, we highly recommend configuring the expected number of keys per window per partition "
+      + "with the responsive.window.bloom.filter.expected.keys property.";
 
   public static final String WINDOW_BLOOM_FILTER_EXPECTED_KEYS_CONFIG = "responsive.window.bloom.filter.expected.keys";
   private static final long WINDOW_BLOOM_FILTER_EXPECTED_KEYS_DEFAULT = 1_000L;
@@ -339,14 +343,18 @@ public class ResponsiveConfig extends AbstractConfig {
           Importance.LOW,
           REMOTE_TABLE_CHECK_INTERVAL_MS_DOC
       ).define(
-<<<<<<< HEAD
           MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_CONFIG,
-=======
-          WINDOW_BLOOM_FILTER_ENABLED_CONFIG,
           Type.BOOLEAN,
-          WINDOW_BLOOM_FILTER_ENABLED_DEFAULT,
+          MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_DEFAULT,
           Importance.LOW,
-          WINDOW_BLOOM_FILTER_ENABLED_DOC
+          MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_DOC
+      ).define(
+          WINDOW_BLOOM_FILTER_COUNT_CONFIG,
+          Type.INT,
+          WINDOW_BLOOM_FILTER_COUNT_DEFAULT,
+          between(0, 1),
+          Importance.LOW,
+          WINDOW_BLOOM_FILTER_COUNT_DOC
       ).define(
           WINDOW_BLOOM_FILTER_EXPECTED_KEYS_CONFIG,
           Type.LONG,
@@ -359,13 +367,6 @@ public class ResponsiveConfig extends AbstractConfig {
           WINDOW_BLOOM_FILTER_FPP_DEFAULT,
           Importance.LOW,
           WINDOW_BLOOM_FILTER_FPP_DOC
-      ).define(
-          TIMESTAMP_FIRST_WINDOWED_KEY_CONFIG,
->>>>>>> d539064 (Add guava bloom filter to window store)
-          Type.BOOLEAN,
-          MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_DEFAULT,
-          Importance.LOW,
-          MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_DOC
       );
 
   /**

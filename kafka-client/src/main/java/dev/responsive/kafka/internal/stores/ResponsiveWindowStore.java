@@ -16,7 +16,7 @@
 
 package dev.responsive.kafka.internal.stores;
 
-import static dev.responsive.kafka.api.config.ResponsiveConfig.WINDOW_BLOOM_FILTER_ENABLED_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.WINDOW_BLOOM_FILTER_COUNT_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.WINDOW_BLOOM_FILTER_EXPECTED_KEYS_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.WINDOW_BLOOM_FILTER_FPP_CONFIG;
 
@@ -48,11 +48,11 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
   private final TableName name;
   private final long retentionPeriod;
 
-  // TODO(sophie): make these configurable
-  private boolean enableBloomFilter = false;
+  private int numberBloomFilterWindows;
   private double fpp;
   private long expectedKeysPerWindow;
   private BloomFilter<byte[]> bloomFilter;
+  private boolean ignoreBloomFilter; // true for the first window after interruption by a restart
 
   private Position position; // TODO(IQ): update the position during restoration
   private boolean open;
@@ -107,11 +107,11 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
           window -> window.windowStartMs >= minValidTimestamp()
       );
 
-      enableBloomFilter = config.getBoolean(WINDOW_BLOOM_FILTER_ENABLED_CONFIG);
-      if (enableBloomFilter) {
+      numberBloomFilterWindows = config.getInt(WINDOW_BLOOM_FILTER_COUNT_CONFIG);
+      if (numberBloomFilterWindows > 0) {
         expectedKeysPerWindow = config.getLong(WINDOW_BLOOM_FILTER_EXPECTED_KEYS_CONFIG);
         fpp = config.getDouble(WINDOW_BLOOM_FILTER_FPP_CONFIG);
-        bloomFilter = BloomFilter.create(Funnels.byteArrayFunnel(), expectedKeysPerWindow, fpp);
+        ignoreBloomFilter = true; // always ignore the first window since we may be missing keys
       }
 
       log.info("Completed initializing state store");
@@ -145,7 +145,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
     } else {
       windowOperations.put(key, value, windowStartTime);
 
-      if (enableBloomFilter) {
+      if (numberBloomFilterWindows > 0) {
         if (windowStartTime > observedStreamTime) {
           final double actualFpp = bloomFilter.expectedFpp();
           final long approxElementCount = bloomFilter.approximateElementCount();
@@ -172,7 +172,10 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
 
           bloomFilter = BloomFilter.create(Funnels.byteArrayFunnel(), expectedKeysPerWindow, fpp);
           bloomFilter.put(key.get());
-        } else if (windowStartTime == observedStreamTime) {
+
+          ignoreBloomFilter = false;
+
+        } else if (!ignoreBloomFilter && windowStartTime == observedStreamTime) {
           bloomFilter.put(key.get());
         }
       }
@@ -188,7 +191,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       return null;
     }
 
-    if (enableBloomFilter && windowStartTime == observedStreamTime) {
+    if (!ignoreBloomFilter && windowStartTime == observedStreamTime) {
       return bloomFilter.mightContain(key.get())
           ? windowOperations.fetch(key, windowStartTime)
           : null;
