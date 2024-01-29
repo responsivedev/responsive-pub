@@ -55,7 +55,7 @@ import dev.responsive.kafka.internal.db.BytesKeySpec;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.CassandraKeyValueTable;
 import dev.responsive.kafka.internal.db.KeySpec;
-import dev.responsive.kafka.internal.db.WriteBatcher;
+import dev.responsive.kafka.internal.db.BatchFlusher;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.db.spec.BaseTableSpec;
 import dev.responsive.kafka.internal.metrics.ClientVersionMetadata;
@@ -211,14 +211,14 @@ public class CommitBufferTest {
 
   private CommitBuffer<Bytes, Integer> createCommitBuffer(final boolean truncateChangelog) {
     final var flushManager = table.init(changelog.partition());
-    final WriteBatcher<Bytes, Integer> writeBatcher = new WriteBatcher<>(
+    final BatchFlusher<Bytes, Integer> batchFlusher = new BatchFlusher<>(
         KEY_SPEC,
         changelog.partition(),
         flushManager
     );
 
     return new CommitBuffer<>(
-        writeBatcher,
+        batchFlusher,
         sessionClients,
         changelog,
         admin,
@@ -236,7 +236,7 @@ public class CommitBufferTest {
       final Supplier<Instant> clock
   ) {
     return new CommitBuffer<>(
-        new WriteBatcher<>(KEY_SPEC, changelog.partition(), table.init(KAFKA_PARTITION)),
+        new BatchFlusher<>(KEY_SPEC, changelog.partition(), table.init(KAFKA_PARTITION)),
         sessionClients,
         changelog,
         admin,
@@ -363,7 +363,7 @@ public class CommitBufferTest {
     final ExceptionSupplier exceptionSupplier = mock(ExceptionSupplier.class);
     final var flushManager = table.init(changelog.partition());
     try (final CommitBuffer<Bytes, Integer> buffer = new CommitBuffer<>(
-        new WriteBatcher<>(KEY_SPEC, changelog.partition(), flushManager),
+        new BatchFlusher<>(KEY_SPEC, changelog.partition(), flushManager),
         sessionClients,
         changelog,
         admin,
@@ -403,7 +403,7 @@ public class CommitBufferTest {
     // Given:
     final var flushManager = table.init(changelog.partition());
     new CommitBuffer<>(
-        new WriteBatcher<>(KEY_SPEC, changelog.partition(), flushManager),
+        new BatchFlusher<>(KEY_SPEC, changelog.partition(), flushManager),
         sessionClients, changelog, admin,
         KEY_SPEC, true, tableName, TRIGGERS, EXCEPTION_SUPPLIER);
 
@@ -464,7 +464,7 @@ public class CommitBufferTest {
         .thenReturn(failedTruncationsSensor);
     final var flushManager = table.init(changelog.partition());
     final CommitBuffer<Bytes, Integer> buffer = new CommitBuffer<>(
-        new WriteBatcher<>(KEY_SPEC, changelog.partition(), flushManager),
+        new BatchFlusher<>(KEY_SPEC, changelog.partition(), flushManager),
         sessionClients,
         sourceChangelog,
         admin,
@@ -629,7 +629,7 @@ public class CommitBufferTest {
     final ExceptionSupplier exceptionSupplier = mock(ExceptionSupplier.class);
     final var flushManager = table.init(changelog.partition());
     final CommitBuffer<Bytes, Integer> buffer = new CommitBuffer<>(
-        new WriteBatcher<>(KEY_SPEC, changelog.partition(), flushManager),
+        new BatchFlusher<>(KEY_SPEC, changelog.partition(), flushManager),
         sessionClients, changelog, admin,
         KEY_SPEC, true, tableName, TRIGGERS, exceptionSupplier);
 
@@ -672,7 +672,7 @@ public class CommitBufferTest {
     // Given:
     final var flushManager = table.init(changelog.partition());
     final CommitBuffer<Bytes, Integer> buffer = new CommitBuffer<>(
-        new WriteBatcher<>(KEY_SPEC, changelog.partition(), flushManager),
+        new BatchFlusher<>(KEY_SPEC, changelog.partition(), flushManager),
         sessionClients,
         changelog,
         admin,

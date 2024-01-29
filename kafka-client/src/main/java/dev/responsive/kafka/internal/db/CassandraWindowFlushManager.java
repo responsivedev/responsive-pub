@@ -52,10 +52,9 @@ public class CassandraWindowFlushManager implements FlushManager<WindowedKey, Se
     this.kafkaPartition = kafkaPartition;
     this.epoch = epoch;
 
-    logPrefix = String.format("%s[%d] MongoWindowFlushManager {epoch=%s}",
+    logPrefix = String.format("%s[%d] window-store {epoch=%s} ",
                               table.name(), kafkaPartition, epoch);
-    log = new LogContext(String.format("%s[%d]", table.name(), kafkaPartition))
-        .logger(CassandraWindowFlushManager.class);
+    log = new LogContext(logPrefix).logger(CassandraWindowFlushManager.class);
   }
 
   @Override

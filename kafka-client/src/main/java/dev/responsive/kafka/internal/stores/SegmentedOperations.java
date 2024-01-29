@@ -30,7 +30,7 @@ import dev.responsive.kafka.internal.db.CassandraTableSpecFactory;
 import dev.responsive.kafka.internal.db.FlushManager;
 import dev.responsive.kafka.internal.db.RemoteWindowedTable;
 import dev.responsive.kafka.internal.db.WindowedKeySpec;
-import dev.responsive.kafka.internal.db.WriteBatcher;
+import dev.responsive.kafka.internal.db.BatchFlusher;
 import dev.responsive.kafka.internal.db.mongo.ResponsiveMongoClient;
 import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner;
 import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
@@ -108,13 +108,13 @@ public class SegmentedOperations implements WindowOperations {
     log.info("Remote table {} is available for querying.", name.remoteName());
 
     final WindowedKeySpec keySpec = new WindowedKeySpec(withinRetention);
-    final WriteBatcher<WindowedKey, ?> writeBatcher = new WriteBatcher<>(
+    final BatchFlusher<WindowedKey, ?> batchFlusher = new BatchFlusher<>(
         keySpec,
         changelog.partition(),
         flushManager
     );
     final CommitBuffer<WindowedKey, ?> buffer = CommitBuffer.from(
-        writeBatcher,
+        batchFlusher,
         sessionClients,
         changelog,
         keySpec,

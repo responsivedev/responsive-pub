@@ -41,7 +41,7 @@ public class CassandraFactFlushManager implements FlushManager<Bytes, Integer> {
     this.kafkaPartition = kafkaPartition;
 
     partitioner = TablePartitioner.defaultPartitioner();
-    logPrefix = String.format("%s[%d] CassandraFactFlushManager", table.name(), kafkaPartition);
+    logPrefix = String.format("%s[%d] fact-store", table.name(), kafkaPartition);
   }
 
   @Override

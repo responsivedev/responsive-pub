@@ -28,7 +28,7 @@ import dev.responsive.kafka.internal.db.BytesKeySpec;
 import dev.responsive.kafka.internal.db.CassandraTableSpecFactory;
 import dev.responsive.kafka.internal.db.FlushManager;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
-import dev.responsive.kafka.internal.db.WriteBatcher;
+import dev.responsive.kafka.internal.db.BatchFlusher;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
@@ -102,14 +102,14 @@ public class PartitionedOperations implements KeyValueOperations {
     log.info("Remote table {} is available for querying.", name.remoteName());
 
     final BytesKeySpec keySpec = new BytesKeySpec();
-    final WriteBatcher<Bytes, ?> writeBatcher = new WriteBatcher<>(
+    final BatchFlusher<Bytes, ?> batchFlusher = new BatchFlusher<>(
         keySpec,
         changelog.partition(),
         flushManager
     );
 
     final CommitBuffer<Bytes, ?> buffer = CommitBuffer.from(
-        writeBatcher,
+        batchFlusher,
         sessionClients,
         changelog,
         keySpec,

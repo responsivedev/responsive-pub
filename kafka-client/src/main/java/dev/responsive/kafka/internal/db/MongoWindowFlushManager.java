@@ -61,7 +61,7 @@ public class MongoWindowFlushManager implements FlushManager<WindowedKey, Segmen
     this.partitioner = partitioner;
     this.kafkaPartition = kafkaPartition;
 
-    logPrefix = String.format("%s[%d] MongoWindowFlushManager {epoch=%d} ",
+    logPrefix = String.format("%s[%d] window-store {epoch=%d} ",
                               table.name(), kafkaPartition, table.epoch(kafkaPartition));
     log = new LogContext(logPrefix).logger(MongoWindowFlushManager.class);
   }
@@ -109,7 +109,6 @@ public class MongoWindowFlushManager implements FlushManager<WindowedKey, Segmen
     return table.postCommit(kafkaPartition);
   }
 
-  @Override
   public String logPrefix() {
     return logPrefix;
   }

@@ -56,7 +56,7 @@ public class MongoKVFlushManager implements FlushManager<Bytes, Integer> {
     this.kafkaPartition = kafkaPartition;
 
     partitioner = TablePartitioner.defaultPartitioner();
-    logPrefix = String.format("%s[%d] MongoKVFlushManager {epoch=%d} ",
+    logPrefix = String.format("%s[%d] kv-store {epoch=%d} ",
                               table.name(), kafkaPartition, table.epoch(kafkaPartition));
     log = new LogContext(logPrefix).logger(MongoKVFlushManager.class);
   }

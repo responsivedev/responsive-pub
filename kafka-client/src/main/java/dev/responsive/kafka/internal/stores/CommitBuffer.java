@@ -42,7 +42,8 @@ import static org.apache.kafka.clients.admin.RecordsToDelete.beforeOffset;
 
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.db.KeySpec;
-import dev.responsive.kafka.internal.db.WriteBatcher;
+import dev.responsive.kafka.internal.db.BatchFlusher;
+import dev.responsive.kafka.internal.db.BatchFlusher.FlushResult;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.utils.ExceptionSupplier;
 import dev.responsive.kafka.internal.utils.Iterators;
@@ -87,7 +88,7 @@ public class CommitBuffer<K extends Comparable<K>, P>
   private final Logger log;
   private final String logPrefix;
 
-  private final WriteBatcher<K, P> writeBatcher;
+  private final BatchFlusher<K, P> batchFlusher;
   private final SizeTrackingBuffer<K> buffer;
   private final ResponsiveMetrics metrics;
   private final Admin admin;
@@ -117,7 +118,7 @@ public class CommitBuffer<K extends Comparable<K>, P>
   private Instant lastFlush;
 
   static <K extends Comparable<K>, P> CommitBuffer<K, P> from(
-      final WriteBatcher<K, P> writeBatcher,
+      final BatchFlusher<K, P> batchFlusher,
       final SessionClients clients,
       final TopicPartition changelog,
       final KeySpec<K> keySpec,
@@ -128,7 +129,7 @@ public class CommitBuffer<K extends Comparable<K>, P>
     final var admin = clients.admin();
 
     return new CommitBuffer<>(
-        writeBatcher,
+        batchFlusher,
         clients,
         changelog,
         admin,
@@ -141,7 +142,7 @@ public class CommitBuffer<K extends Comparable<K>, P>
   }
 
   CommitBuffer(
-      final WriteBatcher<K, P> writeBatcher,
+      final BatchFlusher<K, P> batchFlusher,
       final SessionClients sessionClients,
       final TopicPartition changelog,
       final Admin admin,
@@ -152,7 +153,7 @@ public class CommitBuffer<K extends Comparable<K>, P>
       final ExceptionSupplier exceptionSupplier
   ) {
     this(
-        writeBatcher,
+        batchFlusher,
         sessionClients,
         changelog,
         admin,
@@ -167,7 +168,7 @@ public class CommitBuffer<K extends Comparable<K>, P>
   }
 
   CommitBuffer(
-      final WriteBatcher<K, P> writeBatcher,
+      final BatchFlusher<K, P> batchFlusher,
       final SessionClients sessionClients,
       final TopicPartition changelog,
       final Admin admin,
@@ -179,7 +180,7 @@ public class CommitBuffer<K extends Comparable<K>, P>
       final int maxBatchSize,
       final Supplier<Instant> clock
   ) {
-    this.writeBatcher = writeBatcher;
+    this.batchFlusher = batchFlusher;
     this.changelog = changelog;
     this.metrics = sessionClients.metrics();
     this.admin = admin;
@@ -468,16 +469,20 @@ public class CommitBuffer<K extends Comparable<K>, P>
         buffer.getReader().size(),
         batchSize,
         consumedOffset,
-        writeBatcher
+             batchFlusher
     );
 
-    final RemoteWriteResult<P> flushResult = writeBatcher.flushWriteBatch(
-        buffer.getReader().values(), consumedOffset);
+    final FlushResult<K, P> flushResult = batchFlusher.flushWriteBatch(
+        buffer.getReader(), consumedOffset
+    );
 
-    if (!flushResult.wasApplied()) {
+    if (!flushResult.result().wasApplied()) {
       flushErrorsSensor.record();
 
-      final String errorMsg = writeBatcher.failedFlushMsg(flushResult, consumedOffset);
+      final String errorMsg =
+          String.format("Error while flushing batch for table partition %s! %s",
+                        flushResult.result().tablePartition(),
+                        flushResult.failedFlushInfo(consumedOffset));
       log.warn(errorMsg);
 
       throw exceptionSupplier.commitFencedException(logPrefix + errorMsg);
@@ -490,11 +495,11 @@ public class CommitBuffer<K extends Comparable<K>, P>
     flushSensor.record(1, endMs);
     flushLatencySensor.record(flushLatencyMs, endMs);
 
-    log.info("Flushed {} records with offset {} to remote in {}ms ({})",
+    log.info("Flushed {} records to {} table partitions with offset {} in {}ms",
              buffer.getReader().size(),
+             flushResult.numTablePartitionsFlushed(),
              consumedOffset,
-             flushLatencyMs,
-             writeBatcher.successfulFlushMsg()
+             flushLatencyMs
     );
     buffer.clear();
 

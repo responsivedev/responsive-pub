@@ -20,27 +20,27 @@ package dev.responsive.kafka.internal.db;
 
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
+import java.util.Collection;
 
 public interface FlushManager<K, P> {
+
+  String tableName();
 
   TablePartitioner<K, P> partitioner();
 
   RemoteWriter<K, P> createWriter(final P tablePartition);
 
+  void writeAdded(final K key);
+
   RemoteWriteResult<P> preFlush();
 
   RemoteWriteResult<P> postFlush(final long consumedOffset);
-
-  String logPrefix();
 
   default String failedFlushMsg(final long batchOffset) {
     // TODO: remove default and implement!
     return "failed on flushing offset " + batchOffset;
   }
 
-  default String successfulFlushMsg() {
-    // TODO: remove default and implement!
-    return "";
-  }
+  String logPrefix();
 
 }

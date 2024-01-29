@@ -47,8 +47,7 @@ public class CassandraKVFlushManager implements FlushManager<Bytes, Integer> {
     this.kafkaPartition = kafkaPartition;
     this.epoch = epoch;
 
-    logPrefix = String.format("%s[%d] CassandraKVFlushManager {epoch=%d}",
-                              table.name(), kafkaPartition, epoch);
+    logPrefix = String.format("%s[%d] kv-store {epoch=%d} ", table.name(), kafkaPartition, epoch);
   }
 
   @Override
