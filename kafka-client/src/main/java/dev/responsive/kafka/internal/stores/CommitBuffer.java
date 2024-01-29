@@ -468,7 +468,7 @@ public class CommitBuffer<K extends Comparable<K>, P>
         buffer.getReader().size(),
         batchSize,
         consumedOffset,
-             writeBatcher
+        writeBatcher
     );
 
     final RemoteWriteResult<P> flushResult = writeBatcher.flushWriteBatch(

@@ -1,6 +1,6 @@
 /*
  *
- *  * Copyright 2023 Responsive Computing, Inc.
+ *  * Copyright 2024 Responsive Computing, Inc.
  *  *
  *  * Licensed under the Apache License, Version 2.0 (the "License");
  *  * you may not use this file except in compliance with the License.
@@ -32,10 +32,11 @@ import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
 /**
- * A class for holding and coordinating the pending writes and other metadata involved
- * in a flush to the remote table
+ * An immutable class with the prepared batch of writes that are ready to be flushed to the
+ * remote table.
+ *
  */
-public class WriteBatch<K extends Comparable<K>, P> {
+public class PreparedBatch<K extends Comparable<K>, P> {
   private final Logger log;
 
   private final Function<P, RemoteWriter<K, P>> writerFactory;
@@ -45,14 +46,14 @@ public class WriteBatch<K extends Comparable<K>, P> {
   private final Map<P, RemoteWriter<K, P>> batchWriters = new HashMap<>();
   boolean closed = false;
 
-  public WriteBatch(
+  public PreparedBatch(
       final Function<P, RemoteWriter<K, P>> writerFactory,
       final KeySpec<K> keySpec,
       final int kafkaPartition,
       final TablePartitioner<K, P> partitioner,
       final Collection<Result<K>> bufferedWrites
   ) {
-    this.log = new LogContext(String.format("[%d]", kafkaPartition)).logger(WriteBatch.class);
+    this.log = new LogContext(String.format("[%d]", kafkaPartition)).logger(PreparedBatch.class);
     this.writerFactory = writerFactory;
     this.kafkaPartition = kafkaPartition;
     this.partitioner = partitioner;

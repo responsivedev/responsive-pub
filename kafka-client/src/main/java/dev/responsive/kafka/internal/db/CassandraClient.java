@@ -50,7 +50,7 @@ public class CassandraClient {
   private final TableCache<RemoteKVTable<BoundStatement>> kvFactory;
   private final TableCache<RemoteKVTable<BoundStatement>> factFactory;
   private final TableCache<RemoteWindowedTable<BoundStatement>> windowedFactory;
-  private final TableCache<RemoteKVTable<BoundStatement>> globalFactory;
+  private final TableCache<CassandraFactTable> globalFactory;
 
   /**
    * @param session the Cassandra session, expected to be initialized
@@ -152,7 +152,7 @@ public class CassandraClient {
     session.close();
   }
 
-  public TableCache<RemoteKVTable<BoundStatement>> globalFactory() {
+  public TableCache<CassandraFactTable> globalFactory() {
     return globalFactory;
   }
 

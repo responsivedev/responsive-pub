@@ -1,25 +1,24 @@
 /*
  *
- *  * Copyright 2023 Responsive Computing, Inc.
- *  *
- *  * Licensed under the Apache License, Version 2.0 (the "License");
- *  * you may not use this file except in compliance with the License.
- *  * You may obtain a copy of the License at
- *  *
- *  *     http://www.apache.org/licenses/LICENSE-2.0
- *  *
- *  * Unless required by applicable law or agreed to in writing, software
- *  * distributed under the License is distributed on an "AS IS" BASIS,
- *  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  * See the License for the specific language governing permissions and
- *  * limitations under the License.
+ *  Copyright 2023 Responsive Computing, Inc.
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
  *
  */
 
 package dev.responsive.kafka.internal.db.mongo;
 
 import static com.mongodb.MongoClientSettings.getDefaultCodecRegistry;
-import static dev.responsive.kafka.internal.db.mongo.WindowDoc.compositeKey;
 import static dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.UNINITIALIZED_STREAM_TIME;
 import static dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration.NO_COMMITTED_OFFSET;
 import static org.bson.codecs.configuration.CodecRegistries.fromProviders;
@@ -54,6 +53,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.bson.codecs.configuration.CodecProvider;
 import org.bson.codecs.configuration.CodecRegistry;
@@ -79,7 +79,9 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
   private final ConcurrentMap<Integer, PartitionSegments> kafkaPartitionToSegments =
       new ConcurrentHashMap<>();
 
-  private class PartitionSegments {
+  private static class PartitionSegments {
+    private final MongoDatabase database;
+    private final long segmentIntervalMs;
     private final long epoch;
     private final SegmentBatch segmentBatch;
 
@@ -88,17 +90,29 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
     private final Map<SegmentPartition, MongoCollection<WindowDoc>> segmentWindows;
 
     public PartitionSegments(
+        final MongoDatabase database,
+        final long segmentIntervalMs,
         final long streamTime,
         final long epoch
     ) {
+      this.database = database;
+      this.segmentIntervalMs = segmentIntervalMs;
       this.segmentBatch = new SegmentBatch(streamTime);
       this.epoch = epoch;
       this.segmentWindows = new ConcurrentHashMap<>();
     }
 
+    private String collectionNameForSegment(final SegmentPartition segmentPartition) {
+      final long segmentStartTimeMs = segmentPartition.segmentId * segmentIntervalMs;
+      return String.format(
+          "%d-%d",
+          segmentPartition.tablePartition, segmentStartTimeMs
+      );
+    }
+
     void createSegment(final SegmentPartition segmentToCreate) {
       LOG.info("{}[{}] Creating segment id {}",
-               name, segmentToCreate.tablePartition, segmentToCreate.segmentId);
+               database.getName(), segmentToCreate.tablePartition, segmentToCreate.segmentId);
 
       final MongoCollection<WindowDoc> windowDocs =
           database.getCollection(collectionNameForSegment(segmentToCreate), WindowDoc.class);
@@ -121,7 +135,7 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
     // no async way to drop a collection but the stream thread doesn't actually need to wait for it
     void expireSegment(final SegmentPartition segmentToDelete) {
       LOG.info("{}[{}] Expiring segment id {}",
-               name, segmentToDelete.tablePartition, segmentToDelete.segmentId);
+               database.getName(), segmentToDelete.tablePartition, segmentToDelete.segmentId);
 
       final var expiredDocs = segmentWindows.get(segmentToDelete);
       expiredDocs.drop();
@@ -161,9 +175,9 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
       final int kafkaPartition
   ) {
     final WindowMetadataDoc metaDoc = metadata.findOneAndUpdate(
-        Filters.eq(WindowMetadataDoc.ID, kafkaPartition),
+        Filters.eq(WindowMetadataDoc.PARTITION, kafkaPartition),
         Updates.combine(
-            Updates.setOnInsert(WindowMetadataDoc.ID, kafkaPartition),
+            Updates.setOnInsert(WindowMetadataDoc.PARTITION, kafkaPartition),
             Updates.setOnInsert(WindowMetadataDoc.OFFSET, NO_COMMITTED_OFFSET),
             Updates.setOnInsert(WindowMetadataDoc.STREAM_TIME, UNINITIALIZED_STREAM_TIME),
             Updates.inc(WindowMetadataDoc.EPOCH, 1) // will set the value to 1 if it doesn't exist
@@ -179,7 +193,8 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
 
     LOG.info("{}[{}] Retrieved initial metadata {}", name, kafkaPartition, metaDoc);
 
-    final var partitionSegments = new PartitionSegments(metaDoc.streamTime, metaDoc.epoch);
+    final var partitionSegments = new PartitionSegments(
+        database, partitioner.segmentIntervalMs(), metaDoc.streamTime, metaDoc.epoch);
 
     final var activeSegments = partitioner.activeSegments(kafkaPartition, metaDoc.streamTime);
     if (activeSegments.isEmpty()) {
@@ -190,8 +205,6 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
         // Most likely if we have active segments upon initialization, the corresponding
         // collections and windowStart indices already exist, in which case #getCollection and
         // #createIndex should be quick and won't rebuild either structure if one already exists
-        // TODO: optimize by using listCollectionNames to skip redundant collection/index creation
-        //  since we should almost always have an index for each collection for all active segments
         partitionSegments.createSegment(segmentToCreate);
       }
 
@@ -214,14 +227,7 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
     );
   }
 
-  public String collectionNameForSegment(final SegmentPartition segmentPartition) {
-    return String.format(
-        "%d-%d",
-        segmentPartition.tablePartition, segmentPartition.segmentId
-    );
-  }
-
-  public MongoCollection<WindowDoc> windowsForSegmentPartition(
+  private MongoCollection<WindowDoc> windowsForSegmentPartition(
       final int kafkaPartition,
       final SegmentPartition segment
   ) {
@@ -260,14 +266,25 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
 
   @Override
   public long fetchOffset(final int kafkaPartition) {
-    final WindowMetadataDoc result = metadata.find(
-        Filters.eq(WindowMetadataDoc.ID, kafkaPartition)
+    final WindowMetadataDoc remoteMetadata = metadata.find(
+        Filters.eq(WindowMetadataDoc.PARTITION, kafkaPartition)
     ).first();
-    if (result == null) {
-      LOG.error("Offset fetch failed due to missing metadata row for partition {}", kafkaPartition);
+
+    if (remoteMetadata == null) {
+      LOG.error("{}[{}] Offset fetch failed due to missing metadata row",
+                name, kafkaPartition);
       throw new IllegalStateException("No metadata row found for partition " + kafkaPartition);
     }
-    return result.offset;
+
+    final long localEpoch = kafkaPartitionToSegments.get(kafkaPartition).epoch;
+    if (remoteMetadata.epoch > localEpoch) {
+      LOG.warn("{}[{}] Fenced retrieving start offset due to stored epoch {} being greater "
+                   + "than local epoch {} ",
+               name, kafkaPartition, remoteMetadata.epoch, localEpoch);
+      throw new TaskMigratedException("Fenced while fetching offset to start restoration from");
+    }
+
+    return remoteMetadata.offset;
   }
 
   public WriteModel<WindowMetadataDoc> setOffsetAndStreamTime(
@@ -283,7 +300,7 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
 
     return new UpdateOneModel<>(
         Filters.and(
-            Filters.eq(WindowMetadataDoc.ID, kafkaPartition),
+            Filters.eq(WindowMetadataDoc.PARTITION, kafkaPartition),
             Filters.lte(WindowMetadataDoc.EPOCH, epoch)
         ),
         Updates.combine(

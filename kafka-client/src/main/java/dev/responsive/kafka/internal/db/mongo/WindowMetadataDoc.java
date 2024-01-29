@@ -27,12 +27,12 @@ import java.util.Objects;
  */
 public class WindowMetadataDoc {
 
-  public static final String ID = "_id";
+  public static final String PARTITION = "_id";
   public static final String OFFSET = "offset";
   public static final String EPOCH = "epoch";
   public static final String STREAM_TIME = "streamTime";
 
-  int id;
+  int partition;
   long offset;
   long epoch;
   long streamTime;
@@ -40,12 +40,12 @@ public class WindowMetadataDoc {
   public WindowMetadataDoc() {
   }
 
-  public int id() {
-    return id;
+  public int partition() {
+    return partition;
   }
 
-  public void setId(final int id) {
-    this.id = id;
+  public void setPartition(final int partition) {
+    this.partition = partition;
   }
 
   public long offset() {
@@ -81,7 +81,7 @@ public class WindowMetadataDoc {
       return false;
     }
     final WindowMetadataDoc that = (WindowMetadataDoc) o;
-    return id == that.id
+    return partition == that.partition
         && offset == that.offset
         && epoch == that.epoch
         && streamTime == that.streamTime;
@@ -89,13 +89,13 @@ public class WindowMetadataDoc {
 
   @Override
   public int hashCode() {
-    return Objects.hash(id, epoch, offset, streamTime);
+    return Objects.hash(partition, epoch, offset, streamTime);
   }
 
   @Override
   public String toString() {
     return "WindowMetadataDoc{"
-        + "id=" + id
+        + "id=" + partition
         + ", offset=" + offset
         + ", epoch=" + epoch
         + ", streamTime=" + streamTime

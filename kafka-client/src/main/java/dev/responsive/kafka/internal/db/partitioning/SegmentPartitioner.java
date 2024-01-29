@@ -173,6 +173,10 @@ public class SegmentPartitioner implements TablePartitioner<WindowedKey, Segment
     return new SegmentPartition(kafkaPartition, METADATA_SEGMENT_ID);
   }
 
+  public long segmentIntervalMs() {
+    return segmentIntervalMs;
+  }
+
   /**
    * Return all active segments for the given stream-time and retention period
    *

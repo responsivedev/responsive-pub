@@ -1,6 +1,6 @@
 /*
  *
- *  * Copyright 2023 Responsive Computing, Inc.
+ *  * Copyright 2024 Responsive Computing, Inc.
  *  *
  *  * Licensed under the Apache License, Version 2.0 (the "License");
  *  * you may not use this file except in compliance with the License.
@@ -80,7 +80,7 @@ public class MongoKVFlushManager implements FlushManager<Bytes, Integer> {
   public RemoteWriteResult<Integer> postFlush(final long consumedOffset) {
     try {
       // TODO: should we check result.wasAcknowledged()/use a write concern?
-      metadataDocs.bulkWrite(List.of(table.setOffset(kafkaPartition, consumedOffset)));
+      table.setOffset(kafkaPartition, consumedOffset);
     } catch (final MongoBulkWriteException e) {
       log.warn("Bulk write operation failed", e);
       final WriteConcernError writeConcernError = e.getWriteConcernError();

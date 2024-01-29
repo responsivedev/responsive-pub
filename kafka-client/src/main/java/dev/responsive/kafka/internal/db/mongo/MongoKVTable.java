@@ -33,6 +33,7 @@ import com.mongodb.client.model.UpdateOneModel;
 import com.mongodb.client.model.UpdateOptions;
 import com.mongodb.client.model.Updates;
 import com.mongodb.client.model.WriteModel;
+import com.mongodb.client.result.UpdateResult;
 import dev.responsive.kafka.internal.db.MongoKVFlushManager;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import java.time.Instant;
@@ -188,9 +189,10 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
     return result.offset;
   }
 
-  public WriteModel<MetadataDoc> setOffset(final int kafkaPartition, final long offset) {
+  public UpdateResult setOffset(final int kafkaPartition, final long offset) {
     final long epoch = kafkaPartitionToEpoch.get(kafkaPartition);
-    return new UpdateOneModel<>(
+
+    return metadata.updateOne(
         Filters.and(
             Filters.eq(MetadataDoc.ID, kafkaPartition),
             Filters.lte(MetadataDoc.EPOCH, epoch)

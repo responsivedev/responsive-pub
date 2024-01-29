@@ -1,6 +1,6 @@
 /*
  *
- *  * Copyright 2023 Responsive Computing, Inc.
+ *  * Copyright 2024 Responsive Computing, Inc.
  *  *
  *  * Licensed under the Apache License, Version 2.0 (the "License");
  *  * you may not use this file except in compliance with the License.
@@ -48,7 +48,7 @@ public class WriteBatcher<K extends Comparable<K>, P> {
       final Collection<Result<K>> bufferedWrites,
       final long consumedOffset
   ) {
-    final WriteBatch<K, P> writeBatch = new WriteBatch<>(
+    final PreparedBatch<K, P> preparedBatch = new PreparedBatch<>(
         flushManager::createWriter,
         keySpec,
         kafkaPartition,
@@ -56,7 +56,7 @@ public class WriteBatcher<K extends Comparable<K>, P> {
         bufferedWrites
     );
 
-    numTablePartitionsInBatch = writeBatch.numTablePartitionsInBatch();
+    numTablePartitionsInBatch = preparedBatch.numTablePartitionsInBatch();
 
     final var preFlushResult = flushManager.preFlush();
     if (!preFlushResult.wasApplied()) {
@@ -64,7 +64,7 @@ public class WriteBatcher<K extends Comparable<K>, P> {
       return preFlushResult;
     }
 
-    final var flushResult = writeBatch.flushBatch();
+    final var flushResult = preparedBatch.flushBatch();
     // the offset is only used for recovery, so it can (and should) be set only
     // if/when the entire batch of flushes has completed successfully
     if (!flushResult.wasApplied()) {
