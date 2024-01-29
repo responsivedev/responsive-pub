@@ -22,7 +22,7 @@ import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
 import org.apache.kafka.common.utils.Bytes;
 
-public class CassandraFactFlushManager implements FlushManager<Bytes, Integer> {
+public class CassandraFactFlushManager extends KVFlushManager {
 
   private final String logPrefix;
   private final CassandraFactTable table;
@@ -45,6 +45,11 @@ public class CassandraFactFlushManager implements FlushManager<Bytes, Integer> {
   }
 
   @Override
+  public String tableName() {
+    return table.name();
+  }
+
+  @Override
   public TablePartitioner<Bytes, Integer> partitioner() {
     return partitioner;
   }
@@ -60,12 +65,7 @@ public class CassandraFactFlushManager implements FlushManager<Bytes, Integer> {
   }
 
   @Override
-  public RemoteWriteResult<Integer> preFlush() {
-    return RemoteWriteResult.success(null);
-  }
-
-  @Override
-  public RemoteWriteResult<Integer> postFlush(final long consumedOffset) {
+  public RemoteWriteResult<Integer> updateOffset(final long consumedOffset) {
     final int metadataPartition = partitioner.metadataTablePartition(kafkaPartition);
     final var result = client.execute(table.setOffset(kafkaPartition, consumedOffset));
     return result.wasApplied()

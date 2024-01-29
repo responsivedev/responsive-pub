@@ -111,7 +111,7 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
     LOG.info("Retrieved initial metadata {}", metaDoc);
 
     kafkaPartitionToEpoch.put(kafkaPartition, metaDoc.epoch);
-    return new MongoKVFlushManager(this, docs, metadata, kafkaPartition);
+    return new MongoKVFlushManager(this, docs, kafkaPartition);
   }
 
   public long epoch(final int kafkaPartition) {

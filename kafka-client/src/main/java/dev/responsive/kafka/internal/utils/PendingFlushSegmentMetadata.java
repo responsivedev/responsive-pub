@@ -22,8 +22,8 @@ import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner;
 import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.SegmentRoll;
 
 /**
- * Used to track metadata for the pending flush of the segments that make up a windowed table, such as
- * the latest flushed stream-time and the stream-time of the current batch as well
+ * Used to track metadata for the pending flush of the segments that make up a windowed table,
+ * such as the latest flushed stream-time and the stream-time of the current batch as well
  * as the set of segments that will be rolled (created/deleted) by the ongoing flush
  * <p>
  * Note: we intentionally track stream-time separately here and in the state store itself
@@ -31,19 +31,15 @@ import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.SegmentR
  * (Specifically, the table will always lag the view of stream-time that is shared by the
  * ResponsiveWindowStore and CommitBuffer due to buffering/batching of writes)
  */
-public class PendingFlushMetadata {
+public class PendingFlushSegmentMetadata {
 
   private long flushedStreamTime;
   private long batchStreamTime;
   private SegmentRoll segmentRoll;
 
-  public PendingFlushMetadata(final long persistedStreamTime) {
+  public PendingFlushSegmentMetadata(final long persistedStreamTime) {
     this.flushedStreamTime = persistedStreamTime;
     this.batchStreamTime = persistedStreamTime;
-  }
-
-  public long flushedStreamTime() {
-    return flushedStreamTime;
   }
 
   public long batchStreamTime() {

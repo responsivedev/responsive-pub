@@ -35,6 +35,11 @@ public class TTDFlushManager<K> implements FlushManager<K, Integer> {
   }
 
   @Override
+  public String tableName() {
+    return table.name();
+  }
+
+  @Override
   public TablePartitioner<K, Integer> partitioner() {
     return TablePartitioner.defaultPartitioner();
   }
@@ -42,6 +47,11 @@ public class TTDFlushManager<K> implements FlushManager<K, Integer> {
   @Override
   public RemoteWriter<K, Integer> createWriter(final Integer tablePartition) {
     return new TTDWriter<>(table, tablePartition);
+  }
+
+  @Override
+  public void writeAdded(final K key) {
+
   }
 
   @Override

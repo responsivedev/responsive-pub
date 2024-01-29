@@ -25,25 +25,22 @@ import com.mongodb.client.MongoCollection;
 import dev.responsive.kafka.internal.db.mongo.MongoWindowedTable;
 import dev.responsive.kafka.internal.db.mongo.MongoWriter;
 import dev.responsive.kafka.internal.db.mongo.WindowDoc;
-import dev.responsive.kafka.internal.db.mongo.WindowMetadataDoc;
 import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner;
 import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.SegmentPartition;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
 import dev.responsive.kafka.internal.utils.WindowedKey;
-import java.util.List;
 import java.util.function.Function;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
-public class MongoWindowFlushManager implements FlushManager<WindowedKey, SegmentPartition> {
+public class MongoWindowFlushManager extends WindowFlushManager {
 
   private final String logPrefix;
   private final Logger log;
 
   private final MongoWindowedTable table;
   private final Function<SegmentPartition, MongoCollection<WindowDoc>> windowsForSegment;
-  private final MongoCollection<WindowMetadataDoc> metadataDocs;
 
   private final SegmentPartitioner partitioner;
   private final int kafkaPartition;
@@ -51,19 +48,25 @@ public class MongoWindowFlushManager implements FlushManager<WindowedKey, Segmen
   public MongoWindowFlushManager(
       final MongoWindowedTable table,
       final Function<SegmentPartition, MongoCollection<WindowDoc>> windowsForSegment,
-      final MongoCollection<WindowMetadataDoc> metadataDocs,
       final SegmentPartitioner partitioner,
-      final int kafkaPartition
+      final int kafkaPartition,
+      final long streamTime
   ) {
+    super(kafkaPartition, partitioner, streamTime);
+
     this.table = table;
     this.windowsForSegment = windowsForSegment;
-    this.metadataDocs = metadataDocs;
     this.partitioner = partitioner;
     this.kafkaPartition = kafkaPartition;
 
     logPrefix = String.format("%s[%d] window-store {epoch=%d} ",
                               table.name(), kafkaPartition, table.epoch(kafkaPartition));
     log = new LogContext(logPrefix).logger(MongoWindowFlushManager.class);
+  }
+
+  @Override
+  public String tableName() {
+    return table.name();
   }
 
   @Override
@@ -84,15 +87,27 @@ public class MongoWindowFlushManager implements FlushManager<WindowedKey, Segmen
   }
 
   @Override
-  public RemoteWriteResult<SegmentPartition> preFlush() {
-    return table.preCommit(kafkaPartition);
+  public RemoteWriteResult<SegmentPartition> createSegment(
+      final SegmentPartition segmentPartition
+  ) {
+    return table.createSegmentForPartition(kafkaPartition, segmentPartition);
   }
 
   @Override
-  public RemoteWriteResult<SegmentPartition> postFlush(final long consumedOffset) {
+  public RemoteWriteResult<SegmentPartition> deleteSegment(
+      final SegmentPartition segmentPartition
+  ) {
+    return table.deleteSegmentForPartition(kafkaPartition, segmentPartition);
+  }
+
+  @Override
+  public RemoteWriteResult<SegmentPartition> updateOffsetAndStreamTime(
+      final long consumedOffset,
+      final long streamTime
+  ) {
     try {
       // TODO: should we check result.wasAcknowledged()/use a write concern?
-      table.setOffsetAndStreamTime(kafkaPartition, consumedOffset);
+      table.setOffsetAndStreamTime(kafkaPartition, consumedOffset, streamTime);
     } catch (final MongoBulkWriteException e) {
       log.warn("Bulk write operation failed", e);
       final WriteConcernError writeConcernError = e.getWriteConcernError();
@@ -106,7 +121,7 @@ public class MongoWindowFlushManager implements FlushManager<WindowedKey, Segmen
       log.error("Unexpected exception running the bulk write operation", e);
       throw new RuntimeException("Bulk write operation failed", e);
     }
-    return table.postCommit(kafkaPartition);
+    return RemoteWriteResult.success(null);
   }
 
   public String logPrefix() {

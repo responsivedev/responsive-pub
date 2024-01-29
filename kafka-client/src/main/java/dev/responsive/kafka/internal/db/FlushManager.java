@@ -20,7 +20,6 @@ package dev.responsive.kafka.internal.db;
 
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
-import java.util.Collection;
 
 public interface FlushManager<K, P> {
 

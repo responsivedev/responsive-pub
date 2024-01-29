@@ -23,23 +23,20 @@ import com.mongodb.MongoException;
 import com.mongodb.bulk.WriteConcernError;
 import com.mongodb.client.MongoCollection;
 import dev.responsive.kafka.internal.db.mongo.KVDoc;
-import dev.responsive.kafka.internal.db.mongo.MetadataDoc;
 import dev.responsive.kafka.internal.db.mongo.MongoKVTable;
 import dev.responsive.kafka.internal.db.mongo.MongoWriter;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
-import java.util.List;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
-public class MongoKVFlushManager implements FlushManager<Bytes, Integer> {
+public class MongoKVFlushManager extends KVFlushManager {
   private final String logPrefix;
   private final Logger log;
 
   private final MongoKVTable table;
   private final MongoCollection<KVDoc> kvDocs;
-  private final MongoCollection<MetadataDoc> metadataDocs;
 
   private final TablePartitioner<Bytes, Integer> partitioner;
   private final int kafkaPartition;
@@ -47,18 +44,21 @@ public class MongoKVFlushManager implements FlushManager<Bytes, Integer> {
   public MongoKVFlushManager(
       final MongoKVTable table,
       final MongoCollection<KVDoc> kvDocs,
-      final MongoCollection<MetadataDoc> metadataDocs,
       final int kafkaPartition
   ) {
     this.table = table;
     this.kvDocs = kvDocs;
-    this.metadataDocs = metadataDocs;
     this.kafkaPartition = kafkaPartition;
 
     partitioner = TablePartitioner.defaultPartitioner();
     logPrefix = String.format("%s[%d] kv-store {epoch=%d} ",
                               table.name(), kafkaPartition, table.epoch(kafkaPartition));
     log = new LogContext(logPrefix).logger(MongoKVFlushManager.class);
+  }
+
+  @Override
+  public String tableName() {
+    return table.name();
   }
 
   @Override
@@ -72,12 +72,7 @@ public class MongoKVFlushManager implements FlushManager<Bytes, Integer> {
   }
 
   @Override
-  public RemoteWriteResult<Integer> preFlush() {
-    return RemoteWriteResult.success(kafkaPartition);
-  }
-
-  @Override
-  public RemoteWriteResult<Integer> postFlush(final long consumedOffset) {
+  public RemoteWriteResult<Integer> updateOffset(final long consumedOffset) {
     try {
       // TODO: should we check result.wasAcknowledged()/use a write concern?
       table.setOffset(kafkaPartition, consumedOffset);

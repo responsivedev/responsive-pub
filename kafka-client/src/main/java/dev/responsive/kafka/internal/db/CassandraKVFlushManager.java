@@ -24,7 +24,7 @@ import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
 import org.apache.kafka.common.utils.Bytes;
 
-public class CassandraKVFlushManager implements FlushManager<Bytes, Integer> {
+public class CassandraKVFlushManager extends KVFlushManager {
 
   private final String logPrefix;
   private final CassandraKeyValueTable table;
@@ -51,6 +51,11 @@ public class CassandraKVFlushManager implements FlushManager<Bytes, Integer> {
   }
 
   @Override
+  public String tableName() {
+    return table.name();
+  }
+
+  @Override
   public TablePartitioner<Bytes, Integer> partitioner() {
     return partitioner;
   }
@@ -67,12 +72,7 @@ public class CassandraKVFlushManager implements FlushManager<Bytes, Integer> {
   }
 
   @Override
-  public RemoteWriteResult<Integer> preFlush() {
-    return RemoteWriteResult.success(null);
-  }
-
-  @Override
-  public RemoteWriteResult<Integer> postFlush(final long consumedOffset) {
+  public RemoteWriteResult<Integer> updateOffset(final long consumedOffset) {
     final int tablePartition = partitioner.metadataTablePartition(kafkaPartition);
 
     final BatchStatementBuilder builder = new BatchStatementBuilder(BatchType.UNLOGGED);

@@ -41,9 +41,9 @@ import static dev.responsive.kafka.internal.metrics.StoreMetrics.TIME_SINCE_LAST
 import static org.apache.kafka.clients.admin.RecordsToDelete.beforeOffset;
 
 import dev.responsive.kafka.api.config.ResponsiveConfig;
-import dev.responsive.kafka.internal.db.KeySpec;
 import dev.responsive.kafka.internal.db.BatchFlusher;
 import dev.responsive.kafka.internal.db.BatchFlusher.FlushResult;
+import dev.responsive.kafka.internal.db.KeySpec;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.utils.ExceptionSupplier;
 import dev.responsive.kafka.internal.utils.Iterators;

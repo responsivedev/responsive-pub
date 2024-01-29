@@ -45,11 +45,9 @@ import com.datastax.oss.driver.api.querybuilder.schema.CreateTableWithOptions;
 import com.datastax.oss.driver.internal.querybuilder.schema.compaction.DefaultLeveledCompactionStrategy;
 import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner;
 import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.SegmentPartition;
-import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.SegmentRoll;
 import dev.responsive.kafka.internal.db.spec.CassandraTableSpec;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
 import dev.responsive.kafka.internal.utils.Iterators;
-import dev.responsive.kafka.internal.utils.PendingFlushMetadata;
 import dev.responsive.kafka.internal.utils.WindowedKey;
 import java.nio.ByteBuffer;
 import java.time.Duration;
@@ -57,8 +55,6 @@ import java.time.Instant;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeoutException;
 import javax.annotation.CheckReturnValue;
 import org.apache.kafka.common.utils.Bytes;
@@ -99,9 +95,6 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
   private final PreparedStatement fetchEpoch;
   private final PreparedStatement reserveEpoch;
   private final PreparedStatement ensureEpoch;
-
-  private final ConcurrentMap<Integer, PendingFlushMetadata> kafkaPartitionToSegmentMetadata =
-      new ConcurrentHashMap<>();
 
   public static CassandraWindowedTable create(
       final CassandraTableSpec spec,
@@ -486,7 +479,6 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
     }
 
     final long streamTime = fetchStreamTime(kafkaPartition);
-    kafkaPartitionToSegmentMetadata.put(kafkaPartition, new PendingFlushMetadata(streamTime));
     LOG.info("Initialized stream-time to {} with epoch {} for kafka partition {}",
              streamTime, epoch, kafkaPartition);
 
@@ -520,7 +512,8 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
         client,
         partitioner,
         kafkaPartition,
-        epoch
+        epoch,
+        streamTime
     );
   }
 
@@ -546,53 +539,25 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
     throw e;
   }
 
-  public RemoteWriteResult<SegmentPartition> preCommit(
+  public RemoteWriteResult<SegmentPartition> createSegment(
       final int kafkaPartition,
-      final long epoch
+      final long epoch,
+      final SegmentPartition segmentPartition
   ) {
-    final PendingFlushMetadata pendingFlushMetadata =
-        kafkaPartitionToSegmentMetadata.get(kafkaPartition);
-    final SegmentRoll pendingRoll = pendingFlushMetadata.prepareRoll(partitioner, name);
+    // TODO: use executeAsync to create and reserve epoch for segments
+    final var createSegment = client.execute(createSegment(segmentPartition, epoch));
 
-    // TODO(sophie): use executeAsync to create and reserve epoch for segments
-    SegmentPartition segment = null;
-    for (final long segmentId : pendingRoll.segmentsToCreate()) {
-      segment = new SegmentPartition(kafkaPartition, segmentId);
-      final var createSegment = client.execute(createSegment(segment, epoch));
+    // If the segment creation failed because the table partition already exists, attempt to
+    // update the epoch in case we are fencing an older writer -- if that fails it means we're
+    // the ones being fenced
+    if (!createSegment.wasApplied()) {
+      final var reserveEpoch = client.execute(reserveEpoch(segmentPartition, epoch));
 
-      // If the segment creation failed because the table partition already exists, attempt to
-      // update the epoch in case we are fencing an older writer -- if that fails it means we're
-      // the ones being fenced
-      if (!createSegment.wasApplied()) {
-        final var reserveEpoch = client.execute(reserveEpoch(segment, epoch));
-
-        if (!reserveEpoch.wasApplied()) {
-          return RemoteWriteResult.failure(segment);
-        }
+      if (!reserveEpoch.wasApplied()) {
+        return RemoteWriteResult.failure(segmentPartition);
       }
     }
-    return RemoteWriteResult.success(segment);
-  }
-
-  public RemoteWriteResult<SegmentPartition> postCommit(
-      final int kafkaPartition,
-      final long epoch
-  ) {
-    final PendingFlushMetadata pendingFlushMetadata = kafkaPartitionToSegmentMetadata.get(kafkaPartition);
-
-    SegmentPartition segment = null;
-    for (final long segmentId : pendingFlushMetadata.segmentRoll().segmentsToExpire()) {
-      segment = new SegmentPartition(kafkaPartition, segmentId);
-      // TODO: use executeAsync
-      final var expireSegmentResult = client.execute(
-          expireSegment(new SegmentPartition(kafkaPartition, segmentId))
-      );
-      if (!expireSegmentResult.wasApplied()) {
-        return RemoteWriteResult.failure(segment);
-      }
-    }
-    pendingFlushMetadata.finalizeRoll();
-    return RemoteWriteResult.success(segment);
+    return RemoteWriteResult.success(segmentPartition);
   }
 
   private BoundStatement createSegment(final SegmentPartition segmentToCreate, final long epoch) {
@@ -602,6 +567,22 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
         .setLong(SEGMENT_ID.bind(), segmentToCreate.segmentId)
         .setLong(EPOCH.bind(), epoch)
         .setIdempotent(true);
+  }
+
+  public RemoteWriteResult<SegmentPartition> deleteSegment(
+      final int kafkaPartition,
+      final SegmentPartition segmentPartition
+  ) {
+    // TODO: use executeAsync
+    final var expireSegmentResult = client.execute(
+        expireSegment(segmentPartition)
+    );
+
+    if (!expireSegmentResult.wasApplied()) {
+      return RemoteWriteResult.failure(segmentPartition);
+    }
+
+    return RemoteWriteResult.success(segmentPartition);
   }
 
   private BoundStatement expireSegment(final SegmentPartition segmentToDelete) {
@@ -665,19 +646,18 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
 
   public BoundStatement setStreamTime(
       final int kafkaPartition,
-      final long epoch
+      final long epoch,
+      final long streamTime
   ) {
-    final PendingFlushMetadata pendingFlushMetadata = kafkaPartitionToSegmentMetadata.get(kafkaPartition);
-
     LOG.debug("{}[{}] Updating stream time to {} with epoch {}",
-              name, kafkaPartition, pendingFlushMetadata.batchStreamTime(), epoch);
+              name, kafkaPartition, streamTime, epoch);
 
     final SegmentPartition metadataPartition = partitioner.metadataTablePartition(kafkaPartition);
     return setStreamTime
         .bind()
         .setInt(PARTITION_KEY.bind(), metadataPartition.tablePartition)
         .setLong(SEGMENT_ID.bind(), metadataPartition.segmentId)
-        .setLong(STREAM_TIME.bind(), pendingFlushMetadata.batchStreamTime());
+        .setLong(STREAM_TIME.bind(), streamTime);
   }
 
   /**
@@ -740,8 +720,6 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
       final byte[] value,
       final long epochMillis
   ) {
-    maybeUpdateStreamTime(kafkaPartition, key.windowStartMs);
-
     final SegmentPartition remotePartition = partitioner.tablePartition(kafkaPartition, key);
     return insert
         .bind()
@@ -768,8 +746,6 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
       final int kafkaPartition,
       final WindowedKey key
   ) {
-    maybeUpdateStreamTime(kafkaPartition, key.windowStartMs);
-
     final SegmentPartition segmentPartition = partitioner.tablePartition(kafkaPartition, key);
     return delete
         .bind()
@@ -957,10 +933,6 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
         Iterators.wrapped(segmentIterators),
         k -> k.windowStartMs >= timeFrom && k.windowStartMs < timeTo
     );
-  }
-
-  private void maybeUpdateStreamTime(final int kafkaPartition, final long timestamp) {
-    kafkaPartitionToSegmentMetadata.get(kafkaPartition).updateStreamTime(timestamp);
   }
 
   private static KeyValue<WindowedKey, byte[]> windowRows(final Row row) {
