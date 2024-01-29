@@ -296,12 +296,20 @@ public class SegmentPartitioner implements TablePartitioner<WindowedKey, Segment
   }
 
   public static class SegmentRoll {
-    public final long[] segmentsToExpire;
-    public final long[] segmentsToCreate;
+    private final long[] segmentsToExpire;
+    private final long[] segmentsToCreate;
 
     public SegmentRoll(final long[] segmentsToExpire, final long[] segmentsToCreate) {
       this.segmentsToExpire = segmentsToExpire;
       this.segmentsToCreate = segmentsToCreate;
+    }
+
+    public long[] segmentsToExpire() {
+      return segmentsToExpire;
+    }
+
+    public long[] segmentsToCreate() {
+      return segmentsToCreate;
     }
 
     @Override

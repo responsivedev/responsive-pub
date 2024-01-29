@@ -92,7 +92,7 @@ public class MongoWindowFlushManager implements FlushManager<WindowedKey, Segmen
   public RemoteWriteResult<SegmentPartition> postFlush(final long consumedOffset) {
     try {
       // TODO: should we check result.wasAcknowledged()/use a write concern?
-      metadataDocs.bulkWrite(List.of(table.setOffsetAndStreamTime(kafkaPartition, consumedOffset)));
+      table.setOffsetAndStreamTime(kafkaPartition, consumedOffset);
     } catch (final MongoBulkWriteException e) {
       log.warn("Bulk write operation failed", e);
       final WriteConcernError writeConcernError = e.getWriteConcernError();

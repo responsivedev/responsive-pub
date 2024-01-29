@@ -49,7 +49,7 @@ import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.SegmentR
 import dev.responsive.kafka.internal.db.spec.CassandraTableSpec;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
 import dev.responsive.kafka.internal.utils.Iterators;
-import dev.responsive.kafka.internal.utils.SegmentBatch;
+import dev.responsive.kafka.internal.utils.PendingFlushMetadata;
 import dev.responsive.kafka.internal.utils.WindowedKey;
 import java.nio.ByteBuffer;
 import java.time.Duration;
@@ -100,7 +100,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
   private final PreparedStatement reserveEpoch;
   private final PreparedStatement ensureEpoch;
 
-  private final ConcurrentMap<Integer, SegmentBatch> kafkaPartitionToSegmentMetadata =
+  private final ConcurrentMap<Integer, PendingFlushMetadata> kafkaPartitionToSegmentMetadata =
       new ConcurrentHashMap<>();
 
   public static CassandraWindowedTable create(
@@ -486,7 +486,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
     }
 
     final long streamTime = fetchStreamTime(kafkaPartition);
-    kafkaPartitionToSegmentMetadata.put(kafkaPartition, new SegmentBatch(streamTime));
+    kafkaPartitionToSegmentMetadata.put(kafkaPartition, new PendingFlushMetadata(streamTime));
     LOG.info("Initialized stream-time to {} with epoch {} for kafka partition {}",
              streamTime, epoch, kafkaPartition);
 
@@ -550,16 +550,13 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
       final int kafkaPartition,
       final long epoch
   ) {
-    final SegmentBatch segmentBatch = kafkaPartitionToSegmentMetadata.get(kafkaPartition);
-    final SegmentRoll pendingRoll = partitioner.rolledSegments(
-        name, segmentBatch.flushedStreamTime, segmentBatch.batchStreamTime
-    );
+    final PendingFlushMetadata pendingFlushMetadata =
+        kafkaPartitionToSegmentMetadata.get(kafkaPartition);
+    final SegmentRoll pendingRoll = pendingFlushMetadata.prepareRoll(partitioner, name);
 
     // TODO(sophie): use executeAsync to create and reserve epoch for segments
-    segmentBatch.prepareRoll(pendingRoll);
-
     SegmentPartition segment = null;
-    for (final long segmentId : pendingRoll.segmentsToCreate) {
+    for (final long segmentId : pendingRoll.segmentsToCreate()) {
       segment = new SegmentPartition(kafkaPartition, segmentId);
       final var createSegment = client.execute(createSegment(segment, epoch));
 
@@ -581,10 +578,10 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
       final int kafkaPartition,
       final long epoch
   ) {
-    final SegmentBatch segmentBatch = kafkaPartitionToSegmentMetadata.get(kafkaPartition);
+    final PendingFlushMetadata pendingFlushMetadata = kafkaPartitionToSegmentMetadata.get(kafkaPartition);
 
     SegmentPartition segment = null;
-    for (final long segmentId : segmentBatch.segmentRoll.segmentsToExpire) {
+    for (final long segmentId : pendingFlushMetadata.segmentRoll().segmentsToExpire()) {
       segment = new SegmentPartition(kafkaPartition, segmentId);
       // TODO: use executeAsync
       final var expireSegmentResult = client.execute(
@@ -594,7 +591,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
         return RemoteWriteResult.failure(segment);
       }
     }
-    segmentBatch.finalizeRoll();
+    pendingFlushMetadata.finalizeRoll();
     return RemoteWriteResult.success(segment);
   }
 
@@ -670,17 +667,17 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
       final int kafkaPartition,
       final long epoch
   ) {
-    final SegmentBatch segmentBatch = kafkaPartitionToSegmentMetadata.get(kafkaPartition);
+    final PendingFlushMetadata pendingFlushMetadata = kafkaPartitionToSegmentMetadata.get(kafkaPartition);
 
     LOG.debug("{}[{}] Updating stream time to {} with epoch {}",
-              name, kafkaPartition, segmentBatch.batchStreamTime, epoch);
+              name, kafkaPartition, pendingFlushMetadata.batchStreamTime(), epoch);
 
     final SegmentPartition metadataPartition = partitioner.metadataTablePartition(kafkaPartition);
     return setStreamTime
         .bind()
         .setInt(PARTITION_KEY.bind(), metadataPartition.tablePartition)
         .setLong(SEGMENT_ID.bind(), metadataPartition.segmentId)
-        .setLong(STREAM_TIME.bind(), segmentBatch.batchStreamTime);
+        .setLong(STREAM_TIME.bind(), pendingFlushMetadata.batchStreamTime());
   }
 
   /**

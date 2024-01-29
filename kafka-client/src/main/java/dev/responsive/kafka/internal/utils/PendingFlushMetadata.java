@@ -18,38 +18,67 @@
 
 package dev.responsive.kafka.internal.utils;
 
+import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner;
 import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.SegmentRoll;
 
 /**
- * Used to track metadata of the segments that make up a windowed table, such as
- * the latest flushed stream-time and the stream-time of the current batch.
+ * Used to track metadata for the pending flush of the segments that make up a windowed table, such as
+ * the latest flushed stream-time and the stream-time of the current batch as well
+ * as the set of segments that will be rolled (created/deleted) by the ongoing flush
+ * <p>
  * Note: we intentionally track stream-time separately here and in the state store itself
  * as these entities have different views of the current time and should not be unified.
  * (Specifically, the table will always lag the view of stream-time that is shared by the
  * ResponsiveWindowStore and CommitBuffer due to buffering/batching of writes)
  */
-public class SegmentBatch {
+public class PendingFlushMetadata {
 
-  public long flushedStreamTime;
-  public long batchStreamTime;
-  public SegmentRoll segmentRoll;
+  private long flushedStreamTime;
+  private long batchStreamTime;
+  private SegmentRoll segmentRoll;
 
-  public SegmentBatch(final long persistedStreamTime) {
+  public PendingFlushMetadata(final long persistedStreamTime) {
     this.flushedStreamTime = persistedStreamTime;
     this.batchStreamTime = persistedStreamTime;
   }
 
+  public long flushedStreamTime() {
+    return flushedStreamTime;
+  }
+
+  public long batchStreamTime() {
+    return batchStreamTime;
+  }
+
+  public SegmentRoll segmentRoll() {
+    return segmentRoll;
+  }
+
   public void updateStreamTime(final long recordTimestamp) {
+    if (segmentRoll != null) {
+      throw new IllegalStateException("Current segmentRoll should be null when updating the "
+                                          + "batch stream time");
+    }
     batchStreamTime = Math.max(batchStreamTime, recordTimestamp);
   }
 
-  public void prepareRoll(final SegmentRoll newSegmentRoll) {
-    segmentRoll = newSegmentRoll;
+  public SegmentRoll prepareRoll(final SegmentPartitioner partitioner, final String tableName) {
+    if (segmentRoll != null) {
+      throw new IllegalStateException();
+    }
+
+    segmentRoll = partitioner.rolledSegments(
+        tableName,
+        flushedStreamTime,
+        batchStreamTime
+    );
+
+    return segmentRoll;
   }
 
   public void finalizeRoll() {
-    segmentRoll = null;
     flushedStreamTime = batchStreamTime;
+    segmentRoll = null;
   }
 
 }
