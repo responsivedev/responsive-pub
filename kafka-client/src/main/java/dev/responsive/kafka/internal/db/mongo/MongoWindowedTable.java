@@ -73,9 +73,11 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
   private final boolean timestampFirstOrder;
 
   private final MongoDatabase database;
+  private final MongoDatabase adminDatabase;
   private final MongoCollection<WindowMetadataDoc> metadata;
   private final ConcurrentMap<Integer, PartitionSegments> kafkaPartitionToSegments =
       new ConcurrentHashMap<>();
+  private final boolean sharded;
 
   private class PartitionSegments {
     private final long epoch;
@@ -98,9 +100,13 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
       LOG.info("{}[{}] Creating segment id {}",
                name, segmentToCreate.tablePartition, segmentToCreate.segmentId);
 
-      final MongoCollection<WindowDoc> windowDocs =
-          database.getCollection(collectionNameForSegment(segmentToCreate), WindowDoc.class);
-
+      final var collectionName = collectionNameForSegment(segmentToCreate);
+      final var windowDocs = MongoUtils.createShardedCollection(
+          collectionName,
+          WindowDoc.class,
+          database,
+          adminDatabase
+      );
       segmentWindows.put(segmentToCreate, windowDocs);
     }
 
@@ -127,11 +133,13 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
       final MongoClient client,
       final String name,
       final SegmentPartitioner partitioner,
-      final boolean timestampFirstOrder
+      final boolean timestampFirstOrder,
+      final boolean sharded
   ) {
     this.name = name;
     this.partitioner = partitioner;
     this.timestampFirstOrder = timestampFirstOrder;
+    this.sharded = sharded;
 
     final CodecProvider pojoCodecProvider = PojoCodecProvider.builder().automatic(true).build();
     final CodecRegistry pojoCodecRegistry = fromRegistries(
@@ -140,6 +148,7 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
     );
 
     this.database = client.getDatabase(name).withCodecRegistry(pojoCodecRegistry);
+    this.adminDatabase = client.getDatabase("admin");
     this.metadata = database.getCollection(
         METADATA_COLLECTION_NAME,
         WindowMetadataDoc.class

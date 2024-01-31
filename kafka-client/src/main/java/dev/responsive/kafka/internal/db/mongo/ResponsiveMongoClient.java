@@ -40,7 +40,8 @@ public class ResponsiveMongoClient {
             client,
             spec.tableName(),
             (SegmentPartitioner) spec.partitioner(),
-            timestampFirstOrder
+            timestampFirstOrder,
+            true
         )
     );
   }

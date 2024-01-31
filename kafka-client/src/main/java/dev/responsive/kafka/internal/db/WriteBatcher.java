@@ -58,6 +58,7 @@ public class WriteBatcher<K extends Comparable<K>, P> {
 
     numTablePartitionsInBatch = writeBatch.numTablePartitionsInBatch();
 
+    log.info("flushing store");
     final var preFlushResult = flushManager.preFlush();
     if (!preFlushResult.wasApplied()) {
       log.warn("Failed on pre-flush callback for write batch (consumedOffset={})", consumedOffset);

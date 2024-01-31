@@ -18,6 +18,7 @@ package dev.responsive.kafka.internal.db.mongo;
 
 import com.mongodb.MongoBulkWriteException;
 import com.mongodb.client.MongoCollection;
+import com.mongodb.client.model.BulkWriteOptions;
 import com.mongodb.client.model.WriteModel;
 import dev.responsive.kafka.internal.db.RemoteTable;
 import dev.responsive.kafka.internal.db.RemoteWriter;
@@ -69,8 +70,9 @@ public class MongoWriter<K, P, D> implements RemoteWriter<K, P> {
       return CompletableFuture.completedFuture(RemoteWriteResult.success(tablePartition));
     }
 
+    final BulkWriteOptions options = new BulkWriteOptions().ordered(false);
     try {
-      collection.get().bulkWrite(accumulatedWrites);
+      collection.get().bulkWrite(accumulatedWrites, options);
       accumulatedWrites.clear();
       return CompletableFuture.completedFuture(RemoteWriteResult.success(tablePartition));
     } catch (final MongoBulkWriteException e) {
