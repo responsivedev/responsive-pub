@@ -36,6 +36,8 @@ import static dev.responsive.kafka.internal.metrics.StoreMetrics.TIME_SINCE_LAST
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.TIME_SINCE_LAST_FLUSH_DESCRIPTION;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.greaterThan;
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -71,9 +73,11 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
@@ -574,6 +578,46 @@ public class CommitBufferTest {
       clock.set(clock.get().plus(Duration.ofSeconds(35)));
       buffer.flush(5L);
       assertThat(table.fetchOffset(KAFKA_PARTITION), is(5L));
+    }
+  }
+
+  private Optional<Instant> measureFlushTime(
+      final CommitBuffer<Bytes, Integer> buffer,
+      final AtomicReference<Instant> clock,
+      final long flushOffset,
+      final Instant to
+  ) {
+    buffer.put(Bytes.wrap(new byte[]{18}), VALUE, CURRENT_TS);
+    while (clock.get().isBefore(to)) {
+      buffer.flush(flushOffset);
+      if (table.fetchOffset(KAFKA_PARTITION) == flushOffset) {
+        return Optional.of(clock.get());
+      }
+      clock.set(clock.get().plus(Duration.ofSeconds(1)));
+    }
+    return Optional.empty();
+  }
+
+  @Test
+  public void shouldApplyJitterToFlushInterval() {
+    final AtomicReference<Instant> clock = new AtomicReference<>(Instant.now());
+    try (final CommitBuffer<Bytes, Integer> buffer = createCommitBuffer(
+        FlushTriggers.ofInterval(Duration.ofSeconds(20), Duration.ofSeconds(5)),
+        100,
+        clock::get)
+    ) {
+      final Set<Duration> intervals = new HashSet<>();
+      for (int i = 0; i < 20; i++) {
+        final Instant start = clock.get();
+        final Optional<Instant> flushTime
+            = measureFlushTime(buffer, clock, 5 + i, start.plus(Duration.ofSeconds(26)));
+        assertThat(flushTime.isPresent(), is(true));
+        final Duration flushInterval = Duration.between(start, flushTime.get());
+        final long flushIntervalSeconds = flushInterval.getSeconds();
+        assertThat(flushIntervalSeconds, greaterThanOrEqualTo(15L));
+        intervals.add(flushInterval);
+      }
+      assertThat(intervals.size(), greaterThan(1));
     }
   }
 

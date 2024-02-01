@@ -439,6 +439,7 @@ public class CommitBuffer<K extends Comparable<K>, P>
           now
       );
       timeTrigger = true;
+      flushTriggers.reset();
     } else {
       log.debug("Time since last flush {} not over trigger {}",
           Duration.between(lastFlush, now),

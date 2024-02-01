@@ -139,6 +139,12 @@ public class ResponsiveConfig extends AbstractConfig {
   public static final long STORE_FLUSH_INTERVAL_TRIGGER_DEFAULT
       = Duration.ofSeconds(30).toMillis();
 
+  public static final String STORE_FLUSH_INTERVAL_TRIGGER_JITTER_CONFIG = "responsive.store.flush.trigger.local.jitter.ms";
+  public static final String STORE_FLUSH_INTERVAL_TRIGGER_JITTER_DOC = "The jitter to apply to the flush interval." +
+      "For flush interval i and jitter j, the flush interval for a given flush will a randomly selected duration" +
+      "between i-j and i+j.";
+  public static final int STORE_FLUSH_INTERVAL_TRIGGER_JITTER_DEFAULT = 0;
+
   // TODO: consider if we want this as a local, global or per-store configuration
   public static final String MAX_CONCURRENT_REQUESTS_CONFIG = "responsive.max.concurrent.requests";
   private static final String MAX_CONCURRENT_REQUESTS_DOC = "The maximum number of requests"
@@ -301,6 +307,12 @@ public class ResponsiveConfig extends AbstractConfig {
           STORE_FLUSH_INTERVAL_TRIGGER_DEFAULT,
           Importance.MEDIUM,
           STORE_FLUSH_INTERVAL_TRIGGER_DOC
+      ).define(
+          STORE_FLUSH_INTERVAL_TRIGGER_JITTER_CONFIG,
+          Type.INT,
+          STORE_FLUSH_INTERVAL_TRIGGER_JITTER_DEFAULT,
+          Importance.LOW,
+          STORE_FLUSH_INTERVAL_TRIGGER_JITTER_DOC
       ).define(
           SUBPARTITION_HASHER_CONFIG,
           Type.CLASS,
