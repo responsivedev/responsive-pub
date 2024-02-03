@@ -18,10 +18,13 @@ package dev.responsive.kafka.internal.stores;
 
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 
+import dev.responsive.kafka.api.async.AsyncKeyValueStore;
+import dev.responsive.kafka.api.async.ResponsiveFuture;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.internal.utils.TableName;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Supplier;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
@@ -36,7 +39,8 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.internals.StoreQueryUtils;
 import org.slf4j.Logger;
 
-public class ResponsiveKeyValueStore implements KeyValueStore<Bytes, byte[]> {
+public class ResponsiveKeyValueStore
+    implements KeyValueStore<Bytes, byte[]>, AsyncKeyValueStore<Bytes, byte[]> {
 
   private final ResponsiveKeyValueParams params;
   private final TableName name;
@@ -143,7 +147,7 @@ public class ResponsiveKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     // the Responsive Client doesn't require flushing state
     // to disk, we return false even though the store is
     // persistent in a remote store
-    return false;
+    return true;
   }
 
   @Override
@@ -207,6 +211,22 @@ public class ResponsiveKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     if (operations != null) {
       operations.close();
     }
+  }
+
+  @Override
+  public ResponsiveFuture<Supplier<byte[]>> putIfAbsentAsync(final Bytes key, final byte[] value) {
+    final ResponsiveFuture<byte[]> old = getAsync(key);
+    return old.thenApply(maybeOld -> () -> {
+        if (maybeOld == null && value != null) {
+          put(key, value);
+        }
+        return maybeOld;
+    });
+  }
+
+  @Override
+  public ResponsiveFuture<byte[]> getAsync(final Bytes key) {
+    return operations.getAsync(key);
   }
 
   @Override
