@@ -1,8 +1,13 @@
+if [ -z $SECRETS_CFG_PATH ]
+then
+    SECRETS_CFG_PATH=/mnt/secretcfg
+fi
+
 if [ -z $LOGGING_KAFKA_EP ]
 then
     LOG4J_CONFIG_PATH=/log4j-console-only.yaml
 else
-    LOG4J_CONFIG_PATH=/mnt/secretcfg/log4j-with-kafka-filled.yaml
+    LOG4J_CONFIG_PATH=${SECRETS_CFG_PATH}/log4j-with-kafka-filled.yaml
 fi
 
-java -Dlog4j2.configurationFile=file:${LOG4J_CONFIG_PATH} -cp "/usr/share/java/responsive-operator/*" dev.responsive.k8s.operator.OperatorMain ${OPERATOR_OPTS} -controllerUrl ${CONTROLLER_EP} -secretsFile "/mnt/secretcfg/secrets.properties"
+java -Dlog4j2.configurationFile=file:${LOG4J_CONFIG_PATH} -cp "/usr/share/java/responsive-operator/*" dev.responsive.k8s.operator.OperatorMain ${OPERATOR_OPTS} -controllerUrl ${CONTROLLER_EP} -secretsFile "${SECRETS_CFG_PATH}/secrets.properties"

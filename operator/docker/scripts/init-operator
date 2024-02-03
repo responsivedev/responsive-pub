@@ -1,0 +1,30 @@
+df -h
+
+if [ -z $SECRETS_PATH ]
+then
+    SECRETS_PATH=/etc/responsive-operator
+fi
+
+if [ -z $LOGGING_SECRETS_PATH ]
+then
+    LOGGING_SECRETS_PATH=/etc/responsive-operator/logging_kafka
+fi
+
+if [ -z $SECRETS_CFG_PATH ]
+then
+    SECRETS_CFG_PATH=/mnt/secretcfg
+fi
+
+if [ -z $LOGGING_KAFKA_EP ]
+then
+    echo "no kafka ep, skip init logcfg" 
+else
+    echo "copy over log cfg with secrets"
+    cp ${LOGGING_SECRETS_PATH}/key.properties $LOGGING_KAFKA_KEY_FILE
+    cat /log4j-with-kafka.yaml | envsubst > ${SECRETS_CFG_PATH}/log4j-with-kafka-filled.yaml
+fi
+
+echo "copy over controller creds"
+cp ${SECRETS_PATH}/secrets.properties ${SECRETS_CFG_PATH}/secrets.properties
+
+echo "done"
