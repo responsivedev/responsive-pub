@@ -16,6 +16,8 @@
 
 package dev.responsive.kafka.internal.db;
 
+import dev.responsive.kafka.api.async.ResponsiveFuture;
+import java.util.concurrent.CompletableFuture;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
@@ -33,6 +35,10 @@ public interface RemoteKVTable<S> extends RemoteTable<Bytes, S> {
    * @return the value previously set
    */
   byte[] get(int kafkaPartition, Bytes key, long minValidTs);
+
+  default ResponsiveFuture<byte[]> getAsync(int kafkaPartition, Bytes key, long minValidTs) {
+    throw new UnsupportedOperationException("getAsync not supported for this table type");
+  }
 
   /**
    * Retrieves a range of key value pairs from the given {@code partitionKey} and

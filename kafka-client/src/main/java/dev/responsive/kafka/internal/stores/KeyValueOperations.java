@@ -16,7 +16,9 @@
 
 package dev.responsive.kafka.internal.stores;
 
+import dev.responsive.kafka.api.async.ResponsiveFuture;
 import java.io.Closeable;
+import java.util.concurrent.CompletableFuture;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -28,6 +30,8 @@ public interface KeyValueOperations extends Closeable, RecordBatchingStateRestor
   byte[] delete(final Bytes key);
 
   byte[] get(final Bytes key);
+  
+  ResponsiveFuture<byte[]> getAsync(final Bytes key);
 
   KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to);
 

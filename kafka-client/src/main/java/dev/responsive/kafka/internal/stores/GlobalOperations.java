@@ -20,6 +20,7 @@ import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadSe
 import static dev.responsive.kafka.internal.db.partitioning.TablePartitioner.defaultPartitioner;
 
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
+import dev.responsive.kafka.api.async.ResponsiveFuture;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.CassandraTableSpecFactory;
@@ -27,6 +28,7 @@ import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
 import dev.responsive.kafka.internal.utils.SessionClients;
 import java.util.Collection;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeoutException;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
@@ -184,4 +186,8 @@ public class GlobalOperations implements KeyValueOperations {
     }
   }
 
+  @Override
+  public ResponsiveFuture<byte[]> getAsync(final Bytes key) {
+    throw new UnsupportedOperationException("getAsync not supported for global store");
+  }
 }

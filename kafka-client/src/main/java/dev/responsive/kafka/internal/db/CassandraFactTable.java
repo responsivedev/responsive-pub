@@ -25,6 +25,7 @@ import static dev.responsive.kafka.internal.db.ColumnName.ROW_TYPE;
 import static dev.responsive.kafka.internal.db.ColumnName.TIMESTAMP;
 import static dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration.NO_COMMITTED_OFFSET;
 
+import com.datastax.oss.driver.api.core.cql.AsyncResultSet;
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
 import com.datastax.oss.driver.api.core.cql.Row;
@@ -32,11 +33,14 @@ import com.datastax.oss.driver.api.core.type.DataTypes;
 import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
 import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
 import com.datastax.oss.driver.api.querybuilder.schema.CreateTableWithOptions;
+import dev.responsive.kafka.api.async.ResponsiveFuture;
 import dev.responsive.kafka.internal.db.spec.CassandraTableSpec;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import javax.annotation.CheckReturnValue;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -270,6 +274,19 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
       final ByteBuffer value = result.get(0).getByteBuffer(DATA_VALUE.column());
       return Objects.requireNonNull(value).array();
     }
+  }
+
+  @Override
+  public ResponsiveFuture<byte[]> getAsync(final int kafkaPartition, final Bytes key,
+                                           final long minValidTs) {
+    final BoundStatement get = this.get
+        .bind()
+        .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
+        .setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(minValidTs));
+    final CompletionStage<AsyncResultSet> resultStage = client.executeAsync(get);
+    // TODO: make sure you're doing the right hting here
+    return ResponsiveFuture.of(resultStage.toCompletableFuture())
+            .thenApply(result -> result.one().getByteBuffer(0).array());
   }
 
   @Override

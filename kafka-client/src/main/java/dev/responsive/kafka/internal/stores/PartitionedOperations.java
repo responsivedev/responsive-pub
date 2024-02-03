@@ -22,6 +22,7 @@ import static dev.responsive.kafka.internal.utils.StoreUtil.numPartitionsForKafk
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.changelogFor;
 
+import dev.responsive.kafka.api.async.ResponsiveFuture;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.internal.db.BytesKeySpec;
@@ -37,6 +38,7 @@ import dev.responsive.kafka.internal.utils.SessionClients;
 import dev.responsive.kafka.internal.utils.TableName;
 import java.util.Collection;
 import java.util.OptionalInt;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeoutException;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
@@ -234,6 +236,22 @@ public class PartitionedOperations implements KeyValueOperations {
     }
 
     return table.get(
+        changelog.partition(),
+        key,
+        minValidTimestamp()
+    );
+  }
+
+  @Override
+  public ResponsiveFuture<byte[]> getAsync(final Bytes key) {
+    // TODO: combine with the cached get above
+    final Result<Bytes> result = buffer.get(key);
+    if (result != null) {
+      return result.isTombstone ? ResponsiveFuture.ofCompleted(null)
+          : ResponsiveFuture.ofCompleted(result.value);
+    }
+
+    return table.getAsync(
         changelog.partition(),
         key,
         minValidTimestamp()
