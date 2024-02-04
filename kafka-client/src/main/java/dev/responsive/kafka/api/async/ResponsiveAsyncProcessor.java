@@ -44,6 +44,7 @@ public class ResponsiveAsyncProcessor<KIn, VIn, KOut, VOut>
   @Override
   public void init(final ProcessorContext<KOut, VOut> context) {
     this.context = context;
+    unflushedStore = context.getStateStore("async-processor");
     unflushedKey = context.taskId() + KEY_SUFFIX;
     this.stores = wrapped.stores().stream().collect(Collectors.toMap(
         s -> s,
@@ -61,8 +62,8 @@ public class ResponsiveAsyncProcessor<KIn, VIn, KOut, VOut>
         // we already have an outstanding process call for this key, wait for it to finish
         continue;
       }
+      unflushedKeys.add(unflushedRecord.key());
       if (!finalizers.containsKey(unflushedRecord.offset())) {
-        unflushedKeys.add(unflushedRecord.key());
         finalizers.put(
             unflushedRecord.offset,
             wrapped.processAsync(asyncStores, new Record<>(
@@ -97,7 +98,10 @@ public class ResponsiveAsyncProcessor<KIn, VIn, KOut, VOut>
       throw new IllegalStateException("cannot use async processor with upstream punctuation");
     }
     final long offset = maybeMetadata.get().offset();
-    final UnflushedRecords<KIn, VIn> unflushed = unflushedStore.get(unflushedKey);
+    UnflushedRecords<KIn, VIn> unflushed = unflushedStore.get(unflushedKey);
+    if (unflushed == null) {
+      unflushed = new UnflushedRecords<>(List.of());
+    }
     final UnflushedRecords<KIn, VIn> withNext = new UnflushedRecords<>(
         ImmutableList.<UnflushedRecord<KIn, VIn>>builder()
             .addAll(unflushed.records())
@@ -147,7 +151,7 @@ public class ResponsiveAsyncProcessor<KIn, VIn, KOut, VOut>
     }
   }
 
-  private static final class UnflushedRecords<K, V> {
+  static final class UnflushedRecords<K, V> {
     private final List<UnflushedRecord<K, V>> records;
 
     private UnflushedRecords(final List<UnflushedRecord<K, V>> records) {

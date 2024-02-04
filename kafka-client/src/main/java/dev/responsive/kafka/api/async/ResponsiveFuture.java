@@ -1,5 +1,6 @@
 package dev.responsive.kafka.api.async;
 
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -60,7 +61,21 @@ public interface ResponsiveFuture<T> extends Future<T> {
 
     @Override
     public boolean isDone() {
-      return wrapped.isDone() && next != null && next.isDone();
+      if (!wrapped.isDone()) {
+        return false;
+      }
+      if (next == null) {
+        final T wrappedResult;
+        try {
+          wrappedResult = wrapped.get();
+        } catch (InterruptedException e) {
+          throw new IllegalStateException(e);
+        } catch (CancellationException | ExecutionException e) {
+          return true;
+        }
+        next = composer.apply(wrappedResult);
+      }
+      return next.isDone();
     }
 
     @Override
