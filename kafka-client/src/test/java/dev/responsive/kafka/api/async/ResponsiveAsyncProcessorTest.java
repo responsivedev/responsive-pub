@@ -134,8 +134,10 @@ class ResponsiveAsyncProcessorTest {
     }
 
     @Override
-    public Future<Finalizer<Integer, String>> processAsync(final Map<String, AsyncStore> stores,
-                                                           final Record<String, Integer> record) {
+    public Future<Finalizer<Integer, String>> processAsync(
+        final Map<String, AsyncKeyValueStore<?, ?>> stores,
+        final Record<String, Integer> record
+    ) {
       return futures.compute(record.key(), (k, ev) -> new CompletableFuture<>());
     }
 

@@ -18,15 +18,11 @@ package dev.responsive.kafka.internal.stores;
 
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 
-import dev.responsive.kafka.api.async.AsyncStore;
+import dev.responsive.kafka.api.async.AsyncKeyValueStore;
 import dev.responsive.kafka.api.async.ResponsiveFuture;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.internal.utils.TableName;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
 import org.apache.kafka.common.utils.Bytes;
@@ -43,7 +39,8 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.internals.StoreQueryUtils;
 import org.slf4j.Logger;
 
-public class ResponsiveKeyValueStore implements KeyValueStore<Bytes, byte[]>, AsyncStore {
+public class ResponsiveKeyValueStore
+    implements KeyValueStore<Bytes, byte[]>, AsyncKeyValueStore<Bytes, byte[]> {
 
   private final ResponsiveKeyValueParams params;
   private final TableName name;

@@ -12,7 +12,7 @@ public interface AsyncProcessor<KIn, VIn, KOut, VOut> {
 
   // must be read-only (can't write to stores or forward)
   Future<Finalizer<KOut, VOut>> processAsync(
-      Map<String, AsyncStore> stores, Record<KIn, VIn> record);
+      Map<String, AsyncKeyValueStore<?, ?>> stores, Record<KIn, VIn> record);
 
   void close();
 

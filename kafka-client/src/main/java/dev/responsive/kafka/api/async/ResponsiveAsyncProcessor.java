@@ -27,7 +27,7 @@ public class ResponsiveAsyncProcessor<KIn, VIn, KOut, VOut>
   private static final String KEY_SUFFIX = ".unflushed";
   private final AsyncProcessor<KIn, VIn, KOut, VOut> wrapped;
   private final int maxUnflushed;
-  private Map<String, AsyncStore> asyncStores;
+  private Map<String, AsyncKeyValueStore<?, ?>> asyncStores;
   private Map<String, StateStore> stores;
   private ProcessorContext<KOut, VOut> context;
   private KeyValueStore<String, UnflushedRecords<KIn, VIn>> unflushedStore;
@@ -51,8 +51,8 @@ public class ResponsiveAsyncProcessor<KIn, VIn, KOut, VOut>
         context::getStateStore
     ));
     this.asyncStores = stores.entrySet().stream()
-        .filter(e -> e.getValue() instanceof AsyncStore)
-        .collect(Collectors.toMap(Entry::getKey, e -> (AsyncStore) e.getValue()));
+        .filter(e -> e.getValue() instanceof AsyncKeyValueStore)
+        .collect(Collectors.toMap(Entry::getKey, e -> (AsyncKeyValueStore<?, ?>) e.getValue()));
   }
 
   private void pokeUnflushed(final UnflushedRecords<KIn, VIn> unflushed, boolean block) {

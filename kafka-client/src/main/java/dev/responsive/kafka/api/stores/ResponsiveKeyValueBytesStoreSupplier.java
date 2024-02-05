@@ -16,13 +16,17 @@
 
 package dev.responsive.kafka.api.stores;
 
+import dev.responsive.kafka.api.async.AsyncKeyValueStore;
 import dev.responsive.kafka.internal.stores.ResponsiveKeyValueStore;
 import java.util.Locale;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.internals.AsyncStoreSupplier;
 
-public class ResponsiveKeyValueBytesStoreSupplier implements KeyValueBytesStoreSupplier {
+@SuppressWarnings("rawtypes")
+public class ResponsiveKeyValueBytesStoreSupplier
+    implements KeyValueBytesStoreSupplier, AsyncStoreSupplier {
 
   private final ResponsiveKeyValueParams params;
 
@@ -37,6 +41,11 @@ public class ResponsiveKeyValueBytesStoreSupplier implements KeyValueBytesStoreS
 
   @Override
   public KeyValueStore<Bytes, byte[]> get() {
+    return new ResponsiveKeyValueStore(params);
+  }
+
+  @Override
+  public AsyncKeyValueStore<Bytes, byte[]> getAsyncStore() {
     return new ResponsiveKeyValueStore(params);
   }
 
