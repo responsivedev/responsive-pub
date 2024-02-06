@@ -275,7 +275,7 @@ public class SegmentPartitioner implements TablePartitioner<WindowedKey, Segment
           newMaxActiveSegment + 1  // exclusive: add 1 to create segment for highest valid timestamp
       );
 
-      if (newMinActiveSegment > oldMinActiveSegment ) {
+      if (newMinActiveSegment > oldMinActiveSegment) {
         LOG.info("{}[{}] Advancing stream-time from {}ms to {}ms and rolling segments with "
                      + "expiredSegments: [{}-{}] and newSegments: [{}-{}]",
                  tableName, kafkaPartition, oldStreamTime, newStreamTime, oldMinActiveSegment,

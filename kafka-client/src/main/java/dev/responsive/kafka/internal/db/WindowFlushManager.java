@@ -18,7 +18,6 @@ package dev.responsive.kafka.internal.db;
 
 import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner;
 import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.SegmentPartition;
-import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.SegmentRoll;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
 import dev.responsive.kafka.internal.utils.PendingFlushSegmentMetadata;
 import dev.responsive.kafka.internal.utils.WindowedKey;
@@ -30,6 +29,7 @@ public abstract class WindowFlushManager implements FlushManager<WindowedKey, Se
   private final PendingFlushSegmentMetadata pendingFlushSegmentMetadata;
 
   public WindowFlushManager(
+      final String tableName,
       final int kafkaPartition,
       final SegmentPartitioner partitioner,
       final long streamTime
@@ -37,7 +37,7 @@ public abstract class WindowFlushManager implements FlushManager<WindowedKey, Se
     this.kafkaPartition = kafkaPartition;
     this.partitioner = partitioner;
     this.pendingFlushSegmentMetadata =
-        new PendingFlushSegmentMetadata(tableName(), kafkaPartition, streamTime);
+        new PendingFlushSegmentMetadata(tableName, kafkaPartition, streamTime);
   }
 
   @Override

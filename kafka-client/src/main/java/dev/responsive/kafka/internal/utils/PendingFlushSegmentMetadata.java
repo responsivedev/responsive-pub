@@ -48,7 +48,7 @@ public class PendingFlushSegmentMetadata {
       final int kafkaPartition,
       final long persistedStreamTime
   ) {
-    this.log = new LogContext(String.format("%s[%s] ", tableName, kafkaPartition))
+    this.log = new LogContext(String.format("%s[%d] ", tableName, kafkaPartition))
         .logger(PendingFlushSegmentMetadata.class);
     this.tableName = tableName;
     this.kafkaPartition = kafkaPartition;

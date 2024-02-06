@@ -47,7 +47,7 @@ public class CassandraWindowFlushManager extends WindowFlushManager {
       final long epoch,
       final long streamTime
   ) {
-    super(kafkaPartition, partitioner, streamTime);
+    super(table.name(), kafkaPartition, partitioner, streamTime);
     this.table = table;
     this.client = client;
     this.partitioner = partitioner;
