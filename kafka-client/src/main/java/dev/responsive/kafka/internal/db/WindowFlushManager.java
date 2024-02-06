@@ -18,6 +18,7 @@ package dev.responsive.kafka.internal.db;
 
 import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner;
 import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.SegmentPartition;
+import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.SegmentRoll;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
 import dev.responsive.kafka.internal.utils.PendingFlushSegmentMetadata;
 import dev.responsive.kafka.internal.utils.WindowedKey;
@@ -35,16 +36,18 @@ public abstract class WindowFlushManager implements FlushManager<WindowedKey, Se
   ) {
     this.kafkaPartition = kafkaPartition;
     this.partitioner = partitioner;
-    this.pendingFlushSegmentMetadata = new PendingFlushSegmentMetadata(streamTime);
+    this.pendingFlushSegmentMetadata =
+        new PendingFlushSegmentMetadata(tableName(), kafkaPartition, streamTime);
   }
 
+  @Override
   public void writeAdded(final WindowedKey key) {
     pendingFlushSegmentMetadata.updateStreamTime(key.windowStartMs);
   }
 
   @Override
   public RemoteWriteResult<SegmentPartition> preFlush() {
-    final var pendingRoll = pendingFlushSegmentMetadata.prepareRoll(partitioner, tableName());
+    final var pendingRoll = pendingFlushSegmentMetadata.prepareRoll(partitioner);
 
     for (final long segmentId : pendingRoll.segmentsToCreate()) {
       final var createResult = createSegment(new SegmentPartition(kafkaPartition, segmentId));
@@ -82,7 +85,7 @@ public abstract class WindowFlushManager implements FlushManager<WindowedKey, Se
    * Persist the latest consumed offset and stream-time corresponding to the batch that was just
    * flushed to the remote table
    */
-  public abstract RemoteWriteResult<SegmentPartition> updateOffsetAndStreamTime(
+  protected abstract RemoteWriteResult<SegmentPartition> updateOffsetAndStreamTime(
       final long consumedOffset,
       final long streamTime
   );
@@ -91,7 +94,7 @@ public abstract class WindowFlushManager implements FlushManager<WindowedKey, Se
    * "Create" the passed-in segment by executing whatever preparations are needed to
    * support writes to this segment. Assumed to be completed synchronously
    */
-  public abstract RemoteWriteResult<SegmentPartition> createSegment(
+  protected abstract RemoteWriteResult<SegmentPartition> createSegment(
       final SegmentPartition partition
   );
 
@@ -99,7 +102,7 @@ public abstract class WindowFlushManager implements FlushManager<WindowedKey, Se
    * "Delete" the passed-in expired segment by executing whatever cleanup is needed to
    * release the resources held by this segment and reclaim the storage it previously held
    */
-  public abstract RemoteWriteResult<SegmentPartition> deleteSegment(
+  protected abstract RemoteWriteResult<SegmentPartition> deleteSegment(
       final SegmentPartition partition
   );
 

@@ -20,6 +20,8 @@ package dev.responsive.kafka.internal.utils;
 
 import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner;
 import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.SegmentRoll;
+import org.apache.kafka.common.utils.LogContext;
+import org.slf4j.Logger;
 
 /**
  * Used to track metadata for the pending flush of the segments that make up a windowed table,
@@ -33,12 +35,25 @@ import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.SegmentR
  */
 public class PendingFlushSegmentMetadata {
 
-  private long flushedStreamTime;
-  private long batchStreamTime;
-  private SegmentRoll segmentRoll;
+  private final Logger log;
+  private final String tableName;
+  private final int kafkaPartition;
 
-  public PendingFlushSegmentMetadata(final long persistedStreamTime) {
-    this.flushedStreamTime = persistedStreamTime;
+  private long persistedStreamTime;
+  private long batchStreamTime;
+  private SegmentRoll batchSegmentRoll;
+
+  public PendingFlushSegmentMetadata(
+      final String tableName,
+      final int kafkaPartition,
+      final long persistedStreamTime
+  ) {
+    this.log = new LogContext(String.format("%s[%s] ", tableName, kafkaPartition))
+        .logger(PendingFlushSegmentMetadata.class);
+    this.tableName = tableName;
+    this.kafkaPartition = kafkaPartition;
+
+    this.persistedStreamTime = persistedStreamTime;
     this.batchStreamTime = persistedStreamTime;
   }
 
@@ -47,34 +62,44 @@ public class PendingFlushSegmentMetadata {
   }
 
   public SegmentRoll segmentRoll() {
-    return segmentRoll;
+    return batchSegmentRoll;
   }
 
   public void updateStreamTime(final long recordTimestamp) {
-    if (segmentRoll != null) {
-      throw new IllegalStateException("Current segmentRoll should be null when updating the "
+    if (batchSegmentRoll != null) {
+      log.error("Attempted to update batch while active flush was ongoing "
+                    + "(persistedStreamTime={}, batchStreamTime={})",
+                persistedStreamTime, batchStreamTime
+      );
+      throw new IllegalStateException("Current SegmentRoll should be null when updating the "
                                           + "batch stream time");
     }
     batchStreamTime = Math.max(batchStreamTime, recordTimestamp);
   }
 
-  public SegmentRoll prepareRoll(final SegmentPartitioner partitioner, final String tableName) {
-    if (segmentRoll != null) {
-      throw new IllegalStateException();
+  public SegmentRoll prepareRoll(final SegmentPartitioner partitioner) {
+    if (batchSegmentRoll != null) {
+      log.error("Attempted to prepare flush while active flush was ongoing "
+                    + "(persistedStreamTime={}, batchStreamTime={})",
+                persistedStreamTime, batchStreamTime
+      );
+      throw new IllegalStateException("Current SegmentRoll should be null when initializing "
+                                          + "a new segment roll to prepare the next flush");
     }
 
-    segmentRoll = partitioner.rolledSegments(
+    batchSegmentRoll = partitioner.rolledSegments(
         tableName,
-        flushedStreamTime,
+        kafkaPartition,
+        persistedStreamTime,
         batchStreamTime
     );
 
-    return segmentRoll;
+    return batchSegmentRoll;
   }
 
   public void finalizeRoll() {
-    flushedStreamTime = batchStreamTime;
-    segmentRoll = null;
+    persistedStreamTime = batchStreamTime;
+    batchSegmentRoll = null;
   }
 
 }

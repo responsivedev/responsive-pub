@@ -238,6 +238,7 @@ public class SegmentPartitioner implements TablePartitioner<WindowedKey, Segment
 
   public SegmentRoll rolledSegments(
       final String tableName,
+      final int kafkaPartition,
       final long oldStreamTime,
       final long newStreamTime
   ) {
@@ -249,12 +250,12 @@ public class SegmentPartitioner implements TablePartitioner<WindowedKey, Segment
 
     // Special case where this is the first record we've received
     if (oldStreamTime == UNINITIALIZED_STREAM_TIME) {
-      final long[] segmentsToExpire = new long[]{};
+      final LongStream segmentsToExpire = LongStream.empty();
 
-      final long[] segmentsToCreate = LongStream.range(
+      final LongStream segmentsToCreate = LongStream.range(
           newMinActiveSegment,
           newMaxActiveSegment + 1 // add 1 since the upper bound is exclusive
-      ).toArray();
+      );
 
       LOG.info("Initializing stream-time for table {} to {}ms and creating segments: [{}-{}]",
                  tableName, newStreamTime, newMinActiveSegment, newMaxActiveSegment);
@@ -264,21 +265,21 @@ public class SegmentPartitioner implements TablePartitioner<WindowedKey, Segment
           segmentsToCreate
       );
     } else {
-      final long[] segmentsToExpire = LongStream.range(
+      final LongStream segmentsToExpire = LongStream.range(
           oldMinActiveSegment,
           newMinActiveSegment
-      ).toArray();
+      );
 
-      final long[] segmentsToCreate = LongStream.range(
+      final LongStream segmentsToCreate = LongStream.range(
           oldMaxActiveSegment + 1, // inclusive: add 1 b/c the old max segment should already exist
           newMaxActiveSegment + 1  // exclusive: add 1 to create segment for highest valid timestamp
-      ).toArray();
+      );
 
-      if (segmentsToCreate.length > 0) {
-        LOG.info("Advancing stream-time for table {} from {}ms to {}ms and rolling segments with "
+      if (newMinActiveSegment > oldMinActiveSegment ) {
+        LOG.info("{}[{}] Advancing stream-time from {}ms to {}ms and rolling segments with "
                      + "expiredSegments: [{}-{}] and newSegments: [{}-{}]",
-                 tableName, oldStreamTime, newStreamTime, oldMinActiveSegment, newMinActiveSegment,
-                 oldMaxActiveSegment + 1, newMaxActiveSegment);
+                 tableName, kafkaPartition, oldStreamTime, newStreamTime, oldMinActiveSegment,
+                 newMinActiveSegment, oldMaxActiveSegment + 1, newMaxActiveSegment);
       }
       return new SegmentRoll(
           segmentsToExpire,
@@ -296,33 +297,33 @@ public class SegmentPartitioner implements TablePartitioner<WindowedKey, Segment
   }
 
   public static class SegmentRoll {
-    private final long[] segmentsToExpire;
-    private final long[] segmentsToCreate;
+    private final List<Long> segmentsToExpire;
+    private final List<Long> segmentsToCreate;
 
-    public SegmentRoll(final long[] segmentsToExpire, final long[] segmentsToCreate) {
-      this.segmentsToExpire = segmentsToExpire;
-      this.segmentsToCreate = segmentsToCreate;
+    public SegmentRoll(final LongStream segmentsToExpire, final LongStream segmentsToCreate) {
+      this.segmentsToExpire = segmentsToExpire.boxed().collect(Collectors.toUnmodifiableList());
+      this.segmentsToCreate = segmentsToCreate.boxed().collect(Collectors.toUnmodifiableList());
     }
 
-    public long[] segmentsToExpire() {
+    public List<Long> segmentsToExpire() {
       return segmentsToExpire;
     }
 
-    public long[] segmentsToCreate() {
+    public List<Long> segmentsToCreate() {
       return segmentsToCreate;
     }
 
     @Override
     public String toString() {
-      final int numExpired = segmentsToExpire.length;
+      final int numExpired = segmentsToExpire.size();
       final String expired = numExpired == 0
           ? "[]"
-          : String.format("[%d-%d]", segmentsToExpire[0], segmentsToExpire[numExpired - 1]);
+          : String.format("[%d-%d]", segmentsToExpire.get(0), segmentsToExpire.get(numExpired - 1));
 
-      final int numCreated = segmentsToCreate.length;
+      final int numCreated = segmentsToCreate.size();
       final String created = numCreated == 0
           ? "[]"
-          : String.format("[%d-%d]", segmentsToCreate[0], segmentsToCreate[numCreated - 1]);
+          : String.format("[%d-%d]", segmentsToCreate.get(0), segmentsToCreate.get(numCreated - 1));
 
       return String.format("SegmentRoll: expired segment(s)=%s, new segments(s)=%s",
                            expired, created);
