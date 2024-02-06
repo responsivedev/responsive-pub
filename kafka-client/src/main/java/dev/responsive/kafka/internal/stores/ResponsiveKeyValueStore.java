@@ -147,7 +147,7 @@ public class ResponsiveKeyValueStore
     // the Responsive Client doesn't require flushing state
     // to disk, we return false even though the store is
     // persistent in a remote store
-    return false;
+    return true;
   }
 
   @Override

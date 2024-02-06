@@ -284,9 +284,10 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
         .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
         .setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(minValidTs));
     final CompletionStage<AsyncResultSet> resultStage = client.executeAsync(get);
-    // TODO: make sure you're doing the right hting here
+    // TODO: make sure you're doing the right thing here
     return ResponsiveFuture.of(resultStage.toCompletableFuture())
-            .thenApply(result -> result.one().getByteBuffer(0).array());
+            .thenApply(result -> result.one() == null
+                ? null : result.one().getByteBuffer(0).array());
   }
 
   @Override

@@ -9,7 +9,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
-class AsyncTimestampedKeyValueStoreBuilder<K, V>
+public class AsyncTimestampedKeyValueStoreBuilder<K, V>
     extends AbstractStoreBuilder<K, ValueAndTimestamp<V>, TimestampedKeyValueStore<K, V>> {
 
   private final AsyncStoreSupplier<ResponsiveKeyValueStore> storeSupplier;

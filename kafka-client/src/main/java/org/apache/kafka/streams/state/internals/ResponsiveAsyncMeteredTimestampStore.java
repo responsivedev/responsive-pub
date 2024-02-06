@@ -1,6 +1,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import dev.responsive.kafka.api.async.AsyncKeyValueStore;
+import dev.responsive.kafka.api.async.AsyncTimestampedKeyValueStore;
 import dev.responsive.kafka.api.async.ResponsiveFuture;
 import java.util.Objects;
 import java.util.function.Supplier;
@@ -12,7 +13,7 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 public class ResponsiveAsyncMeteredTimestampStore<K, V>
     extends MeteredTimestampedKeyValueStore<K, V>
-    implements AsyncKeyValueStore<K, ValueAndTimestamp<V>> {
+    implements AsyncTimestampedKeyValueStore<K, V> {
   private final AsyncKeyValueStore<Bytes, byte[]> asyncInner;
 
   @SuppressWarnings("unchecked")

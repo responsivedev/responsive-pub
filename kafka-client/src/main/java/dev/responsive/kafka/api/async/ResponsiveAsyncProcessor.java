@@ -2,8 +2,13 @@ package dev.responsive.kafka.api.async;
 
 import com.google.common.collect.ImmutableList;
 import dev.responsive.kafka.api.async.AsyncProcessor.Finalizer;
+import dev.responsive.kafka.api.async.UnflushedRecords.UnflushedRecord;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -13,32 +18,60 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.stream.Collectors;
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.internals.WrappedStateStore;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 // TODO: schedule punctuation to poke when there is no traffic
 
 public class ResponsiveAsyncProcessor<KIn, VIn, KOut, VOut>
     implements Processor<KIn, VIn, KOut, VOut> {
+  private static final Logger LOG = LoggerFactory.getLogger(ResponsiveAsyncProcessor.class);
   private static final String KEY_SUFFIX = ".unflushed";
   private final AsyncProcessor<KIn, VIn, KOut, VOut> wrapped;
   private final int maxUnflushed;
+  private final Serde<KIn> keySerde;
+  private final Serde<VIn> valSerde;
   private Map<String, AsyncKeyValueStore<?, ?>> asyncStores;
   private Map<String, StateStore> stores;
   private ProcessorContext<KOut, VOut> context;
-  private KeyValueStore<String, UnflushedRecords<KIn, VIn>> unflushedStore;
+  private KeyValueStore<String, UnflushedRecords> unflushedStore;
   private final Map<Long, Future<Finalizer<KOut, VOut>>> finalizers = new HashMap<>();
   private String unflushedKey;
 
   public ResponsiveAsyncProcessor(
       final AsyncProcessor<KIn, VIn, KOut, VOut> wrapped,
-      final int maxUnflushed) {
+      final int maxUnflushed, final Serde<KIn> keySerde, final Serde<VIn> valSerde) {
     this.wrapped = Objects.requireNonNull(wrapped);
     this.maxUnflushed = maxUnflushed;
+    this.keySerde = Objects.requireNonNull(keySerde);
+    this.valSerde = Objects.requireNonNull(valSerde);
+  }
+
+  private Optional<AsyncKeyValueStore<?, ?>> maybeLoadStore(final StateStore store) {
+    if (store instanceof AsyncKeyValueStore) {
+      return Optional.of((AsyncKeyValueStore<?, ?>) store);
+    }
+    try {
+      //final Method m = store.getClass().getDeclaredMethod("wrapped");
+      final Method m = WrappedStateStore.class.getDeclaredMethod("wrapped");
+      final Object wrapped = m.invoke(store);
+      if (wrapped instanceof AsyncKeyValueStore) {
+        return Optional.of((AsyncKeyValueStore<?, ?>) wrapped);
+      }
+    } catch (final NoSuchMethodException | InvocationTargetException | IllegalAccessException e) {
+      LOG.info("error calling wrapped", e);
+    }
+    LOG.info("unknown store type " + store.getClass().getName());
+    return Optional.empty();
   }
 
   @Override
@@ -51,25 +84,28 @@ public class ResponsiveAsyncProcessor<KIn, VIn, KOut, VOut>
         context::getStateStore
     ));
     this.asyncStores = stores.entrySet().stream()
-        .filter(e -> e.getValue() instanceof AsyncKeyValueStore)
-        .collect(Collectors.toMap(Entry::getKey, e -> (AsyncKeyValueStore<?, ?>) e.getValue()));
+        .map(e -> Map.entry(e.getKey(), maybeLoadStore(e.getValue())))
+        .filter(e -> e.getValue().isPresent())
+        .collect(Collectors.toMap(Entry::getKey, e -> e.getValue().get()));
   }
 
-  private void pokeUnflushed(final UnflushedRecords<KIn, VIn> unflushed, boolean block) {
-    final Set<KIn> unflushedKeys = new HashSet<>();
-    for (final UnflushedRecord<KIn, VIn> unflushedRecord : unflushed.records()) {
-      if (unflushedKeys.contains(unflushedRecord.key())) {
+  private void pokeUnflushed(final UnflushedRecords unflushed, boolean block) {
+    final Set<Bytes> unflushedKeys = new HashSet<>();
+    final List<UnflushedRecord> remainingUnflushed = new ArrayList<>();
+    for (final UnflushedRecord unflushedRecord : unflushed.records()) {
+      if (unflushedKeys.contains(Bytes.wrap(unflushedRecord.key()))) {
         // we already have an outstanding process call for this key, wait for it to finish
+        remainingUnflushed.add(unflushedRecord);
         continue;
       }
-      unflushedKeys.add(unflushedRecord.key());
+      unflushedKeys.add(Bytes.wrap(unflushedRecord.key()));
       if (!finalizers.containsKey(unflushedRecord.offset())) {
         finalizers.put(
-            unflushedRecord.offset,
+            unflushedRecord.offset(),
             wrapped.processAsync(asyncStores, new Record<>(
-                unflushedRecord.key(),
-                unflushedRecord.value(),
-                unflushedRecord.timestmap()
+                keySerde.deserializer().deserialize("", unflushedRecord.key()),
+                valSerde.deserializer().deserialize("", unflushedRecord.value()),
+                unflushedRecord.timestamp()
             ))
         );
       }
@@ -86,9 +122,15 @@ public class ResponsiveAsyncProcessor<KIn, VIn, KOut, VOut>
         finalizer.maybeForward(stores, context);
         block = false;
         finalizers.remove(unflushedRecord.offset());
-        unflushedKeys.remove(unflushedRecord.key());
+        unflushedKeys.remove(Bytes.wrap(unflushedRecord.key()));
+      } else {
+        remainingUnflushed.add(unflushedRecord);
       }
     }
+    unflushedStore.put(
+        unflushedKey,
+        new UnflushedRecords(ImmutableList.copyOf(remainingUnflushed))
+    );
   }
 
   @Override
@@ -98,18 +140,18 @@ public class ResponsiveAsyncProcessor<KIn, VIn, KOut, VOut>
       throw new IllegalStateException("cannot use async processor with upstream punctuation");
     }
     final long offset = maybeMetadata.get().offset();
-    UnflushedRecords<KIn, VIn> unflushed = unflushedStore.get(unflushedKey);
+    UnflushedRecords unflushed = unflushedStore.get(unflushedKey);
     if (unflushed == null) {
-      unflushed = new UnflushedRecords<>(List.of());
+      unflushed = new UnflushedRecords(List.of());
     }
-    final UnflushedRecords<KIn, VIn> withNext = new UnflushedRecords<>(
-        ImmutableList.<UnflushedRecord<KIn, VIn>>builder()
+    final UnflushedRecords withNext = new UnflushedRecords(
+        ImmutableList.<UnflushedRecord>builder()
             .addAll(unflushed.records())
-            .add(new UnflushedRecord<>(
+            .add(new UnflushedRecord(
                 offset,
                 record.timestamp(),
-                record.key(),
-                record.value()))
+                keySerde.serializer().serialize("", record.key()),
+                valSerde.serializer().serialize("", record.value())))
             .build()
     );
     unflushedStore.put(unflushedKey, withNext);
@@ -121,45 +163,4 @@ public class ResponsiveAsyncProcessor<KIn, VIn, KOut, VOut>
     wrapped.close();
   }
 
-  private static class UnflushedRecord<K, V> {
-    private final long offset;
-    private final long timestmap;
-    private final K key;
-    private final V value;
-
-    private UnflushedRecord(final long offset, final long timestmap, final K key, final V value) {
-      this.offset = offset;
-      this.timestmap = timestmap;
-      this.key = key;
-      this.value = value;
-    }
-
-    private long offset() {
-      return offset;
-    }
-
-    private long timestmap() {
-      return timestmap;
-    }
-
-    private K key() {
-      return key;
-    }
-
-    private V value() {
-      return value;
-    }
-  }
-
-  static final class UnflushedRecords<K, V> {
-    private final List<UnflushedRecord<K, V>> records;
-
-    private UnflushedRecords(final List<UnflushedRecord<K, V>> records) {
-      this.records = Objects.requireNonNull(records, "records");
-    }
-
-    public List<UnflushedRecord<K, V>> records() {
-      return records;
-    }
-  }
 }

@@ -7,7 +7,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import dev.responsive.kafka.api.async.AsyncProcessor.Finalizer;
-import dev.responsive.kafka.api.async.ResponsiveAsyncProcessor.UnflushedRecords;
 import dev.responsive.kafka.internal.stores.ResponsiveKeyValueStore;
 import java.util.HashMap;
 import java.util.List;
@@ -16,6 +15,7 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
@@ -54,7 +54,12 @@ class ResponsiveAsyncProcessorTest {
     when(context.getStateStore("async-processor")).thenReturn(internalStore);
     when(context.taskId()).thenReturn(TASK_ID);
     when(context.recordMetadata()).thenAnswer(a -> Optional.of(metadata));
-    processor = new ResponsiveAsyncProcessor<>(wrapped, 4);
+    processor = new ResponsiveAsyncProcessor<>(
+        wrapped,
+        4,
+        Serdes.String(),
+        Serdes.Integer()
+    );
     processor.init(context);
   }
 
@@ -80,7 +85,7 @@ class ResponsiveAsyncProcessorTest {
     process(new Record<>("baz", 3, 102));
 
     // when:
-    final UnflushedRecords<String, Integer> unflushed = internalStore.get(TASK_ID + ".unflushed");
+    final UnflushedRecords unflushed = internalStore.get(TASK_ID + ".unflushed");
 
     // then:
     assertThat(unflushed.records().size(), is(3));
@@ -148,29 +153,26 @@ class ResponsiveAsyncProcessorTest {
   }
 
   private static class TestStateStore
-      implements KeyValueStore<String, UnflushedRecords<String, Integer>> {
-    private final Map<String, UnflushedRecords<String, Integer>> data = new HashMap<>();
+      implements KeyValueStore<String, UnflushedRecords> {
+    private final Map<String, UnflushedRecords> data = new HashMap<>();
 
     @Override
-    public void put(final String key, final UnflushedRecords<String, Integer> value) {
+    public void put(final String key, final UnflushedRecords value) {
       data.put(key, value);
     }
 
     @Override
-    public UnflushedRecords<String, Integer> putIfAbsent(
-        final String key,
-        final UnflushedRecords<String, Integer> value
-    ) {
+    public UnflushedRecords putIfAbsent(final String key, final UnflushedRecords value) {
       throw new UnsupportedOperationException();
     }
 
     @Override
-    public void putAll(final List<KeyValue<String, UnflushedRecords<String, Integer>>> entries) {
+    public void putAll(final List<KeyValue<String, UnflushedRecords>> entries) {
       throw new UnsupportedOperationException();
     }
 
     @Override
-    public UnflushedRecords<String, Integer> delete(final String key) {
+    public UnflushedRecords delete(final String key) {
       throw new UnsupportedOperationException();
     }
 
@@ -207,17 +209,17 @@ class ResponsiveAsyncProcessorTest {
     }
 
     @Override
-    public UnflushedRecords<String, Integer> get(final String key) {
+    public UnflushedRecords get(final String key) {
       return data.get(key);
     }
 
     @Override
-    public KeyValueIterator<String, UnflushedRecords<String, Integer>> range(final String from, final String to) {
+    public KeyValueIterator<String, UnflushedRecords> range(final String from, final String to) {
       throw new UnsupportedOperationException();
     }
 
     @Override
-    public KeyValueIterator<String, UnflushedRecords<String, Integer>> all() {
+    public KeyValueIterator<String, UnflushedRecords> all() {
       throw new UnsupportedOperationException();
     }
 
