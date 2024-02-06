@@ -389,7 +389,7 @@ public class CommitBufferTest {
       );
 
       // Then:
-      final String errorMsg = "commit-buffer [" + table.name() + "-2] "
+      final String errorMsg = "commit-buffer [" + tableName.tableName() + "-2] "
           + "Failed table partition [8]: "
           + "<batchOffset=100, persistedOffset=-1>, "
           + "<localEpoch=1, persistedEpoch=2>";
@@ -658,7 +658,7 @@ public class CommitBufferTest {
         () -> buffer.restoreBatch(List.of(record)));
 
     // Then:
-    final String errorMsg = "commit-buffer [" + table.name() + "-2] "
+    final String errorMsg = "commit-buffer [" + tableName.tableName() + "-2] "
         + "Failed table partition [8]: "
         + "<batchOffset=100, persistedOffset=-1>, "
         + "<localEpoch=1, persistedEpoch=2>";
