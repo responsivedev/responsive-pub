@@ -51,6 +51,7 @@ import static org.mockito.Mockito.when;
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
+import dev.responsive.kafka.internal.db.BatchFlusher;
 import dev.responsive.kafka.internal.db.BytesKeySpec;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.CassandraKeyValueTable;
@@ -61,6 +62,7 @@ import dev.responsive.kafka.internal.metrics.ClientVersionMetadata;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.utils.ExceptionSupplier;
 import dev.responsive.kafka.internal.utils.SessionClients;
+import dev.responsive.kafka.internal.utils.TableName;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
 import java.nio.ByteBuffer;
@@ -151,6 +153,7 @@ public class CommitBufferTest {
   private SessionClients sessionClients;
   private TopicPartition changelog;
   private String name;
+  private TableName tableName;
   private SubPartitioner partitioner;
   private CassandraKeyValueTable table;
   private CassandraClient client;
@@ -162,6 +165,7 @@ public class CommitBufferTest {
       @ResponsiveConfigParam final ResponsiveConfig config
   ) throws InterruptedException, TimeoutException {
     name = info.getTestMethod().orElseThrow().getName();
+    tableName = new TableName(name);
     session = CqlSession.builder()
         .addContactPoint(cassandra.getContactPoint())
         .withLocalDatacenter(cassandra.getLocalDatacenter())
@@ -206,16 +210,21 @@ public class CommitBufferTest {
   }
 
   private CommitBuffer<Bytes, Integer> createCommitBuffer(final boolean truncateChangelog) {
-    final var writerFactory = table.init(changelog.partition());
+    final var flushManager = table.init(changelog.partition());
+    final BatchFlusher<Bytes, Integer> batchFlusher = new BatchFlusher<>(
+        KEY_SPEC,
+        changelog.partition(),
+        flushManager
+    );
 
     return new CommitBuffer<>(
-        writerFactory,
+        batchFlusher,
         sessionClients,
         changelog,
         admin,
         KEY_SPEC,
         truncateChangelog,
-        name,
+        tableName,
         TRIGGERS,
         EXCEPTION_SUPPLIER
     );
@@ -227,13 +236,13 @@ public class CommitBufferTest {
       final Supplier<Instant> clock
   ) {
     return new CommitBuffer<>(
-        table.init(KAFKA_PARTITION),
+        new BatchFlusher<>(KEY_SPEC, changelog.partition(), table.init(KAFKA_PARTITION)),
         sessionClients,
         changelog,
         admin,
         KEY_SPEC,
         true,
-        name,
+        tableName,
         flushTriggers,
         EXCEPTION_SUPPLIER,
         maxBatchSize,
@@ -352,10 +361,17 @@ public class CommitBufferTest {
   public void shouldNotFlushWithExpiredEpoch() {
     // Given:
     final ExceptionSupplier exceptionSupplier = mock(ExceptionSupplier.class);
-    final var writerFactory = table.init(changelog.partition());
+    final var flushManager = table.init(changelog.partition());
     try (final CommitBuffer<Bytes, Integer> buffer = new CommitBuffer<>(
-        writerFactory, sessionClients, changelog, admin,
-        KEY_SPEC, true, name, TRIGGERS, exceptionSupplier)) {
+        new BatchFlusher<>(KEY_SPEC, changelog.partition(), flushManager),
+        sessionClients,
+        changelog,
+        admin,
+        KEY_SPEC,
+        true,
+        tableName,
+        TRIGGERS,
+        exceptionSupplier)) {
 
       Mockito.when(exceptionSupplier.commitFencedException(anyString()))
           .thenAnswer(msg -> new RuntimeException(msg.getArgument(0).toString()));
@@ -373,10 +389,10 @@ public class CommitBufferTest {
       );
 
       // Then:
-      final String errorMsg = "commit-buffer [" + table.name() + "-2] "
-          + "Error while writing batch for table partition 8! "
-          + "Batch Offset: 100, Persisted Offset: -1, "
-          + "Local Epoch: 1, Persisted Epoch: 2";
+      final String errorMsg = "commit-buffer [" + tableName.tableName() + "-2] "
+          + "Failed table partition [8]: "
+          + "<batchOffset=100, persistedOffset=-1>, "
+          + "<localEpoch=1, persistedEpoch=2>";
       assertThat(e.getMessage(), equalTo(errorMsg));
     }
   }
@@ -384,10 +400,11 @@ public class CommitBufferTest {
   @Test
   public void shouldIncrementEpochAndReserveForAllSubpartitionsOnInit() {
     // Given:
-    final var writerFactory = table.init(changelog.partition());
+    final var flushManager = table.init(changelog.partition());
     new CommitBuffer<>(
-        writerFactory, sessionClients, changelog, admin,
-        KEY_SPEC, true, name, TRIGGERS, EXCEPTION_SUPPLIER);
+        new BatchFlusher<>(KEY_SPEC, changelog.partition(), flushManager),
+        sessionClients, changelog, admin,
+        KEY_SPEC, true, tableName, TRIGGERS, EXCEPTION_SUPPLIER);
 
     for (final int tp : partitioner.allTablePartitions(changelog.partition())) {
       assertThat(table.fetchEpoch(tp), is(1L));
@@ -433,7 +450,7 @@ public class CommitBufferTest {
   }
 
   @Test
-  public void shouldNotTruncateTopicAfterFlushIfTruncateEnabledForSourceTopicChangelog() {
+  public void shouldNotTruncateTopicAfterFlushWithSourceTopicChangelog() {
     // Given:
     final var sourceChangelog = new TopicPartition("some-source-topic", KAFKA_PARTITION);
     Mockito.when(metrics.sensor("flush-" + sourceChangelog))
@@ -444,14 +461,15 @@ public class CommitBufferTest {
         .thenReturn(flushErrorSensor);
     Mockito.when(metrics.sensor("failed-truncations-" + sourceChangelog))
         .thenReturn(failedTruncationsSensor);
+    final var flushManager = table.init(changelog.partition());
     final CommitBuffer<Bytes, Integer> buffer = new CommitBuffer<>(
-        table.init(changelog.partition()),
+        new BatchFlusher<>(KEY_SPEC, changelog.partition(), flushManager),
         sessionClients,
         sourceChangelog,
         admin,
         KEY_SPEC,
         true,
-        name,
+        tableName,
         TRIGGERS,
         EXCEPTION_SUPPLIER
     );
@@ -608,10 +626,11 @@ public class CommitBufferTest {
   public void shouldNotRestoreRecordsWhenFencedByEpoch() {
     // Given:
     final ExceptionSupplier exceptionSupplier = mock(ExceptionSupplier.class);
-    final var writerFactory = table.init(changelog.partition());
+    final var flushManager = table.init(changelog.partition());
     final CommitBuffer<Bytes, Integer> buffer = new CommitBuffer<>(
-        writerFactory, sessionClients, changelog, admin,
-        KEY_SPEC, true, name, TRIGGERS, exceptionSupplier);
+        new BatchFlusher<>(KEY_SPEC, changelog.partition(), flushManager),
+        sessionClients, changelog, admin,
+        KEY_SPEC, true, tableName, TRIGGERS, exceptionSupplier);
 
     // initialize a new writer to bump the epoch
     table.init(changelog.partition());
@@ -639,25 +658,25 @@ public class CommitBufferTest {
         () -> buffer.restoreBatch(List.of(record)));
 
     // Then:
-    final String errorMsg = "commit-buffer [" + table.name() + "-2] "
-        + "Error while writing batch for table partition 8! "
-        + "Batch Offset: 100, Persisted Offset: -1, "
-        + "Local Epoch: 1, Persisted Epoch: 2";
+    final String errorMsg = "commit-buffer [" + tableName.tableName() + "-2] "
+        + "Failed table partition [8]: "
+        + "<batchOffset=100, persistedOffset=-1>, "
+        + "<localEpoch=1, persistedEpoch=2>";
     assertThat(e.getMessage(), equalTo(errorMsg));
   }
 
   @Test
   public void shouldRestoreStreamsBatchLargerThanCassandraBatch() {
     // Given:
-    final var writerFactory = table.init(changelog.partition());
+    final var flushManager = table.init(changelog.partition());
     final CommitBuffer<Bytes, Integer> buffer = new CommitBuffer<>(
-        writerFactory,
+        new BatchFlusher<>(KEY_SPEC, changelog.partition(), flushManager),
         sessionClients,
         changelog,
         admin,
         KEY_SPEC,
         true,
-        name,
+        tableName,
         TRIGGERS,
         EXCEPTION_SUPPLIER,
         3,

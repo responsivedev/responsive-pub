@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Responsive Computing, Inc.
+ * Copyright 2024 Responsive Computing, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,25 +16,22 @@
 
 package dev.responsive.kafka.internal.db;
 
+import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
-public class TTDWriterFactory<K> extends WriterFactory<K, Integer> {
+public class TTDFlushManager<K> implements FlushManager<K, Integer> {
 
+  private final String logPrefix;
   private final TTDTable<K> table;
-  private final int dummyPartition = 0; // there are no real partitions in the TTD
+  private final int kafkaPartition = 0; // dummy value as there are no real partitions in the TTD
 
-  public TTDWriterFactory(
+  public TTDFlushManager(
       final TTDTable<K> table
   ) {
-    super(String.format("TTDWriterFactory [%s] ", table.name()));
     this.table = table;
-  }
-
-  @Override
-  public RemoteWriter<K, Integer> createWriter(final Integer tablePartition) {
-    return new TTDWriter<>(table, tablePartition);
+    this.logPrefix = String.format("%s TTDFlushManager ", table.name());
   }
 
   @Override
@@ -43,20 +40,33 @@ public class TTDWriterFactory<K> extends WriterFactory<K, Integer> {
   }
 
   @Override
-  protected Integer tablePartitionForKey(final K key) {
-    return dummyPartition;
-  }
-
-  @SuppressWarnings("ResultOfMethodCallIgnored")
-  @Override
-  public RemoteWriteResult<Integer> setOffset(final long offset) {
-    table.setOffset(dummyPartition, offset);
-    return RemoteWriteResult.success(dummyPartition);
+  public TablePartitioner<K, Integer> partitioner() {
+    return TablePartitioner.defaultPartitioner();
   }
 
   @Override
-  protected long offset() {
-    return 0;
+  public RemoteWriter<K, Integer> createWriter(final Integer tablePartition) {
+    return new TTDWriter<>(table, tablePartition);
+  }
+
+  @Override
+  public void writeAdded(final K key) {
+
+  }
+
+  @Override
+  public RemoteWriteResult<Integer> preFlush() {
+    return RemoteWriteResult.success(kafkaPartition);
+  }
+
+  @Override
+  public RemoteWriteResult<Integer> postFlush(final long consumedOffset) {
+    return RemoteWriteResult.success(kafkaPartition);
+  }
+
+  @Override
+  public String failedFlushInfo(final long batchOffset, final Integer failedTablePartition) {
+    return "";
   }
 
   private static class TTDWriter<K> implements RemoteWriter<K, Integer> {
@@ -86,4 +96,10 @@ public class TTDWriterFactory<K> extends WriterFactory<K, Integer> {
     }
 
   }
+
+  @Override
+  public String logPrefix() {
+    return logPrefix;
+  }
+
 }

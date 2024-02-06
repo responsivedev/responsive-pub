@@ -19,25 +19,42 @@ package dev.responsive.kafka.internal.db.mongo;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.model.WriteModel;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
+import dev.responsive.kafka.internal.db.RemoteWindowedTable;
 import dev.responsive.kafka.internal.db.TableCache;
+import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.db.spec.BaseTableSpec;
 import java.util.concurrent.TimeoutException;
-import org.bson.Document;
 
 public class ResponsiveMongoClient {
 
-  private final TableCache<RemoteKVTable<WriteModel<Document>>> cache;
+  private final TableCache<MongoKVTable> kvTableCache;
+  private final TableCache<MongoWindowedTable> windowTableCache;
   private final MongoClient client;
 
-  public ResponsiveMongoClient(final MongoClient client) {
+  public ResponsiveMongoClient(final MongoClient client, final boolean timestampFirstOrder) {
     this.client = client;
-    cache = new TableCache<>(spec -> new MongoKVTable(client, spec.tableName()));
+    kvTableCache = new TableCache<>(spec -> new MongoKVTable(client, spec.tableName()));
+    windowTableCache = new TableCache<>(
+        spec -> new MongoWindowedTable(
+            client,
+            spec.tableName(),
+            (SegmentPartitioner) spec.partitioner(),
+            timestampFirstOrder
+        )
+    );
   }
 
-  public RemoteKVTable<WriteModel<Document>> kvTable(final String name)
+  public RemoteKVTable<WriteModel<KVDoc>> kvTable(final String name)
       throws InterruptedException, TimeoutException {
-    return cache.create(new BaseTableSpec(name, TablePartitioner.defaultPartitioner()));
+    return kvTableCache.create(new BaseTableSpec(name, TablePartitioner.defaultPartitioner()));
+  }
+
+  public RemoteWindowedTable<WriteModel<WindowDoc>> windowedTable(
+      final String name,
+      final SegmentPartitioner partitioner
+  ) throws InterruptedException, TimeoutException {
+    return windowTableCache.create(new BaseTableSpec(name, partitioner));
   }
 
   public void close() {

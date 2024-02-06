@@ -17,6 +17,7 @@
 package dev.responsive.kafka.integration;
 
 
+import static dev.responsive.kafka.testutils.IntegrationTestUtils.minutesToMillis;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.pipeRecords;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.startAppAndAwaitRunning;
 import static java.util.Arrays.asList;
@@ -39,6 +40,7 @@ import static org.hamcrest.Matchers.equalTo;
 
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
+import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.api.stores.ResponsiveStores;
 import dev.responsive.kafka.api.stores.ResponsiveWindowParams;
 import dev.responsive.kafka.testutils.KeyValueTimestamp;
@@ -81,10 +83,12 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
-import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
-@ExtendWith(ResponsiveExtension.class)
 public class ResponsiveWindowStoreIntegrationTest {
+
+  @RegisterExtension
+  static ResponsiveExtension EXTENSION = new ResponsiveExtension(StorageBackend.MONGO_DB);
 
   private static final String INPUT_TOPIC = "input";
   private static final String OTHER_TOPIC = "other";
@@ -127,12 +131,12 @@ public class ResponsiveWindowStoreIntegrationTest {
     final StreamsBuilder builder = new StreamsBuilder();
 
     final ConcurrentMap<Windowed<Long>, Long> collect = new ConcurrentHashMap<>();
-    final CountdownLatchWrapper inputLatch = new CountdownLatchWrapper(0);
     final CountdownLatchWrapper outputLatch = new CountdownLatchWrapper(0);
 
-    final CountDownLatch latch2 = new CountDownLatch(2);
+    final CountDownLatch finalLatch = new CountDownLatch(2);
     final KStream<Long, Long> input = builder.stream(inputTopic());
-    input.peek((k, v) -> inputLatch.countDown())
+    
+    input
         .groupByKey()
         .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofSeconds(5), Duration.ofSeconds(1)))
         .aggregate(
@@ -150,7 +154,7 @@ public class ResponsiveWindowStoreIntegrationTest {
           outputLatch.countDown();
 
           if (v == 1000) {
-            latch2.countDown();
+            finalLatch.countDown();
           }
         })
         // discard the window, so we don't have to serialize it
@@ -174,9 +178,9 @@ public class ResponsiveWindowStoreIntegrationTest {
       // produce two keys each having values 0-2 that are 100ms apart
       // which should result in just one window (per key) with the sum
       // of 3 after the first Streams instance is closed
-      inputLatch.resetCountdown(6);
+      outputLatch.resetCountdown(6);
       pipeInput(producer, inputTopic(), () -> timestamp.getAndAdd(100), 0, 3, 0, 1);
-      inputLatch.await();
+      outputLatch.await();
       assertThat(collect, Matchers.hasEntry(windowed(0, baseTs, 5000), 3L));
     }
 
@@ -192,21 +196,21 @@ public class ResponsiveWindowStoreIntegrationTest {
     ) {
       startAppAndAwaitRunning(Duration.ofSeconds(15), kafkaStreams);
 
-      inputLatch.resetCountdown(4);
+      outputLatch.resetCountdown(4);
       // Produce another two records with values 3-4, still within the first window
       pipeInput(producer, inputTopic(), () -> timestamp.getAndAdd(100), 3, 5, 0, 1);
 
-      inputLatch.await();
+      outputLatch.await();
       assertThat(collect, Matchers.hasEntry(windowed(0, baseTs, 5000), 10L));
 
       // Produce another set with values 5-10 in new window that advances stream-time
       // enough to expire the first window
-      inputLatch.resetCountdown(10);
+      outputLatch.resetCountdown(10);
       final long secondWindowStart = baseTs + 10_000L;
       timestamp.set(secondWindowStart);
       pipeInput(producer, inputTopic(), () -> timestamp.getAndAdd(100), 5, 10, 0, 1);
 
-      inputLatch.await();
+      outputLatch.await();
       assertThat(collect, Matchers.hasEntry(windowed(0, secondWindowStart, 5000), 35L));
 
       // at this point the records produced by this pipe should be
@@ -221,7 +225,7 @@ public class ResponsiveWindowStoreIntegrationTest {
       // down the latch
       timestamp.set(baseTs + 15000);
       pipeInput(producer, inputTopic(), timestamp::get, 1000, 1001, 0, 1);
-      latch2.await();
+      finalLatch.await();
     }
 
     // Then:
@@ -238,20 +242,87 @@ public class ResponsiveWindowStoreIntegrationTest {
   }
 
   @Test
+  public void shouldComputeMultipleWindowsPerSegment() throws Exception {
+    // Given:
+    final Map<String, Object> properties = getMutablePropertiesWithStringSerdes();
+    final StreamsBuilder builder = new StreamsBuilder();
+
+    final ConcurrentMap<Windowed<String>, String> results = new ConcurrentHashMap<>();
+    final CountdownLatchWrapper outputLatch = new CountdownLatchWrapper(0);
+
+    final KStream<String, String> input = builder.stream(inputTopic());
+
+    final Duration windowSize = Duration.ofMinutes(15);
+    final Duration gracePeriod = Duration.ofDays(15);
+    final long numSegments = 35L;
+
+    input
+        .groupByKey()
+        .windowedBy(TimeWindows.ofSizeAndGrace(windowSize, gracePeriod))
+        .aggregate(
+            () -> "",
+            (k, v, agg) -> agg + v,
+            ResponsiveStores.windowMaterialized(
+                ResponsiveWindowParams.window(
+                    name,
+                    windowSize,
+                    gracePeriod
+                ).withNumSegments(numSegments)
+            ))
+        .toStream()
+        .peek((k, v) -> {
+          results.put(k, v);
+          outputLatch.countDown();
+        })
+        // discard the window, so we don't have to serialize it
+        // we're not checking the output topic anyway
+        .selectKey((k, v) -> k.key())
+        .to(outputTopic());
+
+    // When:
+    try (
+        final ResponsiveKafkaStreams kafkaStreams =
+            new ResponsiveKafkaStreams(builder.build(), properties);
+        final KafkaProducer<String, String> producer = new KafkaProducer<>(properties)
+    ) {
+      startAppAndAwaitRunning(Duration.ofSeconds(15), kafkaStreams);
+
+      outputLatch.resetCountdown(11);
+
+      // Start from timestamp of 0L to get predictable results
+      // Write to multiple windows within a single segment and all within the large grace period
+      final List<KeyValueTimestamp<String, String>> input1 = asList(
+          new KeyValueTimestamp<>("key", "a", minutesToMillis(0L)),  // [0, 15]  --> "a"
+          new KeyValueTimestamp<>("key", "b", minutesToMillis(11L)), // [0, 15]  --> "ab"
+          new KeyValueTimestamp<>("key", "c", minutesToMillis(7L)),  // [0, 15]  --> "abc"
+          new KeyValueTimestamp<>("key", "d", minutesToMillis(16L)), // [15, 30] --> "d"
+          new KeyValueTimestamp<>("key", "e", minutesToMillis(28L)), // [15, 30] --> "de"
+          new KeyValueTimestamp<>("key", "f", minutesToMillis(5L)),  // [0, 15]  --> "abcf"
+          new KeyValueTimestamp<>("key", "g", minutesToMillis(26L)), // [15, 30] --> "deg"
+          new KeyValueTimestamp<>("key", "h", minutesToMillis(41L)), // [30, 45] --> "h"
+          new KeyValueTimestamp<>("key", "i", minutesToMillis(31L)), // [30, 45] --> "hi"
+          new KeyValueTimestamp<>("key", "j", minutesToMillis(2L)),  // [0, 15]  --> "abcfj"
+          new KeyValueTimestamp<>("key", "k", minutesToMillis(16L))  // [15, 30] --> "degk"
+      );
+
+      pipeRecords(producer, inputTopic(), input1);
+
+      outputLatch.await();
+      assertThat(results.size(), equalTo(3));
+      assertThat(results, Matchers.hasEntry(windowedKeyInMinutes(0L, 15L), "abcfj"));
+      assertThat(results, Matchers.hasEntry(windowedKeyInMinutes(15L, 30L), "degk"));
+      assertThat(results, Matchers.hasEntry(windowedKeyInMinutes(30L, 45L), "hi"));
+    }
+  }
+
+  @Test
   public void shouldComputeHoppingWindowAggregateWithRetention() throws Exception {
     // Given:
-    final Map<String, Object> properties = getMutableProperties();
-    properties.put(KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-    properties.put(VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-    properties.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-    properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-    properties.put(DEFAULT_KEY_SERDE_CLASS_CONFIG, StringSerde.class.getName());
-    properties.put(DEFAULT_VALUE_SERDE_CLASS_CONFIG, StringSerde.class.getName());
+    final Map<String, Object> properties = getMutablePropertiesWithStringSerdes();
 
     final StreamsBuilder builder = new StreamsBuilder();
 
     final ConcurrentMap<Windowed<String>, String> results = new ConcurrentHashMap<>();
-    final CountdownLatchWrapper inputLatch = new CountdownLatchWrapper(0);
     final CountdownLatchWrapper outputLatch = new CountdownLatchWrapper(0);
 
     final Duration windowSize = Duration.ofSeconds(10);
@@ -259,7 +330,7 @@ public class ResponsiveWindowStoreIntegrationTest {
     final Duration advance = Duration.ofSeconds(5);
 
     final KStream<String, String> input = builder.stream(inputTopic());
-    input.peek((k, v) -> inputLatch.countDown())
+    input
         .groupByKey()
         .windowedBy(TimeWindows.ofSizeAndGrace(windowSize, gracePeriod).advanceBy(advance))
         .aggregate(
@@ -290,7 +361,6 @@ public class ResponsiveWindowStoreIntegrationTest {
     ) {
       startAppAndAwaitRunning(Duration.ofSeconds(15), kafkaStreams);
 
-      inputLatch.resetCountdown(8);
       outputLatch.resetCountdown(11);
 
       // Start from timestamp of 0L to get predictable results
@@ -306,7 +376,6 @@ public class ResponsiveWindowStoreIntegrationTest {
       );
 
       pipeRecords(producer, inputTopic(), input1);
-      inputLatch.await();
       outputLatch.await();
 
       assertThat(results.size(), equalTo(4));
@@ -317,7 +386,7 @@ public class ResponsiveWindowStoreIntegrationTest {
     }
   }
 
-  class CountdownLatchWrapper {
+  static class CountdownLatchWrapper {
     private CountDownLatch currentLatch;
 
     public CountdownLatchWrapper(final int initialCountdown) {
@@ -444,6 +513,15 @@ public class ResponsiveWindowStoreIntegrationTest {
     return new Windowed<>(k, new TimeWindow(startMs, startMs + size));
   }
 
+  private Windowed<String> windowedKeyInMinutes(
+      final long startMinutes,
+      final long endMinutes
+  ) {
+    final long startMs = minutesToMillis(startMinutes);
+    final long endMs = minutesToMillis(endMinutes);
+    return new Windowed<>("key", new TimeWindow(startMs, endMs));
+  }
+
   private Windowed<String> windowedKey(final long startMs) {
     return new Windowed<>("key", new TimeWindow(startMs, startMs + 10_000));
   }
@@ -468,6 +546,17 @@ public class ResponsiveWindowStoreIntegrationTest {
       }
     }
     producer.flush();
+  }
+
+  private Map<String, Object> getMutablePropertiesWithStringSerdes() {
+    final Map<String, Object> properties = getMutableProperties();
+    properties.put(KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+    properties.put(VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+    properties.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+    properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+    properties.put(DEFAULT_KEY_SERDE_CLASS_CONFIG, StringSerde.class.getName());
+    properties.put(DEFAULT_VALUE_SERDE_CLASS_CONFIG, StringSerde.class.getName());
+    return properties;
   }
 
   private Map<String, Object> getMutableProperties() {

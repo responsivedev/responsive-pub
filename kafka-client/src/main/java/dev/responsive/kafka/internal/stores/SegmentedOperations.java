@@ -25,11 +25,13 @@ import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils
 
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.stores.ResponsiveWindowParams;
+import dev.responsive.kafka.internal.db.BatchFlusher;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.CassandraTableSpecFactory;
+import dev.responsive.kafka.internal.db.FlushManager;
 import dev.responsive.kafka.internal.db.RemoteWindowedTable;
 import dev.responsive.kafka.internal.db.WindowedKeySpec;
-import dev.responsive.kafka.internal.db.WriterFactory;
+import dev.responsive.kafka.internal.db.mongo.ResponsiveMongoClient;
 import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner;
 import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
 import dev.responsive.kafka.internal.utils.Iterators;
@@ -87,29 +89,37 @@ public class SegmentedOperations implements WindowOperations {
         context.taskId().partition()
     );
 
+    final SegmentPartitioner partitioner = SegmentPartitioner.create(params);
+
     final RemoteWindowedTable<?> table;
     switch (sessionClients.storageBackend()) {
       case CASSANDRA:
-        table = createCassandra(params, sessionClients);
+        table = createCassandra(params, sessionClients, partitioner);
         break;
       case MONGO_DB:
-        throw new UnsupportedOperationException("Window stores are not yet compatible with Mongo");
+        table = createMongo(params, sessionClients, partitioner);
+        break;
       default:
         throw new IllegalStateException("Unexpected value: " + sessionClients.storageBackend());
     }
 
-    final WriterFactory<WindowedKey, ?> writerFactory = table.init(changelog.partition());
+    final FlushManager<WindowedKey, ?> flushManager = table.init(changelog.partition());
 
     log.info("Remote table {} is available for querying.", name.tableName());
 
     final WindowedKeySpec keySpec = new WindowedKeySpec(withinRetention);
+    final BatchFlusher<WindowedKey, ?> batchFlusher = new BatchFlusher<>(
+        keySpec,
+        changelog.partition(),
+        flushManager
+    );
     final CommitBuffer<WindowedKey, ?> buffer = CommitBuffer.from(
-        writerFactory,
+        batchFlusher,
         sessionClients,
         changelog,
         keySpec,
         params.truncateChangelog(),
-        params.name().kafkaName(),
+        params.name(),
         config
     );
     final long restoreStartOffset = table.fetchOffset(changelog.partition());
@@ -135,17 +145,33 @@ public class SegmentedOperations implements WindowOperations {
 
   private static RemoteWindowedTable<?> createCassandra(
       final ResponsiveWindowParams params,
-      final SessionClients clients
+      final SessionClients clients,
+      final SegmentPartitioner partitioner
   ) throws InterruptedException, TimeoutException {
-
     final CassandraClient client = clients.cassandraClient();
-    final SegmentPartitioner partitioner = SegmentPartitioner.create(params);
 
     final var spec = CassandraTableSpecFactory.fromWindowParams(params, partitioner);
 
     switch (params.schemaType()) {
       case WINDOW:
         return client.windowedFactory().create(spec);
+      case STREAM:
+        throw new UnsupportedOperationException("Not yet implemented");
+      default:
+        throw new IllegalArgumentException(params.schemaType().name());
+    }
+  }
+
+  private static RemoteWindowedTable<?> createMongo(
+      final ResponsiveWindowParams params,
+      final SessionClients clients,
+      final SegmentPartitioner partitioner
+  ) throws InterruptedException, TimeoutException {
+    final ResponsiveMongoClient client = clients.mongoClient();
+
+    switch (params.schemaType()) {
+      case WINDOW:
+        return client.windowedTable(params.name().tableName(), partitioner);
       case STREAM:
         throw new UnsupportedOperationException("Not yet implemented");
       default:

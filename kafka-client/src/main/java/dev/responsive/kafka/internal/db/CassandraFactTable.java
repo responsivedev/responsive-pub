@@ -176,7 +176,7 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
   }
 
   @Override
-  public WriterFactory<Bytes, Integer> init(
+  public CassandraFactFlushManager init(
       final int kafkaPartition
   ) {
     client.execute(
@@ -188,7 +188,7 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
             .build()
     );
 
-    return new FactWriterFactory<>(this, client, kafkaPartition);
+    return new CassandraFactFlushManager(this, client, kafkaPartition);
   }
 
   @Override
@@ -211,7 +211,6 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
     }
   }
 
-  @Override
   public BoundStatement setOffset(
       final int kafkaPartition,
       final long offset

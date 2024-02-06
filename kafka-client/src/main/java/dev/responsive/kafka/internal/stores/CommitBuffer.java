@@ -41,14 +41,15 @@ import static dev.responsive.kafka.internal.metrics.StoreMetrics.TIME_SINCE_LAST
 import static org.apache.kafka.clients.admin.RecordsToDelete.beforeOffset;
 
 import dev.responsive.kafka.api.config.ResponsiveConfig;
+import dev.responsive.kafka.internal.db.BatchFlusher;
+import dev.responsive.kafka.internal.db.BatchFlusher.FlushResult;
 import dev.responsive.kafka.internal.db.KeySpec;
-import dev.responsive.kafka.internal.db.RemoteWriter;
-import dev.responsive.kafka.internal.db.WriterFactory;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.utils.ExceptionSupplier;
 import dev.responsive.kafka.internal.utils.Iterators;
 import dev.responsive.kafka.internal.utils.Result;
 import dev.responsive.kafka.internal.utils.SessionClients;
+import dev.responsive.kafka.internal.utils.TableName;
 import java.io.Closeable;
 import java.time.Duration;
 import java.time.Instant;
@@ -87,7 +88,7 @@ public class CommitBuffer<K extends Comparable<K>, P>
   private final Logger log;
   private final String logPrefix;
 
-  private final WriterFactory<K, P> writerFactory;
+  private final BatchFlusher<K, P> batchFlusher;
   private final SizeTrackingBuffer<K> buffer;
   private final ResponsiveMetrics metrics;
   private final Admin admin;
@@ -117,48 +118,48 @@ public class CommitBuffer<K extends Comparable<K>, P>
   private Instant lastFlush;
 
   static <K extends Comparable<K>, P> CommitBuffer<K, P> from(
-      final WriterFactory<K, P> writerFactory,
+      final BatchFlusher<K, P> batchFlusher,
       final SessionClients clients,
       final TopicPartition changelog,
       final KeySpec<K> keySpec,
       final boolean truncateChangelog,
-      final String storeName,
+      final TableName tableName,
       final ResponsiveConfig config
   ) {
     final var admin = clients.admin();
 
     return new CommitBuffer<>(
-        writerFactory,
+        batchFlusher,
         clients,
         changelog,
         admin,
         keySpec,
         truncateChangelog,
-        storeName,
+        tableName,
         FlushTriggers.fromConfig(config),
         ExceptionSupplier.fromConfig(config.originals())
     );
   }
 
   CommitBuffer(
-      final WriterFactory<K, P> writerFactory,
+      final BatchFlusher<K, P> batchFlusher,
       final SessionClients sessionClients,
       final TopicPartition changelog,
       final Admin admin,
       final KeySpec<K> keySpec,
       final boolean truncateChangelog,
-      final String storeName,
+      final TableName tableName,
       final FlushTriggers flushTriggers,
       final ExceptionSupplier exceptionSupplier
   ) {
     this(
-        writerFactory,
+        batchFlusher,
         sessionClients,
         changelog,
         admin,
         keySpec,
         truncateChangelog,
-        storeName,
+        tableName,
         flushTriggers,
         exceptionSupplier,
         MAX_BATCH_SIZE,
@@ -167,19 +168,19 @@ public class CommitBuffer<K extends Comparable<K>, P>
   }
 
   CommitBuffer(
-      final WriterFactory<K, P> writerFactory,
+      final BatchFlusher<K, P> batchFlusher,
       final SessionClients sessionClients,
       final TopicPartition changelog,
       final Admin admin,
       final KeySpec<K> keySpec,
       final boolean truncateChangelog,
-      final String storeName,
+      final TableName tableName,
       final FlushTriggers flushTriggers,
       final ExceptionSupplier exceptionSupplier,
       final int maxBatchSize,
       final Supplier<Instant> clock
   ) {
-    this.writerFactory = writerFactory;
+    this.batchFlusher = batchFlusher;
     this.changelog = changelog;
     this.metrics = sessionClients.metrics();
     this.admin = admin;
@@ -193,8 +194,10 @@ public class CommitBuffer<K extends Comparable<K>, P>
     this.lastFlush = clock.get();
 
     logPrefix = String.format("commit-buffer [%s-%d] ",
-                              writerFactory.tableName(), changelog.partition());
+                              tableName.tableName(), changelog.partition());
     log = new LogContext(logPrefix).logger(CommitBuffer.class);
+
+    final String storeName = tableName.kafkaName();
 
     flushSensorName = getSensorName(FLUSH, changelog);
     flushLatencySensorName = getSensorName(FLUSH_LATENCY, changelog);
@@ -466,27 +469,26 @@ public class CommitBuffer<K extends Comparable<K>, P>
         buffer.getReader().size(),
         batchSize,
         consumedOffset,
-        writerFactory
+             batchFlusher
     );
 
-    final WriterFactory<K, P>.PendingFlush pendingFlush = writerFactory.beginNewFlush();
-    for (final Result<K> result : buffer.getReader().values()) {
-      final RemoteWriter<K, P> writer = pendingFlush.writerForKey(result.key);
+    final FlushResult<K, P> flushResult = batchFlusher.flushWriteBatch(
+        buffer.getReader(), consumedOffset
+    );
 
-      if (result.isTombstone) {
-        writer.delete(result.key);
-      } else if (keySpec.retain(result.key)) {
-        writer.insert(result.key, result.value, result.timestamp);
-      }
-    }
+    if (!flushResult.result().wasApplied()) {
+      final P failedTablePartition = flushResult.result().tablePartition();
+      log.warn("Error while flushing batch for table partition {}", failedTablePartition);
 
-    final var flushResult = writerFactory.commitPendingFlush(pendingFlush, consumedOffset);
-    // TODO: we could/probably should move the result checking and handling inside the
-    //  #commitPendingFlush method, since we have to go back to the WriterFactory for the
-    //  specific error message anyways. It might also be nice to extract the exception
-    //  supplier so that different tables and/or writers can throw more specific errors
-    if (!flushResult.wasApplied()) {
-      throwFlushException(flushResult, consumedOffset);
+      flushErrorsSensor.record();
+
+      final String errorMsg = String.format(
+          "Failed table partition [%s]: %s",
+          failedTablePartition, flushResult.failedFlushInfo(consumedOffset, failedTablePartition)
+      );
+      log.warn(errorMsg);
+
+      throw exceptionSupplier.commitFencedException(logPrefix + errorMsg);
     }
 
     final long endNanos = System.nanoTime();
@@ -496,12 +498,11 @@ public class CommitBuffer<K extends Comparable<K>, P>
     flushSensor.record(1, endMs);
     flushLatencySensor.record(flushLatencyMs, endMs);
 
-    log.info("Flushed {} records to remote in {}ms (offset={}, writer={}, numSubPartitions={})",
+    log.info("Flushed {} records to {} table partitions with offset {} in {}ms",
              buffer.getReader().size(),
-             flushLatencyMs,
+             flushResult.numTablePartitionsFlushed(),
              consumedOffset,
-             writerFactory,
-             pendingFlush.numRemoteWriters()
+             flushLatencyMs
     );
     buffer.clear();
 
@@ -583,15 +584,6 @@ public class CommitBuffer<K extends Comparable<K>, P>
     if (consumedOffset >= 0) {
       doFlush(consumedOffset, records.size());
     }
-  }
-
-  private void throwFlushException(final RemoteWriteResult<P> result, final long consumedOffset) {
-    flushErrorsSensor.record();
-
-    final String errorMsg = writerFactory.failedFlushError(result, consumedOffset);
-    log.warn(errorMsg);
-
-    throw exceptionSupplier.commitFencedException(logPrefix + errorMsg);
   }
 
   @Override
