@@ -173,7 +173,7 @@ public class TablePartitionerIntegrationTest {
           true,
           properties
       );
-      final String cassandraName = new TableName(storeName).remoteName();
+      final String cassandraName = new TableName(storeName).tableName();
       final var partitioner = SubPartitioner.create(
           OptionalInt.empty(),
           NUM_PARTITIONS_INPUT,
@@ -238,7 +238,7 @@ public class TablePartitionerIntegrationTest {
           true,
           properties
       );
-      final String cassandraName = new TableName(storeName).remoteName();
+      final String cassandraName = new TableName(storeName).tableName();
       final var partitioner = TablePartitioner.defaultPartitioner();
       final CassandraFactTable table = CassandraFactTable.create(
           new BaseTableSpec(cassandraName, partitioner), client);
@@ -320,7 +320,7 @@ public class TablePartitionerIntegrationTest {
           true,
           properties
       );
-      final String cassandraName = new TableName(storeName).remoteName();
+      final String cassandraName = new TableName(storeName).tableName();
       final var partitioner = SubPartitioner.create(
           OptionalInt.empty(),
           NUM_PARTITIONS_INPUT,

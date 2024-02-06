@@ -71,7 +71,7 @@ class CassandraFactTableIntegrationTest {
   public void shouldInitializeWithCorrectMetadata() throws Exception {
     // Given:
     params = ResponsiveKeyValueParams.fact(storeName);
-    final String tableName = params.name().remoteName();
+    final String tableName = params.name().tableName();
     final RemoteKVTable<BoundStatement> schema = client
         .factFactory()
         .create(CassandraTableSpecFactory.fromKVParams(params, defaultPartitioner()));
@@ -103,7 +103,7 @@ class CassandraFactTableIntegrationTest {
     // Given:
     final var ttl = Duration.ofDays(30);
     params = ResponsiveKeyValueParams.fact(storeName).withTimeToLive(ttl);
-    final String tableName = params.name().remoteName();
+    final String tableName = params.name().tableName();
 
     // When:
     client.factFactory()
@@ -130,7 +130,7 @@ class CassandraFactTableIntegrationTest {
   public void shouldUseTwcsWithoutTtl() throws Exception {
     // Given:
     params = ResponsiveKeyValueParams.fact(storeName);
-    final String tableName = params.name().remoteName();
+    final String tableName = params.name().tableName();
 
     // When:
     client.factFactory()
@@ -175,7 +175,7 @@ class CassandraFactTableIntegrationTest {
   public void shouldRespectSemanticTTL() throws Exception {
     // Given:
     params = ResponsiveKeyValueParams.fact(storeName);
-    final String tableName = params.name().remoteName();
+    final String tableName = params.name().tableName();
 
     final RemoteKVTable<BoundStatement> table = client
         .factFactory()
