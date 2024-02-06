@@ -389,11 +389,10 @@ public class CommitBufferTest {
       );
 
       // Then:
-      // TODO(sophie): fix this up once the error messages are all implemented
       final String errorMsg = "commit-buffer [" + table.name() + "-2] "
-          + "Error while writing batch for table partition 8! "
-          + "Batch Offset: 100, Persisted Offset: -1, "
-          + "Local Epoch: 1, Persisted Epoch: 2";
+          + "Failed table partition [8]: "
+          + "<batchOffset=100, persistedOffset=-1>, "
+          + "<localEpoch=1, persistedEpoch=2>";
       assertThat(e.getMessage(), equalTo(errorMsg));
     }
   }
@@ -451,7 +450,7 @@ public class CommitBufferTest {
   }
 
   @Test
-  public void shouldNotTruncateTopicAfterFlushIfTruncateEnabledForSourceTopicChangelog() {
+  public void shouldNotTruncateTopicAfterFlushWithSourceTopicChangelog() {
     // Given:
     final var sourceChangelog = new TopicPartition("some-source-topic", KAFKA_PARTITION);
     Mockito.when(metrics.sensor("flush-" + sourceChangelog))
@@ -659,11 +658,10 @@ public class CommitBufferTest {
         () -> buffer.restoreBatch(List.of(record)));
 
     // Then:
-    // TODO(sophie): fix this up once the error messages are all implemented
     final String errorMsg = "commit-buffer [" + table.name() + "-2] "
-        + "Error while writing batch for table partition 8! "
-        + "Batch Offset: 100, Persisted Offset: -1, "
-        + "Local Epoch: 1, Persisted Epoch: 2";
+        + "Failed table partition [8]: "
+        + "<batchOffset=100, persistedOffset=-1>, "
+        + "<localEpoch=1, persistedEpoch=2>";
     assertThat(e.getMessage(), equalTo(errorMsg));
   }
 

@@ -65,7 +65,7 @@ public class TTDFlushManager<K> implements FlushManager<K, Integer> {
   }
 
   @Override
-  public String failedFlushInfo(final long batchOffset) {
+  public String failedFlushInfo(final long batchOffset, final Integer failedTablePartition) {
     return "";
   }
 

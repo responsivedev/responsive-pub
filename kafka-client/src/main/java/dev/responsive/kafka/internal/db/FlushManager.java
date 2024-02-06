@@ -35,7 +35,7 @@ public interface FlushManager<K, P> {
 
   RemoteWriteResult<P> postFlush(final long consumedOffset);
 
-  String failedFlushInfo(final long batchOffset);
+  String failedFlushInfo(final long batchOffset, final P failedTablePartition);
 
   String logPrefix();
 

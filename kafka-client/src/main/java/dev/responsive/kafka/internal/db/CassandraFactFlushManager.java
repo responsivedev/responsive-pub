@@ -65,7 +65,7 @@ public class CassandraFactFlushManager extends KVFlushManager {
   }
 
   @Override
-  public String failedFlushInfo(final long batchOffset) {
+  public String failedFlushInfo(final long batchOffset, final Integer failedTablePartition) {
     return String.format("<batchOffset=%d, persistedOffset=%d>",
                          batchOffset, table.fetchOffset(kafkaPartition));
   }

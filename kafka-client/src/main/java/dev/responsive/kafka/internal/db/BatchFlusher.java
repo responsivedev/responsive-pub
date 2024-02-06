@@ -153,8 +153,8 @@ public class BatchFlusher<K extends Comparable<K>, P> {
       return numTablePartitionsFlushed;
     }
 
-    public String failedFlushInfo(final long consumedOffset) {
-      return flushManager.failedFlushInfo(consumedOffset);
+    public String failedFlushInfo(final long consumedOffset, final P failedTablePartition) {
+      return flushManager.failedFlushInfo(consumedOffset, failedTablePartition);
     }
   }
 }

@@ -101,7 +101,7 @@ public class MongoWindowFlushManager extends WindowFlushManager {
   }
 
   @Override
-  public String failedFlushInfo(final long batchOffset) {
+  public String failedFlushInfo(final long batchOffset, final SegmentPartition failedTablePartition) {
     return String.format("<batchOffset=%d, persistedOffset=%d>, <localEpoch=%d, persistedEpoch=%d>",
                          batchOffset, table.fetchOffset(kafkaPartition),
                          table.localEpoch(kafkaPartition), table.fetchEpoch(kafkaPartition));

@@ -477,12 +477,15 @@ public class CommitBuffer<K extends Comparable<K>, P>
     );
 
     if (!flushResult.result().wasApplied()) {
+      final P failedTablePartition = flushResult.result().tablePartition();
+      log.warn("Error while flushing batch for table partition {}", failedTablePartition);
+
       flushErrorsSensor.record();
 
-      final String errorMsg =
-          String.format("Error while flushing batch for table partition %s! %s",
-                        flushResult.result().tablePartition(),
-                        flushResult.failedFlushInfo(consumedOffset));
+      final String errorMsg = String.format(
+          "Failed table partition [%s]: %s",
+          failedTablePartition, flushResult.failedFlushInfo(consumedOffset, failedTablePartition)
+      );
       log.warn(errorMsg);
 
       throw exceptionSupplier.commitFencedException(logPrefix + errorMsg);
