@@ -60,7 +60,7 @@ public class MongoWindowFlushManager extends WindowFlushManager {
     this.kafkaPartition = kafkaPartition;
 
     logPrefix = String.format("%s[%d] window-store {epoch=%d} ",
-                              table.name(), kafkaPartition, table.epoch(kafkaPartition));
+                              table.name(), kafkaPartition, table.localEpoch(kafkaPartition));
     log = new LogContext(logPrefix).logger(MongoWindowFlushManager.class);
   }
 
@@ -98,6 +98,13 @@ public class MongoWindowFlushManager extends WindowFlushManager {
       final SegmentPartition segmentPartition
   ) {
     return table.deleteSegmentForPartition(kafkaPartition, segmentPartition);
+  }
+
+  @Override
+  public String failedFlushInfo(final long batchOffset) {
+    return String.format("<batchOffset=%d, persistedOffset=%d>, <localEpoch=%d, persistedEpoch=%d>",
+                         batchOffset, table.fetchOffset(kafkaPartition),
+                         table.localEpoch(kafkaPartition), table.fetchEpoch(kafkaPartition));
   }
 
   @Override

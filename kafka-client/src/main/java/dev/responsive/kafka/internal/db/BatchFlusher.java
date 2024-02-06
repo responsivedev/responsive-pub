@@ -154,7 +154,7 @@ public class BatchFlusher<K extends Comparable<K>, P> {
     }
 
     public String failedFlushInfo(final long consumedOffset) {
-      return flushManager.failedFlushMsg(consumedOffset);
+      return flushManager.failedFlushInfo(consumedOffset);
     }
   }
 }

@@ -65,6 +65,12 @@ public class CassandraFactFlushManager extends KVFlushManager {
   }
 
   @Override
+  public String failedFlushInfo(final long batchOffset) {
+    return String.format("<batchOffset=%d, persistedOffset=%d>",
+                         batchOffset, table.fetchOffset(kafkaPartition));
+  }
+
+  @Override
   public RemoteWriteResult<Integer> updateOffset(final long consumedOffset) {
     final int metadataPartition = partitioner.metadataTablePartition(kafkaPartition);
     final var result = client.execute(table.setOffset(kafkaPartition, consumedOffset));

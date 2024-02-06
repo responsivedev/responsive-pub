@@ -97,6 +97,13 @@ public class CassandraWindowFlushManager extends WindowFlushManager {
   }
 
   @Override
+  public String failedFlushInfo(final long batchOffset) {
+    return String.format("<batchOffset=%d, persistedOffset=%d>, <localEpoch=%d, persistedEpoch=%d>",
+                         batchOffset, table.fetchOffset(kafkaPartition), epoch,
+                         table.fetchEpoch(partitioner.metadataTablePartition(kafkaPartition)));
+  }
+
+  @Override
   public RemoteWriteResult<SegmentPartition> updateOffsetAndStreamTime(
       final long consumedOffset,
       final long streamTime

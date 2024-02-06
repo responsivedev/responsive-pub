@@ -194,7 +194,7 @@ public class CommitBuffer<K extends Comparable<K>, P>
     this.lastFlush = clock.get();
 
     logPrefix = String.format("commit-buffer [%s-%d] ",
-                              tableName.remoteName(), changelog.partition());
+                              tableName.tableName(), changelog.partition());
     log = new LogContext(logPrefix).logger(CommitBuffer.class);
 
     final String storeName = tableName.kafkaName();

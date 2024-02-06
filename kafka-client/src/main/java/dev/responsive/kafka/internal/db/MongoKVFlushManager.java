@@ -52,7 +52,7 @@ public class MongoKVFlushManager extends KVFlushManager {
 
     partitioner = TablePartitioner.defaultPartitioner();
     logPrefix = String.format("%s[%d] kv-store {epoch=%d} ",
-                              table.name(), kafkaPartition, table.epoch(kafkaPartition));
+                              table.name(), kafkaPartition, table.localEpoch(kafkaPartition));
     log = new LogContext(logPrefix).logger(MongoKVFlushManager.class);
   }
 
@@ -69,6 +69,13 @@ public class MongoKVFlushManager extends KVFlushManager {
   @Override
   public RemoteWriter<Bytes, Integer> createWriter(final Integer tablePartition) {
     return new MongoWriter<>(table, kafkaPartition, tablePartition, () -> kvDocs);
+  }
+
+  @Override
+  public String failedFlushInfo(final long batchOffset) {
+    return String.format("<batchOffset=%d, persistedOffset=%d>, <localEpoch=%d, persistedEpoch=%d>",
+                         batchOffset, table.fetchOffset(kafkaPartition),
+                         table.localEpoch(kafkaPartition), table.fetchEpoch(kafkaPartition));
   }
 
   @Override

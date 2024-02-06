@@ -244,6 +244,23 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
     return RemoteWriteResult.success(segmentPartition);
   }
 
+  public long localEpoch(final int kafkaPartition) {
+    return kafkaPartitionToSegments.get(kafkaPartition).epoch;
+  }
+
+  public long fetchEpoch(final int kafkaPartition) {
+    final WindowMetadataDoc remoteMetadata = metadata.find(
+        Filters.eq(WindowMetadataDoc.PARTITION, kafkaPartition)
+    ).first();
+
+    if (remoteMetadata == null) {
+      LOG.error("{}[{}] Epoch fetch failed due to missing metadata row",
+                name, kafkaPartition);
+      throw new IllegalStateException("No metadata row found for partition " + kafkaPartition);
+    }
+    return remoteMetadata.epoch;
+  }
+
   @Override
   public long fetchOffset(final int kafkaPartition) {
     final WindowMetadataDoc remoteMetadata = metadata.find(
@@ -289,10 +306,6 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
             Updates.set(WindowMetadataDoc.EPOCH, epoch)
         )
     );
-  }
-
-  public long epoch(final int kafkaPartition) {
-    return kafkaPartitionToSegments.get(kafkaPartition).epoch;
   }
 
   /**

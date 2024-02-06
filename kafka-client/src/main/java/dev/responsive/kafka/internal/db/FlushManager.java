@@ -35,10 +35,7 @@ public interface FlushManager<K, P> {
 
   RemoteWriteResult<P> postFlush(final long consumedOffset);
 
-  default String failedFlushMsg(final long batchOffset) {
-    // TODO: remove default and implement!
-    return "failed on flushing offset " + batchOffset;
-  }
+  String failedFlushInfo(final long batchOffset);
 
   String logPrefix();
 

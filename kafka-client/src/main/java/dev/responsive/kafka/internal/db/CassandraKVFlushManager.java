@@ -72,6 +72,13 @@ public class CassandraKVFlushManager extends KVFlushManager {
   }
 
   @Override
+  public String failedFlushInfo(final long batchOffset) {
+    return String.format("<batchOffset=%d, persistedOffset=%d>, <localEpoch=%d, persistedEpoch=%d>",
+                         batchOffset, table.fetchOffset(kafkaPartition),
+                         epoch, table.fetchEpoch(kafkaPartition));
+  }
+
+  @Override
   public RemoteWriteResult<Integer> updateOffset(final long consumedOffset) {
     final int tablePartition = partitioner.metadataTablePartition(kafkaPartition);
 

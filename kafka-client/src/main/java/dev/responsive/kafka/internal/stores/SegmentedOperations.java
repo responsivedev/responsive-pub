@@ -105,7 +105,7 @@ public class SegmentedOperations implements WindowOperations {
 
     final FlushManager<WindowedKey, ?> flushManager = table.init(changelog.partition());
 
-    log.info("Remote table {} is available for querying.", name.remoteName());
+    log.info("Remote table {} is available for querying.", name.tableName());
 
     final WindowedKeySpec keySpec = new WindowedKeySpec(withinRetention);
     final BatchFlusher<WindowedKey, ?> batchFlusher = new BatchFlusher<>(
@@ -171,7 +171,7 @@ public class SegmentedOperations implements WindowOperations {
 
     switch (params.schemaType()) {
       case WINDOW:
-        return client.windowedTable(params.name().remoteName(), partitioner);
+        return client.windowedTable(params.name().tableName(), partitioner);
       case STREAM:
         throw new UnsupportedOperationException("Not yet implemented");
       default:

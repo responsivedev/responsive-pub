@@ -52,12 +52,13 @@ import org.slf4j.LoggerFactory;
 public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
 
   private static final Logger LOG = LoggerFactory.getLogger(MongoKVTable.class);
-  private static final String METADATA_COLLECTION_SUFFIX = "_md";
+  private static final String KV_COLLECTION_NAME = "kv_data";
+  private static final String METADATA_COLLECTION_NAME = "kv_metadata";
 
   private final String name;
 
   private final MongoCollection<KVDoc> docs;
-  private final MongoCollection<MetadataDoc> metadata;
+  private final MongoCollection<KVMetadataDoc> metadata;
 
   private final ConcurrentMap<Integer, Long> kafkaPartitionToEpoch = new ConcurrentHashMap<>();
 
@@ -73,8 +74,9 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
     );
 
     final MongoDatabase database = client.getDatabase(name).withCodecRegistry(pojoCodecRegistry);
-    docs = database.getCollection(name, KVDoc.class);
-    metadata = database.getCollection(name + METADATA_COLLECTION_SUFFIX, MetadataDoc.class);
+
+    docs = database.getCollection(KV_COLLECTION_NAME, KVDoc.class);
+    metadata = database.getCollection(METADATA_COLLECTION_NAME, KVMetadataDoc.class);
 
     // TODO(agavra): make the tombstone retention configurable
     // this is idempotent
@@ -91,13 +93,13 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
 
   @Override
   public MongoKVFlushManager init(final int kafkaPartition) {
-    final MetadataDoc metaDoc = metadata.findOneAndUpdate(
-        Filters.eq(MetadataDoc.ID, kafkaPartition),
+    final KVMetadataDoc metaDoc = metadata.findOneAndUpdate(
+        Filters.eq(KVMetadataDoc.PARTITION, kafkaPartition),
         Updates.combine(
-            Updates.setOnInsert(MetadataDoc.ID, kafkaPartition),
-            Updates.setOnInsert(MetadataDoc.PARTITION, kafkaPartition),
-            Updates.setOnInsert(MetadataDoc.OFFSET, NO_COMMITTED_OFFSET),
-            Updates.inc(MetadataDoc.EPOCH, 1) // will set the value to 1 if it doesn't exist
+            Updates.setOnInsert(KVMetadataDoc.PARTITION, kafkaPartition),
+            Updates.setOnInsert(KVMetadataDoc.PARTITION, kafkaPartition),
+            Updates.setOnInsert(KVMetadataDoc.OFFSET, NO_COMMITTED_OFFSET),
+            Updates.inc(KVMetadataDoc.EPOCH, 1) // will set the value to 1 if it doesn't exist
         ),
         new FindOneAndUpdateOptions()
             .upsert(true)
@@ -112,10 +114,6 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
 
     kafkaPartitionToEpoch.put(kafkaPartition, metaDoc.epoch);
     return new MongoKVFlushManager(this, docs, kafkaPartition);
-  }
-
-  public long epoch(final int kafkaPartition) {
-    return kafkaPartitionToEpoch.get(kafkaPartition);
   }
 
   @Override
@@ -180,8 +178,8 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
 
   @Override
   public long fetchOffset(final int kafkaPartition) {
-    final MetadataDoc result = metadata.find(
-        Filters.eq(MetadataDoc.ID, kafkaPartition)
+    final KVMetadataDoc result = metadata.find(
+        Filters.eq(KVMetadataDoc.PARTITION, kafkaPartition)
     ).first();
     if (result == null) {
       throw new IllegalStateException("Expected to find metadata row");
@@ -194,18 +192,33 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
 
     return metadata.updateOne(
         Filters.and(
-            Filters.eq(MetadataDoc.ID, kafkaPartition),
-            Filters.lte(MetadataDoc.EPOCH, epoch)
+            Filters.eq(KVMetadataDoc.PARTITION, kafkaPartition),
+            Filters.lte(KVMetadataDoc.EPOCH, epoch)
         ),
         Updates.combine(
-            Updates.set(MetadataDoc.OFFSET, offset),
-            Updates.set(MetadataDoc.EPOCH, epoch)
+            Updates.set(KVMetadataDoc.OFFSET, offset),
+            Updates.set(KVMetadataDoc.EPOCH, epoch)
         )
     );
   }
 
+  public long localEpoch(final int kafkaPartition) {
+    return kafkaPartitionToEpoch.get(kafkaPartition);
+  }
+
+  public long fetchEpoch(final int kafkaPartition) {
+    final KVMetadataDoc result = metadata.find(
+        Filters.eq(KVMetadataDoc.PARTITION, kafkaPartition)
+    ).first();
+    if (result == null) {
+      throw new IllegalStateException("Expected to find metadata row");
+    }
+    return result.epoch;
+  }
+
   @Override
   public long approximateNumEntries(final int kafkaPartition) {
+    LOG.warn("approximateNumEntries is not yet implemented for Mongo");
     return 0;
   }
 

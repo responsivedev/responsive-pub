@@ -64,6 +64,11 @@ public class TTDFlushManager<K> implements FlushManager<K, Integer> {
     return RemoteWriteResult.success(kafkaPartition);
   }
 
+  @Override
+  public String failedFlushInfo(final long batchOffset) {
+    return "";
+  }
+
   private static class TTDWriter<K> implements RemoteWriter<K, Integer> {
     private final TTDTable<K> table;
     private final int tablePartition;

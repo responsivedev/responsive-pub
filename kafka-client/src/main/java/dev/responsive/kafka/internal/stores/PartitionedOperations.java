@@ -99,7 +99,7 @@ public class PartitionedOperations implements KeyValueOperations {
 
     final FlushManager<Bytes, ?> flushManager = table.init(changelog.partition());
 
-    log.info("Remote table {} is available for querying.", name.remoteName());
+    log.info("Remote table {} is available for querying.", name.tableName());
 
     final BytesKeySpec keySpec = new BytesKeySpec();
     final BatchFlusher<Bytes, ?> batchFlusher = new BatchFlusher<>(
@@ -159,7 +159,7 @@ public class PartitionedOperations implements KeyValueOperations {
         : SubPartitioner.create(
             actualRemoteCount,
             numChangelogPartitions,
-            params.name().remoteName(),
+            params.name().tableName(),
             config,
             changelogTopicName
         );
@@ -179,7 +179,7 @@ public class PartitionedOperations implements KeyValueOperations {
       final ResponsiveKeyValueParams params,
       final SessionClients sessionClients
   ) throws InterruptedException, TimeoutException {
-    return sessionClients.mongoClient().kvTable(params.name().remoteName());
+    return sessionClients.mongoClient().kvTable(params.name().tableName());
   }
 
   @SuppressWarnings("rawtypes")
