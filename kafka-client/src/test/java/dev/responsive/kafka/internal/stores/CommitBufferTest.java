@@ -581,6 +581,9 @@ public class CommitBufferTest {
     }
   }
 
+  // measure how long before the commit buffer actually flushes the buffer (1-second granularity)
+  // the measurement is taken by iterating until the flush succeeds, advancing the clock by
+  // 1 second at each iteration.
   private Optional<Instant> measureFlushTime(
       final CommitBuffer<Bytes, Integer> buffer,
       final AtomicReference<Instant> clock,
@@ -600,23 +603,32 @@ public class CommitBufferTest {
 
   @Test
   public void shouldApplyJitterToFlushInterval() {
+    // applies a 5-second jitter (for a 10 seconds range) and measures the flush interval
+    // over 20 iterations. Then, the test asserts that we got at least 2 different intervals.
+    // The test has a (1/10 ^ 20) probability of returning a false-negative
     final AtomicReference<Instant> clock = new AtomicReference<>(Instant.now());
     try (final CommitBuffer<Bytes, Integer> buffer = createCommitBuffer(
         FlushTriggers.ofInterval(Duration.ofSeconds(20), Duration.ofSeconds(5)),
         100,
         clock::get)
     ) {
+      // given:
       final Set<Duration> intervals = new HashSet<>();
       for (int i = 0; i < 20; i++) {
         final Instant start = clock.get();
+
+        // when:
         final Optional<Instant> flushTime
             = measureFlushTime(buffer, clock, 5 + i, start.plus(Duration.ofSeconds(26)));
+
+        // then make sure the flush happened in a time that's in range:
         assertThat(flushTime.isPresent(), is(true));
         final Duration flushInterval = Duration.between(start, flushTime.get());
         final long flushIntervalSeconds = flushInterval.getSeconds();
         assertThat(flushIntervalSeconds, greaterThanOrEqualTo(15L));
         intervals.add(flushInterval);
       }
+      // then make sure that there was some randomness to the jitter:
       assertThat(intervals.size(), greaterThan(1));
     }
   }
