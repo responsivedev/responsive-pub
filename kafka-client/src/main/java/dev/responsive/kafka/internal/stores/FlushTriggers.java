@@ -6,7 +6,7 @@ import java.util.Random;
 
 public class FlushTriggers {
   public static FlushTriggers ALWAYS = new FlushTriggers(0, 0, Duration.ZERO, Duration.ZERO);
-  private final Random RANDOM = new Random();
+  private static final Random RANDOM = new Random();
 
   private final int records;
   private final long bytes;
@@ -76,7 +76,7 @@ public class FlushTriggers {
   }
 
   public void reset() {
-    if (interval.toMillis() == 0) {
+    if (interval.isZero() || jitter.isZero()) {
       intervalOffset = 0;
     } else {
       intervalOffset = RANDOM.nextLong() % (jitter.toMillis());
