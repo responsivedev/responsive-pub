@@ -141,7 +141,7 @@ public class ResponsiveConfig extends AbstractConfig {
 
   public static final String STORE_FLUSH_INTERVAL_TRIGGER_JITTER_CONFIG = "responsive.store.flush.trigger.local.jitter.ms";
   public static final String STORE_FLUSH_INTERVAL_TRIGGER_JITTER_DOC = "The jitter to apply to the flush interval."
-      + "For flush interval i and jitter j, the flush interval for a given flush will a randomly selected duration"
+      + "For flush interval i and jitter j, the actual flush interval for a given flush will a randomly selected duration"
       + "between i-j and i+j.";
   public static final int STORE_FLUSH_INTERVAL_TRIGGER_JITTER_DEFAULT = 0;
 
