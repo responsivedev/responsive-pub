@@ -453,6 +453,8 @@ public class CommitBuffer<K extends Comparable<K>, P>
       return;
     }
 
+    flushTriggers.reset();
+
     if (buffer.getReader().isEmpty()) {
       log.debug("Ignoring flush() of empty commit buffer");
       return;
