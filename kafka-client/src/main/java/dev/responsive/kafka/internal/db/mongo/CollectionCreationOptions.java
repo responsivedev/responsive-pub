@@ -13,8 +13,8 @@ public class CollectionCreationOptions {
 
   public static CollectionCreationOptions fromConfig(final ResponsiveConfig config) {
     return new CollectionCreationOptions(
-        config.getBoolean(ResponsiveConfig.MONGO_COLLECTION_SHARDING_ENABLED),
-        config.getInt(ResponsiveConfig.MONGO_COLLECTION_SHARDING_CHUNKS)
+        config.getBoolean(ResponsiveConfig.MONGO_COLLECTION_SHARDING_ENABLED_CONFIG),
+        config.getInt(ResponsiveConfig.MONGO_COLLECTION_SHARDING_CHUNKS_CONFIG)
     );
   }
 
