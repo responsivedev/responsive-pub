@@ -19,6 +19,7 @@ package dev.responsive.kafka.internal.stores;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.WINDOW_BLOOM_FILTER_COUNT_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.WINDOW_BLOOM_FILTER_EXPECTED_KEYS_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.WINDOW_BLOOM_FILTER_FPP_CONFIG;
+import static dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.UNINITIALIZED_STREAM_TIME;
 
 import com.google.common.hash.BloomFilter;
 import com.google.common.hash.Funnels;
@@ -52,11 +53,10 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
   private double fpp;
   private long expectedKeysPerWindow;
   private BloomFilter<byte[]> bloomFilter;
-  private boolean ignoreBloomFilter; // true for the first window after interruption by a restart
 
   private Position position; // TODO(IQ): update the position during restoration
   private boolean open;
-  private long observedStreamTime;
+  private long observedStreamTime = UNINITIALIZED_STREAM_TIME;
 
   // All the fields below this are effectively final, we just can't set them until #init is called
   private WindowOperations windowOperations;
@@ -111,7 +111,6 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       if (numberBloomFilterWindows > 0) {
         expectedKeysPerWindow = config.getLong(WINDOW_BLOOM_FILTER_EXPECTED_KEYS_CONFIG);
         fpp = config.getDouble(WINDOW_BLOOM_FILTER_FPP_CONFIG);
-        ignoreBloomFilter = true; // always ignore the first window since we may be missing keys
       }
 
       log.info("Completed initializing state store");
@@ -121,6 +120,10 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
     } catch (InterruptedException | TimeoutException e) {
       throw new ProcessorStateException("Failed to initialize store.", e);
     }
+  }
+
+  private boolean hasActiveBloomFilter() {
+    return bloomFilter != null;
   }
 
   @Override
@@ -146,36 +149,44 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       windowOperations.put(key, value, windowStartTime);
 
       if (numberBloomFilterWindows > 0) {
-        if (windowStartTime > observedStreamTime) {
-          final double actualFpp = bloomFilter.expectedFpp();
-          final long approxElementCount = bloomFilter.approximateElementCount();
-          log.info("Rolling new bloom filter for window@{}, previous filter for window@{} "
-                       + "had approx {} elements with estimated fpp={}",
-                   windowStartTime, observedStreamTime, approxElementCount, actualFpp);
+        // don't create a bloom filter for the first window after a restart, since we may be
+        // missing some of the data that was inserted into the window prior to the restart
+        final boolean isFirstWindowAfterRestart = observedStreamTime == UNINITIALIZED_STREAM_TIME;
 
-          // TODO(sophie): consider adapting the numKeysPerWindow estimate based on the approx.
-          //  count of the last window. According to the #approximateElementCount docs, "This
-          //  approximation is reasonably accurate if it does not exceed the value of
-          //  {@code expectedInsertions} that was used when constructing the filter".
-          //  We can test whether #expectedFpp is close to or smaller than the provided fpp as
-          //  an indicator of the count approximation's accuracy, since an #expectedFpp that is
-          //  "significantly higher" than the provided fpp signals that the actual number of
-          //  elements exceeded the provided expectedInsertions.
-          //  If the #expectedFpp indicates we can't trust the count approximation, we know to try
-          //  something higher than the previous expectedInsertions value.
-          //  Otherwise, we can just use the result of #approximateElementCount
-          if (actualFpp > fpp) {
-            log.warn("Actual fpp was {} which is greater than requested fpp {}. It's likely that "
-                         + "the actual number of elements exceeded the expected keys per window {}",
-                     actualFpp, fpp, expectedKeysPerWindow);
+        if (windowStartTime > observedStreamTime && !isFirstWindowAfterRestart) {
+
+          if (hasActiveBloomFilter()) {
+            final double actualFpp = bloomFilter.expectedFpp();
+            final long approxElementCount = bloomFilter.approximateElementCount();
+            log.info("Rolling new bloom filter for window@{}, previous filter for window@{} "
+                         + "had approx {} elements with estimated fpp={}",
+                     windowStartTime, observedStreamTime, approxElementCount, actualFpp);
+
+            // TODO(sophie): consider adapting the numKeysPerWindow estimate based on the approx.
+            //  count of the last window. According to the #approximateElementCount docs, "This
+            //  approximation is reasonably accurate if it does not exceed the value of
+            //  {@code expectedInsertions} that was used when constructing the filter".
+            //  We can test whether #expectedFpp is close to or smaller than the provided fpp as
+            //  an indicator of the count approximation's accuracy, since an #expectedFpp that is
+            //  "significantly higher" than the provided fpp signals that the actual number of
+            //  elements exceeded the provided expectedInsertions.
+            //  If the #expectedFpp indicates we can't trust the count approximation, we know to try
+            //  something higher than the previous expectedInsertions value.
+            //  Otherwise, we can just use the result of #approximateElementCount
+            if (actualFpp > fpp) {
+              log.warn("Actual fpp was {} which is greater than requested fpp {}. It's likely that "
+                           + "the actual number of elements exceeded the expected keys per window {}",
+                       actualFpp, fpp, expectedKeysPerWindow);
+            }
+          } else {
+            log.info("Creating the first bloom filter for window@{} with previous window@{}",
+                     windowStartTime, observedStreamTime);
           }
 
           bloomFilter = BloomFilter.create(Funnels.byteArrayFunnel(), expectedKeysPerWindow, fpp);
           bloomFilter.put(key.get());
 
-          ignoreBloomFilter = false;
-
-        } else if (!ignoreBloomFilter && windowStartTime == observedStreamTime) {
+        } else if (hasActiveBloomFilter() && windowStartTime == observedStreamTime) {
           bloomFilter.put(key.get());
         }
       }
@@ -191,7 +202,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       return null;
     }
 
-    if (!ignoreBloomFilter && windowStartTime == observedStreamTime) {
+    if (hasActiveBloomFilter() && windowStartTime == observedStreamTime) {
       return bloomFilter.mightContain(key.get())
           ? windowOperations.fetch(key, windowStartTime)
           : null;
