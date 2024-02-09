@@ -171,6 +171,16 @@ public class ResponsiveConfig extends AbstractConfig {
       + "with for best results. However it is important to note that this cannot be changed for "
       + "an active application. Messing with this can corrupt existing state!";
 
+  public static final String MONGO_COLLECTION_SHARDING_ENABLED_CONFIG = "responsive.mongo.collection.sharding.enabled";
+  private static final boolean MONGO_COLLECTION_SHARDING_ENABLED_DEFAULT = false;
+  private static final String MONGO_COLLECTION_SHARDING_ENABLED_DOC = "Toggles use of sharded collections. Set "
+      + "this to true when running against a sharded mongo cluster, to shard a collection across multiple mongo "
+      + "replica sets.";
+
+  public static final String MONGO_COLLECTION_SHARDING_CHUNKS_CONFIG = "responsive.mongo.collection.sharding.chunks";
+  private static final int MONGO_COLLECTION_SHARDING_CHUNKS_DEFAULT = 4;
+  private static final String MONGO_COLLECTION_SHARDING_CHUNKS_DOC = "For sharded collections, sets the number of "
+      + "initial chunks to create the collection with.";
 
   // ------------------ StreamsConfig overrides ----------------------
 
@@ -331,6 +341,18 @@ public class ResponsiveConfig extends AbstractConfig {
           MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_DEFAULT,
           Importance.LOW,
           MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_DOC
+      ).define(
+          MONGO_COLLECTION_SHARDING_ENABLED_CONFIG,
+          Type.BOOLEAN,
+          MONGO_COLLECTION_SHARDING_ENABLED_DEFAULT,
+          Importance.LOW,
+          MONGO_COLLECTION_SHARDING_ENABLED_DOC
+      ).define(
+          MONGO_COLLECTION_SHARDING_CHUNKS_CONFIG,
+          Type.INT,
+          MONGO_COLLECTION_SHARDING_CHUNKS_DEFAULT,
+          Importance.LOW,
+          MONGO_COLLECTION_SHARDING_CHUNKS_DOC
       );
 
   /**

@@ -36,6 +36,7 @@ import dev.responsive.kafka.internal.config.InternalSessionConfigs;
 import dev.responsive.kafka.internal.config.ResponsiveStreamsConfig;
 import dev.responsive.kafka.internal.db.CassandraClientFactory;
 import dev.responsive.kafka.internal.db.DefaultCassandraClientFactory;
+import dev.responsive.kafka.internal.db.mongo.CollectionCreationOptions;
 import dev.responsive.kafka.internal.db.mongo.ResponsiveMongoClient;
 import dev.responsive.kafka.internal.metrics.ClientVersionMetadata;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
@@ -455,7 +456,11 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
               responsiveConfig.getBoolean(MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_CONFIG);
 
           sessionClients = new SessionClients(
-              Optional.of(new ResponsiveMongoClient(mongoClient, timestampFirstOrder)),
+              Optional.of(new ResponsiveMongoClient(
+                  mongoClient,
+                  timestampFirstOrder,
+                  CollectionCreationOptions.fromConfig(responsiveConfig)
+              )),
               Optional.empty(),
               admin
           );

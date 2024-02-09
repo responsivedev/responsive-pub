@@ -73,14 +73,18 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
   private final boolean timestampFirstOrder;
 
   private final MongoDatabase database;
+  private final MongoDatabase adminDatabase;
   private final MongoCollection<WindowMetadataDoc> metadata;
   private final ConcurrentMap<Integer, PartitionSegments> kafkaPartitionToSegments =
       new ConcurrentHashMap<>();
+  private final CollectionCreationOptions collectionCreationOptions;
 
   private static class PartitionSegments {
     private final MongoDatabase database;
+    private final MongoDatabase adminDatabase;
     private final SegmentPartitioner partitioner;
     private final long epoch;
+    private final CollectionCreationOptions collectionCreationOptions;
 
     // Recommended to keep the total number of collections under 10,000, so we should not
     // let num_segments * num_kafka_partitions exceed 10k at the most
@@ -88,14 +92,18 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
 
     public PartitionSegments(
         final MongoDatabase database,
+        final MongoDatabase adminDatabase,
         final SegmentPartitioner partitioner,
         final int kafkaPartition,
         final long streamTime,
-        final long epoch
+        final long epoch,
+        final CollectionCreationOptions collectionCreationOptions
     ) {
       this.database = database;
+      this.adminDatabase = adminDatabase;
       this.partitioner = partitioner;
       this.epoch = epoch;
+      this.collectionCreationOptions = collectionCreationOptions;
       this.segmentWindows = new ConcurrentHashMap<>();
 
       final var activeSegments = partitioner.activeSegments(kafkaPartition, streamTime);
@@ -129,9 +137,22 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
       LOG.info("{}[{}] Creating segment id {}",
                database.getName(), segmentToCreate.tablePartition, segmentToCreate.segmentId);
 
-      final MongoCollection<WindowDoc> windowDocs =
-          database.getCollection(collectionNameForSegment(segmentToCreate), WindowDoc.class);
-
+      final var collectionName = collectionNameForSegment(segmentToCreate);
+      final MongoCollection<WindowDoc> windowDocs;
+      if (collectionCreationOptions.sharded()) {
+        windowDocs = MongoUtils.createShardedCollection(
+            collectionName,
+            WindowDoc.class,
+            database,
+            adminDatabase,
+            collectionCreationOptions.numChunks()
+        );
+      } else {
+        windowDocs = database.getCollection(
+            collectionNameForSegment(segmentToCreate),
+            WindowDoc.class
+        );
+      }
       segmentWindows.put(segmentToCreate, windowDocs);
     }
 
@@ -158,11 +179,13 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
       final MongoClient client,
       final String name,
       final SegmentPartitioner partitioner,
-      final boolean timestampFirstOrder
+      final boolean timestampFirstOrder,
+      final CollectionCreationOptions collectionCreationOptions
   ) {
     this.name = name;
     this.partitioner = partitioner;
     this.timestampFirstOrder = timestampFirstOrder;
+    this.collectionCreationOptions = collectionCreationOptions;
 
     final CodecProvider pojoCodecProvider = PojoCodecProvider.builder().automatic(true).build();
     final CodecRegistry pojoCodecRegistry = fromRegistries(
@@ -171,6 +194,7 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
     );
 
     this.database = client.getDatabase(name).withCodecRegistry(pojoCodecRegistry);
+    this.adminDatabase = client.getDatabase("admin");
     this.metadata = database.getCollection(
         METADATA_COLLECTION_NAME,
         WindowMetadataDoc.class
@@ -208,7 +232,13 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
     kafkaPartitionToSegments.put(
         kafkaPartition,
         new PartitionSegments(
-            database, partitioner, kafkaPartition, metaDoc.streamTime, metaDoc.epoch
+            database,
+            adminDatabase,
+            partitioner,
+            kafkaPartition,
+            metaDoc.streamTime,
+            metaDoc.epoch,
+            collectionCreationOptions
         )
     );
 
