@@ -64,6 +64,7 @@ import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessorContext;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
 import org.apache.kafka.streams.processor.api.FixedKeyRecord;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.junit.jupiter.api.AfterEach;
@@ -114,7 +115,7 @@ public class StoreQueryIntegrationTest {
   }
 
   @Test
-  public void shouldReturnAllStoreDataOnAllQuery() throws Exception {
+  public void shouldAggregateAcrossAllKeysUsingAllQuery() throws Exception {
     // Given:
     final Map<String, Object> properties = getMutableProperties();
     final KafkaProducer<String, String> producer = new KafkaProducer<>(properties);
@@ -122,33 +123,32 @@ public class StoreQueryIntegrationTest {
       startAppAndAwaitRunning(Duration.ofSeconds(10), streams);
 
       final List<KeyValueTimestamp<String, String>> records = Arrays.asList(
-        new KeyValueTimestamp<>("A", "ignored", 0L),
-        new KeyValueTimestamp<>("B", "ignored", 0L),
-        new KeyValueTimestamp<>("C", "ignored", 0L),
-        new KeyValueTimestamp<>("D", "ignored", 0L),
-        new KeyValueTimestamp<>("E", "ignored", 0L)
+        new KeyValueTimestamp<>("A", "A", 0L),
+        new KeyValueTimestamp<>("B", "B", 0L),
+        new KeyValueTimestamp<>("C", "C", 0L),
+        new KeyValueTimestamp<>("A", "a", 0L),
+        new KeyValueTimestamp<>("D", "D", 0L)
       );
 
       // When:
       pipeRecords(producer, inputTopic(), records);
 
       // Then:
-      properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, IntegerDeserializer.class.getName());
       final var kvs = readOutput(outputTopic(), 0, 5, true, properties);
       assertThat(
           kvs,
           hasItems(
-              new KeyValue<>("A", 1),
-              new KeyValue<>("B", 2),
-              new KeyValue<>("C", 3),
-              new KeyValue<>("D", 4),
-              new KeyValue<>("E", 5))
+              new KeyValue<>("A", "A"),
+              new KeyValue<>("B", "AB"),
+              new KeyValue<>("C", "ABC"),
+              new KeyValue<>("A", "ABCa"),
+              new KeyValue<>("D", "aBCD"))
       );
     }
   }
 
   @Test
-  public void testKeyValueStoreRangeQuery() throws Exception {
+  public void shouldAggregateAllCapitalLettersUsingRangeQuery() throws Exception {
     // Given:
     final Map<String, Object> properties = getMutableProperties();
     final KafkaProducer<String, String> producer = new KafkaProducer<>(properties);
@@ -156,27 +156,26 @@ public class StoreQueryIntegrationTest {
       startAppAndAwaitRunning(Duration.ofSeconds(10), streams);
 
       final List<KeyValueTimestamp<String, String>> records = Arrays.asList(
-          new KeyValueTimestamp<>("A", "ignored", 0L),
-          new KeyValueTimestamp<>("B", "ignored", 0L),
-          new KeyValueTimestamp<>("C", "ignored", 0L),
-          new KeyValueTimestamp<>("D", "ignored", 0L),
-          new KeyValueTimestamp<>("E", "ignored", 0L)
+          new KeyValueTimestamp<>("A", "A", 0L),
+          new KeyValueTimestamp<>("b", "b", 0L),
+          new KeyValueTimestamp<>("C", "C", 0L),
+          new KeyValueTimestamp<>("d", "d", 0L),
+          new KeyValueTimestamp<>("E", "E", 0L)
       );
 
       // When:
       pipeRecords(producer, inputTopic(), records);
 
       // Then:
-      properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, IntegerDeserializer.class.getName());
       final var kvs = readOutput(outputTopic(), 0, 5, true, properties);
       assertThat(
           kvs,
           hasItems(
-              new KeyValue<>("A", 0),
-              new KeyValue<>("B", 1),
-              new KeyValue<>("C", 2),
-              new KeyValue<>("D", 3),
-              new KeyValue<>("E", 3))
+              new KeyValue<>("A", "A"),
+              new KeyValue<>("b", "Ab"),
+              new KeyValue<>("C", "AC"),
+              new KeyValue<>("d", "ACd"),
+              new KeyValue<>("E", "ACE"))
       );
     }
   }
@@ -196,12 +195,12 @@ public class StoreQueryIntegrationTest {
             Serdes.String());
     input
         .processValues(new TransformerSupplier(range, storeBuilder), kvStoreName())
-        .to(outputTopic(), Produced.valueSerde(Serdes.Integer()));
+        .to(outputTopic());
 
     return new ResponsiveKafkaStreams(builder.build(), properties);
   }
 
-  private class TransformerSupplier implements FixedKeyProcessorSupplier<String, String, Integer> {
+  private class TransformerSupplier implements FixedKeyProcessorSupplier<String, String, String> {
 
     private final StoreBuilder<?> storeBuilder;
     private final boolean rangeQuery;
@@ -212,7 +211,7 @@ public class StoreQueryIntegrationTest {
     }
 
     @Override
-    public FixedKeyProcessor<String, String, Integer> get() {
+    public FixedKeyProcessor<String, String, String> get() {
       return new CountingProcessor(rangeQuery);
     }
 
@@ -225,7 +224,7 @@ public class StoreQueryIntegrationTest {
     }
   }
 
-  private class CountingProcessor implements FixedKeyProcessor<String, String, Integer> {
+  private class CountingProcessor implements FixedKeyProcessor<String, String, String> {
 
     private final boolean rangeQuery;
 
@@ -234,10 +233,10 @@ public class StoreQueryIntegrationTest {
     }
 
     private KeyValueStore<String, String> kvStore;
-    private FixedKeyProcessorContext<String, Integer> context;
+    private FixedKeyProcessorContext<String, String> context;
 
     @Override
-    public void init(final FixedKeyProcessorContext<String, Integer> context) {
+    public void init(final FixedKeyProcessorContext<String, String> context) {
       FixedKeyProcessor.super.init(context);
       this.kvStore = context.getStateStore(kvStoreName());
       this.context = context;
@@ -245,24 +244,28 @@ public class StoreQueryIntegrationTest {
 
     @Override
     public void process(final FixedKeyRecord<String, String> record) {
-      kvStore.put(record.key(), record.value());
-      int count = 0;
-      if (rangeQuery) {
-        try (final var iter = kvStore.range("B", "D")) {
-          while (iter.hasNext()) {
-            iter.next();
-            ++count;
-          }
+      final StringBuilder builder = new StringBuilder();
+
+      KeyValueIterator<String, String> iterator = null;
+      try {
+
+        if (rangeQuery) {
+          iterator = kvStore.range("A", "Z");
+        } else {
+          iterator = kvStore.all();
         }
-      } else {
-        try (final var iter = kvStore.all()) {
-          while (iter.hasNext()) {
-            iter.next();
-            ++count;
-          }
+
+        while (iterator.hasNext()) {
+          builder.append(iterator.next().value);
         }
+        builder.append(record.value());
+
+      } finally {
+        iterator.close();
       }
-      context.forward(record.withValue(count));
+
+      kvStore.put(record.key(), record.value());
+      context.forward(record.withValue(builder.toString()));
     }
   }
 
