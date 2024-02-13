@@ -32,15 +32,25 @@ public class ResponsiveMongoClient {
   private final TableCache<MongoWindowedTable> windowTableCache;
   private final MongoClient client;
 
-  public ResponsiveMongoClient(final MongoClient client, final boolean timestampFirstOrder) {
+  public ResponsiveMongoClient(
+      final MongoClient client,
+      final boolean timestampFirstOrder,
+      final CollectionCreationOptions collectionCreationOptions
+  ) {
     this.client = client;
-    kvTableCache = new TableCache<>(spec -> new MongoKVTable(client, spec.tableName()));
+    kvTableCache = new TableCache<>(
+        spec -> new MongoKVTable(
+            client,
+            spec.tableName(),
+            collectionCreationOptions
+        ));
     windowTableCache = new TableCache<>(
         spec -> new MongoWindowedTable(
             client,
             spec.tableName(),
             (SegmentPartitioner) spec.partitioner(),
-            timestampFirstOrder
+            timestampFirstOrder,
+            collectionCreationOptions
         )
     );
   }

@@ -62,6 +62,7 @@ import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.CassandraClientFactory;
 import dev.responsive.kafka.internal.db.DefaultCassandraClientFactory;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
+import dev.responsive.kafka.internal.db.mongo.CollectionCreationOptions;
 import dev.responsive.kafka.internal.db.mongo.MongoKVTable;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
@@ -325,7 +326,11 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
           clientId,
           clientSecret == null ? null : clientSecret.value()
       );
-      table = new MongoKVTable(mongoClient, aggName());
+      table = new MongoKVTable(
+          mongoClient,
+          aggName(),
+          CollectionCreationOptions.fromConfig(config)
+      );
       table.init(0);
     } else {
       throw new IllegalArgumentException(EXTENSION.backend + " Unsupported");

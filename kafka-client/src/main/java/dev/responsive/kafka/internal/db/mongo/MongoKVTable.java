@@ -64,7 +64,8 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
 
   public MongoKVTable(
       final MongoClient client,
-      final String name
+      final String name,
+      final CollectionCreationOptions collectionCreationOptions
   ) {
     this.name = name;
     final CodecProvider pojoCodecProvider = PojoCodecProvider.builder().automatic(true).build();
@@ -74,8 +75,18 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
     );
 
     final MongoDatabase database = client.getDatabase(name).withCodecRegistry(pojoCodecRegistry);
-
-    docs = database.getCollection(KV_COLLECTION_NAME, KVDoc.class);
+    if (collectionCreationOptions.sharded()) {
+      final MongoDatabase adminDatabase = client.getDatabase("admin");
+      docs = MongoUtils.createShardedCollection(
+          KV_COLLECTION_NAME,
+          KVDoc.class,
+          database,
+          adminDatabase,
+          collectionCreationOptions.numChunks()
+      );
+    } else {
+      docs = database.getCollection(KV_COLLECTION_NAME, KVDoc.class);
+    }
     metadata = database.getCollection(METADATA_COLLECTION_NAME, KVMetadataDoc.class);
 
     // TODO(agavra): make the tombstone retention configurable
