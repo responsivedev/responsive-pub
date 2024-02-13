@@ -23,6 +23,17 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 public interface RemoteWindowedTable<S> extends RemoteTable<WindowedKey, S> {
 
   /**
+   * Initializes the table by setting the metadata fields to
+   * their initialized values.
+   *
+   * @return a {@link WindowFlushManager} that gives the callee access
+   * to run statements on {@code table}
+   */
+  WindowFlushManager init(
+      final int kafkaPartition
+  );
+
+  /**
    * Retrieves the value of the given {@code kafkaPartition} and {@code key}.
    *
    * @param kafkaPartition  the kafka partition

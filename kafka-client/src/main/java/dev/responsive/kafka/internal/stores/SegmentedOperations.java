@@ -28,8 +28,8 @@ import dev.responsive.kafka.api.stores.ResponsiveWindowParams;
 import dev.responsive.kafka.internal.db.BatchFlusher;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.CassandraTableSpecFactory;
-import dev.responsive.kafka.internal.db.FlushManager;
 import dev.responsive.kafka.internal.db.RemoteWindowedTable;
+import dev.responsive.kafka.internal.db.WindowFlushManager;
 import dev.responsive.kafka.internal.db.WindowedKeySpec;
 import dev.responsive.kafka.internal.db.mongo.ResponsiveMongoClient;
 import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner;
@@ -65,6 +65,8 @@ public class SegmentedOperations implements WindowOperations {
   private final ResponsiveStoreRegistry storeRegistry;
   private final ResponsiveStoreRegistration registration;
   private final ResponsiveRestoreListener restoreListener;
+
+  private final long initialStreamTime;
 
   public static SegmentedOperations create(
       final TableName name,
@@ -103,7 +105,7 @@ public class SegmentedOperations implements WindowOperations {
         throw new IllegalStateException("Unexpected value: " + sessionClients.storageBackend());
     }
 
-    final FlushManager<WindowedKey, ?> flushManager = table.init(changelog.partition());
+    final WindowFlushManager flushManager = table.init(changelog.partition());
 
     log.info("Remote table {} is available for querying.", name.tableName());
 
@@ -139,7 +141,8 @@ public class SegmentedOperations implements WindowOperations {
         changelog,
         storeRegistry,
         registration,
-        sessionClients.restoreListener()
+        sessionClients.restoreListener(),
+        flushManager.streamTime()
     );
   }
 
@@ -188,7 +191,8 @@ public class SegmentedOperations implements WindowOperations {
       final TopicPartition changelog,
       final ResponsiveStoreRegistry storeRegistry,
       final ResponsiveStoreRegistration registration,
-      final ResponsiveRestoreListener restoreListener
+      final ResponsiveRestoreListener restoreListener,
+      final long initialStreamTime
   ) {
     this.context = context;
     this.params = params;
@@ -198,6 +202,12 @@ public class SegmentedOperations implements WindowOperations {
     this.storeRegistry = storeRegistry;
     this.registration = registration;
     this.restoreListener = restoreListener;
+    this.initialStreamTime = initialStreamTime;
+  }
+
+  @Override
+  public long initialStreamTime() {
+    return initialStreamTime;
   }
 
   @Override

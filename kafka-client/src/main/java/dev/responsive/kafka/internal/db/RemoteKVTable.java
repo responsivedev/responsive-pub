@@ -22,6 +22,17 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 public interface RemoteKVTable<S> extends RemoteTable<Bytes, S> {
 
   /**
+   * Initializes the table by setting the metadata fields to
+   * their initialized values.
+   *
+   * @return a {@link KVFlushManager} that gives the callee access
+   * to run statements on {@code table}
+   */
+  KVFlushManager init(
+      final int kafkaPartition
+  );
+
+  /**
    * Retrieves the value of the given {@code partitionKey} and {@code key}
    * from {@code table}.
    *
