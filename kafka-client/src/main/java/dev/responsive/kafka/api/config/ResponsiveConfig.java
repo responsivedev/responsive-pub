@@ -180,12 +180,13 @@ public class ResponsiveConfig extends AbstractConfig {
   // ------------------ WindowStore configurations ----------------------
 
   public static final String MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_CONFIG = "responsive.mongo.windowed.key.timestamp.first";
-  private static final boolean MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_DEFAULT = false;
+  private static final boolean MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_DEFAULT = true;
   private static final String MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_DOC = "Whether to put the window start timestamp "
       + "first in the composite windowed key format for MongoDB. This can be toggled true/false to get better "
       + "performance depending on the density of unique keys per window, and should be experimented "
-      + "with for best results. However it is important to note that this cannot be changed for "
-      + "an active application. Messing with this can corrupt existing state!";
+      + "with for best results. Must be true for any application that uses range queries on window stores. "
+      + "It is also important to note that this cannot be changed for an active application -- flipping "
+      + "this can corrupt existing state.";
 
   public static final String WINDOW_BLOOM_FILTER_COUNT_CONFIG = "responsive.window.bloom.filter.count";
   private static final int WINDOW_BLOOM_FILTER_COUNT_DEFAULT = 0;
