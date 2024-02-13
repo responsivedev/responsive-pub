@@ -510,7 +510,7 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
       final long timeFrom,
       final long timeTo
   ) {
-    if (timestampFirstOrder) {
+    if (!timestampFirstOrder) {
       throw new UnsupportedOperationException("Range queries such as fetchAll require stores to be "
                                                   + "configured with timestamp-first order");
     }

@@ -201,7 +201,8 @@ public class StoreQueryIntegrationTest {
       pipeRecords(producer, inputTopic(), records);
 
       // Then:
-      //TODO
+      final var kvs = readOutput(outputTopic(), 0, 5, true, properties);
+      // TODO
     }
   }
 
