@@ -25,6 +25,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -37,7 +38,10 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KafkaStreams.StateListener;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.state.QueryableStoreType;
 import org.junit.jupiter.api.TestInfo;
 
 public final class IntegrationTestUtils {
@@ -216,10 +220,10 @@ public final class IntegrationTestUtils {
   }
 
 
-  public static void awaitOutput(
+  public static <K, V> void awaitOutput(
       final String topic,
       final long from,
-      final Set<KeyValue<Long, Long>> expected,
+      final Set<KeyValue<K, V>> expected,
       final boolean readUncommitted,
       final Map<String, Object> originals
   ) throws TimeoutException {
@@ -230,15 +234,15 @@ public final class IntegrationTestUtils {
 
     final var allSeen = new HashSet<>();
     final var notYetSeen = new HashSet<>(expected);
-    try (final KafkaConsumer<Long, Long> consumer = new KafkaConsumer<>(properties)) {
+    try (final KafkaConsumer<K, V> consumer = new KafkaConsumer<>(properties)) {
       final TopicPartition output = new TopicPartition(topic, 0);
       consumer.assign(List.of(output));
       consumer.seek(output, from);
 
       final long end = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
       while (!notYetSeen.isEmpty()) {
-        final ConsumerRecords<Long, Long> polled = consumer.poll(Duration.ofSeconds(30));
-        for (ConsumerRecord<Long, Long> rec : polled) {
+        final ConsumerRecords<K, V> polled = consumer.poll(Duration.ofSeconds(30));
+        for (ConsumerRecord<K, V> rec : polled) {
           final var kv = new KeyValue<>(rec.key(), rec.value());
           notYetSeen.remove(kv);
           allSeen.add(kv);
@@ -264,6 +268,10 @@ public final class IntegrationTestUtils {
         ? IsolationLevel.READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT)
         : IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT));
 
+    // configured to only poll one record at a time so we can
+    // guarantee we won't accidentally poll more than numEvents
+    properties.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 1);
+
     try (final KafkaConsumer<K, V> consumer = new KafkaConsumer<>(properties)) {
       final TopicPartition output = new TopicPartition(topic, 0);
       consumer.assign(List.of(output));
@@ -272,8 +280,6 @@ public final class IntegrationTestUtils {
       final long end = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
       final List<KeyValue<K, V>> result = new ArrayList<>();
       while (result.size() < numEvents) {
-        // this is configured to only poll one record at a time, so we
-        // can guarantee we won't accidentally poll more than numEvents
         final ConsumerRecords<K, V> polled = consumer.poll(Duration.ofSeconds(30));
         for (ConsumerRecord<K, V> rec : polled) {
           result.add(new KeyValue<>(rec.key(), rec.value()));
@@ -331,6 +337,29 @@ public final class IntegrationTestUtils {
       }
     } finally {
       lock.unlock();
+    }
+  }
+
+  public static <S> S getStore(
+      final KafkaStreams streams,
+      final String storeName,
+      final QueryableStoreType<S> storeType
+  ) throws Exception {
+    final Duration defaultWaitTime = Duration.ofSeconds(10L);
+    final long deadline = System.currentTimeMillis() + defaultWaitTime.toMillis();
+    while (true) {
+      try {
+        return streams.store(StoreQueryParameters.fromNameAndType(storeName, storeType));
+      } catch (final InvalidStateStoreException e) {
+        if (System.currentTimeMillis() > deadline) {
+          throw e;
+        }
+      } catch (final Exception e) {
+        if (System.currentTimeMillis() > deadline) {
+          throw new AssertionError(e);
+        }
+      }
+      Thread.sleep(100L);
     }
   }
 
