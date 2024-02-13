@@ -170,11 +170,11 @@ public class ResponsiveConfig extends AbstractConfig {
       + "with for best results. However it is important to note that this cannot be changed for "
       + "an active application. Messing with this can corrupt existing state!";
 
-  public static final String WINDOW_BLOOM_FILTER_COUNT_CONFIG = "responsive.window.bloom.filter.enabled";
+  public static final String WINDOW_BLOOM_FILTER_COUNT_CONFIG = "responsive.window.bloom.filter.count";
   private static final int WINDOW_BLOOM_FILTER_COUNT_DEFAULT = 0;
   private static final String WINDOW_BLOOM_FILTER_COUNT_DOC = "How many of the most recent windows to "
       + "to build a bloom filter for in order to minimize unnecessary negative remote lookups. Enable bloom "
-      + "filters for windowed aggregations by setting this to a value of 1 or higher* (multiple bloom filters "
+      + "filters for windowed aggregations by setting this to a value of 1 or higher (multiple bloom filters "
       + "not yet supported. Only applies to hopping and tumbling windowed aggregations. "
       + "If enabled, we highly recommend configuring the expected number of keys per window per partition "
       + "with the responsive.window.bloom.filter.expected.keys property.";
