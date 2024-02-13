@@ -24,47 +24,59 @@ import org.bson.codecs.pojo.annotations.BsonId;
 public class KVDoc {
 
   // TODO(agavra): figure out if we can use @BsonProperty to set the names explicitly
-  public static final String ID = "_id";
+  public static final String KEY = "_id";
   public static final String VALUE = "value";
+  public static final String KAFKA_PARTITION = "partition";
   public static final String EPOCH = "epoch";
   public static final String TOMBSTONE_TS = "tombstoneTs";
 
   @BsonId
-  byte[] id;
+  byte[] key;
   byte[] value;
+  int kafkaPartition;
   long epoch;
   Date tombstoneTs;
 
   public KVDoc() {
   }
 
-  public KVDoc(final byte[] key, final byte[] value, final long epoch) {
+  public KVDoc(final byte[] key, final byte[] value, final int kafkaPartition, final long epoch) {
+    this.key = key;
     this.value = value;
+    this.kafkaPartition = kafkaPartition;
     this.epoch = epoch;
   }
 
   public byte[] getKey() {
-    return id;
+    return key;
   }
 
   public void setKey(final byte[] id) {
-    this.id = id;
-  }
-
-  public void setValue(final byte[] value) {
-    this.value = value;
-  }
-
-  public void setEpoch(final long epoch) {
-    this.epoch = epoch;
+    this.key = id;
   }
 
   public byte[] getValue() {
     return value;
   }
 
+  public void setValue(final byte[] value) {
+    this.value = value;
+  }
+
   public long getEpoch() {
     return epoch;
+  }
+
+  public void setEpoch(final long epoch) {
+    this.epoch = epoch;
+  }
+
+  public int getKafkaPartition() {
+    return kafkaPartition;
+  }
+
+  public void setKafkaPartition(final int kafkaPartition) {
+    this.kafkaPartition = kafkaPartition;
   }
 
   public Date getTombstoneTs() {
@@ -83,16 +95,18 @@ public class KVDoc {
     if (o == null || getClass() != o.getClass()) {
       return false;
     }
-    final KVDoc kvDoc = (KVDoc) o;
-    return epoch == kvDoc.epoch
-        && Arrays.equals(id, kvDoc.id)
-        && Arrays.equals(value, kvDoc.value)
-        && Objects.equals(tombstoneTs, kvDoc.tombstoneTs);
+    final KVDoc other = (KVDoc) o;
+    return epoch == other.epoch
+        && kafkaPartition == other.kafkaPartition
+        && Arrays.equals(key, other.key)
+        && Arrays.equals(value, other.value)
+        && Objects.equals(tombstoneTs, other.tombstoneTs);
   }
 
   @Override
   public int hashCode() {
-    int result = Objects.hash(id, epoch, tombstoneTs);
+    int result = Objects.hash(kafkaPartition, epoch, tombstoneTs);
+    result = 31 * result + Arrays.hashCode(key);
     result = 31 * result + Arrays.hashCode(value);
     return result;
   }
@@ -100,8 +114,9 @@ public class KVDoc {
   @Override
   public String toString() {
     return "KVDoc{"
-        + "id=" + Arrays.toString(id)
+        + "id=" + Arrays.toString(key)
         + ", value=" + Arrays.toString(value)
+        + ", kafkaPartition=" + kafkaPartition
         + ", epoch=" + epoch
         + ", tombstoneTs=" + tombstoneTs
         + '}';

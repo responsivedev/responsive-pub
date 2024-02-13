@@ -20,11 +20,11 @@ import java.util.Objects;
 
 public class KVMetadataDoc {
 
-  public static final String PARTITION = "_id";
+  public static final String KAFKA_PARTITION = "_id";
   public static final String OFFSET = "offset";
   public static final String EPOCH = "epoch";
 
-  int partition;
+  int kafkaPartition;
   long offset;
   long epoch;
 
@@ -32,11 +32,11 @@ public class KVMetadataDoc {
   }
 
   public int partition() {
-    return partition;
+    return kafkaPartition;
   }
 
-  public void setPartition(final int partition) {
-    this.partition = partition;
+  public void setKafkaPartition(final int kafkaPartition) {
+    this.kafkaPartition = kafkaPartition;
   }
 
   public long offset() {
@@ -64,20 +64,20 @@ public class KVMetadataDoc {
       return false;
     }
     final KVMetadataDoc that = (KVMetadataDoc) o;
-    return partition == that.partition
+    return kafkaPartition == that.kafkaPartition
         && offset == that.offset
         && epoch == that.epoch;
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(partition, epoch, offset);
+    return Objects.hash(kafkaPartition, epoch, offset);
   }
 
   @Override
   public String toString() {
     return "KVMetadataDoc{"
-        + ", partition=" + partition
+        + ", partition=" + kafkaPartition
         + ", offset=" + offset
         + ", epoch=" + epoch
         + '}';

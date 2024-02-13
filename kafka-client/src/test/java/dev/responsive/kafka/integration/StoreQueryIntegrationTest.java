@@ -74,7 +74,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 public class StoreQueryIntegrationTest {
 
   @RegisterExtension
-  static ResponsiveExtension EXTENSION = new ResponsiveExtension(StorageBackend.CASSANDRA);
+  static ResponsiveExtension EXTENSION = new ResponsiveExtension(StorageBackend.MONGO_DB);
 
   private static final String INPUT_TOPIC = "input";
   private static final String OUTPUT_TOPIC = "output";
