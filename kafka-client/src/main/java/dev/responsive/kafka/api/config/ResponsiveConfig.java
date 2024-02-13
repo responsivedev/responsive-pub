@@ -16,6 +16,8 @@
 
 package dev.responsive.kafka.api.config;
 
+import static org.apache.kafka.common.config.ConfigDef.Range.between;
+
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.internal.db.partitioning.Murmur3Hasher;
 import java.time.Duration;
@@ -163,14 +165,6 @@ public class ResponsiveConfig extends AbstractConfig {
   private static final String SUBPARTITION_HASHER_DOC = "Hasher to use for sub-partitioning.";
   private static final Class<?> SUBPARTITION_HASHER_DEFAULT = Murmur3Hasher.class;
 
-  public static final String MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_CONFIG = "responsive.mongo.windowed.key.timestamp.first";
-  private static final boolean MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_DEFAULT = false;
-  private static final String MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_DOC = "Whether to put the window start timestamp "
-      + "first in the composite windowed key format for MongoDB. This can be toggled true/false to get better "
-      + "performance depending on the density of unique keys per window, and should be experimented "
-      + "with for best results. However it is important to note that this cannot be changed for "
-      + "an active application. Messing with this can corrupt existing state!";
-
   public static final String MONGO_COLLECTION_SHARDING_ENABLED_CONFIG = "responsive.mongo.collection.sharding.enabled";
   private static final boolean MONGO_COLLECTION_SHARDING_ENABLED_DEFAULT = false;
   private static final String MONGO_COLLECTION_SHARDING_ENABLED_DOC = "Toggles use of sharded collections. Set "
@@ -181,6 +175,42 @@ public class ResponsiveConfig extends AbstractConfig {
   private static final int MONGO_COLLECTION_SHARDING_CHUNKS_DEFAULT = 4;
   private static final String MONGO_COLLECTION_SHARDING_CHUNKS_DOC = "For sharded collections, sets the number of "
       + "initial chunks to create the collection with.";
+
+
+  // ------------------ WindowStore configurations ----------------------
+
+  public static final String MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_CONFIG = "responsive.mongo.windowed.key.timestamp.first";
+  private static final boolean MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_DEFAULT = false;
+  private static final String MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_DOC = "Whether to put the window start timestamp "
+      + "first in the composite windowed key format for MongoDB. This can be toggled true/false to get better "
+      + "performance depending on the density of unique keys per window, and should be experimented "
+      + "with for best results. However it is important to note that this cannot be changed for "
+      + "an active application. Messing with this can corrupt existing state!";
+
+  public static final String WINDOW_BLOOM_FILTER_COUNT_CONFIG = "responsive.window.bloom.filter.count";
+  private static final int WINDOW_BLOOM_FILTER_COUNT_DEFAULT = 0;
+  private static final String WINDOW_BLOOM_FILTER_COUNT_DOC = "How many of the most recent windows to "
+      + "to build a bloom filter for in order to minimize unnecessary negative remote lookups. Enable bloom "
+      + "filters for windowed aggregations by setting this to a value of 1 or higher (multiple bloom filters "
+      + "not yet supported. Only applies to hopping and tumbling windowed aggregations. "
+      + "If enabled, we highly recommend configuring the expected number of keys per window per partition "
+      + "with the responsive.window.bloom.filter.expected.keys property.";
+
+  public static final String WINDOW_BLOOM_FILTER_EXPECTED_KEYS_CONFIG = "responsive.window.bloom.filter.expected.keys";
+  private static final long WINDOW_BLOOM_FILTER_EXPECTED_KEYS_DEFAULT = 1_000L;
+  private static final String WINDOW_BLOOM_FILTER_EXPECTED_KEYS_DOC = "Expected number of elements for "
+      + "the WindowStore bloom filters, or the approximate number of unique keys per partition that "
+      + "will be present in the most recent window of a hopping or tumbling windowed aggregation. "
+      + "For loads that vary over time, use the maximum keys per partition that may appear in a window. "
+      + "An overestimate will use slightly more memory, but an underestimate will significantly degrade "
+      + "the bloom filter's performance";
+
+  public static final String WINDOW_BLOOM_FILTER_FPP_CONFIG = "responsive.window.bloom.filter.fpp";
+  private static final double WINDOW_BLOOM_FILTER_FPP_DEFAULT = 0.03d;
+  private static final String WINDOW_BLOOM_FILTER_FPP_DOC = "A double representing the desired false "
+      + "positive percentage for the WindowStore bloom filters. A smaller value means fewer unnecessary "
+      + "lookups but requires more heap memory";
+
 
   // ------------------ StreamsConfig overrides ----------------------
 
@@ -336,12 +366,6 @@ public class ResponsiveConfig extends AbstractConfig {
           Importance.LOW,
           REMOTE_TABLE_CHECK_INTERVAL_MS_DOC
       ).define(
-          MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_CONFIG,
-          Type.BOOLEAN,
-          MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_DEFAULT,
-          Importance.LOW,
-          MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_DOC
-      ).define(
           MONGO_COLLECTION_SHARDING_ENABLED_CONFIG,
           Type.BOOLEAN,
           MONGO_COLLECTION_SHARDING_ENABLED_DEFAULT,
@@ -353,6 +377,31 @@ public class ResponsiveConfig extends AbstractConfig {
           MONGO_COLLECTION_SHARDING_CHUNKS_DEFAULT,
           Importance.LOW,
           MONGO_COLLECTION_SHARDING_CHUNKS_DOC
+      ).define(
+          MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_CONFIG,
+          Type.BOOLEAN,
+          MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_DEFAULT,
+          Importance.LOW,
+          MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_DOC
+      ).define(
+          WINDOW_BLOOM_FILTER_COUNT_CONFIG,
+          Type.INT,
+          WINDOW_BLOOM_FILTER_COUNT_DEFAULT,
+          between(0, 1),
+          Importance.LOW,
+          WINDOW_BLOOM_FILTER_COUNT_DOC
+      ).define(
+          WINDOW_BLOOM_FILTER_EXPECTED_KEYS_CONFIG,
+          Type.LONG,
+          WINDOW_BLOOM_FILTER_EXPECTED_KEYS_DEFAULT,
+          Importance.LOW,
+          WINDOW_BLOOM_FILTER_EXPECTED_KEYS_DOC
+      ).define(
+          WINDOW_BLOOM_FILTER_FPP_CONFIG,
+          Type.DOUBLE,
+          WINDOW_BLOOM_FILTER_FPP_DEFAULT,
+          Importance.LOW,
+          WINDOW_BLOOM_FILTER_FPP_DOC
       );
 
   /**

@@ -40,6 +40,10 @@ public abstract class WindowFlushManager implements FlushManager<WindowedKey, Se
         new PendingFlushSegmentMetadata(tableName, kafkaPartition, streamTime);
   }
 
+  public long streamTime() {
+    return pendingFlushSegmentMetadata.batchStreamTime();
+  }
+
   @Override
   public void writeAdded(final WindowedKey key) {
     pendingFlushSegmentMetadata.updateStreamTime(key.windowStartMs);

@@ -18,7 +18,11 @@ package dev.responsive.kafka.internal.db;
 
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.kafka.internal.clients.TTDCassandraClient;
+import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner;
+import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.SegmentPartition;
+import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.db.spec.CassandraTableSpec;
+import dev.responsive.kafka.internal.stores.RemoteWriteResult;
 import dev.responsive.kafka.internal.stores.WindowStoreStub;
 import dev.responsive.kafka.internal.utils.WindowedKey;
 import org.apache.kafka.common.utils.Bytes;
@@ -29,6 +33,7 @@ public class TTDWindowedTable extends TTDTable<WindowedKey>
 
   private final String name;
   private final WindowStoreStub stub;
+  private final SegmentPartitioner partitioner;
 
   public static TTDWindowedTable create(
       final CassandraTableSpec spec,
@@ -41,11 +46,17 @@ public class TTDWindowedTable extends TTDTable<WindowedKey>
     super(client);
     name = spec.tableName();
     stub = new WindowStoreStub();
+    partitioner = (SegmentPartitioner) spec.partitioner();
   }
 
   @Override
   public String name() {
     return name;
+  }
+
+  @Override
+  public WindowFlushManager init(final int kafkaPartition) {
+    return new TTDWindowFlushManager(this, kafkaPartition, partitioner);
   }
 
   @Override
@@ -140,5 +151,71 @@ public class TTDWindowedTable extends TTDTable<WindowedKey>
   @Override
   public long count() {
     return 0;
+  }
+
+  private static class TTDWindowFlushManager extends WindowFlushManager {
+
+    private final String logPrefix;
+    private final TTDWindowedTable table;
+    private final SegmentPartitioner partitioner;
+
+    public TTDWindowFlushManager(
+        final TTDWindowedTable table,
+        final int kafkaPartition,
+        final SegmentPartitioner partitioner
+    ) {
+      super(table.name(), kafkaPartition, partitioner, 0L);
+      this.table = table;
+      this.partitioner = partitioner;
+      this.logPrefix = String.format("%s TTDWindowFlushManager ", table.name());
+    }
+
+    @Override
+    public String tableName() {
+      return table.name();
+    }
+
+    @Override
+    public TablePartitioner<WindowedKey, SegmentPartition> partitioner() {
+      return partitioner;
+    }
+
+    @Override
+    public RemoteWriter<WindowedKey, SegmentPartition> createWriter(
+        final SegmentPartition tablePartition
+    ) {
+      return new TTDWriter<>(table, tablePartition);
+    }
+
+    @Override
+    public String failedFlushInfo(
+        final long batchOffset,
+        final SegmentPartition failedTablePartition
+    ) {
+      return "";
+    }
+
+    @Override
+    public String logPrefix() {
+      return logPrefix;
+    }
+
+    @Override
+    protected RemoteWriteResult<SegmentPartition> updateOffsetAndStreamTime(
+        final long consumedOffset,
+        final long streamTime
+    ) {
+      return null;
+    }
+
+    @Override
+    protected RemoteWriteResult<SegmentPartition> createSegment(final SegmentPartition partition) {
+      return null;
+    }
+
+    @Override
+    protected RemoteWriteResult<SegmentPartition> deleteSegment(final SegmentPartition partition) {
+      return null;
+    }
   }
 }

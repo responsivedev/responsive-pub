@@ -29,23 +29,6 @@ public interface RemoteTable<K, S> {
   String name();
 
   /**
-   * Initializes the table by setting the metadata fields to
-   * their initialized values.
-   *
-   * @return a {@link FlushManager} that gives the callee access
-   * to run statements on {@code table}
-   *
-   * TODO: this is the only place where the partition type is needed so it
-   *  doesn't make sense to generic-ify the entire RemoteTable class just for
-   *  this. Of course it's also not ideal to leave the generic as a ? because we
-   *  now have to cast/suppress "unchecked" warnings everywhere this is used.
-   *  We should explore cleaning up partition types in general
-   */
-  FlushManager<K, ?> init(
-      final int kafkaPartition
-  );
-
-  /**
    * Inserts data into {@code table}. Note that this will overwrite
    * any existing entry in the table with the same key.
    *

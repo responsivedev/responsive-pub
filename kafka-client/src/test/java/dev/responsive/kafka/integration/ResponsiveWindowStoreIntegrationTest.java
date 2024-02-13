@@ -107,7 +107,11 @@ public class ResponsiveWindowStoreIntegrationTest {
   ) throws InterruptedException, ExecutionException {
     // append a random int to avoid naming collisions on repeat runs
     name = info.getTestMethod().orElseThrow().getName() + "-" + new Random().nextInt();
+
     this.responsiveProps.putAll(responsiveProps);
+    this.responsiveProps.put(ResponsiveConfig.WINDOW_BLOOM_FILTER_COUNT_CONFIG, 1);
+    this.responsiveProps.put(ResponsiveConfig.WINDOW_BLOOM_FILTER_EXPECTED_KEYS_CONFIG, 10);
+
     this.admin = admin;
     final var result = admin.createTopics(
         List.of(

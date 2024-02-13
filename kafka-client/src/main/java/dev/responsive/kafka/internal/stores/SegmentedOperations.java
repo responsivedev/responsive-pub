@@ -28,8 +28,8 @@ import dev.responsive.kafka.api.stores.ResponsiveWindowParams;
 import dev.responsive.kafka.internal.db.BatchFlusher;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.CassandraTableSpecFactory;
-import dev.responsive.kafka.internal.db.FlushManager;
 import dev.responsive.kafka.internal.db.RemoteWindowedTable;
+import dev.responsive.kafka.internal.db.WindowFlushManager;
 import dev.responsive.kafka.internal.db.WindowedKeySpec;
 import dev.responsive.kafka.internal.db.mongo.ResponsiveMongoClient;
 import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner;
@@ -40,6 +40,7 @@ import dev.responsive.kafka.internal.utils.SessionClients;
 import dev.responsive.kafka.internal.utils.TableName;
 import dev.responsive.kafka.internal.utils.WindowedKey;
 import java.util.Collection;
+import java.util.Map;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Predicate;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -65,10 +66,14 @@ public class SegmentedOperations implements WindowOperations {
   private final ResponsiveStoreRegistration registration;
   private final ResponsiveRestoreListener restoreListener;
 
+  private final long initialStreamTime;
+
   public static SegmentedOperations create(
       final TableName name,
       final StateStoreContext storeContext,
       final ResponsiveWindowParams params,
+      final Map<String, Object> appConfigs,
+      final ResponsiveConfig responsiveConfig,
       final Predicate<WindowedKey> withinRetention
   ) throws InterruptedException, TimeoutException {
 
@@ -77,10 +82,7 @@ public class SegmentedOperations implements WindowOperations {
     ).logger(SegmentedOperations.class);
     final var context = asInternalProcessorContext(storeContext);
 
-    // Save this so we don't have to rebuild the config map on every access
-    final var appConfigs = storeContext.appConfigs();
 
-    final ResponsiveConfig config = ResponsiveConfig.responsiveConfig(appConfigs);
     final SessionClients sessionClients = loadSessionClients(appConfigs);
     final ResponsiveStoreRegistry storeRegistry = loadStoreRegistry(appConfigs);
 
@@ -103,7 +105,7 @@ public class SegmentedOperations implements WindowOperations {
         throw new IllegalStateException("Unexpected value: " + sessionClients.storageBackend());
     }
 
-    final FlushManager<WindowedKey, ?> flushManager = table.init(changelog.partition());
+    final WindowFlushManager flushManager = table.init(changelog.partition());
 
     log.info("Remote table {} is available for querying.", name.tableName());
 
@@ -120,7 +122,7 @@ public class SegmentedOperations implements WindowOperations {
         keySpec,
         params.truncateChangelog(),
         params.name(),
-        config
+        responsiveConfig
     );
     final long restoreStartOffset = table.fetchOffset(changelog.partition());
     final var registration = new ResponsiveStoreRegistration(
@@ -139,7 +141,8 @@ public class SegmentedOperations implements WindowOperations {
         changelog,
         storeRegistry,
         registration,
-        sessionClients.restoreListener()
+        sessionClients.restoreListener(),
+        flushManager.streamTime()
     );
   }
 
@@ -188,7 +191,8 @@ public class SegmentedOperations implements WindowOperations {
       final TopicPartition changelog,
       final ResponsiveStoreRegistry storeRegistry,
       final ResponsiveStoreRegistration registration,
-      final ResponsiveRestoreListener restoreListener
+      final ResponsiveRestoreListener restoreListener,
+      final long initialStreamTime
   ) {
     this.context = context;
     this.params = params;
@@ -198,6 +202,12 @@ public class SegmentedOperations implements WindowOperations {
     this.storeRegistry = storeRegistry;
     this.registration = registration;
     this.restoreListener = restoreListener;
+    this.initialStreamTime = initialStreamTime;
+  }
+
+  @Override
+  public long initialStreamTime() {
+    return initialStreamTime;
   }
 
   @Override
