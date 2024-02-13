@@ -16,7 +16,6 @@
 
 package dev.responsive.kafka.integration;
 
-
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.minutesToMillis;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.pipeRecords;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.startAppAndAwaitRunning;
@@ -185,6 +184,7 @@ public class ResponsiveWindowStoreIntegrationTest {
       outputLatch.resetCountdown(6);
       pipeInput(producer, inputTopic(), () -> timestamp.getAndAdd(100), 0, 3, 0, 1);
       outputLatch.await();
+
       assertThat(collect, Matchers.hasEntry(windowed(0, baseTs, 5000), 3L));
     }
 
@@ -220,17 +220,23 @@ public class ResponsiveWindowStoreIntegrationTest {
       // at this point the records produced by this pipe should be
       // past the retention period and therefore be ignored from the
       // first window
+      outputLatch.resetCountdown(2);
       timestamp.set(baseTs);
       pipeInput(producer, inputTopic(), timestamp::get, 100, 101, 0, 1);
 
+      outputLatch.await();
       assertThat(collect, Matchers.hasEntry(windowed(0, baseTs, 5000), 10L));
 
       // use this to signify that we're done processing and count
       // down the latch
+      outputLatch.resetCountdown(2);
       timestamp.set(baseTs + 15000);
+
       pipeInput(producer, inputTopic(), timestamp::get, 1000, 1001, 0, 1);
       finalLatch.await();
     }
+
+    outputLatch.await();
 
     // Then:
     assertThat(collect.size(), Matchers.is(6));

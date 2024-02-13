@@ -252,7 +252,7 @@ public final class IntegrationTestUtils {
     }
   }
 
-  public static List<KeyValue<Long, Long>> readOutput(
+  public static <K, V> List<KeyValue<K, V>> readOutput(
       final String topic,
       final long from,
       final long numEvents,
@@ -264,18 +264,18 @@ public final class IntegrationTestUtils {
         ? IsolationLevel.READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT)
         : IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT));
 
-    try (final KafkaConsumer<Long, Long> consumer = new KafkaConsumer<>(properties)) {
+    try (final KafkaConsumer<K, V> consumer = new KafkaConsumer<>(properties)) {
       final TopicPartition output = new TopicPartition(topic, 0);
       consumer.assign(List.of(output));
       consumer.seek(output, from);
 
       final long end = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
-      final List<KeyValue<Long, Long>> result = new ArrayList<>();
+      final List<KeyValue<K, V>> result = new ArrayList<>();
       while (result.size() < numEvents) {
         // this is configured to only poll one record at a time, so we
         // can guarantee we won't accidentally poll more than numEvents
-        final ConsumerRecords<Long, Long> polled = consumer.poll(Duration.ofSeconds(30));
-        for (ConsumerRecord<Long, Long> rec : polled) {
+        final ConsumerRecords<K, V> polled = consumer.poll(Duration.ofSeconds(30));
+        for (ConsumerRecord<K, V> rec : polled) {
           result.add(new KeyValue<>(rec.key(), rec.value()));
         }
         if (System.nanoTime() > end) {
