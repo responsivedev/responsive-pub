@@ -38,7 +38,7 @@ runs:
       if: ${{ inputs.force_version == 'None' }}
       uses: gradle/gradle-build-action@v2.9.0
       with:
-        arguments: :${{ inputs.module }}:release
+        arguments: :${{ inputs.module }}:release --debug
 
     - name: "Gradle: Release Version (forced)"
       if: ${{ inputs.force_version != 'None' }}
