@@ -38,13 +38,6 @@ public abstract class TTDTable<K> implements RemoteTable<K, BoundStatement> {
   public abstract long count();
 
   @Override
-  public TTDFlushManager<K> init(
-      final int kafkaPartition
-  ) {
-    return new TTDFlushManager<>(this);
-  }
-
-  @Override
   public long fetchOffset(final int kafkaPartition) {
     return 0;
   }
