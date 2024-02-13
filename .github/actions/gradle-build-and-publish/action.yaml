@@ -48,6 +48,7 @@ runs:
 
     - name: "Gradle: Publish Artifacts"
       uses: gradle/gradle-build-action@v2.9.0
+      if: ${{ inputs.module != 'operator' }}
       with:
         arguments: :${{ inputs.module }}:publish # publish to both S3 and Sonatype OSSRH
       env:

@@ -16,6 +16,14 @@
 
 package dev.responsive.kafka.internal.stores;
 
+import static dev.responsive.kafka.api.config.ResponsiveConfig.WINDOW_BLOOM_FILTER_COUNT_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.WINDOW_BLOOM_FILTER_EXPECTED_KEYS_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.WINDOW_BLOOM_FILTER_FPP_CONFIG;
+import static dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.UNINITIALIZED_STREAM_TIME;
+
+import com.google.common.hash.BloomFilter;
+import com.google.common.hash.Funnels;
+import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.stores.ResponsiveWindowParams;
 import dev.responsive.kafka.internal.utils.Iterators;
 import dev.responsive.kafka.internal.utils.TableName;
@@ -41,9 +49,15 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
   private final TableName name;
   private final long retentionPeriod;
 
+  private long initialStreamTime;
+  private int numBloomFilterWindows;
+  private double fpp;
+  private long expectedKeysPerWindow;
+  private BloomFilter<byte[]> bloomFilter;
+
   private Position position; // TODO(IQ): update the position during restoration
   private boolean open;
-  private long observedStreamTime;
+  private long observedStreamTime = UNINITIALIZED_STREAM_TIME;
 
   // All the fields below this are effectively final, we just can't set them until #init is called
   private WindowOperations windowOperations;
@@ -81,13 +95,23 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
     try {
       log.info("Initializing state store");
 
+      final var appConfigs = storeContext.appConfigs();
+      final ResponsiveConfig config = ResponsiveConfig.responsiveConfig(appConfigs);
+
       context = storeContext;
       windowOperations = SegmentedOperations.create(
           name,
           storeContext,
           params,
+          appConfigs,
+          config,
           window -> window.windowStartMs >= minValidTimestamp()
       );
+
+      numBloomFilterWindows = config.getInt(WINDOW_BLOOM_FILTER_COUNT_CONFIG);
+      expectedKeysPerWindow = config.getLong(WINDOW_BLOOM_FILTER_EXPECTED_KEYS_CONFIG);
+      fpp = config.getDouble(WINDOW_BLOOM_FILTER_FPP_CONFIG);
+      initialStreamTime = windowOperations.initialStreamTime();
 
       log.info("Completed initializing state store");
 
@@ -96,6 +120,14 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
     } catch (InterruptedException | TimeoutException e) {
       throw new ProcessorStateException("Failed to initialize store.", e);
     }
+  }
+
+  private boolean inLatestWindowBloomFilter(final long windowStartTime) {
+    return hasActiveBloomFilter() && windowStartTime == observedStreamTime;
+  }
+
+  private boolean hasActiveBloomFilter() {
+    return bloomFilter != null;
   }
 
   @Override
@@ -115,14 +147,62 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
 
   @Override
   public void put(final Bytes key, final byte[] value, final long windowStartTime) {
-    observedStreamTime = Math.max(observedStreamTime, windowStartTime);
-
     if (value == null) {
       windowOperations.delete(key, windowStartTime);
     } else {
       windowOperations.put(key, value, windowStartTime);
+
+      if (numBloomFilterWindows > 0) {
+
+        // don't create a bloom filter for the latest window after a restart, since we may be
+        // missing some of the data that was inserted into the window prior to the restart
+        final boolean shouldRollBloomFilter =
+            windowStartTime > observedStreamTime && windowStartTime != initialStreamTime;
+
+        if (shouldRollBloomFilter) {
+          createNewBloomFilter(windowStartTime);
+        }
+
+        if (shouldRollBloomFilter || inLatestWindowBloomFilter(windowStartTime)) {
+          bloomFilter.put(key.get());
+        }
+      }
     }
+
+    observedStreamTime = Math.max(observedStreamTime, windowStartTime);
     StoreQueryUtils.updatePosition(position, context);
+  }
+
+  private void createNewBloomFilter(final long windowStartTime) {
+    if (!hasActiveBloomFilter()) {
+      log.info("Creating the first bloom filter for window@{} with previous window@{}",
+               windowStartTime, observedStreamTime);
+    } else {
+      final double actualFpp = bloomFilter.expectedFpp();
+      final long approxElementCount = bloomFilter.approximateElementCount();
+      log.info("Rolling new bloom filter for window@{}, previous filter for window@{} "
+                   + "had approx {} elements with estimated fpp={}",
+               windowStartTime, observedStreamTime, approxElementCount, actualFpp);
+
+      // TODO(sophie): consider adapting the numKeysPerWindow estimate based on the approx.
+      //  count of the last window. According to the #approximateElementCount docs, "This
+      //  approximation is reasonably accurate if it does not exceed the value of
+      //  {@code expectedInsertions} that was used when constructing the filter".
+      //  We can test whether #expectedFpp is close to or smaller than the provided fpp as
+      //  an indicator of the count approximation's accuracy, since an #expectedFpp that is
+      //  "significantly higher" than the provided fpp signals that the actual number of
+      //  elements exceeded the provided expectedInsertions.
+      //  If the #expectedFpp indicates we can't trust the count approximation, we know to try
+      //  something higher than the previous expectedInsertions value.
+      //  Otherwise, we can just use the result of #approximateElementCount
+      if (actualFpp > fpp) {
+        log.warn("Actual fpp was {} which is greater than requested fpp {}. It's likely that "
+                     + "the actual number of elements exceeded the expected keys per window {}",
+                 actualFpp, fpp, expectedKeysPerWindow);
+      }
+    }
+
+    bloomFilter = BloomFilter.create(Funnels.byteArrayFunnel(), expectedKeysPerWindow, fpp);
   }
 
   @Override
@@ -131,7 +211,13 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
       return null;
     }
 
-    return windowOperations.fetch(key, windowStartTime);
+    if (inLatestWindowBloomFilter(windowStartTime)) {
+      return bloomFilter.mightContain(key.get())
+          ? windowOperations.fetch(key, windowStartTime)
+          : null;
+    } else {
+      return windowOperations.fetch(key, windowStartTime);
+    }
   }
 
   @Override

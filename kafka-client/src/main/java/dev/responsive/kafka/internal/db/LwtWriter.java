@@ -105,7 +105,6 @@ public class LwtWriter<K, P> implements RemoteWriter<K, P> {
       result = result.thenCompose(awr -> executeAsync(builder.build()));
     }
 
-
     return result;
   }
 

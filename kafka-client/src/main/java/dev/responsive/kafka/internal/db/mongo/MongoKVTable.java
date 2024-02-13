@@ -33,8 +33,9 @@ import com.mongodb.client.model.UpdateOneModel;
 import com.mongodb.client.model.UpdateOptions;
 import com.mongodb.client.model.Updates;
 import com.mongodb.client.model.WriteModel;
+import com.mongodb.client.result.UpdateResult;
+import dev.responsive.kafka.internal.db.MongoKVFlushManager;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
-import dev.responsive.kafka.internal.db.WriterFactory;
 import java.time.Instant;
 import java.util.Date;
 import java.util.concurrent.ConcurrentHashMap;
@@ -42,45 +43,51 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueIterator;
-import org.bson.Document;
 import org.bson.codecs.configuration.CodecProvider;
 import org.bson.codecs.configuration.CodecRegistry;
 import org.bson.codecs.pojo.PojoCodecProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class MongoKVTable implements RemoteKVTable<WriteModel<Document>> {
+public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
 
   private static final Logger LOG = LoggerFactory.getLogger(MongoKVTable.class);
-  private static final String METADATA_COLLECTION_SUFFIX = "_md";
+  private static final String KV_COLLECTION_NAME = "kv_data";
+  private static final String METADATA_COLLECTION_NAME = "kv_metadata";
 
   private final String name;
+
   private final MongoCollection<KVDoc> docs;
-  private final MongoCollection<MetadataDoc> metadata;
+  private final MongoCollection<KVMetadataDoc> metadata;
 
-  private final MongoCollection<Document> genericDocs;
-  private final MongoCollection<Document> genericMetadata;
+  private final ConcurrentMap<Integer, Long> kafkaPartitionToEpoch = new ConcurrentHashMap<>();
 
-  // this map contains the initialized value of the metadata document,
-  // for which the epoch and object ID will never change. it is likely
-  // that after a few writes to MongoDB the cached MetadataDoc.offset value
-  // will be out of date, so it should not be used beyond initialization
-  private final ConcurrentMap<Integer, MetadataDoc> metadataRows = new ConcurrentHashMap<>();
-
-  public MongoKVTable(final MongoClient client, final String name) {
+  public MongoKVTable(
+      final MongoClient client,
+      final String name,
+      final CollectionCreationOptions collectionCreationOptions
+  ) {
     this.name = name;
-    CodecProvider pojoCodecProvider = PojoCodecProvider.builder().automatic(true).build();
-    CodecRegistry pojoCodecRegistry = fromRegistries(
+    final CodecProvider pojoCodecProvider = PojoCodecProvider.builder().automatic(true).build();
+    final CodecRegistry pojoCodecRegistry = fromRegistries(
         getDefaultCodecRegistry(),
         fromProviders(pojoCodecProvider)
     );
 
     final MongoDatabase database = client.getDatabase(name).withCodecRegistry(pojoCodecRegistry);
-    genericDocs = database.getCollection(name);
-    docs = database.getCollection(name, KVDoc.class);
-
-    genericMetadata = database.getCollection(name + METADATA_COLLECTION_SUFFIX);
-    metadata = database.getCollection(name + METADATA_COLLECTION_SUFFIX, MetadataDoc.class);
+    if (collectionCreationOptions.sharded()) {
+      final MongoDatabase adminDatabase = client.getDatabase("admin");
+      docs = MongoUtils.createShardedCollection(
+          KV_COLLECTION_NAME,
+          KVDoc.class,
+          database,
+          adminDatabase,
+          collectionCreationOptions.numChunks()
+      );
+    } else {
+      docs = database.getCollection(KV_COLLECTION_NAME, KVDoc.class);
+    }
+    metadata = database.getCollection(METADATA_COLLECTION_NAME, KVMetadataDoc.class);
 
     // TODO(agavra): make the tombstone retention configurable
     // this is idempotent
@@ -96,30 +103,28 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<Document>> {
   }
 
   @Override
-  public WriterFactory<Bytes, Integer> init(final int kafkaPartition) {
-    metadataRows.computeIfAbsent(kafkaPartition, kp -> {
-      final MetadataDoc metaDoc = metadata.findOneAndUpdate(
-          Filters.eq(MetadataDoc.PARTITION, kafkaPartition),
-          Updates.combine(
-              Updates.setOnInsert(MetadataDoc.PARTITION, kafkaPartition),
-              Updates.setOnInsert(MetadataDoc.OFFSET, NO_COMMITTED_OFFSET),
-              Updates.inc(MetadataDoc.EPOCH, 1) // will set the value to 1 if it doesn't exist
-          ),
-          new FindOneAndUpdateOptions()
-              .upsert(true)
-              .returnDocument(ReturnDocument.AFTER)
-      );
+  public MongoKVFlushManager init(final int kafkaPartition) {
+    final KVMetadataDoc metaDoc = metadata.findOneAndUpdate(
+        Filters.eq(KVMetadataDoc.PARTITION, kafkaPartition),
+        Updates.combine(
+            Updates.setOnInsert(KVMetadataDoc.PARTITION, kafkaPartition),
+            Updates.setOnInsert(KVMetadataDoc.PARTITION, kafkaPartition),
+            Updates.setOnInsert(KVMetadataDoc.OFFSET, NO_COMMITTED_OFFSET),
+            Updates.inc(KVMetadataDoc.EPOCH, 1) // will set the value to 1 if it doesn't exist
+        ),
+        new FindOneAndUpdateOptions()
+            .upsert(true)
+            .returnDocument(ReturnDocument.AFTER)
+    );
 
-      if (metaDoc == null) {
-        throw new IllegalStateException("Uninitialized metadata for partition " + kafkaPartition);
-      }
+    if (metaDoc == null) {
+      throw new IllegalStateException("Uninitialized metadata for partition " + kafkaPartition);
+    }
 
-      LOG.info("Retrieved initial metadata {}", metaDoc);
+    LOG.info("Retrieved initial metadata {}", metaDoc);
 
-      return metaDoc;
-    });
-
-    return new MongoWriterFactory<>(this, genericDocs, genericMetadata, kafkaPartition);
+    kafkaPartitionToEpoch.put(kafkaPartition, metaDoc.epoch);
+    return new MongoKVFlushManager(this, docs, kafkaPartition);
   }
 
   @Override
@@ -129,9 +134,12 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<Document>> {
   }
 
   @Override
-  public KeyValueIterator<Bytes, byte[]> range(final int kafkaPartition, final Bytes from,
-                                               final Bytes to,
-                                               final long minValidTs) {
+  public KeyValueIterator<Bytes, byte[]> range(
+      final int kafkaPartition,
+      final Bytes from,
+      final Bytes to,
+      final long minValidTs
+  ) {
     throw new UnsupportedOperationException();
   }
 
@@ -141,13 +149,13 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<Document>> {
   }
 
   @Override
-  public WriteModel<Document> insert(
+  public WriteModel<KVDoc> insert(
       final int kafkaPartition,
       final Bytes key,
       final byte[] value,
       final long epochMillis
   ) {
-    final long epoch = metadataRows.get(kafkaPartition).epoch;
+    final long epoch = kafkaPartitionToEpoch.get(kafkaPartition);
     return new UpdateOneModel<>(
         Filters.and(
             Filters.eq(KVDoc.ID, key.get()),
@@ -163,8 +171,8 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<Document>> {
   }
 
   @Override
-  public WriteModel<Document> delete(final int kafkaPartition, final Bytes key) {
-    final long epoch = metadataRows.get(kafkaPartition).epoch;
+  public WriteModel<KVDoc> delete(final int kafkaPartition, final Bytes key) {
+    final long epoch = kafkaPartitionToEpoch.get(kafkaPartition);
     return new UpdateOneModel<>(
         Filters.and(
             Filters.eq(KVDoc.ID, key.get()),
@@ -181,8 +189,8 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<Document>> {
 
   @Override
   public long fetchOffset(final int kafkaPartition) {
-    final MetadataDoc result = metadata.find(
-        Filters.eq(MetadataDoc.ID, metadataRows.get(kafkaPartition).id())
+    final KVMetadataDoc result = metadata.find(
+        Filters.eq(KVMetadataDoc.PARTITION, kafkaPartition)
     ).first();
     if (result == null) {
       throw new IllegalStateException("Expected to find metadata row");
@@ -190,23 +198,38 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<Document>> {
     return result.offset;
   }
 
-  @Override
-  public WriteModel<Document> setOffset(final int kafkaPartition, final long offset) {
-    final long epoch = metadataRows.get(kafkaPartition).epoch;
-    return new UpdateOneModel<>(
+  public UpdateResult setOffset(final int kafkaPartition, final long offset) {
+    final long epoch = kafkaPartitionToEpoch.get(kafkaPartition);
+
+    return metadata.updateOne(
         Filters.and(
-            Filters.eq(MetadataDoc.ID, metadataRows.get(kafkaPartition).id()),
-            Filters.lte(MetadataDoc.EPOCH, epoch)
+            Filters.eq(KVMetadataDoc.PARTITION, kafkaPartition),
+            Filters.lte(KVMetadataDoc.EPOCH, epoch)
         ),
         Updates.combine(
-            Updates.set(MetadataDoc.OFFSET, offset),
-            Updates.set(MetadataDoc.EPOCH, epoch)
+            Updates.set(KVMetadataDoc.OFFSET, offset),
+            Updates.set(KVMetadataDoc.EPOCH, epoch)
         )
     );
   }
 
+  public long localEpoch(final int kafkaPartition) {
+    return kafkaPartitionToEpoch.get(kafkaPartition);
+  }
+
+  public long fetchEpoch(final int kafkaPartition) {
+    final KVMetadataDoc result = metadata.find(
+        Filters.eq(KVMetadataDoc.PARTITION, kafkaPartition)
+    ).first();
+    if (result == null) {
+      throw new IllegalStateException("Expected to find metadata row");
+    }
+    return result.epoch;
+  }
+
   @Override
   public long approximateNumEntries(final int kafkaPartition) {
+    LOG.warn("approximateNumEntries is not yet implemented for Mongo");
     return 0;
   }
 

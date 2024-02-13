@@ -18,6 +18,7 @@ package dev.responsive.kafka.internal.db.mongo;
 
 import com.mongodb.MongoBulkWriteException;
 import com.mongodb.client.MongoCollection;
+import com.mongodb.client.model.BulkWriteOptions;
 import com.mongodb.client.model.WriteModel;
 import dev.responsive.kafka.internal.db.RemoteTable;
 import dev.responsive.kafka.internal.db.RemoteWriter;
@@ -26,26 +27,29 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
-import org.bson.Document;
+import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class MongoWriter<K> implements RemoteWriter<K, Integer> {
+public class MongoWriter<K, P, D> implements RemoteWriter<K, P> {
 
   private static final Logger LOG = LoggerFactory.getLogger(MongoWriter.class);
 
-  private final RemoteTable<K, WriteModel<Document>> table;
+  private final RemoteTable<K, WriteModel<D>> table;
   private final int kafkaPartition;
-  private final MongoCollection<Document> collection;
-  private final List<WriteModel<Document>> accumulatedWrites = new ArrayList<>();
+  private final P tablePartition;
+  private final Supplier<MongoCollection<D>> collection;
+  private final List<WriteModel<D>> accumulatedWrites = new ArrayList<>();
 
   public MongoWriter(
-      final RemoteTable<K, WriteModel<Document>> table,
+      final RemoteTable<K, WriteModel<D>> table,
       final int kafkaPartition,
-      final MongoCollection<Document> collection
+      final P tablePartition,
+      final Supplier<MongoCollection<D>> collection
   ) {
     this.table = table;
     this.kafkaPartition = kafkaPartition;
+    this.tablePartition = tablePartition;
     this.collection = collection;
   }
 
@@ -60,16 +64,22 @@ public class MongoWriter<K> implements RemoteWriter<K, Integer> {
   }
 
   @Override
-  public CompletionStage<RemoteWriteResult<Integer>> flush() {
+  public CompletionStage<RemoteWriteResult<P>> flush() {
+    if (accumulatedWrites.isEmpty()) {
+      LOG.info("Skipping empty bulk write for partition {}", tablePartition);
+      return CompletableFuture.completedFuture(RemoteWriteResult.success(tablePartition));
+    }
+
+    final BulkWriteOptions options = new BulkWriteOptions().ordered(false);
     try {
-      collection.bulkWrite(accumulatedWrites);
+      collection.get().bulkWrite(accumulatedWrites, options);
       accumulatedWrites.clear();
-      return CompletableFuture.completedFuture(RemoteWriteResult.success(kafkaPartition));
+      return CompletableFuture.completedFuture(RemoteWriteResult.success(tablePartition));
     } catch (final MongoBulkWriteException e) {
       LOG.error("Failed to flush to {}[{}]. If the exception contains 'E11000 duplicate key', "
                     + "then it was likely this writer was fenced",
-                table.name(), kafkaPartition, e);
-      return CompletableFuture.completedFuture(RemoteWriteResult.failure(kafkaPartition));
+                table.name(), tablePartition, e);
+      return CompletableFuture.completedFuture(RemoteWriteResult.failure(tablePartition));
     }
   }
 

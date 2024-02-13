@@ -28,6 +28,29 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       serviceAccountName: {{ include "responsive-operator.serviceAccountName" . }}
+      initContainers:
+        - name: {{ .Chart.Name }}-init
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ['bash', '/init-operator']
+          env:
+              - name: LOGGING_KAFKA_EP
+                value: {{ .Values.logging.kafka.endpoint }}
+              - name: LOGGING_TOPIC
+                value: {{ .Values.logging.kafka.topic }}
+              - name: LOGGING_KAFKA_KEY_FILE
+                value: /mnt/secretcfg/logging_kafka_key.properties
+          volumeMounts:
+            - name: cfg
+              mountPath: /etc/responsive-operator/
+              readOnly: true
+            - name: secretcfg
+              mountPath: /mnt/secretcfg
+            {{- if ne .Values.logging.kafka.keySecret "" }}
+            - name: logging-kafka-key
+              mountPath: /etc/responsive-operator/logging_kafka/
+              readOnly: true
+            {{- end }}
       containers:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
@@ -39,29 +62,25 @@ spec:
                 value: {{ .Values.logging.kafka.endpoint }}
               - name: LOGGING_TOPIC
                 value: {{ .Values.logging.kafka.topic }}
-              - name: LOGGING_KAFKA_KEY_FILE
-                value: /etc/responsive-operator/logging_kafka/key.properties
               - name: OPERATOR_OPTS
                 value: {{ .Values.operatorOpts }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           securityContext:
-            {{- toYaml .Values.securityContext | nindent 10 }}
+            {{- toYaml .Values.securityContext | nindent 12 }}
           volumeMounts:
-            - name: cfg
-              mountPath: /etc/responsive-operator/
+            - name: secretcfg
+              mountPath: /mnt/secretcfg
               readOnly: true
-            {{- if ne .Values.logging.kafka.keySecret "" }}
-            - name: logging-kafka-key
-              mountPath: /etc/responsive-operator/logging_kafka/
-              readOnly: true
-            {{- end }}
       volumes:
         - name: cfg
           secret:
             secretName: {{ .Values.controllerSecret }}
             optional: true
             defaultMode: 0444
+        - name: secretcfg
+          emptyDir:
+            sizeLimit: 4Mi
         {{- if ne .Values.logging.kafka.keySecret "" }}
         - name: logging-kafka-key
           secret:

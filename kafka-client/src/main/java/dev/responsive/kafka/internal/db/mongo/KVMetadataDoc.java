@@ -17,31 +17,18 @@
 package dev.responsive.kafka.internal.db.mongo;
 
 import java.util.Objects;
-import org.bson.codecs.pojo.annotations.BsonId;
-import org.bson.types.ObjectId;
 
-public class MetadataDoc {
+public class KVMetadataDoc {
 
-  public static final String ID = "_id";
-  public static final String PARTITION = "partition";
+  public static final String PARTITION = "_id";
   public static final String OFFSET = "offset";
   public static final String EPOCH = "epoch";
 
-  @BsonId
-  ObjectId id;
   int partition;
   long offset;
   long epoch;
 
-  public MetadataDoc() {
-  }
-
-  public ObjectId id() {
-    return id;
-  }
-
-  public void setId(final ObjectId id) {
-    this.id = id;
+  public KVMetadataDoc() {
   }
 
   public int partition() {
@@ -76,22 +63,20 @@ public class MetadataDoc {
     if (o == null || getClass() != o.getClass()) {
       return false;
     }
-    final MetadataDoc that = (MetadataDoc) o;
+    final KVMetadataDoc that = (KVMetadataDoc) o;
     return partition == that.partition
         && offset == that.offset
-        && epoch == that.epoch
-        && Objects.equals(id, that.id);
+        && epoch == that.epoch;
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(id, partition, epoch, offset);
+    return Objects.hash(partition, epoch, offset);
   }
 
   @Override
   public String toString() {
-    return "MetadataDoc{"
-        + "id=" + id
+    return "KVMetadataDoc{"
         + ", partition=" + partition
         + ", offset=" + offset
         + ", epoch=" + epoch

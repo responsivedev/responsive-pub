@@ -31,7 +31,7 @@ class TableNameTest {
     final var name = new TableName(kafkaName);
 
     // Then:
-    MatcherAssert.assertThat(name.remoteName(), Matchers.is("foo_bar_baz__qux"));
+    MatcherAssert.assertThat(name.tableName(), Matchers.is("foo_bar_baz__qux"));
   }
 
 }

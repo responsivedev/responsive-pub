@@ -16,32 +16,17 @@
 
 package dev.responsive.kafka.internal.db;
 
+import dev.responsive.kafka.internal.utils.WindowedKey;
 import javax.annotation.CheckReturnValue;
+import org.apache.kafka.common.utils.Bytes;
 
+/**
+ * @param <K> the key type, e.g. {@link Bytes} or {@link WindowedKey}
+ * @param <S> the write statement type, for adding updates to a write batch
+ */
 public interface RemoteTable<K, S> {
 
   String name();
-
-  /**
-   * Initializes the table by setting the metadata fields to
-   * their initialized values.
-   *
-   * @return a {@link WriterFactory} that gives the callee access
-   * to run statements on {@code table}
-   *
-   * TODO: this is the only place where the partition type is needed so it
-   *  doesn't make sense to generic-ify the entire RemoteTable class just for
-   *  this. Of course it's also not ideal to leave the generic as a ? because we
-   *  now have to cast/suppress "unchecked" warnings everywhere this is used.
-   *  We should explore cleaning up partition types in general, and move this
-   *  this method out of RemoteTable either by creating the WriterFactory up
-   *  front and passing it in as a param, or possibly moving it to the
-   *  {@link TableMetadata} interface which is already parameterized by table
-   *  partition type
-   */
-  WriterFactory<K, ?> init(
-      final int kafkaPartition
-  );
 
   /**
    * Inserts data into {@code table}. Note that this will overwrite
@@ -85,15 +70,4 @@ public interface RemoteTable<K, S> {
    *         partition for the given kafka partition
    */
   long fetchOffset(final int kafkaPartition);
-
-  /**
-   * @param kafkaPartition the kafka partition
-   * @return a statement that can be used to set the offset
-   *         in the metadata row of {@code table}.
-   */
-  @CheckReturnValue
-  S setOffset(
-      final int kafkaPartition,
-      final long offset
-  );
 }

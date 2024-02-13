@@ -36,6 +36,8 @@ import static dev.responsive.kafka.internal.metrics.StoreMetrics.TIME_SINCE_LAST
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.TIME_SINCE_LAST_FLUSH_DESCRIPTION;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.greaterThan;
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -51,6 +53,7 @@ import static org.mockito.Mockito.when;
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
+import dev.responsive.kafka.internal.db.BatchFlusher;
 import dev.responsive.kafka.internal.db.BytesKeySpec;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.CassandraKeyValueTable;
@@ -61,6 +64,7 @@ import dev.responsive.kafka.internal.metrics.ClientVersionMetadata;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.utils.ExceptionSupplier;
 import dev.responsive.kafka.internal.utils.SessionClients;
+import dev.responsive.kafka.internal.utils.TableName;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
 import java.nio.ByteBuffer;
@@ -69,9 +73,11 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
@@ -151,6 +157,7 @@ public class CommitBufferTest {
   private SessionClients sessionClients;
   private TopicPartition changelog;
   private String name;
+  private TableName tableName;
   private SubPartitioner partitioner;
   private CassandraKeyValueTable table;
   private CassandraClient client;
@@ -162,6 +169,7 @@ public class CommitBufferTest {
       @ResponsiveConfigParam final ResponsiveConfig config
   ) throws InterruptedException, TimeoutException {
     name = info.getTestMethod().orElseThrow().getName();
+    tableName = new TableName(name);
     session = CqlSession.builder()
         .addContactPoint(cassandra.getContactPoint())
         .withLocalDatacenter(cassandra.getLocalDatacenter())
@@ -206,16 +214,21 @@ public class CommitBufferTest {
   }
 
   private CommitBuffer<Bytes, Integer> createCommitBuffer(final boolean truncateChangelog) {
-    final var writerFactory = table.init(changelog.partition());
+    final var flushManager = table.init(changelog.partition());
+    final BatchFlusher<Bytes, Integer> batchFlusher = new BatchFlusher<>(
+        KEY_SPEC,
+        changelog.partition(),
+        flushManager
+    );
 
     return new CommitBuffer<>(
-        writerFactory,
+        batchFlusher,
         sessionClients,
         changelog,
         admin,
         KEY_SPEC,
         truncateChangelog,
-        name,
+        tableName,
         TRIGGERS,
         EXCEPTION_SUPPLIER
     );
@@ -227,13 +240,13 @@ public class CommitBufferTest {
       final Supplier<Instant> clock
   ) {
     return new CommitBuffer<>(
-        table.init(KAFKA_PARTITION),
+        new BatchFlusher<>(KEY_SPEC, changelog.partition(), table.init(KAFKA_PARTITION)),
         sessionClients,
         changelog,
         admin,
         KEY_SPEC,
         true,
-        name,
+        tableName,
         flushTriggers,
         EXCEPTION_SUPPLIER,
         maxBatchSize,
@@ -352,10 +365,17 @@ public class CommitBufferTest {
   public void shouldNotFlushWithExpiredEpoch() {
     // Given:
     final ExceptionSupplier exceptionSupplier = mock(ExceptionSupplier.class);
-    final var writerFactory = table.init(changelog.partition());
+    final var flushManager = table.init(changelog.partition());
     try (final CommitBuffer<Bytes, Integer> buffer = new CommitBuffer<>(
-        writerFactory, sessionClients, changelog, admin,
-        KEY_SPEC, true, name, TRIGGERS, exceptionSupplier)) {
+        new BatchFlusher<>(KEY_SPEC, changelog.partition(), flushManager),
+        sessionClients,
+        changelog,
+        admin,
+        KEY_SPEC,
+        true,
+        tableName,
+        TRIGGERS,
+        exceptionSupplier)) {
 
       Mockito.when(exceptionSupplier.commitFencedException(anyString()))
           .thenAnswer(msg -> new RuntimeException(msg.getArgument(0).toString()));
@@ -373,10 +393,10 @@ public class CommitBufferTest {
       );
 
       // Then:
-      final String errorMsg = "commit-buffer [" + table.name() + "-2] "
-          + "Error while writing batch for table partition 8! "
-          + "Batch Offset: 100, Persisted Offset: -1, "
-          + "Local Epoch: 1, Persisted Epoch: 2";
+      final String errorMsg = "commit-buffer [" + tableName.tableName() + "-2] "
+          + "Failed table partition [8]: "
+          + "<batchOffset=100, persistedOffset=-1>, "
+          + "<localEpoch=1, persistedEpoch=2>";
       assertThat(e.getMessage(), equalTo(errorMsg));
     }
   }
@@ -384,10 +404,11 @@ public class CommitBufferTest {
   @Test
   public void shouldIncrementEpochAndReserveForAllSubpartitionsOnInit() {
     // Given:
-    final var writerFactory = table.init(changelog.partition());
+    final var flushManager = table.init(changelog.partition());
     new CommitBuffer<>(
-        writerFactory, sessionClients, changelog, admin,
-        KEY_SPEC, true, name, TRIGGERS, EXCEPTION_SUPPLIER);
+        new BatchFlusher<>(KEY_SPEC, changelog.partition(), flushManager),
+        sessionClients, changelog, admin,
+        KEY_SPEC, true, tableName, TRIGGERS, EXCEPTION_SUPPLIER);
 
     for (final int tp : partitioner.allTablePartitions(changelog.partition())) {
       assertThat(table.fetchEpoch(tp), is(1L));
@@ -433,7 +454,7 @@ public class CommitBufferTest {
   }
 
   @Test
-  public void shouldNotTruncateTopicAfterFlushIfTruncateEnabledForSourceTopicChangelog() {
+  public void shouldNotTruncateTopicAfterFlushWithSourceTopicChangelog() {
     // Given:
     final var sourceChangelog = new TopicPartition("some-source-topic", KAFKA_PARTITION);
     Mockito.when(metrics.sensor("flush-" + sourceChangelog))
@@ -444,14 +465,15 @@ public class CommitBufferTest {
         .thenReturn(flushErrorSensor);
     Mockito.when(metrics.sensor("failed-truncations-" + sourceChangelog))
         .thenReturn(failedTruncationsSensor);
+    final var flushManager = table.init(changelog.partition());
     final CommitBuffer<Bytes, Integer> buffer = new CommitBuffer<>(
-        table.init(changelog.partition()),
+        new BatchFlusher<>(KEY_SPEC, changelog.partition(), flushManager),
         sessionClients,
         sourceChangelog,
         admin,
         KEY_SPEC,
         true,
-        name,
+        tableName,
         TRIGGERS,
         EXCEPTION_SUPPLIER
     );
@@ -559,6 +581,58 @@ public class CommitBufferTest {
     }
   }
 
+  // measure how long before the commit buffer actually flushes the buffer (1-second granularity)
+  // the measurement is taken by iterating until the flush succeeds, advancing the clock by
+  // 1 second at each iteration.
+  private Optional<Instant> measureFlushTime(
+      final CommitBuffer<Bytes, Integer> buffer,
+      final AtomicReference<Instant> clock,
+      final long flushOffset,
+      final Instant to
+  ) {
+    buffer.put(Bytes.wrap(new byte[]{18}), VALUE, CURRENT_TS);
+    while (clock.get().isBefore(to)) {
+      buffer.flush(flushOffset);
+      if (table.fetchOffset(KAFKA_PARTITION) == flushOffset) {
+        return Optional.of(clock.get());
+      }
+      clock.set(clock.get().plus(Duration.ofSeconds(1)));
+    }
+    return Optional.empty();
+  }
+
+  @Test
+  public void shouldApplyJitterToFlushInterval() {
+    // applies a 5-second jitter (for a 10 seconds range) and measures the flush interval
+    // over 20 iterations. Then, the test asserts that we got at least 2 different intervals.
+    // The test has a (1/10 ^ 20) probability of returning a false-negative
+    final AtomicReference<Instant> clock = new AtomicReference<>(Instant.now());
+    try (final CommitBuffer<Bytes, Integer> buffer = createCommitBuffer(
+        FlushTriggers.ofInterval(Duration.ofSeconds(20), Duration.ofSeconds(5)),
+        100,
+        clock::get)
+    ) {
+      // given:
+      final Set<Duration> intervals = new HashSet<>();
+      for (int i = 0; i < 20; i++) {
+        final Instant start = clock.get();
+
+        // when:
+        final Optional<Instant> flushTime
+            = measureFlushTime(buffer, clock, 5 + i, start.plus(Duration.ofSeconds(26)));
+
+        // then make sure the flush happened in a time that's in range:
+        assertThat(flushTime.isPresent(), is(true));
+        final Duration flushInterval = Duration.between(start, flushTime.get());
+        final long flushIntervalSeconds = flushInterval.getSeconds();
+        assertThat(flushIntervalSeconds, greaterThanOrEqualTo(15L));
+        intervals.add(flushInterval);
+      }
+      // then make sure that there was some randomness to the jitter:
+      assertThat(intervals.size(), greaterThan(1));
+    }
+  }
+
   @Test
   public void shouldDeleteRowInCassandraWithTombstone() {
     // Given:
@@ -608,10 +682,11 @@ public class CommitBufferTest {
   public void shouldNotRestoreRecordsWhenFencedByEpoch() {
     // Given:
     final ExceptionSupplier exceptionSupplier = mock(ExceptionSupplier.class);
-    final var writerFactory = table.init(changelog.partition());
+    final var flushManager = table.init(changelog.partition());
     final CommitBuffer<Bytes, Integer> buffer = new CommitBuffer<>(
-        writerFactory, sessionClients, changelog, admin,
-        KEY_SPEC, true, name, TRIGGERS, exceptionSupplier);
+        new BatchFlusher<>(KEY_SPEC, changelog.partition(), flushManager),
+        sessionClients, changelog, admin,
+        KEY_SPEC, true, tableName, TRIGGERS, exceptionSupplier);
 
     // initialize a new writer to bump the epoch
     table.init(changelog.partition());
@@ -639,25 +714,25 @@ public class CommitBufferTest {
         () -> buffer.restoreBatch(List.of(record)));
 
     // Then:
-    final String errorMsg = "commit-buffer [" + table.name() + "-2] "
-        + "Error while writing batch for table partition 8! "
-        + "Batch Offset: 100, Persisted Offset: -1, "
-        + "Local Epoch: 1, Persisted Epoch: 2";
+    final String errorMsg = "commit-buffer [" + tableName.tableName() + "-2] "
+        + "Failed table partition [8]: "
+        + "<batchOffset=100, persistedOffset=-1>, "
+        + "<localEpoch=1, persistedEpoch=2>";
     assertThat(e.getMessage(), equalTo(errorMsg));
   }
 
   @Test
   public void shouldRestoreStreamsBatchLargerThanCassandraBatch() {
     // Given:
-    final var writerFactory = table.init(changelog.partition());
+    final var flushManager = table.init(changelog.partition());
     final CommitBuffer<Bytes, Integer> buffer = new CommitBuffer<>(
-        writerFactory,
+        new BatchFlusher<>(KEY_SPEC, changelog.partition(), flushManager),
         sessionClients,
         changelog,
         admin,
         KEY_SPEC,
         true,
-        name,
+        tableName,
         TRIGGERS,
         EXCEPTION_SUPPLIER,
         3,

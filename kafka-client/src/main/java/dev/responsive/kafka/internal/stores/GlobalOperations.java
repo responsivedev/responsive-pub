@@ -19,11 +19,10 @@ package dev.responsive.kafka.internal.stores;
 import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadSessionClients;
 import static dev.responsive.kafka.internal.db.partitioning.TablePartitioner.defaultPartitioner;
 
-import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.internal.db.CassandraClient;
+import dev.responsive.kafka.internal.db.CassandraFactTable;
 import dev.responsive.kafka.internal.db.CassandraTableSpecFactory;
-import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
 import dev.responsive.kafka.internal.utils.SessionClients;
 import java.util.Collection;
@@ -46,7 +45,7 @@ public class GlobalOperations implements KeyValueOperations {
 
   private final GlobalProcessorContextImpl context;
   private final CassandraClient client;
-  private final RemoteKVTable<BoundStatement> table;
+  private final CassandraFactTable table;
 
   public static GlobalOperations create(
       final StateStoreContext storeContext,
@@ -81,7 +80,7 @@ public class GlobalOperations implements KeyValueOperations {
       final ResponsiveRestoreListener restoreListener,
       final GlobalProcessorContextImpl context,
       final CassandraClient client,
-      final RemoteKVTable<BoundStatement> table
+      final CassandraFactTable table
   ) {
     this.storeName = storeName;
     this.changelog = changelog;

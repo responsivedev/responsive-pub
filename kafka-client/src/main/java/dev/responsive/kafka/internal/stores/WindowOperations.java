@@ -27,6 +27,8 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
 
 public interface WindowOperations extends Closeable, RecordBatchingStateRestoreCallback {
 
+  long initialStreamTime();
+
   void put(final Bytes key, final byte[] value, final long windowStartTime);
 
   void delete(final Bytes key, final long windowStartTime);

@@ -18,10 +18,12 @@ package dev.responsive.kafka.internal.db;
 
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.kafka.internal.clients.TTDCassandraClient;
+import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.db.spec.CassandraTableSpec;
 import dev.responsive.kafka.internal.db.spec.DelegatingTableSpec;
 import dev.responsive.kafka.internal.db.spec.TtlTableSpec;
 import dev.responsive.kafka.internal.stores.KVStoreStub;
+import dev.responsive.kafka.internal.stores.RemoteWriteResult;
 import java.time.Duration;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -55,6 +57,13 @@ public class TTDKeyValueTable extends TTDTable<Bytes> implements RemoteKVTable<B
     }
 
     stub = new KVStoreStub(ttl, time);
+  }
+
+  @Override
+  public KVFlushManager init(
+      final int kafkaPartition
+  ) {
+    return new TTDKeyValueFlushManager(this);
   }
 
   @Override
@@ -110,6 +119,49 @@ public class TTDKeyValueTable extends TTDTable<Bytes> implements RemoteKVTable<B
   @Override
   public long approximateNumEntries(final int kafkaPartition) {
     return client.count(name(), kafkaPartition);
+  }
+
+  private static class TTDKeyValueFlushManager extends KVFlushManager {
+
+    private final String logPrefix;
+    private final TTDKeyValueTable table;
+
+    public TTDKeyValueFlushManager(
+        final TTDKeyValueTable table
+    ) {
+      this.table = table;
+      this.logPrefix = String.format("%s TTDKeyValueFlushManager ", table.name());
+    }
+
+    @Override
+    public String tableName() {
+      return table.name();
+    }
+
+    @Override
+    public TablePartitioner<Bytes, Integer> partitioner() {
+      return TablePartitioner.defaultPartitioner();
+    }
+
+    @Override
+    public RemoteWriter<Bytes, Integer> createWriter(final Integer tablePartition) {
+      return new TTDWriter<>(table, tablePartition);
+    }
+
+    @Override
+    public String failedFlushInfo(final long batchOffset, final Integer failedTablePartition) {
+      return "";
+    }
+
+    @Override
+    public String logPrefix() {
+      return logPrefix;
+    }
+
+    @Override
+    public RemoteWriteResult<Integer> updateOffset(final long consumedOffset) {
+      return RemoteWriteResult.success(null);
+    }
   }
 
 }

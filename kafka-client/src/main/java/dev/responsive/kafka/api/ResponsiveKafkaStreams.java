@@ -19,6 +19,7 @@ package dev.responsive.kafka.api;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.CLIENT_ID_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.CLIENT_SECRET_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.METRICS_ENABLED_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_HOSTNAME_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.TASK_ASSIGNOR_CLASS_OVERRIDE;
 import static dev.responsive.kafka.internal.metrics.ResponsiveMetrics.RESPONSIVE_METRICS_NAMESPACE;
@@ -35,6 +36,7 @@ import dev.responsive.kafka.internal.config.InternalSessionConfigs;
 import dev.responsive.kafka.internal.config.ResponsiveStreamsConfig;
 import dev.responsive.kafka.internal.db.CassandraClientFactory;
 import dev.responsive.kafka.internal.db.DefaultCassandraClientFactory;
+import dev.responsive.kafka.internal.db.mongo.CollectionCreationOptions;
 import dev.responsive.kafka.internal.db.mongo.ResponsiveMongoClient;
 import dev.responsive.kafka.internal.metrics.ClientVersionMetadata;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
@@ -450,8 +452,15 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
               clientId,
               clientSecret == null ? null : clientSecret.value()
           );
+          final boolean timestampFirstOrder =
+              responsiveConfig.getBoolean(MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_CONFIG);
+
           sessionClients = new SessionClients(
-              Optional.of(new ResponsiveMongoClient(mongoClient)),
+              Optional.of(new ResponsiveMongoClient(
+                  mongoClient,
+                  timestampFirstOrder,
+                  CollectionCreationOptions.fromConfig(responsiveConfig)
+              )),
               Optional.empty(),
               admin
           );

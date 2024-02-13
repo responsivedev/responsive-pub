@@ -55,8 +55,7 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class CassandraKeyValueTable
-    implements RemoteKVTable<BoundStatement>, TableMetadata<Integer> {
+public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
 
   private static final Logger LOG = LoggerFactory.getLogger(CassandraKeyValueTable.class);
   private static final String FROM_BIND = "fk";
@@ -265,7 +264,7 @@ public class CassandraKeyValueTable
   }
 
   @Override
-  public WriterFactory<Bytes, Integer> init(
+  public CassandraKVFlushManager init(
       final int kafkaPartition
   ) {
     partitioner.allTablePartitions(kafkaPartition).forEach(tablePartition -> client.execute(
@@ -312,20 +311,17 @@ public class CassandraKeyValueTable
       }
     }
 
-    final WriterFactory<Bytes, Integer> writerFactory = new LwtWriterFactory<>(
-        this,
+    final int basePartition = partitioner.metadataTablePartition(kafkaPartition);
+    LOG.info("Initialized store {} with epoch {} for subpartitions in range: {{} -> {}}",
+             name, epoch, basePartition, basePartition + partitioner.getFactor() - 1);
+
+    return new CassandraKVFlushManager(
         this,
         client,
         partitioner,
         kafkaPartition,
         epoch
     );
-
-    final int basePartition = partitioner.metadataTablePartition(kafkaPartition);
-    LOG.info("Initialized store {} with {} for subpartitions in range: {{} -> {}}",
-             name, writerFactory, basePartition, basePartition + partitioner.getFactor() - 1);
-
-    return writerFactory;
   }
 
   @Override
@@ -447,7 +443,6 @@ public class CassandraKeyValueTable
     }
   }
 
-  @Override
   public BoundStatement setOffset(final int kafkaPartition, final long offset) {
     final int metadataTablePartition = partitioner.metadataTablePartition(kafkaPartition);
     return setOffset
@@ -456,7 +451,11 @@ public class CassandraKeyValueTable
         .setLong(OFFSET.bind(), offset);
   }
 
-  @Override
+  /**
+   * @param tablePartition the table partition to fetch the epoch for
+   *
+   * @return the current epoch associated with this table partition
+   */
   public long fetchEpoch(final Integer tablePartition) {
     final List<Row> result = client.execute(
             fetchEpoch
@@ -473,7 +472,6 @@ public class CassandraKeyValueTable
     }
   }
 
-  @Override
   public BoundStatement reserveEpoch(final Integer tablePartition, final long epoch) {
     return reserveEpoch
         .bind()
@@ -481,7 +479,6 @@ public class CassandraKeyValueTable
         .setLong(EPOCH.bind(), epoch);
   }
 
-  @Override
   public BoundStatement ensureEpoch(final Integer tablePartition, final long epoch) {
     return ensureEpoch
         .bind()

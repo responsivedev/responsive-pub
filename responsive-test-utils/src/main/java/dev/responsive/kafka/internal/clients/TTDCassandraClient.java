@@ -115,11 +115,6 @@ public class TTDCassandraClient extends CassandraClient {
   }
 
   @Override
-  public TableCache<RemoteKVTable<BoundStatement>> globalFactory() {
-    return kvFactory;
-  }
-
-  @Override
   public TableCache<RemoteKVTable<BoundStatement>> kvFactory() {
     return kvFactory;
   }

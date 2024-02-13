@@ -25,11 +25,13 @@ import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils
 
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.stores.ResponsiveWindowParams;
+import dev.responsive.kafka.internal.db.BatchFlusher;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.CassandraTableSpecFactory;
 import dev.responsive.kafka.internal.db.RemoteWindowedTable;
+import dev.responsive.kafka.internal.db.WindowFlushManager;
 import dev.responsive.kafka.internal.db.WindowedKeySpec;
-import dev.responsive.kafka.internal.db.WriterFactory;
+import dev.responsive.kafka.internal.db.mongo.ResponsiveMongoClient;
 import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner;
 import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
 import dev.responsive.kafka.internal.utils.Iterators;
@@ -38,6 +40,7 @@ import dev.responsive.kafka.internal.utils.SessionClients;
 import dev.responsive.kafka.internal.utils.TableName;
 import dev.responsive.kafka.internal.utils.WindowedKey;
 import java.util.Collection;
+import java.util.Map;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Predicate;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -63,10 +66,14 @@ public class SegmentedOperations implements WindowOperations {
   private final ResponsiveStoreRegistration registration;
   private final ResponsiveRestoreListener restoreListener;
 
+  private final long initialStreamTime;
+
   public static SegmentedOperations create(
       final TableName name,
       final StateStoreContext storeContext,
       final ResponsiveWindowParams params,
+      final Map<String, Object> appConfigs,
+      final ResponsiveConfig responsiveConfig,
       final Predicate<WindowedKey> withinRetention
   ) throws InterruptedException, TimeoutException {
 
@@ -75,10 +82,7 @@ public class SegmentedOperations implements WindowOperations {
     ).logger(SegmentedOperations.class);
     final var context = asInternalProcessorContext(storeContext);
 
-    // Save this so we don't have to rebuild the config map on every access
-    final var appConfigs = storeContext.appConfigs();
 
-    final ResponsiveConfig config = ResponsiveConfig.responsiveConfig(appConfigs);
     final SessionClients sessionClients = loadSessionClients(appConfigs);
     final ResponsiveStoreRegistry storeRegistry = loadStoreRegistry(appConfigs);
 
@@ -87,30 +91,38 @@ public class SegmentedOperations implements WindowOperations {
         context.taskId().partition()
     );
 
+    final SegmentPartitioner partitioner = SegmentPartitioner.create(params);
+
     final RemoteWindowedTable<?> table;
     switch (sessionClients.storageBackend()) {
       case CASSANDRA:
-        table = createCassandra(params, sessionClients);
+        table = createCassandra(params, sessionClients, partitioner);
         break;
       case MONGO_DB:
-        throw new UnsupportedOperationException("Window stores are not yet compatible with Mongo");
+        table = createMongo(params, sessionClients, partitioner);
+        break;
       default:
         throw new IllegalStateException("Unexpected value: " + sessionClients.storageBackend());
     }
 
-    final WriterFactory<WindowedKey, ?> writerFactory = table.init(changelog.partition());
+    final WindowFlushManager flushManager = table.init(changelog.partition());
 
-    log.info("Remote table {} is available for querying.", name.remoteName());
+    log.info("Remote table {} is available for querying.", name.tableName());
 
     final WindowedKeySpec keySpec = new WindowedKeySpec(withinRetention);
+    final BatchFlusher<WindowedKey, ?> batchFlusher = new BatchFlusher<>(
+        keySpec,
+        changelog.partition(),
+        flushManager
+    );
     final CommitBuffer<WindowedKey, ?> buffer = CommitBuffer.from(
-        writerFactory,
+        batchFlusher,
         sessionClients,
         changelog,
         keySpec,
         params.truncateChangelog(),
-        params.name().kafkaName(),
-        config
+        params.name(),
+        responsiveConfig
     );
     final long restoreStartOffset = table.fetchOffset(changelog.partition());
     final var registration = new ResponsiveStoreRegistration(
@@ -129,23 +141,40 @@ public class SegmentedOperations implements WindowOperations {
         changelog,
         storeRegistry,
         registration,
-        sessionClients.restoreListener()
+        sessionClients.restoreListener(),
+        flushManager.streamTime()
     );
   }
 
   private static RemoteWindowedTable<?> createCassandra(
       final ResponsiveWindowParams params,
-      final SessionClients clients
+      final SessionClients clients,
+      final SegmentPartitioner partitioner
   ) throws InterruptedException, TimeoutException {
-
     final CassandraClient client = clients.cassandraClient();
-    final SegmentPartitioner partitioner = SegmentPartitioner.create(params);
 
     final var spec = CassandraTableSpecFactory.fromWindowParams(params, partitioner);
 
     switch (params.schemaType()) {
       case WINDOW:
         return client.windowedFactory().create(spec);
+      case STREAM:
+        throw new UnsupportedOperationException("Not yet implemented");
+      default:
+        throw new IllegalArgumentException(params.schemaType().name());
+    }
+  }
+
+  private static RemoteWindowedTable<?> createMongo(
+      final ResponsiveWindowParams params,
+      final SessionClients clients,
+      final SegmentPartitioner partitioner
+  ) throws InterruptedException, TimeoutException {
+    final ResponsiveMongoClient client = clients.mongoClient();
+
+    switch (params.schemaType()) {
+      case WINDOW:
+        return client.windowedTable(params.name().tableName(), partitioner);
       case STREAM:
         throw new UnsupportedOperationException("Not yet implemented");
       default:
@@ -162,7 +191,8 @@ public class SegmentedOperations implements WindowOperations {
       final TopicPartition changelog,
       final ResponsiveStoreRegistry storeRegistry,
       final ResponsiveStoreRegistration registration,
-      final ResponsiveRestoreListener restoreListener
+      final ResponsiveRestoreListener restoreListener,
+      final long initialStreamTime
   ) {
     this.context = context;
     this.params = params;
@@ -172,6 +202,12 @@ public class SegmentedOperations implements WindowOperations {
     this.storeRegistry = storeRegistry;
     this.registration = registration;
     this.restoreListener = restoreListener;
+    this.initialStreamTime = initialStreamTime;
+  }
+
+  @Override
+  public long initialStreamTime() {
+    return initialStreamTime;
   }
 
   @Override
