@@ -107,6 +107,14 @@ public class WindowStoreStub {
     throw new UnsupportedOperationException("Not yet implemented.");
   }
 
+  public KeyValueIterator<WindowedKey, byte[]> all() {
+    throw new UnsupportedOperationException("Not yet implemented.");
+  }
+
+  public KeyValueIterator<WindowedKey, byte[]> backAll() {
+    throw new UnsupportedOperationException("Not yet implemented.");
+  }
+
   private long minValidTimestamp() {
     return observedStreamTime - retentionPeriod + 1;
   }

@@ -21,6 +21,7 @@ package dev.responsive.kafka.internal.db.mongo;
 import static com.mongodb.MongoClientSettings.getDefaultCodecRegistry;
 import static dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.UNINITIALIZED_STREAM_TIME;
 import static dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration.NO_COMMITTED_OFFSET;
+import static dev.responsive.kafka.internal.stores.SegmentedOperations.MIN_KEY;
 import static org.bson.codecs.configuration.CodecRegistries.fromProviders;
 import static org.bson.codecs.configuration.CodecRegistries.fromRegistries;
 
@@ -52,6 +53,7 @@ import java.util.concurrent.ConcurrentMap;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.bson.codecs.configuration.CodecProvider;
 import org.bson.codecs.configuration.CodecRegistry;
@@ -65,9 +67,6 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
   private static final String METADATA_COLLECTION_NAME = "window_metadata";
 
   private static final UpdateOptions UPSERT_OPTIONS = new UpdateOptions().upsert(true);
-
-  // The "minimum" possible key when comparing bytewise, used to define range query bounds
-  private static final Bytes MIN_KEY = Bytes.wrap(new byte[0]);
 
   private final String name;
   private final SegmentPartitioner partitioner;
@@ -548,6 +547,34 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
       final long timeTo
   ) {
     throw new UnsupportedOperationException("backFetchAll not yet supported for MongoDB backends");
+  }
+
+  @Override
+  public KeyValueIterator<WindowedKey, byte[]> all(
+      final int kafkaPartition,
+      final long streamTime
+  ) {
+    final List<KeyValueIterator<WindowedKey, byte[]>> segmentIterators = new LinkedList<>();
+    final var partitionSegments = kafkaPartitionToSegments.get(kafkaPartition);
+
+    for (final var segment : partitioner.activeSegments(kafkaPartition, streamTime)) {
+      final var segmentWindows = partitionSegments.segmentWindows.get(segment);
+
+      final FindIterable<WindowDoc> fetchResults = segmentWindows.find();
+
+      segmentIterators.add(
+          Iterators.kv(fetchResults.iterator(), MongoWindowedTable::windowFromDoc)
+      );
+    }
+    return Iterators.wrapped(segmentIterators);
+  }
+
+  @Override
+  public KeyValueIterator<WindowedKey, byte[]> backAll(
+      final int kafkaPartition,
+      final long streamTime
+  ) {
+    throw new UnsupportedOperationException("backAll not yet supported for MongoDB backends");
   }
 
   public BasicDBObject compositeKey(final WindowedKey windowedKey) {

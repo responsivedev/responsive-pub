@@ -55,6 +55,9 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
 
 public class SegmentedOperations implements WindowOperations {
 
+  // The "minimum" possible key when comparing bytewise, used to define range query bounds
+  public static final Bytes MIN_KEY = Bytes.wrap(new byte[0]);
+
   @SuppressWarnings("rawtypes")
   private final InternalProcessorContext context;
   private final ResponsiveWindowParams params;
@@ -267,12 +270,26 @@ public class SegmentedOperations implements WindowOperations {
       final long timeFrom,
       final long timeTo
   ) {
-    throw new UnsupportedOperationException("Not yet implemented");
+    final WindowedKey lowerBound = new WindowedKey(MIN_KEY, timeFrom);
+    final WindowedKey upperBound = new WindowedKey(MIN_KEY, timeTo + 1);
+
+    // set toInclusive bound to false due to the +1 in the upper bound
+    return Iterators.windowedKey(
+        new LocalRemoteKvIterator<>(
+            buffer.range(lowerBound, upperBound, true, false),
+            table.fetchAll(changelog.partition(), timeFrom, timeTo)),
+        params.windowSize()
+    );
   }
 
   @Override
-  public KeyValueIterator<Windowed<Bytes>, byte[]> all() {
-    throw new UnsupportedOperationException("Not yet implemented");
+  public KeyValueIterator<Windowed<Bytes>, byte[]> all(final long streamTime) {
+    return Iterators.windowedKey(
+        new LocalRemoteKvIterator<>(
+            buffer.all(),
+            table.all(changelog.partition(), streamTime)),
+        params.windowSize()
+    );
   }
 
   @Override

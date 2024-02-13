@@ -149,6 +149,22 @@ public class TTDWindowedTable extends TTDTable<WindowedKey>
   }
 
   @Override
+  public KeyValueIterator<WindowedKey, byte[]> all(
+      final int kafkaPartition,
+      final long streamTime
+  ) {
+    return stub.all();
+  }
+
+  @Override
+  public KeyValueIterator<WindowedKey, byte[]> backAll(
+      final int kafkaPartition,
+      final long streamTime
+  ) {
+    return stub.backAll();
+  }
+
+  @Override
   public long count() {
     return 0;
   }

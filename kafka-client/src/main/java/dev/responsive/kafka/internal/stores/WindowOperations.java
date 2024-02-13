@@ -53,7 +53,7 @@ public interface WindowOperations extends Closeable, RecordBatchingStateRestoreC
       final long timeTo
   );
 
-  KeyValueIterator<Windowed<Bytes>, byte[]> all();
+  KeyValueIterator<Windowed<Bytes>, byte[]> all(final long streamTime);
 
   WindowStoreIterator<byte[]> backwardFetch(
       final Bytes key,

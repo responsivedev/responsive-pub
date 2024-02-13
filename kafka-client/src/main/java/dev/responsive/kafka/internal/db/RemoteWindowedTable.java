@@ -18,6 +18,7 @@ package dev.responsive.kafka.internal.db;
 
 import dev.responsive.kafka.internal.utils.WindowedKey;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
 public interface RemoteWindowedTable<S> extends RemoteTable<WindowedKey, S> {
@@ -157,4 +158,22 @@ public interface RemoteWindowedTable<S> extends RemoteTable<WindowedKey, S> {
       long timeFrom,
       long timeTo
   );
+
+  /**
+   * Retrieves the windows of the given {@code kafkaPartition} across all keys and timestamps.
+   *
+   * @param kafkaPartition the kafka partition
+   *
+   * @return a forwards iterator over all the windows and values previously set
+   */
+  KeyValueIterator<WindowedKey, byte[]> all(int kafkaPartition, long streamTime);
+
+  /**
+   * Retrieves the windows of the given {@code kafkaPartition} across all keys and timestamps.
+   *
+   * @param kafkaPartition the kafka partition
+   *
+   * @return a backwards iterator over all the windows and values previously set
+   */
+  KeyValueIterator<WindowedKey, byte[]> backAll(int kafkaPartition, long streamTime);
 }
