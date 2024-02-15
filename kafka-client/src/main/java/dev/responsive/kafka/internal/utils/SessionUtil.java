@@ -36,6 +36,8 @@ import com.mongodb.client.MongoClients;
 import com.mongodb.client.MongoDatabase;
 import dev.responsive.kafka.internal.db.ResponsiveRetryPolicy;
 import java.net.InetSocketAddress;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import javax.annotation.Nullable;
 import org.bson.Document;
 
@@ -95,8 +97,8 @@ public final class SessionUtil {
       // reads if they're ok with the risks
       connectionString = String.format(
           "mongodb+srv://%s:%s@%s/?retryWrites=true&w=majority&r=majority",
-          clientId,
-          clientSecret,
+          URLEncoder.encode(clientId, StandardCharsets.UTF_8),
+          URLEncoder.encode(clientSecret, StandardCharsets.UTF_8),
           hostname
       );
     } else if (clientId == null ^ clientSecret == null) {
