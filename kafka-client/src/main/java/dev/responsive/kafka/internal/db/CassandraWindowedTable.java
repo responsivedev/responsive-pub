@@ -139,7 +139,8 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
             .value(WINDOW_START.column(), WINDOW_START.literal(METADATA_TS))
             .value(EPOCH.column(), bindMarker(EPOCH.bind()))
             .ifNotExists()
-            .build()
+            .build(),
+        QueryOp.WRITE
     );
 
     // TODO: explore how to guard against accidental resurrection of deleted segments by
@@ -153,7 +154,8 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
         QueryBuilder.deleteFrom(name)
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
             .where(SEGMENT_ID.relation().isEqualTo(bindMarker(SEGMENT_ID.bind())))
-            .build()
+            .build(),
+        QueryOp.WRITE
     );
 
     final var insert = client.prepare(
@@ -165,7 +167,8 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
             .value(DATA_KEY.column(), bindMarker(DATA_KEY.bind()))
             .value(WINDOW_START.column(), bindMarker(WINDOW_START.bind()))
             .value(DATA_VALUE.column(), bindMarker(DATA_VALUE.bind()))
-            .build()
+            .build(),
+        QueryOp.WRITE
     );
 
     final var delete = client.prepare(
@@ -176,7 +179,8 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
             .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
             .where(DATA_KEY.relation().isEqualTo(bindMarker(DATA_KEY.bind())))
             .where(WINDOW_START.relation().isEqualTo(bindMarker(WINDOW_START.bind())))
-            .build()
+            .build(),
+        QueryOp.WRITE
     );
 
     final var fetchSingle = client.prepare(
@@ -188,7 +192,8 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
             .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
             .where(DATA_KEY.relation().isEqualTo(bindMarker(DATA_KEY.bind())))
             .where(WINDOW_START.relation().isEqualTo(bindMarker(WINDOW_START.bind())))
-            .build()
+            .build(),
+        QueryOp.READ
     );
 
     final var fetch = client.prepare(
@@ -201,7 +206,8 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
             .where(DATA_KEY.relation().isEqualTo(bindMarker(DATA_KEY.bind())))
             .where(WINDOW_START.relation().isGreaterThanOrEqualTo(bindMarker(WINDOW_FROM_BIND)))
             .where(WINDOW_START.relation().isLessThan(bindMarker(WINDOW_TO_BIND)))
-            .build()
+            .build(),
+        QueryOp.READ
     );
 
     final var fetchRange = client.prepare(
@@ -213,7 +219,8 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
             .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
             .where(DATA_KEY.relation().isGreaterThan(bindMarker(KEY_FROM_BIND)))
             .where(DATA_KEY.relation().isLessThan(bindMarker(KEY_TO_BIND)))
-            .build()
+            .build(),
+        QueryOp.READ
     );
 
     final var fetchAll = client.prepare(
@@ -223,7 +230,8 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
             .where(SEGMENT_ID.relation().isEqualTo(bindMarker(SEGMENT_ID.bind())))
             .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
-            .build()
+            .build(),
+        QueryOp.READ
     );
 
     final var backFetch = client.prepare(
@@ -238,7 +246,8 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
             .where(WINDOW_START.relation().isLessThan(bindMarker(WINDOW_TO_BIND)))
             .orderBy(DATA_KEY.column(), ClusteringOrder.DESC)
             .orderBy(WINDOW_START.column(), ClusteringOrder.DESC)
-            .build()
+            .build(),
+        QueryOp.READ
     );
 
     final var backFetchRange = client.prepare(
@@ -252,7 +261,8 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
             .where(DATA_KEY.relation().isLessThan(bindMarker(KEY_TO_BIND)))
             .orderBy(DATA_KEY.column(), ClusteringOrder.DESC)
             .orderBy(WINDOW_START.column(), ClusteringOrder.DESC)
-            .build()
+            .build(),
+        QueryOp.READ
     );
 
     final var backFetchAll = client.prepare(
@@ -264,7 +274,8 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
             .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
             .orderBy(DATA_KEY.column(), ClusteringOrder.DESC)
             .orderBy(WINDOW_START.column(), ClusteringOrder.DESC)
-            .build()
+            .build(),
+        QueryOp.READ
     );
 
     final var fetchOffset = client.prepare(
@@ -276,7 +287,8 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
             .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
             .where(WINDOW_START.relation().isEqualTo(WINDOW_START.literal(METADATA_TS)))
             .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
-            .build()
+            .build(),
+        QueryOp.READ
     );
 
     final var setOffset = client.prepare(
@@ -288,7 +300,8 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
             .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
             .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
             .where(WINDOW_START.relation().isEqualTo(WINDOW_START.literal(METADATA_TS)))
-            .build()
+            .build(),
+        QueryOp.WRITE
     );
 
     final var fetchStreamTime = client.prepare(
@@ -300,7 +313,8 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
             .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
             .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
             .where(WINDOW_START.relation().isEqualTo(WINDOW_START.literal(METADATA_TS)))
-            .build()
+            .build(),
+        QueryOp.READ
     );
 
     final var setStreamTime = client.prepare(
@@ -312,7 +326,8 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
             .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
             .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
             .where(WINDOW_START.relation().isEqualTo(WINDOW_START.literal(METADATA_TS)))
-            .build()
+            .build(),
+        QueryOp.WRITE
     );
 
     final var fetchEpoch = client.prepare(
@@ -324,7 +339,8 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
             .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
             .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
             .where(WINDOW_START.relation().isEqualTo(WINDOW_START.literal(METADATA_TS)))
-            .build()
+            .build(),
+        QueryOp.READ
     );
 
     final var reserveEpoch = client.prepare(
@@ -337,7 +353,8 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
             .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
             .where(WINDOW_START.relation().isEqualTo(WINDOW_START.literal(METADATA_TS)))
             .ifColumn(EPOCH.column()).isLessThan(bindMarker(EPOCH.bind()))
-            .build()
+            .build(),
+        QueryOp.WRITE
     );
 
     final var ensureEpoch = client.prepare(
@@ -350,7 +367,8 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
             .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
             .where(WINDOW_START.relation().isEqualTo(WINDOW_START.literal(METADATA_TS)))
             .ifColumn(EPOCH.column()).isEqualTo(bindMarker(EPOCH.bind()))
-            .build()
+            .build(),
+        QueryOp.WRITE
     );
 
     // TODO: consider how to refactor the spec-wrapping based table creation so we can

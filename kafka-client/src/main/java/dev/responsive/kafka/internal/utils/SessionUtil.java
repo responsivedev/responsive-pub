@@ -16,12 +16,14 @@
 
 package dev.responsive.kafka.internal.utils;
 
+import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.REQUEST_CONSISTENCY;
 import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.REQUEST_THROTTLER_CLASS;
 import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.REQUEST_THROTTLER_MAX_CONCURRENT_REQUESTS;
 import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.REQUEST_THROTTLER_MAX_QUEUE_SIZE;
 import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.REQUEST_TIMEOUT;
 import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.RETRY_POLICY_CLASS;
 
+import com.datastax.oss.driver.api.core.ConsistencyLevel;
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.CqlSessionBuilder;
 import com.datastax.oss.driver.api.core.config.DriverConfigLoader;
@@ -80,6 +82,7 @@ public final class SessionUtil {
             // cause a rebalance
             .withInt(REQUEST_THROTTLER_MAX_QUEUE_SIZE, Integer.MAX_VALUE)
             .withInt(REQUEST_THROTTLER_MAX_CONCURRENT_REQUESTS, maxConcurrentRequests)
+            .withString(REQUEST_CONSISTENCY, ConsistencyLevel.QUORUM.name())
             .build())
         .withKeyspace(keyspace)
         .build();

@@ -18,9 +18,12 @@ package dev.responsive.kafka.api.config;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.between;
 
+import com.datastax.oss.driver.api.core.ConsistencyLevel;
+import com.datastax.oss.driver.api.core.DefaultConsistencyLevel;
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.internal.db.partitioning.Murmur3Hasher;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.Map;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -93,6 +96,16 @@ public class ResponsiveConfig extends AbstractConfig {
 
   public static final String METRICS_SECRET_CONFIG = "responsive.metrics.secret";
   private static final String METRICS_SECRET_DOC = "The Secret provided for Metrics access.";
+
+  // ------------------ cassandra configurations ------------------------------
+
+  public static final String READ_CONSISTENCY_LEVEL_CONFIG = "responsive.cassandra.consistency.reads";
+  private static final String READ_CONSISTENCY_LEVEL_DEFAULT = ConsistencyLevel.QUORUM.name();
+  private static final String READ_CONSISTENCY_LEVEL_DOC = "The consistency level to set for reads";
+
+  public static final String WRITE_CONSISTENCY_LEVEL_CONFIG = "responsive.cassandra.consistency.writes";
+  private static final String WRITE_CONSISTENCY_LEVEL_DEFAULT = ConsistencyLevel.QUORUM.name();
+  private static final String WRITE_CONSISTENCY_LEVEL_DOC = "The consistency level to set for writes";
 
   // ------------------ request configurations --------------------------------
 
@@ -402,6 +415,26 @@ public class ResponsiveConfig extends AbstractConfig {
           WINDOW_BLOOM_FILTER_FPP_DEFAULT,
           Importance.LOW,
           WINDOW_BLOOM_FILTER_FPP_DOC
+      ).define(
+          READ_CONSISTENCY_LEVEL_CONFIG,
+          Type.STRING,
+          READ_CONSISTENCY_LEVEL_DEFAULT,
+          ConfigDef.CaseInsensitiveValidString.in(
+              Arrays.stream(DefaultConsistencyLevel.values())
+                  .map(Enum::name)
+                  .toArray(String[]::new)),
+          Importance.MEDIUM,
+          READ_CONSISTENCY_LEVEL_DOC
+      ).define(
+          WRITE_CONSISTENCY_LEVEL_CONFIG,
+          Type.STRING,
+          WRITE_CONSISTENCY_LEVEL_DEFAULT,
+          ConfigDef.CaseInsensitiveValidString.in(
+              Arrays.stream(DefaultConsistencyLevel.values())
+                  .map(Enum::name)
+                  .toArray(String[]::new)),
+          Importance.MEDIUM,
+          WRITE_CONSISTENCY_LEVEL_DOC
       );
 
   /**
