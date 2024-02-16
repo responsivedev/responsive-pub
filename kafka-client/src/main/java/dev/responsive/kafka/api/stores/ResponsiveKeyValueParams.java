@@ -19,7 +19,6 @@ package dev.responsive.kafka.api.stores;
 import dev.responsive.kafka.internal.stores.SchemaTypes.KVSchema;
 import dev.responsive.kafka.internal.utils.TableName;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.Optional;
 import javax.annotation.Nullable;
 

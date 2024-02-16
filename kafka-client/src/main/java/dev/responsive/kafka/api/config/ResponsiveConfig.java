@@ -227,9 +227,9 @@ public class ResponsiveConfig extends AbstractConfig {
 
   public static final String RESPONSIVE_MODE = "responsive.mode";
   public static final String RESPONSIVE_MODE_DEFAULT = ResponsiveMode.RUN.name();
-  public static final String RESPONSIVE_MODE_DOC = "Determines the mode the Responsive application " +
-      "runs in. When set to RUN, runs the Kafka Streams app. When set to MIGRATE, runs app" +
-      " migration.";
+  public static final String RESPONSIVE_MODE_DOC = "Determines the mode the Responsive application "
+      + "runs in. When set to RUN, runs the Kafka Streams app. When set to MIGRATE, runs app"
+      + " migration.";
 
   // ------------------ StreamsConfig overrides ----------------------
 
