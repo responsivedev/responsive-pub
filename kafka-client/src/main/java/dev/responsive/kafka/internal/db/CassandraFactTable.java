@@ -107,7 +107,8 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
             .value(DATA_KEY.column(), bindMarker(DATA_KEY.bind()))
             .value(TIMESTAMP.column(), bindMarker(TIMESTAMP.bind()))
             .value(DATA_VALUE.column(), bindMarker(DATA_VALUE.bind()))
-            .build()
+            .build(),
+        QueryOp.WRITE
     );
 
     final var get = client.prepare(
@@ -120,7 +121,8 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
             // ALLOW FILTERING is OK b/c the query only scans one partition (it actually  only
             // returns a single value)
             .allowFiltering()
-            .build()
+            .build(),
+        QueryOp.READ
     );
 
     final var delete = client.prepare(
@@ -128,7 +130,8 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
             .deleteFrom(name)
             .where(ROW_TYPE.relation().isEqualTo(RowType.DATA_ROW.literal()))
             .where(DATA_KEY.relation().isEqualTo(bindMarker(DATA_KEY.bind())))
-            .build()
+            .build(),
+        QueryOp.WRITE
     );
 
     final var fetchOffset = client.prepare(
@@ -137,7 +140,8 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
             .column(OFFSET.column())
             .where(ROW_TYPE.relation().isEqualTo(RowType.METADATA_ROW.literal()))
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
-            .build()
+            .build(),
+        QueryOp.READ
     );
 
     final var setOffset = client.prepare(
@@ -146,7 +150,8 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
             .setColumn(OFFSET.column(), bindMarker(OFFSET.bind()))
             .where(ROW_TYPE.relation().isEqualTo(RowType.METADATA_ROW.literal()))
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
-            .build()
+            .build(),
+        QueryOp.WRITE
     );
 
     return new CassandraFactTable(

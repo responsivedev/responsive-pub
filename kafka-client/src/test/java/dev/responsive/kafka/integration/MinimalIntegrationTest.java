@@ -73,7 +73,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 public class MinimalIntegrationTest {
 
   @RegisterExtension
-  static ResponsiveExtension EXTENSION = new ResponsiveExtension(StorageBackend.MONGO_DB);
+  static ResponsiveExtension EXTENSION = new ResponsiveExtension(StorageBackend.CASSANDRA);
 
   private static final String INPUT_TOPIC = "input";
   private static final String OUTPUT_TOPIC = "output";
@@ -119,12 +119,16 @@ public class MinimalIntegrationTest {
     final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties);
     try (final ResponsiveKafkaStreams streams = buildStreams(properties)) {
       startAppAndAwaitRunning(Duration.ofSeconds(10), streams);
-      pipeInput(inputTopic(), 2, producer, System::currentTimeMillis, 0, 10, 0, 1);
+      for (int i = 0; i < 10000; i++) {
+        pipeInput(inputTopic(), 2, producer, System::currentTimeMillis, 0, 10, 0, 1);
+        Thread.sleep(100);
+      }
 
       final var kvs = readOutput(outputTopic(), 0, 20, true, properties);
       assertThat(
           kvs,
           hasItems(new KeyValue<>(0L, 10L), new KeyValue<>(1L, 10L)));
+
     }
   }
 
