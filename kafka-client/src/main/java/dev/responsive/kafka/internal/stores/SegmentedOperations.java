@@ -37,6 +37,7 @@ import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
 import dev.responsive.kafka.internal.utils.Iterators;
 import dev.responsive.kafka.internal.utils.Result;
 import dev.responsive.kafka.internal.utils.SessionClients;
+import dev.responsive.kafka.internal.utils.StoreUtil;
 import dev.responsive.kafka.internal.utils.TableName;
 import dev.responsive.kafka.internal.utils.WindowedKey;
 import java.util.Collection;
@@ -91,7 +92,13 @@ public class SegmentedOperations implements WindowOperations {
         context.taskId().partition()
     );
 
-    final SegmentPartitioner partitioner = SegmentPartitioner.create(params);
+    final SegmentPartitioner<WindowedKey> partitioner = new SegmentPartitioner<WindowedKey>(
+        params.retentionPeriod(),
+        StoreUtil.computeSegmentInterval(params.retentionPeriod(), params.numSegments()),
+        (WindowedKey k, final long segmentIntervalMs) -> {
+          return Long.max(0, k.windowStartMs / segmentIntervalMs);
+        }
+    );
 
     final RemoteWindowedTable<?> table;
     switch (sessionClients.storageBackend()) {
@@ -149,7 +156,7 @@ public class SegmentedOperations implements WindowOperations {
   private static RemoteWindowedTable<?> createCassandra(
       final ResponsiveWindowParams params,
       final SessionClients clients,
-      final SegmentPartitioner partitioner
+      final SegmentPartitioner<WindowedKey> partitioner
   ) throws InterruptedException, TimeoutException {
     final CassandraClient client = clients.cassandraClient();
 
@@ -168,7 +175,7 @@ public class SegmentedOperations implements WindowOperations {
   private static RemoteWindowedTable<?> createMongo(
       final ResponsiveWindowParams params,
       final SessionClients clients,
-      final SegmentPartitioner partitioner
+      final SegmentPartitioner<WindowedKey> partitioner
   ) throws InterruptedException, TimeoutException {
     final ResponsiveMongoClient client = clients.mongoClient();
 
@@ -224,7 +231,7 @@ public class SegmentedOperations implements WindowOperations {
   public byte[] fetch(final Bytes key, final long windowStartTime) {
     final WindowedKey windowedKey = new WindowedKey(key, windowStartTime);
     final Result<WindowedKey> localResult = buffer.get(windowedKey);
-    if (localResult != null)  {
+    if (localResult != null) {
       return localResult.isTombstone ? null : localResult.value;
     }
 

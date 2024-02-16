@@ -21,11 +21,11 @@ import static java.util.Collections.emptyList;
 import dev.responsive.kafka.api.stores.ResponsiveWindowParams;
 import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.SegmentPartition;
 import dev.responsive.kafka.internal.utils.StoreUtil;
-import dev.responsive.kafka.internal.utils.WindowedKey;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
+import javax.swing.text.Segment;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -80,7 +80,7 @@ import org.slf4j.LoggerFactory;
  * For the time being, we simply recommend that users configure the number of segments
  * similarly to how they would configure the number of sub-partitions for a key-value store.
  */
-public class SegmentPartitioner implements TablePartitioner<WindowedKey, SegmentPartition> {
+public class SegmentPartitioner<K> implements TablePartitioner<K, SegmentPartition> {
 
   private static final Logger LOG = LoggerFactory.getLogger(SegmentPartitioner.class);
 
@@ -90,9 +90,7 @@ public class SegmentPartitioner implements TablePartitioner<WindowedKey, Segment
   private final long retentionPeriodMs;
   private final long segmentIntervalMs;
 
-  // TODO: partitioner doesn't actually need the window size, we just pass it to the table this way
-  //  We should find a better way to pass parameters from the StateStore to the RemoteTable
-  private final long windowSizeMs;
+  private final SegmentIdCalculation<K> computeSegmentId;
 
   public static class SegmentPartition {
     public final int tablePartition;
@@ -136,36 +134,34 @@ public class SegmentPartitioner implements TablePartitioner<WindowedKey, Segment
     }
   }
 
-  public static SegmentPartitioner create(
-      final ResponsiveWindowParams params
-  ) {
-    final long segmentInterval =
-        StoreUtil.computeSegmentInterval(params.retentionPeriod(), params.numSegments());
-    return new SegmentPartitioner(params.retentionPeriod(), segmentInterval, params.windowSize());
-  }
-
   public SegmentPartitioner(
       final long retentionPeriodMs,
       final long segmentIntervalMs,
-      final long windowSizeMs
+      final SegmentIdCalculation<K> computeSegmentId
   ) {
     this.retentionPeriodMs = retentionPeriodMs;
     this.segmentIntervalMs = segmentIntervalMs;
-    this.windowSizeMs = windowSizeMs;
-    if (retentionPeriodMs <= 0L || segmentIntervalMs <= 0L || windowSizeMs <= 0L) {
+    this.computeSegmentId = computeSegmentId;
+    if (retentionPeriodMs <= 0L || segmentIntervalMs <= 0L) {
       LOG.error("Segment values should all be positive, got retentionPeriod={}ms, "
-                    + "segmentInterval={}ms, and windowSize={}ms",
-                retentionPeriodMs, segmentIntervalMs, windowSizeMs);
+          + "segmentInterval={}ms", retentionPeriodMs, segmentIntervalMs
+      );
       throw new IllegalStateException("Segment partitioner received a negative or zero value");
     }
 
-    LOG.info("Created segment partitioner with retentionPeriod={}ms, segmentInterval={}ms,"
-                 + " and windowSize={}ms", retentionPeriodMs, segmentIntervalMs, windowSizeMs);
+    LOG.info(
+        "Created segment partitioner with retentionPeriod={}ms, segmentInterval={}ms",
+        retentionPeriodMs,
+        segmentIntervalMs
+    );
   }
 
   @Override
-  public SegmentPartition tablePartition(final int kafkaPartition, final WindowedKey key) {
-    return new SegmentPartition(kafkaPartition, segmentId(key.windowStartMs));
+  public SegmentPartition tablePartition(final int kafkaPartition, final K key) {
+    return new SegmentPartition(
+        kafkaPartition,
+        this.computeSegmentId.apply(key, this.segmentIntervalMs)
+    );
   }
 
   @Override
@@ -181,7 +177,7 @@ public class SegmentPartitioner implements TablePartitioner<WindowedKey, Segment
    * Return all active segments for the given stream-time and retention period
    *
    * @param kafkaPartition the original partition in kafka
-   * @param streamTime       the lowest timestamp in the fetched range
+   * @param streamTime     the lowest timestamp in the fetched range
    * @return               all remote partitions for active segments of this kafka partition
    */
   public List<SegmentPartition> activeSegments(
@@ -258,7 +254,8 @@ public class SegmentPartitioner implements TablePartitioner<WindowedKey, Segment
       );
 
       LOG.info("Initializing stream-time for table {} to {}ms and creating segments: [{}-{}]",
-                 tableName, newStreamTime, newMinActiveSegment, newMaxActiveSegment);
+          tableName, newStreamTime, newMinActiveSegment, newMaxActiveSegment
+      );
 
       return new SegmentRoll(
           segmentsToExpire,
@@ -277,9 +274,10 @@ public class SegmentPartitioner implements TablePartitioner<WindowedKey, Segment
 
       if (newMinActiveSegment > oldMinActiveSegment) {
         LOG.info("{}[{}] Advancing stream-time from {}ms to {}ms and rolling segments with "
-                     + "expiredSegments: [{}-{}] and newSegments: [{}-{}]",
-                 tableName, kafkaPartition, oldStreamTime, newStreamTime, oldMinActiveSegment,
-                 newMinActiveSegment, oldMaxActiveSegment + 1, newMaxActiveSegment);
+                + "expiredSegments: [{}-{}] and newSegments: [{}-{}]",
+            tableName, kafkaPartition, oldStreamTime, newStreamTime, oldMinActiveSegment,
+            newMinActiveSegment, oldMaxActiveSegment + 1, newMaxActiveSegment
+        );
       }
       return new SegmentRoll(
           segmentsToExpire,
@@ -326,7 +324,13 @@ public class SegmentPartitioner implements TablePartitioner<WindowedKey, Segment
           : String.format("[%d-%d]", segmentsToCreate.get(0), segmentsToCreate.get(numCreated - 1));
 
       return String.format("SegmentRoll: expired segment(s)=%s, new segments(s)=%s",
-                           expired, created);
+          expired, created
+      );
     }
+  }
+
+  @FunctionalInterface
+  public interface SegmentIdCalculation<K> {
+    long apply(K key, final long segmentIntervalMs);
   }
 }
