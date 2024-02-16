@@ -225,6 +225,12 @@ public class ResponsiveConfig extends AbstractConfig {
       + "lookups but requires more heap memory";
 
 
+  public static final String RESPONSIVE_MODE = "responsive.mode";
+  public static final String RESPONSIVE_MODE_DEFAULT = ResponsiveMode.RUN.name();
+  public static final String RESPONSIVE_MODE_DOC = "Determines the mode the Responsive application " +
+      "runs in. When set to RUN, runs the Kafka Streams app. When set to MIGRATE, runs app" +
+      " migration.";
+
   // ------------------ StreamsConfig overrides ----------------------
 
   // These configuration values are required by Responsive, and a ConfigException will
@@ -435,6 +441,17 @@ public class ResponsiveConfig extends AbstractConfig {
                   .toArray(String[]::new)),
           Importance.MEDIUM,
           WRITE_CONSISTENCY_LEVEL_DOC
+      ).define(
+          RESPONSIVE_MODE,
+          Type.STRING,
+          RESPONSIVE_MODE_DEFAULT,
+          ConfigDef.CaseInsensitiveValidString.in(
+              Arrays.stream(ResponsiveMode.values())
+                  .map(Enum::name)
+                  .toArray(String[]::new)
+          ),
+          Importance.LOW,
+          RESPONSIVE_MODE_DOC
       );
 
   /**
