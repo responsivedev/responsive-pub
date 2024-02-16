@@ -108,7 +108,8 @@ public class CassandraFactTable implements RemoteKVTable {
             .value(DATA_KEY.column(), bindMarker(DATA_KEY.bind()))
             .value(TIMESTAMP.column(), bindMarker(TIMESTAMP.bind()))
             .value(DATA_VALUE.column(), bindMarker(DATA_VALUE.bind()))
-            .build()
+            .build(),
+        QueryOp.WRITE
     );
 
     final var get = client.prepare(
@@ -121,7 +122,8 @@ public class CassandraFactTable implements RemoteKVTable {
             // ALLOW FILTERING is OK b/c the query only scans one partition (it actually  only
             // returns a single value)
             .allowFiltering()
-            .build()
+            .build(),
+        QueryOp.READ
     );
 
     final var delete = client.prepare(
@@ -129,7 +131,8 @@ public class CassandraFactTable implements RemoteKVTable {
             .deleteFrom(name)
             .where(ROW_TYPE.relation().isEqualTo(RowType.DATA_ROW.literal()))
             .where(DATA_KEY.relation().isEqualTo(bindMarker(DATA_KEY.bind())))
-            .build()
+            .build(),
+        QueryOp.WRITE
     );
 
     final var getMeta = client.prepare(
@@ -138,7 +141,8 @@ public class CassandraFactTable implements RemoteKVTable {
             .column(OFFSET.column())
             .where(ROW_TYPE.relation().isEqualTo(RowType.METADATA_ROW.literal()))
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
-            .build()
+            .build(),
+        QueryOp.READ
     );
 
     final var setOffset = client.prepare(
@@ -147,7 +151,8 @@ public class CassandraFactTable implements RemoteKVTable {
             .setColumn(OFFSET.column(), bindMarker(OFFSET.bind()))
             .where(ROW_TYPE.relation().isEqualTo(RowType.METADATA_ROW.literal()))
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
-            .build()
+            .build(),
+        QueryOp.WRITE
     );
 
     return new CassandraFactTable(

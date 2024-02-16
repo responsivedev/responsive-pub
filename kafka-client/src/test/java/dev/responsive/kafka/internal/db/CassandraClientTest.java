@@ -19,11 +19,11 @@ package dev.responsive.kafka.internal.db;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.mockito.Mockito.when;
 
+import com.datastax.oss.driver.api.core.ConsistencyLevel;
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.cql.SimpleStatement;
 import com.datastax.oss.driver.api.core.cql.Statement;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
-import dev.responsive.kafka.internal.db.CassandraClient;
 import java.util.Map;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
@@ -60,6 +60,92 @@ class CassandraClientTest {
     // Then:
     final Statement<?> value = statementCaptor.getValue();
     assertThat(value.isIdempotent(), Matchers.is(true));
+  }
+
+  @Test
+  public void shouldDefaultReadConsistencyToQuorum() {
+    // Given:
+    final CassandraClient client = new CassandraClient(
+        session,
+        ResponsiveConfig.loggedConfig(Map.of(
+            ResponsiveConfig.TENANT_ID_CONFIG, "ignored",
+            ResponsiveConfig.STORAGE_HOSTNAME_CONFIG, "ignored",
+            ResponsiveConfig.STORAGE_PORT_CONFIG, 0
+        ))
+    );
+    when(session.prepare((SimpleStatement) statementCaptor.capture())).thenReturn(null);
+
+    // When:
+    client.prepare(SimpleStatement.newInstance("SELECT * FROM foo;"), QueryOp.READ);
+
+    // Then:
+    final Statement<?> value = statementCaptor.getValue();
+    assertThat(value.getConsistencyLevel(), Matchers.is(ConsistencyLevel.QUORUM));
+  }
+
+  @Test
+  public void shouldDefaultWriteConsistencyToQuorum() {
+    // Given:
+    final CassandraClient client = new CassandraClient(
+        session,
+        ResponsiveConfig.loggedConfig(Map.of(
+            ResponsiveConfig.TENANT_ID_CONFIG, "ignored",
+            ResponsiveConfig.STORAGE_HOSTNAME_CONFIG, "ignored",
+            ResponsiveConfig.STORAGE_PORT_CONFIG, 0
+        ))
+    );
+    when(session.prepare((SimpleStatement) statementCaptor.capture())).thenReturn(null);
+
+    // When:
+    client.prepare(SimpleStatement.newInstance("INSERT INTO foo (id) VALUES (1);"), QueryOp.WRITE);
+
+    // Then:
+    final Statement<?> value = statementCaptor.getValue();
+    assertThat(value.getConsistencyLevel(), Matchers.is(ConsistencyLevel.QUORUM));
+  }
+
+  @Test
+  public void shouldOverwriteConsistencyLevelsIfConfigIsSetForRead() {
+    // Given:
+    final CassandraClient client = new CassandraClient(
+        session,
+        ResponsiveConfig.loggedConfig(Map.of(
+            ResponsiveConfig.TENANT_ID_CONFIG, "ignored",
+            ResponsiveConfig.STORAGE_HOSTNAME_CONFIG, "ignored",
+            ResponsiveConfig.STORAGE_PORT_CONFIG, 0,
+            ResponsiveConfig.READ_CONSISTENCY_LEVEL_CONFIG, "ALL"
+        ))
+    );
+    when(session.prepare((SimpleStatement) statementCaptor.capture())).thenReturn(null);
+
+    // When:
+    client.prepare(SimpleStatement.newInstance("SELECT * FROM foo;"), QueryOp.READ);
+
+    // Then:
+    final Statement<?> value = statementCaptor.getValue();
+    assertThat(value.getConsistencyLevel(), Matchers.is(ConsistencyLevel.ALL));
+  }
+
+  @Test
+  public void shouldOverwriteConsistencyLevelsIfConfigIsSetForWrite() {
+    // Given:
+    final CassandraClient client = new CassandraClient(
+        session,
+        ResponsiveConfig.loggedConfig(Map.of(
+            ResponsiveConfig.TENANT_ID_CONFIG, "ignored",
+            ResponsiveConfig.STORAGE_HOSTNAME_CONFIG, "ignored",
+            ResponsiveConfig.STORAGE_PORT_CONFIG, 0,
+            ResponsiveConfig.WRITE_CONSISTENCY_LEVEL_CONFIG, "ALL"
+        ))
+    );
+    when(session.prepare((SimpleStatement) statementCaptor.capture())).thenReturn(null);
+
+    // When:
+    client.prepare(SimpleStatement.newInstance("INSERT INTO foo (id) VALUES (1);"), QueryOp.WRITE);
+
+    // Then:
+    final Statement<?> value = statementCaptor.getValue();
+    assertThat(value.getConsistencyLevel(), Matchers.is(ConsistencyLevel.ALL));
   }
 
 }

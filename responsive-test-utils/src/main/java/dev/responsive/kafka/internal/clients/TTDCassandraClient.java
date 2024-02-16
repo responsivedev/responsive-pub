@@ -24,6 +24,7 @@ import com.datastax.oss.driver.api.core.cql.ResultSet;
 import com.datastax.oss.driver.api.core.cql.SimpleStatement;
 import com.datastax.oss.driver.api.core.cql.Statement;
 import dev.responsive.kafka.internal.db.CassandraClient;
+import dev.responsive.kafka.internal.db.QueryOp;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.RemoteWindowedTable;
 import dev.responsive.kafka.internal.db.TableCache;
@@ -91,7 +92,7 @@ public class TTDCassandraClient extends CassandraClient {
   }
 
   @Override
-  public PreparedStatement prepare(final SimpleStatement statement) {
+  public PreparedStatement prepare(final SimpleStatement statement, final QueryOp operation) {
     throw new UnsupportedOperationException("Unexpected method call on TTD stub client");
   }
 
