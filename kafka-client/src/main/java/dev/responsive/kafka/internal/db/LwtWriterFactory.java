@@ -201,7 +201,8 @@ public class LwtWriterFactory<K> implements WriterFactory<K> {
             .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
             .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
             .ifColumn(EPOCH.column()).isEqualTo(EPOCH.literal(epoch))
-            .build()
+            .build(),
+        QueryOp.WRITE
     );
   }
 
@@ -218,7 +219,8 @@ public class LwtWriterFactory<K> implements WriterFactory<K> {
             .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
             .where(WINDOW_START.relation().isEqualTo(WINDOW_START.literal(0L)))
             .ifColumn(EPOCH.column()).isEqualTo(EPOCH.literal(epoch))
-            .build()
+            .build(),
+        QueryOp.WRITE
     );
   }
 }

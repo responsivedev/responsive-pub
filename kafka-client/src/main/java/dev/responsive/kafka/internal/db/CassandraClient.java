@@ -19,6 +19,7 @@ package dev.responsive.kafka.internal.db;
 import static dev.responsive.kafka.internal.db.ColumnName.PARTITION_KEY;
 
 import com.datastax.oss.driver.api.core.CqlSession;
+import com.datastax.oss.driver.api.core.DefaultConsistencyLevel;
 import com.datastax.oss.driver.api.core.cql.AsyncResultSet;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
 import com.datastax.oss.driver.api.core.cql.ResultSet;
@@ -28,6 +29,7 @@ import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.utils.RemoteMonitor;
 import java.time.Duration;
+import java.util.Locale;
 import java.util.OptionalInt;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ScheduledExecutorService;
@@ -94,7 +96,27 @@ public class CassandraClient {
     return session.executeAsync(statement.setIdempotent(true));
   }
 
-  public PreparedStatement prepare(final SimpleStatement statement) {
+  public PreparedStatement prepare(final SimpleStatement statement, final QueryOp operation) {
+    switch (operation) {
+      case READ:
+        final String readCL = config.getString(ResponsiveConfig.READ_CONSISTENCY_LEVEL_CONFIG);
+        if (readCL != null) {
+          return session.prepare(statement.setConsistencyLevel(
+              DefaultConsistencyLevel.valueOf(readCL.toUpperCase(Locale.ROOT)))
+          );
+        }
+        break;
+      case WRITE:
+        final String writeCl = config.getString(ResponsiveConfig.WRITE_CONSISTENCY_LEVEL_CONFIG);
+        if (writeCl != null) {
+          return session.prepare(statement.setConsistencyLevel(
+              DefaultConsistencyLevel.valueOf(writeCl.toUpperCase(Locale.ROOT)))
+          );
+        }
+        break;
+      default:
+        throw new IllegalArgumentException("Unexpected query operation " + operation);
+    }
     return session.prepare(statement);
   }
 
