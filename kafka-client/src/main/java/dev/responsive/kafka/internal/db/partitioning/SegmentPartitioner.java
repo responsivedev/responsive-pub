@@ -18,14 +18,11 @@ package dev.responsive.kafka.internal.db.partitioning;
 
 import static java.util.Collections.emptyList;
 
-import dev.responsive.kafka.api.stores.ResponsiveWindowParams;
 import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.SegmentPartition;
-import dev.responsive.kafka.internal.utils.StoreUtil;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
-import javax.swing.text.Segment;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
