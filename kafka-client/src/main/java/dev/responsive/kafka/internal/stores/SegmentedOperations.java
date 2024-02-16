@@ -94,10 +94,7 @@ public class SegmentedOperations implements WindowOperations {
 
     final SegmentPartitioner<WindowedKey> partitioner = new SegmentPartitioner<WindowedKey>(
         params.retentionPeriod(),
-        StoreUtil.computeSegmentInterval(params.retentionPeriod(), params.numSegments()),
-        (WindowedKey k, final long segmentIntervalMs) -> {
-          return Long.max(0, k.windowStartMs / segmentIntervalMs);
-        }
+        StoreUtil.computeSegmentInterval(params.retentionPeriod(), params.numSegments())
     );
 
     final RemoteWindowedTable<?> table;

@@ -49,6 +49,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import javax.swing.text.Segment;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.TaskMigratedException;
@@ -67,7 +68,7 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
   private static final UpdateOptions UPSERT_OPTIONS = new UpdateOptions().upsert(true);
 
   private final String name;
-  private final SegmentPartitioner partitioner;
+  private final SegmentPartitioner<WindowedKey> partitioner;
 
   // whether to put windowStartMs first in the composite windowed key format in WindowDoc
   private final boolean timestampFirstOrder;
@@ -82,7 +83,7 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
   private static class PartitionSegments {
     private final MongoDatabase database;
     private final MongoDatabase adminDatabase;
-    private final SegmentPartitioner partitioner;
+    private final SegmentPartitioner<WindowedKey> partitioner;
     private final long epoch;
     private final CollectionCreationOptions collectionCreationOptions;
 
@@ -93,7 +94,7 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
     public PartitionSegments(
         final MongoDatabase database,
         final MongoDatabase adminDatabase,
-        final SegmentPartitioner partitioner,
+        final SegmentPartitioner<WindowedKey> partitioner,
         final int kafkaPartition,
         final long streamTime,
         final long epoch,
@@ -106,7 +107,8 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
       this.collectionCreationOptions = collectionCreationOptions;
       this.segmentWindows = new ConcurrentHashMap<>();
 
-      final var activeSegments = partitioner.activeSegments(kafkaPartition, streamTime);
+      final List<SegmentPartition> activeSegments =
+          partitioner.activeSegments(kafkaPartition, streamTime);
       if (activeSegments.isEmpty()) {
         LOG.info("{}[{}] No active segments for initial streamTime {}",
                  database.getName(), kafkaPartition, streamTime);
@@ -178,7 +180,7 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
   public MongoWindowedTable(
       final MongoClient client,
       final String name,
-      final SegmentPartitioner partitioner,
+      final SegmentPartitioner<WindowedKey> partitioner,
       final boolean timestampFirstOrder,
       final CollectionCreationOptions collectionCreationOptions
   ) {

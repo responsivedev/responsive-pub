@@ -25,13 +25,13 @@ import dev.responsive.kafka.internal.utils.WindowedKey;
 public abstract class WindowFlushManager implements FlushManager<WindowedKey, SegmentPartition> {
 
   private final int kafkaPartition;
-  private final SegmentPartitioner partitioner;
+  private final SegmentPartitioner<WindowedKey> partitioner;
   private final PendingFlushSegmentMetadata pendingFlushSegmentMetadata;
 
   public WindowFlushManager(
       final String tableName,
       final int kafkaPartition,
-      final SegmentPartitioner partitioner,
+      final SegmentPartitioner<WindowedKey> partitioner,
       final long streamTime
   ) {
     this.kafkaPartition = kafkaPartition;

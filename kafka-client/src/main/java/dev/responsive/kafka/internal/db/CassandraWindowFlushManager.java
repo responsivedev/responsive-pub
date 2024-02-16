@@ -42,7 +42,7 @@ public class CassandraWindowFlushManager extends WindowFlushManager {
   public CassandraWindowFlushManager(
       final CassandraWindowedTable table,
       final CassandraClient client,
-      final SegmentPartitioner partitioner,
+      final SegmentPartitioner<WindowedKey> partitioner,
       final int kafkaPartition,
       final long epoch,
       final long streamTime

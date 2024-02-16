@@ -18,6 +18,7 @@ package dev.responsive.kafka.internal.db.partitioning;
 
 import static java.util.Collections.emptyList;
 
+import dev.responsive.kafka.internal.db.TimePartitionableKey;
 import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.SegmentPartition;
 import java.util.Collections;
 import java.util.List;
@@ -77,7 +78,8 @@ import org.slf4j.LoggerFactory;
  * For the time being, we simply recommend that users configure the number of segments
  * similarly to how they would configure the number of sub-partitions for a key-value store.
  */
-public class SegmentPartitioner<K> implements TablePartitioner<K, SegmentPartition> {
+public class SegmentPartitioner<K extends TimePartitionableKey<K>>
+    implements TablePartitioner<K, SegmentPartition> {
 
   private static final Logger LOG = LoggerFactory.getLogger(SegmentPartitioner.class);
 
@@ -86,8 +88,6 @@ public class SegmentPartitioner<K> implements TablePartitioner<K, SegmentPartiti
 
   private final long retentionPeriodMs;
   private final long segmentIntervalMs;
-
-  private final SegmentIdCalculation<K> computeSegmentId;
 
   public static class SegmentPartition {
     public final int tablePartition;
@@ -133,12 +133,10 @@ public class SegmentPartitioner<K> implements TablePartitioner<K, SegmentPartiti
 
   public SegmentPartitioner(
       final long retentionPeriodMs,
-      final long segmentIntervalMs,
-      final SegmentIdCalculation<K> computeSegmentId
+      final long segmentIntervalMs
   ) {
     this.retentionPeriodMs = retentionPeriodMs;
     this.segmentIntervalMs = segmentIntervalMs;
-    this.computeSegmentId = computeSegmentId;
     if (retentionPeriodMs <= 0L || segmentIntervalMs <= 0L) {
       LOG.error("Segment values should all be positive, got retentionPeriod={}ms, "
           + "segmentInterval={}ms", retentionPeriodMs, segmentIntervalMs
@@ -157,7 +155,7 @@ public class SegmentPartitioner<K> implements TablePartitioner<K, SegmentPartiti
   public SegmentPartition tablePartition(final int kafkaPartition, final K key) {
     return new SegmentPartition(
         kafkaPartition,
-        this.computeSegmentId.apply(key, this.segmentIntervalMs)
+        segmentId(key.getPartitionTimestamp())
     );
   }
 
@@ -324,10 +322,5 @@ public class SegmentPartitioner<K> implements TablePartitioner<K, SegmentPartiti
           expired, created
       );
     }
-  }
-
-  @FunctionalInterface
-  public interface SegmentIdCalculation<K> {
-    long apply(K key, final long segmentIntervalMs);
   }
 }

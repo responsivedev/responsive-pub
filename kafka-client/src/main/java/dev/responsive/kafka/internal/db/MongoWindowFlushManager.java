@@ -42,13 +42,13 @@ public class MongoWindowFlushManager extends WindowFlushManager {
   private final MongoWindowedTable table;
   private final Function<SegmentPartition, MongoCollection<WindowDoc>> windowsForSegment;
 
-  private final SegmentPartitioner partitioner;
+  private final SegmentPartitioner<WindowedKey> partitioner;
   private final int kafkaPartition;
 
   public MongoWindowFlushManager(
       final MongoWindowedTable table,
       final Function<SegmentPartition, MongoCollection<WindowDoc>> windowsForSegment,
-      final SegmentPartitioner partitioner,
+      final SegmentPartitioner<WindowedKey> partitioner,
       final int kafkaPartition,
       final long streamTime
   ) {

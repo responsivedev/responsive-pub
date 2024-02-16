@@ -16,9 +16,10 @@
 
 package dev.responsive.kafka.internal.utils;
 
+import dev.responsive.kafka.internal.db.TimePartitionableKey;
 import org.apache.kafka.common.utils.Bytes;
 
-public class WindowedKey implements Comparable<WindowedKey> {
+public class WindowedKey implements TimePartitionableKey<WindowedKey> {
 
   public final Bytes key;
   public final long windowStartMs;
@@ -49,5 +50,10 @@ public class WindowedKey implements Comparable<WindowedKey> {
     } else {
       return Long.compare(this.windowStartMs, o.windowStartMs);
     }
+  }
+
+  @Override
+  public long getPartitionTimestamp() {
+    return this.windowStartMs;
   }
 }

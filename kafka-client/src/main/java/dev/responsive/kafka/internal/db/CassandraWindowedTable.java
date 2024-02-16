@@ -49,6 +49,7 @@ import dev.responsive.kafka.internal.db.spec.CassandraTableSpec;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
 import dev.responsive.kafka.internal.utils.Iterators;
 import dev.responsive.kafka.internal.utils.WindowedKey;
+import java.awt.Window;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.time.Instant;
@@ -75,7 +76,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
 
   private final String name;
   private final CassandraClient client;
-  private final SegmentPartitioner partitioner;
+  private final SegmentPartitioner<WindowedKey> partitioner;
 
   private final PreparedStatement createSegment;
   private final PreparedStatement expireSegment;
@@ -355,7 +356,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
 
     // TODO: consider how to refactor the spec-wrapping based table creation so we can
     //  directly pass in a partitioner of the expected type and don't have to cast
-    final SegmentPartitioner partitioner = (SegmentPartitioner) spec.partitioner();
+    final SegmentPartitioner<WindowedKey> partitioner = (SegmentPartitioner) spec.partitioner();
     return new CassandraWindowedTable(
         name,
         client,
@@ -400,7 +401,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
   public CassandraWindowedTable(
       final String name,
       final CassandraClient client,
-      final SegmentPartitioner partitioner,
+      final SegmentPartitioner<WindowedKey> partitioner,
       final PreparedStatement createSegment,
       final PreparedStatement expireSegment,
       final PreparedStatement insert,
@@ -488,7 +489,8 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
     // regular data partitions/segments and never expired
     // therefore we initialize from the metadata partition and then broadcast the epoch to
     // all the other partitions containing data for active segments
-    final var activeSegments = partitioner.activeSegments(kafkaPartition, streamTime);
+    final List<SegmentPartition> activeSegments =
+        partitioner.activeSegments(kafkaPartition, streamTime);
     if (activeSegments.isEmpty()) {
       LOG.info("Skipping reservation of epoch {} for kafka partition {} due to no active segments",
                epoch, kafkaPartition);
