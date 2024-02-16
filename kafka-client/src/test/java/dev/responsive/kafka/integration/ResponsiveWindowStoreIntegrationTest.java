@@ -138,7 +138,6 @@ public class ResponsiveWindowStoreIntegrationTest {
 
     final CountDownLatch finalLatch = new CountDownLatch(2);
     final KStream<Long, Long> input = builder.stream(inputTopic());
-    
     input
         .groupByKey()
         .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofSeconds(5), Duration.ofSeconds(1)))
@@ -149,8 +148,10 @@ public class ResponsiveWindowStoreIntegrationTest {
                 ResponsiveWindowParams.window(
                     name,
                     Duration.ofSeconds(5),
-                    Duration.ofSeconds(1))
-            ))
+                    Duration.ofSeconds(1)
+                )
+            )
+        )
         .toStream()
         .peek((k, v) -> {
           collect.put(k, v);
@@ -278,7 +279,8 @@ public class ResponsiveWindowStoreIntegrationTest {
                     windowSize,
                     gracePeriod
                 ).withNumSegments(numSegments)
-            ))
+            )
+        )
         .toStream()
         .peek((k, v) -> {
           results.put(k, v);
@@ -350,8 +352,10 @@ public class ResponsiveWindowStoreIntegrationTest {
                 ResponsiveWindowParams.window(
                     name,
                     windowSize,
-                    gracePeriod)
-            ))
+                    gracePeriod
+                )
+            )
+        )
         .toStream()
         .peek((k, v) -> {
           results.put(k, v);
@@ -419,7 +423,7 @@ public class ResponsiveWindowStoreIntegrationTest {
       }
     }
   }
-  
+
   //@Test
   public void shouldComputeWindowedJoinUsingRanges() throws InterruptedException {
     // Given:
@@ -433,7 +437,8 @@ public class ResponsiveWindowStoreIntegrationTest {
     final CountDownLatch latch1 = new CountDownLatch(2);
     final CountDownLatch latch2 = new CountDownLatch(2);
     final Duration windowSize = Duration.ofMillis(1000);
-    input.join(other,
+    input.join(
+            other,
             (v1, v2) -> {
               System.out.println("Joining: " + v1 + ", " + v2);
               return (v1 << Integer.SIZE) | v2;
@@ -444,7 +449,8 @@ public class ResponsiveWindowStoreIntegrationTest {
                     "input" + name, windowSize, windowSize, true),
                 ResponsiveStores.windowStoreSupplier(
                     "other" + name, windowSize, windowSize, true)
-            ))
+            )
+        )
         .peek((k, v) -> {
           collect.computeIfAbsent(k, old -> new ArrayBlockingQueue<>(10)).add(v);
           if (v.intValue() == 1) {
