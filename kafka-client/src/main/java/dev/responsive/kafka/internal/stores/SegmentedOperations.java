@@ -161,7 +161,7 @@ public class SegmentedOperations implements WindowOperations {
 
     switch (params.schemaType()) {
       case WINDOW:
-        return client.windowedFactory().create(spec);
+        return client.windowedFactory().create(spec, partitioner);
       case STREAM:
         throw new UnsupportedOperationException("Not yet implemented");
       default:

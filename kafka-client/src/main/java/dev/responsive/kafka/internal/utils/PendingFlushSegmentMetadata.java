@@ -77,7 +77,7 @@ public class PendingFlushSegmentMetadata {
     batchStreamTime = Math.max(batchStreamTime, recordTimestamp);
   }
 
-  public SegmentRoll prepareRoll(final SegmentPartitioner partitioner) {
+  public SegmentRoll prepareRoll(final SegmentPartitioner<?> partitioner) {
     if (batchSegmentRoll != null) {
       log.error("Attempted to prepare flush while active flush was ongoing "
                     + "(persistedStreamTime={}, batchStreamTime={})",

@@ -99,7 +99,8 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
 
   public static CassandraWindowedTable create(
       final CassandraTableSpec spec,
-      final CassandraClient client
+      final CassandraClient client,
+      final SegmentPartitioner<WindowedKey> partitioner
   ) throws InterruptedException, TimeoutException {
     final String name = spec.tableName();
 
@@ -354,9 +355,6 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
             .build()
     );
 
-    // TODO: consider how to refactor the spec-wrapping based table creation so we can
-    //  directly pass in a partitioner of the expected type and don't have to cast
-    final SegmentPartitioner<WindowedKey> partitioner = (SegmentPartitioner) spec.partitioner();
     return new CassandraWindowedTable(
         name,
         client,

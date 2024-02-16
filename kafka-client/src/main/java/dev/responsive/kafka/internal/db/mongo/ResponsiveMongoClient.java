@@ -18,6 +18,7 @@ package dev.responsive.kafka.internal.db.mongo;
 
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.model.WriteModel;
+import dev.responsive.kafka.internal.db.WindowedTableCache;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.RemoteWindowedTable;
 import dev.responsive.kafka.internal.db.TableCache;
@@ -30,7 +31,7 @@ import java.util.concurrent.TimeoutException;
 public class ResponsiveMongoClient {
 
   private final TableCache<MongoKVTable> kvTableCache;
-  private final TableCache<MongoWindowedTable> windowTableCache;
+  private final WindowedTableCache<MongoWindowedTable> windowTableCache;
   private final MongoClient client;
 
   public ResponsiveMongoClient(
@@ -45,11 +46,11 @@ public class ResponsiveMongoClient {
             spec.tableName(),
             collectionCreationOptions
         ));
-    windowTableCache = new TableCache<>(
-        spec -> new MongoWindowedTable(
+    windowTableCache = new WindowedTableCache<>(
+        (spec, partitioner) -> new MongoWindowedTable(
             client,
             spec.tableName(),
-            (SegmentPartitioner<WindowedKey>) spec.partitioner(),
+            partitioner,
             timestampFirstOrder,
             collectionCreationOptions
         )
@@ -65,7 +66,7 @@ public class ResponsiveMongoClient {
       final String name,
       final SegmentPartitioner<WindowedKey> partitioner
   ) throws InterruptedException, TimeoutException {
-    return windowTableCache.create(new BaseTableSpec(name, partitioner));
+    return windowTableCache.create(new BaseTableSpec(name, partitioner), partitioner);
   }
 
   public void close() {
