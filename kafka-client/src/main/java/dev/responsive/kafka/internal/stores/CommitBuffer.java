@@ -57,6 +57,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
@@ -370,7 +371,9 @@ public class CommitBuffer<K extends Comparable<K>, P>
   ) {
     return Iterators.kv(
         Iterators.filter(
-            buffer.getReader().entrySet().iterator(),
+            // make a full copy to avoid concurrent mod exceptions
+            // we can worry about performance for all() some other time
+            new TreeMap<>(buffer.getReader()).entrySet().iterator(),
             e -> keySpec.retain(e.getKey())
         ),
         result -> new KeyValue<>(result.getKey(), result.getValue())
@@ -382,7 +385,9 @@ public class CommitBuffer<K extends Comparable<K>, P>
   ) {
     return Iterators.kv(
         Iterators.filter(
-            buffer.getReader().entrySet().iterator(),
+            // make a full copy to avoid concurrent mod exceptions
+            // we can worry about performance for all() some other time
+            new TreeMap<>(buffer.getReader()).entrySet().iterator(),
             kv -> keySpec.retain(kv.getKey()) && filter.test(kv.getValue())),
         result -> new KeyValue<>(result.getKey(), result.getValue())
     );
@@ -393,7 +398,7 @@ public class CommitBuffer<K extends Comparable<K>, P>
   ) {
     return Iterators.kv(
         Iterators.filter(
-            buffer.getReader().descendingMap().entrySet().iterator(),
+            new TreeMap<>(buffer.getReader()).descendingMap().entrySet().iterator(),
             kv -> keySpec.retain(kv.getKey()) && filter.test(kv.getKey())),
         result -> new KeyValue<>(result.getKey(), result.getValue())
     );

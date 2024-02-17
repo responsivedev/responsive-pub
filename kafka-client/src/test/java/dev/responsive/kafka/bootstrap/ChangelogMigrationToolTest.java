@@ -36,10 +36,10 @@ import static org.apache.kafka.streams.StreamsConfig.STATESTORE_CACHE_MAX_BYTES_
 import static org.apache.kafka.streams.StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.hasItems;
 
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.config.StorageBackend;
+import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
 import java.time.Duration;
@@ -48,28 +48,40 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.function.Consumer;
+import java.util.stream.LongStream;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.state.QueryableStoreTypes;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.Stores;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.RegisterExtension;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 // this test can be run manually to verify Cluster Bootstrapping behavior
 @Disabled
 class ChangelogMigrationToolTest {
+
+  private static final Logger LOG = LoggerFactory.getLogger(ChangelogMigrationToolTest.class);
 
   @RegisterExtension
   static ResponsiveExtension EXTENSION = new ResponsiveExtension(StorageBackend.CASSANDRA);
@@ -114,32 +126,65 @@ class ChangelogMigrationToolTest {
 
   @Test
   public void test() throws Exception {
-    final Map<String, Object> properties = getProperties();
-    final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties);
+    // Given:
+    final int partitions = 2;
+    final int numKeys = 100;
+    final long numEvents = 1000;
 
-    // Run A Normal KS Application with rocksDB
-    try (final ResponsiveKafkaStreams streams = buildRocksBased(properties)) {
+    final var tableName = name + "-count";
+    final var changelog = name + "-count-changelog";
+    final var params = ResponsiveKeyValueParams.keyValue(tableName);
+
+    final Map<String, Object> baseProps = getProperties();
+    final Properties bootProps = new Properties();
+    bootProps.putAll(getProperties());
+    bootProps.put(ChangelogMigrationConfig.CHANGELOG_TOPIC_CONFIG, changelog);
+
+    // When:
+    // 1: Run A Normal KS Application with rocksDB and make sure all records are processed
+    LOG.info("Running a normal Kafka Streams application with RocksDB to populate changelog.");
+    final KafkaProducer<Long, Long> produce = new KafkaProducer<>(baseProps);
+    try (final ResponsiveKafkaStreams streams = buildRocksBased(baseProps)) {
       startAppAndAwaitRunning(Duration.ofSeconds(10), streams);
-      for (int i = 0; i < 1000; i++) {
-        pipeInput(inputTopic(), 2, producer, System::currentTimeMillis, 0, 10, 0, 1);
-      }
+      final long[] keys = LongStream.range(0, numKeys).toArray();
+      final long perKey = numEvents / numKeys;
+      pipeInput(inputTopic(), partitions, produce, System::currentTimeMillis, 0, perKey, keys);
 
-      // just verify all 1000 were written
-      readOutput(outputTopic(), 0, 1000, true, properties);
+      LOG.info("Awaiting the output from all 1000 records");
+      readOutput(outputTopic(), 0, numEvents, true, baseProps);
     }
 
-    // Run the bootstrap application with Cassandra
-    final Properties bootstrapProps = new Properties();
-    bootstrapProps.putAll(getProperties());
-    bootstrapProps.put(ChangelogMigrationConfig.CHANGELOG_TOPIC_CONFIG, name + "-count-changelog");
-    bootstrapProps.put(ChangelogMigrationConfig.TABLE_NAME_CONFIG, name + "-count");
-    final ChangelogMigrationTool app =
-        new ChangelogMigrationTool(bootstrapProps);
+    // 2: Run the changelog migration tool to bootstrap the new Cassandra table
+    final CountDownLatch processedAllRecords = new CountDownLatch(1000);
+    final Consumer<Record<byte[], byte[]>> countdown = r -> processedAllRecords.countDown();
+    final ChangelogMigrationTool app = new ChangelogMigrationTool(bootProps, params, countdown);
+
+    LOG.info("Awaiting for Bootstrapping application to start");
     startAppAndAwaitRunning(Duration.ofSeconds(120), app.getStreams());
 
-    // Manually Check Cassandra
-    Thread.sleep(100000);
+    // Then:
+    // Ensure that all records exist with the expected values
+    // before checking Cassandra make sure all records have been processed
+    LOG.info("Await all records from changelog processed");
+    processedAllRecords.await();
 
+    final ReadOnlyKeyValueStore<byte[], byte[]> table = app.getStreams()
+        .store(StoreQueryParameters.fromNameAndType(
+            tableName, QueryableStoreTypes.keyValueStore()));
+
+    final Map<Long, Long> all = new HashMap<>();
+    try (final var ser = new LongDeserializer(); final var it = table.all()) {
+      while (it.hasNext()) {
+        final var kv = it.next();
+        all.put(ser.deserialize("ignored", kv.key), ser.deserialize("ignored", kv.value));
+      }
+    }
+
+    for (long k = 0; k < numKeys; k++) {
+      assertThat(all, Matchers.hasEntry(k, numEvents/ numKeys));
+    }
+
+    // Finally: Cleanup
     app.getStreams().close();
     app.getStreams().cleanUp();
   }

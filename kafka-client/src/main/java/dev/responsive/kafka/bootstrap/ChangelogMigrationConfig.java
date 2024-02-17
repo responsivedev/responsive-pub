@@ -27,21 +27,12 @@ public class ChangelogMigrationConfig extends AbstractConfig {
   public static final String CHANGELOG_TOPIC_CONFIG = "responsive.migration.changelog.topic";
   private static final String CHANGELOG_TOPIC_DOC = "The changelog from the store to migrate.";
 
-  public static final String TABLE_NAME_CONFIG = "responsive.migration.table.name";
-  private static final String TABLE_NAME_DOC = "The table name. This should match the table "
-      + "name in the original application that is being migrated.";
-
   private static final ConfigDef CONFIG_DEF = new ConfigDef()
       .define(
           CHANGELOG_TOPIC_CONFIG,
           ConfigDef.Type.STRING,
           ConfigDef.Importance.HIGH,
           CHANGELOG_TOPIC_DOC
-      ).define(
-          TABLE_NAME_CONFIG,
-          ConfigDef.Type.STRING,
-          ConfigDef.Importance.HIGH,
-          TABLE_NAME_DOC
       );
 
   public ChangelogMigrationConfig(final Map<?, ?> originals) {
