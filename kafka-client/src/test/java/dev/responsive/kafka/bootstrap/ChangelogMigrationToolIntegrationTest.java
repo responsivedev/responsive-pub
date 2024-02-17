@@ -49,6 +49,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
@@ -76,6 +77,7 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -83,9 +85,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 // this test can be run manually to verify Cluster Bootstrapping behavior
-class ChangelogMigrationToolTest {
+@Disabled
+class ChangelogMigrationToolIntegrationTest {
 
-  private static final Logger LOG = LoggerFactory.getLogger(ChangelogMigrationToolTest.class);
+  private static final Logger LOG =
+      LoggerFactory.getLogger(ChangelogMigrationToolIntegrationTest.class);
 
   @RegisterExtension
   static ResponsiveExtension EXTENSION = new ResponsiveExtension(StorageBackend.CASSANDRA);
@@ -96,6 +100,8 @@ class ChangelogMigrationToolTest {
   private final Map<String, Object> responsiveProps = new HashMap<>();
 
   private String name;
+  private String tableName;
+  private String changelog;
   private Admin admin;
 
   @BeforeEach
@@ -110,6 +116,8 @@ class ChangelogMigrationToolTest {
     ScheduledExecutorService executor = new ScheduledThreadPoolExecutor(2);
 
     this.responsiveProps.putAll(responsiveProps);
+    this.tableName = name;
+    this.changelog = name + "-" + tableName + "-changelog";
 
     this.admin = admin;
     createTopicsAndWait(admin, Map.of(inputTopic(), 2, outputTopic(), 1));
@@ -117,7 +125,11 @@ class ChangelogMigrationToolTest {
 
   @AfterEach
   public void after() {
-    admin.deleteTopics(List.of(inputTopic(), outputTopic()));
+    try {
+      admin.deleteTopics(List.of(inputTopic(), outputTopic(), changelog)).all().get();
+    } catch (final Exception ignored) {
+      // ignore
+    }
   }
 
   private String inputTopic() {
@@ -135,13 +147,12 @@ class ChangelogMigrationToolTest {
     final int numKeys = 100;
     final int numEvents = 1000;
 
-    final var tableName = name + "-count";
-    final var changelog = name + "-count-changelog";
     final var params = ResponsiveKeyValueParams.keyValue(tableName);
 
     final Map<String, Object> baseProps = getProperties();
     final Properties bootProps = new Properties();
     bootProps.putAll(getProperties());
+    bootProps.put(APPLICATION_ID_CONFIG, name + "-bootstrap");
     bootProps.put(ChangelogMigrationConfig.CHANGELOG_TOPIC_CONFIG, changelog);
 
     // When:
@@ -175,6 +186,7 @@ class ChangelogMigrationToolTest {
     // since we can't call get() on the store created from the Changelog
     // Migration Tool we create a new Kafka Streams to get the store and
     // make sure it has the correct contents
+    LOG.info("Running main application with the new responsive store");
     try (final ResponsiveKafkaStreams streams = buildCount(baseProps, tableName, true)) {
       startAppAndAwaitRunning(Duration.ofSeconds(120), streams);
 
@@ -182,7 +194,8 @@ class ChangelogMigrationToolTest {
           .store(StoreQueryParameters.fromNameAndType(
               tableName, QueryableStoreTypes.keyValueStore()));
 
-      assertThat(table.approximateNumEntries(), Matchers.is(numKeys));
+      // each partition has a metadata row associated with it
+      assertThat(table.approximateNumEntries(), Matchers.is((long) (numKeys + partitions)));
 
       final Map<Long, Long> all = new HashMap<>();
       for (long k = 0; k < numKeys; k++) {
@@ -193,6 +206,14 @@ class ChangelogMigrationToolTest {
         assertThat(all, Matchers.hasEntry(k, (long) (numEvents / numKeys)));
       }
     }
+
+    // also verify no additional topics were created
+    final Set<String> topics = admin.listTopics().names().get();
+    assertThat(topics.size(), Matchers.is(3));
+    assertThat(
+        topics,
+        Matchers.containsInAnyOrder(inputTopic(), outputTopic(), changelog)
+    );
   }
 
   @Test
@@ -202,10 +223,6 @@ class ChangelogMigrationToolTest {
     final int numKeys = 100;
     final int numEvents = 200;
 
-    final var tableName = name + "-dupes";
-    // changelog name is generated as application-id-<store-name>-changelog
-    // from the original rocksDB application
-    final var changelog = name + "-" + tableName + "-changelog";
     final var params = ResponsiveKeyValueParams.fact(tableName);
 
     final Map<String, Object> baseProps = getProperties();
@@ -247,6 +264,7 @@ class ChangelogMigrationToolTest {
     // since we can't call get() on the store created from the Changelog
     // Migration Tool we create a new Kafka Streams to get the store and
     // make sure it has the correct contents
+    LOG.info("Running main application with the new responsive store");
     try (final ResponsiveKafkaStreams streams = buildDeduper(baseProps, tableName, true)) {
       startAppAndAwaitRunning(Duration.ofSeconds(120), streams);
 
@@ -264,6 +282,13 @@ class ChangelogMigrationToolTest {
       }
     }
 
+    // also verify no additional topics were created
+    final Set<String> topics = admin.listTopics().names().get();
+    assertThat(topics.size(), Matchers.is(3));
+    assertThat(
+        topics,
+        Matchers.containsInAnyOrder(inputTopic(), outputTopic(), changelog)
+    );
   }
 
   private ResponsiveKafkaStreams buildCount(
