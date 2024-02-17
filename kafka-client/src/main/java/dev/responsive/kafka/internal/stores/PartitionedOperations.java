@@ -246,6 +246,15 @@ public class PartitionedOperations implements KeyValueOperations {
 
   @Override
   public byte[] get(final Bytes key) {
+    if (migrationMode) {
+      // we don't want to issue gets in migration mode since
+      // we're just reading from the changelog. the problem is
+      // that materialized tables issue get() on every put() to
+      // send the "undo" data downstream -- we intercept all gets
+      // and just return null
+      return null;
+    }
+
     // try the buffer first, it acts as a local cache
     // but this is also necessary for correctness as
     // it is possible that the data is either uncommitted
