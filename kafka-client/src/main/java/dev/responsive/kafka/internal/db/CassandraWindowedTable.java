@@ -49,7 +49,6 @@ import dev.responsive.kafka.internal.db.spec.CassandraTableSpec;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
 import dev.responsive.kafka.internal.utils.Iterators;
 import dev.responsive.kafka.internal.utils.WindowedKey;
-import java.awt.Window;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.time.Instant;

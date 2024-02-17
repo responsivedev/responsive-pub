@@ -18,7 +18,7 @@ package dev.responsive.kafka.internal.db.partitioning;
 
 import static java.util.Collections.emptyList;
 
-import dev.responsive.kafka.internal.db.TimePartitionableKey;
+import dev.responsive.kafka.internal.db.SegmentableKey;
 import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.SegmentPartition;
 import java.util.Collections;
 import java.util.List;
@@ -78,7 +78,7 @@ import org.slf4j.LoggerFactory;
  * For the time being, we simply recommend that users configure the number of segments
  * similarly to how they would configure the number of sub-partitions for a key-value store.
  */
-public class SegmentPartitioner<K extends TimePartitionableKey<K>>
+public class SegmentPartitioner<K extends SegmentableKey<K>>
     implements TablePartitioner<K, SegmentPartition> {
 
   private static final Logger LOG = LoggerFactory.getLogger(SegmentPartitioner.class);
@@ -155,7 +155,7 @@ public class SegmentPartitioner<K extends TimePartitionableKey<K>>
   public SegmentPartition tablePartition(final int kafkaPartition, final K key) {
     return new SegmentPartition(
         kafkaPartition,
-        segmentId(key.getPartitionTimestamp())
+        segmentId(key.segmentTimestamp())
     );
   }
 

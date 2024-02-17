@@ -10,6 +10,7 @@ import javax.annotation.concurrent.ThreadSafe;
 
 @ThreadSafe
 public class WindowedTableCache<T extends RemoteTable<?, ?>> {
+
   @FunctionalInterface
   public interface Factory<T> {
     T create(final CassandraTableSpec spec, SegmentPartitioner<WindowedKey> partitioner)
@@ -19,7 +20,9 @@ public class WindowedTableCache<T extends RemoteTable<?, ?>> {
   private final Map<String, T> tables = new HashMap<>();
   private final Factory<T> factory;
 
-  public WindowedTableCache(final Factory<T> factory) { this.factory = factory; }
+  public WindowedTableCache(final Factory<T> factory) {
+    this.factory = factory;
+  }
 
   /**
    * Creates a table with the supplied {@code tableName} with the
