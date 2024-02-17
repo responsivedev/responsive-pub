@@ -230,7 +230,7 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
 
   @Override
   public long approximateNumEntries(final int kafkaPartition) {
-    return client.count(name(), kafkaPartition);
+    throw new UnsupportedOperationException("all is not supported on fact tables");
   }
 
   @Override
@@ -283,14 +283,14 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
       final Bytes from,
       final Bytes to,
       long minValidTs) {
-    throw new UnsupportedOperationException("range scans are not supported on Idempotent schemas.");
+    throw new UnsupportedOperationException("range scans are not supported on fact tables.");
   }
 
   @Override
   public KeyValueIterator<Bytes, byte[]> all(
       final int kafkaPartition,
       long minValidTs) {
-    throw new UnsupportedOperationException("all is not supported on Idempotent schemas");
+    throw new UnsupportedOperationException("all is not supported on fact tables");
   }
 
   private static String metadataTable(final String tableName) {

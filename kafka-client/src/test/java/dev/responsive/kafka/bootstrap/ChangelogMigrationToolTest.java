@@ -40,6 +40,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
+import dev.responsive.kafka.api.stores.ResponsiveStores;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
 import java.time.Duration;
@@ -63,14 +64,18 @@ import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessorContext;
+import org.apache.kafka.streams.processor.api.FixedKeyRecord;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -78,7 +83,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 // this test can be run manually to verify Cluster Bootstrapping behavior
-@Disabled
 class ChangelogMigrationToolTest {
 
   private static final Logger LOG = LoggerFactory.getLogger(ChangelogMigrationToolTest.class);
@@ -129,7 +133,7 @@ class ChangelogMigrationToolTest {
     // Given:
     final int partitions = 2;
     final int numKeys = 100;
-    final long numEvents = 1000;
+    final int numEvents = 1000;
 
     final var tableName = name + "-count";
     final var changelog = name + "-count-changelog";
@@ -144,10 +148,10 @@ class ChangelogMigrationToolTest {
     // 1: Run A Normal KS Application with rocksDB and make sure all records are processed
     LOG.info("Running a normal Kafka Streams application with RocksDB to populate changelog.");
     final KafkaProducer<Long, Long> produce = new KafkaProducer<>(baseProps);
-    try (final ResponsiveKafkaStreams streams = buildRocksBased(baseProps)) {
+    try (final ResponsiveKafkaStreams streams = buildCount(baseProps, tableName, false)) {
       startAppAndAwaitRunning(Duration.ofSeconds(10), streams);
       final long[] keys = LongStream.range(0, numKeys).toArray();
-      final long perKey = numEvents / numKeys;
+      final int perKey = numEvents / numKeys;
       pipeInput(inputTopic(), partitions, produce, System::currentTimeMillis, 0, perKey, keys);
 
       LOG.info("Awaiting the output from all 1000 records");
@@ -155,48 +159,150 @@ class ChangelogMigrationToolTest {
     }
 
     // 2: Run the changelog migration tool to bootstrap the new Cassandra table
-    final CountDownLatch processedAllRecords = new CountDownLatch(1000);
+    final CountDownLatch processedAllRecords = new CountDownLatch(numEvents);
+    final Consumer<Record<byte[], byte[]>> countdown = r -> processedAllRecords.countDown();
+    try (final var app = new ChangelogMigrationTool(bootProps, params, countdown).buildStreams()) {
+      LOG.info("Awaiting for Bootstrapping application to start");
+      startAppAndAwaitRunning(Duration.ofSeconds(120), app);
+
+      // Ensure that all records exist with the expected values
+      // before checking Cassandra make sure all records have been processed
+      LOG.info("Await all records from changelog processed");
+      processedAllRecords.await();
+    }
+
+    // Then:
+    // since we can't call get() on the store created from the Changelog
+    // Migration Tool we create a new Kafka Streams to get the store and
+    // make sure it has the correct contents
+    try (final ResponsiveKafkaStreams streams = buildCount(baseProps, tableName, true)) {
+      startAppAndAwaitRunning(Duration.ofSeconds(120), streams);
+
+      final ReadOnlyKeyValueStore<Long, Long> table = streams
+          .store(StoreQueryParameters.fromNameAndType(
+              tableName, QueryableStoreTypes.keyValueStore()));
+
+      assertThat(table.approximateNumEntries(), Matchers.is(numKeys));
+
+      final Map<Long, Long> all = new HashMap<>();
+      for (long k = 0; k < numKeys; k++) {
+        all.put(k, table.get(k));
+      }
+
+      for (long k = 0; k < numKeys; k++) {
+        assertThat(all, Matchers.hasEntry(k, (long) (numEvents / numKeys)));
+      }
+    }
+  }
+
+  @Test
+  public void testFactStore() throws Exception {
+    // Given:
+    final int partitions = 2;
+    final int numKeys = 100;
+    final int numEvents = 200;
+
+    final var tableName = name + "-dupes";
+    // changelog name is generated as application-id-<store-name>-changelog
+    // from the original rocksDB application
+    final var changelog = name + "-" + tableName + "-changelog";
+    final var params = ResponsiveKeyValueParams.fact(tableName);
+
+    final Map<String, Object> baseProps = getProperties();
+    final Properties bootProps = new Properties();
+    bootProps.putAll(getProperties());
+    bootProps.put(APPLICATION_ID_CONFIG, name + "-bootstrap");
+    bootProps.put(ChangelogMigrationConfig.CHANGELOG_TOPIC_CONFIG, changelog);
+
+    // When:
+    // 1: Run A Normal KS Application with rocksDB and make sure all records are processed
+    LOG.info("Running a normal Kafka Streams application with RocksDB to populate changelog.");
+    final KafkaProducer<Long, Long> produce = new KafkaProducer<>(baseProps);
+    try (final ResponsiveKafkaStreams streams = buildDeduper(baseProps, tableName, false)) {
+      startAppAndAwaitRunning(Duration.ofSeconds(10), streams);
+      final long[] keys = LongStream.range(0, numKeys).toArray();
+      final int perKey = numEvents / numKeys;
+      pipeInput(inputTopic(), partitions, produce, System::currentTimeMillis, 0, perKey, keys);
+
+      LOG.info("Awaiting the output from all {} keys", numKeys);
+      readOutput(outputTopic(), 0, numKeys, true, baseProps);
+    }
+
+    // 2: Run the changelog migration tool to bootstrap the new Cassandra table
+    final CountDownLatch processedAllRecords = new CountDownLatch(numKeys);
     final Consumer<Record<byte[], byte[]>> countdown = r -> processedAllRecords.countDown();
     final ChangelogMigrationTool app = new ChangelogMigrationTool(bootProps, params, countdown);
 
     LOG.info("Awaiting for Bootstrapping application to start");
-    startAppAndAwaitRunning(Duration.ofSeconds(120), app.getStreams());
+    try (final var migrationApp = app.buildStreams()) {
+      startAppAndAwaitRunning(Duration.ofSeconds(120), migrationApp);
+
+      // Ensure that all records exist with the expected values
+      // before checking Cassandra make sure all records have been processed
+      LOG.info("Await all records from changelog processed");
+      processedAllRecords.await();
+    }
 
     // Then:
-    // Ensure that all records exist with the expected values
-    // before checking Cassandra make sure all records have been processed
-    LOG.info("Await all records from changelog processed");
-    processedAllRecords.await();
+    // since we can't call get() on the store created from the Changelog
+    // Migration Tool we create a new Kafka Streams to get the store and
+    // make sure it has the correct contents
+    try (final ResponsiveKafkaStreams streams = buildDeduper(baseProps, tableName, true)) {
+      startAppAndAwaitRunning(Duration.ofSeconds(120), streams);
 
-    final ReadOnlyKeyValueStore<byte[], byte[]> table = app.getStreams()
-        .store(StoreQueryParameters.fromNameAndType(
-            tableName, QueryableStoreTypes.keyValueStore()));
+      final ReadOnlyKeyValueStore<Long, Long> table = streams
+          .store(StoreQueryParameters.fromNameAndType(
+              tableName, QueryableStoreTypes.keyValueStore()));
 
-    final Map<Long, Long> all = new HashMap<>();
-    try (final var ser = new LongDeserializer(); final var it = table.all()) {
-      while (it.hasNext()) {
-        final var kv = it.next();
-        all.put(ser.deserialize("ignored", kv.key), ser.deserialize("ignored", kv.value));
+      final Map<Long, Long> all = new HashMap<>();
+      for (long k = 0; k < numKeys; k++) {
+        all.put(k, table.get(k));
+      }
+
+      for (long k = 0; k < numKeys; k++) {
+        assertThat(all, Matchers.hasEntry(k, 1L));
       }
     }
 
-    for (long k = 0; k < numKeys; k++) {
-      assertThat(all, Matchers.hasEntry(k, numEvents/ numKeys));
-    }
-
-    // Finally: Cleanup
-    app.getStreams().close();
-    app.getStreams().cleanUp();
   }
 
-  private ResponsiveKafkaStreams buildRocksBased(final Map<String, Object> properties) {
+  private ResponsiveKafkaStreams buildCount(
+      final Map<String, Object> properties,
+      final String tableName,
+      final boolean responsive
+  ) {
     final StreamsBuilder builder = new StreamsBuilder();
 
     final KStream<Long, Long> input = builder.stream(inputTopic());
     input
         .groupByKey()
-        .count(Materialized.as(Stores.persistentKeyValueStore("count")))
+        .count(Materialized.as(
+            responsive
+                ? ResponsiveStores.keyValueStore(tableName)
+                : Stores.persistentKeyValueStore(tableName)))
         .toStream()
+        .to(outputTopic());
+
+    return new ResponsiveKafkaStreams(builder.build(), properties);
+  }
+
+  private ResponsiveKafkaStreams buildDeduper(
+      final Map<String, Object> properties,
+      final String tableName,
+      final boolean responsive
+  ) {
+    final StreamsBuilder builder = new StreamsBuilder();
+    builder.addStateStore(
+        Stores.timestampedKeyValueStoreBuilder(
+            responsive
+                ? ResponsiveStores.factStore(tableName)
+                : Stores.persistentKeyValueStore(tableName),
+            new Serdes.LongSerde(),
+            new Serdes.LongSerde()));
+
+    final KStream<Long, Long> input = builder.stream(inputTopic());
+    input
+        .processValues(() -> new Deduper(tableName), tableName)
         .to(outputTopic());
 
     return new ResponsiveKafkaStreams(builder.build(), properties);
@@ -227,4 +333,28 @@ class ChangelogMigrationToolTest {
     return properties;
   }
 
+  private static class Deduper implements FixedKeyProcessor<Long, Long, Long> {
+
+    private final String tableName;
+    private TimestampedKeyValueStore<Long, Long> store;
+    private FixedKeyProcessorContext<Long, Long> context;
+
+    public Deduper(final String tableName) {
+      this.tableName = tableName;
+    }
+
+    @Override
+    public void init(final FixedKeyProcessorContext<Long, Long> context) {
+      this.context = context;
+      this.store = context.getStateStore(tableName);
+    }
+
+    @Override
+    public void process(final FixedKeyRecord<Long, Long> record) {
+      final var valAndTs = ValueAndTimestamp.make(1L, context.currentStreamTimeMs());
+      if (store.putIfAbsent(record.key(), valAndTs) == null) {
+        context.forward(record);
+      }
+    }
+  }
 }

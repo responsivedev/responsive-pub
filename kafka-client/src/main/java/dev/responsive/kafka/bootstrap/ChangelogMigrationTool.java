@@ -45,8 +45,10 @@ public class ChangelogMigrationTool {
   private static final org.slf4j.Logger LOG =
       org.slf4j.LoggerFactory.getLogger(ChangelogMigrationTool.class);
 
-  private final ResponsiveKafkaStreams streams;
   private final Consumer<Record<byte[], byte[]>> processor;
+  private final ChangelogMigrationConfig config;
+  private final Properties properties;
+  private final ResponsiveKeyValueParams params;
 
   @SuppressWarnings("unused") // reason: public API
   public ChangelogMigrationTool(
@@ -74,19 +76,12 @@ public class ChangelogMigrationTool {
     // stability
     properties.putIfAbsent(STORE_FLUSH_RECORDS_TRIGGER_CONFIG, 10_000);
 
-    final ChangelogMigrationConfig config = new ChangelogMigrationConfig(properties);
-    this.streams = buildStreams(config, properties, params);
+    config = new ChangelogMigrationConfig(properties);
+    this.properties = properties;
+    this.params = params;
   }
 
-  public ResponsiveKafkaStreams getStreams() {
-    return streams;
-  }
-
-  private ResponsiveKafkaStreams buildStreams(
-      final ChangelogMigrationConfig config,
-      final Properties properties,
-      final ResponsiveKeyValueParams params
-      ) {
+  public ResponsiveKafkaStreams buildStreams() {
     final StreamsBuilder builder = new StreamsBuilder();
     final String source = config.getString(CHANGELOG_TOPIC_CONFIG);
 
