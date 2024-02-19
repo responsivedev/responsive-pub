@@ -17,6 +17,7 @@
 package dev.responsive.kafka.api.stores;
 
 import dev.responsive.kafka.internal.stores.ResponsiveKeyValueStore;
+import dev.responsive.kafka.internal.stores.StoreAccumulator;
 import java.util.Locale;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
@@ -28,6 +29,7 @@ public class ResponsiveKeyValueBytesStoreSupplier implements KeyValueBytesStoreS
 
   public ResponsiveKeyValueBytesStoreSupplier(final ResponsiveKeyValueParams params) {
     this.params = params;
+    StoreAccumulator.INSTANCE.register(this);
   }
 
   @Override
