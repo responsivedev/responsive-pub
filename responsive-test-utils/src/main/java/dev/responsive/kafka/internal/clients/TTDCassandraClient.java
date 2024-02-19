@@ -30,6 +30,7 @@ import dev.responsive.kafka.internal.db.RemoteWindowedTable;
 import dev.responsive.kafka.internal.db.TTDKeyValueTable;
 import dev.responsive.kafka.internal.db.TTDWindowedTable;
 import dev.responsive.kafka.internal.db.TableCache;
+import dev.responsive.kafka.internal.db.WindowedTableCache;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistry;
 import dev.responsive.kafka.internal.utils.RemoteMonitor;
 import java.time.Duration;
@@ -43,7 +44,7 @@ public class TTDCassandraClient extends CassandraClient {
   private final TTDMockAdmin admin;
 
   private final TableCache<RemoteKVTable<BoundStatement>> kvFactory;
-  private final TableCache<RemoteWindowedTable<BoundStatement>> windowedFactory;
+  private final WindowedTableCache<RemoteWindowedTable<BoundStatement>> windowedFactory;
 
   public TTDCassandraClient(final TTDMockAdmin admin, final Time time) {
     super(loggedConfig(admin.props()));
@@ -51,7 +52,10 @@ public class TTDCassandraClient extends CassandraClient {
     this.admin = admin;
 
     kvFactory = new TableCache<>(spec -> TTDKeyValueTable.create(spec, this));
-    windowedFactory = new TableCache<>(spec -> TTDWindowedTable.create(spec, this));
+    windowedFactory = new WindowedTableCache<>((spec, partitioner) -> TTDWindowedTable.create(spec,
+        this,
+        partitioner
+    ));
   }
 
   public Time time() {
@@ -125,7 +129,7 @@ public class TTDCassandraClient extends CassandraClient {
   }
 
   @Override
-  public TableCache<RemoteWindowedTable<BoundStatement>> windowedFactory() {
+  public WindowedTableCache<RemoteWindowedTable<BoundStatement>> windowedFactory() {
     return windowedFactory;
   }
 }

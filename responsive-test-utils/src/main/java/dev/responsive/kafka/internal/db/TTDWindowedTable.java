@@ -33,20 +33,25 @@ public class TTDWindowedTable extends TTDTable<WindowedKey>
 
   private final String name;
   private final WindowStoreStub stub;
-  private final SegmentPartitioner partitioner;
+  private final SegmentPartitioner<WindowedKey> partitioner;
 
   public static TTDWindowedTable create(
       final CassandraTableSpec spec,
-      final CassandraClient client
+      final CassandraClient client,
+      final SegmentPartitioner<WindowedKey> partitioner
   ) {
-    return new TTDWindowedTable(spec, (TTDCassandraClient) client);
+    return new TTDWindowedTable(spec, (TTDCassandraClient) client, partitioner);
   }
 
-  public TTDWindowedTable(final CassandraTableSpec spec, final TTDCassandraClient client) {
+  public TTDWindowedTable(
+      final CassandraTableSpec spec,
+      final TTDCassandraClient client,
+      SegmentPartitioner<WindowedKey> partitioner
+  ) {
     super(client);
-    name = spec.tableName();
-    stub = new WindowStoreStub();
-    partitioner = (SegmentPartitioner) spec.partitioner();
+    this.name = spec.tableName();
+    this.stub = new WindowStoreStub();
+    this.partitioner = partitioner;
   }
 
   @Override
@@ -157,12 +162,12 @@ public class TTDWindowedTable extends TTDTable<WindowedKey>
 
     private final String logPrefix;
     private final TTDWindowedTable table;
-    private final SegmentPartitioner partitioner;
+    private final SegmentPartitioner<WindowedKey> partitioner;
 
     public TTDWindowFlushManager(
         final TTDWindowedTable table,
         final int kafkaPartition,
-        final SegmentPartitioner partitioner
+        final SegmentPartitioner<WindowedKey> partitioner
     ) {
       super(table.name(), kafkaPartition, partitioner, 0L);
       this.table = table;
