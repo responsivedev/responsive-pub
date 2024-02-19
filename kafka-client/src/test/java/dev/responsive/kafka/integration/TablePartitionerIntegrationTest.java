@@ -190,18 +190,9 @@ public class TablePartitionerIntegrationTest {
 
       for (long tp = 0; tp < 32; ++tp) {
         final var kBytes = Bytes.wrap(serializer.serialize("", tp));
-        assertThat(
-            deserializer.deserialize(
-                "foo",
-                // these store ValueAndTimestamp, so we need to just pluck the last 8 bytes
-                Arrays.copyOfRange(
-                    table.get(
-                        (int) (tp % NUM_PARTITIONS_INPUT),
-                        kBytes,
-                        MIN_VALID_TS),
-                    8,
-                    16)),
-            is(100L));
+        final byte[] valBytes = table.get((int) tp % NUM_PARTITIONS_INPUT, kBytes, MIN_VALID_TS);
+        final Long val = deserializer.deserialize("foo", Arrays.copyOfRange(valBytes, 8, 16));
+        assertThat(val, is(100L));
       }
     }
   }
@@ -249,23 +240,14 @@ public class TablePartitionerIntegrationTest {
       assertThat(offset0, is(notNullValue()));
       assertThat(offset1, is(notNullValue()));
 
-      // throws because it doesn't exist
       Assertions.assertEquals(table.fetchOffset(2), NO_COMMITTED_OFFSET);
 
       // these store ValueAndTimestamp, so we need to just pluck the last 8 bytes
       for (long k = 0; k < 32; k++) {
         final var kBytes = Bytes.wrap(serializer.serialize("", k));
-        assertThat(
-            deserializer.deserialize(
-                "foo",
-                Arrays.copyOfRange(
-                    table.get(
-                        (int) k % NUM_PARTITIONS_INPUT,
-                        kBytes,
-                        MIN_VALID_TS),
-                    8,
-                    16)),
-            is(100L));
+        final byte[] valBytes = table.get((int) k % NUM_PARTITIONS_INPUT, kBytes, MIN_VALID_TS);
+        final Long val = deserializer.deserialize("foo", Arrays.copyOfRange(valBytes, 8, 16));
+        assertThat(val, is(100L));
       }
     }
   }
