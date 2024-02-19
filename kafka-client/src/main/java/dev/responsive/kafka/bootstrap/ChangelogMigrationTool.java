@@ -35,6 +35,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
@@ -42,6 +43,8 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
+import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 
 public class ChangelogMigrationTool {
 
@@ -49,22 +52,24 @@ public class ChangelogMigrationTool {
       org.slf4j.LoggerFactory.getLogger(ChangelogMigrationTool.class);
 
   private final Consumer<Record<byte[], byte[]>> processor;
-  private final ChangelogMigrationConfig config;
   private final Properties properties;
-  private final ResponsiveKeyValueParams params;
+  private final KeyValueBytesStoreSupplier storeSupplier;
+  private final String changelogTopic;
 
   @SuppressWarnings("unused") // reason: public API
   public ChangelogMigrationTool(
       final Properties properties,
-      final ResponsiveKeyValueParams params
+      final KeyValueBytesStoreSupplier storeSupplier,
+      final String changelogTopic
   ) {
-    this(properties, params, r -> {});
+    this(properties, storeSupplier, changelogTopic, r -> {});
   }
 
   // Visible for testing
   ChangelogMigrationTool(
       final Properties properties,
-      final ResponsiveKeyValueParams params,
+      final KeyValueBytesStoreSupplier storeSupplier,
+      final String changelogTopic,
       final Consumer<Record<byte[], byte[]>> processor
   ) {
     this.processor = processor;
@@ -80,23 +85,21 @@ public class ChangelogMigrationTool {
     // stability
     properties.putIfAbsent(STORE_FLUSH_RECORDS_TRIGGER_CONFIG, 10_000);
 
-    config = new ChangelogMigrationConfig(properties);
     this.properties = properties;
-    this.params = params;
+    this.changelogTopic = changelogTopic;
+    this.storeSupplier = storeSupplier;
   }
 
   public ResponsiveKafkaStreams buildStreams() {
     final StreamsBuilder builder = new StreamsBuilder();
-    final String source = config.getString(CHANGELOG_TOPIC_CONFIG);
+    final AtomicLong processed = new AtomicLong();
 
-    final KTable<byte[], byte[]> table =
-        builder.table(
-            source,
-            Consumed.with(Serdes.ByteArray(), Serdes.ByteArray()),
-            Materialized
-                .<byte[], byte[]>as(ResponsiveStores.keyValueStore(params))
-                .withValueSerde(Serdes.ByteArray())
-                .withKeySerde(Serdes.ByteArray())
+    final KTable<byte[], byte[]> table = builder.table(
+        changelogTopic,
+        Consumed.with(Serdes.ByteArray(), Serdes.ByteArray()),
+        Materialized.<byte[], byte[]>as(storeSupplier)
+            .withValueSerde(Serdes.ByteArray())
+            .withKeySerde(Serdes.ByteArray())
     );
 
     table
@@ -124,6 +127,12 @@ public class ChangelogMigrationTool {
           }
         }));
 
-    return new ResponsiveKafkaStreams(builder.build(properties), properties);
+    return new ResponsiveKafkaStreams(
+        builder.build(properties),
+        properties,
+        new DefaultKafkaClientSupplier(),
+        Time.SYSTEM,
+        true
+    );
   }
 }

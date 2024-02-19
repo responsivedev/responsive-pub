@@ -30,6 +30,8 @@ import static org.apache.kafka.streams.StreamsConfig.METRICS_SAMPLE_WINDOW_MS_CO
 
 import dev.responsive.kafka.api.config.CompatibilityMode;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
+import dev.responsive.kafka.api.config.ResponsiveMode;
+import dev.responsive.kafka.bootstrap.EmbeddedChangelogMigrationRunner;
 import dev.responsive.kafka.internal.clients.ResponsiveKafkaClientSupplier;
 import dev.responsive.kafka.internal.config.ConfigUtils;
 import dev.responsive.kafka.internal.config.InternalSessionConfigs;
@@ -87,6 +89,10 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
   private final ResponsiveStateListener responsiveStateListener;
   private final ResponsiveRestoreListener responsiveRestoreListener;
   private final SessionClients sessionClients;
+  private final String applicationId;
+  private final ResponsiveConfig responsiveConfig;
+  private final Topology topology;
+  private final boolean migrating;
 
   /**
    * Create a {@code ResponsiveKafkaStreams} instance.
@@ -126,7 +132,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       final Map<?, ?> configs,
       final KafkaClientSupplier clientSupplier
   ) {
-    this(topology, configs, clientSupplier, Time.SYSTEM);
+    this(topology, configs, clientSupplier, Time.SYSTEM, false);
   }
 
   /**
@@ -147,7 +153,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       final Map<?, ?> configs,
       final Time time
   ) {
-    this(topology, configs, new DefaultKafkaClientSupplier(), time);
+    this(topology, configs, new DefaultKafkaClientSupplier(), time, false);
   }
 
   /**
@@ -169,12 +175,14 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       final Topology topology,
       final Map<?, ?> configs,
       final KafkaClientSupplier clientSupplier,
-      final Time time
+      final Time time,
+      final boolean migrating
   ) {
     this(
         new Params(topology, configs)
             .withClientSupplier(clientSupplier)
             .withTime(time)
+            .withMigrating(migrating)
             .build()
     );
   }
@@ -220,6 +228,25 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     sessionClients.initialize(responsiveMetrics, responsiveRestoreListener);
     super.setGlobalStateRestoreListener(responsiveRestoreListener);
     super.setStateListener(responsiveStateListener);
+
+    this.applicationId = applicationConfigs.getString(APPLICATION_ID_CONFIG);
+    this.responsiveConfig = params.responsiveConfig;
+    this.topology = params.topology;
+    this.migrating = params.migrating;
+  }
+
+  @Override
+  public synchronized void start() throws IllegalStateException, StreamsException {
+    if (responsiveConfig.getString(ResponsiveConfig.RESPONSIVE_MODE)
+        .equals(ResponsiveMode.MIGRATE.name()) && !migrating) {
+      EmbeddedChangelogMigrationRunner.runMigration(
+          responsiveConfig,
+          applicationId,
+          topology
+      );
+    } else {
+      super.start();
+    }
   }
 
   private static ResponsiveMetrics createMetrics(
@@ -387,6 +414,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     // initialized on init()
     private SessionClients sessionClients;
     private ResponsiveKafkaClientSupplier responsiveKafkaClientSupplier;
+    private boolean migrating = false;
 
     public Params(final Topology topology, final Map<?, ?> configs) {
       this.topology = topology;
@@ -412,6 +440,11 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
 
     public Params withTime(final Time time) {
       this.time = time;
+      return this;
+    }
+
+    public Params withMigrating(final boolean migrating) {
+      this.migrating = migrating;
       return this;
     }
 

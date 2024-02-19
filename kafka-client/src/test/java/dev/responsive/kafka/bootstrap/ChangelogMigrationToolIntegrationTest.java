@@ -147,7 +147,7 @@ class ChangelogMigrationToolIntegrationTest {
     final int numKeys = 100;
     final int numEvents = 1000;
 
-    final var params = ResponsiveKeyValueParams.keyValue(tableName);
+    final var params = ResponsiveStores.keyValueStore(tableName);
 
     final Map<String, Object> baseProps = getProperties();
     final Properties bootProps = new Properties();
@@ -172,7 +172,8 @@ class ChangelogMigrationToolIntegrationTest {
     // 2: Run the changelog migration tool to bootstrap the new Cassandra table
     final CountDownLatch processedAllRecords = new CountDownLatch(numEvents);
     final Consumer<Record<byte[], byte[]>> countdown = r -> processedAllRecords.countDown();
-    try (final var app = new ChangelogMigrationTool(bootProps, params, countdown).buildStreams()) {
+    try (final var app
+             = new ChangelogMigrationTool(bootProps, params, changelog, countdown).buildStreams()) {
       LOG.info("Awaiting for Bootstrapping application to start");
       startAppAndAwaitRunning(Duration.ofSeconds(120), app);
 
@@ -218,7 +219,7 @@ class ChangelogMigrationToolIntegrationTest {
     final int numKeys = 100;
     final int numEvents = 200;
 
-    final var params = ResponsiveKeyValueParams.fact(tableName);
+    final var params = ResponsiveStores.factStore(tableName);
 
     final Map<String, Object> baseProps = getProperties();
     final Properties bootProps = new Properties();
@@ -243,7 +244,8 @@ class ChangelogMigrationToolIntegrationTest {
     // 2: Run the changelog migration tool to bootstrap the new Cassandra table
     final CountDownLatch processedAllRecords = new CountDownLatch(numKeys);
     final Consumer<Record<byte[], byte[]>> countdown = r -> processedAllRecords.countDown();
-    final ChangelogMigrationTool app = new ChangelogMigrationTool(bootProps, params, countdown);
+    final ChangelogMigrationTool app
+        = new ChangelogMigrationTool(bootProps, params, changelog, countdown);
 
     LOG.info("Awaiting for Bootstrapping application to start");
     try (final var migrationApp = app.buildStreams()) {
