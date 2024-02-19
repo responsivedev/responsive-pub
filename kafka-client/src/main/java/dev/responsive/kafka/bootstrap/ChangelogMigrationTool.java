@@ -19,7 +19,6 @@ package dev.responsive.kafka.bootstrap;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_MODE;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.STORE_FLUSH_RECORDS_TRIGGER_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.WRITE_CONSISTENCY_LEVEL_CONFIG;
-import static dev.responsive.kafka.bootstrap.ChangelogMigrationConfig.CHANGELOG_TOPIC_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS;
 import static org.apache.kafka.streams.StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG;
@@ -49,22 +48,24 @@ public class ChangelogMigrationTool {
       org.slf4j.LoggerFactory.getLogger(ChangelogMigrationTool.class);
 
   private final Consumer<Record<byte[], byte[]>> processor;
-  private final ChangelogMigrationConfig config;
+  private final String changelogTopic;
   private final Properties properties;
   private final ResponsiveKeyValueParams params;
 
   @SuppressWarnings("unused") // reason: public API
   public ChangelogMigrationTool(
       final Properties properties,
-      final ResponsiveKeyValueParams params
+      final ResponsiveKeyValueParams params,
+      final String changelogTopic
   ) {
-    this(properties, params, r -> {});
+    this(properties, params, changelogTopic, r -> {});
   }
 
   // Visible for testing
   ChangelogMigrationTool(
       final Properties properties,
       final ResponsiveKeyValueParams params,
+      final String changelogTopic,
       final Consumer<Record<byte[], byte[]>> processor
   ) {
     this.processor = processor;
@@ -80,18 +81,17 @@ public class ChangelogMigrationTool {
     // stability
     properties.putIfAbsent(STORE_FLUSH_RECORDS_TRIGGER_CONFIG, 10_000);
 
-    config = new ChangelogMigrationConfig(properties);
     this.properties = properties;
     this.params = params;
+    this.changelogTopic = changelogTopic;
   }
 
   public ResponsiveKafkaStreams buildStreams() {
     final StreamsBuilder builder = new StreamsBuilder();
-    final String source = config.getString(CHANGELOG_TOPIC_CONFIG);
 
     final KTable<byte[], byte[]> table =
         builder.table(
-            source,
+            changelogTopic,
             Consumed.with(Serdes.ByteArray(), Serdes.ByteArray()),
             Materialized
                 .<byte[], byte[]>as(ResponsiveStores.keyValueStore(params))

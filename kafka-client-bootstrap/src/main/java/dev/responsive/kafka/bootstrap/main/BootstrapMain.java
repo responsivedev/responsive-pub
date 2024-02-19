@@ -56,7 +56,8 @@ public class BootstrapMain {
 
     final ChangelogMigrationTool tool = new ChangelogMigrationTool(
         properties,
-        params
+        params,
+        cmd.getOptionValue(BootstrapOptions.CHANGELOG_TOPIC)
     );
 
     final ResponsiveKafkaStreams app = tool.buildStreams();
@@ -90,8 +91,15 @@ public class BootstrapMain {
         .desc("The name of the state store")
         .build();
 
-    public static final Option TTL = Option.builder("ttlSeconds")
+    public static final Option CHANGELOG_TOPIC = Option.builder("changelogTopic")
         .required(true)
+        .hasArg(true)
+        .numberOfArgs(1)
+        .desc("The name of the store's changelog topic")
+        .build();
+
+    public static final Option TTL = Option.builder("ttlSeconds")
+        .required(false)
         .hasArg(true)
         .numberOfArgs(1)
         .desc("The TTL for the store in seconds")
@@ -100,6 +108,7 @@ public class BootstrapMain {
     public static final Options OPTIONS = new org.apache.commons.cli.Options()
         .addOption(PROPERTIES_FILE)
         .addOption(NAME)
+        .addOption(CHANGELOG_TOPIC)
         .addOption(TTL);
   }
 }
