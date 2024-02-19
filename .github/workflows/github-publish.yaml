@@ -89,7 +89,7 @@ jobs:
         env:
           ECR_REGISTRY: ${{ steps.login-ecr-public.outputs.public-registry }}
 
-       - name: "Publish Kafka Client Bootstrap"
+      - name: "Publish Kafka Client Bootstrap"
         uses: gradle/gradle-build-action@v2.9.0
         if: ${{ inputs.module == 'kafka-client' }}
         with:
