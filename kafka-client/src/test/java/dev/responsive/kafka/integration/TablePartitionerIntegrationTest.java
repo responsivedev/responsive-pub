@@ -226,7 +226,7 @@ public class TablePartitionerIntegrationTest {
               .boxed()
               .map(k -> new KeyValue<>(k, 100L))
               .collect(Collectors.toSet()),
-          true,
+          false,
           properties
       );
       final String cassandraName = new TableName(storeName).tableName();
@@ -299,7 +299,7 @@ public class TablePartitionerIntegrationTest {
               .boxed()
               .map(k -> new KeyValue<>(k, 100L))
               .collect(Collectors.toSet()),
-          true,
+          false,
           properties
       );
       final String cassandraName = new TableName(storeName).tableName();
