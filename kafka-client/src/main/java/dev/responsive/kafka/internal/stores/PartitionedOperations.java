@@ -25,6 +25,7 @@ import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.ResponsiveMode;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
+import dev.responsive.kafka.internal.config.ConfigUtils;
 import dev.responsive.kafka.internal.db.BatchFlusher;
 import dev.responsive.kafka.internal.db.BytesKeySpec;
 import dev.responsive.kafka.internal.db.CassandraTableSpecFactory;
@@ -133,8 +134,7 @@ public class PartitionedOperations implements KeyValueOperations {
     );
     storeRegistry.registerStore(registration);
 
-    final boolean migrationMode = config.getString(ResponsiveConfig.RESPONSIVE_MODE)
-        .equals(ResponsiveMode.MIGRATE.name());
+    final boolean migrationMode = ConfigUtils.responsiveMode(config) == ResponsiveMode.MIGRATE;
     long startingTimestamp = -1;
     final Optional<Duration> ttl = params.timeToLive();
     if (migrationMode && ttl.isPresent()) {
@@ -246,6 +246,15 @@ public class PartitionedOperations implements KeyValueOperations {
 
   @Override
   public byte[] get(final Bytes key) {
+    if (migrationMode) {
+      // we don't want to issue gets in migration mode since
+      // we're just reading from the changelog. the problem is
+      // that materialized tables issue get() on every put() to
+      // send the "undo" data downstream -- we intercept all gets
+      // and just return null
+      return null;
+    }
+
     // try the buffer first, it acts as a local cache
     // but this is also necessary for correctness as
     // it is possible that the data is either uncommitted
