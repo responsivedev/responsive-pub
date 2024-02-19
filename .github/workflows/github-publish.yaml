@@ -89,6 +89,14 @@ jobs:
         env:
           ECR_REGISTRY: ${{ steps.login-ecr-public.outputs.public-registry }}
 
+       - name: "Publish Kafka Client Bootstrap"
+        uses: gradle/gradle-build-action@v2.9.0
+        if: ${{ inputs.module == 'kafka-client' }}
+        with:
+          arguments: kafka-client-bootstrap:pushDockerMultiArch -PdockerRegistry=${{ steps.login-ecr-public.outputs.public-registry }}/j8q9y0n6 -PhelmRegistry=${{ steps.login-ecr-public.outputs.public-registry }}/j8q9y0n6
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr-public.outputs.public-registry }}
+
       - name: "Checkout sindri"
         uses: actions/checkout@v3
         with:
