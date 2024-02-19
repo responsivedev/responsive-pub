@@ -197,13 +197,8 @@ class ChangelogMigrationToolIntegrationTest {
       // each partition has a metadata row associated with it
       assertThat(table.approximateNumEntries(), Matchers.is((long) (numKeys + partitions)));
 
-      final Map<Long, Long> all = new HashMap<>();
       for (long k = 0; k < numKeys; k++) {
-        all.put(k, table.get(k));
-      }
-
-      for (long k = 0; k < numKeys; k++) {
-        assertThat(all, Matchers.hasEntry(k, (long) (numEvents / numKeys)));
+        assertThat(table.get(k), Matchers.is((long) numEvents / numKeys));
       }
     }
 
@@ -272,13 +267,8 @@ class ChangelogMigrationToolIntegrationTest {
           .store(StoreQueryParameters.fromNameAndType(
               tableName, QueryableStoreTypes.keyValueStore()));
 
-      final Map<Long, Long> all = new HashMap<>();
       for (long k = 0; k < numKeys; k++) {
-        all.put(k, table.get(k));
-      }
-
-      for (long k = 0; k < numKeys; k++) {
-        assertThat(all, Matchers.hasEntry(k, 1L));
+        assertThat(table.get(k), Matchers.is(k % 8));
       }
     }
 
@@ -376,7 +366,7 @@ class ChangelogMigrationToolIntegrationTest {
 
     @Override
     public void process(final FixedKeyRecord<Long, Long> record) {
-      final var valAndTs = ValueAndTimestamp.make(1L, context.currentStreamTimeMs());
+      final var valAndTs = ValueAndTimestamp.make(record.key() % 8, context.currentStreamTimeMs());
       if (store.putIfAbsent(record.key(), valAndTs) == null) {
         context.forward(record);
       }

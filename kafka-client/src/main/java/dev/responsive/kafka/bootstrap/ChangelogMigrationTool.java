@@ -18,11 +18,13 @@ package dev.responsive.kafka.bootstrap;
 
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_MODE;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.STORE_FLUSH_RECORDS_TRIGGER_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.WRITE_CONSISTENCY_LEVEL_CONFIG;
 import static dev.responsive.kafka.bootstrap.ChangelogMigrationConfig.CHANGELOG_TOPIC_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS;
 import static org.apache.kafka.streams.StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG;
 
+import com.datastax.oss.driver.api.core.ConsistencyLevel;
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.config.ResponsiveMode;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
@@ -34,6 +36,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.api.Processor;
@@ -69,6 +72,7 @@ public class ChangelogMigrationTool {
     properties.put(TOPOLOGY_OPTIMIZATION_CONFIG, REUSE_KTABLE_SOURCE_TOPICS);
     properties.put(AUTO_OFFSET_RESET_CONFIG, "earliest");
     properties.put(RESPONSIVE_MODE, ResponsiveMode.MIGRATE.name());
+    properties.put(WRITE_CONSISTENCY_LEVEL_CONFIG, ConsistencyLevel.ALL.name());
 
     // it is possible to push this number higher, but this is a relatively safe
     // number and still gets decent performance -- use putIfAbsent in case the
@@ -88,6 +92,7 @@ public class ChangelogMigrationTool {
     final KTable<byte[], byte[]> table =
         builder.table(
             source,
+            Consumed.with(Serdes.ByteArray(), Serdes.ByteArray()),
             Materialized
                 .<byte[], byte[]>as(ResponsiveStores.keyValueStore(params))
                 .withValueSerde(Serdes.ByteArray())

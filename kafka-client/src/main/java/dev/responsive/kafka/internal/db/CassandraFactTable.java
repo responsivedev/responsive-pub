@@ -230,7 +230,8 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
 
   @Override
   public long approximateNumEntries(final int kafkaPartition) {
-    throw new UnsupportedOperationException("all is not supported on fact tables");
+    throw new UnsupportedOperationException(
+        "approximateNumEntries is not supported on fact tables");
   }
 
   @Override

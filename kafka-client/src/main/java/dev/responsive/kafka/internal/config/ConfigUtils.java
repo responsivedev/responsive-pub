@@ -20,6 +20,7 @@ import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_APPLIC
 
 import dev.responsive.kafka.api.config.CompatibilityMode;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
+import dev.responsive.kafka.api.config.ResponsiveMode;
 import dev.responsive.kafka.api.config.StorageBackend;
 import java.util.Locale;
 import org.apache.kafka.streams.StreamsConfig;
@@ -50,6 +51,14 @@ public class ConfigUtils {
         .toUpperCase(Locale.ROOT);
 
     return CompatibilityMode.valueOf(backend);
+  }
+
+  public static ResponsiveMode responsiveMode(final ResponsiveConfig config) {
+    final var mode = config
+        .getString(ResponsiveConfig.RESPONSIVE_MODE)
+        .toUpperCase(Locale.ROOT);
+
+    return ResponsiveMode.valueOf(mode);
   }
 
   public static String responsiveAppId(
