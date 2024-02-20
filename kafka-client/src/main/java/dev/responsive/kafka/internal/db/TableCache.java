@@ -20,14 +20,14 @@ import dev.responsive.kafka.internal.db.spec.CassandraTableSpec;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeoutException;
-import jnr.ffi.annotations.Synchronized;
+import javax.annotation.concurrent.ThreadSafe;
 
 /**
  * A {@code ThreadSafeTableFactory} creates and maintains a collection
  * of {@link RemoteTable}s, ensuring that the statements to create the
  * table are only prepared once during the lifetime of the application.
  */
-@Synchronized
+@ThreadSafe
 public class TableCache<T extends RemoteTable<?, ?>> {
 
   @FunctionalInterface
@@ -63,7 +63,7 @@ public class TableCache<T extends RemoteTable<?, ?>> {
    * @param name the name of the table
    * @return the table, if it was already created by {@link #create(CassandraTableSpec)}
    */
-  public T getTable(final String name) {
+  public synchronized T getTable(final String name) {
     return tables.get(name);
   }
 

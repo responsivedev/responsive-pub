@@ -21,9 +21,9 @@ import dev.responsive.kafka.internal.db.spec.CassandraTableSpec;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeoutException;
-import jnr.ffi.annotations.Synchronized;
+import javax.annotation.concurrent.ThreadSafe;
 
-@Synchronized
+@ThreadSafe
 public class WindowedTableCache<T extends RemoteTable<?, ?>> {
 
   @FunctionalInterface
@@ -60,7 +60,7 @@ public class WindowedTableCache<T extends RemoteTable<?, ?>> {
    * @return the table, if it was already created by
    *         {@link #create(CassandraTableSpec, WindowSegmentPartitioner)}
    */
-  public T getTable(final String name) {
+  public synchronized T getTable(final String name) {
     return tables.get(name);
   }
 
