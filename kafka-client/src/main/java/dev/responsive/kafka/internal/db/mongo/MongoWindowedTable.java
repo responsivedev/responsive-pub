@@ -120,7 +120,7 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
           createSegment(segmentToCreate);
         }
 
-        final long firstSegmentId = activeSegments.get(0).segmentId;
+        final long firstSegmentId = activeSegments.get(0).segmentStartTimestamp;
         LOG.info("{}[{}] Initialized active segments in range {} - {}",
                  database.getName(), kafkaPartition, firstSegmentId,
                  firstSegmentId + activeSegments.size());
@@ -128,7 +128,8 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
     }
 
     private String collectionNameForSegment(final SegmentPartition segmentPartition) {
-      final long segmentStartTimeMs = segmentPartition.segmentId * segmenter.segmentIntervalMs();
+      final long segmentStartTimeMs =
+          segmentPartition.segmentStartTimestamp * segmenter.segmentIntervalMs();
       return String.format(
           "%d-%d",
           segmentPartition.tablePartition, segmentStartTimeMs
@@ -137,7 +138,8 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
 
     private void createSegment(final SegmentPartition segmentToCreate) {
       LOG.info("{}[{}] Creating segment id {}",
-               database.getName(), segmentToCreate.tablePartition, segmentToCreate.segmentId);
+          database.getName(), segmentToCreate.tablePartition, segmentToCreate.segmentStartTimestamp
+      );
 
       final var collectionName = collectionNameForSegment(segmentToCreate);
       final MongoCollection<WindowDoc> windowDocs;
@@ -163,14 +165,15 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
     // thus guaranteeing that even if we are fenced, the new writer will pick up from an offset and
     // stream-time such that the segment is already expired
     // However this does leave us vulnerable to zombie segments. We should consider doing a sweep
-    // for old segments every so often with #listCollectionNames, since the segmentId is embedded in
-    // the collection name and will indicate whether it's part of the active set or not, perhaps
-    // using a scheduled executor to avoid blocking processing
+    // for old segments every so often with #listCollectionNames, since the segmentStartTimestamp is
+    // embedded in the collection name and will indicate whether it's part of the active set or
+    // not, perhaps using a scheduled executor to avoid blocking processing.
     // In fact we may want to move all the segment expiration to a background process since there's
     // no async way to drop a collection but the stream thread doesn't actually need to wait for it
     private void deleteSegment(final SegmentPartition segmentToExpire) {
       LOG.info("{}[{}] Expiring segment id {}",
-               database.getName(), segmentToExpire.tablePartition, segmentToExpire.segmentId);
+          database.getName(), segmentToExpire.tablePartition, segmentToExpire.segmentStartTimestamp
+      );
 
       final var expiredDocs = segmentWindows.get(segmentToExpire);
       expiredDocs.drop();

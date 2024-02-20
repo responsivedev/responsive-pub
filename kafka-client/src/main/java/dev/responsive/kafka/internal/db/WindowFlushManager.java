@@ -53,8 +53,9 @@ public abstract class WindowFlushManager implements FlushManager<WindowedKey, Se
   public RemoteWriteResult<SegmentPartition> preFlush() {
     final var pendingRoll = pendingFlushSegmentMetadata.prepareRoll(segmenter);
 
-    for (final long segmentId : pendingRoll.segmentsToCreate()) {
-      final var createResult = createSegment(new SegmentPartition(kafkaPartition, segmentId));
+    for (final long segmentStartTimestamp : pendingRoll.segmentsToCreate()) {
+      final var createResult =
+          createSegment(new SegmentPartition(kafkaPartition, segmentStartTimestamp));
       if (!createResult.wasApplied()) {
         return createResult;
       }
@@ -74,8 +75,10 @@ public abstract class WindowFlushManager implements FlushManager<WindowedKey, Se
       return metadataResult;
     }
 
-    for (final long segmentId : pendingFlushSegmentMetadata.segmentRoll().segmentsToExpire()) {
-      final var deleteResult = deleteSegment(new SegmentPartition(kafkaPartition, segmentId));
+    for (final long segmentStartTimestamp : pendingFlushSegmentMetadata.segmentRoll()
+        .segmentsToExpire()) {
+      final var deleteResult =
+          deleteSegment(new SegmentPartition(kafkaPartition, segmentStartTimestamp));
       if (!deleteResult.wasApplied()) {
         return deleteResult;
       }

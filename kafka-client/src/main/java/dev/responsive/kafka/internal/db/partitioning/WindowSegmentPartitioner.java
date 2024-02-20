@@ -39,7 +39,7 @@ public class WindowSegmentPartitioner implements
   ) {
     return new Segmenter.SegmentPartition(
         kafkaPartition,
-        this.segmenter.segmentId(key.windowStartMs)
+        this.segmenter.segmentStartTimestamp(key.windowStartMs)
     );
   }
 

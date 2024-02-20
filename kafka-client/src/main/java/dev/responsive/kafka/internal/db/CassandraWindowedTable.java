@@ -25,7 +25,7 @@ import static dev.responsive.kafka.internal.db.ColumnName.METADATA_TS;
 import static dev.responsive.kafka.internal.db.ColumnName.OFFSET;
 import static dev.responsive.kafka.internal.db.ColumnName.PARTITION_KEY;
 import static dev.responsive.kafka.internal.db.ColumnName.ROW_TYPE;
-import static dev.responsive.kafka.internal.db.ColumnName.SEGMENT_ID;
+import static dev.responsive.kafka.internal.db.ColumnName.SEGMENT_START_TIMESTAMP;
 import static dev.responsive.kafka.internal.db.ColumnName.STREAM_TIME;
 import static dev.responsive.kafka.internal.db.ColumnName.WINDOW_START;
 import static dev.responsive.kafka.internal.db.RowType.DATA_ROW;
@@ -134,7 +134,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
         QueryBuilder
             .insertInto(name)
             .value(PARTITION_KEY.column(), bindMarker(PARTITION_KEY.bind()))
-            .value(SEGMENT_ID.column(), bindMarker(SEGMENT_ID.bind()))
+            .value(SEGMENT_START_TIMESTAMP.column(), bindMarker(SEGMENT_START_TIMESTAMP.bind()))
             .value(ROW_TYPE.column(), METADATA_ROW.literal())
             .value(DATA_KEY.column(), DATA_KEY.literal(METADATA_KEY))
             .value(WINDOW_START.column(), WINDOW_START.literal(METADATA_TS))
@@ -153,7 +153,8 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
     final var expireSegment = client.prepare(
         QueryBuilder.deleteFrom(name)
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
-            .where(SEGMENT_ID.relation().isEqualTo(bindMarker(SEGMENT_ID.bind())))
+            .where(SEGMENT_START_TIMESTAMP.relation()
+                .isEqualTo(bindMarker(SEGMENT_START_TIMESTAMP.bind())))
             .build()
     );
 
@@ -161,7 +162,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
         QueryBuilder
             .insertInto(name)
             .value(PARTITION_KEY.column(), bindMarker(PARTITION_KEY.bind()))
-            .value(SEGMENT_ID.column(), bindMarker(SEGMENT_ID.bind()))
+            .value(SEGMENT_START_TIMESTAMP.column(), bindMarker(SEGMENT_START_TIMESTAMP.bind()))
             .value(ROW_TYPE.column(), DATA_ROW.literal())
             .value(DATA_KEY.column(), bindMarker(DATA_KEY.bind()))
             .value(WINDOW_START.column(), bindMarker(WINDOW_START.bind()))
@@ -173,7 +174,8 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
         QueryBuilder
             .deleteFrom(name)
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
-            .where(SEGMENT_ID.relation().isEqualTo(bindMarker(SEGMENT_ID.bind())))
+            .where(SEGMENT_START_TIMESTAMP.relation()
+                .isEqualTo(bindMarker(SEGMENT_START_TIMESTAMP.bind())))
             .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
             .where(DATA_KEY.relation().isEqualTo(bindMarker(DATA_KEY.bind())))
             .where(WINDOW_START.relation().isEqualTo(bindMarker(WINDOW_START.bind())))
@@ -185,7 +187,8 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
             .selectFrom(name)
             .columns(DATA_KEY.column(), WINDOW_START.column(), DATA_VALUE.column())
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
-            .where(SEGMENT_ID.relation().isEqualTo(bindMarker(SEGMENT_ID.bind())))
+            .where(SEGMENT_START_TIMESTAMP.relation()
+                .isEqualTo(bindMarker(SEGMENT_START_TIMESTAMP.bind())))
             .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
             .where(DATA_KEY.relation().isEqualTo(bindMarker(DATA_KEY.bind())))
             .where(WINDOW_START.relation().isEqualTo(bindMarker(WINDOW_START.bind())))
@@ -197,7 +200,8 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
             .selectFrom(name)
             .columns(DATA_KEY.column(), WINDOW_START.column(), DATA_VALUE.column())
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
-            .where(SEGMENT_ID.relation().isEqualTo(bindMarker(SEGMENT_ID.bind())))
+            .where(SEGMENT_START_TIMESTAMP.relation()
+                .isEqualTo(bindMarker(SEGMENT_START_TIMESTAMP.bind())))
             .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
             .where(DATA_KEY.relation().isEqualTo(bindMarker(DATA_KEY.bind())))
             .where(WINDOW_START.relation().isGreaterThanOrEqualTo(bindMarker(WINDOW_FROM_BIND)))
@@ -210,7 +214,8 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
             .selectFrom(name)
             .columns(DATA_KEY.column(), WINDOW_START.column(), DATA_VALUE.column())
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
-            .where(SEGMENT_ID.relation().isEqualTo(bindMarker(SEGMENT_ID.bind())))
+            .where(SEGMENT_START_TIMESTAMP.relation()
+                .isEqualTo(bindMarker(SEGMENT_START_TIMESTAMP.bind())))
             .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
             .where(DATA_KEY.relation().isGreaterThan(bindMarker(KEY_FROM_BIND)))
             .where(DATA_KEY.relation().isLessThan(bindMarker(KEY_TO_BIND)))
@@ -222,7 +227,8 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
             .selectFrom(name)
             .columns(DATA_KEY.column(), WINDOW_START.column(), DATA_VALUE.column())
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
-            .where(SEGMENT_ID.relation().isEqualTo(bindMarker(SEGMENT_ID.bind())))
+            .where(SEGMENT_START_TIMESTAMP.relation()
+                .isEqualTo(bindMarker(SEGMENT_START_TIMESTAMP.bind())))
             .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
             .build()
     );
@@ -232,7 +238,8 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
             .selectFrom(name)
             .columns(DATA_KEY.column(), WINDOW_START.column(), DATA_VALUE.column())
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
-            .where(SEGMENT_ID.relation().isEqualTo(bindMarker(SEGMENT_ID.bind())))
+            .where(SEGMENT_START_TIMESTAMP.relation()
+                .isEqualTo(bindMarker(SEGMENT_START_TIMESTAMP.bind())))
             .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
             .where(DATA_KEY.relation().isEqualTo(bindMarker(DATA_KEY.bind())))
             .where(WINDOW_START.relation().isGreaterThanOrEqualTo(bindMarker(WINDOW_FROM_BIND)))
@@ -247,7 +254,8 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
             .selectFrom(name)
             .columns(DATA_KEY.column(), WINDOW_START.column(), DATA_VALUE.column())
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
-            .where(SEGMENT_ID.relation().isEqualTo(bindMarker(SEGMENT_ID.bind())))
+            .where(SEGMENT_START_TIMESTAMP.relation()
+                .isEqualTo(bindMarker(SEGMENT_START_TIMESTAMP.bind())))
             .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
             .where(DATA_KEY.relation().isGreaterThan(bindMarker(KEY_FROM_BIND)))
             .where(DATA_KEY.relation().isLessThan(bindMarker(KEY_TO_BIND)))
@@ -261,7 +269,8 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
             .selectFrom(name)
             .columns(DATA_KEY.column(), WINDOW_START.column(), DATA_VALUE.column())
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
-            .where(SEGMENT_ID.relation().isEqualTo(bindMarker(SEGMENT_ID.bind())))
+            .where(SEGMENT_START_TIMESTAMP.relation()
+                .isEqualTo(bindMarker(SEGMENT_START_TIMESTAMP.bind())))
             .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
             .orderBy(DATA_KEY.column(), ClusteringOrder.DESC)
             .orderBy(WINDOW_START.column(), ClusteringOrder.DESC)
@@ -273,7 +282,8 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
             .selectFrom(name)
             .column(OFFSET.column())
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
-            .where(SEGMENT_ID.relation().isEqualTo(bindMarker(SEGMENT_ID.bind())))
+            .where(SEGMENT_START_TIMESTAMP.relation()
+                .isEqualTo(bindMarker(SEGMENT_START_TIMESTAMP.bind())))
             .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
             .where(WINDOW_START.relation().isEqualTo(WINDOW_START.literal(METADATA_TS)))
             .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
@@ -285,7 +295,8 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
             .update(name)
             .setColumn(OFFSET.column(), bindMarker(OFFSET.bind()))
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
-            .where(SEGMENT_ID.relation().isEqualTo(bindMarker(SEGMENT_ID.bind())))
+            .where(SEGMENT_START_TIMESTAMP.relation()
+                .isEqualTo(bindMarker(SEGMENT_START_TIMESTAMP.bind())))
             .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
             .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
             .where(WINDOW_START.relation().isEqualTo(WINDOW_START.literal(METADATA_TS)))
@@ -297,7 +308,8 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
             .selectFrom(name)
             .column(STREAM_TIME.column())
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
-            .where(SEGMENT_ID.relation().isEqualTo(bindMarker(SEGMENT_ID.bind())))
+            .where(SEGMENT_START_TIMESTAMP.relation()
+                .isEqualTo(bindMarker(SEGMENT_START_TIMESTAMP.bind())))
             .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
             .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
             .where(WINDOW_START.relation().isEqualTo(WINDOW_START.literal(METADATA_TS)))
@@ -309,7 +321,8 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
             .update(name)
             .setColumn(STREAM_TIME.column(), bindMarker(STREAM_TIME.bind()))
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
-            .where(SEGMENT_ID.relation().isEqualTo(bindMarker(SEGMENT_ID.bind())))
+            .where(SEGMENT_START_TIMESTAMP.relation()
+                .isEqualTo(bindMarker(SEGMENT_START_TIMESTAMP.bind())))
             .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
             .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
             .where(WINDOW_START.relation().isEqualTo(WINDOW_START.literal(METADATA_TS)))
@@ -321,7 +334,8 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
             .selectFrom(name)
             .column(EPOCH.column())
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
-            .where(SEGMENT_ID.relation().isEqualTo(bindMarker(SEGMENT_ID.bind())))
+            .where(SEGMENT_START_TIMESTAMP.relation()
+                .isEqualTo(bindMarker(SEGMENT_START_TIMESTAMP.bind())))
             .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
             .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
             .where(WINDOW_START.relation().isEqualTo(WINDOW_START.literal(METADATA_TS)))
@@ -333,7 +347,8 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
             .update(name)
             .setColumn(EPOCH.column(), bindMarker(EPOCH.bind()))
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
-            .where(SEGMENT_ID.relation().isEqualTo(bindMarker(SEGMENT_ID.bind())))
+            .where(SEGMENT_START_TIMESTAMP.relation()
+                .isEqualTo(bindMarker(SEGMENT_START_TIMESTAMP.bind())))
             .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
             .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
             .where(WINDOW_START.relation().isEqualTo(WINDOW_START.literal(METADATA_TS)))
@@ -346,7 +361,8 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
             .update(name)
             .setColumn(EPOCH.column(), bindMarker(EPOCH.bind()))
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
-            .where(SEGMENT_ID.relation().isEqualTo(bindMarker(SEGMENT_ID.bind())))
+            .where(SEGMENT_START_TIMESTAMP.relation()
+                .isEqualTo(bindMarker(SEGMENT_START_TIMESTAMP.bind())))
             .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
             .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
             .where(WINDOW_START.relation().isEqualTo(WINDOW_START.literal(METADATA_TS)))
@@ -384,7 +400,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
         .createTable(tableName)
         .ifNotExists()
         .withPartitionKey(PARTITION_KEY.column(), DataTypes.INT)
-        .withPartitionKey(SEGMENT_ID.column(), DataTypes.BIGINT)
+        .withPartitionKey(SEGMENT_START_TIMESTAMP.column(), DataTypes.BIGINT)
         .withClusteringColumn(ROW_TYPE.column(), DataTypes.TINYINT)
         .withClusteringColumn(DATA_KEY.column(), DataTypes.BLOB)
         .withClusteringColumn(WINDOW_START.column(), DataTypes.TIMESTAMP)
@@ -455,7 +471,10 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
     final var initMetadata = client.execute(
         QueryBuilder.insertInto(name)
             .value(PARTITION_KEY.column(), PARTITION_KEY.literal(metadataPartition.tablePartition))
-            .value(SEGMENT_ID.column(), SEGMENT_ID.literal(metadataPartition.segmentId))
+            .value(
+                SEGMENT_START_TIMESTAMP.column(),
+                SEGMENT_START_TIMESTAMP.literal(metadataPartition.segmentStartTimestamp)
+            )
             .value(ROW_TYPE.column(), METADATA_ROW.literal())
             .value(DATA_KEY.column(), DATA_KEY.literal(METADATA_KEY))
             .value(WINDOW_START.column(), WINDOW_START.literal(METADATA_TS))
@@ -492,7 +511,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
       LOG.info("Skipping reservation of epoch {} for kafka partition {} due to no active segments",
                epoch, kafkaPartition);
     } else {
-      final long firstSegmentId = activeSegments.get(0).segmentId;
+      final long firstSegmentId = activeSegments.get(0).segmentStartTimestamp;
       long lastSegmentId = firstSegmentId;
       for (final SegmentPartition tablePartition : activeSegments) {
         final var reserveSegmentEpoch = client.execute(reserveEpoch(tablePartition, epoch));
@@ -500,7 +519,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
         if (!reserveSegmentEpoch.wasApplied()) {
           handleEpochFencing(kafkaPartition, tablePartition, epoch);
         }
-        lastSegmentId = tablePartition.segmentId;
+        lastSegmentId = tablePartition.segmentStartTimestamp;
       }
       LOG.info("Reserved epoch {} for kafka partition {} across active segments in range {} - {}",
                epoch, kafkaPartition, firstSegmentId, lastSegmentId);
@@ -563,7 +582,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
     return createSegment
         .bind()
         .setInt(PARTITION_KEY.bind(), segmentToCreate.tablePartition)
-        .setLong(SEGMENT_ID.bind(), segmentToCreate.segmentId)
+        .setLong(SEGMENT_START_TIMESTAMP.bind(), segmentToCreate.segmentStartTimestamp)
         .setLong(EPOCH.bind(), epoch)
         .setIdempotent(true);
   }
@@ -588,7 +607,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
     return expireSegment
         .bind()
         .setInt(PARTITION_KEY.bind(), segmentToDelete.tablePartition)
-        .setLong(SEGMENT_ID.bind(), segmentToDelete.segmentId)
+        .setLong(SEGMENT_START_TIMESTAMP.bind(), segmentToDelete.segmentStartTimestamp)
         .setIdempotent(true);
   }
 
@@ -599,7 +618,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
         fetchOffset
             .bind()
             .setInt(PARTITION_KEY.bind(), metadataPartition.tablePartition)
-            .setLong(SEGMENT_ID.bind(), metadataPartition.segmentId))
+            .setLong(SEGMENT_START_TIMESTAMP.bind(), metadataPartition.segmentStartTimestamp))
         .all();
 
     if (result.size() != 1) {
@@ -621,7 +640,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
     return setOffset
         .bind()
         .setInt(PARTITION_KEY.bind(), metadataPartition.tablePartition)
-        .setLong(SEGMENT_ID.bind(), metadataPartition.segmentId)
+        .setLong(SEGMENT_START_TIMESTAMP.bind(), metadataPartition.segmentStartTimestamp)
         .setLong(OFFSET.bind(), offset);
   }
 
@@ -631,7 +650,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
             fetchStreamTime
                 .bind()
                 .setInt(PARTITION_KEY.bind(), metadataPartition.tablePartition)
-                .setLong(SEGMENT_ID.bind(), metadataPartition.segmentId))
+                .setLong(SEGMENT_START_TIMESTAMP.bind(), metadataPartition.segmentStartTimestamp))
         .all();
 
     if (result.size() != 1) {
@@ -655,7 +674,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
     return setStreamTime
         .bind()
         .setInt(PARTITION_KEY.bind(), metadataPartition.tablePartition)
-        .setLong(SEGMENT_ID.bind(), metadataPartition.segmentId)
+        .setLong(SEGMENT_START_TIMESTAMP.bind(), metadataPartition.segmentStartTimestamp)
         .setLong(STREAM_TIME.bind(), streamTime);
   }
 
@@ -669,7 +688,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
             fetchEpoch
                 .bind()
                 .setInt(PARTITION_KEY.bind(), segmentPartition.tablePartition)
-                .setLong(SEGMENT_ID.bind(), segmentPartition.segmentId))
+                .setLong(SEGMENT_START_TIMESTAMP.bind(), segmentPartition.segmentStartTimestamp))
         .all();
 
     if (result.size() != 1) {
@@ -685,7 +704,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
     return reserveEpoch
         .bind()
         .setInt(PARTITION_KEY.bind(), segmentPartition.tablePartition)
-        .setLong(SEGMENT_ID.bind(), segmentPartition.segmentId)
+        .setLong(SEGMENT_START_TIMESTAMP.bind(), segmentPartition.segmentStartTimestamp)
         .setLong(EPOCH.bind(), epoch);
   }
 
@@ -693,7 +712,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
     return ensureEpoch
         .bind()
         .setInt(PARTITION_KEY.bind(), segmentPartition.tablePartition)
-        .setLong(SEGMENT_ID.bind(), segmentPartition.segmentId)
+        .setLong(SEGMENT_START_TIMESTAMP.bind(), segmentPartition.segmentStartTimestamp)
         .setLong(EPOCH.bind(), epoch);
   }
 
@@ -723,7 +742,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
     return insert
         .bind()
         .setInt(PARTITION_KEY.bind(), remotePartition.tablePartition)
-        .setLong(SEGMENT_ID.bind(), remotePartition.segmentId)
+        .setLong(SEGMENT_START_TIMESTAMP.bind(), remotePartition.segmentStartTimestamp)
         .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.key.get()))
         .setInstant(WINDOW_START.bind(), Instant.ofEpochMilli(key.windowStartMs))
         .setByteBuffer(DATA_VALUE.bind(), ByteBuffer.wrap(value));
@@ -749,7 +768,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
     return delete
         .bind()
         .setInt(PARTITION_KEY.bind(), segmentPartition.tablePartition)
-        .setLong(SEGMENT_ID.bind(), segmentPartition.segmentId)
+        .setLong(SEGMENT_START_TIMESTAMP.bind(), segmentPartition.segmentStartTimestamp)
         .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.key.get()))
         .setInstant(WINDOW_START.bind(), Instant.ofEpochMilli(key.windowStartMs));
   }
@@ -767,7 +786,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
     final BoundStatement get = fetchSingle
         .bind()
         .setInt(PARTITION_KEY.bind(), segmentPartition.tablePartition)
-        .setLong(SEGMENT_ID.bind(), segmentPartition.segmentId)
+        .setLong(SEGMENT_START_TIMESTAMP.bind(), segmentPartition.segmentStartTimestamp)
         .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
         .setInstant(WINDOW_START.bind(), Instant.ofEpochMilli(windowStart));
 
@@ -798,7 +817,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
       final BoundStatement get = fetch
           .bind()
           .setInt(PARTITION_KEY.bind(), partition.tablePartition)
-          .setLong(SEGMENT_ID.bind(), partition.segmentId)
+          .setLong(SEGMENT_START_TIMESTAMP.bind(), partition.segmentStartTimestamp)
           .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
           .setInstant(WINDOW_FROM_BIND, Instant.ofEpochMilli(timeFrom))
           .setInstant(WINDOW_TO_BIND, Instant.ofEpochMilli(timeTo));
@@ -826,7 +845,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
       final BoundStatement get = backFetch
           .bind()
           .setInt(PARTITION_KEY.bind(), partition.tablePartition)
-          .setLong(SEGMENT_ID.bind(), partition.segmentId)
+          .setLong(SEGMENT_START_TIMESTAMP.bind(), partition.segmentStartTimestamp)
           .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
           .setInstant(WINDOW_FROM_BIND, Instant.ofEpochMilli(timeFrom))
           .setInstant(WINDOW_TO_BIND, Instant.ofEpochMilli(timeTo));
@@ -855,7 +874,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
       final BoundStatement get = fetchRange
           .bind()
           .setInt(PARTITION_KEY.bind(), partition.tablePartition)
-          .setLong(SEGMENT_ID.bind(), partition.segmentId)
+          .setLong(SEGMENT_START_TIMESTAMP.bind(), partition.segmentStartTimestamp)
           .setByteBuffer(KEY_FROM_BIND, ByteBuffer.wrap(fromKey.get()))
           .setByteBuffer(KEY_TO_BIND, ByteBuffer.wrap(toKey.get()));
 
@@ -886,7 +905,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
       final BoundStatement get = backFetchRange
           .bind()
           .setInt(PARTITION_KEY.bind(), partition.tablePartition)
-          .setLong(SEGMENT_ID.bind(), partition.segmentId)
+          .setLong(SEGMENT_START_TIMESTAMP.bind(), partition.segmentStartTimestamp)
           .setByteBuffer(KEY_FROM_BIND, ByteBuffer.wrap(fromKey.get()))
           .setByteBuffer(KEY_TO_BIND, ByteBuffer.wrap(toKey.get()));
 
@@ -915,7 +934,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
       final BoundStatement get = fetchAll
           .bind()
           .setInt(PARTITION_KEY.bind(), partition.tablePartition)
-          .setLong(SEGMENT_ID.bind(), partition.segmentId)
+          .setLong(SEGMENT_START_TIMESTAMP.bind(), partition.segmentStartTimestamp)
           .setInstant(KEY_FROM_BIND, Instant.ofEpochMilli(timeFrom))
           .setInstant(KEY_TO_BIND, Instant.ofEpochMilli(timeTo));
 
@@ -944,7 +963,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
       final BoundStatement get = backFetchAll
           .bind()
           .setInt(PARTITION_KEY.bind(), partition.tablePartition)
-          .setLong(SEGMENT_ID.bind(), partition.segmentId)
+          .setLong(SEGMENT_START_TIMESTAMP.bind(), partition.segmentStartTimestamp)
           .setInstant(KEY_FROM_BIND, Instant.ofEpochMilli(timeFrom))
           .setInstant(KEY_TO_BIND, Instant.ofEpochMilli(timeTo));
 
