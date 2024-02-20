@@ -39,20 +39,20 @@ runs:
         arguments: :${{ inputs.module }}:build
 
     - name: "Gradle: Release Version"
-      if: ${{ inputs.force_version == 'None' }} && $${{ inputs.build_only == 'false' }}
+      if: ${{ inputs.force_version == 'None' }} && ${{ inputs.build_only == 'false' }}
       uses: gradle/gradle-build-action@v2.9.0
       with:
         arguments: :${{ inputs.module }}:release
 
     - name: "Gradle: Release Version (forced)"
-      if: ${{ inputs.force_version != 'None' }}  && $${{ inputs.build_only == 'false' }}
+      if: ${{ inputs.force_version != 'None' }}  && ${{ inputs.build_only == 'false' }}
       uses: gradle/gradle-build-action@v2.9.0
       with:
         arguments: :${{ inputs.module }}:release -Prelease.forceVersion=${{ inputs.force_version }}
 
     - name: "Gradle: Publish Artifacts"
       uses: gradle/gradle-build-action@v2.9.0
-      if: ${{ inputs.module != 'operator' }} && $${{ inputs.build_only == 'false' }}
+      if: ${{ inputs.module != 'operator' }} && ${{ inputs.build_only == 'false' }}
       with:
         arguments: :${{ inputs.module }}:publish # publish to both S3 and Sonatype OSSRH
       env:
