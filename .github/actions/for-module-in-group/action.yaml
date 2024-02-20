@@ -34,6 +34,10 @@ inputs:
   action:
     required: true
     description: "the action to execute (options: gradle-build-and-publish)"
+  build_only:
+    default: "false"
+    required: false
+    description: "set this value to true to only run the build"
   OSSRH_USER:
     required: false
     description: "the OSSRH user for publishing actions (found in the 'secrets' context)"
@@ -55,6 +59,7 @@ runs:
       uses: ./.github/actions/gradle-build-and-publish
       with:
         module: ${{ inputs.module }}
+        input: ${{ inputs.build_only }}
         OSSRH_USER: ${{ inputs.OSSRH_USER }}
         OSSRH_PASSWORD: ${{ inputs.OSSRH_PASSWORD }}
         SIGNING_KEY: ${{ inputs.SIGNING_KEY }}
@@ -65,6 +70,7 @@ runs:
       uses: ./.github/actions/gradle-build-and-publish
       with:
         module: "responsive-test-utils"
+        input: ${{ inputs.build_only }}
         force_version: ${{ steps.gradle-build-and-publish-root-module.outputs.release_version }}
         OSSRH_USER: ${{ inputs.OSSRH_USER }}
         OSSRH_PASSWORD: ${{ inputs.OSSRH_PASSWORD }}
