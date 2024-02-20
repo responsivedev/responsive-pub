@@ -16,12 +16,14 @@
 
 package dev.responsive.kafka.internal.utils;
 
+import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.REQUEST_CONSISTENCY;
 import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.REQUEST_THROTTLER_CLASS;
 import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.REQUEST_THROTTLER_MAX_CONCURRENT_REQUESTS;
 import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.REQUEST_THROTTLER_MAX_QUEUE_SIZE;
 import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.REQUEST_TIMEOUT;
 import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.RETRY_POLICY_CLASS;
 
+import com.datastax.oss.driver.api.core.ConsistencyLevel;
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.CqlSessionBuilder;
 import com.datastax.oss.driver.api.core.config.DriverConfigLoader;
@@ -36,6 +38,8 @@ import com.mongodb.client.MongoClients;
 import com.mongodb.client.MongoDatabase;
 import dev.responsive.kafka.internal.db.ResponsiveRetryPolicy;
 import java.net.InetSocketAddress;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import javax.annotation.Nullable;
 import org.bson.Document;
 
@@ -78,6 +82,7 @@ public final class SessionUtil {
             // cause a rebalance
             .withInt(REQUEST_THROTTLER_MAX_QUEUE_SIZE, Integer.MAX_VALUE)
             .withInt(REQUEST_THROTTLER_MAX_CONCURRENT_REQUESTS, maxConcurrentRequests)
+            .withString(REQUEST_CONSISTENCY, ConsistencyLevel.QUORUM.name())
             .build())
         .withKeyspace(keyspace)
         .build();
@@ -95,8 +100,8 @@ public final class SessionUtil {
       // reads if they're ok with the risks
       connectionString = String.format(
           "mongodb+srv://%s:%s@%s/?retryWrites=true&w=majority&r=majority",
-          clientId,
-          clientSecret,
+          URLEncoder.encode(clientId, StandardCharsets.UTF_8),
+          URLEncoder.encode(clientSecret, StandardCharsets.UTF_8),
           hostname
       );
     } else if (clientId == null ^ clientSecret == null) {

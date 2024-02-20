@@ -19,11 +19,13 @@
 package dev.responsive.kafka.internal.db;
 
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
+import dev.responsive.kafka.internal.utils.Constants;
 import dev.responsive.kafka.internal.utils.Result;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
@@ -63,8 +65,9 @@ public class BatchFlusher<K extends Comparable<K>, P> {
     // if/when the entire batch of flushes has completed successfully
     final RemoteWriteResult<P> flushResult;
     try {
-      flushResult = flushBatch(batchWriters).get();
-    } catch (final InterruptedException | ExecutionException e) {
+      flushResult = flushBatch(batchWriters)
+          .get(Constants.BLOCKING_TIMEOUT_VALUE, Constants.BLOCKING_TIMEOUT_UNIT);
+    } catch (final InterruptedException | ExecutionException | TimeoutException e) {
       log.error("Unexpected exception while flushing to remote", e);
       throw new RuntimeException("Failed while flushing batch for kafka partition "
                                      + kafkaPartition + " to remote", e);

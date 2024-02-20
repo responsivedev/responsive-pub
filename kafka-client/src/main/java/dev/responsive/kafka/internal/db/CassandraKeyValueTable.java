@@ -94,7 +94,8 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
             .value(DATA_KEY.column(), bindMarker(DATA_KEY.bind()))
             .value(TIMESTAMP.column(), bindMarker(TIMESTAMP.bind()))
             .value(DATA_VALUE.column(), bindMarker(DATA_VALUE.bind()))
-            .build()
+            .build(),
+        QueryOp.WRITE
     );
 
     final var get = client.prepare(
@@ -107,7 +108,8 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
             .where(TIMESTAMP.relation().isGreaterThanOrEqualTo(bindMarker(TIMESTAMP.bind())))
             // ALLOW FILTERING is OK b/c the query only scans one partition
             .allowFiltering()
-            .build()
+            .build(),
+        QueryOp.READ
     );
 
     final var range = client.prepare(
@@ -121,7 +123,8 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
             .where(TIMESTAMP.relation().isGreaterThanOrEqualTo(bindMarker(TIMESTAMP.bind())))
             // ALLOW FILTERING is OK b/c the query only scans one partition
             .allowFiltering()
-            .build()
+            .build(),
+        QueryOp.READ
     );
 
     final var all = client.prepare(
@@ -133,7 +136,8 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
             .where(TIMESTAMP.relation().isGreaterThanOrEqualTo(bindMarker(TIMESTAMP.bind())))
             // ALLOW FILTERING is OK b/c the query only scans one partition
             .allowFiltering()
-            .build()
+            .build(),
+        QueryOp.READ
     );
 
     final var delete = client.prepare(
@@ -142,7 +146,8 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
             .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
             .where(DATA_KEY.relation().isEqualTo(bindMarker(DATA_KEY.bind())))
-            .build()
+            .build(),
+        QueryOp.WRITE
     );
 
     final var fetchOffset = client.prepare(
@@ -152,7 +157,8 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
             .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
             .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
-            .build()
+            .build(),
+        QueryOp.READ
     );
 
     final var setOffset = client.prepare(
@@ -162,7 +168,8 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
             .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
             .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
-            .build()
+            .build(),
+        QueryOp.WRITE
     );
 
     final var fetchEpoch = client.prepare(
@@ -172,7 +179,8 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
             .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
             .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
-            .build()
+            .build(),
+        QueryOp.READ
     );
 
     final var reserveEpoch = client.prepare(
@@ -183,7 +191,8 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
             .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
             .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
             .ifColumn(EPOCH.column()).isLessThan(bindMarker(EPOCH.bind()))
-            .build()
+            .build(),
+        QueryOp.WRITE
     );
 
     final var ensureEpoch = client.prepare(
@@ -194,7 +203,8 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
             .where(ROW_TYPE.relation().isEqualTo(METADATA_ROW.literal()))
             .where(DATA_KEY.relation().isEqualTo(DATA_KEY.literal(METADATA_KEY)))
             .ifColumn(EPOCH.column()).isEqualTo(bindMarker(EPOCH.bind()))
-            .build()
+            .build(),
+        QueryOp.WRITE
     );
 
     return new CassandraKeyValueTable(

@@ -1,7 +1,9 @@
 name: PR Build
 on:
   pull_request:
-    branches: ["main"]
+    branches:
+      - main
+      - 'patch/**'
 jobs:
   build:
     permissions:
