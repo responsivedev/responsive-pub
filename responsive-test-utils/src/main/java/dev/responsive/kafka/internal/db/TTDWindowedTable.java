@@ -169,7 +169,7 @@ public class TTDWindowedTable extends TTDTable<WindowedKey>
         final int kafkaPartition,
         final WindowSegmentPartitioner partitioner
     ) {
-      super(table.name(), kafkaPartition, partitioner.segmenter, 0L);
+      super(table.name(), kafkaPartition, partitioner.segmenter(), 0L);
       this.table = table;
       this.partitioner = partitioner;
       this.logPrefix = String.format("%s TTDWindowFlushManager ", table.name());
