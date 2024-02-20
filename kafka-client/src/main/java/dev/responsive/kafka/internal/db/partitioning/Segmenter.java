@@ -18,8 +18,6 @@ package dev.responsive.kafka.internal.db.partitioning;
 
 import static java.util.Collections.emptyList;
 
-import dev.responsive.kafka.internal.db.SegmentableKey;
-import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.SegmentPartition;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -28,12 +26,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * A segment-based partitioner where kafka partitions are mapped to a subset of remote partitions
- * divided up into "segments" that correspond to a range of timestamps. By deleting a table
- * partition we can "drop" a full segment at a time, which can be done if (and only if) the
- * stream-time advances such that the highest timestamp in the range is now outside the retention
- * period. This is intended for segmented WindowStores, but could be extended in the future to
- * other timeseries and/or ttl types of state stores.
+ * A helper class for segment-based partitioners where kafka partitions are mapped to a subset
+ * of remote partitions divided up into "segments" that correspond to a range of timestamps.
+ * By deleting a table partition we can "drop" a full segment at a time, which can be done if
+ * (and only if) the stream-time advances such that the highest timestamp in the range is now
+ * outside the retention period. This is intended for segmented WindowStores, but could be
+ * extended in the future to other timeseries and/or ttl types of state stores.
  * <p>
  * Each segment covers a specific time range in milliseconds. If t_n is the start time of the
  * nth segment, then that segment covers all timestamps from t_s - t_s + segmentInterval.
@@ -78,12 +76,10 @@ import org.slf4j.LoggerFactory;
  * For the time being, we simply recommend that users configure the number of segments
  * similarly to how they would configure the number of sub-partitions for a key-value store.
  */
-public class SegmentPartitioner<K extends SegmentableKey<K>>
-    implements TablePartitioner<K, SegmentPartition> {
+public class Segmenter {
 
-  private static final Logger LOG = LoggerFactory.getLogger(SegmentPartitioner.class);
+  private static final Logger LOG = LoggerFactory.getLogger(Segmenter.class);
 
-  public static final long METADATA_SEGMENT_ID = -1L;
   public static final long UNINITIALIZED_STREAM_TIME = -1L;
 
   private final long retentionPeriodMs;
@@ -131,7 +127,7 @@ public class SegmentPartitioner<K extends SegmentableKey<K>>
     }
   }
 
-  public SegmentPartitioner(
+  public Segmenter(
       final long retentionPeriodMs,
       final long segmentIntervalMs
   ) {
@@ -149,19 +145,6 @@ public class SegmentPartitioner<K extends SegmentableKey<K>>
         retentionPeriodMs,
         segmentIntervalMs
     );
-  }
-
-  @Override
-  public SegmentPartition tablePartition(final int kafkaPartition, final K key) {
-    return new SegmentPartition(
-        kafkaPartition,
-        segmentId(key.segmentTimestamp())
-    );
-  }
-
-  @Override
-  public SegmentPartition metadataTablePartition(final int kafkaPartition) {
-    return new SegmentPartition(kafkaPartition, METADATA_SEGMENT_ID);
   }
 
   public long segmentIntervalMs() {
@@ -281,7 +264,7 @@ public class SegmentPartitioner<K extends SegmentableKey<K>>
     }
   }
 
-  private long segmentId(final long windowTimestamp) {
+  public long segmentId(final long windowTimestamp) {
     return Long.max(0, windowTimestamp / segmentIntervalMs);
   }
 

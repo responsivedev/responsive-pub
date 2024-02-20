@@ -32,7 +32,7 @@ import dev.responsive.kafka.internal.db.RemoteWindowedTable;
 import dev.responsive.kafka.internal.db.WindowFlushManager;
 import dev.responsive.kafka.internal.db.WindowedKeySpec;
 import dev.responsive.kafka.internal.db.mongo.ResponsiveMongoClient;
-import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner;
+import dev.responsive.kafka.internal.db.partitioning.WindowSegmentPartitioner;
 import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
 import dev.responsive.kafka.internal.utils.Iterators;
 import dev.responsive.kafka.internal.utils.Result;
@@ -92,7 +92,7 @@ public class SegmentedOperations implements WindowOperations {
         context.taskId().partition()
     );
 
-    final SegmentPartitioner<WindowedKey> partitioner = new SegmentPartitioner<WindowedKey>(
+    final WindowSegmentPartitioner partitioner = new WindowSegmentPartitioner(
         params.retentionPeriod(),
         StoreUtil.computeSegmentInterval(params.retentionPeriod(), params.numSegments())
     );
@@ -153,7 +153,7 @@ public class SegmentedOperations implements WindowOperations {
   private static RemoteWindowedTable<?> createCassandra(
       final ResponsiveWindowParams params,
       final SessionClients clients,
-      final SegmentPartitioner<WindowedKey> partitioner
+      final WindowSegmentPartitioner partitioner
   ) throws InterruptedException, TimeoutException {
     final CassandraClient client = clients.cassandraClient();
 
@@ -172,7 +172,7 @@ public class SegmentedOperations implements WindowOperations {
   private static RemoteWindowedTable<?> createMongo(
       final ResponsiveWindowParams params,
       final SessionClients clients,
-      final SegmentPartitioner<WindowedKey> partitioner
+      final WindowSegmentPartitioner partitioner
   ) throws InterruptedException, TimeoutException {
     final ResponsiveMongoClient client = clients.mongoClient();
 

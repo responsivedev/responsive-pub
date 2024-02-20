@@ -18,9 +18,9 @@ package dev.responsive.kafka.internal.db;
 
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.kafka.internal.clients.TTDCassandraClient;
-import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner;
-import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.SegmentPartition;
+import dev.responsive.kafka.internal.db.partitioning.Segmenter.SegmentPartition;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
+import dev.responsive.kafka.internal.db.partitioning.WindowSegmentPartitioner;
 import dev.responsive.kafka.internal.db.spec.CassandraTableSpec;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
 import dev.responsive.kafka.internal.stores.WindowStoreStub;
@@ -33,12 +33,12 @@ public class TTDWindowedTable extends TTDTable<WindowedKey>
 
   private final String name;
   private final WindowStoreStub stub;
-  private final SegmentPartitioner<WindowedKey> partitioner;
+  private final WindowSegmentPartitioner partitioner;
 
   public static TTDWindowedTable create(
       final CassandraTableSpec spec,
       final CassandraClient client,
-      final SegmentPartitioner<WindowedKey> partitioner
+      final WindowSegmentPartitioner partitioner
   ) {
     return new TTDWindowedTable(spec, (TTDCassandraClient) client, partitioner);
   }
@@ -46,7 +46,7 @@ public class TTDWindowedTable extends TTDTable<WindowedKey>
   public TTDWindowedTable(
       final CassandraTableSpec spec,
       final TTDCassandraClient client,
-      SegmentPartitioner<WindowedKey> partitioner
+      WindowSegmentPartitioner partitioner
   ) {
     super(client);
     this.name = spec.tableName();
@@ -162,14 +162,14 @@ public class TTDWindowedTable extends TTDTable<WindowedKey>
 
     private final String logPrefix;
     private final TTDWindowedTable table;
-    private final SegmentPartitioner<WindowedKey> partitioner;
+    private final WindowSegmentPartitioner partitioner;
 
     public TTDWindowFlushManager(
         final TTDWindowedTable table,
         final int kafkaPartition,
-        final SegmentPartitioner<WindowedKey> partitioner
+        final WindowSegmentPartitioner partitioner
     ) {
-      super(table.name(), kafkaPartition, partitioner, 0L);
+      super(table.name(), kafkaPartition, partitioner.segmenter, 0L);
       this.table = table;
       this.partitioner = partitioner;
       this.logPrefix = String.format("%s TTDWindowFlushManager ", table.name());

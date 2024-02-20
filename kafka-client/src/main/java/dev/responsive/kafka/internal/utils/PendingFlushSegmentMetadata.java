@@ -18,8 +18,8 @@
 
 package dev.responsive.kafka.internal.utils;
 
-import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner;
-import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.SegmentRoll;
+import dev.responsive.kafka.internal.db.partitioning.Segmenter;
+import dev.responsive.kafka.internal.db.partitioning.Segmenter.SegmentRoll;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
@@ -77,7 +77,7 @@ public class PendingFlushSegmentMetadata {
     batchStreamTime = Math.max(batchStreamTime, recordTimestamp);
   }
 
-  public SegmentRoll prepareRoll(final SegmentPartitioner<?> partitioner) {
+  public SegmentRoll prepareRoll(final Segmenter partitioner) {
     if (batchSegmentRoll != null) {
       log.error("Attempted to prepare flush while active flush was ongoing "
                     + "(persistedStreamTime={}, batchStreamTime={})",

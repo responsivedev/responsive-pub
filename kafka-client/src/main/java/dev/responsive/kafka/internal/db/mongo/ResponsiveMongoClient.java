@@ -22,10 +22,9 @@ import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.RemoteWindowedTable;
 import dev.responsive.kafka.internal.db.TableCache;
 import dev.responsive.kafka.internal.db.WindowedTableCache;
-import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
+import dev.responsive.kafka.internal.db.partitioning.WindowSegmentPartitioner;
 import dev.responsive.kafka.internal.db.spec.BaseTableSpec;
-import dev.responsive.kafka.internal.utils.WindowedKey;
 import java.util.concurrent.TimeoutException;
 
 public class ResponsiveMongoClient {
@@ -64,7 +63,7 @@ public class ResponsiveMongoClient {
 
   public RemoteWindowedTable<WriteModel<WindowDoc>> windowedTable(
       final String name,
-      final SegmentPartitioner<WindowedKey> partitioner
+      final WindowSegmentPartitioner partitioner
   ) throws InterruptedException, TimeoutException {
     return windowTableCache.create(new BaseTableSpec(name, partitioner), partitioner);
   }

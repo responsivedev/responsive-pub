@@ -25,9 +25,9 @@ import com.mongodb.client.MongoCollection;
 import dev.responsive.kafka.internal.db.mongo.MongoWindowedTable;
 import dev.responsive.kafka.internal.db.mongo.MongoWriter;
 import dev.responsive.kafka.internal.db.mongo.WindowDoc;
-import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner;
-import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.SegmentPartition;
+import dev.responsive.kafka.internal.db.partitioning.Segmenter.SegmentPartition;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
+import dev.responsive.kafka.internal.db.partitioning.WindowSegmentPartitioner;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
 import dev.responsive.kafka.internal.utils.WindowedKey;
 import java.util.function.Function;
@@ -42,17 +42,17 @@ public class MongoWindowFlushManager extends WindowFlushManager {
   private final MongoWindowedTable table;
   private final Function<SegmentPartition, MongoCollection<WindowDoc>> windowsForSegment;
 
-  private final SegmentPartitioner<WindowedKey> partitioner;
+  private final WindowSegmentPartitioner partitioner;
   private final int kafkaPartition;
 
   public MongoWindowFlushManager(
       final MongoWindowedTable table,
       final Function<SegmentPartition, MongoCollection<WindowDoc>> windowsForSegment,
-      final SegmentPartitioner<WindowedKey> partitioner,
+      final WindowSegmentPartitioner partitioner,
       final int kafkaPartition,
       final long streamTime
   ) {
-    super(table.name(), kafkaPartition, partitioner, streamTime);
+    super(table.name(), kafkaPartition, partitioner.segmenter(), streamTime);
 
     this.table = table;
     this.windowsForSegment = windowsForSegment;

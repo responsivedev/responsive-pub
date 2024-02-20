@@ -16,8 +16,8 @@
 
 package dev.responsive.kafka.internal.db;
 
-import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner;
-import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.SegmentPartition;
+import dev.responsive.kafka.internal.db.partitioning.Segmenter;
+import dev.responsive.kafka.internal.db.partitioning.Segmenter.SegmentPartition;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
 import dev.responsive.kafka.internal.utils.PendingFlushSegmentMetadata;
 import dev.responsive.kafka.internal.utils.WindowedKey;
@@ -25,17 +25,17 @@ import dev.responsive.kafka.internal.utils.WindowedKey;
 public abstract class WindowFlushManager implements FlushManager<WindowedKey, SegmentPartition> {
 
   private final int kafkaPartition;
-  private final SegmentPartitioner<WindowedKey> partitioner;
+  private final Segmenter segmenter;
   private final PendingFlushSegmentMetadata pendingFlushSegmentMetadata;
 
   public WindowFlushManager(
       final String tableName,
       final int kafkaPartition,
-      final SegmentPartitioner<WindowedKey> partitioner,
+      final Segmenter segmenter,
       final long streamTime
   ) {
     this.kafkaPartition = kafkaPartition;
-    this.partitioner = partitioner;
+    this.segmenter = segmenter;
     this.pendingFlushSegmentMetadata =
         new PendingFlushSegmentMetadata(tableName, kafkaPartition, streamTime);
   }
@@ -51,7 +51,7 @@ public abstract class WindowFlushManager implements FlushManager<WindowedKey, Se
 
   @Override
   public RemoteWriteResult<SegmentPartition> preFlush() {
-    final var pendingRoll = pendingFlushSegmentMetadata.prepareRoll(partitioner);
+    final var pendingRoll = pendingFlushSegmentMetadata.prepareRoll(segmenter);
 
     for (final long segmentId : pendingRoll.segmentsToCreate()) {
       final var createResult = createSegment(new SegmentPartition(kafkaPartition, segmentId));

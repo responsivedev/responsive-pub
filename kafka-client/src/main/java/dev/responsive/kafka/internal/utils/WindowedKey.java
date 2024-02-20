@@ -16,10 +16,9 @@
 
 package dev.responsive.kafka.internal.utils;
 
-import dev.responsive.kafka.internal.db.SegmentableKey;
 import org.apache.kafka.common.utils.Bytes;
 
-public class WindowedKey implements SegmentableKey<WindowedKey> {
+public class WindowedKey implements Comparable<WindowedKey> {
 
   public final Bytes key;
   public final long windowStartMs;
@@ -52,8 +51,4 @@ public class WindowedKey implements SegmentableKey<WindowedKey> {
     }
   }
 
-  @Override
-  public long segmentTimestamp() {
-    return this.windowStartMs;
-  }
 }
