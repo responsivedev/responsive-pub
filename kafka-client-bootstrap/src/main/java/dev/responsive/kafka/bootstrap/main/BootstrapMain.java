@@ -47,18 +47,19 @@ public class BootstrapMain {
     final String name = cmd.getOptionValue(BootstrapOptions.NAME);
     ResponsiveKeyValueParams params = ResponsiveKeyValueParams.fact(name);
 
+    final Duration ttl;
     if (cmd.hasOption(BootstrapOptions.TTL)) {
-      final Duration ttl = Duration.ofSeconds(
+      ttl = Duration.ofSeconds(
           Long.parseLong(cmd.getOptionValue(BootstrapOptions.TTL))
       );
       params = params.withTimeToLive(ttl);
+    } else {
+      ttl = null;
     }
 
-    final ChangelogMigrationTool tool = new ChangelogMigrationTool(
-        properties,
-        params,
-        cmd.getOptionValue(BootstrapOptions.CHANGELOG_TOPIC)
-    );
+    final String changelog = cmd.getOptionValue(BootstrapOptions.CHANGELOG_TOPIC);
+
+    final ChangelogMigrationTool tool = new ChangelogMigrationTool(properties, params, changelog);
 
     final ResponsiveKafkaStreams app = tool.buildStreams();
     final CountDownLatch closed = new CountDownLatch(1);
@@ -66,7 +67,10 @@ public class BootstrapMain {
       app.close(Duration.ofMinutes(5));
       closed.countDown();
     }));
-    LOG.info("starting bootstrap application for store {}", name);
+    LOG.info("starting bootstrap application for fact store: store({}) ttl({}) changelog({})",
+        name,
+        ttl == null ? "null" : ttl,
+        changelog);
     app.start();
     try {
       LOG.info("blocking until JVM is shut down");
