@@ -21,9 +21,9 @@ import dev.responsive.kafka.internal.db.spec.CassandraTableSpec;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeoutException;
-import javax.annotation.concurrent.ThreadSafe;
+import jnr.ffi.annotations.Synchronized;
 
-@ThreadSafe
+@Synchronized
 public class WindowedTableCache<T extends RemoteTable<?, ?>> {
 
   @FunctionalInterface
