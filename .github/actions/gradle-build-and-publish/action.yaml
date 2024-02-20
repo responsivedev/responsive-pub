@@ -8,6 +8,10 @@ inputs:
     default: "None"
     required: false
     description: "desired release version (use root module version for all sub-modules, eg kafka-client:currentVersion for responsive-test-utils)"
+  build_only:
+    default: "false"
+    required: false
+    description: "set this value to true to only run the build"
   OSSRH_USER:
     required: true
     description: "the OSSRH user (found in the 'secrets' context)"
@@ -35,20 +39,20 @@ runs:
         arguments: :${{ inputs.module }}:build
 
     - name: "Gradle: Release Version"
-      if: ${{ inputs.force_version == 'None' }}
+      if: ${{ inputs.force_version == 'None' }} && $${{ inputs.build_only == 'false' }}
       uses: gradle/gradle-build-action@v2.9.0
       with:
         arguments: :${{ inputs.module }}:release
 
     - name: "Gradle: Release Version (forced)"
-      if: ${{ inputs.force_version != 'None' }}
+      if: ${{ inputs.force_version != 'None' }}  && $${{ inputs.build_only == 'false' }}
       uses: gradle/gradle-build-action@v2.9.0
       with:
         arguments: :${{ inputs.module }}:release -Prelease.forceVersion=${{ inputs.force_version }}
 
     - name: "Gradle: Publish Artifacts"
       uses: gradle/gradle-build-action@v2.9.0
-      if: ${{ inputs.module != 'operator' }}
+      if: ${{ inputs.module != 'operator' }} && $${{ inputs.build_only == 'false' }}
       with:
         arguments: :${{ inputs.module }}:publish # publish to both S3 and Sonatype OSSRH
       env:
