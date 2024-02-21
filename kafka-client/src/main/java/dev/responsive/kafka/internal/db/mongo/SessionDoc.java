@@ -19,6 +19,7 @@ package dev.responsive.kafka.internal.db.mongo;
 import com.mongodb.BasicDBObject;
 import dev.responsive.kafka.internal.utils.SessionKey;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.Objects;
 
 public class SessionDoc {
@@ -26,6 +27,7 @@ public class SessionDoc {
   public static final String ID = "_id";
   public static final String VALUE = "value";
   public static final String EPOCH = "epoch";
+  public static final String TOMBSTONE_TS = "tombstoneTs";
 
   // Subfields of the composite key _id
   public static final String ID_RECORD_KEY = "key";
@@ -35,6 +37,7 @@ public class SessionDoc {
   BasicDBObject id;
   byte[] value;
   long epoch;
+  Date tombstoneTs;
 
   public SessionDoc() {
   }
@@ -93,12 +96,13 @@ public class SessionDoc {
     final SessionDoc sessionDoc = (SessionDoc) o;
     return epoch == sessionDoc.epoch
         && Objects.equals(id, sessionDoc.id)
-        && Arrays.equals(value, sessionDoc.value);
+        && Arrays.equals(value, sessionDoc.value)
+        && Objects.equals(tombstoneTs, sessionDoc.tombstoneTs);
   }
 
   @Override
   public int hashCode() {
-    int result = Objects.hash(id, epoch);
+    int result = Objects.hash(id, epoch, tombstoneTs);
     result = 31 * result + Arrays.hashCode(value);
     return result;
   }
@@ -112,6 +116,7 @@ public class SessionDoc {
         + ", sessionEndTs=" + sessionKey.sessionEndMs
         + ", value=" + Arrays.toString(value)
         + ", epoch=" + epoch
+        + ", tombstoneTs=" + tombstoneTs
         + '}';
   }
 }

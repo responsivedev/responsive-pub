@@ -169,7 +169,6 @@ public class ResponsiveSessionStore implements SessionStore<Bytes, byte[]> {
         session.window().end()
     );
     this.sessionOperations.delete(sessionKey);
-    throw new UnsupportedOperationException("Not yet implemented");
   }
 
   @Override

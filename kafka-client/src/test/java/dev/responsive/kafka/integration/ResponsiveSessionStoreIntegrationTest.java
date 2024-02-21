@@ -50,7 +50,7 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.TimeWindow;
+import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -111,7 +111,7 @@ public class ResponsiveSessionStoreIntegrationTest {
     final List<KeyValueTimestamp<String, String>> input1 = asList(
         new KeyValueTimestamp<>("key", "a", 0L),
         new KeyValueTimestamp<>("key", "b", 1_000L),
-        new KeyValueTimestamp<>("key", "c", 6_000L)
+        new KeyValueTimestamp<>("key", "c", 5_000L)
     );
     final CountDownLatch outputLatch = new CountDownLatch(1);
 
@@ -121,7 +121,10 @@ public class ResponsiveSessionStoreIntegrationTest {
         .windowedBy(SessionWindows.ofInactivityGapAndGrace(inactivityGap, gracePeriod))
         .aggregate(
             () -> "",
-            (k, v, agg) -> agg + v,
+            (k, v, agg) -> {
+              System.out.println("DEBUG: AGG: " + k + " | " + v + " | " + agg);
+              return agg + v;
+            },
             (aggKey, agg1, agg2) -> agg1 + agg2,
             ResponsiveStores.sessionMaterialized(
                 ResponsiveSessionParams.session(
@@ -133,9 +136,11 @@ public class ResponsiveSessionStoreIntegrationTest {
         )
         .toStream()
         .peek((k, v) -> {
-          System.out.println("DEBUG: KEY " + k.getClass() + " VALUE " + v);
+          System.out.println("DEBUG: PEEK: " + k.getClass() + " VALUE " + v);
           if (v != null) {
             results.put(k, v);
+          } else {
+            results.remove(k);
           }
           outputLatch.countDown();
         })
@@ -154,16 +159,18 @@ public class ResponsiveSessionStoreIntegrationTest {
       startAppAndAwaitRunning(Duration.ofSeconds(15), kafkaStreams);
 
       pipeRecords(producer, inputTopic(), input1);
-      Thread.sleep(10_000);
-//      outputLatch.await();
+      Thread.sleep(3_000);
+      // outputLatch.await();
 
       assertThat(results.size(), equalTo(1));
-      assertThat(results, Matchers.hasEntry(windowedKey(0L), "abc"));    // [0, 5s]
+      assertThat(results, Matchers.hasValue("abc"));
+      assertThat(results, Matchers.hasKey(windowedKey(0L, 5_000L)));
+      assertThat(results, Matchers.hasEntry(windowedKey(0L, 5_000L), "abc"));    // [0, 5s]
     }
   }
 
-  private Windowed<String> windowedKey(final long startMs) {
-    return new Windowed<>("key", new TimeWindow(startMs, startMs + 10_000));
+  private Windowed<String> windowedKey(final long startMs, final long endMs) {
+    return new Windowed<>("key", new SessionWindow(startMs, endMs));
   }
 
   private Map<String, Object> getMutablePropertiesWithStringSerdes() {
@@ -190,6 +197,7 @@ public class ResponsiveSessionStoreIntegrationTest {
     properties.put(DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.LongSerde.class.getName());
     properties.put(NUM_STREAM_THREADS_CONFIG, 1);
     properties.put(COMMIT_INTERVAL_MS_CONFIG, 1); // commit as often as possible
+    // properties.put(STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
 
     properties.put(consumerPrefix(REQUEST_TIMEOUT_MS_CONFIG), 5_000);
     properties.put(consumerPrefix(SESSION_TIMEOUT_MS_CONFIG), 5_000 - 1);

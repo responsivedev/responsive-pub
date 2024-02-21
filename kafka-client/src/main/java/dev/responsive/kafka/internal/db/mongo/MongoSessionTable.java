@@ -30,6 +30,8 @@ import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
 import com.mongodb.client.model.Filters;
 import com.mongodb.client.model.FindOneAndUpdateOptions;
+import com.mongodb.client.model.IndexOptions;
+import com.mongodb.client.model.Indexes;
 import com.mongodb.client.model.ReturnDocument;
 import com.mongodb.client.model.UpdateOneModel;
 import com.mongodb.client.model.UpdateOptions;
@@ -43,11 +45,14 @@ import dev.responsive.kafka.internal.db.partitioning.SessionSegmentPartitioner;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
 import dev.responsive.kafka.internal.utils.Iterators;
 import dev.responsive.kafka.internal.utils.SessionKey;
+import java.time.Instant;
+import java.util.Date;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.TimeUnit;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.TaskMigratedException;
@@ -71,9 +76,11 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
   private final MongoDatabase database;
   private final MongoDatabase adminDatabase;
   private final MongoCollection<WindowMetadataDoc> metadata;
+  private final CollectionCreationOptions collectionCreationOptions;
+
   private final ConcurrentMap<Integer, PartitionSegments> kafkaPartitionToSegments =
       new ConcurrentHashMap<>();
-  private final CollectionCreationOptions collectionCreationOptions;
+  private final ConcurrentMap<Integer, Long> kafkaPartitionToEpoch = new ConcurrentHashMap<>();
 
   private static class PartitionSegments {
     private final MongoDatabase database;
@@ -152,6 +159,13 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
         );
       }
       segmentSessions.put(segmentToCreate, sessionDocs);
+
+      // TODO(agavra): make the tombstone retention configurable
+      // this is idempotent
+      sessionDocs.createIndex(
+          Indexes.descending(SessionDoc.TOMBSTONE_TS),
+          new IndexOptions().expireAfter(12L, TimeUnit.HOURS)
+      );
     }
 
     // Note: it is always safe to drop a segment, even without validating the epoch, since we only
@@ -238,6 +252,7 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
             collectionCreationOptions
         )
     );
+    kafkaPartitionToEpoch.put(kafkaPartition, metaDoc.epoch);
 
     return new MongoSessionFlushManager(
         this,
@@ -419,7 +434,8 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
         ),
         Updates.combine(
             Updates.set(SessionDoc.VALUE, value),
-            Updates.set(SessionDoc.EPOCH, epoch)
+            Updates.set(SessionDoc.EPOCH, epoch),
+            Updates.unset(SessionDoc.TOMBSTONE_TS)
         ),
         UPSERT_OPTIONS
     );
@@ -440,8 +456,19 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
       final int kafkaPartition,
       final SessionKey sessionKey
   ) {
-    final var partitionSegments = kafkaPartitionToSegments.get(kafkaPartition);
-    throw new UnsupportedOperationException("Deletes not yet supported for MongoDB session stores");
+    final long epoch = kafkaPartitionToEpoch.get(kafkaPartition);
+    return new UpdateOneModel<>(
+        Filters.and(
+            Filters.eq(KVDoc.ID, sessionKey.key.get()),
+            Filters.lte(KVDoc.EPOCH, epoch)
+        ),
+        Updates.combine(
+            Updates.unset(SessionDoc.VALUE),
+            Updates.set(SessionDoc.TOMBSTONE_TS, Date.from(Instant.now())),
+            Updates.set(SessionDoc.EPOCH, epoch)
+        ),
+        UPSERT_OPTIONS
+    );
   }
 
   public BasicDBObject compositeKey(final SessionKey sessionKey) {

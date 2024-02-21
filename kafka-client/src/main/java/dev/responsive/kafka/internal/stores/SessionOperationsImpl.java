@@ -208,27 +208,31 @@ public class SessionOperationsImpl implements SessionOperations {
       SessionKey key,
       final byte[] value
   ) {
+    System.out.println("DEBUG: PUT: " + key.toString());
     this.buffer.put(key, value, this.context.timestamp());
   }
 
   @Override
   public void delete(final SessionKey key) {
+    System.out.println("DEBUG: DELETE: " + key.toString());
     this.buffer.tombstone(key, this.context.timestamp());
   }
 
   @Override
   public byte[] fetch(final SessionKey key) {
+    System.out.println("DEBUG: FETCH: " + key.toString());
     final Result<SessionKey> localResult = this.buffer.get(key);
     if (localResult != null) {
       return localResult.isTombstone ? null : localResult.value;
     }
 
-    return this.table.fetch(
+    final var remoteResult = this.table.fetch(
         this.changelog.partition(),
         key.key,
         key.sessionStartMs,
         key.sessionEndMs
     );
+    return remoteResult;
   }
 
   @Override
@@ -237,6 +241,8 @@ public class SessionOperationsImpl implements SessionOperations {
       final long earliestSessionEnd,
       final long latestSessionStart
   ) {
+    System.out.println("DEBUG: FETCH_ALL: " + key.toString());
+
     final SessionKey from = new SessionKey(key, latestSessionStart, latestSessionStart);
     final SessionKey to = new SessionKey(key, earliestSessionEnd, earliestSessionEnd);
     final var localResults = this.buffer.range(from, to);
