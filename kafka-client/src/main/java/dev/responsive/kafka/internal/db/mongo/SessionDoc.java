@@ -22,7 +22,6 @@ import com.mongodb.BasicDBObject;
 import dev.responsive.kafka.internal.utils.SessionKey;
 import java.util.Arrays;
 import java.util.Objects;
-import org.apache.kafka.common.utils.Bytes;
 
 public class SessionDoc {
 
@@ -79,9 +78,9 @@ public class SessionDoc {
       final long sessionEndTs
   ) {
     final BasicDBObject compositeKey =
-        new BasicDBObject(ID_RECORD_KEY, key).
-            append(ID_SESSION_START_TS, sessionStartTs).
-            append(ID_SESSION_END_TS, sessionEndTs);
+        new BasicDBObject(ID_RECORD_KEY, key)
+            .append(ID_SESSION_START_TS, sessionStartTs)
+            .append(ID_SESSION_END_TS, sessionEndTs);
     return compositeKey;
   }
 
@@ -93,10 +92,10 @@ public class SessionDoc {
     if (o == null || getClass() != o.getClass()) {
       return false;
     }
-    final SessionDoc windowDoc = (SessionDoc) o;
-    return epoch == windowDoc.epoch
-        && Objects.equals(id, windowDoc.id)
-        && Arrays.equals(value, windowDoc.value);
+    final SessionDoc sessionDoc = (SessionDoc) o;
+    return epoch == sessionDoc.epoch
+        && Objects.equals(id, sessionDoc.id)
+        && Arrays.equals(value, sessionDoc.value);
   }
 
   @Override

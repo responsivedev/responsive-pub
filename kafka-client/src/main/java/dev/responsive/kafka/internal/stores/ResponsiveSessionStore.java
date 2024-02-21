@@ -16,10 +16,12 @@
 
 package dev.responsive.kafka.internal.stores;
 
-import static dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.UNINITIALIZED_STREAM_TIME;
+
+import static dev.responsive.kafka.internal.db.partitioning.Segmenter.UNINITIALIZED_STREAM_TIME;
 
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.stores.ResponsiveSessionParams;
+import dev.responsive.kafka.internal.utils.Iterators;
 import dev.responsive.kafka.internal.utils.SessionKey;
 import dev.responsive.kafka.internal.utils.TableName;
 import java.util.concurrent.TimeoutException;
@@ -187,6 +189,22 @@ public class ResponsiveSessionStore implements SessionStore<Bytes, byte[]> {
   }
 
   @Override
+  public KeyValueIterator<Windowed<Bytes>, byte[]> findSessions(
+      Bytes key,
+      long earliestSessionEndTime,
+      long latestSessionStartTime
+  ) {
+    if (latestSessionStartTime > earliestSessionEndTime) {
+      return Iterators.emptyKv();
+    }
+
+    // Trim down our search space by using both the observed stream time and the retention period.
+    earliestSessionEndTime = Long.max(earliestSessionEndTime, minValidEndTimestamp());
+    latestSessionStartTime = Long.min(latestSessionStartTime, this.observedStreamTime);
+    return this.sessionOperations.fetchAll(key, earliestSessionEndTime, latestSessionStartTime);
+  }
+
+  @Override
   public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes key) {
     // TODO: IMPLEMENT
     // Retrieve all aggregated sessions for the provided key.
@@ -197,18 +215,6 @@ public class ResponsiveSessionStore implements SessionStore<Bytes, byte[]> {
   public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from, final Bytes to) {
     // TODO: IMPLEMENT
     // Retrieve all aggregated sessions for the given range of keys.
-    throw new UnsupportedOperationException("Not yet implemented");
-  }
-
-  @Override
-  public KeyValueIterator<Windowed<Bytes>, byte[]> findSessions(
-      Bytes key,
-      long earliestSessionEndTime,
-      long latestSessionEndTime
-  ) {
-    // Fetch any sessions where end is ≥ earliestSessionEndTime and the sessions start
-    // is ≤ latestSessionStartTime.
-    // earliestSessionEndTime = Math.max(earliestSessionEndTime, minValidEndTimestamp());
     throw new UnsupportedOperationException("Not yet implemented");
   }
 

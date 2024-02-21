@@ -25,14 +25,16 @@ import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.stores.ResponsiveSessionParams;
 import dev.responsive.kafka.internal.db.BatchFlusher;
 import dev.responsive.kafka.internal.db.RemoteSessionTable;
+import dev.responsive.kafka.internal.db.SessionFlushManager;
 import dev.responsive.kafka.internal.db.SessionKeySpec;
-import dev.responsive.kafka.internal.db.WindowFlushManager;
 import dev.responsive.kafka.internal.db.mongo.ResponsiveMongoClient;
-import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner;
+import dev.responsive.kafka.internal.db.partitioning.SessionSegmentPartitioner;
 import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
+import dev.responsive.kafka.internal.utils.Iterators;
 import dev.responsive.kafka.internal.utils.Result;
 import dev.responsive.kafka.internal.utils.SessionClients;
 import dev.responsive.kafka.internal.utils.SessionKey;
+import dev.responsive.kafka.internal.utils.StoreUtil;
 import dev.responsive.kafka.internal.utils.TableName;
 import java.util.Collection;
 import java.util.Map;
@@ -40,9 +42,13 @@ import java.util.concurrent.TimeoutException;
 import java.util.function.Predicate;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.state.KeyValueIterator;
 
 public class SessionOperationsImpl implements SessionOperations {
 
@@ -82,12 +88,15 @@ public class SessionOperationsImpl implements SessionOperations {
         context.taskId().partition()
     );
 
-    final SegmentPartitioner partitioner = SegmentPartitioner.create(params);
+    final SessionSegmentPartitioner partitioner = new SessionSegmentPartitioner(
+        params.retentionPeriod(),
+        StoreUtil.computeSegmentInterval(params.retentionPeriod(), params.numSegments())
+    );
 
     final RemoteSessionTable<?> table =
         createRemoteSessionTable(params, sessionClients, partitioner);
 
-    final WindowFlushManager flushManager = table.init(changelog.partition());
+    final SessionFlushManager flushManager = table.init(changelog.partition());
 
     log.info("Remote table {} is available for querying.", name.tableName());
 
@@ -131,7 +140,7 @@ public class SessionOperationsImpl implements SessionOperations {
   private static RemoteSessionTable<?> createCassandra(
       final ResponsiveSessionParams params,
       final SessionClients clients,
-      final SegmentPartitioner partitioner
+      final SessionSegmentPartitioner partitioner
   ) throws InterruptedException, TimeoutException {
     throw new UnsupportedOperationException("Not yet implemented");
   }
@@ -139,7 +148,7 @@ public class SessionOperationsImpl implements SessionOperations {
   private static RemoteSessionTable<?> createMongo(
       final ResponsiveSessionParams params,
       final SessionClients clients,
-      final SegmentPartitioner partitioner
+      final SessionSegmentPartitioner partitioner
   ) throws InterruptedException, TimeoutException {
     final ResponsiveMongoClient client = clients.mongoClient();
 
@@ -154,7 +163,7 @@ public class SessionOperationsImpl implements SessionOperations {
   private static RemoteSessionTable<?> createRemoteSessionTable(
       final ResponsiveSessionParams params,
       final SessionClients sessionClients,
-      final SegmentPartitioner partitioner
+      final SessionSegmentPartitioner partitioner
   ) throws InterruptedException, TimeoutException {
     switch (sessionClients.storageBackend()) {
       case CASSANDRA:
@@ -199,23 +208,23 @@ public class SessionOperationsImpl implements SessionOperations {
       SessionKey key,
       final byte[] value
   ) {
-    buffer.put(key, value, context.timestamp());
+    this.buffer.put(key, value, this.context.timestamp());
   }
 
   @Override
   public void delete(final SessionKey key) {
-    buffer.tombstone(key, context.timestamp());
+    this.buffer.tombstone(key, this.context.timestamp());
   }
 
   @Override
   public byte[] fetch(final SessionKey key) {
-    final Result<SessionKey> localResult = buffer.get(key);
+    final Result<SessionKey> localResult = this.buffer.get(key);
     if (localResult != null) {
       return localResult.isTombstone ? null : localResult.value;
     }
 
-    return table.fetch(
-        changelog.partition(),
+    return this.table.fetch(
+        this.changelog.partition(),
         key.key,
         key.sessionStartMs,
         key.sessionEndMs
@@ -223,16 +232,43 @@ public class SessionOperationsImpl implements SessionOperations {
   }
 
   @Override
+  public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(
+      final Bytes key,
+      final long earliestSessionEnd,
+      final long latestSessionStart
+  ) {
+    final SessionKey from = new SessionKey(key, latestSessionStart, latestSessionStart);
+    final SessionKey to = new SessionKey(key, earliestSessionEnd, earliestSessionEnd);
+    final var localResults = this.buffer.range(from, to);
+    final var remoteResults = this.table.fetchAll(
+        this.changelog.partition(),
+        key,
+        earliestSessionEnd,
+        latestSessionStart
+    );
+
+    final var combinedResults = new LocalRemoteKvIterator<>(localResults, remoteResults);
+    return Iterators.mapKeys(
+        combinedResults,
+        sessionKey -> {
+          final var sessionWindow =
+              new SessionWindow(sessionKey.sessionStartMs, sessionKey.sessionEndMs);
+          return new Windowed<>(sessionKey.key, sessionWindow);
+        }
+    );
+  }
+
+  @Override
   public void close() {
     // no need to flush the buffer here, will happen through the kafka client commit as usual
-    buffer.close();
-    restoreListener.onStoreClosed(changelog, params.name().kafkaName());
-    storeRegistry.deregisterStore(registration);
+    this.buffer.close();
+    this.restoreListener.onStoreClosed(changelog, params.name().kafkaName());
+    this.storeRegistry.deregisterStore(registration);
   }
 
   @Override
   public void restoreBatch(final Collection<ConsumerRecord<byte[], byte[]>> records) {
-    buffer.restoreBatch(records);
+    this.buffer.restoreBatch(records);
   }
 
 }

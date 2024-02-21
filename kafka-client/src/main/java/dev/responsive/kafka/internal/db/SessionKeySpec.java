@@ -16,10 +16,7 @@
 
 package dev.responsive.kafka.internal.db;
 
-import static org.apache.kafka.streams.state.StateSerdes.TIMESTAMP_SIZE;
-
 import dev.responsive.kafka.internal.utils.SessionKey;
-import java.nio.ByteBuffer;
 import java.util.function.Predicate;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 
@@ -40,17 +37,6 @@ public class SessionKeySpec implements KeySpec<SessionKey> {
   public SessionKey keyFromRecord(final ConsumerRecord<byte[], byte[]> record) {
     final byte[] key = record.key();
 
-    // the WindowKeySchema in Streams always encodes the changelog record keys by
-    // concatenating the data key + windowStartTime + seqnum
-    // the seqnum is just an arbitrary integer that unfortunately can't be avoided,
-    // so we just need to make sure to stop reading 4 bytes from the end
-//    final int dataKeySize = key.length - TIMESTAMP_SIZE - 4;
-//    final byte[] dataKeyBytes = new byte[dataKeySize];
-//    System.arraycopy(key, 0, dataKeyBytes, 0, dataKeyBytes.length);
-//
-//    final long windowStartTs = ByteBuffer.wrap(key).getLong(dataKeySize);
-//
-//    return new SessionKey(dataKeyBytes, windowStartTs);
     // TODO(antoine): IMPLEMENT
     throw new UnsupportedOperationException("Not yet implemented.");
   }

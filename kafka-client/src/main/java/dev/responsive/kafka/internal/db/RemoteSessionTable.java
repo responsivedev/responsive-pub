@@ -18,6 +18,7 @@ package dev.responsive.kafka.internal.db;
 
 import dev.responsive.kafka.internal.utils.SessionKey;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.state.KeyValueIterator;
 
 public interface RemoteSessionTable<S> extends RemoteTable<SessionKey, S> {
 
@@ -28,7 +29,7 @@ public interface RemoteSessionTable<S> extends RemoteTable<SessionKey, S> {
    * @return a {@link WindowFlushManager} that gives the callee access
    * to run statements on {@code table}
    */
-  WindowFlushManager init(
+  SessionFlushManager init(
       final int kafkaPartition
   );
 
@@ -46,6 +47,24 @@ public interface RemoteSessionTable<S> extends RemoteTable<SessionKey, S> {
       Bytes key,
       long sessionStart,
       long sessionEnd
+  );
+
+  /**
+   * Retrieves the range of sessions of the given {@code kafkaPartition} and {@code key} with
+   * an end time of at least {@code earliestSessionEnd} and a start time of at most
+   * {@code latestSessionStart}.
+   *
+   * @param kafkaPartition     the kafka partition
+   * @param key                the data key
+   * @param earliestSessionEnd the earliest possible end time of the session
+   * @param latestSessionStart the latest possible start time of the session
+   * @return a forwards iterator over the retrieved sessions and values previously set.
+   */
+  KeyValueIterator<SessionKey, byte[]> fetchAll(
+      final int kafkaPartition,
+      final Bytes key,
+      final long earliestSessionEnd,
+      final long latestSessionStart
   );
 
   // TODO: Add more methods that will be used in SessionOperations.

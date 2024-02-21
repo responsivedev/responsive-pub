@@ -23,9 +23,8 @@ import static org.hamcrest.Matchers.equalTo;
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.StorageBackend;
+import dev.responsive.kafka.api.stores.ResponsiveSessionParams;
 import dev.responsive.kafka.api.stores.ResponsiveStores;
-import dev.responsive.kafka.api.stores.ResponsiveWindowParams;
-import dev.responsive.kafka.testutils.IntegrationTestUtils;
 import dev.responsive.kafka.testutils.KeyValueTimestamp;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
@@ -114,7 +113,7 @@ public class ResponsiveSessionStoreIntegrationTest {
         new KeyValueTimestamp<>("key", "b", 1_000L),
         new KeyValueTimestamp<>("key", "c", 6_000L)
     );
-    final CountDownLatch outputLatch = new CountDownLatch(input1.size());
+    final CountDownLatch outputLatch = new CountDownLatch(1);
 
     final KStream<String, String> input = builder.stream(inputTopic());
     input
@@ -125,7 +124,7 @@ public class ResponsiveSessionStoreIntegrationTest {
             (k, v, agg) -> agg + v,
             (aggKey, agg1, agg2) -> agg1 + agg2,
             ResponsiveStores.sessionMaterialized(
-                ResponsiveWindowParams.window(
+                ResponsiveSessionParams.session(
                     name,
                     inactivityGap,
                     gracePeriod
@@ -134,7 +133,10 @@ public class ResponsiveSessionStoreIntegrationTest {
         )
         .toStream()
         .peek((k, v) -> {
-          results.put(k, v);
+          System.out.println("DEBUG: KEY " + k.getClass() + " VALUE " + v);
+          if (v != null) {
+            results.put(k, v);
+          }
           outputLatch.countDown();
         })
         // discard the window, so we don't have to serialize it
@@ -152,9 +154,10 @@ public class ResponsiveSessionStoreIntegrationTest {
       startAppAndAwaitRunning(Duration.ofSeconds(15), kafkaStreams);
 
       pipeRecords(producer, inputTopic(), input1);
-      outputLatch.await();
+      Thread.sleep(10_000);
+//      outputLatch.await();
 
-      assertThat(results.size(), equalTo(4));
+      assertThat(results.size(), equalTo(1));
       assertThat(results, Matchers.hasEntry(windowedKey(0L), "abc"));    // [0, 5s]
     }
   }

@@ -19,20 +19,17 @@ package dev.responsive.kafka.api.stores;
 import static dev.responsive.kafka.internal.utils.StoreUtil.computeSegmentInterval;
 
 import dev.responsive.kafka.internal.stores.ResponsiveSessionStore;
-import dev.responsive.kafka.internal.stores.ResponsiveWindowStore;
 import java.util.Locale;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
-import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
-import org.apache.kafka.streams.state.WindowStore;
 
-public class ResponsiveSessionedStoreSupplier implements SessionBytesStoreSupplier {
+public class ResponsiveSessionStoreSupplier implements SessionBytesStoreSupplier {
 
   private final ResponsiveSessionParams params;
   private final long segmentIntervalMs;
 
-  public ResponsiveSessionedStoreSupplier(final ResponsiveSessionParams params) {
+  public ResponsiveSessionStoreSupplier(final ResponsiveSessionParams params) {
     this.params = params;
     this.segmentIntervalMs = computeSegmentInterval(params.retentionPeriod(), params.numSegments());
   }

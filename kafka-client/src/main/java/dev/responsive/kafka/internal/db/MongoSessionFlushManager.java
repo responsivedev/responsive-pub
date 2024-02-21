@@ -25,8 +25,8 @@ import com.mongodb.client.MongoCollection;
 import dev.responsive.kafka.internal.db.mongo.MongoSessionTable;
 import dev.responsive.kafka.internal.db.mongo.MongoWriter;
 import dev.responsive.kafka.internal.db.mongo.SessionDoc;
-import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner;
-import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.SegmentPartition;
+import dev.responsive.kafka.internal.db.partitioning.Segmenter.SegmentPartition;
+import dev.responsive.kafka.internal.db.partitioning.SessionSegmentPartitioner;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
 import dev.responsive.kafka.internal.utils.SessionKey;
@@ -34,7 +34,7 @@ import java.util.function.Function;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
-public class MongoSessionFlushManager extends WindowFlushManager {
+public class MongoSessionFlushManager extends SessionFlushManager {
 
   private final String logPrefix;
   private final Logger log;
@@ -42,17 +42,17 @@ public class MongoSessionFlushManager extends WindowFlushManager {
   private final MongoSessionTable table;
   private final Function<SegmentPartition, MongoCollection<SessionDoc>> sessionsForSegment;
 
-  private final SegmentPartitioner<SessionKey> partitioner;
+  private final SessionSegmentPartitioner partitioner;
   private final int kafkaPartition;
 
   public MongoSessionFlushManager(
       final MongoSessionTable table,
       final Function<SegmentPartition, MongoCollection<SessionDoc>> sessionsForSegment,
-      final SegmentPartitioner<SessionKey> partitioner,
+      final SessionSegmentPartitioner partitioner,
       final int kafkaPartition,
       final long streamTime
   ) {
-    super(table.name(), kafkaPartition, partitioner, streamTime);
+    super(table.name(), kafkaPartition, partitioner.segmenter(), streamTime);
 
     this.table = table;
     this.sessionsForSegment = sessionsForSegment;
