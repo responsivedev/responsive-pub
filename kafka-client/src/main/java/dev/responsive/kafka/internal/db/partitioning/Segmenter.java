@@ -183,8 +183,6 @@ public class Segmenter {
       final long timeFrom,
       final long timeTo
   ) {
-    final long segmentIdStart = segmentStartTimestamp(timeFrom) / segmentIntervalMs;
-    final long segmentIdEnd = segmentStartTimestamp(timeTo) / segmentIntervalMs;
     return LongStream.range(segmentId(timeFrom), segmentId(timeTo) + 1)
         .mapToObj(segmentId -> new SegmentPartition(
             kafkaPartition,
