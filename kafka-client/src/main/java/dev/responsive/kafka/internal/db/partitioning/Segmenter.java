@@ -18,10 +18,6 @@ package dev.responsive.kafka.internal.db.partitioning;
 
 import static java.util.Collections.emptyList;
 
-import dev.responsive.kafka.api.stores.ResponsiveWindowParams;
-import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.SegmentPartition;
-import dev.responsive.kafka.internal.utils.StoreUtil;
-import dev.responsive.kafka.internal.utils.WindowedKey;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -30,12 +26,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * A segment-based partitioner where kafka partitions are mapped to a subset of remote partitions
- * divided up into "segments" that correspond to a range of timestamps. By deleting a table
- * partition we can "drop" a full segment at a time, which can be done if (and only if) the
- * stream-time advances such that the highest timestamp in the range is now outside the retention
- * period. This is intended for segmented WindowStores, but could be extended in the future to
- * other timeseries and/or ttl types of state stores.
+ * A helper class for segment-based partitioners where kafka partitions are mapped to a subset
+ * of remote partitions divided up into "segments" that correspond to a range of timestamps.
+ * By deleting a table partition we can "drop" a full segment at a time, which can be done if
+ * (and only if) the stream-time advances such that the highest timestamp in the range is now
+ * outside the retention period. This is intended for segmented WindowStores, but could be
+ * extended in the future to other timeseries and/or ttl types of state stores.
  * <p>
  * Each segment covers a specific time range in milliseconds. If t_n is the start time of the
  * nth segment, then that segment covers all timestamps from t_s - t_s + segmentInterval.
@@ -64,11 +60,11 @@ import org.slf4j.LoggerFactory;
  * numSegments = 3
  * segmentInterval = 33
  * <p>
- * kafkaPartition | stream-time | minValidTs |    active segment time bounds   |  segmentId ||
- *           0    |     16      |      0     | 0-32                            | 0          ||
- *           1    |     88      |      0     | 0-32, 33-65, 66-98              | 0, 1, 2    ||
- *           2    |     101     |      2     | 0-32, 33-65, 66-98, 99-131      | 0, 1, 2, 3 ||
- *           3    |     169     |      70    | 66-98, 99-131, 132-164, 165-197 | 1, 2, 3, 4 ||
+ * kafkaPartition | stream-time | minValidTs |    active segment time bounds   | segmentTimestamp ||
+ *           0    |     16      |      0     | 0-32                            | 0                ||
+ *           1    |     88      |      0     | 0-32, 33-65, 66-98              | 0, 33, 66        ||
+ *           2    |     101     |      2     | 0-32, 33-65, 66-98, 99-131      | 0, 33, 66, 99    ||
+ *           3    |     169     |      70    | 66-98, 99-131, 132-164, 165-197 | 66, 99, 132, 165 ||
  * <p>
  * NOTE: because we are already dividing up the partition space into segments, we don't further
  * split things into true sub-partitions based on key. Each kafka partition still maps to multiple
@@ -80,27 +76,22 @@ import org.slf4j.LoggerFactory;
  * For the time being, we simply recommend that users configure the number of segments
  * similarly to how they would configure the number of sub-partitions for a key-value store.
  */
-public class SegmentPartitioner implements TablePartitioner<WindowedKey, SegmentPartition> {
+public class Segmenter {
 
-  private static final Logger LOG = LoggerFactory.getLogger(SegmentPartitioner.class);
+  private static final Logger LOG = LoggerFactory.getLogger(Segmenter.class);
 
-  public static final long METADATA_SEGMENT_ID = -1L;
   public static final long UNINITIALIZED_STREAM_TIME = -1L;
 
   private final long retentionPeriodMs;
   private final long segmentIntervalMs;
 
-  // TODO: partitioner doesn't actually need the window size, we just pass it to the table this way
-  //  We should find a better way to pass parameters from the StateStore to the RemoteTable
-  private final long windowSizeMs;
-
   public static class SegmentPartition {
     public final int tablePartition;
-    public final long segmentId;
+    public final long segmentStartTimestamp;
 
-    public SegmentPartition(final int tablePartition, final long segmentId) {
+    public SegmentPartition(final int tablePartition, final long segmentStartTimestamp) {
       this.tablePartition = tablePartition;
-      this.segmentId = segmentId;
+      this.segmentStartTimestamp = segmentStartTimestamp;
     }
 
     @Override
@@ -117,13 +108,13 @@ public class SegmentPartitioner implements TablePartitioner<WindowedKey, Segment
       if (tablePartition != that.tablePartition) {
         return false;
       }
-      return segmentId == that.segmentId;
+      return segmentStartTimestamp == that.segmentStartTimestamp;
     }
 
     @Override
     public int hashCode() {
       int result = tablePartition;
-      result = 31 * result + (int) (segmentId ^ (segmentId >>> 32));
+      result = 31 * result + (int) (segmentStartTimestamp ^ (segmentStartTimestamp >>> 32));
       return result;
     }
 
@@ -131,46 +122,29 @@ public class SegmentPartitioner implements TablePartitioner<WindowedKey, Segment
     public String toString() {
       return "SegmentPartition{"
           + "tablePartition=" + tablePartition
-          + ", segmentId=" + segmentId
+          + ", segmentStartTimestamp=" + segmentStartTimestamp
           + '}';
     }
   }
 
-  public static SegmentPartitioner create(
-      final ResponsiveWindowParams params
-  ) {
-    final long segmentInterval =
-        StoreUtil.computeSegmentInterval(params.retentionPeriod(), params.numSegments());
-    return new SegmentPartitioner(params.retentionPeriod(), segmentInterval, params.windowSize());
-  }
-
-  public SegmentPartitioner(
+  public Segmenter(
       final long retentionPeriodMs,
-      final long segmentIntervalMs,
-      final long windowSizeMs
+      final long segmentIntervalMs
   ) {
     this.retentionPeriodMs = retentionPeriodMs;
     this.segmentIntervalMs = segmentIntervalMs;
-    this.windowSizeMs = windowSizeMs;
-    if (retentionPeriodMs <= 0L || segmentIntervalMs <= 0L || windowSizeMs <= 0L) {
+    if (retentionPeriodMs <= 0L || segmentIntervalMs <= 0L) {
       LOG.error("Segment values should all be positive, got retentionPeriod={}ms, "
-                    + "segmentInterval={}ms, and windowSize={}ms",
-                retentionPeriodMs, segmentIntervalMs, windowSizeMs);
+          + "segmentInterval={}ms", retentionPeriodMs, segmentIntervalMs
+      );
       throw new IllegalStateException("Segment partitioner received a negative or zero value");
     }
 
-    LOG.info("Created segment partitioner with retentionPeriod={}ms, segmentInterval={}ms,"
-                 + " and windowSize={}ms", retentionPeriodMs, segmentIntervalMs, windowSizeMs);
-  }
-
-  @Override
-  public SegmentPartition tablePartition(final int kafkaPartition, final WindowedKey key) {
-    return new SegmentPartition(kafkaPartition, segmentId(key.windowStartMs));
-  }
-
-  @Override
-  public SegmentPartition metadataTablePartition(final int kafkaPartition) {
-    return new SegmentPartition(kafkaPartition, METADATA_SEGMENT_ID);
+    LOG.info(
+        "Created segment partitioner with retentionPeriod={}ms, segmentInterval={}ms",
+        retentionPeriodMs,
+        segmentIntervalMs
+    );
   }
 
   public long segmentIntervalMs() {
@@ -181,7 +155,7 @@ public class SegmentPartitioner implements TablePartitioner<WindowedKey, Segment
    * Return all active segments for the given stream-time and retention period
    *
    * @param kafkaPartition the original partition in kafka
-   * @param streamTime       the lowest timestamp in the fetched range
+   * @param streamTime     the lowest timestamp in the fetched range
    * @return               all remote partitions for active segments of this kafka partition
    */
   public List<SegmentPartition> activeSegments(
@@ -210,7 +184,10 @@ public class SegmentPartitioner implements TablePartitioner<WindowedKey, Segment
       final long timeTo
   ) {
     return LongStream.range(segmentId(timeFrom), segmentId(timeTo) + 1)
-        .mapToObj(segmentId -> new SegmentPartition(kafkaPartition, segmentId))
+        .mapToObj(segmentId -> new SegmentPartition(
+            kafkaPartition,
+            segmentId * segmentIntervalMs
+        ))
         .collect(Collectors.toList());
   }
 
@@ -232,7 +209,10 @@ public class SegmentPartitioner implements TablePartitioner<WindowedKey, Segment
     return LongStream.range(segmentId(timeFrom), segmentId(timeTo) + 1)
         .boxed()
         .sorted(Collections.reverseOrder())
-        .map(segmentId -> new SegmentPartition(kafkaPartition, segmentId))
+        .map(segmentId -> new SegmentPartition(
+            kafkaPartition,
+            segmentId * segmentIntervalMs
+        ))
         .collect(Collectors.toList());
   }
 
@@ -255,10 +235,11 @@ public class SegmentPartitioner implements TablePartitioner<WindowedKey, Segment
       final LongStream segmentsToCreate = LongStream.range(
           newMinActiveSegment,
           newMaxActiveSegment + 1 // add 1 since the upper bound is exclusive
-      );
+      ).map(segmentId -> segmentId * segmentIntervalMs);
 
       LOG.info("Initializing stream-time for table {} to {}ms and creating segments: [{}-{}]",
-                 tableName, newStreamTime, newMinActiveSegment, newMaxActiveSegment);
+          tableName, newStreamTime, newMinActiveSegment, newMaxActiveSegment
+      );
 
       return new SegmentRoll(
           segmentsToExpire,
@@ -268,24 +249,29 @@ public class SegmentPartitioner implements TablePartitioner<WindowedKey, Segment
       final LongStream segmentsToExpire = LongStream.range(
           oldMinActiveSegment,
           newMinActiveSegment
-      );
+      ).map(segmentId -> segmentId * segmentIntervalMs);
 
       final LongStream segmentsToCreate = LongStream.range(
           oldMaxActiveSegment + 1, // inclusive: add 1 b/c the old max segment should already exist
           newMaxActiveSegment + 1  // exclusive: add 1 to create segment for highest valid timestamp
-      );
+      ).map(segmentId -> segmentId * segmentIntervalMs);
 
       if (newMinActiveSegment > oldMinActiveSegment) {
         LOG.info("{}[{}] Advancing stream-time from {}ms to {}ms and rolling segments with "
-                     + "expiredSegments: [{}-{}] and newSegments: [{}-{}]",
-                 tableName, kafkaPartition, oldStreamTime, newStreamTime, oldMinActiveSegment,
-                 newMinActiveSegment, oldMaxActiveSegment + 1, newMaxActiveSegment);
+                + "expiredSegments: [{}-{}] and newSegments: [{}-{}]",
+            tableName, kafkaPartition, oldStreamTime, newStreamTime, oldMinActiveSegment,
+            newMinActiveSegment, oldMaxActiveSegment + 1, newMaxActiveSegment
+        );
       }
       return new SegmentRoll(
           segmentsToExpire,
           segmentsToCreate
       );
     }
+  }
+
+  public long segmentStartTimestamp(final long windowTimestamp) {
+    return segmentId(windowTimestamp) * segmentIntervalMs;
   }
 
   private long segmentId(final long windowTimestamp) {
@@ -326,7 +312,8 @@ public class SegmentPartitioner implements TablePartitioner<WindowedKey, Segment
           : String.format("[%d-%d]", segmentsToCreate.get(0), segmentsToCreate.get(numCreated - 1));
 
       return String.format("SegmentRoll: expired segment(s)=%s, new segments(s)=%s",
-                           expired, created);
+          expired, created
+      );
     }
   }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Responsive Computing, Inc.
+ * Copyright 2024 Responsive Computing, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,30 +16,26 @@
 
 package dev.responsive.kafka.internal.db;
 
+import dev.responsive.kafka.internal.db.partitioning.WindowSegmentPartitioner;
 import dev.responsive.kafka.internal.db.spec.CassandraTableSpec;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeoutException;
 import javax.annotation.concurrent.ThreadSafe;
 
-/**
- * A {@code ThreadSafeTableFactory} creates and maintains a collection
- * of {@link RemoteTable}s, ensuring that the statements to create the
- * table are only prepared once during the lifetime of the application.
- */
 @ThreadSafe
-public class TableCache<T extends RemoteTable<?, ?>> {
+public class WindowedTableCache<T extends RemoteTable<?, ?>> {
 
   @FunctionalInterface
   public interface Factory<T> {
-    T create(final CassandraTableSpec spec)
+    T create(final CassandraTableSpec spec, WindowSegmentPartitioner partitioner)
         throws InterruptedException, TimeoutException;
   }
 
   private final Map<String, T> tables = new HashMap<>();
   private final Factory<T> factory;
 
-  public TableCache(final Factory<T> factory) {
+  public WindowedTableCache(final Factory<T> factory) {
     this.factory = factory;
   }
 
@@ -47,21 +43,22 @@ public class TableCache<T extends RemoteTable<?, ?>> {
    * Creates a table with the supplied {@code tableName} with the
    * desired schema.
    */
-  public synchronized T create(CassandraTableSpec spec)
+  public synchronized T create(CassandraTableSpec spec, WindowSegmentPartitioner partitioner)
       throws InterruptedException, TimeoutException {
     final T existing = tables.get(spec.tableName());
     if (existing != null) {
       return existing;
     }
 
-    final T table = factory.create(spec);
+    final T table = factory.create(spec, partitioner);
     tables.put(spec.tableName(), table);
     return table;
   }
 
   /**
    * @param name the name of the table
-   * @return the table, if it was already created by {@link #create(CassandraTableSpec)}
+   * @return the table, if it was already created by
+   *         {@link #create(CassandraTableSpec, WindowSegmentPartitioner)}
    */
   public synchronized T getTable(final String name) {
     return tables.get(name);

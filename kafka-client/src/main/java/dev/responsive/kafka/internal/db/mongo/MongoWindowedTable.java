@@ -19,7 +19,7 @@
 package dev.responsive.kafka.internal.db.mongo;
 
 import static com.mongodb.MongoClientSettings.getDefaultCodecRegistry;
-import static dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.UNINITIALIZED_STREAM_TIME;
+import static dev.responsive.kafka.internal.db.partitioning.Segmenter.UNINITIALIZED_STREAM_TIME;
 import static dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration.NO_COMMITTED_OFFSET;
 import static org.bson.codecs.configuration.CodecRegistries.fromProviders;
 import static org.bson.codecs.configuration.CodecRegistries.fromRegistries;
@@ -39,8 +39,9 @@ import com.mongodb.client.model.WriteModel;
 import com.mongodb.client.result.UpdateResult;
 import dev.responsive.kafka.internal.db.MongoWindowFlushManager;
 import dev.responsive.kafka.internal.db.RemoteWindowedTable;
-import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner;
-import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.SegmentPartition;
+import dev.responsive.kafka.internal.db.partitioning.Segmenter;
+import dev.responsive.kafka.internal.db.partitioning.Segmenter.SegmentPartition;
+import dev.responsive.kafka.internal.db.partitioning.WindowSegmentPartitioner;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
 import dev.responsive.kafka.internal.utils.Iterators;
 import dev.responsive.kafka.internal.utils.WindowedKey;
@@ -67,7 +68,7 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
   private static final UpdateOptions UPSERT_OPTIONS = new UpdateOptions().upsert(true);
 
   private final String name;
-  private final SegmentPartitioner partitioner;
+  private final WindowSegmentPartitioner partitioner;
 
   // whether to put windowStartMs first in the composite windowed key format in WindowDoc
   private final boolean timestampFirstOrder;
@@ -82,7 +83,7 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
   private static class PartitionSegments {
     private final MongoDatabase database;
     private final MongoDatabase adminDatabase;
-    private final SegmentPartitioner partitioner;
+    private final Segmenter segmenter;
     private final long epoch;
     private final CollectionCreationOptions collectionCreationOptions;
 
@@ -93,7 +94,7 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
     public PartitionSegments(
         final MongoDatabase database,
         final MongoDatabase adminDatabase,
-        final SegmentPartitioner partitioner,
+        final Segmenter segmenter,
         final int kafkaPartition,
         final long streamTime,
         final long epoch,
@@ -101,12 +102,13 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
     ) {
       this.database = database;
       this.adminDatabase = adminDatabase;
-      this.partitioner = partitioner;
+      this.segmenter = segmenter;
       this.epoch = epoch;
       this.collectionCreationOptions = collectionCreationOptions;
       this.segmentWindows = new ConcurrentHashMap<>();
 
-      final var activeSegments = partitioner.activeSegments(kafkaPartition, streamTime);
+      final List<SegmentPartition> activeSegments =
+          segmenter.activeSegments(kafkaPartition, streamTime);
       if (activeSegments.isEmpty()) {
         LOG.info("{}[{}] No active segments for initial streamTime {}",
                  database.getName(), kafkaPartition, streamTime);
@@ -118,15 +120,22 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
           createSegment(segmentToCreate);
         }
 
-        final long firstSegmentId = activeSegments.get(0).segmentId;
-        LOG.info("{}[{}] Initialized active segments in range {} - {}",
-                 database.getName(), kafkaPartition, firstSegmentId,
-                 firstSegmentId + activeSegments.size());
+        final long firstSegmentStartTimestamp = activeSegments.get(0).segmentStartTimestamp;
+        final long lastSegmentStartTimestamp =
+            firstSegmentStartTimestamp + (activeSegments.size() * segmenter.segmentIntervalMs());
+        LOG.info(
+            "{}[{}] Initialized active segments with start timestamps in [{} - {}]",
+            database.getName(),
+            kafkaPartition,
+            firstSegmentStartTimestamp,
+            lastSegmentStartTimestamp
+        );
       }
     }
 
     private String collectionNameForSegment(final SegmentPartition segmentPartition) {
-      final long segmentStartTimeMs = segmentPartition.segmentId * partitioner.segmentIntervalMs();
+      final long segmentStartTimeMs =
+          segmentPartition.segmentStartTimestamp * segmenter.segmentIntervalMs();
       return String.format(
           "%d-%d",
           segmentPartition.tablePartition, segmentStartTimeMs
@@ -134,8 +143,10 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
     }
 
     private void createSegment(final SegmentPartition segmentToCreate) {
-      LOG.info("{}[{}] Creating segment id {}",
-               database.getName(), segmentToCreate.tablePartition, segmentToCreate.segmentId);
+      LOG.info(
+          "{}[{}] Creating segment start timestamp {}",
+          database.getName(), segmentToCreate.tablePartition, segmentToCreate.segmentStartTimestamp
+      );
 
       final var collectionName = collectionNameForSegment(segmentToCreate);
       final MongoCollection<WindowDoc> windowDocs;
@@ -161,14 +172,16 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
     // thus guaranteeing that even if we are fenced, the new writer will pick up from an offset and
     // stream-time such that the segment is already expired
     // However this does leave us vulnerable to zombie segments. We should consider doing a sweep
-    // for old segments every so often with #listCollectionNames, since the segmentId is embedded in
-    // the collection name and will indicate whether it's part of the active set or not, perhaps
-    // using a scheduled executor to avoid blocking processing
+    // for old segments every so often with #listCollectionNames, since the segmentStartTimestamp is
+    // embedded in the collection name and will indicate whether it's part of the active set or
+    // not, perhaps using a scheduled executor to avoid blocking processing.
     // In fact we may want to move all the segment expiration to a background process since there's
     // no async way to drop a collection but the stream thread doesn't actually need to wait for it
     private void deleteSegment(final SegmentPartition segmentToExpire) {
-      LOG.info("{}[{}] Expiring segment id {}",
-               database.getName(), segmentToExpire.tablePartition, segmentToExpire.segmentId);
+      LOG.info(
+          "{}[{}] Expiring segment start timestamp {}",
+          database.getName(), segmentToExpire.tablePartition, segmentToExpire.segmentStartTimestamp
+      );
 
       final var expiredDocs = segmentWindows.get(segmentToExpire);
       expiredDocs.drop();
@@ -178,7 +191,7 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
   public MongoWindowedTable(
       final MongoClient client,
       final String name,
-      final SegmentPartitioner partitioner,
+      final WindowSegmentPartitioner partitioner,
       final boolean timestampFirstOrder,
       final CollectionCreationOptions collectionCreationOptions
   ) {
@@ -234,7 +247,7 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
         new PartitionSegments(
             database,
             adminDatabase,
-            partitioner,
+            partitioner.segmenter(),
             kafkaPartition,
             metaDoc.streamTime,
             metaDoc.epoch,
@@ -427,7 +440,7 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
     final List<KeyValueIterator<WindowedKey, byte[]>> segmentIterators = new LinkedList<>();
     final var partitionSegments = kafkaPartitionToSegments.get(kafkaPartition);
 
-    for (final var segment : partitioner.range(kafkaPartition, timeFrom, timeTo)) {
+    for (final var segment : partitioner.segmenter().range(kafkaPartition, timeFrom, timeTo)) {
       final var segmentWindows = partitionSegments.segmentWindows.get(segment);
       final FindIterable<WindowDoc> fetchResults = segmentWindows.find(
           Filters.and(
