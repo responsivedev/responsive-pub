@@ -38,7 +38,7 @@ import org.apache.kafka.common.utils.Bytes;
  * those are public classes and it's better to keep this functionality
  * internal.</p>
  */
-public class CassandraTableSpecFactory {
+public class RemoteTableSpecFactory {
 
   public static RemoteTableSpec globalSpec(
       final ResponsiveKeyValueParams params,

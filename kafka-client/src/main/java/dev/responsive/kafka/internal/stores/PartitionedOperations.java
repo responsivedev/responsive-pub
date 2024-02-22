@@ -28,9 +28,9 @@ import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.internal.config.ConfigUtils;
 import dev.responsive.kafka.internal.db.BatchFlusher;
 import dev.responsive.kafka.internal.db.BytesKeySpec;
-import dev.responsive.kafka.internal.db.CassandraTableSpecFactory;
 import dev.responsive.kafka.internal.db.FlushManager;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
+import dev.responsive.kafka.internal.db.RemoteTableSpecFactory;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
@@ -180,7 +180,7 @@ public class PartitionedOperations implements KeyValueOperations {
             changelogTopicName
         );
     final var client = sessionClients.cassandraClient();
-    final var spec = CassandraTableSpecFactory.fromKVParams(params, partitioner);
+    final var spec = RemoteTableSpecFactory.fromKVParams(params, partitioner);
     switch (params.schemaType()) {
       case KEY_VALUE:
         return client.kvFactory().create(spec);
