@@ -60,11 +60,11 @@ import org.slf4j.LoggerFactory;
  * numSegments = 3
  * segmentInterval = 33
  * <p>
- * kafkaPartition | stream-time | minValidTs |    active segment time bounds   |  segmentTimestamp||
+ * kafkaPartition | stream-time | minValidTs |    active segment time bounds   | segmentTimestamp ||
  *           0    |     16      |      0     | 0-32                            | 0                ||
- *           1    |     88      |      0     | 0-32, 33-65, 66-98              | 0, 1, 2          ||
- *           2    |     101     |      2     | 0-32, 33-65, 66-98, 99-131      | 0, 1, 2, 3       ||
- *           3    |     169     |      70    | 66-98, 99-131, 132-164, 165-197 | 1, 2, 3, 4       ||
+ *           1    |     88      |      0     | 0-32, 33-65, 66-98              | 0, 33, 66        ||
+ *           2    |     101     |      2     | 0-32, 33-65, 66-98, 99-131      | 0, 33, 66, 99    ||
+ *           3    |     169     |      70    | 66-98, 99-131, 132-164, 165-197 | 66, 99, 132, 165 ||
  * <p>
  * NOTE: because we are already dividing up the partition space into segments, we don't further
  * split things into true sub-partitions based on key. Each kafka partition still maps to multiple
@@ -183,10 +183,10 @@ public class Segmenter {
       final long timeFrom,
       final long timeTo
   ) {
-    return LongStream.range(segmentStartTimestamp(timeFrom), segmentStartTimestamp(timeTo) + 1)
-        .mapToObj(segmentStartTimestamp -> new SegmentPartition(
+    return LongStream.range(segmentId(timeFrom), segmentId(timeTo) + 1)
+        .mapToObj(segmentId -> new SegmentPartition(
             kafkaPartition,
-            segmentStartTimestamp
+            segmentId * segmentIntervalMs
         ))
         .collect(Collectors.toList());
   }
@@ -206,10 +206,13 @@ public class Segmenter {
       final long timeFrom,
       final long timeTo
   ) {
-    return LongStream.range(segmentStartTimestamp(timeFrom), segmentStartTimestamp(timeTo) + 1)
+    return LongStream.range(segmentId(timeFrom), segmentId(timeTo) + 1)
         .boxed()
         .sorted(Collections.reverseOrder())
-        .map(segmentStartTimestamp -> new SegmentPartition(kafkaPartition, segmentStartTimestamp))
+        .map(segmentId -> new SegmentPartition(
+            kafkaPartition,
+            segmentId * segmentIntervalMs
+        ))
         .collect(Collectors.toList());
   }
 
@@ -219,11 +222,11 @@ public class Segmenter {
       final long oldStreamTime,
       final long newStreamTime
   ) {
-    final long oldMaxActiveSegment = segmentStartTimestamp(oldStreamTime);
-    final long newMaxActiveSegment = segmentStartTimestamp(newStreamTime);
+    final long oldMaxActiveSegment = segmentId(oldStreamTime);
+    final long newMaxActiveSegment = segmentId(newStreamTime);
 
-    final long oldMinActiveSegment = segmentStartTimestamp(minValidTs(oldStreamTime));
-    final long newMinActiveSegment = segmentStartTimestamp(minValidTs(newStreamTime));
+    final long oldMinActiveSegment = segmentId(minValidTs(oldStreamTime));
+    final long newMinActiveSegment = segmentId(minValidTs(newStreamTime));
 
     // Special case where this is the first record we've received
     if (oldStreamTime == UNINITIALIZED_STREAM_TIME) {
@@ -232,7 +235,7 @@ public class Segmenter {
       final LongStream segmentsToCreate = LongStream.range(
           newMinActiveSegment,
           newMaxActiveSegment + 1 // add 1 since the upper bound is exclusive
-      );
+      ).map(segmentId -> segmentId * segmentIntervalMs);
 
       LOG.info("Initializing stream-time for table {} to {}ms and creating segments: [{}-{}]",
           tableName, newStreamTime, newMinActiveSegment, newMaxActiveSegment
@@ -246,12 +249,12 @@ public class Segmenter {
       final LongStream segmentsToExpire = LongStream.range(
           oldMinActiveSegment,
           newMinActiveSegment
-      );
+      ).map(segmentId -> segmentId * segmentIntervalMs);
 
       final LongStream segmentsToCreate = LongStream.range(
           oldMaxActiveSegment + 1, // inclusive: add 1 b/c the old max segment should already exist
           newMaxActiveSegment + 1  // exclusive: add 1 to create segment for highest valid timestamp
-      );
+      ).map(segmentId -> segmentId * segmentIntervalMs);
 
       if (newMinActiveSegment > oldMinActiveSegment) {
         LOG.info("{}[{}] Advancing stream-time from {}ms to {}ms and rolling segments with "
@@ -268,6 +271,10 @@ public class Segmenter {
   }
 
   public long segmentStartTimestamp(final long windowTimestamp) {
+    return segmentId(windowTimestamp) * segmentIntervalMs;
+  }
+
+  private long segmentId(final long windowTimestamp) {
     return Long.max(0, windowTimestamp / segmentIntervalMs);
   }
 

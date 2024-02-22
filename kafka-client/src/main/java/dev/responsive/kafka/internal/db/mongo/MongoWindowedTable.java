@@ -120,10 +120,16 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
           createSegment(segmentToCreate);
         }
 
-        final long firstSegmentId = activeSegments.get(0).segmentStartTimestamp;
-        LOG.info("{}[{}] Initialized active segments in range {} - {}",
-                 database.getName(), kafkaPartition, firstSegmentId,
-                 firstSegmentId + activeSegments.size());
+        final long firstSegmentStartTimestamp = activeSegments.get(0).segmentStartTimestamp;
+        final long lastSegmentStartTimestamp =
+            firstSegmentStartTimestamp + (activeSegments.size() * segmenter.segmentIntervalMs());
+        LOG.info(
+            "{}[{}] Initialized active segments with start timestamps in [{} - {}]",
+            database.getName(),
+            kafkaPartition,
+            firstSegmentStartTimestamp,
+            lastSegmentStartTimestamp
+        );
       }
     }
 
@@ -137,7 +143,8 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
     }
 
     private void createSegment(final SegmentPartition segmentToCreate) {
-      LOG.info("{}[{}] Creating segment id {}",
+      LOG.info(
+          "{}[{}] Creating segment start timestamp {}",
           database.getName(), segmentToCreate.tablePartition, segmentToCreate.segmentStartTimestamp
       );
 
@@ -171,7 +178,8 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
     // In fact we may want to move all the segment expiration to a background process since there's
     // no async way to drop a collection but the stream thread doesn't actually need to wait for it
     private void deleteSegment(final SegmentPartition segmentToExpire) {
-      LOG.info("{}[{}] Expiring segment id {}",
+      LOG.info(
+          "{}[{}] Expiring segment start timestamp {}",
           database.getName(), segmentToExpire.tablePartition, segmentToExpire.segmentStartTimestamp
       );
 

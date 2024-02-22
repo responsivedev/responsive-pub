@@ -23,7 +23,9 @@ import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.changelogFor;
 
 import dev.responsive.kafka.api.config.ResponsiveConfig;
+import dev.responsive.kafka.api.config.ResponsiveMode;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
+import dev.responsive.kafka.internal.config.ConfigUtils;
 import dev.responsive.kafka.internal.db.BatchFlusher;
 import dev.responsive.kafka.internal.db.BytesKeySpec;
 import dev.responsive.kafka.internal.db.CassandraTableSpecFactory;
@@ -35,7 +37,10 @@ import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
 import dev.responsive.kafka.internal.utils.Result;
 import dev.responsive.kafka.internal.utils.SessionClients;
 import dev.responsive.kafka.internal.utils.TableName;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Collection;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.concurrent.TimeoutException;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -61,6 +66,8 @@ public class PartitionedOperations implements KeyValueOperations {
   private final ResponsiveStoreRegistry storeRegistry;
   private final ResponsiveStoreRegistration registration;
   private final ResponsiveRestoreListener restoreListener;
+  private final boolean migrationMode;
+  private final long startingTimestamp;
 
   public static PartitionedOperations create(
       final TableName name,
@@ -127,6 +134,13 @@ public class PartitionedOperations implements KeyValueOperations {
     );
     storeRegistry.registerStore(registration);
 
+    final boolean migrationMode = ConfigUtils.responsiveMode(config) == ResponsiveMode.MIGRATE;
+    long startingTimestamp = -1;
+    final Optional<Duration> ttl = params.timeToLive();
+    if (migrationMode && ttl.isPresent()) {
+      startingTimestamp = Instant.now().minus(ttl.get()).toEpochMilli();
+    }
+
     return new PartitionedOperations(
         log,
         context,
@@ -136,7 +150,9 @@ public class PartitionedOperations implements KeyValueOperations {
         changelog,
         storeRegistry,
         registration,
-        sessionClients.restoreListener()
+        sessionClients.restoreListener(),
+        migrationMode,
+        startingTimestamp
     );
   }
 
@@ -192,7 +208,9 @@ public class PartitionedOperations implements KeyValueOperations {
       final TopicPartition changelog,
       final ResponsiveStoreRegistry storeRegistry,
       final ResponsiveStoreRegistration registration,
-      final ResponsiveRestoreListener restoreListener
+      final ResponsiveRestoreListener restoreListener,
+      final boolean migrationMode,
+      final long startingTimestamp
   ) {
     this.log = log;
     this.context = context;
@@ -203,10 +221,17 @@ public class PartitionedOperations implements KeyValueOperations {
     this.storeRegistry = storeRegistry;
     this.registration = registration;
     this.restoreListener = restoreListener;
+    this.migrationMode = migrationMode;
+    this.startingTimestamp = startingTimestamp;
   }
 
   @Override
   public void put(final Bytes key, final byte[] value) {
+    if (migratingAndTimestampTooEarly()) {
+      // we are bootstrapping a store. Only apply the write if the timestamp
+      // is fresher than the starting timestamp
+      return;
+    }
     buffer.put(key, value, context.timestamp());
   }
 
@@ -221,6 +246,15 @@ public class PartitionedOperations implements KeyValueOperations {
 
   @Override
   public byte[] get(final Bytes key) {
+    if (migrationMode) {
+      // we don't want to issue gets in migration mode since
+      // we're just reading from the changelog. the problem is
+      // that materialized tables issue get() on every put() to
+      // send the "undo" data downstream -- we intercept all gets
+      // and just return null
+      return null;
+    }
+
     // try the buffer first, it acts as a local cache
     // but this is also necessary for correctness as
     // it is possible that the data is either uncommitted
@@ -304,5 +338,17 @@ public class PartitionedOperations implements KeyValueOperations {
         .timeToLive()
         .map(ttl -> context.timestamp() - ttl.toMillis())
         .orElse(-1L);
+  }
+
+  private boolean migratingAndTimestampTooEarly() {
+    if (!migrationMode) {
+      return false;
+    }
+    if (startingTimestamp > 0) {
+      // we are bootstrapping a store. Only apply the write if the timestamp
+      // is fresher than the starting timestamp
+      return context.timestamp() < startingTimestamp;
+    }
+    return false;
   }
 }
