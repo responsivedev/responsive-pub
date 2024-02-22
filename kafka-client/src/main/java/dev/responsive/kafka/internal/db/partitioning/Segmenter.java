@@ -60,11 +60,11 @@ import org.slf4j.LoggerFactory;
  * numSegments = 3
  * segmentInterval = 33
  * <p>
- * kafkaPartition | stream-time | minValidTs |    active segment time bounds   |  segmentTimestamp||
+ * kafkaPartition | stream-time | minValidTs |    active segment time bounds   | segmentTimestamp ||
  *           0    |     16      |      0     | 0-32                            | 0                ||
- *           1    |     88      |      0     | 0-32, 33-65, 66-98              | 0, 1, 2          ||
- *           2    |     101     |      2     | 0-32, 33-65, 66-98, 99-131      | 0, 1, 2, 3       ||
- *           3    |     169     |      70    | 66-98, 99-131, 132-164, 165-197 | 1, 2, 3, 4       ||
+ *           1    |     88      |      0     | 0-32, 33-65, 66-98              | 0, 33, 66        ||
+ *           2    |     101     |      2     | 0-32, 33-65, 66-98, 99-131      | 0, 33, 66, 99    ||
+ *           3    |     169     |      70    | 66-98, 99-131, 132-164, 165-197 | 66, 99, 132, 165 ||
  * <p>
  * NOTE: because we are already dividing up the partition space into segments, we don't further
  * split things into true sub-partitions based on key. Each kafka partition still maps to multiple
