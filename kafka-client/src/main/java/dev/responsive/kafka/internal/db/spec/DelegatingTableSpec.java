@@ -21,11 +21,11 @@ import dev.responsive.kafka.internal.db.TableOperations;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import java.util.EnumSet;
 
-public abstract class DelegatingTableSpec implements CassandraTableSpec {
+public abstract class DelegatingTableSpec implements RemoteTableSpec {
 
-  private final CassandraTableSpec delegate;
+  private final RemoteTableSpec delegate;
 
-  protected DelegatingTableSpec(final CassandraTableSpec delegate) {
+  protected DelegatingTableSpec(final RemoteTableSpec delegate) {
     this.delegate = delegate;
   }
 
@@ -49,7 +49,7 @@ public abstract class DelegatingTableSpec implements CassandraTableSpec {
     return delegate.applyOptions(base);
   }
 
-  public CassandraTableSpec delegate() {
+  public RemoteTableSpec delegate() {
     return delegate;
   }
 }
