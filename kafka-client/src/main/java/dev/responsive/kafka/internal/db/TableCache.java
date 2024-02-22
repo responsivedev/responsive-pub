@@ -16,7 +16,7 @@
 
 package dev.responsive.kafka.internal.db;
 
-import dev.responsive.kafka.internal.db.spec.CassandraTableSpec;
+import dev.responsive.kafka.internal.db.spec.RemoteTableSpec;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeoutException;
@@ -32,7 +32,7 @@ public class TableCache<T extends RemoteTable<?, ?>> {
 
   @FunctionalInterface
   public interface Factory<T> {
-    T create(final CassandraTableSpec spec)
+    T create(final RemoteTableSpec spec)
         throws InterruptedException, TimeoutException;
   }
 
@@ -47,7 +47,7 @@ public class TableCache<T extends RemoteTable<?, ?>> {
    * Creates a table with the supplied {@code tableName} with the
    * desired schema.
    */
-  public synchronized T create(CassandraTableSpec spec)
+  public synchronized T create(RemoteTableSpec spec)
       throws InterruptedException, TimeoutException {
     final T existing = tables.get(spec.tableName());
     if (existing != null) {
@@ -61,7 +61,7 @@ public class TableCache<T extends RemoteTable<?, ?>> {
 
   /**
    * @param name the name of the table
-   * @return the table, if it was already created by {@link #create(CassandraTableSpec)}
+   * @return the table, if it was already created by {@link #create(RemoteTableSpec)}
    */
   public synchronized T getTable(final String name) {
     return tables.get(name);

@@ -27,7 +27,7 @@ import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.stores.ResponsiveWindowParams;
 import dev.responsive.kafka.internal.db.BatchFlusher;
 import dev.responsive.kafka.internal.db.CassandraClient;
-import dev.responsive.kafka.internal.db.CassandraTableSpecFactory;
+import dev.responsive.kafka.internal.db.RemoteTableSpecFactory;
 import dev.responsive.kafka.internal.db.RemoteWindowedTable;
 import dev.responsive.kafka.internal.db.WindowFlushManager;
 import dev.responsive.kafka.internal.db.WindowedKeySpec;
@@ -157,7 +157,7 @@ public class SegmentedOperations implements WindowOperations {
   ) throws InterruptedException, TimeoutException {
     final CassandraClient client = clients.cassandraClient();
 
-    final var spec = CassandraTableSpecFactory.fromWindowParams(params, partitioner);
+    final var spec = RemoteTableSpecFactory.fromWindowParams(params, partitioner);
 
     switch (params.schemaType()) {
       case WINDOW:

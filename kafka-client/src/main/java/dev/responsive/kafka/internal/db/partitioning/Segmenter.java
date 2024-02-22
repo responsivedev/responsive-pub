@@ -315,5 +315,26 @@ public class Segmenter {
           expired, created
       );
     }
+
+    public boolean equals(Object obj) {
+      if (obj == this) {
+        return true;
+      } else if (obj == null) {
+        return false;
+      } else if (this.getClass() != obj.getClass()) {
+        return false;
+      }
+
+      SegmentRoll other = (SegmentRoll) obj;
+      return this.segmentsToCreate.equals(other.segmentsToCreate) && this.segmentsToExpire.equals(
+          other.segmentsToExpire);
+    }
+
+    @Override
+    public int hashCode() {
+      int result = this.segmentsToCreate.hashCode();
+      result = 31 * result + this.segmentsToExpire.hashCode();
+      return result;
+    }
   }
 }
