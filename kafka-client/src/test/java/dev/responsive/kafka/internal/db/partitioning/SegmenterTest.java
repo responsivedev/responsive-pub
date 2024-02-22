@@ -56,6 +56,7 @@ public class SegmenterTest {
     // When:
     final var activeSegments1 = segmenter.activeSegments(1, 1_999);
     final var activeSegments2 = segmenter.activeSegments(1, 3_000);
+    final var activeSegments3 = segmenter.activeSegments(1, 13_000);
 
     // Then:
     assertThat(activeSegments1, hasSize(2));
@@ -70,6 +71,21 @@ public class SegmenterTest {
         new Segmenter.SegmentPartition(1, 1_000),
         new Segmenter.SegmentPartition(1, 2_000),
         new Segmenter.SegmentPartition(1, 3_000)
+    ));
+
+    assertThat(activeSegments3, hasSize(11));
+    assertThat(activeSegments3, containsInRelativeOrder(
+        new Segmenter.SegmentPartition(1, 3_000),
+        new Segmenter.SegmentPartition(1, 4_000),
+        new Segmenter.SegmentPartition(1, 5_000),
+        new Segmenter.SegmentPartition(1, 6_000),
+        new Segmenter.SegmentPartition(1, 7_000),
+        new Segmenter.SegmentPartition(1, 8_000),
+        new Segmenter.SegmentPartition(1, 9_000),
+        new Segmenter.SegmentPartition(1, 10_000),
+        new Segmenter.SegmentPartition(1, 11_000),
+        new Segmenter.SegmentPartition(1, 12_000),
+        new Segmenter.SegmentPartition(1, 13_000)
     ));
   }
 
