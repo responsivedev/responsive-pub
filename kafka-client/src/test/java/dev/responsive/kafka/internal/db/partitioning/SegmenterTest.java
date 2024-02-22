@@ -92,6 +92,12 @@ public class SegmenterTest {
     final var rolledSegments3 = segmenter.rolledSegments(tableName, kafkaPartition,
         2_000, 4_000
     );
+    final var rolledSegments4 = segmenter.rolledSegments(tableName, kafkaPartition,
+        0, 500
+    );
+    final var rolledSegments5 = segmenter.rolledSegments(tableName, kafkaPartition,
+        9_500, 12_500
+    );
 
     // Then:
     assertThat(rolledSegments1, equalTo(new Segmenter.SegmentRoll(
@@ -102,6 +108,12 @@ public class SegmenterTest {
     )));
     assertThat(rolledSegments3, equalTo(new Segmenter.SegmentRoll(
         LongStream.of(), LongStream.of(3_000, 4_000)
+    )));
+    assertThat(rolledSegments4, equalTo(new Segmenter.SegmentRoll(
+        LongStream.of(), LongStream.of()
+    )));
+    assertThat(rolledSegments5, equalTo(new Segmenter.SegmentRoll(
+        LongStream.of(0, 1_000), LongStream.of(10_000, 11_000, 12_000)
     )));
   }
 
