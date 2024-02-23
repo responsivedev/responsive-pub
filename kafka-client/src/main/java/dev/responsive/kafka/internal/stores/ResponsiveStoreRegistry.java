@@ -16,8 +16,6 @@
 
 package dev.responsive.kafka.internal.stores;
 
-import static dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration.NO_COMMITTED_OFFSET;
-
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;

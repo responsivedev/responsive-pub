@@ -32,7 +32,7 @@ public final class ResponsiveStoreRegistration {
   private final TopicPartition changelogTopicPartition;
   private final Consumer<Long> onCommit;
 
-  private final OptionalLong startOffset; // stored offset during init, ie where restore should start
+  private final OptionalLong startOffset; // stored offset during init, (where restore should start)
 
   @VisibleForTesting
   public ResponsiveStoreRegistration(

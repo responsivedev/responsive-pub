@@ -42,15 +42,15 @@ class ResponsiveStoreRegistryTest {
   }
 
   @Test
-  public void shouldReturnEmptyCommittedOffsetFromRegisteredStoreWithNoOffset() {
+  public void shouldReturnEmptyCommittedOffsetFromNotRegisteredStore() {
     assertThat(
-        registry.getCommittedOffset(UNINIT_TOPIC_PARTITION),
+        registry.getCommittedOffset(new TopicPartition("foo", 1)),
         is(OptionalLong.empty())
     );
   }
 
   @Test
-  public void shouldReturnEmptyCommittedOffsetFromNotRegisteredStore() {
+  public void shouldReturnEmptyCommittedOffsetFromChangelogWithNoOffset() {
     assertThat(
         registry.getCommittedOffset(TOPIC_PARTITION),
         is(OptionalLong.empty())
