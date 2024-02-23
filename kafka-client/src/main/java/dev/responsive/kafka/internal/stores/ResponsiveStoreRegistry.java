@@ -16,6 +16,8 @@
 
 package dev.responsive.kafka.internal.stores;
 
+import static dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration.NO_COMMITTED_OFFSET;
+
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
@@ -32,8 +34,11 @@ public class ResponsiveStoreRegistry {
   private final List<ResponsiveStoreRegistration> stores = new LinkedList<>();
 
   public synchronized OptionalLong getCommittedOffset(final TopicPartition topicPartition) {
-    return getRegisteredStoresForChangelog(topicPartition).stream()
-        .mapToLong(ResponsiveStoreRegistration::startOffset)
+    return getRegisteredStoresForChangelog(topicPartition)
+        .stream()
+        .map(ResponsiveStoreRegistration::startOffset)
+        .filter(OptionalLong::isPresent)
+        .mapToLong(OptionalLong::getAsLong)
         .max();
   }
 

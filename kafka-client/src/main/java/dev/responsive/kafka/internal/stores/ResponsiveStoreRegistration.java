@@ -18,6 +18,7 @@ package dev.responsive.kafka.internal.stores;
 
 import com.datastax.oss.driver.shaded.guava.common.annotations.VisibleForTesting;
 import java.util.Objects;
+import java.util.OptionalLong;
 import java.util.function.Consumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
@@ -31,13 +32,13 @@ public final class ResponsiveStoreRegistration {
   private final TopicPartition changelogTopicPartition;
   private final Consumer<Long> onCommit;
 
-  private final long startOffset; // stored offset during init, ie where restore should start
+  private final OptionalLong startOffset; // stored offset during init, ie where restore should start
 
   @VisibleForTesting
   public ResponsiveStoreRegistration(
       final String storeName,
       final TopicPartition changelogTopicPartition,
-      final long startOffset,
+      final OptionalLong startOffset,
       final Consumer<Long> onCommit
   ) {
     this.storeName = Objects.requireNonNull(storeName);
@@ -50,7 +51,7 @@ public final class ResponsiveStoreRegistration {
     log.debug("Created store registration with stored offset={}", startOffset);
   }
 
-  public long startOffset() {
+  public OptionalLong startOffset() {
     return startOffset;
   }
 
