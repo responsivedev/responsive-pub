@@ -98,6 +98,8 @@ public final class IntegrationTestUtils {
     // add displayName to name to account for parameterized tests
     return info.getTestMethod().orElseThrow().getName().toLowerCase(Locale.ROOT)
         + info.getDisplayName().substring("[X] ".length()).toLowerCase(Locale.ROOT)
+        .replace(" ", "") // this can happen if multiple params in parameterized test
+        .replace(",", "") // this can happen if multiple params in parameterized test
         .replace("_", ""); // keep only valid cassandra chars to keep testing code easier
   }
 

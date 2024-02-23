@@ -12,18 +12,29 @@ import org.junit.jupiter.api.Test;
 
 class ResponsiveStoreRegistryTest {
   private static final TopicPartition TOPIC_PARTITION = new TopicPartition("changelog-topic", 5);
+  private static final TopicPartition UNINIT_TOPIC_PARTITION =
+      new TopicPartition("changelog-topic", 2);
   private static final ResponsiveStoreRegistration REGISTRATION = new ResponsiveStoreRegistration(
       "store",
       TOPIC_PARTITION,
-      123L,
+      OptionalLong.of(123L),
       o -> {}
   );
+
+  private static final ResponsiveStoreRegistration UNINIT_REGISTRATION =
+      new ResponsiveStoreRegistration(
+          "store",
+          UNINIT_TOPIC_PARTITION,
+          OptionalLong.empty(),
+          o -> { }
+      );
 
   private final ResponsiveStoreRegistry registry = new ResponsiveStoreRegistry();
 
   @BeforeEach
   public void setup() {
     registry.registerStore(REGISTRATION);
+    registry.registerStore(UNINIT_REGISTRATION);
   }
 
   @Test
@@ -35,6 +46,14 @@ class ResponsiveStoreRegistryTest {
   public void shouldReturnEmptyCommittedOffsetFromNotRegisteredStore() {
     assertThat(
         registry.getCommittedOffset(new TopicPartition("foo", 1)),
+        is(OptionalLong.empty())
+    );
+  }
+
+  @Test
+  public void shouldReturnEmptyCommittedOffsetFromChangelogWithNoOffset() {
+    assertThat(
+        registry.getCommittedOffset(UNINIT_TOPIC_PARTITION),
         is(OptionalLong.empty())
     );
   }
