@@ -34,6 +34,7 @@ class ResponsiveStoreRegistryTest {
   @BeforeEach
   public void setup() {
     registry.registerStore(REGISTRATION);
+    registry.registerStore(UNINIT_REGISTRATION);
   }
 
   @Test
@@ -52,7 +53,7 @@ class ResponsiveStoreRegistryTest {
   @Test
   public void shouldReturnEmptyCommittedOffsetFromChangelogWithNoOffset() {
     assertThat(
-        registry.getCommittedOffset(TOPIC_PARTITION),
+        registry.getCommittedOffset(UNINIT_TOPIC_PARTITION),
         is(OptionalLong.empty())
     );
   }
