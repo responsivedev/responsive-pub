@@ -363,8 +363,6 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
       final long earliestSessionEnd,
       final long latestSessionEnd
   ) {
-    System.out.println(
-        "DEBUG: REMOTE FETCH ALL: " + key + " | " + earliestSessionEnd + " | " + latestSessionEnd);
     final var partitionSegments = kafkaPartitionToSegments.get(kafkaPartition);
 
     final var minKey = new SessionKey(key, 0, earliestSessionEnd);
@@ -375,20 +373,20 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
 
     final List<KeyValueIterator<SessionKey, byte[]>> segmentIterators = new LinkedList<>();
     for (final var segment : candidateSegments) {
-      final var segmentSessions = partitionSegments.segmentSessions.get(segment);
-      if (segmentSessions == null) {
+      final var sessionsSegment = partitionSegments.segmentSessions.get(segment);
+      if (sessionsSegment == null) {
         continue;
       }
 
-      System.out.println("Candidate Segment: " + segment.toString());
-      final FindIterable<SessionDoc> fetchResults = segmentSessions.find(
+      final FindIterable<SessionDoc> fetchResults = sessionsSegment.find(
           Filters.and(
               Filters.gte(SessionDoc.ID, compositeKey(minKey)),
               Filters.lte(SessionDoc.ID, compositeKey(maxKey))
           )
       );
 
-      final var iterator = Iterators.kv(fetchResults.iterator(), MongoSessionTable::sessionFromDoc);
+      final KeyValueIterator<SessionKey, byte[]> iterator =
+          Iterators.kv(fetchResults.iterator(), MongoSessionTable::sessionFromDoc);
       segmentIterators.add(iterator);
     }
 
@@ -489,7 +487,6 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
   }
 
   private static KeyValue<SessionKey, byte[]> sessionFromDoc(final SessionDoc sessionDoc) {
-    System.out.println("SESSION DOC: " + sessionDoc.id + " | " + sessionDoc.getKey());
     return new KeyValue<>(SessionDoc.sessionKey(sessionDoc.id), sessionDoc.value);
   }
 

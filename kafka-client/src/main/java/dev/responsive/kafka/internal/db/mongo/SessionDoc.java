@@ -21,7 +21,8 @@ import dev.responsive.kafka.internal.utils.SessionKey;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.Objects;
-import org.bson.codecs.pojo.annotations.BsonId;
+import org.bson.codecs.pojo.annotations.BsonCreator;
+import org.bson.codecs.pojo.annotations.BsonProperty;
 
 public class SessionDoc {
 
@@ -35,13 +36,25 @@ public class SessionDoc {
   public static final String ID_SESSION_END_TS = "sessionEndTs";
   public static final String ID_SESSION_START_TS = "sessionStartTs";
 
-  @BsonId
   BasicDBObject id;
   byte[] value;
   long epoch;
   Date tombstoneTs;
 
   public SessionDoc() {
+  }
+
+  @BsonCreator
+  public SessionDoc(
+      @BsonProperty(ID) BasicDBObject id,
+      @BsonProperty(VALUE) byte[] value,
+      @BsonProperty(EPOCH) long epoch,
+      @BsonProperty(TOMBSTONE_TS) Date tombstoneTs
+  ) {
+    this.id = id;
+    this.value = value;
+    this.epoch = epoch;
+    this.tombstoneTs = tombstoneTs;
   }
 
   public BasicDBObject getKey() {

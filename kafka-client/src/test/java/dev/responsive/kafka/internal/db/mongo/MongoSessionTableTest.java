@@ -26,9 +26,11 @@ import dev.responsive.kafka.internal.utils.SessionKey;
 import dev.responsive.kafka.internal.utils.SessionUtil;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
-import java.util.List;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Map;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.KeyValue;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -123,6 +125,7 @@ class MongoSessionTableTest {
     assertThat(value, Matchers.nullValue());
   }
 
+  @Test
   public void shouldSucceedFetchAll() {
     // Given:
     final SessionSegmentPartitioner partitioner = new SessionSegmentPartitioner(10_000L, 1_000L);
@@ -145,7 +148,11 @@ class MongoSessionTableTest {
     writer.flush();
 
     // Then:
-    var values = List.of(table.fetchAll(0, byteKey, 0, 900));
-    assertThat(values, Matchers.hasSize(1));
+    var it = table.fetchAll(0, byteKey, 100, 100);
+    var kvs = new ArrayList<KeyValue<SessionKey, byte[]>>();
+    it.forEachRemaining(kvs::add);
+    assertThat(kvs, Matchers.hasSize(1));
+    assertThat("key matches", kvs.get(0).key.equals(sessionKey));
+    assertThat("value matches", Arrays.equals(kvs.get(0).value, DEFAULT_VALUE));
   }
 }

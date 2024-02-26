@@ -142,7 +142,15 @@ public class ResponsiveSessionStoreIntegrationTest {
               System.out.println("DEBUG: AGG: " + k + " | " + v + " | " + agg);
               return agg + v;
             },
-            (aggKey, agg1, agg2) -> agg1 + agg2,
+            (aggKey, agg1, agg2) -> {
+              System.out.println("DEBUG: AGG2: " + aggKey + " | " + agg1 + " | " + agg2);
+              if (agg1 == null) {
+                return agg2;
+              } else if (agg2 == null) {
+                return agg1;
+              }
+              return agg1 + agg2;
+            },
             ResponsiveStores.sessionMaterialized(
                 ResponsiveSessionParams.session(
                     name,

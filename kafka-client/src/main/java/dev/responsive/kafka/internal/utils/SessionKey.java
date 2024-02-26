@@ -16,6 +16,8 @@
 
 package dev.responsive.kafka.internal.utils;
 
+import java.util.Arrays;
+import java.util.Objects;
 import org.apache.kafka.common.utils.Bytes;
 
 public class SessionKey implements Comparable<SessionKey> {
@@ -56,5 +58,26 @@ public class SessionKey implements Comparable<SessionKey> {
     }
 
     return Long.compare(this.sessionStartMs, o.sessionStartMs);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    final SessionKey sessionKey = (SessionKey) o;
+    return Arrays.equals(this.key.get(), sessionKey.key.get()) &&
+        this.sessionEndMs == sessionKey.sessionEndMs
+        && this.sessionStartMs == sessionKey.sessionStartMs;
+  }
+
+  @Override
+  public int hashCode() {
+    int result = Objects.hash(this.sessionEndMs, this.sessionStartMs);
+    result = 31 * result + Arrays.hashCode(this.key.get());
+    return result;
   }
 }
