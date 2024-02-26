@@ -20,6 +20,7 @@ package dev.responsive.kafka.internal.stores;
 
 import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadSessionClients;
 import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadStoreRegistry;
+import static dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration.NO_COMMITTED_OFFSET;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.changelogFor;
 
@@ -27,7 +28,7 @@ import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.stores.ResponsiveWindowParams;
 import dev.responsive.kafka.internal.db.BatchFlusher;
 import dev.responsive.kafka.internal.db.CassandraClient;
-import dev.responsive.kafka.internal.db.CassandraTableSpecFactory;
+import dev.responsive.kafka.internal.db.RemoteTableSpecFactory;
 import dev.responsive.kafka.internal.db.RemoteWindowedTable;
 import dev.responsive.kafka.internal.db.WindowFlushManager;
 import dev.responsive.kafka.internal.db.WindowedKeySpec;
@@ -42,6 +43,7 @@ import dev.responsive.kafka.internal.utils.TableName;
 import dev.responsive.kafka.internal.utils.WindowedKey;
 import java.util.Collection;
 import java.util.Map;
+import java.util.OptionalLong;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Predicate;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -132,7 +134,9 @@ public class SegmentedOperations implements WindowOperations {
     final var registration = new ResponsiveStoreRegistration(
         name.kafkaName(),
         changelog,
-        restoreStartOffset == -1 ? 0 : restoreStartOffset,
+        restoreStartOffset == NO_COMMITTED_OFFSET
+            ? OptionalLong.empty()
+            : OptionalLong.of(restoreStartOffset),
         buffer::flush
     );
     storeRegistry.registerStore(registration);
@@ -157,7 +161,7 @@ public class SegmentedOperations implements WindowOperations {
   ) throws InterruptedException, TimeoutException {
     final CassandraClient client = clients.cassandraClient();
 
-    final var spec = CassandraTableSpecFactory.fromWindowParams(params, partitioner);
+    final var spec = RemoteTableSpecFactory.fromWindowParams(params, partitioner);
 
     switch (params.schemaType()) {
       case WINDOW:

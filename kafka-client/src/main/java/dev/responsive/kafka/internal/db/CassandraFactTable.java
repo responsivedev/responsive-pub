@@ -32,7 +32,7 @@ import com.datastax.oss.driver.api.core.type.DataTypes;
 import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
 import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
 import com.datastax.oss.driver.api.querybuilder.schema.CreateTableWithOptions;
-import dev.responsive.kafka.internal.db.spec.CassandraTableSpec;
+import dev.responsive.kafka.internal.db.spec.RemoteTableSpec;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.List;
@@ -76,7 +76,7 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
   }
 
   public static CassandraFactTable create(
-      final CassandraTableSpec spec,
+      final RemoteTableSpec spec,
       final CassandraClient client
   ) {
     final String name = spec.tableName();

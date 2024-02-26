@@ -75,6 +75,7 @@ import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -90,9 +91,11 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.LongStream;
+import java.util.stream.Stream;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.OffsetSpec;
+import org.apache.kafka.clients.admin.RecordsToDelete;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -100,6 +103,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
@@ -118,7 +122,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 
 public class ResponsiveKeyValueStoreRestoreIntegrationTest {
 
@@ -169,13 +175,26 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
   }
 
   @ParameterizedTest
-  @EnumSource(KVSchema.class)
-  public void shouldFlushStoresBeforeClose(final KVSchema type) throws Exception {
+  @MethodSource("shouldFlushTestParams")
+  public void shouldFlushStoresBeforeClose(
+      final KVSchema type,
+      final boolean startWithTruncatedCL
+  ) throws Exception {
     final Map<String, Object> properties = getMutableProperties();
     final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties);
     final KafkaClientSupplier defaultClientSupplier = new DefaultKafkaClientSupplier();
     final CassandraClientFactory defaultFactory = new DefaultCassandraClientFactory();
     final TopicPartition input = new TopicPartition(inputTopic(), 0);
+    final TopicPartition changelog = new TopicPartition(name + "-" + aggName() + "-changelog", 0);
+
+    if (startWithTruncatedCL) {
+      // send some data
+      for (int i = 0; i < 10; i++) {
+        producer.send(new ProducerRecord<>(changelog.topic(), changelog.partition(), 1L, 1L)).get();
+      }
+      // truncate the topic
+      admin.deleteRecords(Map.of(changelog, RecordsToDelete.beforeOffset(9L))).all().get();
+    }
 
     try (final ResponsiveKafkaStreams streams
              = buildAggregatorApp(properties, defaultClientSupplier, defaultFactory, type, false)) {
@@ -184,9 +203,6 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
       pipeInput(inputTopic(), 1, producer, System::currentTimeMillis, 0, 10, 0);
       // Wait for it to be processed
       waitTillFullyConsumed(input, Duration.ofSeconds(120));
-
-      final TopicPartition changelog
-          = new TopicPartition(name + "-" + aggName() + "-changelog", 0);
 
       // Make sure changelog is even w/ cassandra
       final ResponsiveConfig config = ResponsiveConfig.responsiveConfig(properties);
@@ -200,6 +216,14 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
       final long last = changelogRecords.get(changelogRecords.size() - 1).offset();
       assertThat(cassandraOffset, equalTo(last));
     }
+  }
+
+  private static Stream<Arguments> shouldFlushTestParams() {
+    return Arrays.stream(KVSchema.values())
+        .flatMap(schema -> Stream.of(
+            Arguments.of(schema, true),
+            Arguments.of(schema, false))
+        );
   }
 
   @ParameterizedTest

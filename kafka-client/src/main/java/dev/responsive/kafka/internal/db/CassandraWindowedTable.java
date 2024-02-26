@@ -45,7 +45,7 @@ import com.datastax.oss.driver.api.querybuilder.schema.CreateTableWithOptions;
 import com.datastax.oss.driver.internal.querybuilder.schema.compaction.DefaultLeveledCompactionStrategy;
 import dev.responsive.kafka.internal.db.partitioning.Segmenter;
 import dev.responsive.kafka.internal.db.partitioning.WindowSegmentPartitioner;
-import dev.responsive.kafka.internal.db.spec.CassandraTableSpec;
+import dev.responsive.kafka.internal.db.spec.RemoteTableSpec;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
 import dev.responsive.kafka.internal.utils.Iterators;
 import dev.responsive.kafka.internal.utils.WindowedKey;
@@ -97,7 +97,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
   private final PreparedStatement ensureEpoch;
 
   public static CassandraWindowedTable create(
-      final CassandraTableSpec spec,
+      final RemoteTableSpec spec,
       final CassandraClient client,
       final WindowSegmentPartitioner partitioner
   ) throws InterruptedException, TimeoutException {

@@ -32,8 +32,11 @@ public class ResponsiveStoreRegistry {
   private final List<ResponsiveStoreRegistration> stores = new LinkedList<>();
 
   public synchronized OptionalLong getCommittedOffset(final TopicPartition topicPartition) {
-    return getRegisteredStoresForChangelog(topicPartition).stream()
-        .mapToLong(ResponsiveStoreRegistration::startOffset)
+    return getRegisteredStoresForChangelog(topicPartition)
+        .stream()
+        .map(ResponsiveStoreRegistration::startOffset)
+        .filter(OptionalLong::isPresent)
+        .mapToLong(OptionalLong::getAsLong)
         .max();
   }
 
