@@ -24,13 +24,13 @@ import org.bson.codecs.pojo.annotations.BsonId;
 public class KVDoc {
 
   // TODO(agavra): figure out if we can use @BsonProperty to set the names explicitly
-  public static final String ID = "_id";
+  public static final String KEY = "_id";
   public static final String VALUE = "value";
   public static final String EPOCH = "epoch";
   public static final String TOMBSTONE_TS = "tombstoneTs";
 
   @BsonId
-  byte[] id;
+  byte[] key;
   byte[] value;
   long epoch;
   Date tombstoneTs;
@@ -39,16 +39,17 @@ public class KVDoc {
   }
 
   public KVDoc(final byte[] key, final byte[] value, final long epoch) {
+    this.key = key;
     this.value = value;
     this.epoch = epoch;
   }
 
   public byte[] getKey() {
-    return id;
+    return key;
   }
 
   public void setKey(final byte[] id) {
-    this.id = id;
+    this.key = id;
   }
 
   public void setValue(final byte[] value) {
@@ -85,14 +86,15 @@ public class KVDoc {
     }
     final KVDoc kvDoc = (KVDoc) o;
     return epoch == kvDoc.epoch
-        && Arrays.equals(id, kvDoc.id)
+        && Arrays.equals(key, kvDoc.key)
         && Arrays.equals(value, kvDoc.value)
         && Objects.equals(tombstoneTs, kvDoc.tombstoneTs);
   }
 
   @Override
   public int hashCode() {
-    int result = Objects.hash(id, epoch, tombstoneTs);
+    int result = Objects.hash(epoch, tombstoneTs);
+    result = 31 * result + Arrays.hashCode(key);
     result = 31 * result + Arrays.hashCode(value);
     return result;
   }
@@ -100,7 +102,7 @@ public class KVDoc {
   @Override
   public String toString() {
     return "KVDoc{"
-        + "id=" + Arrays.toString(id)
+        + "key=" + Arrays.toString(key)
         + ", value=" + Arrays.toString(value)
         + ", epoch=" + epoch
         + ", tombstoneTs=" + tombstoneTs

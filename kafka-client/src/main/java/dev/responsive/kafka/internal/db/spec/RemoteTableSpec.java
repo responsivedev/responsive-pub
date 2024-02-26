@@ -30,6 +30,8 @@ public interface RemoteTableSpec {
 
   String tableName();
 
+  String changelogTopicName();
+
   TablePartitioner<?, ?> partitioner();
 
   /**

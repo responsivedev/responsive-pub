@@ -35,6 +35,11 @@ public abstract class DelegatingTableSpec implements RemoteTableSpec {
   }
 
   @Override
+  public String changelogTopicName() {
+    return delegate().changelogTopicName();
+  }
+
+  @Override
   public TablePartitioner<?, ?> partitioner() {
     return delegate.partitioner();
   }

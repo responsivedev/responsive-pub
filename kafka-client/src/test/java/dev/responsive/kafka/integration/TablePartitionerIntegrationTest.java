@@ -106,6 +106,7 @@ public class TablePartitionerIntegrationTest {
 
   private String name;
   private String storeName;
+  private String changelog;
   private Admin admin;
   private CassandraClient client;
 
@@ -118,6 +119,7 @@ public class TablePartitionerIntegrationTest {
   ) throws ExecutionException, InterruptedException {
     name = info.getTestMethod().orElseThrow().getName();
     storeName = name + "store";
+    changelog = storeName + "-changelog";
 
     this.responsiveProps.putAll(responsiveProps);
 
@@ -174,15 +176,16 @@ public class TablePartitionerIntegrationTest {
           properties
       );
       final String cassandraName = new TableName(storeName).tableName();
+      final String changelogTopicName = storeName + "-changelog";
       final var partitioner = SubPartitioner.create(
           OptionalInt.empty(),
           NUM_PARTITIONS_INPUT,
           cassandraName,
           ResponsiveConfig.responsiveConfig(properties),
-          storeName + "-changelog"
+          changelogTopicName
       );
       final CassandraKeyValueTable table = CassandraKeyValueTable.create(
-          new BaseTableSpec(cassandraName, partitioner), client);
+          new BaseTableSpec(cassandraName, changelogTopicName, partitioner), client);
 
       assertThat(client.numPartitions(cassandraName), is(OptionalInt.of(32)));
       assertThat(client.count(cassandraName, 0), is(2L));
@@ -230,9 +233,10 @@ public class TablePartitionerIntegrationTest {
           properties
       );
       final String cassandraName = new TableName(storeName).tableName();
+
       final var partitioner = TablePartitioner.defaultPartitioner();
       final CassandraFactTable table = CassandraFactTable.create(
-          new BaseTableSpec(cassandraName, partitioner), client);
+          new BaseTableSpec(cassandraName, changelog, partitioner), client);
 
       final var offset0 = table.fetchOffset(0);
       final var offset1 = table.fetchOffset(1);
@@ -311,7 +315,7 @@ public class TablePartitionerIntegrationTest {
           storeName + "-changelog"
       );
       final CassandraKeyValueTable table = CassandraKeyValueTable.create(
-          new BaseTableSpec(cassandraName, partitioner), client);
+          new BaseTableSpec(cassandraName, changelog, partitioner), client);
 
       assertThat(client.numPartitions(cassandraName), is(OptionalInt.of(32)));
       assertThat(client.count(cassandraName, 0), is(2L));

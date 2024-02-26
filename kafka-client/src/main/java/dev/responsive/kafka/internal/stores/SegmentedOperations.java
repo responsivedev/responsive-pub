@@ -102,10 +102,10 @@ public class SegmentedOperations implements WindowOperations {
     final RemoteWindowedTable<?> table;
     switch (sessionClients.storageBackend()) {
       case CASSANDRA:
-        table = createCassandra(params, sessionClients, partitioner);
+        table = createCassandra(params, changelog.topic(), sessionClients, partitioner);
         break;
       case MONGO_DB:
-        table = createMongo(params, sessionClients, partitioner);
+        table = createMongo(params, changelog.topic(), sessionClients, partitioner);
         break;
       default:
         throw new IllegalStateException("Unexpected value: " + sessionClients.storageBackend());
@@ -156,12 +156,14 @@ public class SegmentedOperations implements WindowOperations {
 
   private static RemoteWindowedTable<?> createCassandra(
       final ResponsiveWindowParams params,
+      final String changelogTopicName,
       final SessionClients clients,
       final WindowSegmentPartitioner partitioner
   ) throws InterruptedException, TimeoutException {
     final CassandraClient client = clients.cassandraClient();
 
-    final var spec = RemoteTableSpecFactory.fromWindowParams(params, partitioner);
+    final var spec =
+        RemoteTableSpecFactory.fromWindowParams(params, changelogTopicName, partitioner);
 
     switch (params.schemaType()) {
       case WINDOW:
@@ -175,6 +177,7 @@ public class SegmentedOperations implements WindowOperations {
 
   private static RemoteWindowedTable<?> createMongo(
       final ResponsiveWindowParams params,
+      final String changelogTopicName,
       final SessionClients clients,
       final WindowSegmentPartitioner partitioner
   ) throws InterruptedException, TimeoutException {
@@ -182,7 +185,7 @@ public class SegmentedOperations implements WindowOperations {
 
     switch (params.schemaType()) {
       case WINDOW:
-        return client.windowedTable(params.name().tableName(), partitioner);
+        return client.windowedTable(params.name().tableName(), changelogTopicName, partitioner);
       case STREAM:
         throw new UnsupportedOperationException("Not yet implemented");
       default:

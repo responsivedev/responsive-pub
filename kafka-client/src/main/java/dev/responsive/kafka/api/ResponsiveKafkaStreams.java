@@ -458,6 +458,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
           sessionClients = new SessionClients(
               Optional.of(new ResponsiveMongoClient(
                   mongoClient,
+                  admin,
                   timestampFirstOrder,
                   CollectionCreationOptions.fromConfig(responsiveConfig)
               )),

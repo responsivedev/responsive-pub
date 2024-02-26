@@ -100,7 +100,7 @@ public class PartitionedOperations implements KeyValueOperations {
         table = createCassandra(params, config, sessionClients, changelog.topic());
         break;
       case MONGO_DB:
-        table = createMongo(params, sessionClients);
+        table = createMongo(params, changelog.topic(), sessionClients);
         break;
       default:
         throw new IllegalStateException("Unexpected value: " + sessionClients.storageBackend());
@@ -184,7 +184,7 @@ public class PartitionedOperations implements KeyValueOperations {
             changelogTopicName
         );
     final var client = sessionClients.cassandraClient();
-    final var spec = RemoteTableSpecFactory.fromKVParams(params, partitioner);
+    final var spec = RemoteTableSpecFactory.fromKVParams(params, changelogTopicName, partitioner);
     switch (params.schemaType()) {
       case KEY_VALUE:
         return client.kvFactory().create(spec);
@@ -197,9 +197,10 @@ public class PartitionedOperations implements KeyValueOperations {
 
   private static RemoteKVTable<?> createMongo(
       final ResponsiveKeyValueParams params,
+      final String changelogTopicName,
       final SessionClients sessionClients
   ) throws InterruptedException, TimeoutException {
-    return sessionClients.mongoClient().kvTable(params.name().tableName());
+    return sessionClients.mongoClient().kvTable(params.name().tableName(), changelogTopicName);
   }
 
   @SuppressWarnings("rawtypes")

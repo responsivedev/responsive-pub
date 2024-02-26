@@ -26,6 +26,7 @@ import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.db.partitioning.WindowSegmentPartitioner;
 import dev.responsive.kafka.internal.db.spec.BaseTableSpec;
 import java.util.concurrent.TimeoutException;
+import org.apache.kafka.clients.admin.Admin;
 
 public class ResponsiveMongoClient {
 
@@ -33,16 +34,20 @@ public class ResponsiveMongoClient {
   private final WindowedTableCache<MongoWindowedTable> windowTableCache;
   private final MongoClient client;
 
+
   public ResponsiveMongoClient(
       final MongoClient client,
+      final Admin admin,
       final boolean timestampFirstOrder,
       final CollectionCreationOptions collectionCreationOptions
   ) {
     this.client = client;
     kvTableCache = new TableCache<>(
-        spec -> new MongoKVTable(
+        spec -> MongoKVTable.create(
             client,
             spec.tableName(),
+            spec.changelogTopicName(),
+            admin,
             collectionCreationOptions
         ));
     windowTableCache = new WindowedTableCache<>(
@@ -56,16 +61,21 @@ public class ResponsiveMongoClient {
     );
   }
 
-  public RemoteKVTable<WriteModel<KVDoc>> kvTable(final String name)
-      throws InterruptedException, TimeoutException {
-    return kvTableCache.create(new BaseTableSpec(name, TablePartitioner.defaultPartitioner()));
+  public RemoteKVTable<WriteModel<KVDoc>> kvTable(
+      final String name,
+      final String changelogTopicName
+  ) throws InterruptedException, TimeoutException {
+    return kvTableCache.create(
+        new BaseTableSpec(name, changelogTopicName, TablePartitioner.defaultPartitioner())
+    );
   }
 
   public RemoteWindowedTable<WriteModel<WindowDoc>> windowedTable(
       final String name,
+      final String changelogTopicName,
       final WindowSegmentPartitioner partitioner
   ) throws InterruptedException, TimeoutException {
-    return windowTableCache.create(new BaseTableSpec(name, partitioner), partitioner);
+    return windowTableCache.create(new BaseTableSpec(name, changelogTopicName, partitioner), partitioner);
   }
 
   public void close() {

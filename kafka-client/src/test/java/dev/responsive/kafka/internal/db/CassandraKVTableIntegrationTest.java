@@ -70,6 +70,7 @@ public class CassandraKVTableIntegrationTest {
     client = new CassandraClient(session, config);
 
     final String name = info.getTestMethod().orElseThrow().getName();
+    final String changelog = name + "-changelog";
     final ResponsiveConfig partitionerConfig = copyConfigWithOverrides(
         config,
         singletonMap(STORAGE_DESIRED_NUM_PARTITION_CONFIG, NUM_SUBPARTITIONS_TOTAL)
@@ -79,10 +80,10 @@ public class CassandraKVTableIntegrationTest {
         NUM_KAFKA_PARTITIONS,
         name,
         partitionerConfig,
-        name + "-changelog"
+        changelog
     );
     table = CassandraKeyValueTable.create(
-        new BaseTableSpec(name, partitioner), client);
+        new BaseTableSpec(name, changelog, partitioner), client);
   }
 
   @Test
