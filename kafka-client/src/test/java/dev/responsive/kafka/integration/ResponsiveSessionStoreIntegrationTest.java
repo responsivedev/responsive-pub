@@ -98,8 +98,6 @@ public class ResponsiveSessionStoreIntegrationTest {
     name = info.getTestMethod().orElseThrow().getName() + "-" + new Random().nextInt();
 
     this.responsiveProps.putAll(responsiveProps);
-    this.responsiveProps.put(ResponsiveConfig.WINDOW_BLOOM_FILTER_COUNT_CONFIG, 1);
-    this.responsiveProps.put(ResponsiveConfig.WINDOW_BLOOM_FILTER_EXPECTED_KEYS_CONFIG, 10);
 
     this.admin = admin;
     final var result = admin.createTopics(
@@ -113,7 +111,7 @@ public class ResponsiveSessionStoreIntegrationTest {
   }
 
   @Test
-  public void shouldComputeSessionWindowAggregate() throws Exception {
+  public void shouldComputeSessionAggregate() throws Exception {
     // Given:
     final Map<String, Object> properties = getMutablePropertiesWithStringSerdes();
 
@@ -169,7 +167,7 @@ public class ResponsiveSessionStoreIntegrationTest {
           }
           outputLatch.countDown();
         })
-        // discard the window, so we don't have to serialize it
+        // discard the session, so we don't have to serialize it
         // we're not checking the output topic anyway
         .selectKey((k, v) -> k.key())
         .to(outputTopic());
