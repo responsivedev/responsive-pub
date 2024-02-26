@@ -69,8 +69,8 @@ public class SessionKey implements Comparable<SessionKey> {
       return false;
     }
     final SessionKey sessionKey = (SessionKey) o;
-    return Arrays.equals(this.key.get(), sessionKey.key.get()) &&
-        this.sessionEndMs == sessionKey.sessionEndMs
+    return Arrays.equals(this.key.get(), sessionKey.key.get())
+        && this.sessionEndMs == sessionKey.sessionEndMs
         && this.sessionStartMs == sessionKey.sessionStartMs;
   }
 
