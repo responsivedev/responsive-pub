@@ -78,6 +78,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
@@ -578,6 +579,25 @@ public class CommitBufferTest {
       clock.set(clock.get().plus(Duration.ofSeconds(35)));
       buffer.flush(5L);
       assertThat(table.fetchOffset(KAFKA_PARTITION), is(5L));
+    }
+  }
+
+  @Test
+  public void shouldUpdateOffsetWhenNoRecordsInBuffer() {
+    // Given:
+    // just use an atomic reference as a mutable reference type
+    final AtomicReference<Instant> clock = new AtomicReference<>(Instant.now());
+    try (final CommitBuffer<Bytes, Integer> buffer = createCommitBuffer(
+        FlushTriggers.ofInterval(Duration.ofSeconds(30)),
+        100,
+        clock::get
+    )) {
+      // when:
+      clock.updateAndGet(old -> Instant.ofEpochSecond(old.getEpochSecond() + 32));
+      buffer.flush(10L);
+
+      // Then:
+      assertThat(table.fetchOffset(KAFKA_PARTITION), is(10L));
     }
   }
 
