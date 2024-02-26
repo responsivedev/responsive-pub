@@ -56,7 +56,7 @@ public class ResponsiveSessionStore implements SessionStore<Bytes, byte[]> {
     this.position = Position.emptyPosition();
     this.log = new LogContext(
         String.format("session-store [%s] ", this.name.kafkaName())
-    ).logger(ResponsiveWindowStore.class);
+    ).logger(ResponsiveSessionStore.class);
   }
 
   @Override
@@ -66,7 +66,7 @@ public class ResponsiveSessionStore implements SessionStore<Bytes, byte[]> {
       init((StateStoreContext) context, root);
     } else {
       throw new UnsupportedOperationException(
-          "Use ResponsiveWindowStore#init(StateStoreContext, StateStore) instead."
+          "Use ResponsiveSessionStore#init(StateStoreContext, StateStore) instead."
       );
     }
   }

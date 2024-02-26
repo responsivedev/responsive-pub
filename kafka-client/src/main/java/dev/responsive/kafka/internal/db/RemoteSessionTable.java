@@ -26,7 +26,7 @@ public interface RemoteSessionTable<S> extends RemoteTable<SessionKey, S> {
    * Initializes the table by setting the metadata fields to
    * their initialized values.
    *
-   * @return a {@link WindowFlushManager} that gives the callee access
+   * @return a {@link SessionFlushManager} that gives the callee access
    * to run statements on {@code table}
    */
   SessionFlushManager init(

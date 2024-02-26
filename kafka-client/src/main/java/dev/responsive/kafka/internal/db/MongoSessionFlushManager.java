@@ -57,7 +57,8 @@ public class MongoSessionFlushManager extends SessionFlushManager {
     this.partitioner = partitioner;
     this.kafkaPartition = kafkaPartition;
 
-    logPrefix = String.format("%s[%d] window-store {epoch=%d} ",
+    logPrefix = String.format(
+        "%s[%d] session-store {epoch=%d} ",
                               table.name(), kafkaPartition, table.localEpoch(kafkaPartition));
     log = new LogContext(logPrefix).logger(MongoSessionFlushManager.class);
   }
