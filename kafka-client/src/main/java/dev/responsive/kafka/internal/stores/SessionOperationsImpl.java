@@ -239,22 +239,24 @@ public class SessionOperationsImpl implements SessionOperations {
   public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(
       final Bytes key,
       final long earliestSessionEnd,
-      final long latestSessionStart
+      final long latestSessionEnd
   ) {
-    System.out.println("DEBUG: FETCH_ALL: " + key.toString());
+    System.out.println("DEBUG: FETCH_ALL: " + key.toString() + " | " + earliestSessionEnd + " | "
+        + latestSessionEnd);
 
-    final SessionKey from = new SessionKey(key, latestSessionStart, latestSessionStart);
-    final SessionKey to = new SessionKey(key, earliestSessionEnd, earliestSessionEnd);
+    SessionKey from = new SessionKey(key, 0, earliestSessionEnd);
+    SessionKey to = new SessionKey(key, 0, latestSessionEnd);
+
     final var localResults = this.buffer.range(from, to);
     final var remoteResults = this.table.fetchAll(
         this.changelog.partition(),
         key,
         earliestSessionEnd,
-        latestSessionStart
+        latestSessionEnd
     );
 
     final var combinedResults = new LocalRemoteKvIterator<>(localResults, remoteResults);
-    return Iterators.mapKeys(
+    final var keysOnly = Iterators.mapKeys(
         combinedResults,
         sessionKey -> {
           final var sessionWindow =
@@ -262,6 +264,9 @@ public class SessionOperationsImpl implements SessionOperations {
           return new Windowed<>(sessionKey.key, sessionWindow);
         }
     );
+
+    System.out.println("DEBUG: FETCH_ALL: RESULT: " + key + " => " + keysOnly.hasNext());
+    return keysOnly;
   }
 
   @Override

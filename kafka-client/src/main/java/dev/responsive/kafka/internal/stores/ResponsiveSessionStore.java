@@ -21,7 +21,6 @@ import static dev.responsive.kafka.internal.db.partitioning.Segmenter.UNINITIALI
 
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.stores.ResponsiveSessionParams;
-import dev.responsive.kafka.internal.utils.Iterators;
 import dev.responsive.kafka.internal.utils.SessionKey;
 import dev.responsive.kafka.internal.utils.TableName;
 import java.util.concurrent.TimeoutException;
@@ -193,14 +192,18 @@ public class ResponsiveSessionStore implements SessionStore<Bytes, byte[]> {
       long earliestSessionEndTime,
       long latestSessionStartTime
   ) {
-    if (latestSessionStartTime > earliestSessionEndTime) {
-      return Iterators.emptyKv();
-    }
+    System.out.println(
+        "DEBUG: FIND_SESSIONS: " + key.toString() + " | " + earliestSessionEndTime + " | "
+            + latestSessionStartTime);
 
     // Trim down our search space by using both the observed stream time and the retention period.
-    earliestSessionEndTime = Long.max(earliestSessionEndTime, minValidEndTimestamp());
-    latestSessionStartTime = Long.min(latestSessionStartTime, this.observedStreamTime);
-    return this.sessionOperations.fetchAll(key, earliestSessionEndTime, latestSessionStartTime);
+    earliestSessionEndTime = Long.max(
+        Long.max(earliestSessionEndTime, minValidEndTimestamp()),
+        0
+    );
+    final long latestSessionEndTime =
+        Long.max(Long.min(latestSessionStartTime, this.observedStreamTime), earliestSessionEndTime);
+    return this.sessionOperations.fetchAll(key, earliestSessionEndTime, latestSessionEndTime);
   }
 
   @Override

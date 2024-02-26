@@ -37,7 +37,7 @@ public class SessionKeySpec implements KeySpec<SessionKey> {
   public SessionKey keyFromRecord(final ConsumerRecord<byte[], byte[]> record) {
     final byte[] key = record.key();
 
-    // TODO(antoine): IMPLEMENT
+    // TODO(antoine): IMPLEMENT using kafka's SessionKeySchema
     throw new UnsupportedOperationException("Not yet implemented.");
   }
 

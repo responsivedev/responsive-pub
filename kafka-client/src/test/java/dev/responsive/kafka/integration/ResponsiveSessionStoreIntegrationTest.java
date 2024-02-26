@@ -32,6 +32,7 @@ import static org.apache.kafka.streams.StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CON
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.NUM_STREAM_THREADS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
@@ -213,7 +214,7 @@ public class ResponsiveSessionStoreIntegrationTest {
     properties.put(DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.LongSerde.class.getName());
     properties.put(NUM_STREAM_THREADS_CONFIG, 1);
     properties.put(COMMIT_INTERVAL_MS_CONFIG, 1); // commit as often as possible
-    // properties.put(STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
+    properties.put(STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
 
     properties.put(consumerPrefix(REQUEST_TIMEOUT_MS_CONFIG), 5_000);
     properties.put(consumerPrefix(SESSION_TIMEOUT_MS_CONFIG), 5_000 - 1);

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright 2023 Responsive Computing, Inc.
+ *  Copyright 2024 Responsive Computing, Inc.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -75,7 +75,7 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
 
   private final MongoDatabase database;
   private final MongoDatabase adminDatabase;
-  private final MongoCollection<WindowMetadataDoc> metadata;
+  private final MongoCollection<SessionMetadataDoc> metadata;
   private final CollectionCreationOptions collectionCreationOptions;
 
   private final ConcurrentMap<Integer, PartitionSegments> kafkaPartitionToSegments =
@@ -208,7 +208,7 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
     this.adminDatabase = client.getDatabase("admin");
     this.metadata = database.getCollection(
         METADATA_COLLECTION_NAME,
-        WindowMetadataDoc.class
+        SessionMetadataDoc.class
     );
   }
 
@@ -221,13 +221,16 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
   public MongoSessionFlushManager init(
       final int kafkaPartition
   ) {
-    final WindowMetadataDoc metaDoc = metadata.findOneAndUpdate(
-        Filters.eq(WindowMetadataDoc.PARTITION, kafkaPartition),
+    final SessionMetadataDoc metaDoc = metadata.findOneAndUpdate(
+        Filters.eq(SessionMetadataDoc.PARTITION, kafkaPartition),
         Updates.combine(
-            Updates.setOnInsert(WindowMetadataDoc.PARTITION, kafkaPartition),
-            Updates.setOnInsert(WindowMetadataDoc.OFFSET, NO_COMMITTED_OFFSET),
-            Updates.setOnInsert(WindowMetadataDoc.STREAM_TIME, Segmenter.UNINITIALIZED_STREAM_TIME),
-            Updates.inc(WindowMetadataDoc.EPOCH, 1) // will set the value to 1 if it doesn't exist
+            Updates.setOnInsert(SessionMetadataDoc.PARTITION, kafkaPartition),
+            Updates.setOnInsert(SessionMetadataDoc.OFFSET, NO_COMMITTED_OFFSET),
+            Updates.setOnInsert(
+                SessionMetadataDoc.STREAM_TIME,
+                Segmenter.UNINITIALIZED_STREAM_TIME
+            ),
+            Updates.inc(SessionMetadataDoc.EPOCH, 1) // will set the value to 1 if it doesn't exist
         ),
         new FindOneAndUpdateOptions()
             .upsert(true)
@@ -263,6 +266,73 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
     );
   }
 
+  /**
+   * Inserts data into this table. Note that this will overwrite
+   * any existing entry in the table with the same key.
+   *
+   * @param kafkaPartition the kafka partition
+   * @param sessionKey     the windowed data key
+   * @param value          the data value
+   * @param epochMillis    the timestamp of the event
+   * @return a statement that, when executed, will insert the value
+   * for this key and partition into the table.
+   * Note that the key in this case is a "session" key, where
+   * {@code sessionKey} includes both the record key and
+   * the session start / end timestamps
+   */
+  @Override
+  public WriteModel<SessionDoc> insert(
+      final int kafkaPartition,
+      final SessionKey sessionKey,
+      final byte[] value,
+      final long epochMillis
+  ) {
+    final var partitionSegments = kafkaPartitionToSegments.get(kafkaPartition);
+
+    final long epoch = partitionSegments.epoch;
+    return new UpdateOneModel<>(
+        Filters.and(
+            Filters.eq(SessionDoc.ID, compositeKey(sessionKey)),
+            Filters.lte(SessionDoc.EPOCH, epoch)
+        ),
+        Updates.combine(
+            Updates.set(SessionDoc.VALUE, value),
+            Updates.set(SessionDoc.EPOCH, epoch),
+            Updates.unset(SessionDoc.TOMBSTONE_TS)
+        ),
+        UPSERT_OPTIONS
+    );
+  }
+
+  /**
+   * @param kafkaPartition the kafka partition
+   * @param sessionKey     the session data key
+   * @return a statement that, when executed, will delete the value
+   * for this key and partition in the table.
+   * Note that the key in this case is a "session" key, where
+   * {@code sessionKey} includes both the record key and
+   * the sessionStart timestamp
+   */
+  @Override
+  public WriteModel<SessionDoc> delete(
+      final int kafkaPartition,
+      final SessionKey sessionKey
+  ) {
+    final long epoch = kafkaPartitionToEpoch.get(kafkaPartition);
+    return new UpdateOneModel<>(
+        Filters.and(
+            Filters.eq(SessionDoc.ID, compositeKey(sessionKey)),
+            Filters.lte(SessionDoc.EPOCH, epoch)
+        ),
+        Updates.combine(
+            Updates.unset(SessionDoc.VALUE),
+            Updates.set(SessionDoc.TOMBSTONE_TS, Date.from(Instant.now())),
+            Updates.set(SessionDoc.EPOCH, epoch)
+        ),
+        UPSERT_OPTIONS
+    );
+  }
+
   @Override
   public byte[] fetch(
       final int kafkaPartition,
@@ -291,23 +361,32 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
       final int kafkaPartition,
       final Bytes key,
       final long earliestSessionEnd,
-      final long latestSessionStart
+      final long latestSessionEnd
   ) {
-    final List<KeyValueIterator<SessionKey, byte[]>> segmentIterators = new LinkedList<>();
+    System.out.println(
+        "DEBUG: REMOTE FETCH ALL: " + key + " | " + earliestSessionEnd + " | " + latestSessionEnd);
     final var partitionSegments = kafkaPartitionToSegments.get(kafkaPartition);
 
-    final var minKey = compositeKey(key, latestSessionStart, latestSessionStart);
-    final var maxKey = compositeKey(key, earliestSessionEnd, earliestSessionEnd);
-    final var candidateSegments = partitioner.segmenter()
-        .range(kafkaPartition, latestSessionStart, earliestSessionEnd);
+    final var minKey = new SessionKey(key, 0, earliestSessionEnd);
+    final var maxKey = new SessionKey(key, 0, latestSessionEnd);
 
+    final var candidateSegments = partitioner.segmenter()
+        .range(kafkaPartition, earliestSessionEnd, latestSessionEnd);
+
+    final List<KeyValueIterator<SessionKey, byte[]>> segmentIterators = new LinkedList<>();
     for (final var segment : candidateSegments) {
       final var segmentSessions = partitionSegments.segmentSessions.get(segment);
+      if (segmentSessions == null) {
+        continue;
+      }
+
+      System.out.println("Candidate Segment: " + segment.toString());
       final FindIterable<SessionDoc> fetchResults = segmentSessions.find(
           Filters.and(
-              Filters.gte(WindowDoc.ID, minKey),
-              Filters.lte(WindowDoc.ID, maxKey)
-          ));
+              Filters.gte(SessionDoc.ID, compositeKey(minKey)),
+              Filters.lte(SessionDoc.ID, compositeKey(maxKey))
+          )
+      );
 
       final var iterator = Iterators.kv(fetchResults.iterator(), MongoSessionTable::sessionFromDoc);
       segmentIterators.add(iterator);
@@ -344,8 +423,8 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
   }
 
   public long fetchEpoch(final int kafkaPartition) {
-    final WindowMetadataDoc remoteMetadata = metadata.find(
-        Filters.eq(WindowMetadataDoc.PARTITION, kafkaPartition)
+    final SessionMetadataDoc remoteMetadata = metadata.find(
+        Filters.eq(SessionMetadataDoc.PARTITION, kafkaPartition)
     ).first();
 
     if (remoteMetadata == null) {
@@ -358,8 +437,8 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
 
   @Override
   public long fetchOffset(final int kafkaPartition) {
-    final WindowMetadataDoc remoteMetadata = metadata.find(
-        Filters.eq(WindowMetadataDoc.PARTITION, kafkaPartition)
+    final SessionMetadataDoc remoteMetadata = metadata.find(
+        Filters.eq(SessionMetadataDoc.PARTITION, kafkaPartition)
     ).first();
 
     if (remoteMetadata == null) {
@@ -392,102 +471,25 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
 
     return metadata.updateOne(
         Filters.and(
-            Filters.eq(WindowMetadataDoc.PARTITION, kafkaPartition),
-            Filters.lte(WindowMetadataDoc.EPOCH, epoch)
+            Filters.eq(SessionMetadataDoc.PARTITION, kafkaPartition),
+            Filters.lte(SessionMetadataDoc.EPOCH, epoch)
         ),
         Updates.combine(
-            Updates.set(WindowMetadataDoc.OFFSET, offset),
-            Updates.set(WindowMetadataDoc.STREAM_TIME, streamTime),
-            Updates.set(WindowMetadataDoc.EPOCH, epoch)
+            Updates.set(SessionMetadataDoc.OFFSET, offset),
+            Updates.set(SessionMetadataDoc.STREAM_TIME, streamTime),
+            Updates.set(SessionMetadataDoc.EPOCH, epoch)
         )
     );
   }
 
-  /**
-   * Inserts data into this table. Note that this will overwrite
-   * any existing entry in the table with the same key.
-   *
-   * @param kafkaPartition the kafka partition
-   * @param sessionKey    the windowed data key
-   * @param value          the data value
-   * @param epochMillis    the timestamp of the event
-   * @return a statement that, when executed, will insert the value
-   *         for this key and partition into the table.
-   *         Note that the key in this case is a "windowed" key, where
-   *         {@code sessionKey} includes both the record key and
-   *         the windowStart timestamp
-   */
-  @Override
-  public WriteModel<SessionDoc> insert(
-      final int kafkaPartition,
-      final SessionKey sessionKey,
-      final byte[] value,
-      final long epochMillis
-  ) {
-    final var partitionSegments = kafkaPartitionToSegments.get(kafkaPartition);
-
-    final long epoch = partitionSegments.epoch;
-    return new UpdateOneModel<>(
-        Filters.and(
-            Filters.eq(SessionDoc.ID, compositeKey(sessionKey)),
-            Filters.lte(SessionDoc.EPOCH, epoch)
-        ),
-        Updates.combine(
-            Updates.set(SessionDoc.VALUE, value),
-            Updates.set(SessionDoc.EPOCH, epoch),
-            Updates.unset(SessionDoc.TOMBSTONE_TS)
-        ),
-        UPSERT_OPTIONS
-    );
-  }
-
-  /**
-   * @param kafkaPartition  the kafka partition
-   * @param sessionKey    the session data key
-   *
-   * @return a statement that, when executed, will delete the value
-   *         for this key and partition in the table.
-   *         Note that the key in this case is a "session" key, where
-   *         {@code sessionKey} includes both the record key and
-   *         the sessionStart timestamp
-   */
-  @Override
-  public WriteModel<SessionDoc> delete(
-      final int kafkaPartition,
-      final SessionKey sessionKey
-  ) {
-    final long epoch = kafkaPartitionToEpoch.get(kafkaPartition);
-    return new UpdateOneModel<>(
-        Filters.and(
-            Filters.eq(KVDoc.ID, sessionKey.key.get()),
-            Filters.lte(KVDoc.EPOCH, epoch)
-        ),
-        Updates.combine(
-            Updates.unset(SessionDoc.VALUE),
-            Updates.set(SessionDoc.TOMBSTONE_TS, Date.from(Instant.now())),
-            Updates.set(SessionDoc.EPOCH, epoch)
-        ),
-        UPSERT_OPTIONS
-    );
-  }
-
   public BasicDBObject compositeKey(final SessionKey sessionKey) {
-    return compositeKey(sessionKey.key, sessionKey.sessionStartMs, sessionKey.sessionEndMs);
-  }
-
-  public BasicDBObject compositeKey(
-      final Bytes key,
-      final long sessionStartMs,
-      final long sessionEndMs
-  ) {
-    return SessionDoc.compositeKey(
-        key.get(),
-        sessionStartMs,
-        sessionEndMs
+    return SessionDoc.compositeKey(sessionKey.key.get(), sessionKey.sessionStartMs,
+        sessionKey.sessionEndMs
     );
   }
 
   private static KeyValue<SessionKey, byte[]> sessionFromDoc(final SessionDoc sessionDoc) {
+    System.out.println("SESSION DOC: " + sessionDoc.id + " | " + sessionDoc.getKey());
     return new KeyValue<>(SessionDoc.sessionKey(sessionDoc.id), sessionDoc.value);
   }
 

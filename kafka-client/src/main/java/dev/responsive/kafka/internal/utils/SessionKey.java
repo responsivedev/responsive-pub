@@ -38,8 +38,8 @@ public class SessionKey implements Comparable<SessionKey> {
   public String toString() {
     return "SessionKey{"
         + "key=" + this.key
-        + ", sessionStartMs=" + this.sessionStartMs
         + ", sessionEndMs=" + this.sessionEndMs
+        + ", sessionStartMs=" + this.sessionStartMs
         + '}';
   }
 
@@ -50,11 +50,11 @@ public class SessionKey implements Comparable<SessionKey> {
       return compareKeys;
     }
 
-    final int compareStarts = Long.compare(this.sessionStartMs, o.sessionStartMs);
-    if (compareStarts != 0) {
-      return compareStarts;
+    final int compareEnds = Long.compare(this.sessionEndMs, o.sessionEndMs);
+    if (compareEnds != 0) {
+      return compareEnds;
     }
 
-    return Long.compare(this.sessionEndMs, o.sessionEndMs);
+    return Long.compare(this.sessionStartMs, o.sessionStartMs);
   }
 }

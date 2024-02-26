@@ -21,6 +21,7 @@ import dev.responsive.kafka.internal.utils.SessionKey;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.Objects;
+import org.bson.codecs.pojo.annotations.BsonId;
 
 public class SessionDoc {
 
@@ -31,9 +32,10 @@ public class SessionDoc {
 
   // Subfields of the composite key _id
   public static final String ID_RECORD_KEY = "key";
-  public static final String ID_SESSION_START_TS = "sessionStartTs";
   public static final String ID_SESSION_END_TS = "sessionEndTs";
+  public static final String ID_SESSION_START_TS = "sessionStartTs";
 
+  @BsonId
   BasicDBObject id;
   byte[] value;
   long epoch;
@@ -68,8 +70,8 @@ public class SessionDoc {
 
   public static SessionKey sessionKey(final BasicDBObject compositeKey) {
     final byte[] key = (byte[]) compositeKey.get(ID_RECORD_KEY);
-    final long sessionStartTimestamp = (long) compositeKey.get(ID_SESSION_START_TS);
     final long sessionEndTimestamp = (long) compositeKey.get(ID_SESSION_END_TS);
+    final long sessionStartTimestamp = (long) compositeKey.get(ID_SESSION_START_TS);
     return new SessionKey(key, sessionStartTimestamp, sessionEndTimestamp);
   }
 
@@ -80,8 +82,8 @@ public class SessionDoc {
   ) {
     final BasicDBObject compositeKey =
         new BasicDBObject(ID_RECORD_KEY, key)
-            .append(ID_SESSION_START_TS, sessionStartTs)
-            .append(ID_SESSION_END_TS, sessionEndTs);
+            .append(ID_SESSION_END_TS, sessionEndTs)
+            .append(ID_SESSION_START_TS, sessionStartTs);
     return compositeKey;
   }
 
