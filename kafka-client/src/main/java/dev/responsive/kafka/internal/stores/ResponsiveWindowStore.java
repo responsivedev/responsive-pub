@@ -270,7 +270,7 @@ public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
 
   @Override
   public KeyValueIterator<Windowed<Bytes>, byte[]> all() {
-    return windowOperations.all();
+    return windowOperations.all(observedStreamTime);
   }
 
   @Override

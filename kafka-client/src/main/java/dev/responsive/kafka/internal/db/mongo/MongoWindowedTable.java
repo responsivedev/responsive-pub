@@ -21,6 +21,7 @@ package dev.responsive.kafka.internal.db.mongo;
 import static com.mongodb.MongoClientSettings.getDefaultCodecRegistry;
 import static dev.responsive.kafka.internal.db.partitioning.Segmenter.UNINITIALIZED_STREAM_TIME;
 import static dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration.NO_COMMITTED_OFFSET;
+import static dev.responsive.kafka.internal.stores.SegmentedOperations.MIN_KEY;
 import static org.bson.codecs.configuration.CodecRegistries.fromProviders;
 import static org.bson.codecs.configuration.CodecRegistries.fromRegistries;
 
@@ -53,6 +54,7 @@ import java.util.concurrent.ConcurrentMap;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.bson.codecs.configuration.CodecProvider;
 import org.bson.codecs.configuration.CodecRegistry;
@@ -470,13 +472,37 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
   @Override
   public KeyValueIterator<WindowedKey, byte[]> fetchRange(
       final int kafkaPartition,
-      final Bytes fromKey,
-      final Bytes toKey,
+      final Bytes keyFrom,
+      final Bytes keyTo,
       final long timeFrom,
       final long timeTo
   ) {
-    throw new UnsupportedOperationException("fetchRange not yet supported for Mongo backends");
+    final List<KeyValueIterator<WindowedKey, byte[]>> segmentIterators = new LinkedList<>();
+    final var partitionSegments = kafkaPartitionToSegments.get(kafkaPartition);
 
+    for (final var segment : partitioner.range(kafkaPartition, timeFrom, timeTo)) {
+      final var segmentWindows = partitionSegments.segmentWindows.get(segment);
+
+      // Since we use a flat keyspace by concatenating the timestamp with the data key and have
+      // variable length data keys, it's impossible to request only valid data that's within
+      // the given bounds. Instead issue a broad request from the valid bounds and then post-filter
+      final var lowerBound = compositeKey(keyFrom, timeFrom);
+      final var upperBound = compositeKey(keyTo, timeTo);
+
+      final FindIterable<WindowDoc> fetchResults = segmentWindows.find(
+          Filters.and(
+              Filters.gte(WindowDoc.ID, lowerBound),
+              Filters.lte(WindowDoc.ID, upperBound))
+      );
+
+
+      segmentIterators.add(
+          Iterators.filterKv(
+              Iterators.kv(fetchResults.iterator(), MongoWindowedTable::windowFromDoc),
+              kv -> filterFetchRange(kv, timeFrom, timeTo, keyFrom, keyTo, timestampFirstOrder))
+      );
+    }
+    return Iterators.wrapped(segmentIterators);
   }
 
   @Override
@@ -496,7 +522,35 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
       final long timeFrom,
       final long timeTo
   ) {
-    throw new UnsupportedOperationException("fetchAll not yet supported for Mongo backends");
+    if (!timestampFirstOrder) {
+      throw new UnsupportedOperationException("Range queries such as fetchAll require stores to be "
+                                                  + "configured with timestamp-first order");
+    }
+
+    final List<KeyValueIterator<WindowedKey, byte[]>> segmentIterators = new LinkedList<>();
+    final var partitionSegments = kafkaPartitionToSegments.get(kafkaPartition);
+
+    for (final var segment : partitioner.range(kafkaPartition, timeFrom, timeTo)) {
+      final var segmentWindows = partitionSegments.segmentWindows.get(segment);
+
+      // To avoid scanning the entire segment, we use the bytewise "minimum key" to start the scan
+      // at the lower time bound. Since there's no corresponding "maximum key" given the variable
+      // length keys, we have to set the upper bound at timeTo + 1, while using strict comparison
+      // (ie #lt rather than #lte) to exclude said upper bound
+      final var lowerBound = compositeKey(MIN_KEY, timeFrom);
+      final var upperBound = compositeKey(MIN_KEY, timeTo + 1);
+
+      final FindIterable<WindowDoc> fetchResults = segmentWindows.find(
+          Filters.and(
+              Filters.gte(WindowDoc.ID, lowerBound),
+              Filters.lt(WindowDoc.ID, upperBound))
+      );
+
+      segmentIterators.add(
+          Iterators.kv(fetchResults.iterator(), MongoWindowedTable::windowFromDoc)
+      );
+    }
+    return Iterators.wrapped(segmentIterators);
   }
 
   @Override
@@ -506,6 +560,34 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
       final long timeTo
   ) {
     throw new UnsupportedOperationException("backFetchAll not yet supported for MongoDB backends");
+  }
+
+  @Override
+  public KeyValueIterator<WindowedKey, byte[]> all(
+      final int kafkaPartition,
+      final long streamTime
+  ) {
+    final List<KeyValueIterator<WindowedKey, byte[]>> segmentIterators = new LinkedList<>();
+    final var partitionSegments = kafkaPartitionToSegments.get(kafkaPartition);
+
+    for (final var segment : partitioner.activeSegments(kafkaPartition, streamTime)) {
+      final var segmentWindows = partitionSegments.segmentWindows.get(segment);
+
+      final FindIterable<WindowDoc> fetchResults = segmentWindows.find();
+
+      segmentIterators.add(
+          Iterators.kv(fetchResults.iterator(), MongoWindowedTable::windowFromDoc)
+      );
+    }
+    return Iterators.wrapped(segmentIterators);
+  }
+
+  @Override
+  public KeyValueIterator<WindowedKey, byte[]> backAll(
+      final int kafkaPartition,
+      final long streamTime
+  ) {
+    throw new UnsupportedOperationException("backAll not yet supported for MongoDB backends");
   }
 
   public BasicDBObject compositeKey(final WindowedKey windowedKey) {
@@ -522,6 +604,23 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
 
   private static KeyValue<WindowedKey, byte[]> windowFromDoc(final WindowDoc windowDoc) {
     return new KeyValue<>(WindowDoc.windowedKey(windowDoc.id), windowDoc.value);
+  }
+
+  private static boolean filterFetchRange(
+      final WindowedKey windowedKey,
+      final long timeFrom,
+      final long timeTo,
+      final Bytes keyFrom,
+      final Bytes keyTo,
+      final boolean timestampFirstOrder
+  ) {
+    // If we use timestamp-first order, then the upper/lower bounds guarantee the timestamps are
+    // valid, so therefore we only need to filter out the invalid keys (and vice versa)
+    if (timestampFirstOrder) {
+      return windowedKey.key.compareTo(keyFrom) > 0 && windowedKey.key.compareTo(keyTo) < 0;
+    } else {
+      return windowedKey.windowStartMs > timeFrom && windowedKey.windowStartMs < timeTo;
+    }
   }
 
 }

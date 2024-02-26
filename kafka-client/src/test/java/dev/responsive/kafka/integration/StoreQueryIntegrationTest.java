@@ -17,6 +17,7 @@
 package dev.responsive.kafka.integration;
 
 import static dev.responsive.kafka.api.config.ResponsiveConfig.STORE_FLUSH_RECORDS_TRIGGER_CONFIG;
+import static dev.responsive.kafka.api.stores.ResponsiveWindowParams.window;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.createTopicsAndWait;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.pipeRecords;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.readOutput;
@@ -58,6 +59,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessorContext;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
@@ -65,6 +67,7 @@ import org.apache.kafka.streams.processor.api.FixedKeyRecord;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.WindowStore;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -74,7 +77,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 public class StoreQueryIntegrationTest {
 
   @RegisterExtension
-  static ResponsiveExtension EXTENSION = new ResponsiveExtension(StorageBackend.CASSANDRA);
+  static ResponsiveExtension EXTENSION = new ResponsiveExtension(StorageBackend.MONGO_DB);
 
   private static final String INPUT_TOPIC = "input";
   private static final String OUTPUT_TOPIC = "output";
@@ -178,6 +181,31 @@ public class StoreQueryIntegrationTest {
     }
   }
 
+  @Test
+  public void shouldAggregateAllWindowsInRangeQuery() throws Exception {
+    // Given:
+    final Map<String, Object> properties = getMutableProperties();
+    final KafkaProducer<String, String> producer = new KafkaProducer<>(properties);
+    try (final ResponsiveKafkaStreams streams = buildWindowStreams(properties, true)) {
+      startAppAndAwaitRunning(Duration.ofSeconds(10), streams);
+
+      final List<KeyValueTimestamp<String, String>> records = Arrays.asList(
+          new KeyValueTimestamp<>("A", "A", 0L),
+          new KeyValueTimestamp<>("b", "b", 1L),
+          new KeyValueTimestamp<>("C", "C", 2L),
+          new KeyValueTimestamp<>("d", "d", 3L),
+          new KeyValueTimestamp<>("E", "E", 4L)
+      );
+
+      // When:
+      pipeRecords(producer, inputTopic(), records);
+
+      // Then:
+      final var kvs = readOutput(outputTopic(), 0, 5, true, properties);
+      // TODO
+    }
+  }
+
   private ResponsiveKafkaStreams buildKVStreams(
       final Map<String, Object> properties,
       final boolean range
@@ -188,11 +216,34 @@ public class StoreQueryIntegrationTest {
 
     final StoreBuilder<KeyValueStore<String, String>> storeBuilder =
         ResponsiveStores.keyValueStoreBuilder(
-            ResponsiveStores.keyValueStore(ResponsiveKeyValueParams.keyValue(kvStoreName())),
+            ResponsiveStores.keyValueStore(ResponsiveKeyValueParams.keyValue(storeName())),
             Serdes.String(),
             Serdes.String());
     input
-        .processValues(new TransformerSupplier(range, storeBuilder), kvStoreName())
+        .processValues(new TransformerSupplier(false, range, storeBuilder), storeName())
+        .to(outputTopic());
+
+    return new ResponsiveKafkaStreams(builder.build(), properties);
+  }
+
+  private ResponsiveKafkaStreams buildWindowStreams(
+      final Map<String, Object> properties,
+      final boolean range
+  ) {
+    final StreamsBuilder builder = new StreamsBuilder();
+
+    final KStream<String, String> input = builder.stream(inputTopic());
+
+    final Duration windowSize = Duration.ofMillis(10L);
+    final Duration gracePeriod = Duration.ofMillis(100L);
+
+    final StoreBuilder<WindowStore<String, String>> storeBuilder =
+        ResponsiveStores.windowStoreBuilder(
+            ResponsiveStores.windowStoreSupplier(window(storeName(), windowSize, gracePeriod)),
+            Serdes.String(),
+            Serdes.String());
+    input
+        .processValues(new TransformerSupplier(true, range, storeBuilder), storeName())
         .to(outputTopic());
 
     return new ResponsiveKafkaStreams(builder.build(), properties);
@@ -200,17 +251,27 @@ public class StoreQueryIntegrationTest {
 
   private class TransformerSupplier implements FixedKeyProcessorSupplier<String, String, String> {
 
-    private final StoreBuilder<?> storeBuilder;
+    private final boolean windowed;
     private final boolean rangeQuery;
+    private final StoreBuilder<?> storeBuilder;
 
-    public TransformerSupplier(final boolean rangeQuery, final StoreBuilder<?> storeBuilder) {
+    public TransformerSupplier(
+        final boolean windowed,
+        final boolean rangeQuery,
+        final StoreBuilder<?> storeBuilder
+    ) {
+      this.windowed = windowed;
       this.rangeQuery = rangeQuery;
       this.storeBuilder = storeBuilder;
     }
 
     @Override
     public FixedKeyProcessor<String, String, String> get() {
-      return new CountingProcessor(rangeQuery);
+      if (windowed) {
+        return new CrossKeyWindowAggregator(rangeQuery);
+      } else {
+        return new CrossKeyKVAggregator(rangeQuery);
+      }
     }
 
     @Override
@@ -222,11 +283,56 @@ public class StoreQueryIntegrationTest {
     }
   }
 
-  private class CountingProcessor implements FixedKeyProcessor<String, String, String> {
+  private class CrossKeyWindowAggregator implements FixedKeyProcessor<String, String, String> {
 
     private final boolean rangeQuery;
 
-    public CountingProcessor(final boolean rangeQuery) {
+    public CrossKeyWindowAggregator(final boolean rangeQuery) {
+      this.rangeQuery = rangeQuery;
+    }
+
+    private WindowStore<String, String> windowStore;
+    private FixedKeyProcessorContext<String, String> context;
+
+    @Override
+    public void init(final FixedKeyProcessorContext<String, String> context) {
+      FixedKeyProcessor.super.init(context);
+      this.windowStore = context.getStateStore(storeName());
+      this.context = context;
+    }
+
+    @Override
+    public void process(final FixedKeyRecord<String, String> record) {
+      final StringBuilder builder = new StringBuilder();
+
+      KeyValueIterator<Windowed<String>, String> iterator = null;
+      try {
+
+        if (rangeQuery) {
+          iterator = windowStore.fetch("A", "Z", 0L, 5L);
+        } else {
+          iterator = windowStore.all();
+        }
+
+        while (iterator.hasNext()) {
+          builder.append(iterator.next().value);
+        }
+        builder.append(record.value());
+
+      } finally {
+        iterator.close();
+      }
+
+      windowStore.put(record.key(), record.value(), record.timestamp());
+      context.forward(record.withValue(builder.toString()));
+    }
+  }
+
+  private class CrossKeyKVAggregator implements FixedKeyProcessor<String, String, String> {
+
+    private final boolean rangeQuery;
+
+    public CrossKeyKVAggregator(final boolean rangeQuery) {
       this.rangeQuery = rangeQuery;
     }
 
@@ -236,7 +342,7 @@ public class StoreQueryIntegrationTest {
     @Override
     public void init(final FixedKeyProcessorContext<String, String> context) {
       FixedKeyProcessor.super.init(context);
-      this.kvStore = context.getStateStore(kvStoreName());
+      this.kvStore = context.getStateStore(storeName());
       this.context = context;
     }
 
@@ -267,8 +373,8 @@ public class StoreQueryIntegrationTest {
     }
   }
 
-  private String kvStoreName() {
-    return name + "-kv-store";
+  private String storeName() {
+    return name + "-store";
   }
 
   private Map<String, Object> getMutableProperties() {

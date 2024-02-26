@@ -345,6 +345,20 @@ public class CommitBuffer<K extends Comparable<K>, P>
   public KeyValueIterator<K, Result<K>> range(
       final K from,
       final K to,
+      final boolean fromInclusive,
+      final boolean toInclusive
+  ) {
+    return Iterators.kv(
+        Iterators.filter(
+            buffer.getReader().subMap(from, fromInclusive, to, toInclusive).entrySet().iterator(),
+            e -> keySpec.retain(e.getKey())),
+        result -> new KeyValue<>(result.getKey(), result.getValue())
+    );
+  }
+
+  public KeyValueIterator<K, Result<K>> range(
+      final K from,
+      final K to,
       final Predicate<Result<K>> filter
   ) {
     return Iterators.kv(

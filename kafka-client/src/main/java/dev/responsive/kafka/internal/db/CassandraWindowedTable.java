@@ -992,6 +992,22 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
     );
   }
 
+  @Override
+  public KeyValueIterator<WindowedKey, byte[]> all(
+      final int kafkaPartition,
+      final long streamTime
+  ) {
+    throw new UnsupportedOperationException("all is not yet supported for Cassandra backends");
+  }
+
+  @Override
+  public KeyValueIterator<WindowedKey, byte[]> backAll(
+      final int kafkaPartition,
+      final long streamTime
+  ) {
+    throw new UnsupportedOperationException("backAll is not yet supported for Cassandra backends");
+  }
+
   private static KeyValue<WindowedKey, byte[]> windowRows(final Row row) {
     final long startTs = row.getInstant(WINDOW_START.column()).toEpochMilli();
     final Bytes key = Bytes.wrap(row.getByteBuffer(DATA_KEY.column()).array());
