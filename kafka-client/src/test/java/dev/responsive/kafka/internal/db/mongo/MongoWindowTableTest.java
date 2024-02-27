@@ -102,28 +102,38 @@ class MongoWindowTableTest {
         false, UNSHARDED
     );
     final var flushManager = table.init(0);
-    flushManager.updateOffsetAndStreamTime(0, 100);
+    flushManager.updateOffsetAndStreamTime(0, 6_000);
     flushManager.createSegment(segment);
 
     // When:
     final var byteKey = Bytes.wrap("key".getBytes());
-    final var windowedKey = new WindowedKey(byteKey, 500);
+    final var windowedKey1 = new WindowedKey(byteKey, 500);
+    final var windowedKey2 = new WindowedKey(byteKey, 5_000);
     var writer = flushManager.createWriter(segment);
     writer.insert(
-        windowedKey,
+        windowedKey1,
+        DEFAULT_VALUE,
+        table.localEpoch(0)
+    );
+    writer.insert(
+        windowedKey2,
         DEFAULT_VALUE,
         table.localEpoch(0)
     );
     writer.flush();
 
     // Then:
-    var it = table.fetch(0, byteKey, 100, 600);
+    var it = table.fetch(0, byteKey, 100, 6_000);
     var kvs = new ArrayList<KeyValue<WindowedKey, byte[]>>();
     it.forEachRemaining(kvs::add);
 
-    assertThat(kvs, Matchers.hasSize(1));
-    assertThat(kvs.get(0).key.key, Matchers.equalTo(windowedKey.key));
-    assertThat(kvs.get(0).key.windowStartMs, Matchers.equalTo(windowedKey.windowStartMs));
+    assertThat(kvs, Matchers.hasSize(2));
+    assertThat(kvs.get(0).key.key, Matchers.equalTo(windowedKey1.key));
+    assertThat(kvs.get(0).key.windowStartMs, Matchers.equalTo(windowedKey1.windowStartMs));
     assertThat(kvs.get(0).value, Matchers.equalTo(DEFAULT_VALUE));
+
+    assertThat(kvs.get(1).key.key, Matchers.equalTo(windowedKey2.key));
+    assertThat(kvs.get(1).key.windowStartMs, Matchers.equalTo(windowedKey2.windowStartMs));
+    assertThat(kvs.get(1).value, Matchers.equalTo(DEFAULT_VALUE));
   }
 }
