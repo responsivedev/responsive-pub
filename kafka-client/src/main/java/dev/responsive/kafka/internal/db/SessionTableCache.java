@@ -17,7 +17,7 @@
 package dev.responsive.kafka.internal.db;
 
 import dev.responsive.kafka.internal.db.partitioning.SessionSegmentPartitioner;
-import dev.responsive.kafka.internal.db.spec.CassandraTableSpec;
+import dev.responsive.kafka.internal.db.spec.RemoteTableSpec;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeoutException;
@@ -28,7 +28,7 @@ public class SessionTableCache<T extends RemoteTable<?, ?>> {
 
   @FunctionalInterface
   public interface Factory<T> {
-    T create(final CassandraTableSpec spec, SessionSegmentPartitioner partitioner)
+    T create(final RemoteTableSpec spec, SessionSegmentPartitioner partitioner)
         throws InterruptedException, TimeoutException;
   }
 
@@ -43,7 +43,7 @@ public class SessionTableCache<T extends RemoteTable<?, ?>> {
    * Creates a table with the supplied {@code tableName} with the
    * desired schema.
    */
-  public synchronized T create(CassandraTableSpec spec, SessionSegmentPartitioner partitioner)
+  public synchronized T create(RemoteTableSpec spec, SessionSegmentPartitioner partitioner)
       throws InterruptedException, TimeoutException {
     final T existing = tables.get(spec.tableName());
     if (existing != null) {
@@ -58,7 +58,7 @@ public class SessionTableCache<T extends RemoteTable<?, ?>> {
   /**
    * @param name the name of the table
    * @return the table, if it was already created by
-   *         {@link #create(CassandraTableSpec, SessionSegmentPartitioner)}
+   *         {@link #create(RemoteTableSpec, SessionSegmentPartitioner)}
    */
   public synchronized T getTable(final String name) {
     return tables.get(name);
