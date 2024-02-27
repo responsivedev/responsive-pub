@@ -150,12 +150,73 @@ public class ResponsiveSessionStoreIntegrationTest {
     input
         .groupByKey()
         .windowedBy(window)
-        .aggregate(
-            () -> "",
-            sessionAggregator(),
-            sessionMerger(),
-            store
-        )
+        .aggregate(() -> "", sessionAggregator(), sessionMerger(), store)
+        .toStream()
+        .peek((k, v) -> actualPeeks.add(new KeyValue<>(k, v)))
+        .peek((k, v) -> outputLatch.countDown())
+        .selectKey((k, v) -> k.key())
+        .to(outputTopic());
+
+    // When:
+    final Map<String, Object> properties = getMutablePropertiesWithStringSerdes();
+    properties.put(STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
+    properties.put(APPLICATION_SERVER_CONFIG, "host1:1024");
+    final KafkaProducer<String, String> producer = new KafkaProducer<>(properties);
+    try (
+        final ResponsiveKafkaStreams kafkaStreams =
+            new ResponsiveKafkaStreams(builder.build(), properties);
+    ) {
+      startAppAndAwaitRunning(Duration.ofSeconds(15), kafkaStreams);
+      pipeRecords(producer, inputTopic(), inputEvents);
+
+      assertThat(outputLatch.await(3_000, TimeUnit.MILLISECONDS), Matchers.equalTo(true));
+
+      assertThat(actualPeeks, Matchers.hasSize(expectedPeeks.size()));
+      for (var i = 0; i < actualPeeks.size(); i++) {
+        var actual = actualPeeks.get(i);
+        var expected = expectedPeeks.get(i);
+        assertThat(actual.key, Matchers.equalTo(expected.key));
+        assertThat(actual.value, Matchers.equalTo(expected.value));
+      }
+    }
+  }
+
+  @Test
+  public void shouldComputeSessionAggregateWithMultipleKeys() throws Exception {
+    // Given:
+    final Duration inactivityGap = Duration.ofSeconds(5);
+    final Duration gracePeriod = Duration.ofSeconds(2);
+    final SessionWindows window =
+        SessionWindows.ofInactivityGapAndGrace(inactivityGap, gracePeriod);
+
+    final Materialized<String, String, SessionStore<Bytes, byte[]>> store =
+        ResponsiveStores.sessionMaterialized(
+            ResponsiveSessionParams.session(name, inactivityGap, gracePeriod)
+        );
+
+    // Start from timestamp of 0L to get predictable results
+    final List<KeyValueTimestamp<String, String>> inputEvents = asList(
+        new KeyValueTimestamp<>("key1", "a", 0L),
+        new KeyValueTimestamp<>("key1", "b", 1_000L),
+        new KeyValueTimestamp<>("key2", "c", 5_000L),
+        new KeyValueTimestamp<>("key2", "d", 15_000L)
+    );
+    final List<KeyValue<Windowed<String>, String>> expectedPeeks = List.of(
+        new KeyValue<>(windowedKey("key1", 0, 0), "a"),
+        new KeyValue<>(windowedKey("key1", 0, 0), null),
+        new KeyValue<>(windowedKey("key1", 0, 1000), "ab"),
+        new KeyValue<>(windowedKey("key2", 5000, 5000), "c"),
+        new KeyValue<>(windowedKey("key2", 15000, 15000), "d")
+    );
+    final CountDownLatch outputLatch = new CountDownLatch(expectedPeeks.size());
+    final List<KeyValue<Windowed<String>, String>> actualPeeks = new ArrayList<>();
+
+    final StreamsBuilder builder = new StreamsBuilder();
+    final KStream<String, String> input = builder.stream(inputTopic());
+    input
+        .groupByKey()
+        .windowedBy(window)
+        .aggregate(() -> "", sessionAggregator(), sessionMerger(), store)
         .toStream()
         .peek((k, v) -> actualPeeks.add(new KeyValue<>(k, v)))
         .peek((k, v) -> outputLatch.countDown())
