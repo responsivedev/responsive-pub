@@ -221,7 +221,7 @@ rules:
      topic: param(topic)
    mapping:
      records-consumed-total:
-       metric: kafka.streams.topic.records.consumed.total
+       metric: kafka.streams.topic.consumed.total
        type: gauge
        desc: the total records consumed
        unit: '{records}'
