@@ -156,7 +156,7 @@ public class ResponsiveKeyValueStoreEosIntegrationTest {
       // an additional 10 values are uncommitted (5 for each partition)
       // this statement below just blocks until we've read 30 uncommitted
       // records before causing one of the tasks to stall
-      readOutput(outputTopic(), 0, 30, true, properties);
+      readOutput(outputTopic(), 0, 0, 30, true, properties);
 
       state.stall.set(Stall.INJECTED);
 
@@ -184,8 +184,8 @@ public class ResponsiveKeyValueStoreEosIntegrationTest {
       // 20 more values beyond the first read are now committed (10
       // for each partition), but 5 should never have been committed
       // so there should be more uncommitted reads in total
-      final List<KeyValue<Long, Long>> readC = readOutput(outputTopic(), 0, 40, false, properties);
-      final List<KeyValue<Long, Long>> readU = readOutput(outputTopic(), 0, 45, true, properties);
+      final List<KeyValue<Long, Long>> readC = readOutput(outputTopic(), 0, 0, 40, false, properties);
+      final List<KeyValue<Long, Long>> readU = readOutput(outputTopic(), 0, 0, 45, true, properties);
 
       // now we release the stalled consumer
       state.stall.set(Stall.RELEASED);

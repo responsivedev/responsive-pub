@@ -200,15 +200,19 @@ public final class IntegrationTestUtils {
     producer.flush();
   }
 
+  /**
+   * Pipes the provided key-value-timestamp pairs to the given partition and topic
+   */
   public static <K, V> void pipeRecords(
       final KafkaProducer<K, V> producer,
       final String topic,
+      final int partition,
       final List<KeyValueTimestamp<K, V>> records
   ) {
     for (final KeyValueTimestamp<K, V> record : records) {
       producer.send(new ProducerRecord<>(
           topic,
-          0,
+          partition,
           record.timestamp(),
           record.key(),
           record.value()
@@ -217,6 +221,24 @@ public final class IntegrationTestUtils {
     producer.flush();
   }
 
+  /**
+   * Pipes the given key-value pairs to all partitions of this topic (according to the
+   * default partitioning strategy)
+   */
+  public static <K, V> void pipeRecords(
+      final KafkaProducer<K, V> producer,
+      final String topic,
+      final List<KeyValue<K, V>> records
+  ) {
+    for (final KeyValue<K, V> record : records) {
+      producer.send(new ProducerRecord<>(
+          topic,
+          record.key,
+          record.value
+      ));
+    }
+    producer.flush();
+  }
 
   public static void awaitOutput(
       final String topic,
@@ -256,6 +278,7 @@ public final class IntegrationTestUtils {
 
   public static <K, V> List<KeyValue<K, V>> readOutput(
       final String topic,
+      final int partition,
       final long from,
       final long numEvents,
       final boolean readUncommitted,
@@ -267,7 +290,7 @@ public final class IntegrationTestUtils {
         : IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT));
 
     try (final KafkaConsumer<K, V> consumer = new KafkaConsumer<>(properties)) {
-      final TopicPartition output = new TopicPartition(topic, 0);
+      final TopicPartition output = new TopicPartition(topic, partition);
       consumer.assign(List.of(output));
       consumer.seek(output, from);
 

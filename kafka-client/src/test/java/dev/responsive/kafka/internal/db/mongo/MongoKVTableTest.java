@@ -61,7 +61,7 @@ class MongoKVTableTest {
   @Test
   public void shouldSucceedWriterWithSameEpoch() throws ExecutionException, InterruptedException {
     // Given:
-    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED);
+    final MongoKVTable table = new MongoKVTable(client, name, 1, UNSHARDED);
 
     var writerFactory = table.init(0);
     var writer = writerFactory.createWriter(0);
@@ -80,7 +80,7 @@ class MongoKVTableTest {
   @Test
   public void shouldSucceedWriterWithLargerEpoch() throws ExecutionException, InterruptedException {
     // Given:
-    var table = new MongoKVTable(client, name, UNSHARDED);
+    var table = new MongoKVTable(client, name, 1, UNSHARDED);
     var writerFactory = table.init(0);
     var writer = writerFactory.createWriter(0);
     writer.insert(Bytes.wrap(new byte[] {1}), new byte[] {1}, 100);
@@ -88,7 +88,7 @@ class MongoKVTableTest {
 
     // When:
     // initialize new writer with higher epoch
-    table = new MongoKVTable(client, name, UNSHARDED);
+    table = new MongoKVTable(client, name, 1, UNSHARDED);
     writerFactory = table.init(0);
     writer = writerFactory.createWriter(0);
     writer.insert(Bytes.wrap(new byte[] {1}), new byte[] {1}, 101);
@@ -101,11 +101,11 @@ class MongoKVTableTest {
   @Test
   public void shouldFenceWriterSmallerEpoch() throws ExecutionException, InterruptedException {
     // Given:
-    var table0 = new MongoKVTable(client, name, UNSHARDED);
+    var table0 = new MongoKVTable(client, name, 1, UNSHARDED);
     var writerFactory0 = table0.init(0);
     var writer0 = writerFactory0.createWriter(0);
 
-    var table1 = new MongoKVTable(client, name, UNSHARDED);
+    var table1 = new MongoKVTable(client, name, 1, UNSHARDED);
     var writerFactory1 = table1.init(0);
     var writer1 = writerFactory1.createWriter(0);
 

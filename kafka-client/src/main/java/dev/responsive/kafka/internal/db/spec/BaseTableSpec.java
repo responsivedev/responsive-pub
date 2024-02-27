@@ -24,16 +24,27 @@ import java.util.EnumSet;
 public class BaseTableSpec implements RemoteTableSpec {
 
   private final String name;
+  private final String changelogTopicName;
   final TablePartitioner<?, ?> partitioner;
 
-  public BaseTableSpec(final String name, final TablePartitioner<?, ?> partitioner) {
+  public BaseTableSpec(
+      final String name,
+      final String changelogTopicName,
+      final TablePartitioner<?, ?> partitioner
+  ) {
     this.name = name;
+    this.changelogTopicName = changelogTopicName;
     this.partitioner = partitioner;
   }
 
   @Override
   public String tableName() {
     return name;
+  }
+
+  @Override
+  public String changelogTopicName() {
+    return changelogTopicName;
   }
 
   @Override

@@ -59,7 +59,8 @@ public class GlobalOperations implements KeyValueOperations {
 
     final SessionClients sessionClients = loadSessionClients(appConfigs);
     final var client = sessionClients.cassandraClient();
-    final var spec = RemoteTableSpecFactory.globalSpec(params, defaultPartitioner());
+    final var spec =
+        RemoteTableSpecFactory.globalSpec(params, context.topic(), defaultPartitioner());
 
     final var table = client.globalFactory().create(spec);
     table.init(IGNORED_PARTITION);

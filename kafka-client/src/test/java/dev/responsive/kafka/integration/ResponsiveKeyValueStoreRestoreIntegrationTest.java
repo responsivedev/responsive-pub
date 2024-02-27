@@ -332,11 +332,13 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
               changelog.topic()
           );
           table = cassandraClient.kvFactory()
-              .create(new BaseTableSpec(aggName(), partitioner));
+              .create(new BaseTableSpec(aggName(), changelog.topic(), partitioner));
           break;
         case FACT:
           table = cassandraClient.factFactory()
-              .create(new BaseTableSpec(aggName(), TablePartitioner.defaultPartitioner()));
+              .create(new BaseTableSpec(
+                  aggName(), changelog.topic(), TablePartitioner.defaultPartitioner())
+              );
           break;
         default:
           throw new IllegalArgumentException("Unexpected type " + type);
@@ -353,6 +355,7 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
       table = new MongoKVTable(
           mongoClient,
           aggName(),
+          NUM_PARTITIONS,
           CollectionCreationOptions.fromConfig(config)
       );
       table.init(0);

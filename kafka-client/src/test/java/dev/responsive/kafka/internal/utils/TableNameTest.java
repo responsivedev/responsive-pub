@@ -16,6 +16,9 @@
 
 package dev.responsive.kafka.internal.utils;
 
+import org.apache.kafka.clients.producer.internals.BuiltInPartitioner;
+import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.hamcrest.MatcherAssert;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
