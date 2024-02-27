@@ -96,7 +96,7 @@ public class StoreQueryIntegrationTest {
     this.responsiveProps.putAll(responsiveProps);
 
     this.admin = admin;
-    createTopicsAndWait(admin, Map.of(inputTopic(), 1, outputTopic(), 1));
+    createTopicsAndWait(admin, Map.of(inputTopic(), 2, outputTopic(), 2));
   }
 
   @AfterEach
@@ -120,27 +120,35 @@ public class StoreQueryIntegrationTest {
     try (final ResponsiveKafkaStreams streams = buildKVStreams(properties, false)) {
       startAppAndAwaitRunning(Duration.ofSeconds(10), streams);
 
-      final List<KeyValueTimestamp<String, String>> records = Arrays.asList(
-        new KeyValueTimestamp<>("A", "A", 0L),
-        new KeyValueTimestamp<>("B", "B", 0L),
-        new KeyValueTimestamp<>("C", "C", 0L),
-        new KeyValueTimestamp<>("A", "a", 0L),
-        new KeyValueTimestamp<>("D", "D", 0L)
+      final List<KeyValue<String, String>> records = Arrays.asList(
+        new KeyValue<>("A", "A"), // partition 0
+        new KeyValue<>("B", "B"), // partition 0
+        new KeyValue<>("D", "D"), // partition 1
+        new KeyValue<>("E", "E"), // partition 1
+        new KeyValue<>("A", "a"), // partition 0
+        new KeyValue<>("C", "C")  // partition 0
       );
 
       // When:
       pipeRecords(producer, inputTopic(), records);
 
       // Then:
-      final var kvs = readOutput(outputTopic(), 0, 5, true, properties);
+      final var partition0 = readOutput(outputTopic(), 0, 0, 4, true, properties);
       assertThat(
-          kvs,
+          partition0,
           hasItems(
               new KeyValue<>("A", "A"),
               new KeyValue<>("B", "AB"),
-              new KeyValue<>("C", "ABC"),
-              new KeyValue<>("A", "ABCa"),
-              new KeyValue<>("D", "aBCD"))
+              new KeyValue<>("A", "aB"),
+              new KeyValue<>("C", "aBC"))
+      );
+
+      final var partition1 = readOutput(outputTopic(), 1, 0, 2, true, properties);
+      assertThat(
+          partition1,
+          hasItems(
+              new KeyValue<>("D", "D"),
+              new KeyValue<>("E", "DE"))
       );
     }
   }
@@ -153,27 +161,34 @@ public class StoreQueryIntegrationTest {
     try (final ResponsiveKafkaStreams streams = buildKVStreams(properties, true)) {
       startAppAndAwaitRunning(Duration.ofSeconds(10), streams);
 
-      final List<KeyValueTimestamp<String, String>> records = Arrays.asList(
-          new KeyValueTimestamp<>("A", "A", 0L),
-          new KeyValueTimestamp<>("b", "b", 0L),
-          new KeyValueTimestamp<>("C", "C", 0L),
-          new KeyValueTimestamp<>("d", "d", 0L),
-          new KeyValueTimestamp<>("E", "E", 0L)
+      final List<KeyValue<String, String>> records = Arrays.asList(
+          new KeyValue<>("A", "A"), // partition 0
+          new KeyValue<>("b", "b"), // partition 0
+          new KeyValue<>("C", "C"), // partition 0
+          new KeyValue<>("d", "d"), // partition 1
+          new KeyValue<>("E", "E")  // partition 1
       );
 
       // When:
       pipeRecords(producer, inputTopic(), records);
 
       // Then:
-      final var kvs = readOutput(outputTopic(), 0, 5, true, properties);
+      final var partition0 = readOutput(outputTopic(), 0, 0, 3, true, properties);
       assertThat(
-          kvs,
+          partition0,
           hasItems(
               new KeyValue<>("A", "A"),
-              new KeyValue<>("b", "Ab"),
-              new KeyValue<>("C", "AC"),
-              new KeyValue<>("d", "ACd"),
-              new KeyValue<>("E", "ACE"))
+              new KeyValue<>("b", "A"),
+              new KeyValue<>("C", "AC"))
+
+      );
+
+      final var partition1 = readOutput(outputTopic(), 1, 0, 2, true, properties);
+      assertThat(
+          partition1,
+          hasItems(
+              new KeyValue<>("d", ""),
+              new KeyValue<>("E", "E"))
       );
     }
   }
@@ -210,7 +225,7 @@ public class StoreQueryIntegrationTest {
 
     @Override
     public FixedKeyProcessor<String, String, String> get() {
-      return new CountingProcessor(rangeQuery);
+      return new AppendingProcessor(rangeQuery);
     }
 
     @Override
@@ -222,11 +237,11 @@ public class StoreQueryIntegrationTest {
     }
   }
 
-  private class CountingProcessor implements FixedKeyProcessor<String, String, String> {
+  private class AppendingProcessor implements FixedKeyProcessor<String, String, String> {
 
     private final boolean rangeQuery;
 
-    public CountingProcessor(final boolean rangeQuery) {
+    public AppendingProcessor(final boolean rangeQuery) {
       this.rangeQuery = rangeQuery;
     }
 
@@ -242,11 +257,12 @@ public class StoreQueryIntegrationTest {
 
     @Override
     public void process(final FixedKeyRecord<String, String> record) {
+      kvStore.put(record.key(), record.value());
+
       final StringBuilder builder = new StringBuilder();
 
       KeyValueIterator<String, String> iterator = null;
       try {
-
         if (rangeQuery) {
           iterator = kvStore.range("A", "Z");
         } else {
@@ -256,13 +272,11 @@ public class StoreQueryIntegrationTest {
         while (iterator.hasNext()) {
           builder.append(iterator.next().value);
         }
-        builder.append(record.value());
 
       } finally {
         iterator.close();
       }
 
-      kvStore.put(record.key(), record.value());
       context.forward(record.withValue(builder.toString()));
     }
   }

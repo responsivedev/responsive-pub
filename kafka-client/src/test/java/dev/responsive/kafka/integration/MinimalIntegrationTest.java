@@ -124,7 +124,7 @@ public class MinimalIntegrationTest {
         Thread.sleep(100);
       }
 
-      final var kvs = readOutput(outputTopic(), 0, 20, true, properties);
+      final var kvs = readOutput(outputTopic(), 0, 0, 20, true, properties);
       assertThat(
           kvs,
           hasItems(new KeyValue<>(0L, 10L), new KeyValue<>(1L, 10L)));

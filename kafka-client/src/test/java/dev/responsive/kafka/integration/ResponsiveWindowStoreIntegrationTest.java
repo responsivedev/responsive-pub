@@ -315,7 +315,7 @@ public class ResponsiveWindowStoreIntegrationTest {
           new KeyValueTimestamp<>("key", "k", minutesToMillis(16L))  // [15, 30] --> "degk"
       );
 
-      pipeRecords(producer, inputTopic(), input1);
+      pipeRecords(producer, inputTopic(), 0, input1);
 
       outputLatch.await();
       assertThat(results.size(), equalTo(3));
@@ -385,7 +385,7 @@ public class ResponsiveWindowStoreIntegrationTest {
           new KeyValueTimestamp<>("key", "h", 5_000L)   // within grace for [5, 15s] window
       );
 
-      pipeRecords(producer, inputTopic(), input1);
+      pipeRecords(producer, inputTopic(), 0, input1);
       outputLatch.await();
 
       assertThat(results.size(), equalTo(4));

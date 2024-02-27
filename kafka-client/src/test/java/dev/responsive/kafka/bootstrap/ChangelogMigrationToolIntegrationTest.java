@@ -166,7 +166,7 @@ class ChangelogMigrationToolIntegrationTest {
       pipeInput(inputTopic(), partitions, produce, System::currentTimeMillis, 0, perKey, keys);
 
       LOG.info("Awaiting the output from all 1000 records");
-      readOutput(outputTopic(), 0, numEvents, true, baseProps);
+      readOutput(outputTopic(), 0, 0, numEvents, true, baseProps);
     }
 
     // 2: Run the changelog migration tool to bootstrap the new Cassandra table
@@ -238,7 +238,7 @@ class ChangelogMigrationToolIntegrationTest {
       pipeInput(inputTopic(), partitions, produce, System::currentTimeMillis, 0, perKey, keys);
 
       LOG.info("Awaiting the output from all {} keys", numKeys);
-      readOutput(outputTopic(), 0, numKeys, true, baseProps);
+      readOutput(outputTopic(), 0, 0, numKeys, true, baseProps);
     }
 
     // 2: Run the changelog migration tool to bootstrap the new Cassandra table
