@@ -212,19 +212,16 @@ public class SessionOperationsImpl implements SessionOperations {
       SessionKey key,
       final byte[] value
   ) {
-    System.out.println("DEBUG: PUT: " + key.toString());
     this.buffer.put(key, value, this.context.timestamp());
   }
 
   @Override
   public void delete(final SessionKey key) {
-    System.out.println("DEBUG: DELETE: " + key.toString());
     this.buffer.tombstone(key, this.context.timestamp());
   }
 
   @Override
   public byte[] fetch(final SessionKey key) {
-    System.out.println("DEBUG: FETCH: " + key.toString());
     final Result<SessionKey> localResult = this.buffer.get(key);
     if (localResult != null) {
       return localResult.isTombstone ? null : localResult.value;
@@ -245,11 +242,8 @@ public class SessionOperationsImpl implements SessionOperations {
       final long earliestSessionEnd,
       final long latestSessionEnd
   ) {
-    System.out.println("DEBUG: FETCH_ALL: " + key.toString() + " | " + earliestSessionEnd + " | "
-        + latestSessionEnd);
-
-    SessionKey from = new SessionKey(key, 0, earliestSessionEnd);
-    SessionKey to = new SessionKey(key, 0, latestSessionEnd);
+    final SessionKey from = new SessionKey(key, 0, earliestSessionEnd);
+    final SessionKey to = new SessionKey(key, 0, latestSessionEnd);
 
     final var localResults = this.buffer.range(from, to);
     final var remoteResults = this.table.fetchAll(
@@ -268,8 +262,6 @@ public class SessionOperationsImpl implements SessionOperations {
           return new Windowed<>(sessionKey.key, sessionWindow);
         }
     );
-
-    System.out.println("DEBUG: FETCH_ALL: RESULT: " + key + " => " + keysOnly.hasNext());
     return keysOnly;
   }
 

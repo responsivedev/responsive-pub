@@ -38,6 +38,8 @@ import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KafkaStreams.StateListener;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.kstream.Aggregator;
+import org.apache.kafka.streams.kstream.Merger;
 import org.junit.jupiter.api.TestInfo;
 
 public final class IntegrationTestUtils {
@@ -334,6 +336,21 @@ public final class IntegrationTestUtils {
     } finally {
       lock.unlock();
     }
+  }
+
+  public static Merger<String, String> sessionMerger() {
+    return (aggKey, agg1, agg2) -> {
+      if (agg1 == null) {
+        return agg2;
+      } else if (agg2 == null) {
+        return agg1;
+      }
+      return agg1 + agg2;
+    };
+  }
+
+  public static Aggregator<String, String, String> sessionAggregator() {
+    return (k, v, agg) -> agg + v;
   }
 
   private IntegrationTestUtils() {

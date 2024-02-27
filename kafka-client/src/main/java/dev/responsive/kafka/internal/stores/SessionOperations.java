@@ -35,18 +35,17 @@ public interface SessionOperations extends Closeable, RecordBatchingStateRestore
 
   /**
    * Retrieves the range of sessions for the given {@code key} with
-   * an end time of at least {@code earliestSessionEnd} and a start time of at most
-   * {@code latestSessionStart}.
+   * an end time between {@code earliestSessionEnd} and {@code latestSessionEnd}.
    *
    * @param key                the data key
    * @param earliestSessionEnd the earliest possible end time of the session
-   * @param latestSessionStart the latest possible start time of the session
+   * @param latestSessionEnd   the latest possible end time of the session
    * @return a forwards iterator over the retrieved sessions and values previously set.
    */
   KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(
       final Bytes key,
       final long earliestSessionEnd,
-      final long latestSessionStart
+      final long latestSessionEnd
   );
 
   @Override

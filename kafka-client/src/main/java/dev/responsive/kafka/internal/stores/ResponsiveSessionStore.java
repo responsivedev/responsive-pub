@@ -192,10 +192,6 @@ public class ResponsiveSessionStore implements SessionStore<Bytes, byte[]> {
       long earliestSessionEndTime,
       long latestSessionStartTime
   ) {
-    System.out.println(
-        "DEBUG: FIND_SESSIONS: " + key.toString() + " | " + earliestSessionEndTime + " | "
-            + latestSessionStartTime);
-
     // Trim down our search space by using both the observed stream time and the retention period.
     earliestSessionEndTime = Long.max(
         Long.max(earliestSessionEndTime, minValidEndTimestamp()),
