@@ -51,21 +51,18 @@ public interface RemoteSessionTable<S> extends RemoteTable<SessionKey, S> {
 
   /**
    * Retrieves the range of sessions of the given {@code kafkaPartition} and {@code key} with
-   * an end time of at least {@code earliestSessionEnd} and a start time of at most
-   * {@code latestSessionStart}.
+   * an end time between {@code earliestSessionEnd} and {@code latestSessionStart}.
    *
    * @param kafkaPartition     the kafka partition
    * @param key                the data key
    * @param earliestSessionEnd the earliest possible end time of the session
-   * @param latestSessionStart the latest possible start time of the session
+   * @param latestSessionEnd   the latest possible end time of the session
    * @return a forwards iterator over the retrieved sessions and values previously set.
    */
   KeyValueIterator<SessionKey, byte[]> fetchAll(
       final int kafkaPartition,
       final Bytes key,
       final long earliestSessionEnd,
-      final long latestSessionStart
+      final long latestSessionEnd
   );
-
-  // TODO: Add more methods that will be used in SessionOperations.
 }
