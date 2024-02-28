@@ -27,6 +27,7 @@ import responsive.controller.v1.controller.proto.ControllerOuterClass.PolicyStat
 public class ResponsivePolicySpec {
   private final String applicationNamespace;
   private final String applicationName;
+  private final String applicationId;
   // TODO: dont use the protobuf enum type in the k8s crd definition
   private final PolicyStatus status;
   private final ResponsivePolicySpec.PolicyType policyType;
@@ -42,6 +43,7 @@ public class ResponsivePolicySpec {
   public ResponsivePolicySpec(
       @JsonProperty("applicationNamespace") final String applicationNamespace,
       @JsonProperty("applicationName") final String applicationName,
+      @JsonProperty("applicationId") final String applicationId,
       @JsonProperty("status") final PolicyStatus status,
       @JsonProperty("policyType") final PolicyType policyType,
       @JsonProperty("demoPolicy") final Optional<DemoPolicySpec> demoPolicy,
@@ -50,6 +52,10 @@ public class ResponsivePolicySpec {
   ) {
     this.applicationNamespace = applicationNamespace;
     this.applicationName = applicationName;
+    // for backwards compatibility we allow this to be null
+    this.applicationId = applicationId == null
+        ? applicationNamespace + "/" + applicationName
+        : applicationId;
     this.status = status;
     this.demoPolicy = Optional.empty();
     if (Objects.equals(policyType, PolicyType.DEMO)) {
@@ -65,6 +71,7 @@ public class ResponsivePolicySpec {
   public void validate() {
     Objects.requireNonNull(applicationName, "applicationName");
     Objects.requireNonNull(applicationNamespace, "applicationNamespace");
+    Objects.requireNonNull(applicationId, "applicationId");
     Objects.requireNonNull(status, "status");
     Objects.requireNonNull(policyType, "policyType");
     switch (policyType) {
@@ -82,6 +89,10 @@ public class ResponsivePolicySpec {
 
   public String getApplicationName() {
     return applicationName;
+  }
+
+  public String getApplicationId() {
+    return applicationId;
   }
 
   public PolicyStatus getStatus() {
