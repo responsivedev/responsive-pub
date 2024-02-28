@@ -19,7 +19,8 @@ package dev.responsive.kafka.internal.db.mongo;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.Objects;
-import org.bson.codecs.pojo.annotations.BsonId;
+import org.bson.codecs.pojo.annotations.BsonCreator;
+import org.bson.codecs.pojo.annotations.BsonProperty;
 
 public class KVDoc {
 
@@ -29,7 +30,6 @@ public class KVDoc {
   public static final String EPOCH = "epoch";
   public static final String TOMBSTONE_TS = "tombstoneTs";
 
-  @BsonId
   byte[] id;
   byte[] value;
   long epoch;
@@ -38,7 +38,13 @@ public class KVDoc {
   public KVDoc() {
   }
 
-  public KVDoc(final byte[] key, final byte[] value, final long epoch) {
+  @BsonCreator
+  public KVDoc(
+      @BsonProperty(ID) byte[] id,
+      @BsonProperty(VALUE) byte[] value,
+      @BsonProperty(EPOCH) long epoch
+  ) {
+    this.id = id;
     this.value = value;
     this.epoch = epoch;
   }
