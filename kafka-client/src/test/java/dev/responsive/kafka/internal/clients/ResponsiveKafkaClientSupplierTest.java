@@ -247,7 +247,12 @@ class ResponsiveKafkaClientSupplierTest {
 
     // then:
     verify(factories, Mockito.atLeastOnce()).createGlobalConsumer(any(), any(), any());
-    verify(factories, Mockito.atLeastOnce()).createRestoreConsumer(any(), any(), any());
+    verify(factories, Mockito.atLeastOnce()).createRestoreConsumer(
+        any(),
+        any(),
+        any(),
+        anyBoolean()
+    );
   }
 
   @Test
@@ -261,7 +266,7 @@ class ResponsiveKafkaClientSupplierTest {
 
     // then:
     verify(factories, Mockito.never()).createGlobalConsumer(any(), any(), any());
-    verify(factories, Mockito.never()).createRestoreConsumer(any(), any(), any());
+    verify(factories, Mockito.never()).createRestoreConsumer(any(), any(), any(), anyBoolean());
   }
 
   @NotNull
@@ -275,7 +280,8 @@ class ResponsiveKafkaClientSupplierTest {
         new StreamsConfig(CONFIGS),
         storeRegistry,
         metrics,
-        compat
+        compat,
+        false
     );
   }
 

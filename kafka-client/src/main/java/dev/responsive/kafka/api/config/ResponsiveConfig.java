@@ -231,6 +231,15 @@ public class ResponsiveConfig extends AbstractConfig {
       + "runs in. When set to RUN, runs the Kafka Streams app. When set to MIGRATE, runs app"
       + " migration.";
 
+  // ------------------ Misc functional overrides ----------------------
+  public static final String RESTORE_OFFSET_REPAIR_ENABLED_CONFIG = "responsive.restore.offset.repair.enabled";
+  public static final boolean RESTORE_OFFSET_REPAIR_ENABLED_DEFAULT = false;
+  public static final String RESTORE_OFFSET_REPAIR_ENABLED_DOC = "When set to 'true', " + RESTORE_OFFSET_REPAIR_ENABLED_CONFIG
+      + " will ignore OffsetOutOfRangeException and instead seek to the earliest available offset. This exception "
+      + "should only happen in situations where there is truncation/retention on the changelog topic and restoring from the latest "
+      + "committed offset in the remote store is no longer possible. Note that in some situations this may cause data "
+      + "loss, use this configuration with caution";
+
   // ------------------ StreamsConfig overrides ----------------------
 
   // These configuration values are required by Responsive, and a ConfigException will
@@ -452,6 +461,12 @@ public class ResponsiveConfig extends AbstractConfig {
           ),
           Importance.LOW,
           RESPONSIVE_MODE_DOC
+      ).define(
+          RESTORE_OFFSET_REPAIR_ENABLED_CONFIG,
+          Type.BOOLEAN,
+          RESTORE_OFFSET_REPAIR_ENABLED_DEFAULT,
+          Importance.LOW,
+          RESTORE_OFFSET_REPAIR_ENABLED_DOC
       );
 
   /**
