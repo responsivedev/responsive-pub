@@ -146,7 +146,8 @@ public class SessionOperationsImpl implements SessionOperations {
       final SessionClients clients,
       final SessionSegmentPartitioner partitioner
   ) throws InterruptedException, TimeoutException {
-    throw new UnsupportedOperationException("Not yet implemented");
+    throw new UnsupportedOperationException(
+        "Only responsive.storage.backend=MONGO_DB currently supports session windows.");
   }
 
   private static RemoteSessionTable<?> createMongo(

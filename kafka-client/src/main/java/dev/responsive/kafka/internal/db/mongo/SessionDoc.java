@@ -33,8 +33,8 @@ public class SessionDoc {
 
   // Subfields of the composite key _id
   public static final String ID_RECORD_KEY = "key";
-  public static final String ID_SESSION_END_TS = "sessionEndTs";
-  public static final String ID_SESSION_START_TS = "sessionStartTs";
+  public static final String ID_SESSION_END_MS = "sessionEndMs";
+  public static final String ID_SESSION_START_MS = "sessionStartMs";
 
   BasicDBObject id;
   byte[] value;
@@ -57,8 +57,16 @@ public class SessionDoc {
     this.tombstoneTs = tombstoneTs;
   }
 
-  public BasicDBObject getKey() {
+  public BasicDBObject key() {
     return id;
+  }
+
+  public byte[] value() {
+    return value;
+  }
+
+  public long epoch() {
+    return epoch;
   }
 
   public void setKey(final BasicDBObject id) {
@@ -73,18 +81,10 @@ public class SessionDoc {
     this.epoch = epoch;
   }
 
-  public byte[] getValue() {
-    return value;
-  }
-
-  public long getEpoch() {
-    return epoch;
-  }
-
-  public static SessionKey sessionKey(final BasicDBObject compositeKey) {
-    final byte[] key = (byte[]) compositeKey.get(ID_RECORD_KEY);
-    final long sessionEndTimestamp = (long) compositeKey.get(ID_SESSION_END_TS);
-    final long sessionStartTimestamp = (long) compositeKey.get(ID_SESSION_START_TS);
+  public SessionKey toSessionKey() {
+    final byte[] key = (byte[]) id.get(ID_RECORD_KEY);
+    final long sessionEndTimestamp = (long) id.get(ID_SESSION_END_MS);
+    final long sessionStartTimestamp = (long) id.get(ID_SESSION_START_MS);
     return new SessionKey(key, sessionStartTimestamp, sessionEndTimestamp);
   }
 
@@ -95,8 +95,8 @@ public class SessionDoc {
   ) {
     final BasicDBObject compositeKey =
         new BasicDBObject(ID_RECORD_KEY, key)
-            .append(ID_SESSION_END_TS, sessionEndTs)
-            .append(ID_SESSION_START_TS, sessionStartTs);
+            .append(ID_SESSION_END_MS, sessionEndTs)
+            .append(ID_SESSION_START_MS, sessionStartTs);
     return compositeKey;
   }
 
@@ -124,7 +124,7 @@ public class SessionDoc {
 
   @Override
   public String toString() {
-    final SessionKey sessionKey = sessionKey(id);
+    final SessionKey sessionKey = this.toSessionKey();
     return "SessionDoc{"
         + "id=" + Arrays.toString(sessionKey.key.get())
         + ", sessionStartTs=" + sessionKey.sessionStartMs

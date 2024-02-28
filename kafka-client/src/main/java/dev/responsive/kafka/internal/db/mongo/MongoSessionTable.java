@@ -354,7 +354,7 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
             ))
         .first();
 
-    return sessionDoc == null ? null : sessionDoc.getValue();
+    return sessionDoc == null ? null : sessionDoc.value();
   }
 
   public KeyValueIterator<SessionKey, byte[]> fetchAll(
@@ -487,7 +487,7 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
   }
 
   private static KeyValue<SessionKey, byte[]> sessionFromDoc(final SessionDoc sessionDoc) {
-    return new KeyValue<>(SessionDoc.sessionKey(sessionDoc.id), sessionDoc.value);
+    return new KeyValue<>(sessionDoc.toSessionKey(), sessionDoc.value());
   }
 
 }

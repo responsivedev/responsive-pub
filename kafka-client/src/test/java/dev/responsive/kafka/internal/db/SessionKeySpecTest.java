@@ -32,7 +32,7 @@ public class SessionKeySpecTest {
   private static final SessionKeySpec keySpec = new SessionKeySpec(w -> w.sessionEndMs > 0L);
 
   @Test
-  public void verifySessionKeySpecEncoding() {
+  public void shouldDecodeSessionKeyProperly() {
     final byte[] keyByteArray = new byte[10];
     RANDOM.nextBytes(keyByteArray);
 

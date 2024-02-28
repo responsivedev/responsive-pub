@@ -21,25 +21,15 @@ import static dev.responsive.kafka.internal.utils.StoreUtil.durationToMillis;
 import dev.responsive.kafka.internal.stores.SchemaTypes.SessionSchema;
 import dev.responsive.kafka.internal.utils.TableName;
 import java.time.Duration;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public final class ResponsiveSessionParams {
 
-  private static final Logger LOG = LoggerFactory.getLogger(ResponsiveSessionParams.class);
-
-  // TODO: should we enforce a real upper bound on the number of segments/partitions that are
-  //  created? Is there a maximum recommended for Scylla, or for this compaction strategy, etc?
-  private static final long MINIMUM_ALLOWED_NUM_SEGMENTS = 2L;
-  private static final long MAXIMUM_ALLOWED_NUM_SEGMENTS = Long.MAX_VALUE;
-  private static final long MAXIMUM_DEFAULT_NUM_SEGMENTS = 100L;
   private static final long DEFAULT_NUM_SEGMENTS = 10L; // space amplification = 1.1x
 
   private final TableName name;
   private final SessionSchema schemaType;
   private final long inactivityGapMs;
   private final long gracePeriodMs;
-  private final boolean retainDuplicates;
   private final long retentionPeriodMs;
 
   private long numSegments;
@@ -49,14 +39,12 @@ public final class ResponsiveSessionParams {
       final String name,
       final SessionSchema schemaType,
       final Duration inactivityGap,
-      final Duration gracePeriod,
-      final boolean retainDuplicates
+      final Duration gracePeriod
   ) {
     this.name = new TableName(name);
     this.schemaType = schemaType;
     this.inactivityGapMs = durationToMillis(inactivityGap, "inactivityGap");
     this.gracePeriodMs = durationToMillis(gracePeriod, "gracePeriod");
-    this.retainDuplicates = retainDuplicates;
 
     this.retentionPeriodMs = this.inactivityGapMs + this.gracePeriodMs;
     this.numSegments = computeDefaultNumSegments(retentionPeriodMs);
@@ -68,7 +56,7 @@ public final class ResponsiveSessionParams {
       final Duration gracePeriod
   ) {
     return new ResponsiveSessionParams(
-        name, SessionSchema.SESSION, inactivityGap, gracePeriod, false
+        name, SessionSchema.SESSION, inactivityGap, gracePeriod
     );
   }
 
@@ -89,20 +77,12 @@ public final class ResponsiveSessionParams {
     return this.retentionPeriodMs;
   }
 
-  public boolean retainDuplicates() {
-    return this.retainDuplicates;
-  }
-
   public long numSegments() {
     return this.numSegments;
   }
 
   public boolean truncateChangelog() {
     return this.truncateChangelog;
-  }
-
-  private static long maximumAllowedNumSegments(final long retentionPeriodMs) {
-    return Math.min(MAXIMUM_ALLOWED_NUM_SEGMENTS, retentionPeriodMs);
   }
 
   private static long computeDefaultNumSegments(final long retentionPeriodMs) {

@@ -53,7 +53,7 @@ public final class ResponsiveStores {
    *
    * @param params parameters for creation of the key value store
    * @return a supplier for a key-value store with the given options
-   * that uses Responsive's storage for its backend
+   *         that uses Responsive's storage for its backend
    */
   public static KeyValueBytesStoreSupplier keyValueStore(final ResponsiveKeyValueParams params) {
     return new ResponsiveKeyValueBytesStoreSupplier(params);
@@ -64,7 +64,7 @@ public final class ResponsiveStores {
    *
    * @param name the store name
    * @return a supplier for a key-value store with the given options
-   * that uses Responsive's storage for its backend
+   *         that uses Responsive's storage for its backend
    */
   public static KeyValueBytesStoreSupplier keyValueStore(final String name) {
     return keyValueStore(ResponsiveKeyValueParams.keyValue(name));
@@ -90,7 +90,7 @@ public final class ResponsiveStores {
    *
    * @param name the store name
    * @return a supplier for a key-value store with the given options
-   * that uses Responsive's storage for its backend
+   *         that uses Responsive's storage for its backend
    */
   public static KeyValueBytesStoreSupplier factStore(final String name) {
     return keyValueStore(ResponsiveKeyValueParams.fact(name));
@@ -109,10 +109,10 @@ public final class ResponsiveStores {
    * We recommend using {@link #keyValueStore(ResponsiveKeyValueParams)}.
    *
    * @param storeSupplier the key-value store supplier
-   * @param keySerde      the key serde. If null, the default.key.serde config will be used
-   * @param valueSerde    the value serde. If null, the default.value.serde config will be used
+   * @param keySerde the key serde. If null, the default.key.serde config will be used
+   * @param valueSerde the value serde. If null, the default.value.serde config will be used
    * @return a store builder that can be used to build a key-value store with the given options
-   * that uses Responsive's storage for its backend
+   *         that uses Responsive's storage for its backend
    */
   public static <K, V> StoreBuilder<KeyValueStore<K, V>> keyValueStoreBuilder(
       final KeyValueBytesStoreSupplier storeSupplier,
@@ -138,10 +138,10 @@ public final class ResponsiveStores {
    * We recommend using {@link #keyValueStore(ResponsiveKeyValueParams)}.
    *
    * @param storeSupplier the key-value store supplier
-   * @param keySerde      the key serde. If null, the default.key.serde config will be used
-   * @param valueSerde    the value serde. If null, the default.value.serde config will be used
+   * @param keySerde the key serde. If null, the default.key.serde config will be used
+   * @param valueSerde the value serde. If null, the default.value.serde config will be used
    * @return a store builder that can be used to build a key-value store with the given options
-   * that uses Responsive's storage for its backend
+   *         that uses Responsive's storage for its backend
    */
   public static <K, V> StoreBuilder<TimestampedKeyValueStore<K, V>> timestampedKeyValueStoreBuilder(
       final KeyValueBytesStoreSupplier storeSupplier,
@@ -165,7 +165,7 @@ public final class ResponsiveStores {
    *
    * @param params the store parameters
    * @return a Materialized configuration that can be used to build a key value store with the
-   * given options that uses Responsive's storage for its backend
+   *         given options that uses Responsive's storage for its backend
    */
   public static <K, V> Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized(
       final ResponsiveKeyValueParams params
@@ -182,12 +182,12 @@ public final class ResponsiveStores {
    * See for example {@link Stores#inMemoryWindowStore(String, Duration, Duration, boolean)}
    *
    * @param params the {@link ResponsiveWindowParams} for this store
-   *               use {@link ResponsiveWindowParams#window(String, Duration, Duration)} for
-   *               windowed aggregations in the DSL or PAPI stores with update semantics
-   *               use {@link ResponsiveWindowParams#streamStreamJoin(String, Duration, Duration)}
+   *        use {@link ResponsiveWindowParams#window(String, Duration, Duration)} for windowed
+   *               aggregations in the DSL or PAPI stores with update semantics
+   *        use {@link ResponsiveWindowParams#streamStreamJoin(String, Duration, Duration)}
    *               for stream-stream joins in the DSL  or PAPI stores with duplicates semantics
    * @return a supplier for a window store with the given options
-   * that uses Responsive's storage for its backend
+   *         that uses Responsive's storage for its backend
    */
   public static WindowBytesStoreSupplier windowStoreSupplier(final ResponsiveWindowParams params) {
     return new ResponsiveWindowedStoreSupplier(params);
@@ -196,13 +196,13 @@ public final class ResponsiveStores {
   /**
    * See for example {@link Stores#inMemoryWindowStore(String, Duration, Duration, boolean)}
    *
-   * @param name             the store name
-   * @param retentionPeriod  the retention period, must be greater than or equal to window size
-   * @param windowSize       the window size, must be greater than 0
+   * @param name the store name
+   * @param retentionPeriod the retention period, must be greater than or equal to window size
+   * @param windowSize the window size, must be greater than 0
    * @param retainDuplicates whether to retain duplicates vs overwrite records, this must be false
    *                         for all DSL operators except stream-stream joins which require true
    * @return a supplier for a window store with the given options
-   * that uses Responsive's storage for its backend
+   *         that uses Responsive's storage for its backend
    */
   public static WindowBytesStoreSupplier windowStoreSupplier(
       final String name,
@@ -237,10 +237,10 @@ public final class ResponsiveStores {
    * See also {@link Stores#windowStoreBuilder(WindowBytesStoreSupplier, Serde, Serde)}
    *
    * @param storeSupplier a window store supplier
-   * @param keySerde      the key serde. If null, the default.key.serde config will be used
-   * @param valueSerde    the value serde. If null, the default.value.serde config will be used
+   * @param keySerde the key serde. If null, the default.key.serde config will be used
+   * @param valueSerde the value serde. If null, the default.value.serde config will be used
    * @return a store builder that can be used to build a window store with the given options
-   * that uses Responsive's storage for its backend
+   *         that uses Responsive's storage for its backend
    */
   public static <K, V> StoreBuilder<WindowStore<K, V>> windowStoreBuilder(
       final WindowBytesStoreSupplier storeSupplier,
@@ -261,10 +261,10 @@ public final class ResponsiveStores {
    * See also {@link Stores#timestampedWindowStoreBuilder(WindowBytesStoreSupplier, Serde, Serde)}
    *
    * @param storeSupplier a timestamped window store supplier
-   * @param keySerde      the key serde. If null, the default.key.serde config will be used
-   * @param valueSerde    the value serde. If null, the default.value.serde config will be used
+   * @param keySerde the key serde. If null, the default.key.serde config will be used
+   * @param valueSerde the value serde. If null, the default.value.serde config will be used
    * @return a store builder that can be used to build a window store with the given options
-   * that uses Responsive's storage for its backend
+   *         that uses Responsive's storage for its backend
    */
   public static <K, V> StoreBuilder<TimestampedWindowStore<K, V>> timestampedWindowStoreBuilder(
       final WindowBytesStoreSupplier storeSupplier,
@@ -288,7 +288,7 @@ public final class ResponsiveStores {
    *
    * @param params the store parameters
    * @return a Materialized configuration that can be used to build a key value store with the
-   * given options that uses Responsive's storage for its backend
+   *         given options that uses Responsive's storage for its backend
    */
   public static <K, V> Materialized<K, V, WindowStore<Bytes, byte[]>> windowMaterialized(
       final ResponsiveWindowParams params

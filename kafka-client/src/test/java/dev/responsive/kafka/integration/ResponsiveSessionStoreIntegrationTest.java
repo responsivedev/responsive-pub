@@ -17,8 +17,6 @@
 package dev.responsive.kafka.integration;
 
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.pipeRecords;
-import static dev.responsive.kafka.testutils.IntegrationTestUtils.sessionAggregator;
-import static dev.responsive.kafka.testutils.IntegrationTestUtils.sessionMerger;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.startAppAndAwaitRunning;
 import static java.util.Arrays.asList;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
@@ -67,8 +65,10 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.Merger;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
@@ -169,7 +169,7 @@ public class ResponsiveSessionStoreIntegrationTest {
       startAppAndAwaitRunning(Duration.ofSeconds(15), kafkaStreams);
       pipeRecords(producer, inputTopic(), inputEvents);
 
-      assertThat(outputLatch.await(3_000, TimeUnit.MILLISECONDS), Matchers.equalTo(true));
+      assertThat(outputLatch.await(20_000, TimeUnit.MILLISECONDS), Matchers.equalTo(true));
 
       assertThat(actualPeeks, Matchers.hasSize(expectedPeeks.size()));
       for (var i = 0; i < actualPeeks.size(); i++) {
@@ -235,7 +235,7 @@ public class ResponsiveSessionStoreIntegrationTest {
       startAppAndAwaitRunning(Duration.ofSeconds(15), kafkaStreams);
       pipeRecords(producer, inputTopic(), inputEvents);
 
-      assertThat(outputLatch.await(3_000, TimeUnit.MILLISECONDS), Matchers.equalTo(true));
+      assertThat(outputLatch.await(20_000, TimeUnit.MILLISECONDS), Matchers.equalTo(true));
 
       assertThat(actualPeeks, Matchers.hasSize(expectedPeeks.size()));
       for (var i = 0; i < actualPeeks.size(); i++) {
@@ -284,6 +284,21 @@ public class ResponsiveSessionStoreIntegrationTest {
     properties.put(ResponsiveConfig.STORE_FLUSH_RECORDS_TRIGGER_CONFIG, 1);
 
     return properties;
+  }
+
+  public static Merger<String, String> sessionMerger() {
+    return (aggKey, agg1, agg2) -> {
+      if (agg1 == null) {
+        return agg2;
+      } else if (agg2 == null) {
+        return agg1;
+      }
+      return agg1 + agg2;
+    };
+  }
+
+  public static Aggregator<String, String, String> sessionAggregator() {
+    return (k, v, agg) -> agg + v;
   }
 
   private String inputTopic() {

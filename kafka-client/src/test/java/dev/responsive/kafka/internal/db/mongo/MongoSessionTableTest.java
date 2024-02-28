@@ -61,6 +61,13 @@ class MongoSessionTableTest {
     client = SessionUtil.connect(mongoConnection, null, null);
   }
 
+  /*
+   * - Insert a session key with start/end [0, 100]
+   * - Successfully retrieve the session when querying the remote table with start/end [0, 100]
+   * - Correctly fail to retrieve the session when querying the remote table with
+   *    start/end [0, 200]
+   * - Correctly fail to retrieve the session when querying the remote table with the wrong key
+   * */
   @Test
   public void shouldSucceedSimpleSetGet() {
     // Given:
@@ -91,6 +98,13 @@ class MongoSessionTableTest {
     assertThat(value, Matchers.nullValue());
   }
 
+  /*
+   * - Insert a session key with start/end [0, 100]
+   * - Delete the session key that was just inserted.
+   * - Correctly fail to retrieve the session when querying the remote table with start/end [0, 100]
+   * - Correctly fail to retrieve the session when querying the remote table with start/end [0, 200]
+   * - Correctly fail to retrieve the session when querying the remote table with the wrong key
+   * */
   @Test
   public void shouldDeleteProperly() {
     // Given:
@@ -125,6 +139,13 @@ class MongoSessionTableTest {
     assertThat(value, Matchers.nullValue());
   }
 
+  /*
+   * - Insert a session key A with start/end [0, 100]
+   * - Insert a session key B with start/end [0, 150]
+   * - Correctly retrieve session key A with a range query from [50, 150]
+   * - Correctly retrieve session key B with a range query from [50, 150]
+   * - Correctly fail to retrieve session key A with a range query from [150, 250]
+   * */
   @Test
   public void shouldSucceedFetchAll() {
     // Given:
@@ -138,21 +159,39 @@ class MongoSessionTableTest {
 
     // When:
     final var byteKey = Bytes.wrap("key".getBytes());
-    final var sessionKey = new SessionKey(byteKey, 0, 100);
+    final var sessionKey1 = new SessionKey(byteKey, 0, 100);
+    final var sessionKey2 = new SessionKey("other".getBytes(), 0, 150);
     var writer = flushManager.createWriter(segment);
     writer.insert(
-        sessionKey,
+        sessionKey1,
+        DEFAULT_VALUE,
+        table.localEpoch(0)
+    );
+    writer.insert(
+        sessionKey2,
         DEFAULT_VALUE,
         table.localEpoch(0)
     );
     writer.flush();
 
     // Then:
-    var it = table.fetchAll(0, byteKey, 100, 100);
+    var it = table.fetchAll(0, byteKey, 100, 200);
     var kvs = new ArrayList<KeyValue<SessionKey, byte[]>>();
     it.forEachRemaining(kvs::add);
     assertThat(kvs, Matchers.hasSize(1));
-    assertThat("key matches", kvs.get(0).key.equals(sessionKey));
+    assertThat("key matches", kvs.get(0).key.equals(sessionKey1));
     assertThat("value matches", Arrays.equals(kvs.get(0).value, DEFAULT_VALUE));
+
+    it = table.fetchAll(0, Bytes.wrap("other".getBytes()), 100, 200);
+    kvs = new ArrayList<KeyValue<SessionKey, byte[]>>();
+    it.forEachRemaining(kvs::add);
+    assertThat(kvs, Matchers.hasSize(1));
+    assertThat("key matches", kvs.get(0).key.equals(sessionKey2));
+    assertThat("value matches", Arrays.equals(kvs.get(0).value, DEFAULT_VALUE));
+
+    it = table.fetchAll(0, byteKey, 150, 250);
+    kvs = new ArrayList<KeyValue<SessionKey, byte[]>>();
+    it.forEachRemaining(kvs::add);
+    assertThat(kvs, Matchers.hasSize(0));
   }
 }
