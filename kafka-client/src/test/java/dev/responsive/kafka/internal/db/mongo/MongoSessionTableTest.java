@@ -161,6 +161,7 @@ class MongoSessionTableTest {
     final var byteKey = Bytes.wrap("key".getBytes());
     final var sessionKey1 = new SessionKey(byteKey, 0, 100);
     final var sessionKey2 = new SessionKey("other".getBytes(), 0, 150);
+    final var sessionKey3 = new SessionKey(byteKey, 200, 300);
     var writer = flushManager.createWriter(segment);
     writer.insert(
         sessionKey1,
@@ -169,6 +170,11 @@ class MongoSessionTableTest {
     );
     writer.insert(
         sessionKey2,
+        DEFAULT_VALUE,
+        table.localEpoch(0)
+    );
+    writer.insert(
+        sessionKey3,
         DEFAULT_VALUE,
         table.localEpoch(0)
     );
@@ -193,5 +199,14 @@ class MongoSessionTableTest {
     kvs = new ArrayList<KeyValue<SessionKey, byte[]>>();
     it.forEachRemaining(kvs::add);
     assertThat(kvs, Matchers.hasSize(0));
+
+    it = table.fetchAll(0, byteKey, 100, 400);
+    kvs = new ArrayList<KeyValue<SessionKey, byte[]>>();
+    it.forEachRemaining(kvs::add);
+    assertThat(kvs, Matchers.hasSize(2));
+    assertThat("key matches", kvs.get(0).key.equals(sessionKey1));
+    assertThat("value matches", Arrays.equals(kvs.get(0).value, DEFAULT_VALUE));
+    assertThat("key matches", kvs.get(1).key.equals(sessionKey3));
+    assertThat("value matches", Arrays.equals(kvs.get(1).value, DEFAULT_VALUE));
   }
 }
