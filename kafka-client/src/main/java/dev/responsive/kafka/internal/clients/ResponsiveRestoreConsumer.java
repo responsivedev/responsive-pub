@@ -1,5 +1,6 @@
 package dev.responsive.kafka.internal.clients;
 
+import dev.responsive.kafka.api.config.ResponsiveConfig;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
@@ -12,6 +13,7 @@ import java.util.stream.Collectors;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
@@ -48,17 +50,20 @@ public class ResponsiveRestoreConsumer<K, V> extends DelegatingConsumer<K, V> {
 
   private final Function<TopicPartition, OptionalLong> startOffsets;
   private final Set<TopicPartition> uninitializedOffsets = new HashSet<>();
+  private final boolean repairRestoreOffsetOutOfRange;
 
   public ResponsiveRestoreConsumer(
       final String clientId,
       final Consumer<K, V> delegate,
-      final Function<TopicPartition, OptionalLong> startOffsets
+      final Function<TopicPartition, OptionalLong> startOffsets,
+      final boolean repairRestoreOffsetOutOfRange
   ) {
     super(delegate);
     this.startOffsets = Objects.requireNonNull(startOffsets);
     this.log = new LogContext(
         String.format("responsive-restore-consumer [%s]", Objects.requireNonNull(clientId))
     ).logger(ResponsiveConsumer.class);
+    this.repairRestoreOffsetOutOfRange = repairRestoreOffsetOutOfRange;
   }
 
   private Set<TopicPartition> initializeOffsets(final Collection<TopicPartition> partitions) {
@@ -101,7 +106,23 @@ public class ResponsiveRestoreConsumer<K, V> extends DelegatingConsumer<K, V> {
       log.error("Found uninitialized changelog partitions during poll: {}", uninitializedOffsets);
       throw new IllegalStateException("Restore consumer invoked poll without initializing offsets");
     }
-    return super.poll(timeout);
+
+    try {
+      return super.poll(timeout);
+    } catch (final OffsetOutOfRangeException e) {
+      // e.partitions() should never be empty, but we check it because accidentally
+      // passing in empty partitions is catastrophic (it will seek all partitions to
+      // beginning)
+      if (repairRestoreOffsetOutOfRange && !e.partitions().isEmpty()) {
+        log.warn("The restore consumer attempted to seek to offsets that are no longer in range. "
+            + ResponsiveConfig.RESTORE_OFFSET_REPAIR_ENABLED_CONFIG + " is enabled and will "
+            + "automatically seek " + e.partitions() + " to their earliest offset and continue "
+            + "restoration.", e);
+        super.seekToBeginning(e.partitions());
+        return super.poll(timeout);
+      }
+      throw e;
+    }
   }
 
   @Override

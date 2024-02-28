@@ -104,6 +104,7 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
@@ -224,6 +225,76 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
             Arguments.of(schema, true),
             Arguments.of(schema, false))
         );
+  }
+
+  @ParameterizedTest
+  @EnumSource(KVSchema.class)
+  public void shouldRepairOffsetsIfOutOfRangeAndConfigured(final KVSchema type) throws Exception {
+    // Given:
+    final Map<String, Object> properties = getMutableProperties();
+    properties.put(ResponsiveConfig.RESTORE_OFFSET_REPAIR_ENABLED_CONFIG, true);
+    final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties);
+    final KafkaClientSupplier defaultClientSupplier = new DefaultKafkaClientSupplier();
+    final CassandraClientFactory defaultFactory = new DefaultCassandraClientFactory();
+    final TopicPartition input = new TopicPartition(inputTopic(), 0);
+    final TopicPartition changelog = new TopicPartition(name + "-" + aggName() + "-changelog", 0);
+
+    // When:
+    final long clOffset;
+    try (final ResponsiveKafkaStreams streams
+             = buildAggregatorApp(properties, defaultClientSupplier, defaultFactory, type, false)) {
+      IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(30), streams);
+      // Send some data through
+      pipeInput(
+          inputTopic(),
+          1,
+          producer,
+          System::currentTimeMillis,
+          0,
+          1,
+          LongStream.range(0, 100).toArray()
+      );
+      // Wait for it to be processed
+      waitTillFullyConsumed(input, Duration.ofSeconds(120));
+
+      final List<ConsumerRecord<Long, Long>> changelogRecords
+          = slurpPartition(changelog, properties);
+      clOffset = changelogRecords.get(changelogRecords.size() - 1).offset();
+    }
+
+    // produce some data so we can truncate the data that has been committed
+    final RecordMetadata recordMetadata =
+        producer.send(new ProducerRecord<>(changelog.topic(), changelog.partition(), -1L, -1L))
+            .get();
+
+    // truncate the offset that exists in remote
+    admin.deleteRecords(
+        Map.of(changelog, RecordsToDelete.beforeOffset(recordMetadata.offset()))
+    ).all().get();
+
+    // run another application
+    try (final ResponsiveKafkaStreams streams
+             = buildAggregatorApp(properties, defaultClientSupplier, defaultFactory, type, false)) {
+      IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(30), streams);
+      // Send some data through
+      pipeInput(
+          inputTopic(),
+          1,
+          producer,
+          System::currentTimeMillis,
+          0,
+          1,
+          LongStream.range(0, 100).toArray()
+      );
+      // Wait for it to be processed
+      waitTillFullyConsumed(input, Duration.ofSeconds(120));
+
+      // Verify it made progress
+      final List<ConsumerRecord<Long, Long>> changelogRecords
+          = slurpPartition(changelog, properties);
+      final long last = changelogRecords.get(changelogRecords.size() - 1).offset();
+      assertThat(last, greaterThan(clOffset));
+    }
   }
 
   @ParameterizedTest
