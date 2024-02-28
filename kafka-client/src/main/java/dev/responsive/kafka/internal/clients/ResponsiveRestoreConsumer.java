@@ -116,8 +116,8 @@ public class ResponsiveRestoreConsumer<K, V> extends DelegatingConsumer<K, V> {
       if (repairRestoreOffsetOutOfRange && !e.partitions().isEmpty()) {
         log.warn("The restore consumer attempted to seek to offsets that are no longer in range. "
             + ResponsiveConfig.RESTORE_OFFSET_REPAIR_ENABLED_CONFIG + " is enabled and will "
-            + "automatically seek " + e.partitions() + " to their earliest offset and continue "
-            + "restoration.", e);
+            + "automatically seek " + e.offsetOutOfRangePartitions() + " to their earliest offset "
+            + "and continue restoration.", e);
         super.seekToBeginning(e.partitions());
         return super.poll(timeout);
       }
