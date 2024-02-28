@@ -85,6 +85,10 @@ public final class ResponsiveSessionParams {
     return this.truncateChangelog;
   }
 
+  public long gracePeriodMs() {
+    return this.gracePeriodMs;
+  }
+
   private static long computeDefaultNumSegments(final long retentionPeriodMs) {
     // TODO: Smart implementation.
     return DEFAULT_NUM_SEGMENTS;

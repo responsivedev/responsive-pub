@@ -131,16 +131,24 @@ public class ResponsiveSessionStoreIntegrationTest {
     // Start from timestamp of 0L to get predictable results
     final List<KeyValueTimestamp<String, String>> inputEvents = asList(
         new KeyValueTimestamp<>("key", "a", 0L),
-        new KeyValueTimestamp<>("key", "b", 1_000L),
-        new KeyValueTimestamp<>("key", "c", 5_000L)
+        new KeyValueTimestamp<>("key", "b", 6_000L),
+        new KeyValueTimestamp<>("key", "c", 7_000L),
+        new KeyValueTimestamp<>("key1", "d", 8_000L),
+        new KeyValueTimestamp<>("key1", "e", 16_000L),
+        new KeyValueTimestamp<>("key1", "f", 12_000L),
+        new KeyValueTimestamp<>("key1", "g", 7_500L)
     );
     final List<KeyValue<Windowed<String>, String>> expectedPeeks = List.of(
         new KeyValue<>(windowedKey("key", 0, 0), "a"),
         new KeyValue<>(windowedKey("key", 0, 0), null),
-        new KeyValue<>(windowedKey("key", 0, 1000), "ab"),
+        new KeyValue<>(windowedKey("key", 0, 6000), "ab"),
         new KeyValue<>(windowedKey("key", 0, 0), null),
-        new KeyValue<>(windowedKey("key", 0, 1000), null),
-        new KeyValue<>(windowedKey("key", 0, 5000), "abc")
+        new KeyValue<>(windowedKey("key", 0, 6000), null),
+        new KeyValue<>(windowedKey("key", 0, 7000), "abc"),
+        new KeyValue<>(windowedKey("key1", 8000, 8000), "d"),
+        new KeyValue<>(windowedKey("key1", 16_000, 16_000), "e"),
+        new KeyValue<>(windowedKey("key1", 16_000, 16_000), null),
+        new KeyValue<>(windowedKey("key1", 12000, 16_000), "ef")
     );
     final CountDownLatch outputLatch = new CountDownLatch(expectedPeeks.size());
     final List<KeyValue<Windowed<String>, String>> actualPeeks = new ArrayList<>();
@@ -169,73 +177,13 @@ public class ResponsiveSessionStoreIntegrationTest {
       startAppAndAwaitRunning(Duration.ofSeconds(15), kafkaStreams);
       pipeRecords(producer, inputTopic(), inputEvents);
 
-      assertThat(outputLatch.await(20_000, TimeUnit.MILLISECONDS), Matchers.equalTo(true));
+      assertThat(
+          outputLatch.await(20_000, TimeUnit.MILLISECONDS),
+          Matchers.equalTo(true)
+      );
 
-      assertThat(actualPeeks, Matchers.hasSize(expectedPeeks.size()));
-      for (var i = 0; i < actualPeeks.size(); i++) {
-        var actual = actualPeeks.get(i);
-        var expected = expectedPeeks.get(i);
-        assertThat(actual.key, Matchers.equalTo(expected.key));
-        assertThat(actual.value, Matchers.equalTo(expected.value));
-      }
-    }
-  }
-
-  @Test
-  public void shouldComputeSessionAggregateWithMultipleKeys() throws Exception {
-    // Given:
-    final Duration inactivityGap = Duration.ofSeconds(5);
-    final Duration gracePeriod = Duration.ofSeconds(2);
-    final SessionWindows window =
-        SessionWindows.ofInactivityGapAndGrace(inactivityGap, gracePeriod);
-
-    final Materialized<String, String, SessionStore<Bytes, byte[]>> store =
-        ResponsiveStores.sessionMaterialized(
-            ResponsiveSessionParams.session(name, inactivityGap, gracePeriod)
-        );
-
-    // Start from timestamp of 0L to get predictable results
-    final List<KeyValueTimestamp<String, String>> inputEvents = asList(
-        new KeyValueTimestamp<>("key1", "a", 0L),
-        new KeyValueTimestamp<>("key1", "b", 1_000L),
-        new KeyValueTimestamp<>("key2", "c", 5_000L),
-        new KeyValueTimestamp<>("key2", "d", 15_000L)
-    );
-    final List<KeyValue<Windowed<String>, String>> expectedPeeks = List.of(
-        new KeyValue<>(windowedKey("key1", 0, 0), "a"),
-        new KeyValue<>(windowedKey("key1", 0, 0), null),
-        new KeyValue<>(windowedKey("key1", 0, 1000), "ab"),
-        new KeyValue<>(windowedKey("key2", 5000, 5000), "c"),
-        new KeyValue<>(windowedKey("key2", 15000, 15000), "d")
-    );
-    final CountDownLatch outputLatch = new CountDownLatch(expectedPeeks.size());
-    final List<KeyValue<Windowed<String>, String>> actualPeeks = new ArrayList<>();
-
-    final StreamsBuilder builder = new StreamsBuilder();
-    final KStream<String, String> input = builder.stream(inputTopic());
-    input
-        .groupByKey()
-        .windowedBy(window)
-        .aggregate(() -> "", sessionAggregator(), sessionMerger(), store)
-        .toStream()
-        .peek((k, v) -> actualPeeks.add(new KeyValue<>(k, v)))
-        .peek((k, v) -> outputLatch.countDown())
-        .selectKey((k, v) -> k.key())
-        .to(outputTopic());
-
-    // When:
-    final Map<String, Object> properties = getMutablePropertiesWithStringSerdes();
-    properties.put(STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
-    properties.put(APPLICATION_SERVER_CONFIG, "host1:1024");
-    final KafkaProducer<String, String> producer = new KafkaProducer<>(properties);
-    try (
-        final ResponsiveKafkaStreams kafkaStreams =
-            new ResponsiveKafkaStreams(builder.build(), properties);
-    ) {
-      startAppAndAwaitRunning(Duration.ofSeconds(15), kafkaStreams);
-      pipeRecords(producer, inputTopic(), inputEvents);
-
-      assertThat(outputLatch.await(20_000, TimeUnit.MILLISECONDS), Matchers.equalTo(true));
+      // Thread.sleep(5_000);
+      // actualPeeks.forEach(kv -> System.out.println("actual peek: " + kv));
 
       assertThat(actualPeeks, Matchers.hasSize(expectedPeeks.size()));
       for (var i = 0; i < actualPeeks.size(); i++) {

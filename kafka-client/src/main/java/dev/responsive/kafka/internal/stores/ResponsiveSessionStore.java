@@ -193,13 +193,15 @@ public class ResponsiveSessionStore implements SessionStore<Bytes, byte[]> {
       long latestSessionStartTime
   ) {
     // Trim down our search space by using both the observed stream time and the retention period.
-    earliestSessionEndTime = Long.max(
-        Long.max(earliestSessionEndTime, minValidEndTimestamp()),
-        0
-    );
-    final long latestSessionEndTime =
-        Long.max(Long.min(latestSessionStartTime, this.observedStreamTime), earliestSessionEndTime);
-    return this.sessionOperations.fetchAll(key, earliestSessionEndTime, latestSessionEndTime);
+    earliestSessionEndTime =
+        Long.max(earliestSessionEndTime - this.params.gracePeriodMs(), minValidEndTimestamp());
+    earliestSessionEndTime = Long.max(earliestSessionEndTime, 0);
+
+    latestSessionStartTime = Long.min(latestSessionStartTime, this.observedStreamTime + 1);
+    final long latestSessionEndTime = Long.max(earliestSessionEndTime, latestSessionStartTime);
+    final var sessions =
+        this.sessionOperations.fetchAll(key, earliestSessionEndTime, latestSessionEndTime);
+    return sessions;
   }
 
   @Override
