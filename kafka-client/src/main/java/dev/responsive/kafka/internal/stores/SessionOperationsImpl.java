@@ -246,7 +246,10 @@ public class SessionOperationsImpl implements SessionOperations {
     final SessionKey from = new SessionKey(key, 0, earliestSessionEnd);
     final SessionKey to = new SessionKey(key, 0, latestSessionEnd);
 
-    final var localResults = this.buffer.range(from, to);
+    final var localResults = this.buffer.all(kv -> {
+      return kv.key.key.equals(key) && kv.key.sessionEndMs >= earliestSessionEnd
+          && kv.key.sessionEndMs <= latestSessionEnd;
+    });
     final var remoteResults = this.table.fetchAll(
         this.changelog.partition(),
         key,

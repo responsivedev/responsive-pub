@@ -26,7 +26,6 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZE
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.APPLICATION_ID_CONFIG;
-import static org.apache.kafka.streams.StreamsConfig.APPLICATION_SERVER_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.COMMIT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG;
@@ -123,7 +122,7 @@ public class ResponsiveSessionStoreIntegrationTest {
     final SessionWindows window =
         SessionWindows.ofInactivityGapAndGrace(inactivityGap, gracePeriod);
 
-    final Materialized<String, String, SessionStore<Bytes, byte[]>> store =
+    final Materialized<String, String, SessionStore<Bytes, byte[]>> responsiveStore =
         ResponsiveStores.sessionMaterialized(
             ResponsiveSessionParams.session(name, inactivityGap, gracePeriod)
         );
@@ -131,24 +130,27 @@ public class ResponsiveSessionStoreIntegrationTest {
     // Start from timestamp of 0L to get predictable results
     final List<KeyValueTimestamp<String, String>> inputEvents = asList(
         new KeyValueTimestamp<>("key", "a", 0L),
-        new KeyValueTimestamp<>("key", "b", 6_000L),
-        new KeyValueTimestamp<>("key", "c", 7_000L),
+        new KeyValueTimestamp<>("key", "c", 4_000L),
+        new KeyValueTimestamp<>("key", "b", 3_000L),
         new KeyValueTimestamp<>("key1", "d", 8_000L),
         new KeyValueTimestamp<>("key1", "e", 16_000L),
         new KeyValueTimestamp<>("key1", "f", 12_000L),
-        new KeyValueTimestamp<>("key1", "g", 7_500L)
+        new KeyValueTimestamp<>("key1", "g", 7_500L),
+        new KeyValueTimestamp<>("key1", "h", 1_500L)
     );
     final List<KeyValue<Windowed<String>, String>> expectedPeeks = List.of(
         new KeyValue<>(windowedKey("key", 0, 0), "a"),
         new KeyValue<>(windowedKey("key", 0, 0), null),
-        new KeyValue<>(windowedKey("key", 0, 6000), "ab"),
+        new KeyValue<>(windowedKey("key", 0, 4000), "ac"),
         new KeyValue<>(windowedKey("key", 0, 0), null),
-        new KeyValue<>(windowedKey("key", 0, 6000), null),
-        new KeyValue<>(windowedKey("key", 0, 7000), "abc"),
+        new KeyValue<>(windowedKey("key", 0, 4000), null),
+        new KeyValue<>(windowedKey("key", 0, 4000), "acb"),
         new KeyValue<>(windowedKey("key1", 8000, 8000), "d"),
         new KeyValue<>(windowedKey("key1", 16_000, 16_000), "e"),
         new KeyValue<>(windowedKey("key1", 16_000, 16_000), null),
-        new KeyValue<>(windowedKey("key1", 12000, 16_000), "ef")
+        new KeyValue<>(windowedKey("key1", 12_000, 16_000), "ef"),
+        new KeyValue<>(windowedKey("key1", 12_000, 16_000), null),
+        new KeyValue<>(windowedKey("key1", 7500, 16_000), "efg")
     );
     final CountDownLatch outputLatch = new CountDownLatch(expectedPeeks.size());
     final List<KeyValue<Windowed<String>, String>> actualPeeks = new ArrayList<>();
@@ -158,7 +160,7 @@ public class ResponsiveSessionStoreIntegrationTest {
     input
         .groupByKey()
         .windowedBy(window)
-        .aggregate(() -> "", sessionAggregator(), sessionMerger(), store)
+        .aggregate(() -> "", sessionAggregator(), sessionMerger(), responsiveStore)
         .toStream()
         .peek((k, v) -> actualPeeks.add(new KeyValue<>(k, v)))
         .peek((k, v) -> outputLatch.countDown())
@@ -168,7 +170,6 @@ public class ResponsiveSessionStoreIntegrationTest {
     // When:
     final Map<String, Object> properties = getMutablePropertiesWithStringSerdes();
     properties.put(STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
-    properties.put(APPLICATION_SERVER_CONFIG, "host1:1024");
     final KafkaProducer<String, String> producer = new KafkaProducer<>(properties);
     try (
         final ResponsiveKafkaStreams kafkaStreams =
@@ -181,9 +182,6 @@ public class ResponsiveSessionStoreIntegrationTest {
           outputLatch.await(20_000, TimeUnit.MILLISECONDS),
           Matchers.equalTo(true)
       );
-
-      // Thread.sleep(5_000);
-      // actualPeeks.forEach(kv -> System.out.println("actual peek: " + kv));
 
       assertThat(actualPeeks, Matchers.hasSize(expectedPeeks.size()));
       for (var i = 0; i < actualPeeks.size(); i++) {

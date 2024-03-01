@@ -373,12 +373,13 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
   ) {
     final var partitionSegments = kafkaPartitionToSegments.get(kafkaPartition);
 
+    final var candidateSegments = partitioner.segmenter().range(
+        kafkaPartition,
+        earliestSessionEnd,
+        latestSessionEnd
+    );
+
     final var minKey = new SessionKey(key, 0, earliestSessionEnd);
-    final var maxKey = new SessionKey(key, 0, latestSessionEnd);
-
-    final var candidateSegments = partitioner.segmenter()
-        .range(kafkaPartition, earliestSessionEnd, latestSessionEnd);
-
     final List<KeyValueIterator<SessionKey, byte[]>> segmentIterators = new LinkedList<>();
     for (final var segment : candidateSegments) {
       final var sessionsSegment = partitionSegments.segmentSessions.get(segment);
@@ -388,8 +389,7 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
 
       final FindIterable<SessionDoc> fetchResults = sessionsSegment.find(
           Filters.and(
-              Filters.gte(SessionDoc.ID, compositeKey(minKey)),
-              Filters.lte(SessionDoc.ID, compositeKey(maxKey))
+              Filters.gte(SessionDoc.ID, compositeKey(minKey))
           )
       );
 
@@ -497,6 +497,5 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
   private static KeyValue<SessionKey, byte[]> sessionFromDoc(final SessionDoc sessionDoc) {
     return new KeyValue<>(sessionDoc.toSessionKey(), sessionDoc.value());
   }
-
 }
 
