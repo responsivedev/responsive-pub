@@ -85,7 +85,7 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
   private static class PartitionSegments {
     private final MongoDatabase database;
     private final MongoDatabase adminDatabase;
-    private final SessionSegmentPartitioner partitioner;
+    private final Segmenter segmenter;
     private final long epoch;
     private final CollectionCreationOptions collectionCreationOptions;
 
@@ -96,7 +96,7 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
     public PartitionSegments(
         final MongoDatabase database,
         final MongoDatabase adminDatabase,
-        final SessionSegmentPartitioner partitioner,
+        final Segmenter segmenter,
         final int kafkaPartition,
         final long streamTime,
         final long epoch,
@@ -104,12 +104,12 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
     ) {
       this.database = database;
       this.adminDatabase = adminDatabase;
-      this.partitioner = partitioner;
+      this.segmenter = segmenter;
       this.epoch = epoch;
       this.collectionCreationOptions = collectionCreationOptions;
       this.segmentSessions = new ConcurrentHashMap<>();
 
-      final var activeSegments = partitioner.segmenter().activeSegments(kafkaPartition, streamTime);
+      final var activeSegments = segmenter.activeSegments(kafkaPartition, streamTime);
       if (activeSegments.isEmpty()) {
         LOG.info("{}[{}] No active segments for initial streamTime {}",
                  database.getName(), kafkaPartition, streamTime);
@@ -121,16 +121,22 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
           createSegment(segmentToCreate);
         }
 
-        final long firstSegmentId = activeSegments.get(0).segmentStartTimestamp;
-        LOG.info("{}[{}] Initialized active segments in range {} - {}",
-                 database.getName(), kafkaPartition, firstSegmentId,
-                 firstSegmentId + activeSegments.size());
+        final long firstSegmentStartTimestamp = activeSegments.get(0).segmentStartTimestamp;
+        final long lastSegmentStartTimestamp =
+            firstSegmentStartTimestamp + (activeSegments.size() * segmenter.segmentIntervalMs());
+        LOG.info(
+            "{}[{}] Initialized active segments with start timestamps in [{} - {}]",
+            database.getName(),
+            kafkaPartition,
+            firstSegmentStartTimestamp,
+            lastSegmentStartTimestamp
+        );
       }
     }
 
     private String collectionNameForSegment(final Segmenter.SegmentPartition segmentPartition) {
       final long segmentStartTimeMs =
-          segmentPartition.segmentStartTimestamp * partitioner.segmenter().segmentIntervalMs();
+          segmentPartition.segmentStartTimestamp * segmenter.segmentIntervalMs();
       return String.format(
           "%d-%d",
           segmentPartition.tablePartition, segmentStartTimeMs
@@ -138,7 +144,8 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
     }
 
     private void createSegment(final Segmenter.SegmentPartition segmentToCreate) {
-      LOG.info("{}[{}] Creating segment id {}",
+      LOG.info(
+          "{}[{}] Creating segment start timestamp {}",
           database.getName(), segmentToCreate.tablePartition, segmentToCreate.segmentStartTimestamp
       );
 
@@ -179,7 +186,8 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
     // In fact we may want to move all the segment expiration to a background process since there's
     // no async way to drop a collection but the stream thread doesn't actually need to wait for it
     private void deleteSegment(final Segmenter.SegmentPartition segmentToExpire) {
-      LOG.info("{}[{}] Expiring segment id {}",
+      LOG.info(
+          "{}[{}] Expiring segment start timestamp {}",
           database.getName(), segmentToExpire.tablePartition, segmentToExpire.segmentStartTimestamp
       );
 
@@ -248,7 +256,7 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
         new PartitionSegments(
             database,
             adminDatabase,
-            partitioner,
+            partitioner.segmenter(),
             kafkaPartition,
             metaDoc.streamTime,
             metaDoc.epoch,
