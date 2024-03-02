@@ -204,8 +204,8 @@ public class ResponsiveSessionStore implements SessionStore<Bytes, byte[]> {
     final long actualLatestStartTime = latestSessionStartTime;
     final long actualEarliestEndTime = earliestSessionEndTime;
     return Iterators.filterKv(sessions, session -> {
-      return session.window().start() <= actualLatestStartTime &&
-          session.window().end() >= actualEarliestEndTime;
+      return session.window().start() <= actualLatestStartTime
+          && session.window().end() >= actualEarliestEndTime;
     });
   }
 
