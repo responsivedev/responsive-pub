@@ -25,14 +25,68 @@ import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreSupplier;
 
-public class StoreComparator<K, V> {
+public class StoreComparator {
 
   @FunctionalInterface
   public interface FailureFunction {
     void apply(String reason, String method, Object[] args, Object actual, Object truth);
+  }
+
+  @FunctionalInterface
+  public interface CompareFunction {
+    void apply(String method, Object[] args, Object actual, Object truth);
+  }
+
+  public static class MultiKeyValueStoreSupplier<K, V>
+      implements StoreSupplier<KeyValueStore<K, V>> {
+    private final StoreSupplier<KeyValueStore<K, V>> sourceOfTruth;
+    private final StoreSupplier<KeyValueStore<K, V>> candidate;
+    private final CompareFunction compare;
+
+    public MultiKeyValueStoreSupplier(
+        StoreSupplier<KeyValueStore<K, V>> sourceOfTruth,
+        StoreSupplier<KeyValueStore<K, V>> candidate
+    ) {
+      this.sourceOfTruth = sourceOfTruth;
+      this.candidate = candidate;
+      this.compare = null;
+    }
+
+    public MultiKeyValueStoreSupplier(
+        StoreSupplier<KeyValueStore<K, V>> sourceOfTruth,
+        StoreSupplier<KeyValueStore<K, V>> candidate,
+        CompareFunction compare
+    ) {
+      this.sourceOfTruth = sourceOfTruth;
+      this.candidate = candidate;
+      this.compare = compare;
+    }
+
+    @Override
+    public String metricsScope() {
+      return this.sourceOfTruth.metricsScope();
+    }
+
+    @Override
+    public String name() {
+      return this.sourceOfTruth.name();
+    }
+
+    @Override
+    public KeyValueStore<K, V> get() {
+      if (this.compare == null) {
+        return new KeyValueStoreComparator<>(this.sourceOfTruth.get(), this.candidate.get());
+      }
+      return new KeyValueStoreComparator<>(
+          this.sourceOfTruth.get(),
+          this.candidate.get(),
+          this.compare
+      );
+    }
   }
 
   public static class MultiSessionStoreSupplier<K, V> implements StoreSupplier<SessionStore<K, V>> {
