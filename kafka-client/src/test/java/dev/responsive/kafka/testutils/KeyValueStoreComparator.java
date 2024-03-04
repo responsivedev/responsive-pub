@@ -14,8 +14,9 @@
  *  limitations under the License.
  */
 
-package dev.responsive.tools;
+package dev.responsive.kafka.testutils;
 
+import dev.responsive.kafka.internal.utils.Iterators;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
@@ -24,6 +25,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 
@@ -37,7 +39,7 @@ public class KeyValueStoreComparator<K, V> implements KeyValueStore<K, V> {
         sourceOfTruth,
         candidate,
         (String method, Object[] args, Object truth, Object actual) -> {
-          System.out.printf("StoreComparator failure: %s | %s\n", method, args);
+          System.out.printf("StoreComparator compare: %s | %s\n", method, args);
         }
     );
   }
@@ -223,5 +225,10 @@ public class KeyValueStoreComparator<K, V> implements KeyValueStore<K, V> {
         this.candidate.isOpen(), this.sourceOfTruth.isOpen()
     );
     return this.sourceOfTruth.isOpen();
+  }
+
+  @Override
+  public Position getPosition() {
+    return this.sourceOfTruth.getPosition();
   }
 }

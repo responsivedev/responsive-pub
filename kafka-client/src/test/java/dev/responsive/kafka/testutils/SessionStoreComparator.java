@@ -14,8 +14,9 @@
  *  limitations under the License.
  */
 
-package dev.responsive.tools;
+package dev.responsive.kafka.testutils;
 
+import dev.responsive.kafka.internal.utils.Iterators;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;

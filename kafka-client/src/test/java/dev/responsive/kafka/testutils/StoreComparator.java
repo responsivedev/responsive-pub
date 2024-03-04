@@ -14,17 +14,19 @@
  *  limitations under the License.
  */
 
-package dev.responsive.tools;
+package dev.responsive.kafka.testutils;
 
 import java.io.IOException;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreSupplier;
@@ -41,15 +43,14 @@ public class StoreComparator {
     void apply(String method, Object[] args, Object actual, Object truth);
   }
 
-  public static class MultiKeyValueStoreSupplier<K, V>
-      implements StoreSupplier<KeyValueStore<K, V>> {
-    private final StoreSupplier<KeyValueStore<K, V>> sourceOfTruth;
-    private final StoreSupplier<KeyValueStore<K, V>> candidate;
+  public static class MultiKeyValueStoreSupplier implements KeyValueBytesStoreSupplier {
+    private final KeyValueBytesStoreSupplier sourceOfTruth;
+    private final KeyValueBytesStoreSupplier candidate;
     private final CompareFunction compare;
 
     public MultiKeyValueStoreSupplier(
-        StoreSupplier<KeyValueStore<K, V>> sourceOfTruth,
-        StoreSupplier<KeyValueStore<K, V>> candidate
+        KeyValueBytesStoreSupplier sourceOfTruth,
+        KeyValueBytesStoreSupplier candidate
     ) {
       this.sourceOfTruth = sourceOfTruth;
       this.candidate = candidate;
@@ -57,8 +58,8 @@ public class StoreComparator {
     }
 
     public MultiKeyValueStoreSupplier(
-        StoreSupplier<KeyValueStore<K, V>> sourceOfTruth,
-        StoreSupplier<KeyValueStore<K, V>> candidate,
+        KeyValueBytesStoreSupplier sourceOfTruth,
+        KeyValueBytesStoreSupplier candidate,
         CompareFunction compare
     ) {
       this.sourceOfTruth = sourceOfTruth;
@@ -77,7 +78,7 @@ public class StoreComparator {
     }
 
     @Override
-    public KeyValueStore<K, V> get() {
+    public KeyValueStore<Bytes, byte[]> get() {
       if (this.compare == null) {
         return new KeyValueStoreComparator<>(this.sourceOfTruth.get(), this.candidate.get());
       }
