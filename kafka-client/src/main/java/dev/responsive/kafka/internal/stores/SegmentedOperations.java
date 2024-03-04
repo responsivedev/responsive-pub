@@ -81,7 +81,7 @@ public class SegmentedOperations implements WindowOperations {
   ) throws InterruptedException, TimeoutException {
 
     final var log = new LogContext(
-        String.format("store [%s] ", name.kafkaName())
+        String.format("window-store [%s] ", name.kafkaName())
     ).logger(SegmentedOperations.class);
     final var context = asInternalProcessorContext(storeContext);
 

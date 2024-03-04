@@ -24,6 +24,8 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
+import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
@@ -150,7 +152,8 @@ public final class ResponsiveStores {
         Stores.timestampedKeyValueStoreBuilder(
             storeSupplier,
             keySerde,
-            valueSerde),
+            valueSerde
+        ),
         false
     );
   }
@@ -272,7 +275,8 @@ public final class ResponsiveStores {
         Stores.timestampedWindowStoreBuilder(
             storeSupplier,
             keySerde,
-            valueSerde),
+            valueSerde
+        ),
         false
     );
   }
@@ -295,5 +299,47 @@ public final class ResponsiveStores {
     );
   }
 
-  private ResponsiveStores() { }
+  /**
+   * Create a {@link StoreBuilder} that can be used to build a Responsive
+   * {@link SessionStore} and connect it via the Processor API. If using the DSL, use
+   * {@link #sessionMaterialized} instead.
+   * <p>
+   *
+   * @param storeSupplier a session store supplier
+   * @param keySerde      the key serde. If null, the default.key.serde config will be used
+   * @param valueSerde    the value serde. If null, the default.value.serde config will be used
+   * @return a store builder that can be used to build a session store with the given options
+   * that uses Responsive's storage for its backend
+   */
+  public static <K, V> StoreBuilder<SessionStore<K, V>> sessionStoreBuilder(
+      final SessionBytesStoreSupplier storeSupplier,
+      final Serde<K> keySerde,
+      final Serde<V> valueSerde
+  ) {
+    return new ResponsiveStoreBuilder<>(
+        Stores.sessionStoreBuilder(storeSupplier, keySerde, valueSerde),
+        false
+    );
+  }
+
+  /**
+   * Create a {@link Materialized} that can be used to build a Responsive {@link SessionStore}
+   * and materialized in the DSL for most operators. If using the low-level Processor API,
+   * use {@link #sessionStoreBuilder}
+   *
+   * @param params the store parameters
+   * @return a Materialized configuration that can be used to build a key value store with the
+   * given options that uses Responsive's storage for its backend
+   */
+  public static <K, V> Materialized<K, V, SessionStore<Bytes, byte[]>> sessionMaterialized(
+      final ResponsiveSessionParams params
+  ) {
+    return new ResponsiveMaterialized<K, V, SessionStore<Bytes, byte[]>>(
+        Materialized.as(new ResponsiveSessionStoreSupplier(params)),
+        params.truncateChangelog()
+    );
+  }
+
+  private ResponsiveStores() {
+  }
 }
