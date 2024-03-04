@@ -195,9 +195,10 @@ public class ResponsiveSessionStore implements SessionStore<Bytes, byte[]> {
         0,
         Long.max(earliestSessionEndTime, minValidEndTimestamp())
     );
+    final long actualLatestEndTime = Long.max(observedStreamTime, 0);
 
-    final var sessions = sessionOperations.fetchAll(key, earliestSessionEndTime,
-        Long.max(observedStreamTime, 0)
+    final var sessions = sessionOperations.fetchAll(key,
+        actualEarliestEndTime, actualLatestEndTime
     );
 
     return Iterators.filterKv(sessions, session -> {
