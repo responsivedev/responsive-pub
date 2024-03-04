@@ -162,7 +162,9 @@ public class ResponsiveKeyValueStoreIntegrationTest {
         .aggregate(() -> "", (k, v1, agg) -> agg + v1, combinedStore)
         .toStream()
         .peek((k, v) -> {
-          if (k.equals("STOP")) outputLatch.countDown();
+          if (k.equals("STOP")) {
+            outputLatch.countDown();
+          }
         })
         .selectKey((k, v) -> k)
         .to(outputTopic());
