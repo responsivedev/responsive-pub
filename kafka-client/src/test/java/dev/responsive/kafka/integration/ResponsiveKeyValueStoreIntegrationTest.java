@@ -16,11 +16,12 @@
 
 package dev.responsive.kafka.integration;
 
-import static dev.responsive.kafka.api.config.ResponsiveConfig.STORE_FLUSH_RECORDS_TRIGGER_CONFIG;
-import static dev.responsive.kafka.testutils.IntegrationTestUtils.createTopicsAndWait;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.REQUEST_TIMEOUT_MS_CONFIG;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.pipeRecords;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.startAppAndAwaitRunning;
+import static org.apache.kafka.clients.CommonClientConfigs.SESSION_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.MAX_POLL_RECORDS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
@@ -34,6 +35,7 @@ import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
 import static org.hamcrest.MatcherAssert.assertThat;
 
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
+import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.api.stores.ResponsiveStores;
@@ -46,12 +48,13 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Random;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
@@ -66,7 +69,6 @@ import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.internals.RocksDBKeyValueBytesStoreSupplier;
 import org.hamcrest.Matchers;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
@@ -75,7 +77,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 public class ResponsiveKeyValueStoreIntegrationTest {
 
   @RegisterExtension
-  static ResponsiveExtension EXTENSION = new ResponsiveExtension(StorageBackend.CASSANDRA);
+  static ResponsiveExtension EXTENSION = new ResponsiveExtension(StorageBackend.MONGO_DB);
 
   private static final String INPUT_TOPIC = "input";
   private static final String OUTPUT_TOPIC = "output";
@@ -90,20 +92,20 @@ public class ResponsiveKeyValueStoreIntegrationTest {
       final TestInfo info,
       final Admin admin,
       @ResponsiveConfigParam final Map<String, Object> responsiveProps
-  ) {
+  ) throws InterruptedException, ExecutionException {
     // add displayName to name to account for parameterized tests
-    name = info.getDisplayName().replace("()", "");
-    ScheduledExecutorService executor = new ScheduledThreadPoolExecutor(2);
+    name = info.getTestMethod().orElseThrow().getName() + "-" + new Random().nextInt();
 
     this.responsiveProps.putAll(responsiveProps);
 
     this.admin = admin;
-    createTopicsAndWait(admin, Map.of(inputTopic(), 2, outputTopic(), 1));
-  }
-
-  @AfterEach
-  public void after() {
-    admin.deleteTopics(List.of(inputTopic(), outputTopic()));
+    final var result = admin.createTopics(
+        List.of(
+            new NewTopic(inputTopic(), Optional.of(1), Optional.empty()),
+            new NewTopic(outputTopic(), Optional.of(1), Optional.empty())
+        )
+    );
+    result.all().get();
   }
 
   private String inputTopic() {
@@ -114,9 +116,14 @@ public class ResponsiveKeyValueStoreIntegrationTest {
     return name + "." + OUTPUT_TOPIC;
   }
 
+  /*
+   * This test makes sure that the default RocksDB state store and the responsive state
+   * store consistently show identical internal behavior.
+   * We do not check the output topic but rather use the StoreComparator to ensure that
+   * they return identical results from each method invoked on them.
+   */
   @Test
-  public void shouldWork() throws Exception {
-    // Given:
+  public void shouldMatchRocksDB() throws Exception {
     final KeyValueBytesStoreSupplier rocksDbStore =
         new RocksDBKeyValueBytesStoreSupplier(name, false);
 
@@ -125,8 +132,8 @@ public class ResponsiveKeyValueStoreIntegrationTest {
 
     final StoreComparator.CompareFunction compare =
         (String method, Object[] args, Object actual, Object truth) -> {
-          final String reason = method + " should yield identical results";
-          // assertThat(reason, actual, Matchers.equalTo(truth));
+          final String reason = method + " should yield identical results.";
+          assertThat(reason, actual, Matchers.equalTo(truth));
         };
 
     final Materialized<String, String, KeyValueStore<Bytes, byte[]>> combinedStore =
@@ -139,10 +146,12 @@ public class ResponsiveKeyValueStoreIntegrationTest {
         new KeyValueTimestamp<>("key", "a", 0L),
         new KeyValueTimestamp<>("key", "c", 1_000L),
         new KeyValueTimestamp<>("key", "b", 2_000L),
+        new KeyValueTimestamp<>("key", "d", 3_000L),
         new KeyValueTimestamp<>("key", "b", 3_000L),
-        new KeyValueTimestamp<>("key", "b", 4_000L),
-        new KeyValueTimestamp<>("key", "b", 5_000L),
-        new KeyValueTimestamp<>("STOP", "b", 6_000L)
+        new KeyValueTimestamp<>("key", null, 4_000L),
+        new KeyValueTimestamp<>("key2", "e", 4_000L),
+        new KeyValueTimestamp<>("key2", "b", 5_000L),
+        new KeyValueTimestamp<>("STOP", "b", 18_000L)
     );
     final CountDownLatch outputLatch = new CountDownLatch(1);
 
@@ -150,10 +159,7 @@ public class ResponsiveKeyValueStoreIntegrationTest {
     final KStream<String, String> input = builder.stream(inputTopic());
     input
         .groupByKey()
-        .aggregate(() -> "",
-            (k, v1, agg) -> agg + v1,
-            combinedStore
-        )
+        .aggregate(() -> "", (k, v1, agg) -> agg + v1, combinedStore)
         .toStream()
         .peek((k, v) -> {
           if (k.equals("STOP")) outputLatch.countDown();
@@ -167,7 +173,7 @@ public class ResponsiveKeyValueStoreIntegrationTest {
     final KafkaProducer<String, String> producer = new KafkaProducer<>(properties);
     try (
         final ResponsiveKafkaStreams kafkaStreams =
-            new ResponsiveKafkaStreams(builder.build(), properties);
+            new ResponsiveKafkaStreams(builder.build(), properties)
     ) {
       startAppAndAwaitRunning(Duration.ofSeconds(15), kafkaStreams);
       pipeRecords(producer, inputTopic(), inputEvents);
@@ -203,13 +209,14 @@ public class ResponsiveKeyValueStoreIntegrationTest {
     properties.put(DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.LongSerde.class.getName());
     properties.put(DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.LongSerde.class.getName());
     properties.put(NUM_STREAM_THREADS_CONFIG, 1);
-    properties.put(STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
-    properties.put(STORE_FLUSH_RECORDS_TRIGGER_CONFIG, 1);
-    properties.put(COMMIT_INTERVAL_MS_CONFIG, 1);
+    properties.put(COMMIT_INTERVAL_MS_CONFIG, 1); // commit as often as possible
 
-    properties.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 1);
-    properties.put(consumerPrefix(ConsumerConfig.METADATA_MAX_AGE_CONFIG), "1000");
-    properties.put(consumerPrefix(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG), "earliest");
+    properties.put(consumerPrefix(REQUEST_TIMEOUT_MS_CONFIG), 5_000);
+    properties.put(consumerPrefix(SESSION_TIMEOUT_MS_CONFIG), 5_000 - 1);
+
+    properties.put(consumerPrefix(MAX_POLL_RECORDS_CONFIG), 1);
+
+    properties.put(ResponsiveConfig.STORE_FLUSH_RECORDS_TRIGGER_CONFIG, 1);
 
     return properties;
   }

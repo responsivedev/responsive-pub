@@ -34,11 +34,6 @@ import org.apache.kafka.streams.state.StoreSupplier;
 public class StoreComparator {
 
   @FunctionalInterface
-  public interface FailureFunction {
-    void apply(String reason, String method, Object[] args, Object actual, Object truth);
-  }
-
-  @FunctionalInterface
   public interface CompareFunction {
     void apply(String method, Object[] args, Object actual, Object truth);
   }
@@ -93,7 +88,7 @@ public class StoreComparator {
   public static class MultiSessionStoreSupplier<K, V> implements StoreSupplier<SessionStore<K, V>> {
     private final StoreSupplier<SessionStore<K, V>> sourceOfTruth;
     private final StoreSupplier<SessionStore<K, V>> candidate;
-    private final FailureFunction onFailure;
+    private final CompareFunction compare;
 
     public MultiSessionStoreSupplier(
         StoreSupplier<SessionStore<K, V>> sourceOfTruth,
@@ -101,17 +96,17 @@ public class StoreComparator {
     ) {
       this.sourceOfTruth = sourceOfTruth;
       this.candidate = candidate;
-      this.onFailure = null;
+      this.compare = null;
     }
 
     public MultiSessionStoreSupplier(
         StoreSupplier<SessionStore<K, V>> sourceOfTruth,
         StoreSupplier<SessionStore<K, V>> candidate,
-        FailureFunction onFailure
+        CompareFunction compare
     ) {
       this.sourceOfTruth = sourceOfTruth;
       this.candidate = candidate;
-      this.onFailure = onFailure;
+      this.compare = compare;
     }
 
     @Override
@@ -126,13 +121,13 @@ public class StoreComparator {
 
     @Override
     public SessionStore<K, V> get() {
-      if (this.onFailure == null) {
+      if (this.compare == null) {
         return new SessionStoreComparator<>(this.sourceOfTruth.get(), this.candidate.get());
       }
       return new SessionStoreComparator<>(
           this.sourceOfTruth.get(),
           this.candidate.get(),
-          this.onFailure
+          this.compare
       );
     }
   }

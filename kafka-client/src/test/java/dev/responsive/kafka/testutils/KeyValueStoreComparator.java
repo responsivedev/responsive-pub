@@ -204,8 +204,8 @@ public class KeyValueStoreComparator<K, V> implements KeyValueStore<K, V> {
 
   @Override
   public void close() {
-    this.sourceOfTruth.flush();
-    this.candidate.flush();
+    this.sourceOfTruth.close();
+    this.candidate.close();
   }
 
   @Override

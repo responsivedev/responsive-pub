@@ -33,25 +33,25 @@ import org.apache.kafka.streams.state.SessionStore;
 public class SessionStoreComparator<K, V> implements SessionStore<K, V> {
   private final SessionStore<K, V> sourceOfTruth;
   private final SessionStore<K, V> candidate;
-  private final StoreComparator.FailureFunction onFailure;
+  private final StoreComparator.CompareFunction compare;
 
   public SessionStoreComparator(SessionStore<K, V> sourceOfTruth, SessionStore<K, V> candidate) {
     this(
         sourceOfTruth,
         candidate,
-        (String reason, String method, Object[] args, Object truth, Object actual) -> {
-          System.out.printf("StoreComparator failure: %s | %s | %s", reason, method, args);
+        (String method, Object[] args, Object truth, Object actual) -> {
+          System.out.printf("StoreComparator compare: %s | %s", method, args);
         }
     );
   }
 
   public SessionStoreComparator(
       SessionStore<K, V> sourceOfTruth, SessionStore<K, V> candidate,
-      StoreComparator.FailureFunction onFailure
+      StoreComparator.CompareFunction compare
   ) {
     this.sourceOfTruth = sourceOfTruth;
     this.candidate = candidate;
-    this.onFailure = onFailure;
+    this.compare = compare;
   }
 
   @Override
@@ -113,8 +113,7 @@ public class SessionStoreComparator<K, V> implements SessionStore<K, V> {
 
   @Override
   public boolean isOpen() {
-    assertEqual(
-        "isOpen should match for both stores",
+    this.compare.apply(
         "isOpen", new Object[] {},
         this.candidate.isOpen(), this.sourceOfTruth.isOpen()
     );
@@ -123,8 +122,7 @@ public class SessionStoreComparator<K, V> implements SessionStore<K, V> {
 
   @Override
   public Position getPosition() {
-    assertEqual(
-        "getPosition should return the same position for both stores",
+    this.compare.apply(
         "getPosition", new Object[] {},
         this.candidate.getPosition(), this.sourceOfTruth.getPosition()
     );
@@ -145,8 +143,7 @@ public class SessionStoreComparator<K, V> implements SessionStore<K, V> {
       actualResults.add(candidateIterator.next());
     }
 
-    assertEqual(
-        "fetch results from both stores should have the same count",
+    this.compare.apply(
         "fetch", new Object[] {bytes},
         actualResults.size(), expectedResults.size()
     );
@@ -154,13 +151,11 @@ public class SessionStoreComparator<K, V> implements SessionStore<K, V> {
       var actual = actualResults.get(i);
       var expected = expectedResults.get(i);
 
-      assertEqual(
-          "fetch result keys should be identical for both stores",
+      this.compare.apply(
           "fetch", new Object[] {bytes},
           actual.key.key(), expected.key.key()
       );
-      assertEqual(
-          "fetch result values should be identical for both stores",
+      this.compare.apply(
           "fetch", new Object[] {bytes},
           actual.value, expected.value
       );
@@ -183,8 +178,7 @@ public class SessionStoreComparator<K, V> implements SessionStore<K, V> {
       actualResults.add(candidateIterator.next());
     }
 
-    assertEqual(
-        "fetch results from both stores should have the same count",
+    this.compare.apply(
         "fetch", new Object[] {bytes, k1},
         actualResults.size(), expectedResults.size()
     );
@@ -192,13 +186,11 @@ public class SessionStoreComparator<K, V> implements SessionStore<K, V> {
       var actual = actualResults.get(i);
       var expected = expectedResults.get(i);
 
-      assertEqual(
-          "fetch result keys should be identical for both stores",
+      this.compare.apply(
           "fetch", new Object[] {bytes, k1},
           actual.key.key(), expected.key.key()
       );
-      assertEqual(
-          "fetch result values should be identical for both stores",
+      this.compare.apply(
           "fetch", new Object[] {bytes, k1},
           actual.value, expected.value
       );
@@ -217,8 +209,7 @@ public class SessionStoreComparator<K, V> implements SessionStore<K, V> {
         this.sourceOfTruth.fetchSession(key, sessionStartTime, sessionEndTime);
     final var candidateResult =
         this.candidate.fetchSession(key, sessionStartTime, sessionEndTime);
-    assertEqual(
-        "results from both stores should be identical",
+    this.compare.apply(
         "fetchSession", new Object[] {key, sessionStartTime, sessionEndTime},
         candidateResult, sourceOfTruthResult
     );
@@ -247,8 +238,7 @@ public class SessionStoreComparator<K, V> implements SessionStore<K, V> {
       actualResults.add(candidateIterator.next());
     }
 
-    assertEqual(
-        "results from both stores should have the same count",
+    this.compare.apply(
         "findSessions", new Object[] {key, earliestSessionEndTime, latestSessionStartTime},
         actualResults.size(), expectedResults.size()
     );
@@ -256,27 +246,15 @@ public class SessionStoreComparator<K, V> implements SessionStore<K, V> {
       var actual = actualResults.get(i);
       var expected = expectedResults.get(i);
 
-      assertEqual(
-          "result keys should be identical for both stores",
+      this.compare.apply(
           "findSessions", new Object[] {key, earliestSessionEndTime, latestSessionStartTime},
           actual.key.key(), expected.key.key()
       );
-      assertEqual(
-          "result values should be identical for both stores",
+      this.compare.apply(
           "findSessions", new Object[] {key, earliestSessionEndTime, latestSessionStartTime},
           actual.value, expected.value
       );
     }
     return Iterators.kv(actualResults.iterator(), el -> el);
-  }
-
-  private void assertEqual(
-      String reason, String method, Object[] args,
-      Object actual, Object expected
-  ) {
-    if (actual.equals(expected)) {
-      return;
-    }
-    this.onFailure.apply(reason, method, args, actual, expected);
   }
 }
