@@ -32,11 +32,6 @@ public class SessionKeySpec implements KeySpec<SessionKey> {
   }
 
   @Override
-  public int sizeInBytes(final SessionKey key) {
-    return key.key.get().length + Long.BYTES;
-  }
-
-  @Override
   public SessionKey keyFromRecord(final ConsumerRecord<byte[], byte[]> record) {
     final byte[] key = record.key();
     return new SessionKey(
@@ -49,6 +44,14 @@ public class SessionKeySpec implements KeySpec<SessionKey> {
   @Override
   public boolean retain(final SessionKey key) {
     return withinRetention.test(key);
+  }
+
+  /*
+   * Inspired from KafkaStream internal functions within SessionKeySchema.
+   */
+  @Override
+  public int sizeInBytes(final SessionKey key) {
+    return (key == null ? 0 : key.key.get().length) + 2 * TIMESTAMP_SIZE;
   }
 
   /*

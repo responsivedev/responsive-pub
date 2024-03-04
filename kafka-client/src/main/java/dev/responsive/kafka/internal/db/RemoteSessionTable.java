@@ -34,7 +34,9 @@ public interface RemoteSessionTable<S> extends RemoteTable<SessionKey, S> {
   );
 
   /**
-   * Retrieves the value of the given {@code kafkaPartition} and {@code key}.
+   * Retrieves the value of the given {@code kafkaPartition} and {@code key} with
+   * a session start time of {@code sessionStart} and a session end time of
+   * {@code sessionEnd}.
    *
    * @param kafkaPartition the kafka partition
    * @param key            the data key
@@ -51,7 +53,7 @@ public interface RemoteSessionTable<S> extends RemoteTable<SessionKey, S> {
 
   /**
    * Retrieves the range of sessions of the given {@code kafkaPartition} and {@code key} with
-   * an end time between {@code earliestSessionEnd} and {@code latestSessionStart}.
+   * an end time between {@code earliestSessionEnd} and {@code latestSessionEnd}.
    *
    * @param kafkaPartition     the kafka partition
    * @param key                the data key

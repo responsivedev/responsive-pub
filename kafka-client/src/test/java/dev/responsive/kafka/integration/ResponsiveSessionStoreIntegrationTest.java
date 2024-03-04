@@ -170,7 +170,30 @@ public class ResponsiveSessionStoreIntegrationTest {
     // When:
     final Map<String, Object> properties = getMutablePropertiesWithStringSerdes();
     properties.put(STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
-    final KafkaProducer<String, String> producer = new KafkaProducer<>(properties);
+    KafkaProducer<String, String> producer = new KafkaProducer<>(properties);
+    try (
+        final ResponsiveKafkaStreams kafkaStreams =
+            new ResponsiveKafkaStreams(builder.build(), properties);
+    ) {
+      startAppAndAwaitRunning(Duration.ofSeconds(15), kafkaStreams);
+      pipeRecords(producer, inputTopic(), inputEvents);
+
+      assertThat(
+          outputLatch.await(20_000, TimeUnit.MILLISECONDS),
+          Matchers.equalTo(true)
+      );
+
+      assertThat(actualPeeks, Matchers.hasSize(expectedPeeks.size()));
+      for (var i = 0; i < actualPeeks.size(); i++) {
+        var actual = actualPeeks.get(i);
+        var expected = expectedPeeks.get(i);
+        assertThat(actual.key, Matchers.equalTo(expected.key));
+        assertThat(actual.value, Matchers.equalTo(expected.value));
+      }
+    }
+
+    properties.put(ResponsiveConfig.STORE_FLUSH_RECORDS_TRIGGER_CONFIG, 0);
+    producer = new KafkaProducer<>(properties);
     try (
         final ResponsiveKafkaStreams kafkaStreams =
             new ResponsiveKafkaStreams(builder.build(), properties);

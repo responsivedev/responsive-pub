@@ -95,13 +95,13 @@ public class ResponsiveSessionStore implements SessionStore<Bytes, byte[]> {
     }
 
     log.info("Completed initializing state store");
-    storeContext.register(root, this.sessionOperations);
+    storeContext.register(root, sessionOperations);
     this.open = true;
   }
 
   @Override
   public String name() {
-    return this.name.kafkaName();
+    return name.kafkaName();
   }
 
   @Override
@@ -116,12 +116,12 @@ public class ResponsiveSessionStore implements SessionStore<Bytes, byte[]> {
 
   @Override
   public boolean isOpen() {
-    return this.open;
+    return open;
   }
 
   @Override
   public Position getPosition() {
-    return this.position;
+    return position;
   }
 
   @Override
@@ -130,45 +130,42 @@ public class ResponsiveSessionStore implements SessionStore<Bytes, byte[]> {
 
   @Override
   public void close() {
-    this.sessionOperations.close();
+    sessionOperations.close();
   }
 
   @Override
   public void put(final Windowed<Bytes> session, final byte[] aggregator) {
-    // Write the aggregated value for the provided key to the store.
     if (session.window().end() < minValidEndTimestamp()) {
       return;
     }
 
-    SessionKey sessionKey = new SessionKey(
+    final SessionKey sessionKey = new SessionKey(
         session.key(),
         session.window().start(),
         session.window().end()
     );
     if (aggregator == null) {
-      this.sessionOperations.delete(sessionKey);
+      sessionOperations.delete(sessionKey);
       return;
     }
 
-    this.sessionOperations.put(sessionKey, aggregator);
-    this.observedStreamTime = Math.max(this.observedStreamTime, sessionKey.sessionEndMs);
-    StoreQueryUtils.updatePosition(this.position, this.context);
+    sessionOperations.put(sessionKey, aggregator);
+    observedStreamTime = Math.max(observedStreamTime, sessionKey.sessionEndMs);
+    StoreQueryUtils.updatePosition(position, context);
   }
 
   @Override
   public void remove(final Windowed<Bytes> session) {
-    // Remove the session aggregated with provided Windowed key from the store
-    // use sessionKey.window().start() and sessionKey.window.end().
     if (session.window().end() < minValidEndTimestamp()) {
       return;
     }
 
-    SessionKey sessionKey = new SessionKey(
+    final SessionKey sessionKey = new SessionKey(
         session.key(),
         session.window().start(),
         session.window().end()
     );
-    this.sessionOperations.delete(sessionKey);
+    sessionOperations.delete(sessionKey);
   }
 
   @Override
@@ -181,30 +178,30 @@ public class ResponsiveSessionStore implements SessionStore<Bytes, byte[]> {
       return null;
     }
 
-    SessionKey sessionKey = new SessionKey(
+    final SessionKey sessionKey = new SessionKey(
         key, sessionStartTime, sessionEndTime
     );
-    return this.sessionOperations.fetch(sessionKey);
+    return sessionOperations.fetch(sessionKey);
   }
 
   @Override
   public KeyValueIterator<Windowed<Bytes>, byte[]> findSessions(
-      Bytes key,
-      long earliestSessionEndTime,
-      long latestSessionStartTime
+      final Bytes key,
+      final long earliestSessionEndTime,
+      final long latestSessionStartTime
   ) {
     // Trim down our search space by using both the observed stream time.
-    earliestSessionEndTime = Long.max(earliestSessionEndTime, minValidEndTimestamp());
-    earliestSessionEndTime = Long.max(earliestSessionEndTime, 0);
-
-    final var sessions = this.sessionOperations.fetchAll(key, earliestSessionEndTime,
-        Long.max(this.observedStreamTime, 0)
+    final long actualEarliestEndTime = Long.max(
+        0,
+        Long.max(earliestSessionEndTime, minValidEndTimestamp())
     );
 
-    final long actualLatestStartTime = latestSessionStartTime;
-    final long actualEarliestEndTime = earliestSessionEndTime;
+    final var sessions = sessionOperations.fetchAll(key, earliestSessionEndTime,
+        Long.max(observedStreamTime, 0)
+    );
+
     return Iterators.filterKv(sessions, session -> {
-      return session.window().start() <= actualLatestStartTime
+      return session.window().start() <= latestSessionStartTime
           && session.window().end() >= actualEarliestEndTime;
     });
   }
@@ -228,6 +225,6 @@ public class ResponsiveSessionStore implements SessionStore<Bytes, byte[]> {
    * stream time and the retention period stored in the parameters of the session store.
    */
   private long minValidEndTimestamp() {
-    return this.observedStreamTime - this.params.retentionPeriod() + 1;
+    return observedStreamTime - params.retentionPeriod() + 1;
   }
 }

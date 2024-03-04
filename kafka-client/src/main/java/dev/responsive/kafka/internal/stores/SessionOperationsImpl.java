@@ -77,7 +77,7 @@ public class SessionOperationsImpl implements SessionOperations {
   ) throws InterruptedException, TimeoutException {
 
     final var log = new LogContext(
-        String.format("store [%s] ", name.kafkaName())
+        String.format("session-store [%s] ", name.kafkaName())
     ).logger(SessionOperationsImpl.class);
     final var context = asInternalProcessorContext(storeContext);
 

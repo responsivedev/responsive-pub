@@ -145,7 +145,7 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
 
     private void createSegment(final Segmenter.SegmentPartition segmentToCreate) {
       LOG.info(
-          "{}[{}] Creating segment start timestamp {}",
+          "{}[{}] Creating segment with start timestamp {}",
           database.getName(), segmentToCreate.tablePartition, segmentToCreate.segmentStartTimestamp
       );
 
@@ -187,7 +187,7 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
     // no async way to drop a collection but the stream thread doesn't actually need to wait for it
     private void deleteSegment(final Segmenter.SegmentPartition segmentToExpire) {
       LOG.info(
-          "{}[{}] Expiring segment start timestamp {}",
+          "{}[{}] Expiring segment with start timestamp {}",
           database.getName(), segmentToExpire.tablePartition, segmentToExpire.segmentStartTimestamp
       );
 
@@ -319,7 +319,7 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
    * for this key and partition in the table.
    * Note that the key in this case is a "session" key, where
    * {@code sessionKey} includes both the record key and
-   * the sessionStart timestamp
+   * the sessionStart / sessionEnd timestamps
    */
   @Override
   public WriteModel<SessionDoc> delete(
