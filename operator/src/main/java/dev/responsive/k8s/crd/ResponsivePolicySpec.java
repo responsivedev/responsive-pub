@@ -47,8 +47,7 @@ public class ResponsivePolicySpec {
       @JsonProperty("status") final PolicyStatus status,
       @JsonProperty("policyType") final PolicyType policyType,
       @JsonProperty("demoPolicy") final Optional<DemoPolicySpec> demoPolicy,
-      @JsonProperty("kafkaStreamsPolicy")
-      final Optional<KafkaStreamsPolicySpec> kafkaStreamsPolicy
+      @JsonProperty("kafkaStreamsPolicy") final Optional<KafkaStreamsPolicySpec> kafkaStreamsPolicy
   ) {
     this.applicationNamespace = applicationNamespace;
     this.applicationName = applicationName;
@@ -116,7 +115,8 @@ public class ResponsivePolicySpec {
         demoPolicy.getMaxReplicas(),
         demoPolicy.getMinReplicas(),
         demoPolicy.getMaxScaleUpReplicas(),
-        demoPolicy.getDiagnosers()
+        demoPolicy.getDiagnosers(),
+        demoPolicy.getCooldown()
     );
   }
 }

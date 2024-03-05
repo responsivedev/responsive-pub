@@ -27,6 +27,7 @@ class ResponsivePolicySpecTest {
             10,
             0,
             1,
+            Optional.empty(),
             Optional.empty()
         )),
         Optional.empty()
@@ -49,6 +50,7 @@ class ResponsivePolicySpecTest {
             10,
             0,
             1,
+            Optional.empty(),
             Optional.empty()
         )),
         Optional.empty()
@@ -71,6 +73,7 @@ class ResponsivePolicySpecTest {
             10,
             0,
             1,
+            Optional.empty(),
             Optional.empty()
         )),
         Optional.empty()
@@ -93,6 +96,7 @@ class ResponsivePolicySpecTest {
             10,
             0,
             1,
+            Optional.empty(),
             Optional.empty()
         )),
         Optional.empty()
@@ -115,6 +119,7 @@ class ResponsivePolicySpecTest {
             10,
             0,
             1,
+            Optional.empty(),
             Optional.empty())),
         Optional.empty()
     );
@@ -145,7 +150,9 @@ class ResponsivePolicySpecTest {
                     Optional.empty(),
                     Optional.empty()
                 )
-            )))),
+            )),
+            Optional.empty()
+        )),
         Optional.empty()
     );
 
@@ -166,7 +173,9 @@ class ResponsivePolicySpecTest {
             10,
             0,
             1,
-            Optional.of(List.of(DiagnoserSpec.lag())))),
+            Optional.of(List.of(DiagnoserSpec.lag())),
+            Optional.empty()
+        )),
         Optional.empty()
     );
 
