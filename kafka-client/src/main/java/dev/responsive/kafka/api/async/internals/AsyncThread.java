@@ -16,9 +16,27 @@
 
 package dev.responsive.kafka.api.async.internals;
 
-public class AsyncThread extends Thread {
+import java.io.Closeable;
+import java.io.IOException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
-  public AsyncThread(final Runnable target) {
-    super(target);
+public class AsyncThread extends Thread implements Closeable {
+
+  private final AtomicBoolean shutdownRequested = new AtomicBoolean(false);
+
+  public AsyncThread(final String name) {
+    super(name);
+  }
+
+  @Override
+  public void run() {
+    while (!shutdownRequested.getOpaque()) {
+      // TODO
+    }
+  }
+
+  @Override
+  public void close() throws IOException {
+    shutdownRequested.setOpaque(true);
   }
 }

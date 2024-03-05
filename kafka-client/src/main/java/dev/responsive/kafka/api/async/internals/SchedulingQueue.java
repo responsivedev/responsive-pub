@@ -17,6 +17,7 @@
 package dev.responsive.kafka.api.async.internals;
 
 import java.util.function.Predicate;
+import javax.annotation.concurrent.NotThreadSafe;
 import org.apache.kafka.streams.processor.api.Record;
 
 // TODO:
@@ -24,12 +25,21 @@ import org.apache.kafka.streams.processor.api.Record;
 //  2) potentially save "cursor" in dll and have it automatically "reset" to the next oldest
 //  node if/when they go from un-processable to processable via completion of pending records
 //  3) make #poll blocking with Condition to notify when record becomes processable
-public class AsyncRecordQueue<KIn, VIn> {
+/**
+ * A non-blocking queue for input records waiting to be passed from the StreamThread to
+ * the async thread pool and scheduled for execution. This queue is not thread safe and
+ * should be owned and exclusively accessed by the StreamThread. Records that are
+ * processable -- that is, not blocked on previous records with the same key that have
+ * not yet been fully processed -- will be polled from this queue and then passed on to
+ * the async thread pool by the StreamThread.
+ */
+@NotThreadSafe
+public class SchedulingQueue<KIn, VIn> {
 
   private final RecordNode<KIn, VIn> head;
   private final RecordNode<KIn, VIn> tail;
 
-  public AsyncRecordQueue() {
+  public SchedulingQueue() {
     this.head = new RecordNode<>(null, null, null, null);
     this.tail = new RecordNode<>(null, null, null, null);
 
@@ -45,10 +55,25 @@ public class AsyncRecordQueue<KIn, VIn> {
    *         or {@code null} if there are no processable records
    */
   public Record<KIn, VIn> poll() {
+    final RecordNode<KIn, VIn> nextProcessableRecordNode = nextProcessableRecordNode();
+    return nextProcessableRecordNode != null
+        ? nextProcessableRecordNode.record
+        : null;
+  }
+
+  /**
+   * @return whether there are any remaining records in the queue which are currently
+   *         ready for processing
+   */
+  public boolean hasNext() {
+    return nextProcessableRecordNode() != null;
+  }
+
+  private RecordNode<KIn, VIn> nextProcessableRecordNode() {
     RecordNode<KIn, VIn> current = head.next;
     while (current != tail) {
       if (current.isProcessable()) {
-        return remove(current);
+        return current;
       } else {
         current = current.next;
       }

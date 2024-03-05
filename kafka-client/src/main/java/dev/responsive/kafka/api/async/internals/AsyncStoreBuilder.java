@@ -14,9 +14,12 @@
  *  limitations under the License.
  */
 
-package dev.responsive.kafka.internal.utils;
+package dev.responsive.kafka.api.async.internals;
 
-public class DoublyLinkedList<E> {
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.StoreBuilder;
+
+public interface AsyncStoreBuilder<T extends StateStore> extends StoreBuilder<T> {
 
 
 }

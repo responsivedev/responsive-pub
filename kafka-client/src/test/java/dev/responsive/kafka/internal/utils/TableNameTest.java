@@ -16,6 +16,11 @@
 
 package dev.responsive.kafka.internal.utils;
 
+import dev.responsive.kafka.api.stores.ResponsiveStores;
+import dev.responsive.kafka.internal.stores.ResponsiveStoreBuilder;
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.hamcrest.MatcherAssert;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;

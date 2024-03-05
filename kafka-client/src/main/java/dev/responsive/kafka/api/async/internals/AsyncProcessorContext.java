@@ -133,121 +133,6 @@ public class AsyncProcessorContext<KOut, VOut> implements ProcessorContext<KOut,
     return delegate.metrics();
   }
 
-  ////// InterProcessorContext methods below this line //////
-  // Unlike the ProcessorContext methods (above) these are not exposed to the user, and so we
-  // don't need to intercept calls or worry about preserving original values
-
-  @Override
-  public void register(final StateStore store, final StateRestoreCallback stateRestoreCallback) {
-    // TODO track which stores are registered to cross-reference with those that are connected to
-    //  the AsyncProcessorSupplier and the ones that are actually retrieved by the processor itself
-    delegate.register(store, stateRestoreCallback);
-  }
-
-  @Override
-  public void register(
-      final StateStore store,
-      final StateRestoreCallback stateRestoreCallback,
-      final CommitCallback commitCallback
-  ) {
-    delegate.register(store, stateRestoreCallback, commitCallback);
-  }
-
-  @Override
-  public void setSystemTimeMs(final long timeMs) {
-    delegate.setSystemTimeMs(timeMs);
-  }
-
-  @Override
-  public ProcessorRecordContext recordContext() {
-    return delegate.recordContext();
-  }
-
-  @Override
-  public void setRecordContext(final ProcessorRecordContext recordContext) {
-    delegate.setRecordContext(recordContext);
-  }
-
-  @Override
-  public void setCurrentNode(final ProcessorNode<?, ?, ?, ?> currentNode) {
-    delegate.setCurrentNode(currentNode);
-  }
-
-  @Override
-  public ProcessorNode<?, ?, ?, ?> currentNode() {
-    return delegate.currentNode();
-  }
-
-  @Override
-  public ThreadCache cache() {
-    return delegate.cache();
-  }
-
-  @Override
-  public void initialize() {
-    throw new IllegalStateException("initialize should never be invoked on the async context");
-  }
-
-  @Override
-  public void uninitialize() {
-
-  }
-
-  @Override
-  public TaskType taskType() {
-    return null;
-  }
-
-  @Override
-  public void transitionToActive(final StreamTask streamTask, final RecordCollector recordCollector, final ThreadCache newCache) {
-
-  }
-
-  @Override
-  public void transitionToStandby(final ThreadCache newCache) {
-
-  }
-
-  @Override
-  public void registerCacheFlushListener(final String namespace, final DirtyEntryFlushListener listener) {
-
-  }
-
-  @Override
-  public <T extends StateStore> T getStateStore(final StoreBuilder<T> builder) {
-    return InternalProcessorContext.super.getStateStore(builder);
-  }
-
-  @Override
-  public void logChange(final String storeName, final Bytes key, final byte[] value, final long timestamp, final Position position) {
-
-  }
-
-  @Override
-  public String changelogFor(final String storeName) {
-    return null;
-  }
-
-  @Override
-  public void addProcessorMetadataKeyValue(final String key, final long value) {
-
-  }
-
-  @Override
-  public Long processorMetadataForKey(final String key) {
-    return null;
-  }
-
-  @Override
-  public void setProcessorMetadata(final ProcessorMetadata metadata) {
-
-  }
-
-  @Override
-  public ProcessorMetadata getProcessorMetadata() {
-    return null;
-  }
-
   @Override
   @SuppressWarnings("unchecked")
   public <S extends StateStore> S getStateStore(final String name) {
@@ -269,49 +154,18 @@ public class AsyncProcessorContext<KOut, VOut> implements ProcessorContext<KOut,
   }
 
   @Override
-  public Cancellable schedule(final Duration interval, final PunctuationType type, final Punctuator callback) {
+  public Cancellable schedule(
+      final Duration interval,
+      final PunctuationType type,
+      final Punctuator callback
+  ) {
     throw new UnsupportedOperationException("Punctuators not yet supported for async processors");
-  }
-
-  @Override
-  public <K, V> void forward(final K key, final V value) {
-
-  }
-
-  @Override
-  public <K, V> void forward(final K key, final V value, final To to) {
-
   }
 
   @Override
   public void commit() {
     // this is only a best-effort request and not a guarantee, so it's fine to potentially delay
     delegate.commit();
-  }
-
-  @Override
-  public String topic() {
-    return null;
-  }
-
-  @Override
-  public int partition() {
-    return 0;
-  }
-
-  @Override
-  public long offset() {
-    return 0;
-  }
-
-  @Override
-  public Headers headers() {
-    return null;
-  }
-
-  @Override
-  public long timestamp() {
-    return 0;
   }
 
   @Override
@@ -326,7 +180,7 @@ public class AsyncProcessorContext<KOut, VOut> implements ProcessorContext<KOut,
 
   @Override
   public long currentSystemTimeMs() {
-    // TODO: asssess how/when this is actually used in custom processors, and whether we should
+    // TODO: assess how/when this is actually used in custom processors, and whether we should
     //  simply pass the new/true system time, or save the system time on initial invocation
     return delegate.currentSystemTimeMs();
   }
@@ -344,6 +198,49 @@ public class AsyncProcessorContext<KOut, VOut> implements ProcessorContext<KOut,
     return delegate.currentStreamTimeMs();
   }
 
+  public ProcessorRecordContext recordContext() {
+    return delegate.recordContext();
+  }
+
+  public void setRecordContext(final ProcessorRecordContext recordContext) {
+    delegate.setRecordContext(recordContext);
+  }
+
+  public void setCurrentNode(final ProcessorNode<?, ?, ?, ?> currentNode) {
+    delegate.setCurrentNode(currentNode);
+  }
+
+  public ProcessorNode<?, ?, ?, ?> currentNode() {
+    return delegate.currentNode();
+  }
+
+  public void registerCacheFlushListener(final String namespace, final DirtyEntryFlushListener listener) {
+    // TODO -- can we use this to our advantage somehow?
+  }
+
+  public int partition() {
+    return taskId().partition();
+  }
+
+  public long offset() {
+    // For now we assume that (a) the record metadata exists, and (b) there is only one input topic
+    // This allows us to assert that each input record can be uniquely identified -- and ordered --
+    // according to their offset alone
+    // These limitations can/should eventually be lifted, but for now are documented in the
+    // javadocs for AsyncProcessorSupplier
+    final Optional<RecordMetadata> metadata = delegate.recordMetadata();
+    if (metadata.isEmpty()) {
+      throw new UnsupportedOperationException("Record metadata was missing, which implies this "
+                                                  + "record originated from a punctuator. Punctuator-produced records are not yet "
+                                                  + "compatible with async processing.");
+    }
+    return metadata.get().offset();
+  }
+
+  public String currentProcessorName() {
+    return delegate.currentNode().name();
+  }
+
   public AsyncKeyValueStore<?, ?> getAsyncStore(final String storeName) {
     return stateStores.get(storeName);
   }
@@ -352,13 +249,4 @@ public class AsyncProcessorContext<KOut, VOut> implements ProcessorContext<KOut,
     return stateStores;
   }
 
-  @Override
-  public <K extends KOut, V extends VOut> void forward(final FixedKeyRecord<K, V> record) {
-
-  }
-
-  @Override
-  public <K extends KOut, V extends VOut> void forward(final FixedKeyRecord<K, V> record, final String childName) {
-
-  }
 }

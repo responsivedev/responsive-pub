@@ -18,31 +18,106 @@ package dev.responsive.kafka.internal.stores;
 
 import dev.responsive.kafka.internal.utils.StoreUtil;
 import java.util.Map;
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.StoreSupplier;
 
-public class ResponsiveStoreBuilder<T extends StateStore> implements StoreBuilder<T> {
+public class ResponsiveStoreBuilder<K, V, T extends StateStore> implements StoreBuilder<T> {
 
-  private final StoreBuilder<T> delegate;
+  private final StoreType storeType;
+  private final StoreSupplier<?> userStoreSupplier;
+  private final StoreBuilder<T> userStoreBuilder;
+  private final Serde<K> keySerde;
+  private final Serde<V> valueSerde;
+  private final Time time;
   private final boolean truncateChangelog;
 
+  private boolean cachingEnabled;
+
+  public enum StoreType {
+    KEY_VALUE,
+    TIMESTAMPED_KEY_VALUE,
+    WINDOW,
+    TIMESTAMPED_WINDOW,
+    SESSION
+  }
+
   public ResponsiveStoreBuilder(
-      final StoreBuilder<T> delegate,
+      final StoreType storeType,
+      final StoreSupplier<?> userStoreSupplier,
+      final StoreBuilder<T> userStoreBuilder,
+      final Serde<K> keySerde,
+      final Serde<V> valueSerde,
       final boolean truncateChangelog
   ) {
-    this.delegate = delegate;
+    // the time parameter only exists for Streams unit tests and in non-testing code
+    // will always hard-code Time.SYSTEM
+   this(
+       storeType,
+       userStoreSupplier,
+       userStoreBuilder,
+       keySerde,
+       valueSerde,
+       Time.SYSTEM,
+       truncateChangelog
+   );
+  }
+
+  public ResponsiveStoreBuilder(
+      final StoreType storeType,
+      final StoreSupplier<?> userStoreSupplier,
+      final StoreBuilder<T> userStoreBuilder,
+      final Serde<K> keySerde,
+      final Serde<V> valueSerde,
+      final Time time,
+      final boolean truncateChangelog
+  ) {
+    this.storeType = storeType;
+    this.userStoreSupplier = userStoreSupplier;
+    this.userStoreBuilder = userStoreBuilder;
+    this.keySerde = keySerde;
+    this.valueSerde = valueSerde;
+    this.time = time;
     this.truncateChangelog = truncateChangelog;
+  }
+
+  public StoreType storeType() {
+    return storeType;
+  }
+
+  public StoreSupplier<?> storeSupplier() {
+    return userStoreSupplier;
+  }
+
+  public boolean cachingEnabled() {
+    return cachingEnabled;
+  }
+
+  public Serde<K> keySerde() {
+    return keySerde;
+  }
+
+  public Serde<V> valueSerde() {
+    return valueSerde;
+  }
+
+  public Time time() {
+    return time;
   }
 
   @Override
   public StoreBuilder<T> withCachingEnabled() {
-    delegate.withCachingEnabled();
+    userStoreBuilder.withCachingEnabled();
+    cachingEnabled = true;
     return this;
   }
 
   @Override
   public StoreBuilder<T> withCachingDisabled() {
-    delegate.withCachingDisabled();
+    userStoreBuilder.withCachingDisabled();
+    cachingEnabled = false;
     return this;
   }
 
@@ -50,13 +125,13 @@ public class ResponsiveStoreBuilder<T extends StateStore> implements StoreBuilde
   public StoreBuilder<T> withLoggingEnabled(final Map<String, String> config) {
     StoreUtil.validateLogConfigs(config, truncateChangelog, name());
 
-    delegate.withLoggingEnabled(config);
+    userStoreBuilder.withLoggingEnabled(config);
     return this;
   }
 
   @Override
   public StoreBuilder<T> withLoggingDisabled() {
-    delegate.withLoggingDisabled();
+    userStoreBuilder.withLoggingDisabled();
     throw new UnsupportedOperationException(
         "Responsive stores are currently incompatible with disabling the changelog. "
             + "Please reach out to us to request this feature.");
@@ -64,21 +139,22 @@ public class ResponsiveStoreBuilder<T extends StateStore> implements StoreBuilde
 
   @Override
   public T build() {
-    return delegate.build();
+    return userStoreBuilder.build();
   }
 
   @Override
   public Map<String, String> logConfig() {
-    return delegate.logConfig();
+    return userStoreBuilder.logConfig();
   }
 
   @Override
   public boolean loggingEnabled() {
-    return delegate.loggingEnabled();
+    return userStoreBuilder.loggingEnabled();
   }
 
   @Override
   public String name() {
-    return delegate.name();
+    return userStoreBuilder.name();
   }
+
 }
