@@ -243,9 +243,6 @@ public class SessionOperationsImpl implements SessionOperations {
       final long earliestSessionEnd,
       final long latestSessionEnd
   ) {
-    final SessionKey from = new SessionKey(key, 0, earliestSessionEnd);
-    final SessionKey to = new SessionKey(key, 0, latestSessionEnd);
-
     final var localResults = this.buffer.all(kv -> {
       return kv.key.key.equals(key) && kv.key.sessionEndMs >= earliestSessionEnd
           && kv.key.sessionEndMs <= latestSessionEnd;
@@ -266,7 +263,10 @@ public class SessionOperationsImpl implements SessionOperations {
           return new Windowed<>(sessionKey.key, sessionWindow);
         }
     );
-    return keysOnly;
+    return Iterators.filterKv(keysOnly, session -> {
+      return session.window().end() >= earliestSessionEnd
+          && session.window().end() <= latestSessionEnd;
+    });
   }
 
   @Override

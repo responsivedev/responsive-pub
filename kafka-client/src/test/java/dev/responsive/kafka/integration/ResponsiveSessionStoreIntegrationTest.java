@@ -74,7 +74,6 @@ import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.state.SessionStore;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -115,7 +114,6 @@ public class ResponsiveSessionStoreIntegrationTest {
     result.all().get();
   }
 
-  @Disabled
   @Test
   public void shouldComputeSessionAggregate() throws Exception {
     // Given:
@@ -172,6 +170,7 @@ public class ResponsiveSessionStoreIntegrationTest {
     // When:
     final Map<String, Object> properties = getMutablePropertiesWithStringSerdes();
     properties.put(STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
+    properties.put(ResponsiveConfig.STORE_FLUSH_RECORDS_TRIGGER_CONFIG, 1);
     KafkaProducer<String, String> producer = new KafkaProducer<>(properties);
     try (
         final ResponsiveKafkaStreams kafkaStreams =
@@ -180,31 +179,13 @@ public class ResponsiveSessionStoreIntegrationTest {
       startAppAndAwaitRunning(Duration.ofSeconds(15), kafkaStreams);
       pipeRecords(producer, inputTopic(), inputEvents);
 
+      final boolean awaited = outputLatch.await(20_000, TimeUnit.MILLISECONDS);
       assertThat(
-          outputLatch.await(20_000, TimeUnit.MILLISECONDS),
-          Matchers.equalTo(true)
-      );
-
-      assertThat(actualPeeks, Matchers.hasSize(expectedPeeks.size()));
-      for (var i = 0; i < actualPeeks.size(); i++) {
-        var actual = actualPeeks.get(i);
-        var expected = expectedPeeks.get(i);
-        assertThat(actual.key, Matchers.equalTo(expected.key));
-        assertThat(actual.value, Matchers.equalTo(expected.value));
-      }
-    }
-
-    properties.put(ResponsiveConfig.STORE_FLUSH_RECORDS_TRIGGER_CONFIG, 0);
-    producer = new KafkaProducer<>(properties);
-    try (
-        final ResponsiveKafkaStreams kafkaStreams =
-            new ResponsiveKafkaStreams(builder.build(), properties);
-    ) {
-      startAppAndAwaitRunning(Duration.ofSeconds(15), kafkaStreams);
-      pipeRecords(producer, inputTopic(), inputEvents);
-
-      assertThat(
-          outputLatch.await(20_000, TimeUnit.MILLISECONDS),
+          String.format(
+              "The application did not receive the expected number of peeks: %d / %d",
+              actualPeeks.size(), expectedPeeks.size()
+          ),
+          awaited,
           Matchers.equalTo(true)
       );
 
@@ -251,8 +232,6 @@ public class ResponsiveSessionStoreIntegrationTest {
     properties.put(consumerPrefix(SESSION_TIMEOUT_MS_CONFIG), 5_000 - 1);
 
     properties.put(consumerPrefix(MAX_POLL_RECORDS_CONFIG), 1);
-
-    properties.put(ResponsiveConfig.STORE_FLUSH_RECORDS_TRIGGER_CONFIG, 1);
 
     return properties;
   }
