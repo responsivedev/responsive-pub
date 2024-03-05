@@ -90,8 +90,8 @@ message ApplicationPolicySpec {
 }
 
 message PolicyCooldownSpec {
-  optional int32 state_transition_cooldown = 1;
-  optional int32 rebalance_cooldown = 2;
+  optional int32 state_transition_cooldown_seconds = 1;
+  optional int32 rebalance_cooldown_seconds = 2;
 }
 
 message KafkaStreamsPolicySpec {

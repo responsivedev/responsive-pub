@@ -16,5 +16,30 @@
 
 package dev.responsive.k8s.crd;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import java.util.Optional;
+
 public class PolicyCooldownSpec {
+
+  private final Optional<Integer> stateTransitionCooldownSeconds;
+  private final Optional<Integer> rebalanceCooldownSeconds;
+
+  @JsonCreator
+  public PolicyCooldownSpec(
+      @JsonProperty("stateTransitionCooldownSeconds")
+      final Optional<Integer> stateTransitionCooldownSeconds,
+      @JsonProperty("rebalanceCooldownSeconds") final Optional<Integer> rebalanceCooldownSeconds
+  ) {
+    this.stateTransitionCooldownSeconds = stateTransitionCooldownSeconds;
+    this.rebalanceCooldownSeconds = rebalanceCooldownSeconds;
+  }
+
+  public Optional<Integer> getStateTransitionCooldownSeconds() {
+    return stateTransitionCooldownSeconds;
+  }
+
+  public Optional<Integer> getRebalanceCooldownSeconds() {
+    return rebalanceCooldownSeconds;
+  }
 }
