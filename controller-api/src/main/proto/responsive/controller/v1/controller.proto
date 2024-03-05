@@ -89,6 +89,11 @@ message ApplicationPolicySpec {
   }
 }
 
+message PolicyCooldownSpec {
+  optional int32 state_transition_cooldown = 1;
+  optional int32 rebalance_cooldown = 2;
+}
+
 message KafkaStreamsPolicySpec {
   message FixedReplicaScaleUpStrategySpec {
     // should this be a higher-level object?
@@ -151,4 +156,6 @@ message KafkaStreamsPolicySpec {
 
   // Diagnosers
   repeated DiagnoserSpec diagnoser = 3;
+
+  optional PolicyCooldownSpec cooldown = 5;
 }

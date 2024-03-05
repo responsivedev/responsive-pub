@@ -51,7 +51,7 @@ class ControllerProtoFactoriesTest {
         ControllerOuterClass.PolicyStatus.POLICY_STATUS_MANAGED,
         ResponsivePolicySpec.PolicyType.DEMO,
         Optional.of(new DemoPolicySpec(
-            123, 7, 1, Optional.empty())),
+            123, 7, 1, Optional.empty(), Optional.empty())),
         Optional.empty()
     );
     kafkaStreamsPolicy.setSpec(spec);
@@ -92,7 +92,7 @@ class ControllerProtoFactoriesTest {
         ControllerOuterClass.PolicyStatus.POLICY_STATUS_MANAGED,
         ResponsivePolicySpec.PolicyType.DEMO,
         Optional.of(new DemoPolicySpec(
-            123, 7, 1, Optional.of(List.of(diagnoserSpec)))),
+            123, 7, 1, Optional.of(List.of(diagnoserSpec)), Optional.empty())),
         Optional.empty()
     );
   }
