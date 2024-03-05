@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -333,6 +334,38 @@ public final class IntegrationTestUtils {
       }
     } finally {
       lock.unlock();
+    }
+  }
+
+  public static class CountdownLatchWrapper {
+    private CountDownLatch currentLatch;
+
+    public CountdownLatchWrapper(final int initialCountdown) {
+      currentLatch = new CountDownLatch(initialCountdown);
+    }
+
+    public void countDown() {
+      currentLatch.countDown();
+    }
+
+    public void resetCountdown(final int countdown) {
+      currentLatch = new CountDownLatch(countdown);
+    }
+
+    public boolean await(final long timeoutMilliseconds) {
+      try {
+        return currentLatch.await(timeoutMilliseconds, TimeUnit.MILLISECONDS);
+      } catch (final Exception e) {
+        throw new AssertionError(e);
+      }
+    }
+
+    public boolean await() {
+      try {
+        return currentLatch.await(60, TimeUnit.SECONDS);
+      } catch (final Exception e) {
+        throw new AssertionError(e);
+      }
     }
   }
 

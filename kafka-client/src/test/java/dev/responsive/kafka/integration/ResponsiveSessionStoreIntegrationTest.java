@@ -40,6 +40,7 @@ import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.api.stores.ResponsiveSessionParams;
 import dev.responsive.kafka.api.stores.ResponsiveStores;
+import dev.responsive.kafka.testutils.IntegrationTestUtils.CountdownLatchWrapper;
 import dev.responsive.kafka.testutils.KeyValueTimestamp;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
@@ -50,9 +51,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -152,11 +151,12 @@ public class ResponsiveSessionStoreIntegrationTest {
         new KeyValue<>(windowedKey("key1", 12_000, 16_000), null),
         new KeyValue<>(windowedKey("key1", 7500, 16_000), "efg")
     );
-    final CountDownLatch outputLatch = new CountDownLatch(expectedPeeks.size());
-    final List<KeyValue<Windowed<String>, String>> actualPeeks = new ArrayList<>();
 
     final StreamsBuilder builder = new StreamsBuilder();
     final KStream<String, String> input = builder.stream(inputTopic());
+
+    final CountdownLatchWrapper outputLatch = new CountdownLatchWrapper(expectedPeeks.size());
+    final List<KeyValue<Windowed<String>, String>> actualPeeks = new ArrayList<>();
     input
         .groupByKey()
         .windowedBy(window)
@@ -170,6 +170,7 @@ public class ResponsiveSessionStoreIntegrationTest {
     // When:
     final Map<String, Object> properties = getMutablePropertiesWithStringSerdes();
     properties.put(STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
+    properties.put(ResponsiveConfig.STORE_FLUSH_RECORDS_TRIGGER_CONFIG, 0);
     KafkaProducer<String, String> producer = new KafkaProducer<>(properties);
     try (
         final ResponsiveKafkaStreams kafkaStreams =
@@ -179,30 +180,10 @@ public class ResponsiveSessionStoreIntegrationTest {
       pipeRecords(producer, inputTopic(), inputEvents);
 
       assertThat(
-          outputLatch.await(20_000, TimeUnit.MILLISECONDS),
-          Matchers.equalTo(true)
-      );
-
-      assertThat(actualPeeks, Matchers.hasSize(expectedPeeks.size()));
-      for (var i = 0; i < actualPeeks.size(); i++) {
-        var actual = actualPeeks.get(i);
-        var expected = expectedPeeks.get(i);
-        assertThat(actual.key, Matchers.equalTo(expected.key));
-        assertThat(actual.value, Matchers.equalTo(expected.value));
-      }
-    }
-
-    properties.put(ResponsiveConfig.STORE_FLUSH_RECORDS_TRIGGER_CONFIG, 0);
-    producer = new KafkaProducer<>(properties);
-    try (
-        final ResponsiveKafkaStreams kafkaStreams =
-            new ResponsiveKafkaStreams(builder.build(), properties);
-    ) {
-      startAppAndAwaitRunning(Duration.ofSeconds(15), kafkaStreams);
-      pipeRecords(producer, inputTopic(), inputEvents);
-
-      assertThat(
-          outputLatch.await(20_000, TimeUnit.MILLISECONDS),
+          String.format("Did not receive all expected peeks: %d/%d",
+              actualPeeks.size(), expectedPeeks.size()
+          ),
+          outputLatch.await(20_000),
           Matchers.equalTo(true)
       );
 

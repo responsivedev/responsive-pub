@@ -42,6 +42,7 @@ import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.api.stores.ResponsiveStores;
 import dev.responsive.kafka.api.stores.ResponsiveWindowParams;
+import dev.responsive.kafka.testutils.IntegrationTestUtils.CountdownLatchWrapper;
 import dev.responsive.kafka.testutils.KeyValueTimestamp;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
@@ -57,7 +58,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 import org.apache.kafka.clients.admin.Admin;
@@ -396,30 +396,6 @@ public class ResponsiveWindowStoreIntegrationTest {
     }
   }
 
-  static class CountdownLatchWrapper {
-    private CountDownLatch currentLatch;
-
-    public CountdownLatchWrapper(final int initialCountdown) {
-      currentLatch = new CountDownLatch(initialCountdown);
-    }
-
-    public void countDown() {
-      currentLatch.countDown();
-    }
-
-    public void resetCountdown(final int countdown) {
-      currentLatch = new CountDownLatch(countdown);
-    }
-
-    public boolean await() {
-      try {
-        return currentLatch.await(60, TimeUnit.SECONDS);
-      } catch (final Exception e) {
-        throw new AssertionError(e);
-      }
-    }
-  }
-  
   //@Test
   public void shouldComputeWindowedJoinUsingRanges() throws InterruptedException {
     // Given:
