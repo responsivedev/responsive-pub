@@ -16,6 +16,7 @@
 
 package dev.responsive.kafka.integration;
 
+import static dev.responsive.kafka.api.config.ResponsiveConfig.STORE_FLUSH_RECORDS_TRIGGER_CONFIG;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.pipeRecords;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.startAppAndAwaitRunning;
 import static java.util.Arrays.asList;
@@ -36,7 +37,6 @@ import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
 import static org.hamcrest.MatcherAssert.assertThat;
 
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
-import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.api.stores.ResponsiveSessionParams;
 import dev.responsive.kafka.api.stores.ResponsiveStores;
@@ -74,7 +74,6 @@ import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.state.SessionStore;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -115,7 +114,6 @@ public class ResponsiveSessionStoreIntegrationTest {
     result.all().get();
   }
 
-  @Disabled
   @Test
   public void shouldComputeSessionAggregate() throws Exception {
     // Given:
@@ -172,6 +170,7 @@ public class ResponsiveSessionStoreIntegrationTest {
     // When:
     final Map<String, Object> properties = getMutablePropertiesWithStringSerdes();
     properties.put(STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
+    properties.put(STORE_FLUSH_RECORDS_TRIGGER_CONFIG, 1);
     KafkaProducer<String, String> producer = new KafkaProducer<>(properties);
     try (
         final ResponsiveKafkaStreams kafkaStreams =
@@ -180,12 +179,27 @@ public class ResponsiveSessionStoreIntegrationTest {
       startAppAndAwaitRunning(Duration.ofSeconds(15), kafkaStreams);
       pipeRecords(producer, inputTopic(), inputEvents);
 
+      final boolean awaited = outputLatch.await(25_000, TimeUnit.MILLISECONDS);
       assertThat(
-          outputLatch.await(20_000, TimeUnit.MILLISECONDS),
+          String.format(
+              "The application did not receive the expected number of peeks: %d / %d\n%s\nVS\n\n%s",
+              actualPeeks.size(), expectedPeeks.size(),
+              getPeekListString(actualPeeks),
+              getPeekListString(expectedPeeks)
+          ),
+          awaited,
           Matchers.equalTo(true)
       );
 
-      assertThat(actualPeeks, Matchers.hasSize(expectedPeeks.size()));
+      assertThat(
+          String.format(
+              "The application did not receive the expected number of peeks: %d / %d\n%s\nVS\n\n%s",
+              actualPeeks.size(), expectedPeeks.size(),
+              getPeekListString(actualPeeks),
+              getPeekListString(expectedPeeks)
+          ),
+          actualPeeks, Matchers.hasSize(expectedPeeks.size())
+      );
       for (var i = 0; i < actualPeeks.size(); i++) {
         var actual = actualPeeks.get(i);
         var expected = expectedPeeks.get(i);
@@ -193,29 +207,12 @@ public class ResponsiveSessionStoreIntegrationTest {
         assertThat(actual.value, Matchers.equalTo(expected.value));
       }
     }
+  }
 
-    properties.put(ResponsiveConfig.STORE_FLUSH_RECORDS_TRIGGER_CONFIG, 0);
-    producer = new KafkaProducer<>(properties);
-    try (
-        final ResponsiveKafkaStreams kafkaStreams =
-            new ResponsiveKafkaStreams(builder.build(), properties);
-    ) {
-      startAppAndAwaitRunning(Duration.ofSeconds(15), kafkaStreams);
-      pipeRecords(producer, inputTopic(), inputEvents);
-
-      assertThat(
-          outputLatch.await(20_000, TimeUnit.MILLISECONDS),
-          Matchers.equalTo(true)
-      );
-
-      assertThat(actualPeeks, Matchers.hasSize(expectedPeeks.size()));
-      for (var i = 0; i < actualPeeks.size(); i++) {
-        var actual = actualPeeks.get(i);
-        var expected = expectedPeeks.get(i);
-        assertThat(actual.key, Matchers.equalTo(expected.key));
-        assertThat(actual.value, Matchers.equalTo(expected.value));
-      }
-    }
+  private String getPeekListString(List<KeyValue<Windowed<String>, String>> peeks) {
+    final StringBuilder builder = new StringBuilder();
+    peeks.forEach(kv -> builder.append("\t" + kv.toString() + "\n"));
+    return builder.toString();
   }
 
   private Windowed<String> windowedKey(final String key, final long startMs, final long endMs) {
@@ -251,8 +248,6 @@ public class ResponsiveSessionStoreIntegrationTest {
     properties.put(consumerPrefix(SESSION_TIMEOUT_MS_CONFIG), 5_000 - 1);
 
     properties.put(consumerPrefix(MAX_POLL_RECORDS_CONFIG), 1);
-
-    properties.put(ResponsiveConfig.STORE_FLUSH_RECORDS_TRIGGER_CONFIG, 1);
 
     return properties;
   }
