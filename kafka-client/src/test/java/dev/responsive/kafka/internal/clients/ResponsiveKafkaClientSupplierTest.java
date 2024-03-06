@@ -100,7 +100,7 @@ class ResponsiveKafkaClientSupplierTest {
   private ArgumentCaptor<List<ResponsiveProducer.Listener>> producerListenerCaptor;
   @Captor
   private ArgumentCaptor<List<ResponsiveConsumer.Listener>> consumerListenerCaptor;
-  private final OffsetRecorder offsetRecorder = new OffsetRecorder(true);
+  private final OffsetRecorder offsetRecorder = new OffsetRecorder(true, "thread");
   private ResponsiveKafkaClientSupplier supplier;
 
   private final ResponsiveStoreRegistry storeRegistry = new ResponsiveStoreRegistry();
@@ -120,7 +120,7 @@ class ResponsiveKafkaClientSupplierTest {
     ).thenReturn(responsiveConsumer);
     lenient().when(factories.createMetricsPublishingCommitListener(any(), any(), any()))
         .thenReturn(commitMetricListener);
-    lenient().when(factories.createOffsetRecorder(anyBoolean())).thenReturn(offsetRecorder);
+    lenient().when(factories.createOffsetRecorder(anyBoolean(), any())).thenReturn(offsetRecorder);
 
     supplier = supplier(CONFIGS, CompatibilityMode.FULL);
   }

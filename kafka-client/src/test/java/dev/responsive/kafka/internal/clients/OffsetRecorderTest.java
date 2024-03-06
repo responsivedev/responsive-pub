@@ -20,18 +20,21 @@ class OffsetRecorderTest {
 
   private Map<RecordingKey, Long> committedOffsets;
   private Map<TopicPartition, Long> writtenOffsets;
-  private final OffsetRecorder eosRecorder = new OffsetRecorder(true);
-  private final OffsetRecorder alosRecorder = new OffsetRecorder(false);
+  private String threadId;
+  private final OffsetRecorder eosRecorder = new OffsetRecorder(true, "thread");
+  private final OffsetRecorder alosRecorder = new OffsetRecorder(false, "thread");
 
   @BeforeEach
   public void setup() {
-    eosRecorder.addCommitCallback((c, w) -> {
+    eosRecorder.addCommitCallback((t, c, w) -> {
       committedOffsets = c;
       writtenOffsets = w;
+      threadId = t;
     });
-    alosRecorder.addCommitCallback((c, w) -> {
+    alosRecorder.addCommitCallback((t, c, w) -> {
       committedOffsets = c;
       writtenOffsets = w;
+      threadId = t;
     });
   }
 
@@ -54,6 +57,7 @@ class OffsetRecorderTest {
         new RecordingKey(TOPIC_PARTITION1, "group"), 123L,
         new RecordingKey(TOPIC_PARTITION2, "group"), 456L
     )));
+    assertThat(getThreadSentToCallback(), is("thread"));
   }
 
   @Test
@@ -74,6 +78,7 @@ class OffsetRecorderTest {
         TOPIC_PARTITION1, 123L,
         TOPIC_PARTITION2, 456L
     )));
+    assertThat(getThreadSentToCallback(), is("thread"));
   }
 
   @Test
@@ -100,6 +105,7 @@ class OffsetRecorderTest {
     // then:
     assertThat(getWrittenOffsetsSentToCallback().entrySet(), is(empty()));
     assertThat(getCommittedOffsetsSentToCallback().entrySet(), is(empty()));
+    assertThat(getThreadSentToCallback(), is(null));
   }
 
   @Test
@@ -117,6 +123,7 @@ class OffsetRecorderTest {
         new RecordingKey(TOPIC_PARTITION1, ""), 123L,
         new RecordingKey(TOPIC_PARTITION2, ""), 456L
     )));
+    assertThat(getThreadSentToCallback(), is("thread"));
   }
 
   @Test
@@ -141,5 +148,9 @@ class OffsetRecorderTest {
 
   private Map<TopicPartition, Long> getWrittenOffsetsSentToCallback() {
     return writtenOffsets;
+  }
+
+  private String getThreadSentToCallback() {
+    return threadId;
   }
 }

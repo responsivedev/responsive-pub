@@ -21,6 +21,7 @@ package dev.responsive.kafka.internal.stores;
 import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadSessionClients;
 import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadStoreRegistry;
 import static dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration.NO_COMMITTED_OFFSET;
+import static dev.responsive.kafka.internal.utils.StoreUtil.streamThreadId;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.changelogFor;
 
@@ -137,7 +138,8 @@ public class SegmentedOperations implements WindowOperations {
         restoreStartOffset == NO_COMMITTED_OFFSET
             ? OptionalLong.empty()
             : OptionalLong.of(restoreStartOffset),
-        buffer::flush
+        buffer::flush,
+        streamThreadId()
     );
     storeRegistry.registerStore(registration);
 

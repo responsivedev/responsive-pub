@@ -31,8 +31,10 @@ public class ResponsiveStoreRegistry {
 
   private final List<ResponsiveStoreRegistration> stores = new LinkedList<>();
 
-  public synchronized OptionalLong getCommittedOffset(final TopicPartition topicPartition) {
-    return getRegisteredStoresForChangelog(topicPartition)
+  public synchronized OptionalLong getCommittedOffset(
+      final TopicPartition topicPartition,
+      final String threadId) {
+    return getRegisteredStoresForChangelog(topicPartition, threadId)
         .stream()
         .map(ResponsiveStoreRegistration::startOffset)
         .filter(OptionalLong::isPresent)
@@ -41,10 +43,12 @@ public class ResponsiveStoreRegistry {
   }
 
   public synchronized List<ResponsiveStoreRegistration> getRegisteredStoresForChangelog(
-      final TopicPartition topicPartition
+      final TopicPartition topicPartition,
+      final String threadId
   ) {
     return stores.stream()
-        .filter(s -> s.changelogTopicPartition().equals(topicPartition))
+        .filter(s -> s.changelogTopicPartition().equals(topicPartition)
+            && s.threadId().equals(threadId))
         .collect(Collectors.toList());
   }
 
