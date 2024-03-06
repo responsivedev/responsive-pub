@@ -21,6 +21,7 @@ import static dev.responsive.kafka.testutils.IntegrationTestUtils.pipeRecords;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.startAppAndAwaitRunning;
 import static java.util.Arrays.asList;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.MAX_POLL_RECORDS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
@@ -136,7 +137,10 @@ public class ResponsiveSessionStoreIntegrationTest {
         new KeyValueTimestamp<>("key1", "e", 16_000L),
         new KeyValueTimestamp<>("key1", "f", 12_000L),
         new KeyValueTimestamp<>("key1", "g", 7_500L),
-        new KeyValueTimestamp<>("key1", "h", 1_500L)
+        new KeyValueTimestamp<>("key1", "h", 1_500L),
+        new KeyValueTimestamp<>("SENTINEL", null, 17_000L),
+        new KeyValueTimestamp<>("SENTINEL", null, 18_000L),
+        new KeyValueTimestamp<>("SENTINEL", null, 19_000L)
     );
     final List<KeyValue<Windowed<String>, String>> expectedPeeks = List.of(
         new KeyValue<>(windowedKey("key", 0, 0), "a"),
@@ -163,6 +167,9 @@ public class ResponsiveSessionStoreIntegrationTest {
         .aggregate(() -> "", sessionAggregator(), sessionMerger(), responsiveStore)
         .toStream()
         .peek((k, v) -> {
+          if (k.equals("SENTINEL")) {
+            return;
+          }
           actualPeeks.add(new KeyValue<>(k, v));
           outputLatch.countDown();
         })
@@ -181,7 +188,7 @@ public class ResponsiveSessionStoreIntegrationTest {
       startAppAndAwaitRunning(Duration.ofSeconds(15), kafkaStreams);
       pipeRecords(producer, inputTopic(), inputEvents);
 
-      final boolean awaited = outputLatch.await(30_000, TimeUnit.MILLISECONDS);
+      final boolean awaited = outputLatch.await(20_000, TimeUnit.MILLISECONDS);
       assertThat(
           String.format(
               "The application did not receive the expected number of peeks: %d / %d\n%s\nVS\n\n%s",
@@ -250,6 +257,7 @@ public class ResponsiveSessionStoreIntegrationTest {
     properties.put(consumerPrefix(SESSION_TIMEOUT_MS_CONFIG), 5_000 - 1);
 
     properties.put(consumerPrefix(MAX_POLL_RECORDS_CONFIG), 1);
+    properties.put(consumerPrefix(MAX_POLL_INTERVAL_MS_CONFIG), 5_000);
 
     return properties;
   }
