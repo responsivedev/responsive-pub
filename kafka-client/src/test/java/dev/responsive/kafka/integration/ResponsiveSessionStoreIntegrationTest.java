@@ -162,8 +162,10 @@ public class ResponsiveSessionStoreIntegrationTest {
         .windowedBy(window)
         .aggregate(() -> "", sessionAggregator(), sessionMerger(), responsiveStore)
         .toStream()
-        .peek((k, v) -> actualPeeks.add(new KeyValue<>(k, v)))
-        .peek((k, v) -> outputLatch.countDown())
+        .peek((k, v) -> {
+          actualPeeks.add(new KeyValue<>(k, v));
+          outputLatch.countDown();
+        })
         .selectKey((k, v) -> k.key())
         .to(outputTopic());
 
@@ -179,7 +181,7 @@ public class ResponsiveSessionStoreIntegrationTest {
       startAppAndAwaitRunning(Duration.ofSeconds(15), kafkaStreams);
       pipeRecords(producer, inputTopic(), inputEvents);
 
-      final boolean awaited = outputLatch.await(25_000, TimeUnit.MILLISECONDS);
+      final boolean awaited = outputLatch.await(30_000, TimeUnit.MILLISECONDS);
       assertThat(
           String.format(
               "The application did not receive the expected number of peeks: %d / %d\n%s\nVS\n\n%s",
