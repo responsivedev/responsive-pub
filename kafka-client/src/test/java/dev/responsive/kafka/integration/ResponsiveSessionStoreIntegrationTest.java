@@ -167,7 +167,7 @@ public class ResponsiveSessionStoreIntegrationTest {
         .aggregate(() -> "", sessionAggregator(), sessionMerger(), responsiveStore)
         .toStream()
         .peek((k, v) -> {
-          if (k.equals("SENTINEL")) {
+          if (k.key().equals("SENTINEL")) {
             return;
           }
           actualPeeks.add(new KeyValue<>(k, v));
