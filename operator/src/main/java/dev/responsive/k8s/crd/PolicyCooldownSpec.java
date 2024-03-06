@@ -47,16 +47,16 @@ public class PolicyCooldownSpec {
   }
 
   public void validate() {
-    if (stateTransitionCooldownSeconds.isPresent() &&
-        stateTransitionCooldownSeconds.get() < MINIMUM_STATE_TRANSITION_COOLDOWN_SECONDS) {
+    if (stateTransitionCooldownSeconds.isPresent()
+        && stateTransitionCooldownSeconds.get() < MINIMUM_STATE_TRANSITION_COOLDOWN_SECONDS) {
       throw new RuntimeException(String.format(
           "stateTransitionCooldownSeconds of %d should be greater than %d",
           stateTransitionCooldownSeconds.get(), MINIMUM_STATE_TRANSITION_COOLDOWN_SECONDS
       ));
     }
 
-    if (rebalanceCooldownSeconds.isPresent() &&
-        rebalanceCooldownSeconds.get() < MINIMUM_REBALANCE_COOLDOWN_SECONDS) {
+    if (rebalanceCooldownSeconds.isPresent()
+        && rebalanceCooldownSeconds.get() < MINIMUM_REBALANCE_COOLDOWN_SECONDS) {
       throw new RuntimeException(String.format(
           "rebalanceCooldownSeconds of %d should be greater than %d",
           rebalanceCooldownSeconds.get(), MINIMUM_REBALANCE_COOLDOWN_SECONDS
