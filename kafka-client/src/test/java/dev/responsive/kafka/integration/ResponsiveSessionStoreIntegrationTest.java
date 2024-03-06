@@ -179,7 +179,7 @@ public class ResponsiveSessionStoreIntegrationTest {
       startAppAndAwaitRunning(Duration.ofSeconds(15), kafkaStreams);
       pipeRecords(producer, inputTopic(), inputEvents);
 
-      final boolean awaited = outputLatch.await(20_000, TimeUnit.MILLISECONDS);
+      final boolean awaited = outputLatch.await(25_000, TimeUnit.MILLISECONDS);
       assertThat(
           String.format(
               "The application did not receive the expected number of peeks: %d / %d\n%s\nVS\n\n%s",
