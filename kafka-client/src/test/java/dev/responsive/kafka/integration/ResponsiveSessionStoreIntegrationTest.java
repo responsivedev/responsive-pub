@@ -138,9 +138,9 @@ public class ResponsiveSessionStoreIntegrationTest {
         new KeyValueTimestamp<>("key1", "f", 12_000L),
         new KeyValueTimestamp<>("key1", "g", 7_500L),
         new KeyValueTimestamp<>("key1", "h", 1_500L),
-        new KeyValueTimestamp<>("SENTINEL", null, 17_000L),
-        new KeyValueTimestamp<>("SENTINEL", null, 18_000L),
-        new KeyValueTimestamp<>("SENTINEL", null, 19_000L)
+        new KeyValueTimestamp<>("SENTINEL", null, 16_001L),
+        new KeyValueTimestamp<>("SENTINEL", null, 16_002L),
+        new KeyValueTimestamp<>("SENTINEL", null, 16_003L)
     );
     final List<KeyValue<Windowed<String>, String>> expectedPeeks = List.of(
         new KeyValue<>(windowedKey("key", 0, 0), "a"),
