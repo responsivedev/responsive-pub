@@ -31,7 +31,7 @@ class StoreCommitListenerTest {
   @Mock
   private Consumer<Long> store2Flush;
   private final ResponsiveStoreRegistry registry = new ResponsiveStoreRegistry();
-  private final OffsetRecorder offsetRecorder = new OffsetRecorder(true);
+  private final OffsetRecorder offsetRecorder = new OffsetRecorder(true, "thread1");
   private StoreCommitListener commitListener;
 
   @BeforeEach
@@ -40,13 +40,15 @@ class StoreCommitListenerTest {
         "store1",
         PARTITION1,
         OptionalLong.of(0),
-        store1Flush
+        store1Flush,
+        "thread1"
     ));
     registry.registerStore(new ResponsiveStoreRegistration(
         "store2",
         PARTITION2,
         OptionalLong.of(0),
-        store2Flush
+        store2Flush,
+        "thread1"
     ));
     commitListener = new StoreCommitListener(registry, offsetRecorder);
   }
