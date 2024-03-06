@@ -22,6 +22,9 @@ import java.util.Optional;
 
 public class PolicyCooldownSpec {
 
+  private static final Integer MINIMUM_STATE_TRANSITION_COOLDOWN_SECONDS = 1;
+  private static final Integer MINIMUM_REBALANCE_COOLDOWN_SECONDS = 1;
+
   private final Optional<Integer> stateTransitionCooldownSeconds;
   private final Optional<Integer> rebalanceCooldownSeconds;
 
@@ -41,5 +44,23 @@ public class PolicyCooldownSpec {
 
   public Optional<Integer> getRebalanceCooldownSeconds() {
     return rebalanceCooldownSeconds;
+  }
+
+  public void validate() {
+    if (stateTransitionCooldownSeconds.isPresent() &&
+        stateTransitionCooldownSeconds.get() < MINIMUM_STATE_TRANSITION_COOLDOWN_SECONDS) {
+      throw new RuntimeException(String.format(
+          "stateTransitionCooldownSeconds of %d should be greater than %d",
+          stateTransitionCooldownSeconds.get(), MINIMUM_STATE_TRANSITION_COOLDOWN_SECONDS
+      ));
+    }
+
+    if (rebalanceCooldownSeconds.isPresent() &&
+        rebalanceCooldownSeconds.get() < MINIMUM_REBALANCE_COOLDOWN_SECONDS) {
+      throw new RuntimeException(String.format(
+          "rebalanceCooldownSeconds of %d should be greater than %d",
+          rebalanceCooldownSeconds.get(), MINIMUM_REBALANCE_COOLDOWN_SECONDS
+      ));
+    }
   }
 }

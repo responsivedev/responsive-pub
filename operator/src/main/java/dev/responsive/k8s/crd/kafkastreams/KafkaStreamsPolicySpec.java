@@ -32,6 +32,7 @@ public class KafkaStreamsPolicySpec {
 
   public void validate() {
     diagnosers.ifPresent(ds -> ds.forEach(DiagnoserSpec::validate));
+    cooldown.ifPresent(PolicyCooldownSpec::validate);
   }
 
   public int getMaxReplicas() {
