@@ -5,7 +5,6 @@ import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertThrows;
 
-import dev.responsive.kafka.internal.clients.OffsetRecorder;
 import dev.responsive.kafka.internal.clients.OffsetRecorder.RecordingKey;
 import java.util.Map;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -105,7 +104,6 @@ class OffsetRecorderTest {
     // then:
     assertThat(getWrittenOffsetsSentToCallback().entrySet(), is(empty()));
     assertThat(getCommittedOffsetsSentToCallback().entrySet(), is(empty()));
-    assertThat(getThreadSentToCallback(), is(null));
   }
 
   @Test

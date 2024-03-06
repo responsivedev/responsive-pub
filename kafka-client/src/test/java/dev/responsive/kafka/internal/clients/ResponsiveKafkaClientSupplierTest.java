@@ -76,6 +76,12 @@ class ResponsiveKafkaClientSupplierTest {
       )
   );
 
+  private static final Map<String, Object> RESTORE_CONSUMER_CONFIGS = configsWithOverrides(
+      Map.of(
+          ProducerConfig.CLIENT_ID_CONFIG, "foo-StreamThread-0-restore-consumer"
+      )
+  );
+
   @Mock
   private Factories factories;
   @Mock
@@ -242,7 +248,7 @@ class ResponsiveKafkaClientSupplierTest {
     supplier = supplier(CONFIGS, CompatibilityMode.FULL);
 
     // when:
-    supplier.getRestoreConsumer(new HashMap<>(CONSUMER_CONFIGS));
+    supplier.getRestoreConsumer(new HashMap<>(RESTORE_CONSUMER_CONFIGS));
     supplier.getGlobalConsumer(new HashMap<>(PRODUCER_CONFIGS));
 
     // then:
