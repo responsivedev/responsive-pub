@@ -43,13 +43,32 @@ public class ResponsiveStoreRegistry {
   }
 
   public synchronized List<ResponsiveStoreRegistration> getRegisteredStoresForChangelog(
+      final TopicPartition topicPartition
+  ) {
+    return stores.stream()
+        .filter(s -> s.changelogTopicPartition().equals(topicPartition))
+        .collect(Collectors.toList());
+  }
+
+  public synchronized List<ResponsiveStoreRegistration> getRegisteredStoresForChangelog(
       final TopicPartition topicPartition,
       final String threadId
   ) {
-    return stores.stream()
-        .filter(s -> s.changelogTopicPartition().equals(topicPartition)
-            && s.threadId().equals(threadId))
+    final List<ResponsiveStoreRegistration> storesForTopicPartition = stores.stream()
+        .filter(s -> s.changelogTopicPartition().equals(topicPartition))
         .collect(Collectors.toList());
+    if (storesForTopicPartition.isEmpty()) {
+      return storesForTopicPartition;
+    }
+    final List<ResponsiveStoreRegistration> storesForThread = storesForTopicPartition.stream()
+        .filter(s -> s.threadId().equals(threadId))
+        .collect(Collectors.toList());
+    if (storesForThread.isEmpty()) {
+      throw new IllegalStateException(String.format(
+          "there should always be a store for the thread (%s) if there are stores registered "
+              + "for this topic partition (%s)", threadId, topicPartition));
+    }
+    return storesForThread;
   }
 
   public synchronized void registerStore(final ResponsiveStoreRegistration registration) {

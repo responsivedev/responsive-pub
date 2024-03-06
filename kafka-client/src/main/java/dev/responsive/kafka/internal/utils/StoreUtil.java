@@ -98,8 +98,8 @@ public final class StoreUtil {
     final var regex = Pattern.compile(".*-(StreamThread-\\d+)");
     final var match = regex.matcher(threadId);
     if (!match.find()) {
-      LOG.error("Unable to parse stream thread id from thread name = {}", threadId);
-      throw new RuntimeException("unexpected thread name " + threadId);
+      LOG.warn("Unable to parse stream thread id from thread name = {}", threadId);
+      return threadId;
     }
     return match.group(1);
   }
