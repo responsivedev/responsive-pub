@@ -22,8 +22,8 @@ import java.util.Optional;
 
 public class PolicyCooldownSpec {
 
-  private static final Integer MINIMUM_STATE_TRANSITION_COOLDOWN_SECONDS = 1;
-  private static final Integer MINIMUM_REBALANCE_COOLDOWN_SECONDS = 1;
+  private static final Integer MINIMUM_STATE_TRANSITION_COOLDOWN_SECONDS = 0;
+  private static final Integer MINIMUM_REBALANCE_COOLDOWN_SECONDS = 0;
 
   private final Optional<Integer> stateTransitionCooldownSeconds;
   private final Optional<Integer> rebalanceCooldownSeconds;
