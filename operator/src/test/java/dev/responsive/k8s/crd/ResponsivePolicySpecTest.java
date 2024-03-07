@@ -182,4 +182,56 @@ class ResponsivePolicySpecTest {
     // when/then:
     spec.validate();
   }
+
+  @Test
+  public void shouldNotThrowOnValidCooldown() {
+    // given:
+    final var spec = new ResponsivePolicySpec(
+        "baz",
+        "foo",
+        "bar",
+        PolicyStatus.POLICY_STATUS_MANAGED,
+        PolicyType.DEMO,
+        Optional.of(new DemoPolicySpec(
+            10,
+            0,
+            1,
+            Optional.of(List.of(DiagnoserSpec.lag())),
+            Optional.of(new PolicyCooldownSpec(
+                Optional.of(100),
+                Optional.empty()
+            ))
+        )),
+        Optional.empty()
+    );
+
+    // when/then:
+    spec.validate();
+  }
+
+  @Test
+  public void shouldThrowOnInvalidCooldown() {
+    // given:
+    final var spec = new ResponsivePolicySpec(
+        "baz",
+        "foo",
+        "bar",
+        PolicyStatus.POLICY_STATUS_MANAGED,
+        PolicyType.DEMO,
+        Optional.of(new DemoPolicySpec(
+            10,
+            0,
+            1,
+            Optional.of(List.of(DiagnoserSpec.lag())),
+            Optional.of(new PolicyCooldownSpec(
+                Optional.of(-100),
+                Optional.empty()
+            ))
+        )),
+        Optional.empty()
+    );
+
+    // when/then:
+    assertThrows(RuntimeException.class, spec::validate);
+  }
 }
