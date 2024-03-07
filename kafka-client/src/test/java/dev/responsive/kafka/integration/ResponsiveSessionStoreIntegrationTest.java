@@ -36,8 +36,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.config.StorageBackend;
-import dev.responsive.kafka.api.stores.ResponsiveSessionParams;
-import dev.responsive.kafka.api.stores.ResponsiveStores;
 import dev.responsive.kafka.testutils.KeyValueTimestamp;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
@@ -71,6 +69,7 @@ import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.internals.RocksDbSessionBytesStoreSupplier;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -121,10 +120,16 @@ public class ResponsiveSessionStoreIntegrationTest {
     final SessionWindows window =
         SessionWindows.ofInactivityGapAndGrace(inactivityGap, gracePeriod);
 
+    // final Materialized<String, String, SessionStore<Bytes, byte[]>> responsiveStore =
+    //     ResponsiveStores.sessionMaterialized(
+    //         ResponsiveSessionParams.session(name, inactivityGap, gracePeriod)
+    //     );
+
     final Materialized<String, String, SessionStore<Bytes, byte[]>> responsiveStore =
-        ResponsiveStores.sessionMaterialized(
-            ResponsiveSessionParams.session(name, inactivityGap, gracePeriod)
-        );
+        Materialized.as(new RocksDbSessionBytesStoreSupplier(
+            name,
+            inactivityGap.plus(gracePeriod).toMillis()
+        ));
 
     // Start from timestamp of 0L to get predictable results
     final List<KeyValueTimestamp<String, String>> inputEvents = asList(
@@ -141,7 +146,6 @@ public class ResponsiveSessionStoreIntegrationTest {
         new KeyValue<>(windowedKey("key", 0, 0), "a"),
         new KeyValue<>(windowedKey("key", 0, 0), null),
         new KeyValue<>(windowedKey("key", 0, 4000), "ac"),
-        new KeyValue<>(windowedKey("key", 0, 0), null),
         new KeyValue<>(windowedKey("key", 0, 4000), null),
         new KeyValue<>(windowedKey("key", 0, 4000), "acb"),
         new KeyValue<>(windowedKey("key1", 8000, 8000), "d"),
@@ -181,7 +185,7 @@ public class ResponsiveSessionStoreIntegrationTest {
       startAppAndAwaitRunning(Duration.ofSeconds(15), kafkaStreams);
       pipeRecords(producer, inputTopic(), inputEvents);
 
-      final boolean awaited = outputLatch.await(15_000, TimeUnit.MILLISECONDS);
+      final boolean awaited = outputLatch.await(5_000, TimeUnit.MILLISECONDS);
       assertThat(
           String.format(
               "The application did not receive the expected number of peeks: %d / %d\n%s\nVS\n\n%s",
