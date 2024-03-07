@@ -91,7 +91,7 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
 
     // Recommended to keep the total number of collections under 10,000, so we should not
     // let num_segments * num_kafka_partitions exceed 10k at the most
-    private final Map<Segmenter.SegmentPartition, MongoCollection<SessionDoc>> segmentSessions;
+    private final Map<Segmenter.SegmentPartition, MongoCollection<SessionDoc>> segmentToCollection;
 
     public PartitionSegments(
         final MongoDatabase database,
@@ -107,7 +107,7 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
       this.segmenter = segmenter;
       this.epoch = epoch;
       this.collectionCreationOptions = collectionCreationOptions;
-      this.segmentSessions = new ConcurrentHashMap<>();
+      this.segmentToCollection = new ConcurrentHashMap<>();
 
       final var activeSegments = segmenter.activeSegments(kafkaPartition, streamTime);
       if (activeSegments.isEmpty()) {
@@ -165,7 +165,7 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
             SessionDoc.class
         );
       }
-      segmentSessions.put(segmentToCreate, sessionDocs);
+      segmentToCollection.put(segmentToCreate, sessionDocs);
 
       // TODO(agavra): make the tombstone retention configurable
       // this is idempotent
@@ -191,7 +191,7 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
           database.getName(), segmentToExpire.tablePartition, segmentToExpire.segmentStartTimestamp
       );
 
-      final var expiredDocs = segmentSessions.get(segmentToExpire);
+      final var expiredDocs = segmentToCollection.get(segmentToExpire);
       expiredDocs.drop();
     }
   }
@@ -267,7 +267,7 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
 
     return new MongoSessionFlushManager(
         this,
-        (segment) -> sessionsForSegmentPartition(kafkaPartition, segment),
+        (segment) -> collectionForSegmentPartition(kafkaPartition, segment),
         partitioner,
         kafkaPartition,
         metaDoc.streamTime
@@ -351,7 +351,7 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
     final SessionKey sessionKey = new SessionKey(key, sessionStart, sessionEnd);
     final Segmenter.SegmentPartition segment =
         partitioner.tablePartition(kafkaPartition, sessionKey);
-    final var segmentSessions = sessionsForSegmentPartition(kafkaPartition, segment);
+    final var segmentSessions = collectionForSegmentPartition(kafkaPartition, segment);
     if (segmentSessions == null) {
       return null;
     }
@@ -380,15 +380,20 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
     );
 
     final var minKey = new SessionKey(key, 0, earliestSessionEnd);
-    final var maxKey = new SessionKey(key, 0, latestSessionEnd);
+    final var maxKey = new SessionKey(key, 0, latestSessionEnd + 1);
     final List<KeyValueIterator<SessionKey, byte[]>> segmentIterators = new LinkedList<>();
+
     for (final var segment : candidateSegments) {
-      final var sessionsSegment = partitionSegments.segmentSessions.get(segment);
-      if (sessionsSegment == null) {
+      final var collection = partitionSegments.segmentToCollection.get(segment);
+      if (collection == null) {
+        LOG.warn(
+            "Session segment collection could not be queried: {}",
+            segment.segmentStartTimestamp
+        );
         continue;
       }
 
-      final FindIterable<SessionDoc> fetchResults = sessionsSegment.find(
+      final FindIterable<SessionDoc> fetchResults = collection.find(
           Filters.and(
               Filters.gte(SessionDoc.ID, compositeKey(minKey)),
               Filters.lte(SessionDoc.ID, compositeKey(maxKey)),
@@ -404,11 +409,11 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
     return Iterators.wrapped(segmentIterators);
   }
 
-  private MongoCollection<SessionDoc> sessionsForSegmentPartition(
+  private MongoCollection<SessionDoc> collectionForSegmentPartition(
       final int kafkaPartition,
       final Segmenter.SegmentPartition segment
   ) {
-    return kafkaPartitionToSegments.get(kafkaPartition).segmentSessions.get(segment);
+    return kafkaPartitionToSegments.get(kafkaPartition).segmentToCollection.get(segment);
   }
 
   public RemoteWriteResult<Segmenter.SegmentPartition> createSegmentForPartition(

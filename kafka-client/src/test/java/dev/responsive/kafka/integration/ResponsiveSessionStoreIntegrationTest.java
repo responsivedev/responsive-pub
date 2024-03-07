@@ -73,7 +73,7 @@ import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.state.SessionStore;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
@@ -113,7 +113,7 @@ public class ResponsiveSessionStoreIntegrationTest {
     result.all().get();
   }
 
-  @Test
+  @RepeatedTest(100)
   public void shouldComputeSessionAggregate() throws Exception {
     // Given:
     final Duration inactivityGap = Duration.ofSeconds(5);
@@ -134,7 +134,7 @@ public class ResponsiveSessionStoreIntegrationTest {
         new KeyValueTimestamp<>("key1", "d", 8_000L),
         new KeyValueTimestamp<>("key1", "e", 16_000L),
         new KeyValueTimestamp<>("key1", "f", 12_000L),
-        new KeyValueTimestamp<>("key1", "g", 7_500L),
+        new KeyValueTimestamp<>("key1", "g", 9_500L),
         new KeyValueTimestamp<>("key1", "h", 1_500L)
     );
     final List<KeyValue<Windowed<String>, String>> expectedPeeks = List.of(
@@ -148,7 +148,7 @@ public class ResponsiveSessionStoreIntegrationTest {
         new KeyValue<>(windowedKey("key1", 16_000, 16_000), null),
         new KeyValue<>(windowedKey("key1", 12_000, 16_000), "ef"),
         new KeyValue<>(windowedKey("key1", 12_000, 16_000), null),
-        new KeyValue<>(windowedKey("key1", 7500, 16_000), "efg")
+        new KeyValue<>(windowedKey("key1", 9500, 16_000), "efg")
     );
     final CountDownLatch outputLatch = new CountDownLatch(expectedPeeks.size());
     final List<KeyValue<Windowed<String>, String>> actualPeeks = Collections.synchronizedList(
@@ -208,61 +208,6 @@ public class ResponsiveSessionStoreIntegrationTest {
         assertThat(actual.value, Matchers.equalTo(expected.value));
       }
     }
-  }
-
-  @Test
-  public void flake1() throws Exception {
-    shouldComputeSessionAggregate();
-  }
-
-  @Test
-  public void flake2() throws Exception {
-    shouldComputeSessionAggregate();
-  }
-
-  @Test
-  public void flake3() throws Exception {
-    shouldComputeSessionAggregate();
-  }
-
-  @Test
-  public void flake4() throws Exception {
-    shouldComputeSessionAggregate();
-  }
-
-  @Test
-  public void flake5() throws Exception {
-    shouldComputeSessionAggregate();
-  }
-
-  @Test
-  public void flake6() throws Exception {
-    shouldComputeSessionAggregate();
-  }
-
-  @Test
-  public void flake7() throws Exception {
-    shouldComputeSessionAggregate();
-  }
-
-  @Test
-  public void flake8() throws Exception {
-    shouldComputeSessionAggregate();
-  }
-
-  @Test
-  public void flake9() throws Exception {
-    shouldComputeSessionAggregate();
-  }
-
-  @Test
-  public void flake10() throws Exception {
-    shouldComputeSessionAggregate();
-  }
-
-  @Test
-  public void flake11() throws Exception {
-    shouldComputeSessionAggregate();
   }
 
   private String getPeekListString(List<KeyValue<Windowed<String>, String>> peeks) {

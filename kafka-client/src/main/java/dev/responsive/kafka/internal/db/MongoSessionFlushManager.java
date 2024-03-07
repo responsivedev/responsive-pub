@@ -38,14 +38,14 @@ public class MongoSessionFlushManager extends SessionFlushManager {
   private final Logger log;
 
   private final MongoSessionTable table;
-  private final Function<SegmentPartition, MongoCollection<SessionDoc>> sessionsForSegment;
+  private final Function<SegmentPartition, MongoCollection<SessionDoc>> segmentToCollection;
 
   private final SessionSegmentPartitioner partitioner;
   private final int kafkaPartition;
 
   public MongoSessionFlushManager(
       final MongoSessionTable table,
-      final Function<SegmentPartition, MongoCollection<SessionDoc>> sessionsForSegment,
+      final Function<SegmentPartition, MongoCollection<SessionDoc>> segmentToCollection,
       final SessionSegmentPartitioner partitioner,
       final int kafkaPartition,
       final long streamTime
@@ -53,7 +53,7 @@ public class MongoSessionFlushManager extends SessionFlushManager {
     super(table.name(), kafkaPartition, partitioner.segmenter(), streamTime);
 
     this.table = table;
-    this.sessionsForSegment = sessionsForSegment;
+    this.segmentToCollection = segmentToCollection;
     this.partitioner = partitioner;
     this.kafkaPartition = kafkaPartition;
 
@@ -81,7 +81,7 @@ public class MongoSessionFlushManager extends SessionFlushManager {
         table,
         kafkaPartition,
         segment,
-        () -> sessionsForSegment.apply(segment)
+        () -> segmentToCollection.apply(segment)
     );
   }
 
