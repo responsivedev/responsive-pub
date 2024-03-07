@@ -36,6 +36,8 @@ import static org.hamcrest.MatcherAssert.assertThat;
 
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.config.StorageBackend;
+import dev.responsive.kafka.api.stores.ResponsiveSessionParams;
+import dev.responsive.kafka.api.stores.ResponsiveStores;
 import dev.responsive.kafka.testutils.KeyValueTimestamp;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
@@ -69,7 +71,6 @@ import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.state.SessionStore;
-import org.apache.kafka.streams.state.internals.RocksDbSessionBytesStoreSupplier;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -120,16 +121,10 @@ public class ResponsiveSessionStoreIntegrationTest {
     final SessionWindows window =
         SessionWindows.ofInactivityGapAndGrace(inactivityGap, gracePeriod);
 
-    // final Materialized<String, String, SessionStore<Bytes, byte[]>> responsiveStore =
-    //     ResponsiveStores.sessionMaterialized(
-    //         ResponsiveSessionParams.session(name, inactivityGap, gracePeriod)
-    //     );
-
     final Materialized<String, String, SessionStore<Bytes, byte[]>> responsiveStore =
-        Materialized.as(new RocksDbSessionBytesStoreSupplier(
-            name,
-            inactivityGap.plus(gracePeriod).toMillis()
-        ));
+        ResponsiveStores.sessionMaterialized(
+            ResponsiveSessionParams.session(name, inactivityGap, gracePeriod)
+        );
 
     // Start from timestamp of 0L to get predictable results
     final List<KeyValueTimestamp<String, String>> inputEvents = asList(

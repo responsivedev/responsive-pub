@@ -391,7 +391,8 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
       final FindIterable<SessionDoc> fetchResults = sessionsSegment.find(
           Filters.and(
               Filters.gte(SessionDoc.ID, compositeKey(minKey)),
-              Filters.lte(SessionDoc.ID, compositeKey(maxKey))
+              Filters.lte(SessionDoc.ID, compositeKey(maxKey)),
+              Filters.exists(SessionDoc.TOMBSTONE_TS, false)
           )
       );
 

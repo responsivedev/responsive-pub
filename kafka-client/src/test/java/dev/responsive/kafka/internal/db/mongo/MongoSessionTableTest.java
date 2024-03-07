@@ -104,6 +104,7 @@ class MongoSessionTableTest {
    * - Correctly fail to retrieve the session when querying the remote table with start/end [0, 100]
    * - Correctly fail to retrieve the session when querying the remote table with start/end [0, 200]
    * - Correctly fail to retrieve the session when querying the remote table with the wrong key
+   * - Correctly fail to retrieve the session when querying the remote table with a range query
    * */
   @Test
   public void shouldDeleteProperly() {
@@ -137,6 +138,10 @@ class MongoSessionTableTest {
     assertThat(value, Matchers.nullValue());
     value = table.fetch(0, Bytes.wrap("other".getBytes()), 0, 100);
     assertThat(value, Matchers.nullValue());
+    var values = table.fetchAll(0, byteKey, 0, 200);
+    assertThat("no value should be returned from fetchAll",
+        values.hasNext(), Matchers.equalTo(false)
+    );
   }
 
   /*
