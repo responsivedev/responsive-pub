@@ -297,10 +297,11 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
   ) {
     final var partitionSegments = kafkaPartitionToSegments.get(kafkaPartition);
 
+    final BasicDBObject id = compositeKey(sessionKey);
     final long epoch = partitionSegments.epoch;
     return new UpdateOneModel<>(
         Filters.and(
-            Filters.eq(SessionDoc.ID, compositeKey(sessionKey)),
+            Filters.eq(SessionDoc.ID, id),
             Filters.lte(SessionDoc.EPOCH, epoch)
         ),
         Updates.combine(
@@ -380,7 +381,7 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
     );
 
     final var minKey = new SessionKey(key, 0, earliestSessionEnd);
-    final var maxKey = new SessionKey(key, 0, latestSessionEnd + 1);
+    final var maxKey = new SessionKey(key, Long.MAX_VALUE, latestSessionEnd);
     final List<KeyValueIterator<SessionKey, byte[]>> segmentIterators = new LinkedList<>();
 
     for (final var segment : candidateSegments) {
