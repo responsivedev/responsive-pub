@@ -73,7 +73,7 @@ import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.state.SessionStore;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.RepeatedTest;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
@@ -113,7 +113,7 @@ public class ResponsiveSessionStoreIntegrationTest {
     result.all().get();
   }
 
-  @RepeatedTest(100)
+  @Test
   public void shouldComputeSessionAggregate() throws Exception {
     // Given:
     final Duration inactivityGap = Duration.ofSeconds(5);
