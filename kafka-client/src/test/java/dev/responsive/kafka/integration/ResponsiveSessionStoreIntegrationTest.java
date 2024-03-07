@@ -21,8 +21,6 @@ import static dev.responsive.kafka.testutils.IntegrationTestUtils.pipeRecords;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.startAppAndAwaitRunning;
 import static java.util.Arrays.asList;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.MAX_POLL_RECORDS_CONFIG;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
@@ -45,6 +43,7 @@ import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -74,7 +73,6 @@ import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.state.SessionStore;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -116,7 +114,6 @@ public class ResponsiveSessionStoreIntegrationTest {
   }
 
   @Test
-  @Disabled
   public void shouldComputeSessionAggregate() throws Exception {
     // Given:
     final Duration inactivityGap = Duration.ofSeconds(5);
@@ -155,7 +152,8 @@ public class ResponsiveSessionStoreIntegrationTest {
         new KeyValue<>(windowedKey("key1", 7500, 16_000), "efg")
     );
     final CountDownLatch outputLatch = new CountDownLatch(expectedPeeks.size());
-    final List<KeyValue<Windowed<String>, String>> actualPeeks = new ArrayList<>();
+    final List<KeyValue<Windowed<String>, String>> actualPeeks = Collections.synchronizedList(
+        new ArrayList<>());
 
     final StreamsBuilder builder = new StreamsBuilder();
     final KStream<String, String> input = builder.stream(inputTopic());
@@ -164,8 +162,10 @@ public class ResponsiveSessionStoreIntegrationTest {
         .windowedBy(window)
         .aggregate(() -> "", sessionAggregator(), sessionMerger(), responsiveStore)
         .toStream()
-        .peek((k, v) -> actualPeeks.add(new KeyValue<>(k, v)))
-        .peek((k, v) -> outputLatch.countDown())
+        .peek((k, v) -> {
+          actualPeeks.add(new KeyValue<>(k, v));
+          outputLatch.countDown();
+        })
         .selectKey((k, v) -> k.key())
         .to(outputTopic());
 
@@ -181,7 +181,7 @@ public class ResponsiveSessionStoreIntegrationTest {
       startAppAndAwaitRunning(Duration.ofSeconds(15), kafkaStreams);
       pipeRecords(producer, inputTopic(), inputEvents);
 
-      final boolean awaited = outputLatch.await(25_000, TimeUnit.MILLISECONDS);
+      final boolean awaited = outputLatch.await(15_000, TimeUnit.MILLISECONDS);
       assertThat(
           String.format(
               "The application did not receive the expected number of peeks: %d / %d\n%s\nVS\n\n%s",
@@ -209,6 +209,61 @@ public class ResponsiveSessionStoreIntegrationTest {
         assertThat(actual.value, Matchers.equalTo(expected.value));
       }
     }
+  }
+
+  @Test
+  public void flake1() throws Exception {
+    shouldComputeSessionAggregate();
+  }
+
+  @Test
+  public void flake2() throws Exception {
+    shouldComputeSessionAggregate();
+  }
+
+  @Test
+  public void flake3() throws Exception {
+    shouldComputeSessionAggregate();
+  }
+
+  @Test
+  public void flake4() throws Exception {
+    shouldComputeSessionAggregate();
+  }
+
+  @Test
+  public void flake5() throws Exception {
+    shouldComputeSessionAggregate();
+  }
+
+  @Test
+  public void flake6() throws Exception {
+    shouldComputeSessionAggregate();
+  }
+
+  @Test
+  public void flake7() throws Exception {
+    shouldComputeSessionAggregate();
+  }
+
+  @Test
+  public void flake8() throws Exception {
+    shouldComputeSessionAggregate();
+  }
+
+  @Test
+  public void flake9() throws Exception {
+    shouldComputeSessionAggregate();
+  }
+
+  @Test
+  public void flake10() throws Exception {
+    shouldComputeSessionAggregate();
+  }
+
+  @Test
+  public void flake11() throws Exception {
+    shouldComputeSessionAggregate();
   }
 
   private String getPeekListString(List<KeyValue<Windowed<String>, String>> peeks) {
@@ -247,9 +302,6 @@ public class ResponsiveSessionStoreIntegrationTest {
     properties.put(COMMIT_INTERVAL_MS_CONFIG, 1); // commit as often as possible
 
     properties.put(consumerPrefix(REQUEST_TIMEOUT_MS_CONFIG), 5_000);
-    properties.put(consumerPrefix(SESSION_TIMEOUT_MS_CONFIG), 5_000 - 1);
-
-    properties.put(consumerPrefix(MAX_POLL_RECORDS_CONFIG), 1);
 
     return properties;
   }
