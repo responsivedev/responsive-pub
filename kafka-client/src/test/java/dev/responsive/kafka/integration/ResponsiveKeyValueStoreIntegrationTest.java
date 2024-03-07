@@ -42,7 +42,7 @@ import dev.responsive.kafka.api.stores.ResponsiveStores;
 import dev.responsive.kafka.testutils.KeyValueTimestamp;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
-import dev.responsive.kafka.testutils.StoreComparator;
+import dev.responsive.kafka.testutils.StoreComparatorSuppliers;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -130,14 +130,14 @@ public class ResponsiveKeyValueStoreIntegrationTest {
     final KeyValueBytesStoreSupplier responsiveStore =
         ResponsiveStores.keyValueStore(ResponsiveKeyValueParams.keyValue(name));
 
-    final StoreComparator.CompareFunction compare =
+    final StoreComparatorSuppliers.CompareFunction compare =
         (String method, Object[] args, Object actual, Object truth) -> {
           final String reason = method + " should yield identical results.";
           assertThat(reason, actual, Matchers.equalTo(truth));
         };
 
     final Materialized<String, String, KeyValueStore<Bytes, byte[]>> combinedStore =
-        Materialized.as(new StoreComparator.MultiKeyValueStoreSupplier(
+        Materialized.as(new StoreComparatorSuppliers.MultiKeyValueStoreSupplier(
             rocksDbStore, responsiveStore, compare
         ));
 

@@ -33,7 +33,7 @@ import org.apache.kafka.streams.state.SessionStore;
 public class SessionStoreComparator<K, V> implements SessionStore<K, V> {
   private final SessionStore<K, V> sourceOfTruth;
   private final SessionStore<K, V> candidate;
-  private final StoreComparator.CompareFunction compare;
+  private final StoreComparatorSuppliers.CompareFunction compare;
 
   public SessionStoreComparator(SessionStore<K, V> sourceOfTruth, SessionStore<K, V> candidate) {
     this(
@@ -47,7 +47,7 @@ public class SessionStoreComparator<K, V> implements SessionStore<K, V> {
 
   public SessionStoreComparator(
       SessionStore<K, V> sourceOfTruth, SessionStore<K, V> candidate,
-      StoreComparator.CompareFunction compare
+      StoreComparatorSuppliers.CompareFunction compare
   ) {
     this.sourceOfTruth = sourceOfTruth;
     this.candidate = candidate;
@@ -76,7 +76,7 @@ public class SessionStoreComparator<K, V> implements SessionStore<K, V> {
     StateStoreContext proxy = (StateStoreContext) Proxy.newProxyInstance(
         InternalProcessorContext.class.getClassLoader(),
         new Class<?>[] {InternalProcessorContext.class},
-        new StoreComparator.MultiStateStoreContext(storeContext, root)
+        new MultiStateStoreContext(storeContext, root)
     );
     this.sourceOfTruth.init(proxy, root);
     this.candidate.init(proxy, root);

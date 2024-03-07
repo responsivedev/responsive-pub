@@ -32,7 +32,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 public class KeyValueStoreComparator<K, V> implements KeyValueStore<K, V> {
   private final KeyValueStore<K, V> sourceOfTruth;
   private final KeyValueStore<K, V> candidate;
-  private final StoreComparator.CompareFunction compare;
+  private final StoreComparatorSuppliers.CompareFunction compare;
 
   public KeyValueStoreComparator(KeyValueStore<K, V> sourceOfTruth, KeyValueStore<K, V> candidate) {
     this(
@@ -46,7 +46,7 @@ public class KeyValueStoreComparator<K, V> implements KeyValueStore<K, V> {
 
   public KeyValueStoreComparator(
       KeyValueStore<K, V> sourceOfTruth, KeyValueStore<K, V> candidate,
-      StoreComparator.CompareFunction compare
+      StoreComparatorSuppliers.CompareFunction compare
   ) {
     this.sourceOfTruth = sourceOfTruth;
     this.candidate = candidate;
@@ -190,7 +190,7 @@ public class KeyValueStoreComparator<K, V> implements KeyValueStore<K, V> {
     StateStoreContext proxy = (StateStoreContext) Proxy.newProxyInstance(
         InternalProcessorContext.class.getClassLoader(),
         new Class<?>[] {InternalProcessorContext.class},
-        new StoreComparator.MultiStateStoreContext(context, root)
+        new MultiStateStoreContext(context, root)
     );
     this.sourceOfTruth.init(proxy, root);
     this.candidate.init(proxy, root);
