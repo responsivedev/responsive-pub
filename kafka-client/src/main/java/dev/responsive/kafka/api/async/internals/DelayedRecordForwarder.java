@@ -16,6 +16,7 @@
 
 package dev.responsive.kafka.api.async.internals;
 
+import dev.responsive.kafka.api.async.internals.records.ForwardableRecord;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;

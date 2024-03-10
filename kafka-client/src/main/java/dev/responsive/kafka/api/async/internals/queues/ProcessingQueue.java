@@ -14,8 +14,10 @@
  *  limitations under the License.
  */
 
-package dev.responsive.kafka.api.async.internals;
+package dev.responsive.kafka.api.async.internals.queues;
 
+import dev.responsive.kafka.api.async.internals.AsyncThread;
+import dev.responsive.kafka.api.async.internals.records.ProcessableRecord;
 import java.util.Comparator;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.PriorityBlockingQueue;
@@ -31,6 +33,7 @@ import org.apache.kafka.streams.processor.TaskId;
  * -Produces to queue --> StreamThread
  * -Consumes from queue --> AsyncThread
  * -One per physical AsyncProcessor instance
+ *   (ie per logical processor per partition per StreamThread)
  */
 public class ProcessingQueue<KIn, VIn> {
 

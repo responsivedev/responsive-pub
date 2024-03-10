@@ -14,7 +14,7 @@
  *  limitations under the License.
  */
 
-package dev.responsive.kafka.api.async.internals;
+package dev.responsive.kafka.api.async.internals.records;
 
 /**
  * Used to track the progress and state of a record that is currently being executed asynchronously

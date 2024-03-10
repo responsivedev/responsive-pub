@@ -16,13 +16,13 @@
 
 package dev.responsive.kafka.api.async.internals;
 
+import dev.responsive.kafka.api.async.internals.queues.ProcessingQueue;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Queue;
+import java.util.Set;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
-import org.apache.kafka.streams.processor.api.Record;
 
 /**
  * Coordinates communication between the StreamThread and execution threads, as
@@ -60,8 +60,12 @@ public class AsyncThreadPool implements Closeable {
     }
   }
 
-  public Map<String, AsyncProcessorContext<?, ?>> asyncThreadToContext() {
-    return threadToContext;
+  public Set<String> asyncThreadNames() {
+    return threadPool.keySet();
+  }
+
+  public AsyncProcessorContext<?, ?> asyncContextForThread(final String threadName) {
+    return threadPool.get(threadName).context();
   }
 
   private static String threadName(

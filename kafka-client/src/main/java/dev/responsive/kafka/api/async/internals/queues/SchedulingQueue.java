@@ -14,7 +14,7 @@
  *  limitations under the License.
  */
 
-package dev.responsive.kafka.api.async.internals;
+package dev.responsive.kafka.api.async.internals.queues;
 
 import java.util.function.Predicate;
 import org.apache.kafka.streams.processor.api.Record;
@@ -38,6 +38,7 @@ import org.apache.kafka.streams.processor.api.Record;
  * Threading notes:
  * -Should only be accessed from the StreamThread
  * -One per physical AsyncProcessor instance
+ *   (ie per logical processor per partition per StreamThread)
  */
 public class SchedulingQueue<KIn, VIn> {
 

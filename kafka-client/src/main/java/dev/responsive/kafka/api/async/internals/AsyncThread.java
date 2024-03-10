@@ -16,6 +16,7 @@
 
 package dev.responsive.kafka.api.async.internals;
 
+import dev.responsive.kafka.api.async.internals.queues.ProcessingQueue;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicBoolean;

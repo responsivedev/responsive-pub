@@ -14,57 +14,52 @@
  *  limitations under the License.
  */
 
-package dev.responsive.kafka.api.async.internals;
+package dev.responsive.kafka.api.async.internals.records;
 
+import dev.responsive.kafka.api.async.internals.AsyncProcessorContext;
+import java.util.function.Consumer;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 
 /**
- * A record that is ready and able to be forwarded by the StreamThread, plus the
- * metadata needed to do so. Essentially the output record of an async processor.
- * For the input record of an async processor, see {@link ProcessableRecord}
+ * A record that is to be processed asynchronously, and the metadata needed to do so
  * <p>
  * Threading notes:
- * -created by the AsyncThread but "executed" (forwarded) by the StreamThread
+ * -created by the StreamThread
  */
-public class ForwardableRecord<KOut, VOut> {
+public class ProcessableRecord<KIn, VIn> {
 
   // Actual inputs to #forward
-  private final Record<KOut, VOut> record;
-  private final String childName; // may be null
+  private final Record<KIn, VIn> record;
 
-  // Metadata for resetting the processor context before the #forward
+  // Metadata for resetting the processor context before the #process
   private final ProcessorRecordContext recordContext;
 
-  // Callback to notify listeners in the async processing architecture, for example
-  // to unblock records waiting to be scheduled
-  private final Runnable listener;
+  // Executes the user's #process method on this record
+  private final Consumer<Record<KIn, VIn>> process;
 
-  public ForwardableRecord(
-      final Record<KOut, VOut> record,
-      final String childName,
+  public ProcessableRecord(
+      final Record<KIn, VIn> record,
       final ProcessorRecordContext recordContext,
-      final Runnable listener
+      final Consumer<Record<KIn, VIn>> process
   ) {
     this.record = record;
-    this.listener = listener;
     this.recordContext = recordContext;
-    this.childName = childName;
+    this.process = process;
   }
 
-  public Record<KOut, VOut> record() {
+  public Record<KIn, VIn> record() {
     return record;
-  }
-
-  public String childName() {
-    return childName;
   }
 
   public ProcessorRecordContext recordContext() {
     return recordContext;
   }
 
-  public void notifyListeners() {
-      listener.run();
+  public void process(final AsyncProcessorContext<?, ?> asyncContext) {
+    // set context metadata needed for processing
+    asyncContext.prepareForProcess(recordContext);
+    process.accept(record);
   }
+
 }

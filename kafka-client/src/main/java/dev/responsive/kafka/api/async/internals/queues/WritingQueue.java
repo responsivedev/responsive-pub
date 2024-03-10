@@ -14,36 +14,44 @@
  *  limitations under the License.
  */
 
-package dev.responsive.kafka.api.async.internals;
+package dev.responsive.kafka.api.async.internals.queues;
 
+import dev.responsive.kafka.api.async.internals.records.WriteableRecord;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import org.apache.kafka.streams.processor.api.Record;
-import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 
 /**
- * A queue that holds on to records that are ready to be forwarded by the StreamThread.
- * This queue is used to hand off output records from the async thread pool to the
- * corresponding StreamThread to ensure that all further processing beyond/outside
- * the async processor is single threaded and executed by the original StreamThread.
+ * A queue for holding the intercepted {@code #put} calls to a state store that occur
+ * within the {@code #process} method of an async processor.
+ * <p>
+ * These must be intercepted by the async state stores because {@code #process} is
+ * invoked on the AsyncThreads, whereas all puts must be executed on the original
+ * StreamThread due to the possibility of a cache eviction and subsequent processing.
+ * Essentially, all puts are treated as potential forwards, and handled as such.
+ * For this reason the class mirrors the {@link ForwardingQueue}, except that there
+ * is one per state store in the processor rather than one per processor.
  * <p>
  * Threading notes:
  * -Produces to queue --> async thread pool
  * -Consumes from queue --> StreamThread
- * -One per physical AsyncProcessor instance
+ * -One per physical StateStore
+ *   (ie per state store per logical processor per partition per StreamThread)
  */
-public class ForwardingQueue<KOut, VOut> {
+public class WritingQueue<K, V> {
 
   // Use ConcurrentLinkQueue since we just need a simple read-write thread safety with
   // non-blocking queue semantics
-  private final Queue<ForwardableRecord<KOut, VOut>> forwardableRecords =
+  private final Queue<WriteableRecord<K, V>> writeableRecords =
       new ConcurrentLinkedQueue<>();
+
+  private final String stateStoreName;
 
   /**
    * @return true iff there are any records available to forward
    */
   public boolean isEmpty() {
-    return forwardableRecords.isEmpty();
+    return writeableRecords.isEmpty();
   }
 
   /**
@@ -51,13 +59,13 @@ public class ForwardingQueue<KOut, VOut> {
    * <p>
    * Should only be invoked by AsyncThreads
    */
-  public void addToQueue(
-      final Record<KOut, VOut> record,
+  public void write(
+      final Record<K, V> record,
       final String childName, // can be null
       final ProcessorRecordContext recordContext,
       final Runnable forwardingListener
-      ) {
-    forwardableRecords.add(
+  ) {
+    writeableRecords.add(
         new ForwardableRecord<>(record, childName, recordContext, forwardingListener)
     );
   }
@@ -67,8 +75,8 @@ public class ForwardingQueue<KOut, VOut> {
    * <p>
    * Should only be invoked by StreamThreads
    */
-  public ForwardableRecord<KOut, VOut> poll() {
-    return forwardableRecords.poll();
+  public ForwardableRecord<K, V> poll() {
+    return writeableRecords.poll();
   }
-
+  
 }

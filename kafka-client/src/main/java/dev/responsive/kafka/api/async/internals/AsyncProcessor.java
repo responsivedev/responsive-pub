@@ -18,7 +18,12 @@ package dev.responsive.kafka.api.async.internals;
 
 import static dev.responsive.kafka.internal.utils.Utils.extractStreamThreadIndex;
 
+import dev.responsive.kafka.api.async.internals.queues.ForwardingQueue;
+import dev.responsive.kafka.api.async.internals.queues.ProcessingQueue;
+import dev.responsive.kafka.api.async.internals.queues.SchedulingQueue;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
@@ -95,11 +100,12 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn,
         "async-processor [%s-%d]", streamThreadContext.currentProcessorName(), taskId.partition()
     )).logger(AsyncProcessor.class);
 
-    final AsyncContextRouter<KOut, VOut> userContext = new AsyncContextRouter<>((threadPool.asyncThreadToContext()))
-
     // Wrap the context handed to the user in the async router, to ensure that:
     //  a) user calls are delegated to the context owned by the current thread
     //  b) async calls can be intercepted (ie forwards and StateStore reads/writes)
+    final AsyncContextRouter<KOut, VOut> userContext =
+        new AsyncContextRouter<>(asyncThreadToContext(threadPool));
+
     userProcessor.init(userContext);
     verifyConnectedStateStores();
   }
@@ -140,6 +146,24 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn,
     }
   }
 
+  @SuppressWarnings("unchecked")
+  private static <KOut, VOut> Map<String, AsyncProcessorContext<KOut, VOut>> asyncThreadToContext(
+      final AsyncThreadPool threadPool
+  ) {
+    final Set<String> asyncThreadNames = threadPool.asyncThreadNames();
+
+    final Map<String, AsyncProcessorContext<KOut, VOut>> asyncThreadToContext =
+        new HashMap<>(asyncThreadNames.size());
+
+    for (final String asyncThread : asyncThreadNames) {
+      asyncThreadToContext.put(
+          asyncThread,
+          (AsyncProcessorContext<KOut, VOut>) threadPool.asyncContextForThread(asyncThread));
+    }
+
+    return asyncThreadToContext;
+  }
+
   private void drainSchedulingQueue() {
     Record<KIn, VIn> nextProcessableRecord = schedulingQueue.poll();
     while (nextProcessableRecord != null) {
@@ -163,26 +187,29 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn,
     return forwardingQueue.isEmpty() && schedulingQueue.isEmpty();
   }
 
+  /**
+   * Verify that
+   */
   private void verifyConnectedStateStores() {
-    final Map<String, AsyncKeyValueStore<?, ?>> allAsyncStores = streamThreadContext.getAllAsyncStores();
-    if (allAsyncStores.size() != connectedStores.size()) {
+    final Map<String, AsyncKeyValueStore<?, ?>> actualStores = streamThreadContext.getAllAsyncStores();
+    if (actualStores.size() != connectedStores.size()) {
       log.error("Number of connected store names is not equal to the number of stores retrieved "
                     + "via ProcessorContext#getStateStore during initialization. Make sure to pass "
                     + "all state stores used by this processor to the AsyncProcessorSupplier, and "
                     + "they are (all) initialized during the Processor#init call before actual "
                     + "processing begins. Found {} connected store names and {} actual stores used",
-                connectedStores.size(), allAsyncStores.keySet().size());
+                connectedStores.size(), actualStores.keySet().size());
       throw new IllegalStateException("Number of actual stores initialized by this processor does"
                                           + "not match the number of connected store names that were provided to the "
                                           + "AsyncProcessorSupplier");
-    } else if (!connectedStores.keySet().containsAll(allAsyncStores.keySet())) {
+    } else if (!connectedStores.keySet().containsAll(actualStores.keySet())) {
       log.error("The list of connected store names was not identical to the set of store names "
                     + "that were used to access state stores via the ProcessorContext#getStateStore "
                     + "method during initialization. Double check the list of store names that are "
                     + "being passed in to the AsyncProcessorSupplier, and make sure it aligns with "
                     + "the actual store names being used by the processor itself. "
                     + "Got connectedStoreNames=[{}] and actualStoreNames=[{}]",
-                connectedStores.keySet(), allAsyncStores.keySet());
+                connectedStores.keySet(), actualStores.keySet());
       throw new IllegalStateException("The names of actual stores initialized by this processor do"
                                           + "not match the names of connected stores that were "
                                           + "provided to the AsyncProcessorSupplier");
