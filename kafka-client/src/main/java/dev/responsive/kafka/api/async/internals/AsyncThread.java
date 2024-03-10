@@ -23,25 +23,44 @@ import org.apache.kafka.streams.processor.api.ProcessorContext;
 
 public class AsyncThread extends Thread implements Closeable {
 
+  private boolean initialized = false;
+
   private final AtomicBoolean shutdownRequested = new AtomicBoolean(false);
-  // TODO: once we decouple the thread pool from the processor instance, this
-  //  will need to become a map from processor to context as there should be
+
+  // TODO: once we decouple the thread pool from the processor instance, these
+  //  will need to become a map from processor to context/queue as there should be
   //  an async context per processor instance
   private final AsyncProcessorContext<?, ?> asyncContext;
-
+  private final ProcessingQueue<?, ?> processableRecords;
 
   public AsyncThread(
       final String name,
-      final ProcessorContext<?, ?> context
+      final ProcessorContext<?, ?> context,
+      final ProcessingQueue<?, ?> processableRecords
   ) {
     super(name);
-    this.asyncContext = new AsyncProcessorContext<Object, Object>(context);
+    this.asyncContext = new AsyncProcessorContext<>(context);
+    this.processableRecords = processableRecords;
+  }
+
+  public void init(final AsyncProcessorContext<?, ?> asyncContext) {
+
+  }
+
+  // TODO: once thread pool and processor are decoupled, this should look up the
+  //  context in the map by processor node name
+  public AsyncProcessorContext<?, ?> context() {
+    return asyncContext;
   }
 
   @Override
   public void run() {
+    if (!initialized) {
+      throw new IllegalStateException("Attempted to start up async thread before initialization");
+    }
+
     while (!shutdownRequested.getOpaque()) {
-      // TODO
+      processableRecords.poll().process(asyncContext);
     }
   }
 

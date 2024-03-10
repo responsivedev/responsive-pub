@@ -54,14 +54,17 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn,
   // Owned and solely accessed by this StreamThread
   private final SchedulingQueue<KIn, VIn> schedulingQueue = new SchedulingQueue<>();
 
+  // Exclusively written to by this StreamThread (and exclusively read by AsyncThreads)
+  private final ProcessingQueue<KIn, VIn> processableRecords = new ProcessingQueue<>();
+
   // Exclusively read by this StreamThread (and exclusively written to by AsyncThreads)
-  private final RecordForwardingQueue<KOut, VOut> forwardingQueue = new RecordForwardingQueue<>();
+  private final ForwardingQueue<KOut, VOut> forwardingQueue = new ForwardingQueue<>();
 
   // Effectively final -- initialized in #init
   private DelayedRecordForwarder<KOut, VOut> recordForwarder;
   private TaskId taskId;
   private AsyncProcessorContext<KOut, VOut> streamThreadContext;
-  private AsyncThreadPool<KIn, VIn, KOut, VOut> threadPool;
+  private AsyncThreadPool threadPool;
 
   // Note: the constructor will be called from the main application thread (ie the
   // one that creates/starts the KafkaStreams object) so we have to delay the creation
@@ -78,22 +81,26 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn,
 
   @Override
   public void init(final ProcessorContext<KOut, VOut> context) {
-    this.threadPool = new AsyncThreadPool<>(
+    this.threadPool = new AsyncThreadPool(
         THREAD_POOL_SIZE,
         context,
-        extractStreamThreadIndex(Thread.currentThread().getName())
+        extractStreamThreadIndex(Thread.currentThread().getName()),
+        processableRecords
     );
     this.taskId = context.taskId();
     this.streamThreadContext = new AsyncProcessorContext<>(context);
     this.recordForwarder = new DelayedRecordForwarder<>(context);
+
     this.log = new LogContext(String.format(
-        "async-processor [%s-%d]", streamThreadContext, taskId.partition()
+        "async-processor [%s-%d]", streamThreadContext.currentProcessorName(), taskId.partition()
     )).logger(AsyncProcessor.class);
+
+    final AsyncContextRouter<KOut, VOut> userContext = new AsyncContextRouter<>((threadPool.asyncThreadToContext()))
 
     // Wrap the context handed to the user in the async router, to ensure that:
     //  a) user calls are delegated to the context owned by the current thread
     //  b) async calls can be intercepted (ie forwards and StateStore reads/writes)
-    userProcessor.init(new AsyncContextRouter<>(threadPool.asyncThreadToContext()));
+    userProcessor.init(userContext);
     verifyConnectedStateStores();
   }
 
@@ -107,7 +114,6 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn,
 
     // Drain the scheduling queue by passing any processable records to the async thread pool
     drainSchedulingQueue();
-
   }
 
   @Override

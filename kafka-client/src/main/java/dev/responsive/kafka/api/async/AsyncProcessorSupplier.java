@@ -37,7 +37,6 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.AsyncTimestampedKeyValueStoreBuilder;
 
 /**
- *
  * Current limitations:
  * 1) Not compatible with puncuators or input records that originate in upstream punctuators
  * 2) Key-Value stores only at this time: async window and session stores coming soon
@@ -94,7 +93,7 @@ public final class AsyncProcessorSupplier<KIn, VIn, KOut, VOut> implements Proce
     for (final StoreBuilder<?> builder : userProcessorSupplier.stores()) {
       final String storeName = builder.name();
       if (builder instanceof ResponsiveStoreBuilder) {
-        final ResponsiveStoreBuilder<?, ?, ?> responsiveBuilder = (ResponsiveStoreBuilder<?>) builder;
+        final ResponsiveStoreBuilder<?, ?, ?> responsiveBuilder = (ResponsiveStoreBuilder<?, ?, ?>) builder;
 
         final StoreType storeType = responsiveBuilder.storeType();
         switch (storeType) {

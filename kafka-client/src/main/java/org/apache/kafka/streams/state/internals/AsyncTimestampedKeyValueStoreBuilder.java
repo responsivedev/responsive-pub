@@ -48,14 +48,15 @@ public class AsyncTimestampedKeyValueStoreBuilder<K, V> extends TimestampedKeyVa
     private final ValueAndTimestampSerde<V> valueSerde;
     private final Time time;
 
+    @SuppressWarnings("unchecked")
     public AsyncTimestampedKeyValueStoreBuilder(
-        ResponsiveStoreBuilder<K, ValueAndTimestamp<V>, TimestampedKeyValueStore<K, V>> responsiveBuilder
+        final ResponsiveStoreBuilder<?, ?, ?> responsiveBuilder
     ) {
       this(
-          responsiveBuilder,
+          (ResponsiveStoreBuilder<K, ValueAndTimestamp<V>, TimestampedKeyValueStore<K, V>>) responsiveBuilder,
           (KeyValueBytesStoreSupplier) responsiveBuilder.storeSupplier(),
-          responsiveBuilder.keySerde(),
-          responsiveBuilder.valueSerde(),
+          ((ResponsiveStoreBuilder<K, ValueAndTimestamp<V>, TimestampedKeyValueStore<K, V>>) responsiveBuilder).keySerde(),
+          ((ResponsiveStoreBuilder<K, ValueAndTimestamp<V>, TimestampedKeyValueStore<K, V>>) responsiveBuilder).valueSerde(),
           responsiveBuilder.time()
       );
     }

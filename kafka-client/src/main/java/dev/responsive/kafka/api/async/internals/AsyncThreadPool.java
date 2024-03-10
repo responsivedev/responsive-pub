@@ -28,27 +28,30 @@ import org.apache.kafka.streams.processor.api.Record;
  * Coordinates communication between the StreamThread and execution threads, as
  * well as protecting and managing shared objects and accesses
  */
-public class AsyncThreadPool<KIn, VIn, KOut, VOut> implements Closeable {
+public class AsyncThreadPool implements Closeable {
 
   // TODO: start up new threads when existing ones die to maintain the target size
   private final int threadPoolSize;
   private final Map<String, AsyncThread> threadPool;
-  private final Map<String, AsyncProcessorContext<KOut, VOut>> threadToContext;
+  private final Map<String, AsyncProcessorContext<?, ?>> threadToContext;
 
-  private final Queue<Record<KIn, VIn>> processableRecords;
+  private final ProcessingQueue<?, ?> processableRecords;
 
   public AsyncThreadPool(
       final int threadPoolSize,
-      final ProcessorContext<KOut, VOut> context,
-      final String streamThreadIndex
+      final ProcessorContext<?, ?> context,
+      final String streamThreadIndex,
+      final ProcessingQueue<?, ?> processableRecords
   ) {
     this.threadPoolSize = threadPoolSize;
     this.threadPool = new HashMap<>(threadPoolSize);
     this.threadToContext = new HashMap<>(threadPoolSize);
+    this.processableRecords = processableRecords;
 
     for (int i = 0; i < threadPoolSize; ++i) {
       final String name = threadName(streamThreadIndex, i);
-      final AsyncThread thread = new AsyncThread(name, context);
+      final AsyncThread thread = new AsyncThread(name, context, processableRecords);
+
       threadPool.put(name, thread);
       threadToContext.put(name, thread.context());
     }
@@ -57,8 +60,8 @@ public class AsyncThreadPool<KIn, VIn, KOut, VOut> implements Closeable {
     }
   }
 
-  public Map<String, AsyncProcessorContext<KOut, VOut>> asyncThreadToContext() {
-
+  public Map<String, AsyncProcessorContext<?, ?>> asyncThreadToContext() {
+    return threadToContext;
   }
 
   private static String threadName(
@@ -68,11 +71,11 @@ public class AsyncThreadPool<KIn, VIn, KOut, VOut> implements Closeable {
     return String.format("AsyncThread-%s-%d", streamThreadIndex, asyncThreadIndex);
   }
 
-
   @Override
   public void close() throws IOException {
     for (final AsyncThread thread : threadPool.values()) {
-      thread.stop();
+      thread.close();
     }
+    // TODO: wait for threads to join...or is it safe to just make them daemon threads?
   }
 }

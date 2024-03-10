@@ -17,7 +17,6 @@
 package dev.responsive.kafka.api.async.internals;
 
 import java.util.function.Predicate;
-import javax.annotation.concurrent.NotThreadSafe;
 import org.apache.kafka.streams.processor.api.Record;
 
 // TODO:
@@ -33,11 +32,13 @@ import org.apache.kafka.streams.processor.api.Record;
  * not yet been fully processed -- will be polled from this queue and then passed on to
  * the async thread pool by the StreamThread.
  * <p>
+ * We implement a custom doubly-linked list to enable conditional queue-like semantics
+ * with efficient arbitrary removal of the first element that meets the condition.
+ * <p>
  * Threading notes:
  * -Should only be accessed from the StreamThread
  * -One per physical AsyncProcessor instance
  */
-@NotThreadSafe
 public class SchedulingQueue<KIn, VIn> {
 
   private final RecordNode<KIn, VIn> head;

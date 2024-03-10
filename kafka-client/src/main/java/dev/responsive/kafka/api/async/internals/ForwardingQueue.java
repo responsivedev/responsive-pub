@@ -22,18 +22,17 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 
 /**
- * A queue that holds on to record that are ready to be forwarded queue for records that are
- * to be forwarded by the StreamThread. This queue is used to hand off output records from
- * the async thread pool to the corresponding StreamThread to ensure that all further
- * processing beyond/outside the async processor is single threaded and executed by the
- * original StreamThread.
+ * A queue that holds on to records that are ready to be forwarded by the StreamThread.
+ * This queue is used to hand off output records from the async thread pool to the
+ * corresponding StreamThread to ensure that all further processing beyond/outside
+ * the async processor is single threaded and executed by the original StreamThread.
  * <p>
  * Threading notes:
  * -Produces to queue --> async thread pool
  * -Consumes from queue --> StreamThread
  * -One per physical AsyncProcessor instance
  */
-public class RecordForwardingQueue<KOut, VOut> {
+public class ForwardingQueue<KOut, VOut> {
 
   // Use ConcurrentLinkQueue since we just need a simple read-write thread safety with
   // non-blocking queue semantics

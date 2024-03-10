@@ -21,45 +21,22 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
-import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.Cancellable;
-import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
-import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.To;
-import org.apache.kafka.streams.processor.api.FixedKeyRecord;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
-import org.apache.kafka.streams.processor.internals.ProcessorMetadata;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
-import org.apache.kafka.streams.processor.internals.RecordCollector;
-import org.apache.kafka.streams.processor.internals.StreamTask;
-import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
-// TODO: evaluate whether we can just extend the actual processor context implementation class
-//  to avoid having to mock/delegate every single ProcessorContext method
-//  This is complicated since there are multiple types of processor context and because we might
-//  be better off manually wrapping all method calls to ensure we intercept anything that
-//  might have side effects or be vulnerable to changing (eg RecordMetadata) outside #process
-//  Update: we may need to implement InternalProcessorContext or even just extend
-//  AbstractProcessorContext itself, in order to set up all internal fields needed for delayed
-//  forwarding. This will make async processing incompatible with the mock processor context, though
-//  it will still work with both the global and regular processor context types.
 public class AsyncProcessorContext<KOut, VOut> implements ProcessorContext<KOut, VOut> {
 
   private final InternalProcessorContext<KOut, VOut> delegate;
@@ -68,19 +45,24 @@ public class AsyncProcessorContext<KOut, VOut> implements ProcessorContext<KOut,
   // We're being overly cautious here as the taskId is not actually mutated during
   // normal processing, but better safe than sorry (and to protect ourselves against future changes)
   private final TaskId taskId;
+
   private final Serde<?> keySerde;
   private final Serde<?> valueSerde;
 
   // is empty for records that originate from upstream punctuators rather than input topics
+  private final ProcessorNode<?, ?, ?, ?> asyncProcessorNode;
   private final Optional<RecordMetadata> recordMetadata;
 
-  public AsyncProcessorContext(final ProcessorContext<KOut, VOut> delegate) {
+  @SuppressWarnings("unchecked")
+  public AsyncProcessorContext(final ProcessorContext<?,?> delegate) {
     this.delegate = (InternalProcessorContext<KOut, VOut>) delegate;
 
     taskId = delegate.taskId();
-    recordMetadata = delegate.recordMetadata();
     keySerde = delegate.keySerde();
     valueSerde = delegate.valueSerde();
+
+    recordMetadata = delegate.recordMetadata();
+    asyncProcessorNode = this.delegate.currentNode();
   }
 
   @Override
@@ -198,16 +180,16 @@ public class AsyncProcessorContext<KOut, VOut> implements ProcessorContext<KOut,
     return delegate.currentStreamTimeMs();
   }
 
+  /**
+   * (Re)set all inner state and metadata to prepare for an async execution of #process
+   */
+  public void prepareForProcess(final ProcessorRecordContext recordContext) {
+    delegate.setRecordContext(recordContext);
+    delegate.setCurrentNode(asyncProcessorNode);
+  }
+
   public ProcessorRecordContext recordContext() {
     return delegate.recordContext();
-  }
-
-  public void setRecordContext(final ProcessorRecordContext recordContext) {
-    delegate.setRecordContext(recordContext);
-  }
-
-  public void setCurrentNode(final ProcessorNode<?, ?, ?, ?> currentNode) {
-    delegate.setCurrentNode(currentNode);
   }
 
   public ProcessorNode<?, ?, ?, ?> currentNode() {
