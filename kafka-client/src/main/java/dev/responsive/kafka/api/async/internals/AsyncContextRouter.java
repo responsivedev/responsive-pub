@@ -56,7 +56,7 @@ public class AsyncContextRouter<KOut, VOut> implements ProcessorContext<KOut, VO
 
   @Override
   public <K extends KOut, V extends VOut> void forward(final Record<K, V> record) {
-    asyncThreadToContext.get(Thread.currentThread().getName()
+    asyncThreadToContext.get(Thread.currentThread().getName()).forward(record);
   }
 
   @Override

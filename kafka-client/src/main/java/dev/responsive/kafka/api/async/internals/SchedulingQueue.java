@@ -32,6 +32,10 @@ import org.apache.kafka.streams.processor.api.Record;
  * processable -- that is, not blocked on previous records with the same key that have
  * not yet been fully processed -- will be polled from this queue and then passed on to
  * the async thread pool by the StreamThread.
+ * <p>
+ * Threading notes:
+ * -Should only be accessed from the StreamThread
+ * -One per physical AsyncProcessor instance
  */
 @NotThreadSafe
 public class SchedulingQueue<KIn, VIn> {
@@ -45,6 +49,13 @@ public class SchedulingQueue<KIn, VIn> {
 
     head.next = tail;
     tail.previous = head;
+  }
+
+  /**
+   * @return true iff there are any pending records, whether or not they're processable
+   */
+  public boolean isEmpty() {
+    return head == tail;
   }
 
   /**
@@ -64,8 +75,11 @@ public class SchedulingQueue<KIn, VIn> {
   /**
    * @return whether there are any remaining records in the queue which are currently
    *         ready for processing
+   *         Note: this differs from {@link #isEmpty()} in that it tests whether there
+   *         are processable records, so it's possible for #isEmpty to return false
+   *         while this also returns false
    */
-  public boolean hasNext() {
+  public boolean hasProcessableRecord() {
     return nextProcessableRecordNode() != null;
   }
 

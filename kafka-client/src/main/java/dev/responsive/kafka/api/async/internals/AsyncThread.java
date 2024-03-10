@@ -19,13 +19,23 @@ package dev.responsive.kafka.api.async.internals;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
 
 public class AsyncThread extends Thread implements Closeable {
 
   private final AtomicBoolean shutdownRequested = new AtomicBoolean(false);
+  // TODO: once we decouple the thread pool from the processor instance, this
+  //  will need to become a map from processor to context as there should be
+  //  an async context per processor instance
+  private final AsyncProcessorContext<?, ?> asyncContext;
 
-  public AsyncThread(final String name) {
+
+  public AsyncThread(
+      final String name,
+      final ProcessorContext<?, ?> context
+  ) {
     super(name);
+    this.asyncContext = new AsyncProcessorContext<Object, Object>(context);
   }
 
   @Override

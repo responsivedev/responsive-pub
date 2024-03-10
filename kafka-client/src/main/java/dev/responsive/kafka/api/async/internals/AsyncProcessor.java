@@ -19,9 +19,9 @@ package dev.responsive.kafka.api.async.internals;
 import static dev.responsive.kafka.internal.utils.Utils.extractStreamThreadIndex;
 
 import java.util.Map;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledThreadPoolExecutor;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
@@ -37,6 +37,11 @@ import org.slf4j.LoggerFactory;
 //     thread-safe access to the AsyncProcessorContext (perhaps via a wrapper that
 //     designates a single, separate instance of the underlying context for each thread
 //     (in the thread pool as well as the StreamThread itself)
+/**
+ * Threading notes:
+ * -Is exclusively owned and accessed by the StreamThread
+ * -Coordinates the handoff of records between the StreamThread and AyncThreads
+ */
 public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn, KOut, VOut> {
 
   private static final int THREAD_POOL_SIZE = 10;
@@ -49,7 +54,13 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn,
   // Owned and solely accessed by this StreamThread
   private final SchedulingQueue<KIn, VIn> schedulingQueue = new SchedulingQueue<>();
 
-  private AsyncProcessorContext<KOut, VOut> asyncContext;
+  // Exclusively read by this StreamThread (and exclusively written to by AsyncThreads)
+  private final RecordForwardingQueue<KOut, VOut> forwardingQueue = new RecordForwardingQueue<>();
+
+  // Effectively final -- initialized in #init
+  private DelayedRecordForwarder<KOut, VOut> recordForwarder;
+  private TaskId taskId;
+  private AsyncProcessorContext<KOut, VOut> streamThreadContext;
   private AsyncThreadPool<KIn, VIn, KOut, VOut> threadPool;
 
   // Note: the constructor will be called from the main application thread (ie the
@@ -67,33 +78,36 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn,
 
   @Override
   public void init(final ProcessorContext<KOut, VOut> context) {
-    this.asyncContext = new AsyncProcessorContext<>(context);
-    this.log =
-        new LogContext(String.format("async-processor [%s-%d]",
-                      asyncContext.currentProcessorName(), asyncContext.partition())
-        ).logger(AsyncProcessor.class);
-
-    userProcessor.init(asyncContext);
-    verifyConnectedStateStores();
-
     this.threadPool = new AsyncThreadPool<>(
-        THREAD_POOL_SIZE, extractStreamThreadIndex(Thread.currentThread().getName())
+        THREAD_POOL_SIZE,
+        context,
+        extractStreamThreadIndex(Thread.currentThread().getName())
     );
+    this.taskId = context.taskId();
+    this.streamThreadContext = new AsyncProcessorContext<>(context);
+    this.recordForwarder = new DelayedRecordForwarder<>(context);
+    this.log = new LogContext(String.format(
+        "async-processor [%s-%d]", streamThreadContext, taskId.partition()
+    )).logger(AsyncProcessor.class);
+
+    // Wrap the context handed to the user in the async router, to ensure that:
+    //  a) user calls are delegated to the context owned by the current thread
+    //  b) async calls can be intercepted (ie forwards and StateStore reads/writes)
+    userProcessor.init(new AsyncContextRouter<>(threadPool.asyncThreadToContext()));
+    verifyConnectedStateStores();
   }
 
   @Override
   public void process(final Record<KIn, VIn> record) {
     schedulingQueue.offer(record);
 
-    // evaluate newly completed pending records and update queue/metadata
+    // Drain the forwarding queue first to free up any records in the scheduling queue
+    // that are blocked on these forwards
+    drainForwardingQueue();
 
-    Record<KIn, VIn> nextProcessableRecord = schedulingQueue.poll();
-    while (nextProcessableRecord != null) {
+    // Drain the scheduling queue by passing any processable records to the async thread pool
+    drainSchedulingQueue();
 
-      nextProcessableRecord = schedulingQueue.poll();
-    }
-    // check queue for all available records ready for processing
-    // pass all records ready for processing to thread pool
   }
 
   @Override
@@ -107,13 +121,44 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn,
    * each commit, similar to #flushCache
    */
   public void awaitCompletion() {
-    // Check queue for newly processable records and hand them off to thread pool
-    // Wait for pending records to be completed OR new blocked records to become processable
-    // Repeat until input record queue is empty and all pending processing has finished
+    while (!isCompleted()) {
+      drainSchedulingQueue();
+      drainForwardingQueue();
+
+      // TODO: use a Condition to avoid busy waiting
+      try {
+        Thread.sleep(1);
+      } catch (final InterruptedException e) {
+        throw new StreamsException("Interrupted while waiting for async completion", taskId);
+      }
+    }
+  }
+
+  private void drainSchedulingQueue() {
+    Record<KIn, VIn> nextProcessableRecord = schedulingQueue.poll();
+    while (nextProcessableRecord != null) {
+
+      nextProcessableRecord = schedulingQueue.poll();
+      // pass all records ready for processing to thread pool
+
+    }
+  }
+
+  private void drainForwardingQueue() {
+    while (!forwardingQueue.isEmpty()) {
+      recordForwarder.forward(forwardingQueue.poll());
+    }
+  }
+
+  /**
+   * @return true iff all records have been fully processed from start to finish
+   */
+  private boolean isCompleted() {
+    return forwardingQueue.isEmpty() && schedulingQueue.isEmpty();
   }
 
   private void verifyConnectedStateStores() {
-    final Map<String, AsyncKeyValueStore<?, ?>> allAsyncStores = asyncContext.getAllAsyncStores();
+    final Map<String, AsyncKeyValueStore<?, ?>> allAsyncStores = streamThreadContext.getAllAsyncStores();
     if (allAsyncStores.size() != connectedStores.size()) {
       log.error("Number of connected store names is not equal to the number of stores retrieved "
                     + "via ProcessorContext#getStateStore during initialization. Make sure to pass "

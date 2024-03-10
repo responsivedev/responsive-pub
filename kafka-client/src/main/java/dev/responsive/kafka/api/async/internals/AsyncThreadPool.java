@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Queue;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 
 /**
@@ -29,25 +30,35 @@ import org.apache.kafka.streams.processor.api.Record;
  */
 public class AsyncThreadPool<KIn, VIn, KOut, VOut> implements Closeable {
 
-  private
-
+  // TODO: start up new threads when existing ones die to maintain the target size
   private final int threadPoolSize;
   private final Map<String, AsyncThread> threadPool;
+  private final Map<String, AsyncProcessorContext<KOut, VOut>> threadToContext;
 
   private final Queue<Record<KIn, VIn>> processableRecords;
 
-  public AsyncThreadPool(final int threadPoolSize, final String streamThreadIndex) {
+  public AsyncThreadPool(
+      final int threadPoolSize,
+      final ProcessorContext<KOut, VOut> context,
+      final String streamThreadIndex
+  ) {
     this.threadPoolSize = threadPoolSize;
     this.threadPool = new HashMap<>(threadPoolSize);
+    this.threadToContext = new HashMap<>(threadPoolSize);
 
     for (int i = 0; i < threadPoolSize; ++i) {
       final String name = threadName(streamThreadIndex, i);
-      final AsyncThread thread = new AsyncThread(name);
+      final AsyncThread thread = new AsyncThread(name, context);
       threadPool.put(name, thread);
+      threadToContext.put(name, thread.context());
     }
     for (final AsyncThread thread : threadPool.values()) {
       thread.start();
     }
+  }
+
+  public Map<String, AsyncProcessorContext<KOut, VOut>> asyncThreadToContext() {
+
   }
 
   private static String threadName(
