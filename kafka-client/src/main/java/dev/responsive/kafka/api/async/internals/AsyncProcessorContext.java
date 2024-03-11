@@ -16,6 +16,7 @@
 
 package dev.responsive.kafka.api.async.internals;
 
+import dev.responsive.kafka.internal.stores.ResponsiveKeyValueStore;
 import java.io.File;
 import java.time.Duration;
 import java.util.HashMap;
@@ -27,6 +28,7 @@ import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
@@ -35,9 +37,37 @@ import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
-public class AsyncProcessorContext<KOut, VOut> implements ProcessorContext<KOut, VOut> {
+/**
+ * A special version of the usual {@link ProcessorContext} for async processing. It's used
+ * to intercept calls that need to be delayed/invoked on a specific thread, as well as to (re)set
+ * metadata that's needed for record forwarding or may be accessed by a user within their #process
+ * implementation. This enables delayed execution of {@link Processor#process} and
+ * {@link ProcessorContext#forward}.
+ *
+ * <p>
+ * This class must therefore wrap any/all instances of the original processor context which
+ * means we have to make sure it can effectively mimic the actual {@link ProcessorContext} that is
+ * used and expected both by Kafka Streams and the user's {@link Processor} implementation.
+ * For this reason, we have to go a step further and actually implement the
+ * {@link InternalProcessorContext} interface for internal Streams use, rather than just the public
+ * {@link ProcessorContext} that's exposed to users, due to various casting and internal method
+ * access that occurs in the processor context lifecycle. For example, we ourselves make this
+ * cast in the #init method of our StateStore implementations (see
+ * {@link ResponsiveKeyValueStore#init} for one such case)
+ *
+ * <p>
+ * Threading notes:
+ * -Exclusively owned/accessed by a single thread throughout its lifetime
+ * -Each StreamThread and AsyncThread will have one
+ * -One per physical AsyncProcessor instance per thread (StreamThread + all AsyncThreads in pool)
+ *   (ie per logical processor per partition per thread)
+ *
+ * <p>
+ * TODO: consider splitting up into separate classes for the StreamThread and Async version, or
+ *   at least guard the relevant APIs (eg #forward) based on which type it is
+ */
+public class AsyncProcessorContext<KOut, VOut> implements InternalProcessorContext<KOut, VOut> {
 
   private final InternalProcessorContext<KOut, VOut> delegate;
   private final Map<String, AsyncKeyValueStore<?, ?>> stateStores = new HashMap<>();
@@ -63,6 +93,18 @@ public class AsyncProcessorContext<KOut, VOut> implements ProcessorContext<KOut,
 
     recordMetadata = delegate.recordMetadata();
     asyncProcessorNode = this.delegate.currentNode();
+  }
+
+  /**
+   * (Re)set all inner state and metadata to prepare for an async execution of #process
+   */
+  public void prepareForProcess(final ProcessorRecordContext recordContext) {
+    delegate.setRecordContext(recordContext);
+    delegate.setCurrentNode(asyncProcessorNode);
+  }
+
+  public ProcessorNode<?, ?, ?, ?> asyncProcessorNode() {
+    return asyncProcessorNode;
   }
 
   @Override
@@ -118,12 +160,10 @@ public class AsyncProcessorContext<KOut, VOut> implements ProcessorContext<KOut,
   @Override
   @SuppressWarnings("unchecked")
   public <S extends StateStore> S getStateStore(final String name) {
-    // TODO:
-    //  1) We should be enforcing that this is called exactly once per store and only from #init
+    // TODO: We should be enforcing that this is called exactly once per store and only from #init
     //  This delegate call relies on mutable internal context fields and hence should never
     //  be called from the processors' #process method. This is good practice in vanilla Streams
     //  anyway, but it's especially important for the async processor
-    //  2) Implement async StateStore for window and session stores
     final S userDelegate = delegate.getStateStore(name);
     if (userDelegate instanceof KeyValueStore) {
       final var asyncStore = new AsyncKeyValueStore<>((KeyValueStore<?, ?>) userDelegate, name);
@@ -178,26 +218,6 @@ public class AsyncProcessorContext<KOut, VOut> implements ProcessorContext<KOut,
     //  It's probably worth giving a bit more consideration to, however, and possibly
     //  even soliciting user feedback on
     return delegate.currentStreamTimeMs();
-  }
-
-  /**
-   * (Re)set all inner state and metadata to prepare for an async execution of #process
-   */
-  public void prepareForProcess(final ProcessorRecordContext recordContext) {
-    delegate.setRecordContext(recordContext);
-    delegate.setCurrentNode(asyncProcessorNode);
-  }
-
-  public ProcessorRecordContext recordContext() {
-    return delegate.recordContext();
-  }
-
-  public ProcessorNode<?, ?, ?, ?> currentNode() {
-    return delegate.currentNode();
-  }
-
-  public void registerCacheFlushListener(final String namespace, final DirtyEntryFlushListener listener) {
-    // TODO -- can we use this to our advantage somehow?
   }
 
   public int partition() {

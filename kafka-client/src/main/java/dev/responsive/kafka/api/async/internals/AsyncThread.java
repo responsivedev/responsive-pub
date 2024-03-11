@@ -17,14 +17,17 @@
 package dev.responsive.kafka.api.async.internals;
 
 import dev.responsive.kafka.api.async.internals.queues.ProcessingQueue;
+import dev.responsive.kafka.api.async.internals.records.ProcessableRecord;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.slf4j.Logger;
 
 public class AsyncThread extends Thread implements Closeable {
 
-  private boolean initialized = false;
+  private final Logger log;
 
   private final AtomicBoolean shutdownRequested = new AtomicBoolean(false);
 
@@ -42,10 +45,7 @@ public class AsyncThread extends Thread implements Closeable {
     super(name);
     this.asyncContext = new AsyncProcessorContext<>(context);
     this.processableRecords = processableRecords;
-  }
-
-  public void init(final AsyncProcessorContext<?, ?> asyncContext) {
-
+    this.log = new LogContext(String.format("async-thread [%s] ", name)).logger(AsyncThread.class);
   }
 
   // TODO: once thread pool and processor are decoupled, this should look up the
@@ -56,13 +56,24 @@ public class AsyncThread extends Thread implements Closeable {
 
   @Override
   public void run() {
-    if (!initialized) {
-      throw new IllegalStateException("Attempted to start up async thread before initialization");
+    try {
+      while (!shutdownRequested.getOpaque()) {
+        final ProcessableRecord<?, ?> record = processableRecords.poll();
+        process(record);
+      }
+    } catch (final Exception e) {
+      if (shutdownRequested.getOpaque()) {
+        log.info("An exception was thrown during shutdown, possibly as part of the shutdown", e);
+      } else {
+        log.error("Shutting down early due to exception thrown during async processing", e);
+      }
     }
+  }
 
-    while (!shutdownRequested.getOpaque()) {
-      processableRecords.poll().process(asyncContext);
-    }
+  private <KIn, VIn> void process(final ProcessableRecord<KIn ,VIn> record) {
+    asyncContext.prepareForProcess(record.recordContext());
+    record.process().run();
+    record.processListener().run();
   }
 
   @Override

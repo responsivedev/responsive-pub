@@ -20,7 +20,6 @@ import dev.responsive.kafka.api.async.internals.AsyncProcessorRecordContext;
 import dev.responsive.kafka.api.async.internals.AsyncThread;
 import dev.responsive.kafka.api.async.internals.records.ProcessableRecord;
 
-import java.util.function.Consumer;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.Record;
 

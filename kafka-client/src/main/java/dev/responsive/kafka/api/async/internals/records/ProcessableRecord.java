@@ -16,9 +16,7 @@
 
 package dev.responsive.kafka.api.async.internals.records;
 
-import dev.responsive.kafka.api.async.internals.AsyncProcessorContext;
 import dev.responsive.kafka.api.async.internals.AsyncProcessorRecordContext;
-import java.util.function.Consumer;
 import org.apache.kafka.streams.processor.api.Record;
 
 /**
@@ -60,10 +58,12 @@ public class ProcessableRecord<KIn, VIn> implements AsyncRecord<KIn, VIn> {
     return recordContext;
   }
 
-  public void process(final AsyncProcessorContext<?, ?> asyncContext) {
-    asyncContext.prepareForProcess(recordContext);
-    process.run();
-    processListener.run();
+  public Runnable process() {
+    return process;
+  }
+
+  public Runnable processListener() {
+    return processListener;
   }
 
   @Override
@@ -103,7 +103,10 @@ public class ProcessableRecord<KIn, VIn> implements AsyncRecord<KIn, VIn> {
     if (!recordContext.equals(that.recordContext)) {
       return false;
     }
-    return process.equals(that.process);
+    if (!process.equals(that.process)) {
+      return false;
+    }
+    return processListener.equals(that.processListener);
   }
 
   @Override
@@ -111,6 +114,7 @@ public class ProcessableRecord<KIn, VIn> implements AsyncRecord<KIn, VIn> {
     int result = record.hashCode();
     result = 31 * result + recordContext.hashCode();
     result = 31 * result + process.hashCode();
+    result = 31 * result + processListener.hashCode();
     return result;
   }
 }

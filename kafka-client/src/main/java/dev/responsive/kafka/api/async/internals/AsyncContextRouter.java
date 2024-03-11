@@ -42,95 +42,97 @@ import org.apache.kafka.streams.processor.api.RecordMetadata;
  */
 public class AsyncContextRouter<KOut, VOut> implements ProcessorContext<KOut, VOut> {
 
-  private final Map<String, AsyncProcessorContext<KOut, VOut>> asyncThreadToContext;
+  // Includes the StreamThread as well as all AsyncThreads in its pool
+  private final Map<String, AsyncProcessorContext<KOut, VOut>> threadToContext;
 
   public AsyncContextRouter(
-      final Map<String, AsyncProcessorContext<KOut, VOut>> asyncThreadToContext
+      final Map<String, AsyncProcessorContext<KOut, VOut>> threadToContext
   ) {
-    this.asyncThreadToContext = Collections.unmodifiableMap(asyncThreadToContext);
+    // Unmodifiable map ensures thread safety since we only do reads
+    this.threadToContext = Collections.unmodifiableMap(threadToContext);
   }
 
-  public AsyncProcessorContext<KOut, VOut> getThreadContext(final String asyncThreadName) {
-    return asyncThreadToContext.get(asyncThreadName);
+  private AsyncProcessorContext<KOut, VOut> getCurrentThreadContext() {
+    return threadToContext.get(Thread.currentThread().getName());
   }
 
   @Override
   public <K extends KOut, V extends VOut> void forward(final Record<K, V> record) {
-    asyncThreadToContext.get(Thread.currentThread().getName()).forward(record);
+    getCurrentThreadContext().forward(record);
   }
 
   @Override
   public <K extends KOut, V extends VOut> void forward(final Record<K, V> record, final String childName) {
-
+    getCurrentThreadContext().forward(record, childName);
   }
 
   @Override
   public String applicationId() {
-    return null;
+    return getCurrentThreadContext().applicationId();
   }
 
   @Override
   public TaskId taskId() {
-    return null;
+    return getCurrentThreadContext().taskId();
   }
 
   @Override
   public Optional<RecordMetadata> recordMetadata() {
-    return Optional.empty();
+    return getCurrentThreadContext().recordMetadata();
   }
 
   @Override
   public Serde<?> keySerde() {
-    return null;
+    return getCurrentThreadContext().keySerde();
   }
 
   @Override
   public Serde<?> valueSerde() {
-    return null;
+    return getCurrentThreadContext().valueSerde();
   }
 
   @Override
   public File stateDir() {
-    return null;
+    return getCurrentThreadContext().stateDir();
   }
 
   @Override
   public StreamsMetrics metrics() {
-    return null;
+    return getCurrentThreadContext().metrics();
   }
 
   @Override
   public <S extends StateStore> S getStateStore(final String name) {
-    return null;
+    return getCurrentThreadContext().getStateStore(name);
   }
 
   @Override
   public Cancellable schedule(final Duration interval, final PunctuationType type, final Punctuator callback) {
-    return null;
+    return getCurrentThreadContext().schedule(interval, type, callback);
   }
 
   @Override
   public void commit() {
-
+    getCurrentThreadContext().commit();
   }
 
   @Override
   public Map<String, Object> appConfigs() {
-    return null;
+    return getCurrentThreadContext().appConfigs();
   }
 
   @Override
   public Map<String, Object> appConfigsWithPrefix(final String prefix) {
-    return null;
+    return getCurrentThreadContext().appConfigsWithPrefix(prefix);
   }
 
   @Override
   public long currentSystemTimeMs() {
-    return 0;
+    return getCurrentThreadContext().currentSystemTimeMs();
   }
 
   @Override
   public long currentStreamTimeMs() {
-    return 0;
+    return getCurrentThreadContext().currentStreamTimeMs();
   }
 }

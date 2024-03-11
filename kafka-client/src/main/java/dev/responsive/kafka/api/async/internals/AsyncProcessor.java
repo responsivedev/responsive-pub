@@ -96,25 +96,30 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn,
 
   @Override
   public void init(final ProcessorContext<KOut, VOut> context) {
+    final String streamThreadName = extractStreamThreadIndex(Thread.currentThread().getName());
+
     this.threadPool = new AsyncThreadPool(
         THREAD_POOL_SIZE,
         context,
-        extractStreamThreadIndex(Thread.currentThread().getName()),
+        streamThreadName,
         processableRecords
     );
     this.taskId = context.taskId();
     this.originalContext = (InternalProcessorContext<KOut, VOut>) context;
     this.streamThreadAsyncContext = new AsyncProcessorContext<>(context);
-
     this.log = new LogContext(String.format(
-        "async-processor [%s-%d]", streamThreadAsyncContext.currentProcessorName(), taskId.partition()
+        "async-processor [%s-%d]",
+        streamThreadAsyncContext.currentProcessorName(), taskId.partition()
     )).logger(AsyncProcessor.class);
+
+    final Map<String, AsyncProcessorContext<KOut, VOut>> threadToContext =
+        asyncThreadToContext(threadPool);
+    threadToContext.put(streamThreadName, streamThreadAsyncContext);
 
     // Wrap the context handed to the user in the async router, to ensure that:
     //  a) user calls are delegated to the context owned by the current thread
     //  b) async calls can be intercepted (ie forwards and StateStore reads/writes)
-    final AsyncContextRouter<KOut, VOut> userContext =
-        new AsyncContextRouter<>(asyncThreadToContext(threadPool));
+    final AsyncContextRouter<KOut, VOut> userContext = new AsyncContextRouter<>(threadToContext);
 
     userProcessor.init(userContext);
 
