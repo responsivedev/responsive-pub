@@ -16,6 +16,7 @@
 
 package dev.responsive.kafka.api.async.internals.records;
 
+import dev.responsive.kafka.api.async.internals.AsyncProcessorRecordContext;
 import dev.responsive.kafka.api.async.internals.queues.WritingQueue;
 import org.apache.kafka.streams.processor.api.Record;
 
@@ -24,19 +25,26 @@ import org.apache.kafka.streams.processor.api.Record;
  * These records are created by the AsyncThread and handed off to the StreamThread
  * for execution. See {@link WritingQueue} for more details
  */
-public class WriteableRecord<K, V> {
+public class WriteableRecord<KS, VS> implements AsyncRecord<KS, VS> {
 
-  private final Record<K, V> record;
+  private final Record<KS, VS> record;
   private final String storeName;
-  private final int partition;
+  private final AsyncProcessorRecordContext recordContext;
+  private final Runnable putListener;
 
-  public WriteableRecord(final Record<K, V> record, final String storeName, final int partition) {
+  public WriteableRecord(
+      final Record<KS, VS> record,
+      final String storeName,
+      final AsyncProcessorRecordContext recordContext,
+      final Runnable putListener
+  ) {
     this.record = record;
     this.storeName = storeName;
-    this.partition = partition;
+    this.recordContext = recordContext;
+    this.putListener = putListener;
   }
 
-  public Record<K, V> record() {
+  public Record<KS, VS> record() {
     return record;
   }
 
@@ -45,6 +53,54 @@ public class WriteableRecord<K, V> {
   }
 
   public int partition() {
-    return partition;
+    return recordContext.partition();
+  }
+
+  @Override
+  public KS key() {
+    return record.key();
+  }
+
+  @Override
+  public VS value() {
+    return record.value();
+  }
+
+  @Override
+  public String topic() {
+    return recordContext.topic();
+  }
+
+  @Override
+  public long offset() {
+    return recordContext.offset();
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+
+    final WriteableRecord<?, ?> that = (WriteableRecord<?, ?>) o;
+
+    if (!record.equals(that.record)) {
+      return false;
+    }
+    if (!storeName.equals(that.storeName)) {
+      return false;
+    }
+    return recordContext.equals(that.recordContext);
+  }
+
+  @Override
+  public int hashCode() {
+    int result = record.hashCode();
+    result = 31 * result + storeName.hashCode();
+    result = 31 * result + recordContext.hashCode();
+    return result;
   }
 }

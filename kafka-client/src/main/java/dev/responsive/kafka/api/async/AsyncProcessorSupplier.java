@@ -37,19 +37,28 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.AsyncTimestampedKeyValueStoreBuilder;
 
 /**
+ * Instructions:
+ * 1) To use state stores within an async processor, you must connect the state stores via
+ *    automatic connection. In other words, you must have your ProcessorSupplier override the
+ *    {@link ConnectedStoreProvider#stores()} method and supply your store builders there,
+ *    rather than connecting them to the processor manually via APIs like
+ *    {@link StreamsBuilder#addStateStore(StoreBuilder)} (DSL) and
+ *    {@link Topology#addStateStore} (PAPI)
+ *
+ * <p>
+ *
  * Current limitations:
+ * 0) Does not yet support read-your-write semantics -- a #get after a #put is not necessarily
+ *    guaranteed to return the inserted record, or include it in the case of range scans.
+ *    This is only true within an invocation of #process -- all previous input records of the
+ *    same key will always be processed in full before a new record with that key is picked up.
  * 1) Not compatible with puncuators or input records that originate in upstream punctuators
  * 2) Key-Value stores only at this time: async window and session stores coming soon
  * 3) Cannot be used for global state stores
  * 4) Supports only one upstream input topic (specifically for records which will be forwarded to
  *    this processor -- multiple input topics for a subtopology are allowed if the records from
  *    additional input topics do not flow through this processor
- * 5) To use state stores within an async processor, you must connect the state stores via
- *    automatic connection. In other words, you must have your ProcessorSupplier override the
- *    {@link ConnectedStoreProvider#stores()} method and supply your store builders there,
- *    rather than connecting them to the processor manually via APIs like
- *    {@link StreamsBuilder#addStateStore(StoreBuilder)} (DSL) and
- *    {@link Topology#addStateStore} (PAPI)
+ * 5) State stores within an async processor must have the same key and value types
  */
 public final class AsyncProcessorSupplier<KIn, VIn, KOut, VOut> implements ProcessorSupplier<KIn, VIn, KOut, VOut> {
 

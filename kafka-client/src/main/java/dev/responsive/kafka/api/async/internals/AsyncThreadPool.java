@@ -79,6 +79,9 @@ public class AsyncThreadPool implements Closeable {
   public void close() throws IOException {
     for (final AsyncThread thread : threadPool.values()) {
       thread.close();
+
+      // TODO: use timeouts and retries in blocking queue to avoid need for interruption
+      thread.interrupt();
     }
     // TODO: wait for threads to join...or is it safe to just make them daemon threads?
   }

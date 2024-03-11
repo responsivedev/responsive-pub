@@ -126,7 +126,7 @@ public class AsyncProcessorContext<KOut, VOut> implements ProcessorContext<KOut,
     //  2) Implement async StateStore for window and session stores
     final S userDelegate = delegate.getStateStore(name);
     if (userDelegate instanceof KeyValueStore) {
-      final var asyncStore = new AsyncKeyValueStore<>(delegate, name);
+      final var asyncStore = new AsyncKeyValueStore<>((KeyValueStore<?, ?>) userDelegate, name);
       stateStores.put(name, asyncStore);
       return (S) asyncStore;
     } else {

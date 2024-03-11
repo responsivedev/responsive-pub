@@ -16,8 +16,12 @@
 
 package dev.responsive.kafka.api.async.internals.queues;
 
+import dev.responsive.kafka.api.async.internals.AsyncProcessor;
+import dev.responsive.kafka.api.async.internals.AsyncProcessorRecordContext;
+import dev.responsive.kafka.api.async.internals.records.ScheduleableRecord;
 import java.util.function.Predicate;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 
 // TODO:
 //  1) implement predicate/isProcessable checking,
@@ -67,7 +71,7 @@ public class SchedulingQueue<KIn, VIn> {
    * @return the next available record that is ready for processing
    *         or {@code null} if there are no processable records
    */
-  public Record<KIn, VIn> poll() {
+  public ScheduleableRecord<KIn, VIn> poll() {
     final RecordNode<KIn, VIn> nextProcessableRecordNode = nextProcessableRecordNode();
     return nextProcessableRecordNode != null
         ? nextProcessableRecordNode.record
@@ -103,32 +107,41 @@ public class SchedulingQueue<KIn, VIn> {
    * in other words, excluding those that are awaiting previous same-key records to complete.
    *
    * @param record a new record to schedule for processing
+   * @param originalRecordContext the actual recordContext of the processor context
+   *                              at the time this input record was passed to the
+   *                              {@link AsyncProcessor#process} method
    */
-  public void offer(final Record<KIn, VIn> record) {
-    addToTail(record);
+  public void put(
+      final Record<KIn, VIn> record,
+      final ProcessorRecordContext originalRecordContext
+  ) {
+    addToTail(new ScheduleableRecord<>(
+        record,
+        new AsyncProcessorRecordContext(originalRecordContext)
+    ));
   }
 
-  private void addToTail(final Record<KIn, VIn> record) {
+  private void addToTail(final ScheduleableRecord<KIn, VIn> record) {
     final RecordNode<KIn, VIn> node = new RecordNode<>(record, k -> {throw new RuntimeException("Need to implement Predicate!");}, tail, tail.previous);
     tail.previous.next = node;
     tail.previous = node;
   }
 
-  private Record<KIn, VIn> remove(final RecordNode<KIn, VIn> node) {
+  private ScheduleableRecord<KIn, VIn> remove(final RecordNode<KIn, VIn> node) {
     node.next.previous = node.previous;
     node.previous.next = node.next;
     return node.record;
   }
 
   private static class RecordNode<KIn, VIn> {
-    private final Record<KIn, VIn> record;
+    private final ScheduleableRecord<KIn, VIn> record;
     private final Predicate<KIn> isProcessable;
 
     private RecordNode<KIn, VIn> next;
     private RecordNode<KIn, VIn> previous;
 
     public RecordNode(
-        final Record<KIn, VIn> record,
+        final ScheduleableRecord<KIn, VIn> record,
         final Predicate<KIn> isProcessable,
         final RecordNode<KIn, VIn> next,
         final RecordNode<KIn, VIn> previous

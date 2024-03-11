@@ -16,13 +16,13 @@
 
 package dev.responsive.kafka.api.async.internals.queues;
 
+import dev.responsive.kafka.api.async.internals.AsyncProcessorRecordContext;
 import dev.responsive.kafka.api.async.internals.AsyncThread;
 import dev.responsive.kafka.api.async.internals.records.ProcessableRecord;
-import java.util.Comparator;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.PriorityBlockingQueue;
-import org.apache.kafka.streams.errors.StreamsException;
+
+import java.util.function.Consumer;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.api.Record;
 
 /**
  * A queue for processable records that have been scheduled and are waiting to be
@@ -37,13 +37,11 @@ import org.apache.kafka.streams.processor.TaskId;
  */
 public class ProcessingQueue<KIn, VIn> {
 
+  private final OffsetOrderQueue<KIn, VIn, ProcessableRecord<KIn, VIn>> processableRecords =
+      OffsetOrderQueue.nonBlockingQueue(null);
+
   // Effectively final, just has to wait for the processor's #init
   private TaskId taskId;
-  private final BlockingQueue<ProcessableRecord<KIn, VIn>> processableRecords;
-
-  public ProcessingQueue() {
-    this.processableRecords = new PriorityBlockingQueue<>(0, offsetOrderComparator());
-  }
 
   // Some metadata is initialized late (since we have to wait for #init to get it)
   public void initialize(final TaskId taskId) {
@@ -55,20 +53,15 @@ public class ProcessingQueue<KIn, VIn> {
    * <p>
    * To be executed by the StreamThread only
    */
-  public void scheduleForProcessing(final ProcessableRecord<KIn, VIn> record) {
-    boolean addedToQueue = processableRecords.offer(record);
-    while (!addedToQueue) {
-      // TODO:
-      //  1. log a warning
-      //  2. use a Condition to avoid busy waiting
-      try {
-        Thread.sleep(1_000L);
-      } catch (final InterruptedException e) {
-        throw new StreamsException("Interrupted while trying to schedule a record for processing",
-                                   taskId);
-      }
-      addedToQueue = processableRecords.offer(record);
-    }
+  public void scheduleForProcessing(
+      final Record<KIn, VIn> record,
+      final AsyncProcessorRecordContext recordContext,
+      final Runnable process,
+      final Runnable processListener
+  ) {
+    processableRecords.put(new ProcessableRecord<>(
+        record, recordContext, process, processListener)
+    );
   }
 
   /**
@@ -81,10 +74,4 @@ public class ProcessingQueue<KIn, VIn> {
     return processableRecords.poll();
   }
 
-  public static <KIn, VIn> Comparator<ProcessableRecord<KIn, VIn>> offsetOrderComparator() {
-    final Comparator<ProcessableRecord<KIn, VIn>> comparingOffsets =
-        Comparator.comparingLong(r -> r.recordContext().offset());
-
-    return comparingOffsets.thenComparing(r -> r.recordContext().topic());
-  }
 }

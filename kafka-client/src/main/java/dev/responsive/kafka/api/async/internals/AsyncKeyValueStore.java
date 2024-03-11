@@ -30,25 +30,44 @@ import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 
-public class AsyncKeyValueStore<K, V> implements KeyValueStore<K, V> {
+/**
+ * A wrapper around the actual state store that's used to intercept writes that occur
+ * during processing by the AsyncThread, so they can be passed back to the StreamThread
+ * and executed there in case of cache evictions that trigger downstream processing
+ * All variants of #put (eg #putAll and #putIfAbsent) are translated into actual
+ * #put calls, so that we only need to queue up one type of write
+ * <p>
+ * Threading notes:
+ * -Methods should only be invoked from an AsyncThread
+ * -One per physical state store instance
+ *   (ie per state store per processor per partition per StreamThread
+ */
+public class AsyncKeyValueStore<KS, VS> implements KeyValueStore<KS, VS> {
 
-  private final KeyValueStore<K, V> userDelegate;
+  private final String name;
+  private final KeyValueStore<KS, VS> userDelegate;
 
-  public AsyncKeyValueStore(final ProcessorContext<?, ?> userContext, final String name) {
-    this.userDelegate = userContext.getStateStore(name);
+  public AsyncKeyValueStore(
+      final KeyValueStore<KS, VS> userDelegate,
+      final String name
+  ) {
+    this.userDelegate = userDelegate;
+    this.name = name;
   }
 
-  public V get(final K key) {
-
+  public VS get(final KS key) {
+    // TODO: eventually we'll need to intercept this as well for proper
+    //  read-your-write semantics in async processors
+    return userDelegate.get(key);
   }
 
-  public void put(K key, V value) {
+  public void put(KS key, VS value) {
 
   }
 
   @Override
-  public V putIfAbsent(final K key, final V value) {
-    final V oldValue = get(key);
+  public VS putIfAbsent(final KS key, final VS value) {
+    final VS oldValue = get(key);
     if (oldValue == null) {
       put(key, value);
     }
@@ -56,15 +75,15 @@ public class AsyncKeyValueStore<K, V> implements KeyValueStore<K, V> {
   }
 
   @Override
-  public void putAll(final List<KeyValue<K, V>> entries) {
-    for (final KeyValue<K, V> kv : entries) {
+  public void putAll(final List<KeyValue<KS, VS>> entries) {
+    for (final KeyValue<KS, VS> kv : entries) {
       put(kv.key, kv.value);
     }
   }
 
   @Override
-  public V delete(final K key) {
-    final V oldValue = get(key);
+  public VS delete(final KS key) {
+    final VS oldValue = get(key);
     put(key, null);
     return oldValue;
   }
@@ -123,27 +142,27 @@ public class AsyncKeyValueStore<K, V> implements KeyValueStore<K, V> {
   }
 
   @Override
-  public KeyValueIterator<K, V> range(final K from, final K to) {
+  public KeyValueIterator<KS, VS> range(final KS from, final KS to) {
     throw new UnsupportedOperationException("#range is not yet supported with async processing");
   }
 
   @Override
-  public KeyValueIterator<K, V> reverseRange(final K from, final K to) {
+  public KeyValueIterator<KS, VS> reverseRange(final KS from, final KS to) {
     throw new UnsupportedOperationException("#reverseRange is not yet supported with async processing");
   }
 
   @Override
-  public KeyValueIterator<K, V> all() {
+  public KeyValueIterator<KS, VS> all() {
     throw new UnsupportedOperationException("#all is not yet supported with async processing");
   }
 
   @Override
-  public KeyValueIterator<K, V> reverseAll() {
+  public KeyValueIterator<KS, VS> reverseAll() {
     throw new UnsupportedOperationException("#reverseAll is not yet supported with async processing");
   }
 
   @Override
-  public <PS extends Serializer<P>, P> KeyValueIterator<K, V> prefixScan(final P prefix, final PS prefixKeySerializer) {
+  public <PS extends Serializer<P>, P> KeyValueIterator<KS, VS> prefixScan(final P prefix, final PS prefixKeySerializer) {
     throw new UnsupportedOperationException("#prefixScan is not yet supported with async processing");
   }
 

@@ -16,11 +16,11 @@
 
 package dev.responsive.kafka.api.async.internals.queues;
 
+import dev.responsive.kafka.api.async.internals.AsyncProcessorRecordContext;
 import dev.responsive.kafka.api.async.internals.records.ForwardableRecord;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import org.apache.kafka.streams.processor.api.Record;
-import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 
 /**
  * A queue that holds on to records that are ready to be forwarded by the StreamThread.
@@ -36,8 +36,8 @@ import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
  */
 public class ForwardingQueue<KOut, VOut> {
 
-  // Use ConcurrentLinkQueue since we just need a simple read-write thread safety with
-  // non-blocking queue semantics
+  // Use ConcurrentLinkQueue since we just need basic read-write thread safety with
+  // non-blocking, simple FIFO queue semantics
   private final Queue<ForwardableRecord<KOut, VOut>> forwardableRecords =
       new ConcurrentLinkedQueue<>();
 
@@ -56,7 +56,7 @@ public class ForwardingQueue<KOut, VOut> {
   public void addToQueue(
       final Record<KOut, VOut> record,
       final String childName, // can be null
-      final ProcessorRecordContext recordContext,
+      final AsyncProcessorRecordContext recordContext,
       final Runnable forwardingListener
       ) {
     forwardableRecords.add(

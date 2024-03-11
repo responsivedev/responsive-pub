@@ -16,9 +16,9 @@
 
 package dev.responsive.kafka.api.async.internals.queues;
 
+import dev.responsive.kafka.api.async.internals.AsyncProcessorRecordContext;
 import dev.responsive.kafka.api.async.internals.records.WriteableRecord;
-import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.Comparator;
 import org.apache.kafka.streams.processor.api.Record;
 
 /**
@@ -29,29 +29,24 @@ import org.apache.kafka.streams.processor.api.Record;
  * invoked on the AsyncThreads, whereas all puts must be executed on the original
  * StreamThread due to the possibility of a cache eviction and subsequent processing.
  * Essentially, all puts are treated as potential forwards, and handled as such.
- * For this reason the class mirrors the {@link ForwardingQueue}, except that there
- * is one per state store in the processor rather than one per processor.
+ * For this reason the class mirrors the {@link ForwardingQueue} in semantics and usage.
  * <p>
  * Threading notes:
- * -Produces to queue --> async thread pool
- * -Consumes from queue --> StreamThread
- * -One per physical StateStore
- *   (ie per state store per logical processor per partition per StreamThread)
+ * -producer to queue --> AsyncThread
+ * -consumer from queue --> StreamThread
+ * -One per physical AsyncProcessor instance
+ *   (ie per logical processor per partition per StreamThread)
  */
 public class WritingQueue<K, V> {
 
-  // Use ConcurrentLinkQueue since we just need a simple read-write thread safety with
-  // non-blocking queue semantics
-  private final Queue<WriteableRecord<K, V>> writeableRecords =
-      new ConcurrentLinkedQueue<>();
-
-  private final String stateStoreName;
+  private final OffsetOrderQueue<K, V, WriteableRecord<K, V>> storeToWriteableRecords =
+      OffsetOrderQueue.nonBlockingQueue(Comparator.comparing(WriteableRecord::storeName));
 
   /**
    * @return true iff there are any records available to forward
    */
   public boolean isEmpty() {
-    return writeableRecords.isEmpty();
+    return storeToWriteableRecords.isEmpty();
   }
 
   /**
@@ -62,11 +57,11 @@ public class WritingQueue<K, V> {
   public void write(
       final Record<K, V> record,
       final String childName, // can be null
-      final ProcessorRecordContext recordContext,
-      final Runnable forwardingListener
+      final AsyncProcessorRecordContext recordContext,
+      final Runnable putListener
   ) {
-    writeableRecords.add(
-        new ForwardableRecord<>(record, childName, recordContext, forwardingListener)
+    storeToWriteableRecords.put(
+        new WriteableRecord<>(record, childName, recordContext, putListener)
     );
   }
 
@@ -75,8 +70,8 @@ public class WritingQueue<K, V> {
    * <p>
    * Should only be invoked by StreamThreads
    */
-  public ForwardableRecord<K, V> poll() {
-    return writeableRecords.poll();
+  public WriteableRecord<K, V> poll() {
+    return storeToWriteableRecords.poll();
   }
   
 }

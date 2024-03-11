@@ -18,9 +18,12 @@ package dev.responsive.kafka.api.async.internals;
 
 import static dev.responsive.kafka.internal.utils.Utils.extractStreamThreadIndex;
 
+import dev.responsive.kafka.api.async.AsyncProcessorSupplier;
 import dev.responsive.kafka.api.async.internals.queues.ForwardingQueue;
 import dev.responsive.kafka.api.async.internals.queues.ProcessingQueue;
 import dev.responsive.kafka.api.async.internals.queues.SchedulingQueue;
+import dev.responsive.kafka.api.async.internals.queues.WritingQueue;
+import dev.responsive.kafka.api.async.internals.records.ScheduleableRecord;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -30,6 +33,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -64,12 +68,18 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn,
 
   // Exclusively read by this StreamThread (and exclusively written to by AsyncThreads)
   private final ForwardingQueue<KOut, VOut> forwardingQueue = new ForwardingQueue<>();
+  private final WritingQueue<?, ?> writingQueue = new WritingQueue<>();
 
-  // Effectively final -- initialized in #init
-  private DelayedRecordForwarder<KOut, VOut> recordForwarder;
+  // Everything below this line is effectively final and just has to be initialized in #init
   private TaskId taskId;
-  private AsyncProcessorContext<KOut, VOut> streamThreadContext;
   private AsyncThreadPool threadPool;
+  private DelayedRecordHandler<KOut, VOut> recordHandler;
+
+  // the context passed to us in init
+  private InternalProcessorContext<KOut, VOut> originalContext;
+  // the async context owned by the StreamThread that executed this processor's #init
+  // this wraps the originalContext but saves metadata for a "point in time" view
+  private AsyncProcessorContext<KOut, VOut> streamThreadAsyncContext;
 
   // Note: the constructor will be called from the main application thread (ie the
   // one that creates/starts the KafkaStreams object) so we have to delay the creation
@@ -93,11 +103,11 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn,
         processableRecords
     );
     this.taskId = context.taskId();
-    this.streamThreadContext = new AsyncProcessorContext<>(context);
-    this.recordForwarder = new DelayedRecordForwarder<>(context);
+    this.originalContext = (InternalProcessorContext<KOut, VOut>) context;
+    this.streamThreadAsyncContext = new AsyncProcessorContext<>(context);
 
     this.log = new LogContext(String.format(
-        "async-processor [%s-%d]", streamThreadContext.currentProcessorName(), taskId.partition()
+        "async-processor [%s-%d]", streamThreadAsyncContext.currentProcessorName(), taskId.partition()
     )).logger(AsyncProcessor.class);
 
     // Wrap the context handed to the user in the async router, to ensure that:
@@ -107,12 +117,18 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn,
         new AsyncContextRouter<>(asyncThreadToContext(threadPool));
 
     userProcessor.init(userContext);
-    verifyConnectedStateStores();
+
+    final Map<String, AsyncKeyValueStore<?, ?>> accessedStores =
+        streamThreadAsyncContext.getAllAsyncStores();
+
+    verifyConnectedStateStores(accessedStores, connectedStores, log);
+
+    this.recordHandler = new DelayedRecordHandler<>(context, accessedStores);
   }
 
   @Override
   public void process(final Record<KIn, VIn> record) {
-    schedulingQueue.offer(record);
+    schedulingQueue.put(record, originalContext.recordContext());
 
     // Drain the forwarding queue first to free up any records in the scheduling queue
     // that are blocked on these forwards
@@ -165,18 +181,29 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn,
   }
 
   private void drainSchedulingQueue() {
-    Record<KIn, VIn> nextProcessableRecord = schedulingQueue.poll();
+    ScheduleableRecord<KIn, VIn> nextProcessableRecord = schedulingQueue.poll();
     while (nextProcessableRecord != null) {
-
       nextProcessableRecord = schedulingQueue.poll();
-      // pass all records ready for processing to thread pool
 
+      final Record<KIn, VIn> record = nextProcessableRecord.record();
+      processableRecords.scheduleForProcessing(
+          nextProcessableRecord.record(),
+          nextProcessableRecord.recordContext(),
+          () -> userProcessor.process(record),
+          null // TODO
+      );
+    }
+  }
+
+  private void drainWritingQueue() {
+    while (!writingQueue.isEmpty()) {
+      recordHandler.executePut(writingQueue.poll());
     }
   }
 
   private void drainForwardingQueue() {
     while (!forwardingQueue.isEmpty()) {
-      recordForwarder.forward(forwardingQueue.poll());
+      recordHandler.executeForward(forwardingQueue.poll());
     }
   }
 
@@ -188,28 +215,34 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn,
   }
 
   /**
-   * Verify that
+   * Verify that all the stores accessed by the user via {@link ProcessorContext#getStateStore(String)}
+   * during their processor's #init method were connected to the processor following
+   * the appropriate procedure for async processors. For more details, see the
+   * instructions in the javadocs for {@link AsyncProcessorSupplier}.
    */
-  private void verifyConnectedStateStores() {
-    final Map<String, AsyncKeyValueStore<?, ?>> actualStores = streamThreadContext.getAllAsyncStores();
-    if (actualStores.size() != connectedStores.size()) {
+  private static void verifyConnectedStateStores(
+      final Map<String, AsyncKeyValueStore<?, ?>> accessedStores,
+      final Map<String, AsyncStoreBuilder<?>> connectedStores,
+      final Logger log
+  ) {
+    if (accessedStores.size() != connectedStores.size()) {
       log.error("Number of connected store names is not equal to the number of stores retrieved "
                     + "via ProcessorContext#getStateStore during initialization. Make sure to pass "
                     + "all state stores used by this processor to the AsyncProcessorSupplier, and "
                     + "they are (all) initialized during the Processor#init call before actual "
                     + "processing begins. Found {} connected store names and {} actual stores used",
-                connectedStores.size(), actualStores.keySet().size());
+                connectedStores.size(), accessedStores.keySet().size());
       throw new IllegalStateException("Number of actual stores initialized by this processor does"
                                           + "not match the number of connected store names that were provided to the "
                                           + "AsyncProcessorSupplier");
-    } else if (!connectedStores.keySet().containsAll(actualStores.keySet())) {
+    } else if (!connectedStores.keySet().containsAll(accessedStores.keySet())) {
       log.error("The list of connected store names was not identical to the set of store names "
                     + "that were used to access state stores via the ProcessorContext#getStateStore "
                     + "method during initialization. Double check the list of store names that are "
                     + "being passed in to the AsyncProcessorSupplier, and make sure it aligns with "
                     + "the actual store names being used by the processor itself. "
                     + "Got connectedStoreNames=[{}] and actualStoreNames=[{}]",
-                connectedStores.keySet(), actualStores.keySet());
+                connectedStores.keySet(), accessedStores.keySet());
       throw new IllegalStateException("The names of actual stores initialized by this processor do"
                                           + "not match the names of connected stores that were "
                                           + "provided to the AsyncProcessorSupplier");

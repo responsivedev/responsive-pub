@@ -17,9 +17,9 @@
 package dev.responsive.kafka.api.async.internals.records;
 
 import dev.responsive.kafka.api.async.internals.AsyncProcessorContext;
+import dev.responsive.kafka.api.async.internals.AsyncProcessorRecordContext;
 import java.util.function.Consumer;
 import org.apache.kafka.streams.processor.api.Record;
-import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 
 /**
  * A record that is to be processed asynchronously, and the metadata needed to do so
@@ -27,39 +27,90 @@ import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
  * Threading notes:
  * -created by the StreamThread
  */
-public class ProcessableRecord<KIn, VIn> {
+public class ProcessableRecord<KIn, VIn> implements AsyncRecord<KIn, VIn> {
 
   // Actual inputs to #forward
   private final Record<KIn, VIn> record;
 
   // Metadata for resetting the processor context before the #process
-  private final ProcessorRecordContext recordContext;
+  private final AsyncProcessorRecordContext recordContext;
 
   // Executes the user's #process method on this record
-  private final Consumer<Record<KIn, VIn>> process;
+  private final Runnable process;
+
+  private final Runnable processListener;
 
   public ProcessableRecord(
       final Record<KIn, VIn> record,
-      final ProcessorRecordContext recordContext,
-      final Consumer<Record<KIn, VIn>> process
+      final AsyncProcessorRecordContext recordContext,
+      final Runnable process,
+      final Runnable processListener
   ) {
     this.record = record;
     this.recordContext = recordContext;
     this.process = process;
+    this.processListener = processListener;
   }
 
   public Record<KIn, VIn> record() {
     return record;
   }
 
-  public ProcessorRecordContext recordContext() {
+  public AsyncProcessorRecordContext recordContext() {
     return recordContext;
   }
 
   public void process(final AsyncProcessorContext<?, ?> asyncContext) {
-    // set context metadata needed for processing
     asyncContext.prepareForProcess(recordContext);
-    process.accept(record);
+    process.run();
+    processListener.run();
   }
 
+  @Override
+  public KIn key() {
+    return record.key();
+  }
+
+  @Override
+  public VIn value() {
+    return record.value();
+  }
+
+  @Override
+  public String topic() {
+    return recordContext.topic();
+  }
+
+  @Override
+  public long offset() {
+    return recordContext.offset();
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+
+    final ProcessableRecord<?, ?> that = (ProcessableRecord<?, ?>) o;
+
+    if (!record.equals(that.record)) {
+      return false;
+    }
+    if (!recordContext.equals(that.recordContext)) {
+      return false;
+    }
+    return process.equals(that.process);
+  }
+
+  @Override
+  public int hashCode() {
+    int result = record.hashCode();
+    result = 31 * result + recordContext.hashCode();
+    result = 31 * result + process.hashCode();
+    return result;
+  }
 }
