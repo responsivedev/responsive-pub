@@ -16,9 +16,11 @@
 
 package dev.responsive.kafka.api.async.internals.records;
 
-import dev.responsive.kafka.api.async.internals.AsyncProcessorRecordContext;
+import static dev.responsive.kafka.internal.utils.Utils.processorRecordContextHashCode;
+
 import java.util.Objects;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 
 /**
  * A record that is ready and able to be forwarded by the StreamThread, plus the
@@ -34,8 +36,7 @@ public class ForwardableRecord<KOut, VOut> implements AsyncRecord<KOut, VOut> {
   private final Record<KOut, VOut> record;
   private final String childName; // may be null
 
-  // Metadata for resetting the processor context before the #forward
-  private final AsyncProcessorRecordContext recordContext;
+  private final ProcessorRecordContext recordContext;
 
   // Callback to notify listeners in the async processing architecture, for example
   // to unblock records waiting to be scheduled
@@ -44,7 +45,7 @@ public class ForwardableRecord<KOut, VOut> implements AsyncRecord<KOut, VOut> {
   public ForwardableRecord(
       final Record<KOut, VOut> record,
       final String childName,
-      final AsyncProcessorRecordContext recordContext,
+      final ProcessorRecordContext recordContext,
       final Runnable forwardListener
   ) {
     this.record = record;
@@ -61,12 +62,12 @@ public class ForwardableRecord<KOut, VOut> implements AsyncRecord<KOut, VOut> {
     return childName;
   }
 
-  public AsyncProcessorRecordContext recordContext() {
+  public ProcessorRecordContext recordContext() {
     return recordContext;
   }
 
-  public Runnable forwardListener() {
-      return forwardListener;
+  public void markForwardAsComplete() {
+      forwardListener.run();
   }
 
   @Override
@@ -116,7 +117,7 @@ public class ForwardableRecord<KOut, VOut> implements AsyncRecord<KOut, VOut> {
   public int hashCode() {
     int result = record.hashCode();
     result = 31 * result + (childName != null ? childName.hashCode() : 0);
-    result = 31 * result + recordContext.hashCode();
+    result = 31 * result + processorRecordContextHashCode(recordContext, true);
     result = 31 * result + forwardListener.hashCode();
     return result;
   }

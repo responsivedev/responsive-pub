@@ -17,37 +17,39 @@
 package dev.responsive.kafka.api.async.internals.queues;
 
 import dev.responsive.kafka.api.async.internals.records.AsyncEvent;
-import dev.responsive.kafka.api.async.internals.AsyncThread;
-
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.streams.processor.api.Record;
-import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.slf4j.Logger;
 
 /**
- * A queue for events with processable records that have been scheduled and are waiting to be
- * picked up and executed by an {@link AsyncThread} from the pool. Essentially the
- * input queue to the async processing thread pool
+ * A queue for events whose inputs have been fully processed by the AsyncThread
+ * and have been handed off to await the StreamThread for finalization. The
+ * StreamThread picks up events from this queue in order to execute any outputs
+ * that were intercepted during processing, such as forwards and writes, before
+ * ultimating marking the async event as completed. This queue is conceptually
+ * the reverse of the {@link ProcessingQueue} in that it forms a channel from
+ * the AsyncThread(s) to the StreamThread, whereas the ProcessingQueue does the
+ * exact opposite.
  * <p>
  * Threading notes:
- * -Produces to queue --> StreamThread
- * -Consumes from queue --> AsyncThread
+ * -Produces to queue --> AsyncThread
+ * -Consumes from queue --> StreamThread
  * -One per physical AsyncProcessor instance
  *   (ie per logical processor per partition per StreamThread)
  */
-public class ProcessingQueue<KIn, VIn> {
+public class FinalizingQueue<KIn, VIn> {
+
   private final Logger log;
 
   private final String asyncProcessorName;
 
-  private final BlockingQueue<AsyncEvent<KIn, VIn>> processableEvents = new LinkedBlockingQueue<>();
+  private final BlockingQueue<AsyncEvent<KIn, VIn>> processedEvents = new LinkedBlockingQueue<>();
 
-  public ProcessingQueue(final String asyncProcessorName, final int partition) {
+  public FinalizingQueue(final String asyncProcessorName, final int partition) {
     this.log = new LogContext(
-        String.format("processing-queue [%s-%d]", asyncProcessorName, partition)
-    ).logger(ProcessingQueue.class);
+        String.format("finalizing-queue [%s-%d]", asyncProcessorName, partition)
+    ).logger(dev.responsive.kafka.api.async.internals.queues.ProcessingQueue.class);
     this.asyncProcessorName = asyncProcessorName;
   }
 
@@ -56,23 +58,20 @@ public class ProcessingQueue<KIn, VIn> {
    * <p>
    * To be executed by the StreamThread only
    */
-  public void scheduleForProcessing(
-      final Record<KIn, VIn> record,
-      final ProcessorRecordContext recordContext,
-      final Runnable process
+  public void scheduleForFinalization(
+      final AsyncEvent<KIn, VIn> processedEvent
   ) {
+    // Transition to OUTPUT_READY to signal that the event is done with processing
+    // and is currently awaiting finalization by the StreamThread
+    processedEvent.transitionToOutputReady();
+
     try {
-      processableEvents.put(
-          new AsyncEvent<>(
-              asyncProcessorName,
-              record,
-              recordContext,
-              process
-          ));
+      processedEvents.put(processedEvent);
     } catch (final InterruptedException e) {
       // Just throw an exception for now to ensure shutdown occurs
-      log.info("Interrupted while attempting to schedule an event for processing");
-      throw new RuntimeException("Interrupt triggered when scheduling a new event");
+      log.info("Interrupted while attempting to schedule an event for finalization");
+      throw new RuntimeException("Interrupt triggered when passing a processed event back to"
+                                     + "the StreamThread for finalization");
     }
   }
 
@@ -82,14 +81,15 @@ public class ProcessingQueue<KIn, VIn> {
    * <p>
    * To be executed by an AsyncThread only.
    */
-  public AsyncEvent<KIn, VIn> nextProcessableEvent() {
+  public AsyncEvent<KIn, VIn> nextFinalizableEvent() {
     try {
-      return processableEvents.take();
+      return processedEvents.take();
     } catch (final InterruptedException e) {
       // Just throw an exception for now to ensure shutdown occurs
-      log.info("Interrupted while waiting to poll record");
+      log.info("Interrupted while waiting to poll the next processed event");
       throw new RuntimeException("Interrupted during blocking poll");
     }
   }
 
 }
+

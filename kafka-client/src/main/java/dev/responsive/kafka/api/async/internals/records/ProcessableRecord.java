@@ -16,7 +16,7 @@
 
 package dev.responsive.kafka.api.async.internals.records;
 
-import dev.responsive.kafka.api.async.internals.AsyncProcessorRecordContext;
+import dev.responsive.kafka.internal.utils.ImmutableProcessorRecordContext;
 import org.apache.kafka.streams.processor.api.Record;
 
 /**
@@ -31,16 +31,15 @@ public class ProcessableRecord<KIn, VIn> implements AsyncRecord<KIn, VIn> {
   private final Record<KIn, VIn> record;
 
   // Metadata for resetting the processor context before the #process
-  private final AsyncProcessorRecordContext recordContext;
+  private final ImmutableProcessorRecordContext recordContext;
 
-  // Executes the user's #process method on this record
-  private final Runnable process;
+
 
   private final Runnable processListener;
 
   public ProcessableRecord(
       final Record<KIn, VIn> record,
-      final AsyncProcessorRecordContext recordContext,
+      final ImmutableProcessorRecordContext recordContext,
       final Runnable process,
       final Runnable processListener
   ) {
@@ -54,7 +53,7 @@ public class ProcessableRecord<KIn, VIn> implements AsyncRecord<KIn, VIn> {
     return record;
   }
 
-  public AsyncProcessorRecordContext recordContext() {
+  public ImmutableProcessorRecordContext recordContext() {
     return recordContext;
   }
 

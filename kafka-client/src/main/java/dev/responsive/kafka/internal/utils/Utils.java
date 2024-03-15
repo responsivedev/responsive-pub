@@ -17,6 +17,8 @@
 package dev.responsive.kafka.internal.utils;
 
 import java.util.regex.Pattern;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -60,7 +62,7 @@ public final class Utils {
    * @return the thread index, eg "1" from a thread named "processId-StreamThread-1"
    */
   public static String extractStreamThreadIndex(final String streamThreadName) {
-    final var streamThreadMatcher = STREAM_THREAD_REGEX.matcher(streamThreadName);
+    final var streamThreadMatcher = STREAM_THREAD_INDEX_REGEX.matcher(streamThreadName);
     if (streamThreadMatcher.find()) {
       return streamThreadMatcher.group(1);
     } else {
@@ -71,5 +73,33 @@ public final class Utils {
     }
   }
 
+  /**
+   * Generates a consistent hashCode for the given {@link ProcessorRecordContext} by
+   * This workaround is required due to the actual ProcessorRecordContext class throwing
+   * an exception in its #hashCode implementation. This override is intended to discourage the use
+   * of this class in hash-based collections, which in turn is because one of its fields,
+   * {@link Headers}, is mutable and therefore the hashCode would be susceptible to
+   * outside modification.
+   * <p>
+   * If the headers are guaranteed to be safe-guarded and made effectively immutable,
+   * then they are safe to include in the hashCode. If no protections around the headers
+   * exist, they should be left out of the hashCode computation. Use the {@code includeHeaders}
+   * parameter to hash the headers or exclude them from the result.
+   */
+  public static int processorRecordContextHashCode(
+      final ProcessorRecordContext recordContext,
+      final boolean includeHeaders
+  ) {
+    int result = (int) (recordContext.timestamp() ^ (recordContext.timestamp() >>> 32));
+    result = 31 * result + (int) (recordContext.offset() ^ (recordContext.offset() >>> 32));
+    result = 31 * result + (recordContext.topic() != null ? recordContext.topic().hashCode() : 0);
+    result = 31 * result + recordContext.partition();
+
+    if (includeHeaders) {
+      result = 31 * result + recordContext.headers().hashCode();
+    }
+
+    return result;
+  }
 
 }

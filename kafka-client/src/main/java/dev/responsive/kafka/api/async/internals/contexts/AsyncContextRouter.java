@@ -14,8 +14,9 @@
  *  limitations under the License.
  */
 
-package dev.responsive.kafka.api.async.internals;
+package dev.responsive.kafka.api.async.internals.contexts;
 
+import dev.responsive.kafka.api.async.internals.contexts.AsyncProcessorContext;
 import java.io.File;
 import java.time.Duration;
 import java.util.Collections;
@@ -31,6 +32,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 
 /**
  * A simple wrapper layer that routes processor context accesses that occur during
@@ -40,7 +42,7 @@ import org.apache.kafka.streams.processor.api.RecordMetadata;
  * once the async pool is initialized, allowing lock-free/contention-free routing and
  * processor context access
  */
-public class AsyncContextRouter<KOut, VOut> implements ProcessorContext<KOut, VOut> {
+public class AsyncContextRouter<KOut, VOut> implements InternalProcessorContext<KOut, VOut> {
 
   // Includes the StreamThread as well as all AsyncThreads in its pool
   private final Map<String, AsyncProcessorContext<KOut, VOut>> threadToContext;
@@ -94,11 +96,6 @@ public class AsyncContextRouter<KOut, VOut> implements ProcessorContext<KOut, VO
   @Override
   public File stateDir() {
     return getCurrentThreadContext().stateDir();
-  }
-
-  @Override
-  public StreamsMetrics metrics() {
-    return getCurrentThreadContext().metrics();
   }
 
   @Override

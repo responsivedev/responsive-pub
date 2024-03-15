@@ -16,8 +16,12 @@
 
 package dev.responsive.kafka.api.async.internals;
 
+import dev.responsive.kafka.api.async.internals.contexts.AsyncThreadProcessorContext;
+import dev.responsive.kafka.api.async.internals.queues.FinalizingQueue;
+import dev.responsive.kafka.api.async.internals.queues.ForwardingQueue;
 import dev.responsive.kafka.api.async.internals.queues.ProcessingQueue;
-import dev.responsive.kafka.api.async.internals.records.ProcessableRecord;
+import dev.responsive.kafka.api.async.internals.queues.WritingQueue;
+import dev.responsive.kafka.api.async.internals.records.AsyncEvent;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -34,32 +38,40 @@ public class AsyncThread extends Thread implements Closeable {
   // TODO: once we decouple the thread pool from the processor instance, these
   //  will need to become a map from processor to context/queue as there should be
   //  an async context per processor instance
-  private final AsyncProcessorContext<?, ?> asyncContext;
-  private final ProcessingQueue<?, ?> processableRecords;
+  private final AsyncThreadProcessorContext<?, ?> asyncContext;
+  private final ProcessingQueue<?, ?> processingQueue;
+  private final FinalizingQueue<?, ?> finalizingQueue;
 
   public AsyncThread(
       final String name,
       final ProcessorContext<?, ?> context,
-      final ProcessingQueue<?, ?> processableRecords
+      final ProcessingQueue<?, ?> processingQueue,
+      final FinalizingQueue<?, ?> finalizingQueue
   ) {
     super(name);
-    this.asyncContext = new AsyncProcessorContext<>(context);
-    this.processableRecords = processableRecords;
+    this.asyncContext = new AsyncThreadProcessorContext<>(context, forwardingQueue);
+    this.processingQueue = processingQueue;
+    this.finalizingQueue = finalizingQueue;
     this.log = new LogContext(String.format("async-thread [%s] ", name)).logger(AsyncThread.class);
   }
 
   // TODO: once thread pool and processor are decoupled, this should look up the
   //  context in the map by processor node name
-  public AsyncProcessorContext<?, ?> context() {
+  public AsyncThreadProcessorContext<?, ?> context() {
     return asyncContext;
+  }
+
+  public <KIn, VIn> AsyncEvent<KIn, VIn> currentAsyncEvent() {
+    return asyncContext.currentAsyncEvent();
   }
 
   @Override
   public void run() {
     try {
       while (!shutdownRequested.getOpaque()) {
-        final ProcessableRecord<?, ?> record = processableRecords.poll();
-        process(record);
+        final AsyncEvent<?, ?> nextEvent = processingQueue.nextProcessableEvent();
+        asyncProcess(nextEvent);
+        finalizingQueue.scheduleForFinalization(nextEvent);
       }
     } catch (final Exception e) {
       if (shutdownRequested.getOpaque()) {
@@ -70,14 +82,30 @@ public class AsyncThread extends Thread implements Closeable {
     }
   }
 
-  private <KIn, VIn> void process(final ProcessableRecord<KIn ,VIn> record) {
-    asyncContext.prepareForProcess(record.recordContext());
-    record.process().run();
-    record.processListener().run();
+  private <KIn, VIn> void asyncProcess(final AsyncEvent<?, ?> event) {
+    asyncContext.prepareForAsyncProcess(event);
+    event.processInputRecord().run();
   }
 
   @Override
   public void close() throws IOException {
     shutdownRequested.setOpaque(true);
+  }
+
+  /**
+   * A reference to the {@link AsyncEvent} that is currently being processed
+   * This class is used to update the current AsyncEvent in any async state stores,
+   * ensuring the
+   */
+  public static class CurrentAsyncEvent {
+    private AsyncEvent<?, ?> currentAsyncEvent;
+
+    public AsyncEvent<?, ?> currentAsyncEvent() {
+      return currentAsyncEvent;
+    }
+
+    public void updateCurrentAsyncEvent(final AsyncEvent<?, ?> asyncEvent) {
+      this.currentAsyncEvent = asyncEvent;
+    }
   }
 }

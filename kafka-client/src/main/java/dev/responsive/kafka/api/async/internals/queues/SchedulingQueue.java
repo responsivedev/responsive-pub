@@ -17,7 +17,7 @@
 package dev.responsive.kafka.api.async.internals.queues;
 
 import dev.responsive.kafka.api.async.internals.AsyncProcessor;
-import dev.responsive.kafka.api.async.internals.AsyncProcessorRecordContext;
+import dev.responsive.kafka.internal.utils.ImmutableProcessorRecordContext;
 import dev.responsive.kafka.api.async.internals.records.ScheduleableRecord;
 import java.util.function.Predicate;
 import org.apache.kafka.streams.processor.api.Record;
@@ -117,7 +117,7 @@ public class SchedulingQueue<KIn, VIn> {
   ) {
     addToTail(new ScheduleableRecord<>(
         record,
-        new AsyncProcessorRecordContext(originalRecordContext)
+        new ImmutableProcessorRecordContext(originalRecordContext)
     ));
   }
 

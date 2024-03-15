@@ -16,24 +16,15 @@
 
 package org.apache.kafka.streams.state.internals;
 
-import dev.responsive.kafka.api.async.internals.AsyncCachedStateStore.AsyncCachingKeyValueStore;
 import dev.responsive.kafka.api.async.internals.AsyncStoreBuilder;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreBuilder;
-import java.util.Map;
-import java.util.Objects;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.streams.state.internals.CachingKeyValueStore;
-import org.apache.kafka.streams.state.internals.ChangeLoggingKeyValueBytesStore;
-import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
-import org.apache.kafka.streams.state.internals.MeteredKeyValueStore;
-import org.apache.kafka.streams.state.internals.TimestampedKeyValueStoreBuilder;
 
 
 // TODO:
@@ -42,6 +33,7 @@ import org.apache.kafka.streams.state.internals.TimestampedKeyValueStoreBuilder;
 public class AsyncTimestampedKeyValueStoreBuilder<K, V> extends TimestampedKeyValueStoreBuilder<K, V>
     implements AsyncStoreBuilder<TimestampedKeyValueStore<K, V>> {
 
+    private final Runnable flushAsyncBuffers;
     private final KeyValueBytesStoreSupplier storeSupplier;
     private final ResponsiveStoreBuilder<K, ValueAndTimestamp<V>, TimestampedKeyValueStore<K, V>> storeBuilder;
     private final Serde<K> keySerde;
@@ -50,9 +42,11 @@ public class AsyncTimestampedKeyValueStoreBuilder<K, V> extends TimestampedKeyVa
 
     @SuppressWarnings("unchecked")
     public AsyncTimestampedKeyValueStoreBuilder(
+        final Runnable flushAsyncBuffers,
         final ResponsiveStoreBuilder<?, ?, ?> responsiveBuilder
     ) {
       this(
+          flushAsyncBuffers,
           (ResponsiveStoreBuilder<K, ValueAndTimestamp<V>, TimestampedKeyValueStore<K, V>>) responsiveBuilder,
           (KeyValueBytesStoreSupplier) responsiveBuilder.storeSupplier(),
           ((ResponsiveStoreBuilder<K, ValueAndTimestamp<V>, TimestampedKeyValueStore<K, V>>) responsiveBuilder).keySerde(),
@@ -62,6 +56,7 @@ public class AsyncTimestampedKeyValueStoreBuilder<K, V> extends TimestampedKeyVa
     }
 
     private AsyncTimestampedKeyValueStoreBuilder(
+        final Runnable flushAsyncBuffers,
         final ResponsiveStoreBuilder<K, ValueAndTimestamp<V>, TimestampedKeyValueStore<K, V>> storeBuilder,
         final KeyValueBytesStoreSupplier storeSupplier,
         final Serde<K> keySerde,
@@ -69,6 +64,7 @@ public class AsyncTimestampedKeyValueStoreBuilder<K, V> extends TimestampedKeyVa
         final Time time
     ) {
       super(storeSupplier, keySerde, valueSerde, time);
+      this.flushAsyncBuffers = flushAsyncBuffers;
       this.storeSupplier = storeSupplier;
       this.storeBuilder = storeBuilder;
       this.keySerde = keySerde;
@@ -91,7 +87,7 @@ public class AsyncTimestampedKeyValueStoreBuilder<K, V> extends TimestampedKeyVa
       if (!storeBuilder.cachingEnabled()) {
         return inner;
       }
-      return new AsyncCachingKeyValueStore(new CachingKeyValueStore(inner, true));
+      return new AsyncCachingKeyValueStore(inner, true, flushAsyncBuffers);
     }
 
     private KeyValueStore<Bytes, byte[]> maybeWrapLogging(final KeyValueStore<Bytes, byte[]> inner) {

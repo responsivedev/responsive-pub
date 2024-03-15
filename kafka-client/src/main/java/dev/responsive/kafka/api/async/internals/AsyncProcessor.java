@@ -19,6 +19,9 @@ package dev.responsive.kafka.api.async.internals;
 import static dev.responsive.kafka.internal.utils.Utils.extractStreamThreadIndex;
 
 import dev.responsive.kafka.api.async.AsyncProcessorSupplier;
+import dev.responsive.kafka.api.async.internals.contexts.AsyncContextRouter;
+import dev.responsive.kafka.api.async.internals.contexts.AsyncThreadProcessorContext;
+import dev.responsive.kafka.api.async.internals.contexts.StreamThreadProcessorContext;
 import dev.responsive.kafka.api.async.internals.queues.ForwardingQueue;
 import dev.responsive.kafka.api.async.internals.queues.ProcessingQueue;
 import dev.responsive.kafka.api.async.internals.queues.SchedulingQueue;
@@ -64,7 +67,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn,
   private final SchedulingQueue<KIn, VIn> schedulingQueue = new SchedulingQueue<>();
 
   // Exclusively written to by this StreamThread (and exclusively read by AsyncThreads)
-  private final ProcessingQueue<KIn, VIn> processableRecords = new ProcessingQueue<>();
+  private final ProcessingQueue<KIn, VIn> processableRecords = new ProcessingQueue<>(asyncProcessorName);
 
   // Exclusively read by this StreamThread (and exclusively written to by AsyncThreads)
   private final ForwardingQueue<KOut, VOut> forwardingQueue = new ForwardingQueue<>();
@@ -73,13 +76,12 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn,
   // Everything below this line is effectively final and just has to be initialized in #init
   private TaskId taskId;
   private AsyncThreadPool threadPool;
-  private DelayedRecordHandler<KOut, VOut> recordHandler;
 
   // the context passed to us in init
   private InternalProcessorContext<KOut, VOut> originalContext;
   // the async context owned by the StreamThread that executed this processor's #init
   // this wraps the originalContext but saves metadata for a "point in time" view
-  private AsyncProcessorContext<KOut, VOut> streamThreadAsyncContext;
+  private StreamThreadProcessorContext<KOut, VOut> streamThreadAsyncContext;
 
   // Note: the constructor will be called from the main application thread (ie the
   // one that creates/starts the KafkaStreams object) so we have to delay the creation
@@ -106,20 +108,23 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn,
     );
     this.taskId = context.taskId();
     this.originalContext = (InternalProcessorContext<KOut, VOut>) context;
-    this.streamThreadAsyncContext = new AsyncProcessorContext<>(context);
+    this.streamThreadAsyncContext = new StreamThreadProcessorContext<>(context, writingQueue);
     this.log = new LogContext(String.format(
         "async-processor [%s-%d]",
-        streamThreadAsyncContext.currentProcessorName(), taskId.partition()
+        streamThreadAsyncContext.asyncProcessorName(), taskId.partition()
     )).logger(AsyncProcessor.class);
 
-    final Map<String, AsyncProcessorContext<KOut, VOut>> threadToContext =
+    final Map<String, AsyncThreadProcessorContext<KOut, VOut>> asyncThreadToContext =
         asyncThreadToContext(threadPool);
-    threadToContext.put(streamThreadName, streamThreadAsyncContext);
 
-    // Wrap the context handed to the user in the async router, to ensure that:
+    // Wrap the context handed to the user in the async router, to ensure that
+    // subsequent calls to processor context APIs made within the user's #process
+    // implementation will be routed to the specific async context corresponding
+    // to the AsyncThread where that #process is currently being executed
     //  a) user calls are delegated to the context owned by the current thread
     //  b) async calls can be intercepted (ie forwards and StateStore reads/writes)
-    final AsyncContextRouter<KOut, VOut> userContext = new AsyncContextRouter<>(threadToContext);
+    final AsyncContextRouter<KOut, VOut> userContext =
+        new AsyncContextRouter<>(asyncThreadToContext, streamThreadAsyncContext);
 
     userProcessor.init(userContext);
 
@@ -127,8 +132,6 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn,
         streamThreadAsyncContext.getAllAsyncStores();
 
     verifyConnectedStateStores(accessedStores, connectedStores, log);
-
-    this.recordHandler = new DelayedRecordHandler<>(context, accessedStores);
   }
 
   @Override
@@ -155,8 +158,10 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn,
    */
   public void awaitCompletion() {
     while (!isCompleted()) {
+
       drainSchedulingQueue();
       drainForwardingQueue();
+      drainWritingQueue();
 
       // TODO: use a Condition to avoid busy waiting
       try {
@@ -168,18 +173,18 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn,
   }
 
   @SuppressWarnings("unchecked")
-  private static <KOut, VOut> Map<String, AsyncProcessorContext<KOut, VOut>> asyncThreadToContext(
+  private Map<String, AsyncThreadProcessorContext<KOut, VOut>> asyncThreadToContext(
       final AsyncThreadPool threadPool
   ) {
     final Set<String> asyncThreadNames = threadPool.asyncThreadNames();
 
-    final Map<String, AsyncProcessorContext<KOut, VOut>> asyncThreadToContext =
+    final Map<String, AsyncThreadProcessorContext<KOut, VOut>> asyncThreadToContext =
         new HashMap<>(asyncThreadNames.size());
 
     for (final String asyncThread : asyncThreadNames) {
       asyncThreadToContext.put(
           asyncThread,
-          (AsyncProcessorContext<KOut, VOut>) threadPool.asyncContextForThread(asyncThread));
+          (AsyncThreadProcessorContext<KOut, VOut>) threadPool.asyncContextForThread(asyncThread));
     }
 
     return asyncThreadToContext;
@@ -202,13 +207,13 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn,
 
   private void drainWritingQueue() {
     while (!writingQueue.isEmpty()) {
-      recordHandler.executePut(writingQueue.poll());
+      streamThreadAsyncContext.delayedWrite(writingQueue.poll());
     }
   }
 
   private void drainForwardingQueue() {
     while (!forwardingQueue.isEmpty()) {
-      recordHandler.executeForward(forwardingQueue.poll());
+      streamThreadAsyncContext.delayedForward(forwardingQueue.poll());
     }
   }
 

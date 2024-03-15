@@ -16,6 +16,8 @@
 
 package dev.responsive.kafka.api.async.internals;
 
+import dev.responsive.kafka.api.async.internals.contexts.AsyncProcessorContext;
+import dev.responsive.kafka.api.async.internals.contexts.AsyncThreadProcessorContext;
 import dev.responsive.kafka.api.async.internals.queues.ProcessingQueue;
 import java.io.Closeable;
 import java.io.IOException;
@@ -33,24 +35,27 @@ public class AsyncThreadPool implements Closeable {
   // TODO: start up new threads when existing ones die to maintain the target size
   private final int threadPoolSize;
   private final Map<String, AsyncThread> threadPool;
-  private final Map<String, AsyncProcessorContext<?, ?>> threadToContext;
-
-  private final ProcessingQueue<?, ?> processableRecords;
+  private final Map<String, AsyncThreadProcessorContext<?, ?>> threadToContext;
 
   public AsyncThreadPool(
       final int threadPoolSize,
-      final ProcessorContext<?, ?> context,
+      final ProcessorContext<?, ?> originalContext,
       final String streamThreadIndex,
       final ProcessingQueue<?, ?> processableRecords
   ) {
     this.threadPoolSize = threadPoolSize;
     this.threadPool = new HashMap<>(threadPoolSize);
     this.threadToContext = new HashMap<>(threadPoolSize);
-    this.processableRecords = processableRecords;
 
     for (int i = 0; i < threadPoolSize; ++i) {
       final String name = threadName(streamThreadIndex, i);
-      final AsyncThread thread = new AsyncThread(name, context, processableRecords);
+      final AsyncThread thread = new AsyncThread(
+          name,
+          originalContext,
+          processableRecords,
+          forwardableRecords,
+          writeableRecords
+      );
 
       threadPool.put(name, thread);
       threadToContext.put(name, thread.context());
@@ -64,7 +69,7 @@ public class AsyncThreadPool implements Closeable {
     return threadPool.keySet();
   }
 
-  public AsyncProcessorContext<?, ?> asyncContextForThread(final String threadName) {
+  public AsyncThreadProcessorContext<?, ?> asyncContextForThread(final String threadName) {
     return threadPool.get(threadName).context();
   }
 

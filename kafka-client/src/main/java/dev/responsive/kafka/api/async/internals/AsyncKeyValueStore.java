@@ -16,10 +16,15 @@
 
 package dev.responsive.kafka.api.async.internals;
 
+import dev.responsive.kafka.api.async.internals.AsyncThread.CurrentAsyncEvent;
+import dev.responsive.kafka.api.async.internals.queues.WritingQueue;
+import dev.responsive.kafka.api.async.internals.records.AsyncEvent;
+import dev.responsive.kafka.api.async.internals.records.WriteableRecord;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.query.Position;
@@ -39,30 +44,48 @@ import org.apache.kafka.streams.state.KeyValueStore;
  * <p>
  * Threading notes:
  * -Methods should only be invoked from an AsyncThread
- * -One per physical state store instance
- *   (ie per state store per processor per partition per StreamThread
+ * -One for each AsyncThread per physical state store instance
+ *   (ie per state store per processor per partition per AsyncThread per StreamThread
  */
 public class AsyncKeyValueStore<KS, VS> implements KeyValueStore<KS, VS> {
 
   private final String name;
   private final KeyValueStore<KS, VS> userDelegate;
+  private final WritingQueue<KS, VS> writingQueue;
 
+  private final Map<String, CurrentAsyncEvent> threadToAsyncEvent;
+
+  @SuppressWarnings("unchecked")
   public AsyncKeyValueStore(
-      final KeyValueStore<KS, VS> userDelegate,
-      final String name
+      final String name,
+      final KeyValueStore<?, ?> userDelegate,
+      final WritingQueue<?, ?> writingQueue,
+      final Map<String, CurrentAsyncEvent> threadToCurrentEvent
   ) {
-    this.userDelegate = userDelegate;
     this.name = name;
+    this.userDelegate = (KeyValueStore<KS, VS>) userDelegate;
+    this.writingQueue = (WritingQueue<KS, VS>) writingQueue;
+    this.threadToAsyncEvent = Collections.unmodifiableMap(threadToCurrentEvent);
   }
 
-  public VS get(final KS key) {
-    // TODO: eventually we'll need to intercept this as well for proper
-    //  read-your-write semantics in async processors
-    return userDelegate.get(key);
+  public void executeDelayedPut(final WriteableRecord<KS, VS> writeableRecord) {
+    userDelegate.put(writeableRecord.key(), writeableRecord.value());
   }
 
+  /**
+   * The public API that's exposed to users for writing to the store. In an async store, this
+   * write is intercepted and will not be immediately executed on the underlying store. All
+   * such intercepted writes will be moved to a queue where they wait for the original
+   * StreamThread to poll them and complete the write by issuing the intercepted #put on
+   * the underlying store.
+   * At that time, the StreamThread will bypass this method to avoid further interception,
+   * and invoke {@link #executeDelayedPut()} to pass the write down to the underlying store.
+   */
+  @Override
   public void put(KS key, VS value) {
-
+    writingQueue.write(
+        key, value, name,
+    );
   }
 
   @Override
@@ -88,6 +111,11 @@ public class AsyncKeyValueStore<KS, VS> implements KeyValueStore<KS, VS> {
     return oldValue;
   }
 
+  public VS get(final KS key) {
+    // TODO: eventually we'll need to intercept this as well for proper
+    //  read-your-write semantics in async processors
+    return userDelegate.get(key);
+  }
 
   @Override
   public String name() {
@@ -170,4 +198,5 @@ public class AsyncKeyValueStore<KS, VS> implements KeyValueStore<KS, VS> {
   public long approximateNumEntries() {
     return userDelegate.approximateNumEntries();
   }
+
 }

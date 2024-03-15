@@ -16,17 +16,18 @@
 
 package dev.responsive.kafka.api.async.internals.records;
 
-import dev.responsive.kafka.api.async.internals.AsyncProcessorRecordContext;
+import dev.responsive.kafka.internal.utils.ImmutableProcessorRecordContext;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 
 public class ScheduleableRecord<KIn, VIn> implements AsyncRecord<KIn, VIn> {
 
   private final Record<KIn, VIn> record;
-  private final AsyncProcessorRecordContext recordContext;
+  private final ProcessorRecordContext recordContext;
 
   public ScheduleableRecord(
       final Record<KIn, VIn> record,
-      final AsyncProcessorRecordContext recordContext
+      final ProcessorRecordContext recordContext
   ) {
     this.record = record;
     this.recordContext = recordContext;
@@ -36,7 +37,7 @@ public class ScheduleableRecord<KIn, VIn> implements AsyncRecord<KIn, VIn> {
     return record;
   }
 
-  public AsyncProcessorRecordContext recordContext() {
+  public ProcessorRecordContext recordContext() {
     return recordContext;
   }
 

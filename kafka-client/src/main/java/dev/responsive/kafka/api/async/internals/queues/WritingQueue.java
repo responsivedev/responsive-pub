@@ -16,10 +16,9 @@
 
 package dev.responsive.kafka.api.async.internals.queues;
 
-import dev.responsive.kafka.api.async.internals.AsyncProcessorRecordContext;
 import dev.responsive.kafka.api.async.internals.records.WriteableRecord;
 import java.util.Comparator;
-import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 
 /**
  * A queue for holding the intercepted {@code #put} calls to a state store that occur
@@ -37,16 +36,16 @@ import org.apache.kafka.streams.processor.api.Record;
  * -One per physical AsyncProcessor instance
  *   (ie per logical processor per partition per StreamThread)
  */
-public class WritingQueue<K, V> {
+public class WritingQueue<KS, VS> {
 
-  private final OffsetOrderQueue<K, V, WriteableRecord<K, V>> storeToWriteableRecords =
-      OffsetOrderQueue.nonBlockingQueue(Comparator.comparing(WriteableRecord::storeName));
+  private final AsyncEventChannel<KS, VS, WriteableRecord<KS, VS>> writingQueue =
+      AsyncEventChannel.nonBlockingQueue(Comparator.comparing(WriteableRecord::storeName));
 
   /**
    * @return true iff there are any records available to forward
    */
   public boolean isEmpty() {
-    return storeToWriteableRecords.isEmpty();
+    return writingQueue.isEmpty();
   }
 
   /**
@@ -55,13 +54,14 @@ public class WritingQueue<K, V> {
    * Should only be invoked by AsyncThreads
    */
   public void write(
-      final Record<K, V> record,
-      final String childName, // can be null
-      final AsyncProcessorRecordContext recordContext,
+      final KS key,
+      final VS value,
+      final String storeName,
+      final ProcessorRecordContext recordContext,
       final Runnable putListener
   ) {
-    storeToWriteableRecords.put(
-        new WriteableRecord<>(record, childName, recordContext, putListener)
+    writingQueue.put(
+        new WriteableRecord<>(key, value, storeName, recordContext, putListener)
     );
   }
 
@@ -70,8 +70,8 @@ public class WritingQueue<K, V> {
    * <p>
    * Should only be invoked by StreamThreads
    */
-  public WriteableRecord<K, V> poll() {
-    return storeToWriteableRecords.poll();
+  public WriteableRecord<KS, VS> poll() {
+    return writingQueue.poll();
   }
   
 }

@@ -16,9 +16,12 @@
 
 package dev.responsive.kafka.api.async.internals.records;
 
-import dev.responsive.kafka.api.async.internals.AsyncProcessorRecordContext;
+import static dev.responsive.kafka.internal.utils.Utils.processorRecordContextHashCode;
+
+import dev.responsive.kafka.internal.utils.ImmutableProcessorRecordContext;
 import dev.responsive.kafka.api.async.internals.queues.WritingQueue;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 
 /**
  * A record (or tombstone) that should be written to the given state store.
@@ -27,25 +30,28 @@ import org.apache.kafka.streams.processor.api.Record;
  */
 public class WriteableRecord<KS, VS> implements AsyncRecord<KS, VS> {
 
-  private final Record<KS, VS> record;
+  private final KS recordKey;
+  private final VS recordValue;
   private final String storeName;
-  private final AsyncProcessorRecordContext recordContext;
+  private final ProcessorRecordContext recordContext;
   private final Runnable putListener;
 
   public WriteableRecord(
-      final Record<KS, VS> record,
+      final KS recordKey,
+      final VS recordValue,
       final String storeName,
-      final AsyncProcessorRecordContext recordContext,
+      final ProcessorRecordContext recordContext,
       final Runnable putListener
   ) {
-    this.record = record;
+    this.recordKey = recordKey;
+    this.recordValue = recordValue;
     this.storeName = storeName;
     this.recordContext = recordContext;
     this.putListener = putListener;
   }
 
-  public Record<KS, VS> record() {
-    return record;
+  public void markWriteAsComplete() {
+    putListener.run();
   }
 
   public String storeName() {
@@ -56,14 +62,18 @@ public class WriteableRecord<KS, VS> implements AsyncRecord<KS, VS> {
     return recordContext.partition();
   }
 
+  public ProcessorRecordContext recordContext() {
+    return recordContext;
+  }
+
   @Override
   public KS key() {
-    return record.key();
+    return recordKey;
   }
 
   @Override
   public VS value() {
-    return record.value();
+    return recordValue;
   }
 
   @Override
@@ -87,7 +97,7 @@ public class WriteableRecord<KS, VS> implements AsyncRecord<KS, VS> {
 
     final WriteableRecord<?, ?> that = (WriteableRecord<?, ?>) o;
 
-    if (!record.equals(that.record)) {
+    if (!recordKey.equals(that.recordKey)) {
       return false;
     }
     if (!storeName.equals(that.storeName)) {
@@ -98,9 +108,10 @@ public class WriteableRecord<KS, VS> implements AsyncRecord<KS, VS> {
 
   @Override
   public int hashCode() {
-    int result = record.hashCode();
+    int result = recordKey.hashCode();
     result = 31 * result + storeName.hashCode();
-    result = 31 * result + recordContext.hashCode();
+    result = 31 * result + processorRecordContextHashCode(recordContext, true);
     return result;
   }
+
 }

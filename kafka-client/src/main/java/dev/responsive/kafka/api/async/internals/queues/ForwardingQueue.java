@@ -16,7 +16,7 @@
 
 package dev.responsive.kafka.api.async.internals.queues;
 
-import dev.responsive.kafka.api.async.internals.AsyncProcessorRecordContext;
+import dev.responsive.kafka.internal.utils.ImmutableProcessorRecordContext;
 import dev.responsive.kafka.api.async.internals.records.ForwardableRecord;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -56,7 +56,7 @@ public class ForwardingQueue<KOut, VOut> {
   public void addToQueue(
       final Record<KOut, VOut> record,
       final String childName, // can be null
-      final AsyncProcessorRecordContext recordContext,
+      final ImmutableProcessorRecordContext recordContext,
       final Runnable forwardingListener
       ) {
     forwardableRecords.add(
