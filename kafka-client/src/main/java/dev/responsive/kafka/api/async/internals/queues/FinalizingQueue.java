@@ -42,31 +42,30 @@ public class FinalizingQueue<KIn, VIn> {
 
   private final Logger log;
 
-  private final String asyncProcessorName;
-
-  private final BlockingQueue<AsyncEvent<KIn, VIn>> processedEvents = new LinkedBlockingQueue<>();
+  private final BlockingQueue<AsyncEvent<KIn, VIn>> finalizableRecords = new LinkedBlockingQueue<>();
 
   public FinalizingQueue(final String asyncProcessorName, final int partition) {
     this.log = new LogContext(
         String.format("finalizing-queue [%s-%d]", asyncProcessorName, partition)
     ).logger(dev.responsive.kafka.api.async.internals.queues.ProcessingQueue.class);
-    this.asyncProcessorName = asyncProcessorName;
   }
 
   /**
-   * Schedules a processable record to be executed asynchronously by a thread from the async pool
+   * Schedules a record that the AsyncThread finished processing and inserts it
+   * into the queue for the StreamThread to pick up for finalization
    * <p>
    * To be executed by the StreamThread only
    */
+  @SuppressWarnings("unchecked")
   public void scheduleForFinalization(
-      final AsyncEvent<KIn, VIn> processedEvent
+      final AsyncEvent<?, ?> processedEvent
   ) {
     // Transition to OUTPUT_READY to signal that the event is done with processing
     // and is currently awaiting finalization by the StreamThread
     processedEvent.transitionToOutputReady();
 
     try {
-      processedEvents.put(processedEvent);
+      finalizableRecords.put((AsyncEvent<KIn, VIn>) processedEvent);
     } catch (final InterruptedException e) {
       // Just throw an exception for now to ensure shutdown occurs
       log.info("Interrupted while attempting to schedule an event for finalization");
@@ -83,12 +82,16 @@ public class FinalizingQueue<KIn, VIn> {
    */
   public AsyncEvent<KIn, VIn> nextFinalizableEvent() {
     try {
-      return processedEvents.take();
+      return finalizableRecords.take();
     } catch (final InterruptedException e) {
       // Just throw an exception for now to ensure shutdown occurs
       log.info("Interrupted while waiting to poll the next processed event");
       throw new RuntimeException("Interrupted during blocking poll");
     }
+  }
+
+  public boolean isEmpty() {
+    return finalizableRecords.isEmpty();
   }
 
 }

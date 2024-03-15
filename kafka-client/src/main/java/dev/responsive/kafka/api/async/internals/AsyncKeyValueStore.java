@@ -16,14 +16,15 @@
 
 package dev.responsive.kafka.api.async.internals;
 
-import dev.responsive.kafka.api.async.internals.AsyncThread.CurrentAsyncEvent;
+import dev.responsive.kafka.api.async.internals.contexts.AsyncThreadProcessorContext;
 import dev.responsive.kafka.api.async.internals.queues.WritingQueue;
 import dev.responsive.kafka.api.async.internals.records.AsyncEvent;
-import dev.responsive.kafka.api.async.internals.records.WriteableRecord;
+import dev.responsive.kafka.api.async.internals.records.DelayedWrite;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
@@ -34,6 +35,7 @@ import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.slf4j.Logger;
 
 /**
  * A wrapper around the actual state store that's used to intercept writes that occur
@@ -49,27 +51,26 @@ import org.apache.kafka.streams.state.KeyValueStore;
  */
 public class AsyncKeyValueStore<KS, VS> implements KeyValueStore<KS, VS> {
 
+  private final Logger log;
+
   private final String name;
   private final KeyValueStore<KS, VS> userDelegate;
-  private final WritingQueue<KS, VS> writingQueue;
-
-  private final Map<String, CurrentAsyncEvent> threadToAsyncEvent;
 
   @SuppressWarnings("unchecked")
   public AsyncKeyValueStore(
       final String name,
-      final KeyValueStore<?, ?> userDelegate,
-      final WritingQueue<?, ?> writingQueue,
-      final Map<String, CurrentAsyncEvent> threadToCurrentEvent
+      final int partition,
+      final KeyValueStore<?, ?> userDelegate
   ) {
+    this.log = new LogContext(String.format(" async-store [%s-%d]", name, partition))
+        .logger(AsyncKeyValueStore.class);
+
     this.name = name;
     this.userDelegate = (KeyValueStore<KS, VS>) userDelegate;
-    this.writingQueue = (WritingQueue<KS, VS>) writingQueue;
-    this.threadToAsyncEvent = Collections.unmodifiableMap(threadToCurrentEvent);
   }
 
-  public void executeDelayedPut(final WriteableRecord<KS, VS> writeableRecord) {
-    userDelegate.put(writeableRecord.key(), writeableRecord.value());
+  public void executeDelayedWrite(final DelayedWrite<KS, VS> delayedWrite) {
+    userDelegate.put(delayedWrite.key(), delayedWrite.value());
   }
 
   /**
@@ -79,13 +80,26 @@ public class AsyncKeyValueStore<KS, VS> implements KeyValueStore<KS, VS> {
    * StreamThread to poll them and complete the write by issuing the intercepted #put on
    * the underlying store.
    * At that time, the StreamThread will bypass this method to avoid further interception,
-   * and invoke {@link #executeDelayedPut()} to pass the write down to the underlying store.
+   * and invoke {@link #executeDelayedWrite} to pass the write directly to the underlying store.
    */
   @Override
   public void put(KS key, VS value) {
-    writingQueue.write(
-        key, value, name,
-    );
+    final Thread currentThread = Thread.currentThread();
+
+    if (currentThread instanceof AsyncThread) {
+      final AsyncEvent<?, ?> currentAsyncEvent =
+          ((AsyncThread) currentThread).context().currentAsyncEvent();
+
+      currentAsyncEvent.addWrittenRecord(new DelayedWrite<>(key, value, name()));
+    } else {
+      log.error("A non-AsyncThread invoked put on this async store. Caller thread name was {}",
+                currentThread.getName());
+      // The most common reason this case might be hit, besides a bug in the async framework itself,
+      // is if users attempt to insert into a state store from other Processor methods, like
+      // #init or #close
+      throw new IllegalStateException("Can only call #put on an async state store inside the "
+                                          + "#process method of an async processor");
+    }
   }
 
   @Override

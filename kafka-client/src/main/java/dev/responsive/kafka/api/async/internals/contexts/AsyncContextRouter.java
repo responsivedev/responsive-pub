@@ -16,20 +16,18 @@
 
 package dev.responsive.kafka.api.async.internals.contexts;
 
-import dev.responsive.kafka.api.async.internals.contexts.AsyncProcessorContext;
+import dev.responsive.kafka.api.async.internals.AsyncThread;
 import java.io.File;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
@@ -44,92 +42,97 @@ import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
  */
 public class AsyncContextRouter<KOut, VOut> implements InternalProcessorContext<KOut, VOut> {
 
-  // Includes the StreamThread as well as all AsyncThreads in its pool
-  private final Map<String, AsyncProcessorContext<KOut, VOut>> threadToContext;
+  private final Map<String, AsyncThreadProcessorContext<KOut, VOut>> threadToContext;
+  private final StreamThreadProcessorContext<KOut, VOut> streamThreadProcessorContext;
 
   public AsyncContextRouter(
-      final Map<String, AsyncProcessorContext<KOut, VOut>> threadToContext
+      final Map<String, AsyncThreadProcessorContext<KOut, VOut>> threadToContext,
+      final StreamThreadProcessorContext<KOut, VOut> streamThreadProcessorContext
   ) {
     // Unmodifiable map ensures thread safety since we only do reads
     this.threadToContext = Collections.unmodifiableMap(threadToContext);
+
+    this.streamThreadProcessorContext = streamThreadProcessorContext;
   }
 
-  private AsyncProcessorContext<KOut, VOut> getCurrentThreadContext() {
-    return threadToContext.get(Thread.currentThread().getName());
+  private AsyncThreadProcessorContext<KOut, VOut> lookupContextForCurrentThread() {
+    if (Thread.currentThread() instanceof AsyncThread) {
+      return (AsyncThreadProcessorContext<KOut, VOut>) ((AsyncThread) Thread.currentThread()).context();
+    }
   }
 
   @Override
   public <K extends KOut, V extends VOut> void forward(final Record<K, V> record) {
-    getCurrentThreadContext().forward(record);
+    lookupContextForCurrentThread().forward(record);
   }
 
   @Override
   public <K extends KOut, V extends VOut> void forward(final Record<K, V> record, final String childName) {
-    getCurrentThreadContext().forward(record, childName);
+    lookupContextForCurrentThread().forward(record, childName);
   }
 
   @Override
   public String applicationId() {
-    return getCurrentThreadContext().applicationId();
+    return lookupContextForCurrentThread().applicationId();
   }
 
   @Override
   public TaskId taskId() {
-    return getCurrentThreadContext().taskId();
+    return lookupContextForCurrentThread().taskId();
   }
 
   @Override
   public Optional<RecordMetadata> recordMetadata() {
-    return getCurrentThreadContext().recordMetadata();
+    return lookupContextForCurrentThread().recordMetadata();
   }
 
   @Override
   public Serde<?> keySerde() {
-    return getCurrentThreadContext().keySerde();
+    return lookupContextForCurrentThread().keySerde();
   }
 
   @Override
   public Serde<?> valueSerde() {
-    return getCurrentThreadContext().valueSerde();
+    return lookupContextForCurrentThread().valueSerde();
   }
 
   @Override
   public File stateDir() {
-    return getCurrentThreadContext().stateDir();
+    return lookupContextForCurrentThread().stateDir();
   }
 
   @Override
   public <S extends StateStore> S getStateStore(final String name) {
-    return getCurrentThreadContext().getStateStore(name);
+    return lookupContextForCurrentThread().getStateStore(name);
   }
 
   @Override
   public Cancellable schedule(final Duration interval, final PunctuationType type, final Punctuator callback) {
-    return getCurrentThreadContext().schedule(interval, type, callback);
+    return lookupContextForCurrentThread().schedule(interval, type, callback);
   }
 
   @Override
   public void commit() {
-    getCurrentThreadContext().commit();
+    lookupContextForCurrentThread().commit();
   }
 
   @Override
   public Map<String, Object> appConfigs() {
-    return getCurrentThreadContext().appConfigs();
+    return lookupContextForCurrentThread().appConfigs();
   }
 
   @Override
   public Map<String, Object> appConfigsWithPrefix(final String prefix) {
-    return getCurrentThreadContext().appConfigsWithPrefix(prefix);
+    return lookupContextForCurrentThread().appConfigsWithPrefix(prefix);
   }
 
   @Override
   public long currentSystemTimeMs() {
-    return getCurrentThreadContext().currentSystemTimeMs();
+    return lookupContextForCurrentThread().currentSystemTimeMs();
   }
 
   @Override
   public long currentStreamTimeMs() {
-    return getCurrentThreadContext().currentStreamTimeMs();
+    return lookupContextForCurrentThread().currentStreamTimeMs();
   }
 }

@@ -51,7 +51,7 @@ public class AsyncCachingKeyValueStore extends CachingKeyValueStore {
   ) {
     super(underlying, timestampedSchema);
     this.log = new LogContext(
-        String.format("async-caching-store [%s]", super.name())
+        String.format("async-kv-store [%s]", super.name())
     ).logger(AsyncCachingKeyValueStore.class);
   }
 
@@ -62,7 +62,7 @@ public class AsyncCachingKeyValueStore extends CachingKeyValueStore {
    * processed from start to finish (including all "side effects" like writes and forwards)
    */
   public void setAsyncBufferFlusher(final Runnable flushAsyncBuffers) {
-    if (flushAsyncBuffers != null) {
+    if (this.flushAsyncBuffers != null) {
       throw new IllegalStateException("Attempted to set the async buffer flush callback but it"
                                           + "was already initialized");
     }

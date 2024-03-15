@@ -40,7 +40,6 @@ import org.slf4j.Logger;
 public class ProcessingQueue<KIn, VIn> {
   private final Logger log;
 
-  private final String asyncProcessorName;
 
   private final BlockingQueue<AsyncEvent<KIn, VIn>> processableEvents = new LinkedBlockingQueue<>();
 
@@ -48,7 +47,6 @@ public class ProcessingQueue<KIn, VIn> {
     this.log = new LogContext(
         String.format("processing-queue [%s-%d]", asyncProcessorName, partition)
     ).logger(ProcessingQueue.class);
-    this.asyncProcessorName = asyncProcessorName;
   }
 
   /**
@@ -57,18 +55,10 @@ public class ProcessingQueue<KIn, VIn> {
    * To be executed by the StreamThread only
    */
   public void scheduleForProcessing(
-      final Record<KIn, VIn> record,
-      final ProcessorRecordContext recordContext,
-      final Runnable process
+      final AsyncEvent<KIn, VIn> processableEvent
   ) {
     try {
-      processableEvents.put(
-          new AsyncEvent<>(
-              asyncProcessorName,
-              record,
-              recordContext,
-              process
-          ));
+      processableEvents.put(processableEvent);
     } catch (final InterruptedException e) {
       // Just throw an exception for now to ensure shutdown occurs
       log.info("Interrupted while attempting to schedule an event for processing");

@@ -16,15 +16,17 @@
 
 package dev.responsive.kafka.api.async.internals;
 
-import dev.responsive.kafka.api.async.internals.contexts.AsyncProcessorContext;
 import dev.responsive.kafka.api.async.internals.contexts.AsyncThreadProcessorContext;
+import dev.responsive.kafka.api.async.internals.queues.FinalizingQueue;
 import dev.responsive.kafka.api.async.internals.queues.ProcessingQueue;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.slf4j.Logger;
 
 /**
  * Coordinates communication between the StreamThread and execution threads, as
@@ -32,20 +34,25 @@ import org.apache.kafka.streams.processor.api.ProcessorContext;
  */
 public class AsyncThreadPool implements Closeable {
 
+  private final Logger log;
+
   // TODO: start up new threads when existing ones die to maintain the target size
   private final int threadPoolSize;
   private final Map<String, AsyncThread> threadPool;
-  private final Map<String, AsyncThreadProcessorContext<?, ?>> threadToContext;
 
   public AsyncThreadPool(
       final int threadPoolSize,
       final ProcessorContext<?, ?> originalContext,
       final String streamThreadIndex,
-      final ProcessingQueue<?, ?> processableRecords
-  ) {
+      final ProcessingQueue<?, ?> processableRecords,
+      final FinalizingQueue<?, ?> finalizableRecords
+      ) {
+    this.log = new LogContext(String.format(
+        "async-threadpool [StreamThread-%s]", streamThreadIndex)
+    ).logger(AsyncThreadPool.class);
+
     this.threadPoolSize = threadPoolSize;
     this.threadPool = new HashMap<>(threadPoolSize);
-    this.threadToContext = new HashMap<>(threadPoolSize);
 
     for (int i = 0; i < threadPoolSize; ++i) {
       final String name = threadName(streamThreadIndex, i);
@@ -53,23 +60,26 @@ public class AsyncThreadPool implements Closeable {
           name,
           originalContext,
           processableRecords,
-          forwardableRecords,
-          writeableRecords
+          finalizableRecords
       );
 
       threadPool.put(name, thread);
-      threadToContext.put(name, thread.context());
     }
+
     for (final AsyncThread thread : threadPool.values()) {
       thread.start();
     }
+
+    log.info("Started up all {} async threads in this pool", threadPoolSize);
   }
 
   public Set<String> asyncThreadNames() {
     return threadPool.keySet();
   }
 
-  public AsyncThreadProcessorContext<?, ?> asyncContextForThread(final String threadName) {
+  public <KOut, VOut> AsyncThreadProcessorContext<KOut, VOut> asyncContextForThread(
+      final String threadName
+  ) {
     return threadPool.get(threadName).context();
   }
 
@@ -88,6 +98,24 @@ public class AsyncThreadPool implements Closeable {
       // TODO: use timeouts and retries in blocking queue to avoid need for interruption
       thread.interrupt();
     }
-    // TODO: wait for threads to join...or is it safe to just make them daemon threads?
+
+    int joinedThreads = 0;
+    for (final AsyncThread thread : threadPool.values()) {
+      // TODO: make this timeout configurable, or better yet determine it based on the
+      //  timeout that the user passed into #close, since the async thread pool should
+      //  not be shut down unless the app itself is too
+      // TODO: or better yet...is it safe to just make them daemon threads and let them
+      //  die on their own? Or register a shutdown handler and do this offline -- since
+      //  we have to abandon the current pending progress anyway, it should be fine to
+      //  complete the cleanup asynchronously as well
+      try {
+        thread.join(5_000L);
+        ++joinedThreads;
+      } catch (final InterruptedException e) {
+        // If we received an interruption ourselves, we should prioritize exiting over joining
+        log.warn("Interrupted while waiting on async threads to shut down, {} out of {} threads "
+                     + "were able to join in time", joinedThreads, threadPoolSize);
+      }
+    }
   }
 }

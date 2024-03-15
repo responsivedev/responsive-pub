@@ -87,7 +87,7 @@ public class AsyncTimestampedKeyValueStoreBuilder<K, V> extends TimestampedKeyVa
       if (!storeBuilder.cachingEnabled()) {
         return inner;
       }
-      return new AsyncCachingKeyValueStore(inner, true, flushAsyncBuffers);
+      return new AsyncCachingKeyValueStore(inner, true);
     }
 
     private KeyValueStore<Bytes, byte[]> maybeWrapLogging(final KeyValueStore<Bytes, byte[]> inner) {

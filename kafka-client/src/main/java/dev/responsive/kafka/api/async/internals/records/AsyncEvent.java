@@ -16,13 +16,13 @@
 
 package dev.responsive.kafka.api.async.internals.records;
 
+import static dev.responsive.kafka.internal.utils.Utils.processorRecordContextHashCode;
+
 import dev.responsive.kafka.api.async.internals.AsyncProcessor;
 import dev.responsive.kafka.api.async.internals.contexts.AsyncThreadProcessorContext;
 import java.util.LinkedList;
 import java.util.Queue;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.streams.processor.api.Processor;
-import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.slf4j.Logger;
@@ -110,8 +110,8 @@ public class AsyncEvent<KIn, VIn> {
   private final ProcessorRecordContext recordContext;
   private final Runnable processInputRecord;
 
-  private final Queue<ForwardableRecord<?, ?>> outputForwards = new LinkedList<>();
-  private final Queue<WriteableRecord<?, ?>> outputWrites = new LinkedList<>();
+  private final Queue<DelayedForward<?, ?>> outputForwards = new LinkedList<>();
+  private final Queue<DelayedWrite<?, ?>> outputWrites = new LinkedList<>();
 
   public AsyncEvent(
       final String asyncProcessorName,
@@ -134,18 +134,26 @@ public class AsyncEvent<KIn, VIn> {
     return inputRecord;
   }
 
-  public Runnable processInputRecord() {
+  public Runnable inputRecordProcessor() {
     return processInputRecord;
   }
 
-  @SuppressWarnings("unchecked")
-  public <KOut, VOut> ForwardableRecord<KOut, VOut> nextForward() {
-    return (ForwardableRecord<KOut, VOut>) outputForwards.poll();
+  public void addForwardedRecord(final DelayedForward<?, ?> delayedForward) {
+    outputForwards.add(delayedForward);
+  }
+
+  public void addWrittenRecord(final DelayedWrite<?, ?> delayedWrite) {
+    outputWrites.add(delayedWrite);
   }
 
   @SuppressWarnings("unchecked")
-  public <KS, VS> WriteableRecord<KS, VS> nextWrite() {
-    return (WriteableRecord<KS, VS>) outputWrites.poll();
+  public <KOut, VOut> DelayedForward<KOut, VOut> nextForward() {
+    return (DelayedForward<KOut, VOut>) outputForwards.poll();
+  }
+
+  @SuppressWarnings("unchecked")
+  public <KS, VS> DelayedWrite<KS, VS> nextWrite() {
+    return (DelayedWrite<KS, VS>) outputWrites.poll();
   }
 
   public boolean isDone() {
@@ -202,8 +210,51 @@ public class AsyncEvent<KIn, VIn> {
     return recordContext;
   }
 
-  public KIn key() {
+  public KIn inputKey() {
     return inputRecord.key();
   }
 
+  @Override
+  public boolean equals(final Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+
+    final AsyncEvent<?, ?> that = (AsyncEvent<?, ?>) o;
+
+    if (!log.equals(that.log)) {
+      return false;
+    }
+    if (currentState != that.currentState) {
+      return false;
+    }
+    if (!inputRecord.equals(that.inputRecord)) {
+      return false;
+    }
+    if (!recordContext.equals(that.recordContext)) {
+      return false;
+    }
+    if (!processInputRecord.equals(that.processInputRecord)) {
+      return false;
+    }
+    if (!outputForwards.equals(that.outputForwards)) {
+      return false;
+    }
+    return outputWrites.equals(that.outputWrites);
+  }
+
+  @Override
+  public int hashCode() {
+    int result = log.hashCode();
+    result = 31 * result + currentState.hashCode();
+    result = 31 * result + inputRecord.hashCode();
+    result = 31 * result + processorRecordContextHashCode(recordContext, true);
+    result = 31 * result + processInputRecord.hashCode();
+    result = 31 * result + outputForwards.hashCode();
+    result = 31 * result + outputWrites.hashCode();
+    return result;
+  }
 }

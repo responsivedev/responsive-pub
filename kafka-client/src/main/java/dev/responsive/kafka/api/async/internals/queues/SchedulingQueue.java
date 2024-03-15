@@ -16,12 +16,10 @@
 
 package dev.responsive.kafka.api.async.internals.queues;
 
-import dev.responsive.kafka.api.async.internals.AsyncProcessor;
-import dev.responsive.kafka.internal.utils.ImmutableProcessorRecordContext;
+import dev.responsive.kafka.api.async.internals.records.AsyncEvent;
 import dev.responsive.kafka.api.async.internals.records.ScheduleableRecord;
-import java.util.function.Predicate;
-import org.apache.kafka.streams.processor.api.Record;
-import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
+import java.util.HashMap;
+import java.util.Map;
 
 // TODO:
 //  1) implement predicate/isProcessable checking,
@@ -46,36 +44,45 @@ import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
  */
 public class SchedulingQueue<KIn, VIn> {
 
-  private final RecordNode<KIn, VIn> head;
-  private final RecordNode<KIn, VIn> tail;
+  /**
+   * TODO: idea
+   *
+   * class EventKeyStatus {
+   *   Queue<AsyncEvent> waitingEvents;
+   *   boolean inFlightEvent;
+   *
+   *   set inFlight to true when an event of this key is polled from the PriorityQueue
+   *
+   *   when adding new events, check
+   *   if (inFlightEvent ||   PriorityQueue.containsKEy(key)) --> add to waitingEvents queue
+   *   else --> add to PriorityQueue
+   *
+   *   when an event is marked done, set inFlightEvent to false and move the first event in
+   *   waitingEvents from the  key-specific Queue to the PriorityQueue
+   * }
+   *
+   * use a PriorityQueue<AsyncEvent> that sorts according to offset (and secondarily topic -- but
+   * how do we handle punctuator-created records??)
+   * This PriorityQueue would only contain one event per key, and only events that are processable.
+   * Every time an in-flight recrd is completed, we
+   *
+   * We also have a Map<Key -> Queue<AsyncEvent>> with ALL events awaiting scheduling, with each
+   * key pointing to a queue/linked list with the events of the same key in offset order
+   *
+   * When an event is marked done by the StreamThread, it just passes it in here and we
+   * will poll the next event from that key's queue and replace the
+   */
+
+  private final EventNode head;
+  private final EventNode tail;
+  private final Map<KIn, EventNode> inFlightNodesByKey = new HashMap<>();
 
   public SchedulingQueue() {
-    this.head = new RecordNode<>(null, null, null, null);
-    this.tail = new RecordNode<>(null, null, null, null);
+    this.head = new EventNode(null, null, null);
+    this.tail = new EventNode(null, null, null);
 
     head.next = tail;
     tail.previous = head;
-  }
-
-  /**
-   * @return true iff there are any pending records, whether or not they're processable
-   */
-  public boolean isEmpty() {
-    return head == tail;
-  }
-
-  /**
-   * Get the next oldest record that satisfies the constraint for processing, namely
-   * that all previous records with the same {@link KIn key type} have been completed
-   *
-   * @return the next available record that is ready for processing
-   *         or {@code null} if there are no processable records
-   */
-  public ScheduleableRecord<KIn, VIn> poll() {
-    final RecordNode<KIn, VIn> nextProcessableRecordNode = nextProcessableRecordNode();
-    return nextProcessableRecordNode != null
-        ? nextProcessableRecordNode.record
-        : null;
   }
 
   /**
@@ -89,10 +96,36 @@ public class SchedulingQueue<KIn, VIn> {
     return nextProcessableRecordNode() != null;
   }
 
-  private RecordNode<KIn, VIn> nextProcessableRecordNode() {
-    RecordNode<KIn, VIn> current = head.next;
+  /**
+   * @return true iff there are any pending records, whether or not they're processable
+   *         If you want to know if there are any available records that are actually
+   *         ready for processing, use {@link #hasProcessableRecord()} instead
+   */
+  public boolean isEmpty() {
+    return head == tail;
+  }
+
+  /**
+   * Get the next longest-waiting event that satisfies the constraint for processing, namely
+   * that all previous records with the same {@link KIn key type} have been completed
+   *
+   * @return the next available event that is ready for processing
+   *         or {@code null} if there are no processable records
+   */
+  public AsyncEvent<KIn, VIn> poll() {
+    final EventNode nextProcessableRecordNode = nextProcessableRecordNode();
+    return nextProcessableRecordNode != null
+        ? nextProcessableRecordNode.asyncEvent
+        : null;
+  }
+
+  private EventNode nextProcessableRecordNode() {
+    EventNode current = head.next;
     while (current != tail) {
-      if (current.isProcessable()) {
+
+      if (canBeScheduled(current)) {
+        remove(current);
+
         return current;
       } else {
         current = current.next;
@@ -105,55 +138,51 @@ public class SchedulingQueue<KIn, VIn> {
    * Add a new input record to the queue. Records will be processing in modified FIFO
    * order; essentially picking up the next oldest record that is ready to be processed,
    * in other words, excluding those that are awaiting previous same-key records to complete.
-   *
-   * @param record a new record to schedule for processing
-   * @param originalRecordContext the actual recordContext of the processor context
-   *                              at the time this input record was passed to the
-   *                              {@link AsyncProcessor#process} method
    */
   public void put(
-      final Record<KIn, VIn> record,
-      final ProcessorRecordContext originalRecordContext
+      final AsyncEvent<KIn, VIn> newAsyncEvent
   ) {
-    addToTail(new ScheduleableRecord<>(
-        record,
-        new ImmutableProcessorRecordContext(originalRecordContext)
-    ));
+    addToTail(newAsyncEvent);
   }
 
-  private void addToTail(final ScheduleableRecord<KIn, VIn> record) {
-    final RecordNode<KIn, VIn> node = new RecordNode<>(record, k -> {throw new RuntimeException("Need to implement Predicate!");}, tail, tail.previous);
+  private void addToTail(final AsyncEvent<KIn, VIn> asyncEvent) {
+    final EventNode node = new EventNode(
+        asyncEvent,
+        canBeScheduled(asyncEvent.inputKey()),
+        tail,
+        tail.previous
+    );
     tail.previous.next = node;
     tail.previous = node;
   }
 
-  private ScheduleableRecord<KIn, VIn> remove(final RecordNode<KIn, VIn> node) {
+  private AsyncEvent<KIn, VIn> remove(final EventNode node) {
     node.next.previous = node.previous;
     node.previous.next = node.next;
-    return node.record;
+    return node.asyncEvent;
   }
 
-  private static class RecordNode<KIn, VIn> {
-    private final ScheduleableRecord<KIn, VIn> record;
-    private final Predicate<KIn> isProcessable;
 
-    private RecordNode<KIn, VIn> next;
-    private RecordNode<KIn, VIn> previous;
+  private boolean canBeScheduled(final KIn eventKey) {
+    //TODO -- are there any other records scheduled ahead of this one OR a currently pending record?
+    return !inFlightNodesByKey.containsKey(eventKey);
+  }
 
-    public RecordNode(
-        final ScheduleableRecord<KIn, VIn> record,
-        final Predicate<KIn> isProcessable,
-        final RecordNode<KIn, VIn> next,
-        final RecordNode<KIn, VIn> previous
+  private class EventNode {
+    private final AsyncEvent<KIn, VIn> asyncEvent;
+
+    private EventNode next;
+    private EventNode previous;
+
+    public EventNode(
+        final AsyncEvent<KIn, VIn> asyncEvent,
+        final EventNode next,
+        final EventNode previous
     ) {
-      this.record = record;
-      this.isProcessable = isProcessable;
+      this.asyncEvent = asyncEvent;
       this.next = next;
       this.previous = previous;
     }
 
-    public boolean isProcessable() {
-      return isProcessable.test(record.key());
-    }
   }
 }

@@ -16,22 +16,14 @@
 
 package dev.responsive.kafka.api.async.internals.contexts;
 
-import dev.responsive.kafka.api.async.internals.AsyncKeyValueStore;
 import dev.responsive.kafka.internal.stores.ResponsiveKeyValueStore;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Optional;
-import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
-import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
-import org.apache.kafka.streams.state.KeyValueStore;
 
 /**
  * A special version of the usual {@link ProcessorContext} for async processing. It's used
@@ -61,37 +53,37 @@ import org.apache.kafka.streams.state.KeyValueStore;
 public abstract class AsyncProcessorContext<KOut, VOut>
     extends DelegatingInternalProcessorContext<KOut, VOut> {
 
-  // We're being overly cautious here as the taskId is not actually mutated during
-  // normal processing, but better safe than sorry (and to protect ourselves against future changes)
-  private final TaskId taskId;
-
-  private final Serde<?> keySerde;
-  private final Serde<?> valueSerde;
-
-  // is empty for records that originate from upstream punctuators rather than input topics
-  private final Optional<RecordMetadata> recordMetadata;
-
   private final ProcessorNode<?, ?, ?, ?> asyncProcessorNode;
 
   @SuppressWarnings("unchecked")
   public AsyncProcessorContext(final ProcessorContext<?,?> delegate) {
     super((InternalProcessorContext<KOut, VOut>) delegate);
 
-    taskId = super.taskId();
-    keySerde = super.keySerde();
-    valueSerde = super.valueSerde();
-
-    recordMetadata = super.recordMetadata();
     asyncProcessorNode = super.currentNode();
   }
 
   /**
-   * (Re)set all inner state and metadata to prepare for an async execution
+   * (Re)set all inner state and metadata to prepare for a delayed async execution
    * such as processing input records or forwarding output records
    */
-  protected void prepareForAsyncExecution(final ProcessorRecordContext recordContext) {
+  protected void prepareForDelayedExecution(final ProcessorRecordContext recordContext) {
+    // Note: the "RecordContext" and "RecordMetadata" refer to/are the same thing, and
+    // even though they have separate getters with slightly different return types, they
+    // both ultimately just return the recordContext we set here. So we don't need to
+    // worry about setting the recordMetadata separately, even though #recordMetadata is
+    // exposed to the user, since #setRecordContext takes care of that
     super.setRecordContext(recordContext);
     super.setCurrentNode(asyncProcessorNode);
+
+    // TODO: we won't need to do this until we support async with the DSL and support
+    //  the new windowed emit semantics specifically, which is the only thing using it,
+    //  but at some point we may need to make a copy of the context's processorMetadata
+    //  for each async event when it's created and then (re)set it here alongside the
+    //  recordContext.
+    //  This could have nontrivial overhead although it's possible we can get away with
+    //  just saving a single long rather than copying an entire map. This feature needs
+    //  further inspection but isn't supported by either the async framework or in
+    //  Responsive in general, so it's not urgent.
   }
 
   @Override
@@ -102,26 +94,6 @@ public abstract class AsyncProcessorContext<KOut, VOut>
   @Override
   public <K extends KOut, V extends VOut> void forward(final Record<K, V> record, final String childName) {
     throw new IllegalStateException("Must use a StreamThreadProcessorContext to execute forwards");
-  }
-
-  @Override
-  public TaskId taskId() {
-    return taskId;
-  }
-
-  @Override
-  public Optional<RecordMetadata> recordMetadata() {
-    return recordMetadata;
-  }
-
-  @Override
-  public Serde<?> keySerde() {
-    return keySerde;
-  }
-
-  @Override
-  public Serde<?> valueSerde() {
-    return valueSerde;
   }
 
   @Override
@@ -144,10 +116,5 @@ public abstract class AsyncProcessorContext<KOut, VOut>
     //  even soliciting user feedback on
     return super.currentStreamTimeMs();
   }
-
-  public String asyncProcessorName() {
-    return asyncProcessorNode.name();
-  }
-
 
 }

@@ -17,14 +17,13 @@
 package dev.responsive.kafka.api.async.internals.contexts;
 
 import dev.responsive.kafka.api.async.internals.AsyncKeyValueStore;
-import dev.responsive.kafka.api.async.internals.AsyncThread.CurrentAsyncEvent;
-import dev.responsive.kafka.api.async.internals.queues.WritingQueue;
-import dev.responsive.kafka.api.async.internals.records.ForwardableRecord;
-import dev.responsive.kafka.api.async.internals.records.WriteableRecord;
+import dev.responsive.kafka.api.async.internals.records.DelayedForward;
+import dev.responsive.kafka.api.async.internals.records.DelayedWrite;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.state.KeyValueStore;
 
 /**
@@ -38,18 +37,15 @@ import org.apache.kafka.streams.state.KeyValueStore;
  */
 public class StreamThreadProcessorContext<KOut, VOut> extends AsyncProcessorContext<KOut, VOut> {
 
-  private final WritingQueue<?, ?> writingQueue;
   private final Map<String, AsyncKeyValueStore<?, ?>> storeNameToAsyncStore = new HashMap<>();
-  private final Map<String, CurrentAsyncEvent> asyncThreadToCurrentEvent;
+  private final Map<String, AsyncThreadProcessorContext<?, ?>> asyncThreadToContext;
 
   public StreamThreadProcessorContext(
       final ProcessorContext<?, ?> delegate,
-      final WritingQueue<?, ?> writingQueue,
-      final Map<String, CurrentAsyncEvent> asyncThreadToCurrentEvent
+      final Map<String, AsyncThreadProcessorContext<?, ?>> asyncThreadToContext
   ) {
     super(delegate);
-    this.writingQueue = writingQueue;
-    this.asyncThreadToCurrentEvent = asyncThreadToCurrentEvent;
+    this.asyncThreadToContext = asyncThreadToContext;
   }
 
   @Override
@@ -59,9 +55,8 @@ public class StreamThreadProcessorContext<KOut, VOut> extends AsyncProcessorCont
     if (userDelegate instanceof KeyValueStore) {
       final var asyncStore = new AsyncKeyValueStore<>(
           name,
-          (KeyValueStore<?, ?>) userDelegate,
-          writingQueue,
-          asyncThreadToCurrentEvent
+          super.partition(),
+          (KeyValueStore<?, ?>) userDelegate
       );
       storeNameToAsyncStore.put(name, asyncStore);
       return (S) asyncStore;
@@ -71,32 +66,30 @@ public class StreamThreadProcessorContext<KOut, VOut> extends AsyncProcessorCont
     }
   }
 
-  @SuppressWarnings("unchecked")
-  public <KS, VS> void delayedWrite(
-      final WriteableRecord<KS, VS> writeableRecord
-  ) {
-    super.prepareForAsyncExecution(writeableRecord.recordContext());
+  public void prepareToFinalizeEvent(final ProcessorRecordContext recordContext) {
+    super.prepareForDelayedExecution(recordContext);
+  }
 
+  public <KS, VS> void executeDelayedWrite(
+      final DelayedWrite<KS, VS> delayedWrite
+  ) {
     final AsyncKeyValueStore<KS, VS> asyncStore =
-        (AsyncKeyValueStore<KS, VS>) storeNameToAsyncStore.get(writeableRecord.storeName());
-    asyncStore.executeDelayedPut(writeableRecord);
+        getAsyncStore(delayedWrite.storeName());
 
-    writeableRecord.markWriteAsComplete();
+    asyncStore.executeDelayedWrite(delayedWrite);
   }
 
-  public <K extends KOut, V extends VOut> void delayedForward(
-      final ForwardableRecord<K, V> forwardableRecord
+  public <K extends KOut, V extends VOut> void executeDelayedForward(
+      final DelayedForward<K, V> delayedForward
   ) {
-    super.prepareForAsyncExecution(forwardableRecord.recordContext());
-
-    // super.forward throws an exception, so we have to issue the forward to the delegate directly
-    super.delegate().forward(forwardableRecord.record(), forwardableRecord.childName());
-
-    forwardableRecord.markForwardAsComplete();
+    // super.forward throws an exception to prevent forwarding by other context types,
+    // so we have to issue the forward by going through the delegate directly
+    delegate().forward(delayedForward.record(), delayedForward.childName());
   }
 
-  public AsyncKeyValueStore<?, ?> getAsyncStore(final String storeName) {
-    return storeNameToAsyncStore.get(storeName);
+  @SuppressWarnings("unchecked")
+  public <KS, VS> AsyncKeyValueStore<KS, VS> getAsyncStore(final String storeName) {
+    return (AsyncKeyValueStore<KS, VS>) storeNameToAsyncStore.get(storeName);
   }
 
   public Map<String, AsyncKeyValueStore<?, ?>> getAllAsyncStores() {

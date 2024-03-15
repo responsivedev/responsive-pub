@@ -16,9 +16,8 @@
 
 package dev.responsive.kafka.api.async.internals.contexts;
 
-import dev.responsive.kafka.api.async.internals.queues.ForwardingQueue;
 import dev.responsive.kafka.api.async.internals.records.AsyncEvent;
-import dev.responsive.kafka.api.async.internals.records.ProcessableRecord;
+import dev.responsive.kafka.api.async.internals.records.DelayedForward;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
@@ -39,8 +38,6 @@ import org.apache.kafka.streams.processor.api.Record;
 public class AsyncThreadProcessorContext<KOut, VOut>
     extends AsyncProcessorContext<KOut, VOut> {
 
-  private final ForwardingQueue<KOut, VOut> forwardingQueue;
-
   // The AsyncEvent that is currently being processed by this AsyncThread. Updated each
   // time a new event is picked up from the processing queue but before beginning
   // to process it (ie invoking #process on the input record for this event), as
@@ -48,22 +45,21 @@ public class AsyncThreadProcessorContext<KOut, VOut>
   private AsyncEvent<?, ?> currentAsyncEvent;
 
   public AsyncThreadProcessorContext(
-      final ProcessorContext<?, ?> delegate,
-      final ForwardingQueue<KOut, VOut> forwardingQueue
+      final ProcessorContext<?, ?> delegate
   ) {
     super(delegate);
-    this.forwardingQueue = forwardingQueue;
   }
 
-  public void prepareForAsyncProcess(final AsyncEvent<?, ?> nextProcessableEvent) {
-    currentAsyncEvent = nextProcessableEvent;
+  public void prepareToProcessNewEvent(final AsyncEvent<?, ?> nextEventToProcess) {
+    currentAsyncEvent = nextEventToProcess;
+
     // TODO: should we (re)set any other metadata? For example should we
     //  return the original streamTime (which corresponds to the time when
     //  that record was actually picked up) or the current streamTime (which
     //  may be later that what it would have been with synchronous processing,
     //  but will be more aligned with the streamTime being tracked & used by the
     //  state store internals
-    super.prepareForAsyncExecution(nextProcessableEvent.recordContext());
+    super.prepareForDelayedExecution(nextEventToProcess.recordContext());
   }
 
   @SuppressWarnings("unchecked")
@@ -73,15 +69,14 @@ public class AsyncThreadProcessorContext<KOut, VOut>
 
   @Override
   public <K extends KOut, V extends VOut> void forward(final Record<K, V> record) {
-    forwardingQueue.addToQueue(
-        record, null, TODO
-    );
+    currentAsyncEvent.addForwardedRecord(new DelayedForward<>(record, null));
   }
 
   @Override
-  public <K extends KOut, V extends VOut> void forward(final Record<K, V> record, final String childName) {
-    forwardingQueue.addToQueue(
-        record, childName, TODO
-    );
+  public <K extends KOut, V extends VOut> void forward(
+      final Record<K, V> record,
+      final String childName
+  ) {
+    currentAsyncEvent.addForwardedRecord(new DelayedForward<>(record, childName));
   }
 }
