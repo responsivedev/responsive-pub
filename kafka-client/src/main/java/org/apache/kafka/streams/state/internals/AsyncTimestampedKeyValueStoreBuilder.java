@@ -16,8 +16,11 @@
 
 package org.apache.kafka.streams.state.internals;
 
-import dev.responsive.kafka.api.async.internals.AsyncStoreBuilder;
+import dev.responsive.kafka.api.async.internals.stores.AsyncProcessorFlushers.AsyncFlushListener;
+import dev.responsive.kafka.api.async.internals.stores.AsyncStoreBuilder;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreBuilder;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
@@ -33,45 +36,57 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 public class AsyncTimestampedKeyValueStoreBuilder<K, V> extends TimestampedKeyValueStoreBuilder<K, V>
     implements AsyncStoreBuilder<TimestampedKeyValueStore<K, V>> {
 
-    private final Runnable flushAsyncBuffers;
-    private final KeyValueBytesStoreSupplier storeSupplier;
-    private final ResponsiveStoreBuilder<K, ValueAndTimestamp<V>, TimestampedKeyValueStore<K, V>> storeBuilder;
-    private final Serde<K> keySerde;
-    private final ValueAndTimestampSerde<V> valueSerde;
-    private final Time time;
+  private final KeyValueBytesStoreSupplier storeSupplier;
+  private final ResponsiveStoreBuilder<K, ValueAndTimestamp<V>, TimestampedKeyValueStore<K, V>> storeBuilder;
+  private final Serde<K> keySerde;
+  private final ValueAndTimestampSerde<V> valueSerde;
+  private final Time time;
 
-    @SuppressWarnings("unchecked")
-    public AsyncTimestampedKeyValueStoreBuilder(
-        final Runnable flushAsyncBuffers,
-        final ResponsiveStoreBuilder<?, ?, ?> responsiveBuilder
-    ) {
-      this(
-          flushAsyncBuffers,
-          (ResponsiveStoreBuilder<K, ValueAndTimestamp<V>, TimestampedKeyValueStore<K, V>>) responsiveBuilder,
-          (KeyValueBytesStoreSupplier) responsiveBuilder.storeSupplier(),
-          ((ResponsiveStoreBuilder<K, ValueAndTimestamp<V>, TimestampedKeyValueStore<K, V>>) responsiveBuilder).keySerde(),
-          ((ResponsiveStoreBuilder<K, ValueAndTimestamp<V>, TimestampedKeyValueStore<K, V>>) responsiveBuilder).valueSerde(),
-          responsiveBuilder.time()
-      );
-    }
+  // We need to maintain a reference to the method that will flush the async buffers and block
+  // on their
+  private final Map<String, AsyncFlushingKeyValueStore> streamThreadToFlushCallback = new ConcurrentHashMap<>();
 
-    private AsyncTimestampedKeyValueStoreBuilder(
-        final Runnable flushAsyncBuffers,
-        final ResponsiveStoreBuilder<K, ValueAndTimestamp<V>, TimestampedKeyValueStore<K, V>> storeBuilder,
-        final KeyValueBytesStoreSupplier storeSupplier,
-        final Serde<K> keySerde,
-        final Serde<V> valueSerde,
-        final Time time
-    ) {
-      super(storeSupplier, keySerde, valueSerde, time);
-      this.flushAsyncBuffers = flushAsyncBuffers;
-      this.storeSupplier = storeSupplier;
-      this.storeBuilder = storeBuilder;
-      this.keySerde = keySerde;
-      this.valueSerde = valueSerde == null ? null : new ValueAndTimestampSerde<>(valueSerde);
-      this.time = time;
-    }
+  @SuppressWarnings("unchecked")
+  public AsyncTimestampedKeyValueStoreBuilder(
+      final ResponsiveStoreBuilder<?, ?, ?> responsiveBuilder
+  ) {
+    this(
+        (ResponsiveStoreBuilder<K, ValueAndTimestamp<V>, TimestampedKeyValueStore<K, V>>) responsiveBuilder,
+        (KeyValueBytesStoreSupplier) responsiveBuilder.storeSupplier(),
+        ((ResponsiveStoreBuilder<K, ValueAndTimestamp<V>, TimestampedKeyValueStore<K, V>>) responsiveBuilder).keySerde(),
+        ((ResponsiveStoreBuilder<K, ValueAndTimestamp<V>, TimestampedKeyValueStore<K, V>>) responsiveBuilder).valueSerde(),
+        responsiveBuilder.time()
+    );
+  }
 
+  private AsyncTimestampedKeyValueStoreBuilder(
+      final ResponsiveStoreBuilder<K, ValueAndTimestamp<V>, TimestampedKeyValueStore<K, V>> storeBuilder,
+      final KeyValueBytesStoreSupplier storeSupplier,
+      final Serde<K> keySerde,
+      final Serde<V> valueSerde,
+      final Time time
+  ) {
+    super(storeSupplier, keySerde, valueSerde, time);
+    this.storeSupplier = storeSupplier;
+    this.storeBuilder = storeBuilder;
+    this.keySerde = keySerde;
+    this.valueSerde = valueSerde == null ? null : new ValueAndTimestampSerde<>(valueSerde);
+    this.time = time;
+  }
+
+  @Override
+  public void registerNewProcessorForThread(
+      final String streamThreadName,
+      final int partition,
+      final AsyncFlushListener processorFlushListener
+  ) {
+
+  }
+
+  // When a StreamThread creates a newly-assigned tasks, it firsts builds the subtopology
+  // which always starts by building the Processor instance itself (from ProcessorSupplier#get)
+  // and then goes on to build any state stores, ie invoking this call
+  // This means we can rely on the Processor to
     @Override
     public TimestampedKeyValueStore<K, V> build() {
       return new MeteredTimestampedKeyValueStore<>(
@@ -83,11 +98,15 @@ public class AsyncTimestampedKeyValueStoreBuilder<K, V> extends TimestampedKeyVa
       );
     }
 
-    private KeyValueStore<Bytes, byte[]> maybeWrapCaching(final KeyValueStore<Bytes, byte[]> inner) {
+  /**
+   * This is somewhat hacky, but because we hook into the StreamThread's commit
+   * via the {@link CachedStateStore#flushCache()} API, we need
+   */
+  private KeyValueStore<Bytes, byte[]> maybeWrapCaching(final KeyValueStore<Bytes, byte[]> inner) {
       if (!storeBuilder.cachingEnabled()) {
         return inner;
       }
-      return new AsyncCachingKeyValueStore(inner, true);
+      return new AsyncFlushingKeyValueStore(inner, true);
     }
 
     private KeyValueStore<Bytes, byte[]> maybeWrapLogging(final KeyValueStore<Bytes, byte[]> inner) {
@@ -96,4 +115,5 @@ public class AsyncTimestampedKeyValueStoreBuilder<K, V> extends TimestampedKeyVa
       }
       return new ChangeLoggingTimestampedKeyValueBytesStore(inner);
     }
+
 }

@@ -14,15 +14,12 @@
  *  limitations under the License.
  */
 
-package dev.responsive.kafka.api.async.internals;
+package dev.responsive.kafka.api.async.internals.stores;
 
-import dev.responsive.kafka.api.async.internals.contexts.AsyncThreadProcessorContext;
-import dev.responsive.kafka.api.async.internals.queues.WritingQueue;
-import dev.responsive.kafka.api.async.internals.records.AsyncEvent;
-import dev.responsive.kafka.api.async.internals.records.DelayedWrite;
-import java.util.Collections;
+import dev.responsive.kafka.api.async.internals.AsyncThread;
+import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
+import dev.responsive.kafka.api.async.internals.events.DelayedWrite;
 import java.util.List;
-import java.util.Map;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
@@ -53,7 +50,6 @@ public class AsyncKeyValueStore<KS, VS> implements KeyValueStore<KS, VS> {
 
   private final Logger log;
 
-  private final String name;
   private final KeyValueStore<KS, VS> userDelegate;
 
   @SuppressWarnings("unchecked")
@@ -65,7 +61,6 @@ public class AsyncKeyValueStore<KS, VS> implements KeyValueStore<KS, VS> {
     this.log = new LogContext(String.format(" async-store [%s-%d]", name, partition))
         .logger(AsyncKeyValueStore.class);
 
-    this.name = name;
     this.userDelegate = (KeyValueStore<KS, VS>) userDelegate;
   }
 

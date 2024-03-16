@@ -16,8 +16,8 @@
 
 package dev.responsive.kafka.api.async.internals.queues;
 
-import dev.responsive.kafka.api.async.internals.records.AsyncEvent;
-import dev.responsive.kafka.api.async.internals.records.ScheduleableRecord;
+import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
+import dev.responsive.kafka.api.async.internals.events.ScheduleableRecord;
 import java.util.HashMap;
 import java.util.Map;
 

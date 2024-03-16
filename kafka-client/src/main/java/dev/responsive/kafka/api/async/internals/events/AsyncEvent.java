@@ -14,7 +14,7 @@
  *  limitations under the License.
  */
 
-package dev.responsive.kafka.api.async.internals.records;
+package dev.responsive.kafka.api.async.internals.events;
 
 import static dev.responsive.kafka.internal.utils.Utils.processorRecordContextHashCode;
 
@@ -130,10 +130,6 @@ public class AsyncEvent<KIn, VIn> {
     this.processInputRecord = processInputRecord;
   }
 
-  public Record<KIn, VIn> inputRecord() {
-    return inputRecord;
-  }
-
   public Runnable inputRecordProcessor() {
     return processInputRecord;
   }
@@ -144,6 +140,14 @@ public class AsyncEvent<KIn, VIn> {
 
   public void addWrittenRecord(final DelayedWrite<?, ?> delayedWrite) {
     outputWrites.add(delayedWrite);
+  }
+
+  public boolean hasNextForward() {
+    return !outputForwards.isEmpty();
+  }
+
+  public boolean hasNextWrite() {
+    return !outputWrites.isEmpty();
   }
 
   @SuppressWarnings("unchecked")
@@ -170,6 +174,16 @@ public class AsyncEvent<KIn, VIn> {
     currentState = State.INPUT_READY;
   }
 
+  public void transitionToProcessing() {
+    if (!currentState.equals(State.INPUT_READY)) {
+      log.error("[{}] Attempted to mark an async event as being processed but the event was "
+                    + "not in the INPUT_READY state", currentState.name());
+      throw new IllegalStateException("Cannot transition to PROCESSING from the state "
+                                          + currentState.name());
+    }
+    currentState = State.PROCESSING;
+  }
+
   public void transitionToOutputReady() {
     if (!currentState.equals(State.PROCESSING)) {
       log.error("[{}] Attempted to mark an async event as ready for output processing but "
@@ -191,18 +205,19 @@ public class AsyncEvent<KIn, VIn> {
   }
 
   public void transitionToDone() {
-    if (!(outputForwards.isEmpty() && outputWrites.isEmpty())) {
+    if (!currentState.equals(State.FINALIZING)) {
+      log.error("[{}] Attempted to mark an async event as DONE but the event not "
+                    + "in the FINALIZING state", currentState.name());
+      throw new IllegalStateException("Cannot transition to DONE from the state "
+                                          + currentState.name());
+    } else if (!(outputForwards.isEmpty() && outputWrites.isEmpty())) {
       log.error("[{}] Attempted to mark an async event as complete without draining all output queues"
                     + "first. Remaining forwards={} and remaining writes={}",
                 currentState.name(), outputForwards.size(), outputWrites.size());
       throw new IllegalStateException("Can't transition to DONE when there are still records "
                                           + "in the output buffers");
-    } else if (!currentState.equals(State.FINALIZING)) {
-      log.error("[{}] Attempted to mark an async event as DONE but the event not "
-                    + "in the FINALIZING state", currentState.name());
-      throw new IllegalStateException("Cannot transition to DONE from the state "
-                                          + currentState.name());
     }
+
     currentState = State.DONE;
   }
 

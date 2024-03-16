@@ -16,14 +16,12 @@
 
 package dev.responsive.kafka.api.async.internals.queues;
 
-import dev.responsive.kafka.api.async.internals.records.AsyncEvent;
+import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
 import dev.responsive.kafka.api.async.internals.AsyncThread;
 
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.streams.processor.api.Record;
-import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.slf4j.Logger;
 
 /**

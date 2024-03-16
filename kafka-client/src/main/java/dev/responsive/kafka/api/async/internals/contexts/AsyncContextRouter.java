@@ -22,15 +22,19 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
-import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.slf4j.Logger;
 
 /**
  * A simple wrapper layer that routes processor context accesses that occur during
@@ -38,101 +42,204 @@ import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
  * async thread's specific instance of the AsyncProcessorContext. Each execution thread
  * in the async pool gets its own async context and the mapping is final and immutable
  * once the async pool is initialized, allowing lock-free/contention-free routing and
- * processor context access
+ * processor context access.
+ * <p>
+ * This context router allows us to work around the change in execution thread that
+ * occurs after an AsyncProcessor is initialized and processing begins (then flips
+ * again when the processor is closed).
+ * Since a processor context is only passed into a user's Processor implementation
+ * once, during #init, they will need to save a reference to the exact context
+ * object that's passed to #init, which is executed by the StreamThread. But after
+ * that point, it will be only AsyncThreads executing the user's #process method,
+ * and these async threads each have their individual context that is different
+ * from the one belonging to the StreamThread (and to each other's). To make sure
+ * any ProcessorContext calls the user makes inside #process reach the appropriate
+ * context belonging to the currently executing thread, instead of an actual context,
+ * we pass this "context router" in when invoking #init on the user's processor.
+ * This way, when they save a reference to the context, it is not the StreamThread's
+ * context but the router instead, and any calls made later in #process will be
+ * routed accordingly.
+ * <p>
+ * The StreamThread will flip the router to "processing mode" after it returns from
+ * the user's #init method. When the AsyncProcessor is eventually closed, the
+ * StreamThread will turn processing mode back off just before invoking the #close
+ * method of the user's processor.
+ * When in "processing mode", the router expects only AsyncThread access and should
+ * return only {@link AsyncThreadProcessorContext} instances.
+ * When processing mode is off, the router expects the executing thread to be the
+ * original StreamThread, and will only return the {@link StreamThreadProcessorContext}
+ * that belongs to it.
+ * <p>
+ * Threading notes:
+ * -Accessed by both the StreamThread and AsyncThreadPool, but only one or the other
+ *  depending on whether "processing mode" is on or off.
+ * -Although the async processing framework is responsible for setting up and managing
+ *  the state of this class, the context router is not itself for use by the framework
+ *  which should always have a handle on the specific context instance and pass things
+ *  off directly between if needed. In other words, this class is simply made to act
+ *  as an interface between the user and the underlying context objects. It is only
+ *  passed in to the user's #init and only serves to redirect the ProcessorContext
+ *  methods that the user invokes from their processor (whether in #init, #process,
+ *  or #close)
  */
-public class AsyncContextRouter<KOut, VOut> implements InternalProcessorContext<KOut, VOut> {
+public class AsyncContextRouter<KOut, VOut> implements ProcessorContext<KOut, VOut> {
 
-  private final Map<String, AsyncThreadProcessorContext<KOut, VOut>> threadToContext;
+  private final Logger log;
+
+  // Flipped to true once regular processing begins, ie between when #init and #close
+  // are invoked on the AsyncProcessor.
+  // When true, the StreamThread should be executing and its context used to delegate
+  // When false, only AsyncThreads should be accessing this router
+  private final AtomicBoolean isInProcessingMode = new AtomicBoolean(false);
+
   private final StreamThreadProcessorContext<KOut, VOut> streamThreadProcessorContext;
 
   public AsyncContextRouter(
-      final Map<String, AsyncThreadProcessorContext<KOut, VOut>> threadToContext,
+      final String logPrefix,
       final StreamThreadProcessorContext<KOut, VOut> streamThreadProcessorContext
   ) {
-    // Unmodifiable map ensures thread safety since we only do reads
-    this.threadToContext = Collections.unmodifiableMap(threadToContext);
+    this.log = new LogContext(logPrefix).logger(AsyncContextRouter.class);
 
     this.streamThreadProcessorContext = streamThreadProcessorContext;
   }
 
-  private AsyncThreadProcessorContext<KOut, VOut> lookupContextForCurrentThread() {
+  public void startProcessingMode() {
+    isInProcessingMode.setOpaque(true);
+  }
+
+  public void endProcessingMode() {
+    isInProcessingMode.setOpaque(false);
+  }
+
+  /**
+   * Look up the appropriate context based on whether processing mode is on
+   */
+  private AsyncProcessorContext<KOut, VOut> lookupContext() {
+    if (isInProcessingMode.getOpaque()) {
+      return lookupContext();
+    } else {
+      return streamThreadProcessorContext;
+    }
+  }
+
+  /**
+   * Look up the context when you know it should be an AsyncThreadProcessorContext.
+   * This method includes a safety check to verify that assumption
+   */
+  private AsyncThreadProcessorContext<KOut, VOut> lookupContextForAsyncThread() {
     if (Thread.currentThread() instanceof AsyncThread) {
-      return (AsyncThreadProcessorContext<KOut, VOut>) ((AsyncThread) Thread.currentThread()).context();
+      return ((AsyncThread) Thread.currentThread()).context();
+    } else {
+      log.error("Attempted to look up async processor context but is not executing "
+                    + "on an AsyncThread");
+
+      throw new IllegalStateException(
+          "Cannot get an async processor context for a non-async thread"
+      );
     }
   }
 
   @Override
   public <K extends KOut, V extends VOut> void forward(final Record<K, V> record) {
-    lookupContextForCurrentThread().forward(record);
+    if (!isInProcessingMode.getOpaque()) {
+      log.error("Call to context#forward while the processor had not yet begun processing");
+
+      throw new UnsupportedOperationException("Records can not be forwarded from an async "
+                                                  + "processor except inside #process");
+    }
+    lookupContextForAsyncThread().forward(record);
   }
 
   @Override
   public <K extends KOut, V extends VOut> void forward(final Record<K, V> record, final String childName) {
-    lookupContextForCurrentThread().forward(record, childName);
+    if (!isInProcessingMode.getOpaque()) {
+      log.error("Call to context#forward while the processor had not yet begun processing");
+
+      throw new UnsupportedOperationException("Records can not be forwarded from an async "
+                                                  + "processor except inside #process");
+    }
+
+    lookupContextForAsyncThread().forward(record, childName);
   }
 
   @Override
   public String applicationId() {
-    return lookupContextForCurrentThread().applicationId();
+    return lookupContext().applicationId();
   }
 
   @Override
   public TaskId taskId() {
-    return lookupContextForCurrentThread().taskId();
+    return lookupContext().taskId();
   }
 
   @Override
   public Optional<RecordMetadata> recordMetadata() {
-    return lookupContextForCurrentThread().recordMetadata();
+    return lookupContext().recordMetadata();
   }
 
   @Override
   public Serde<?> keySerde() {
-    return lookupContextForCurrentThread().keySerde();
+    return lookupContext().keySerde();
   }
 
   @Override
   public Serde<?> valueSerde() {
-    return lookupContextForCurrentThread().valueSerde();
+    return lookupContext().valueSerde();
   }
 
   @Override
   public File stateDir() {
-    return lookupContextForCurrentThread().stateDir();
+    return lookupContext().stateDir();
+  }
+
+  @Override
+  public StreamsMetrics metrics() {
+    return lookupContext().metrics();
   }
 
   @Override
   public <S extends StateStore> S getStateStore(final String name) {
-    return lookupContextForCurrentThread().getStateStore(name);
+    if (isInProcessingMode.getOpaque()) {
+      log.error("Call to context#getStateStore after the processor was initialized");
+
+      throw new IllegalArgumentException("Cannot call #getStateStore while in processing mode, "
+                                             + "you must initialize all state stores during the"
+                                             + "processor's #init method");
+    }
+    return streamThreadProcessorContext.getStateStore(name);
   }
 
   @Override
-  public Cancellable schedule(final Duration interval, final PunctuationType type, final Punctuator callback) {
-    return lookupContextForCurrentThread().schedule(interval, type, callback);
+  public Cancellable schedule(
+      final Duration interval,
+      final PunctuationType type,
+      final Punctuator callback
+  ) {
+    return lookupContext().schedule(interval, type, callback);
   }
 
   @Override
   public void commit() {
-    lookupContextForCurrentThread().commit();
+    lookupContext().commit();
   }
 
   @Override
   public Map<String, Object> appConfigs() {
-    return lookupContextForCurrentThread().appConfigs();
+    return lookupContext().appConfigs();
   }
 
   @Override
   public Map<String, Object> appConfigsWithPrefix(final String prefix) {
-    return lookupContextForCurrentThread().appConfigsWithPrefix(prefix);
+    return lookupContext().appConfigsWithPrefix(prefix);
   }
 
   @Override
   public long currentSystemTimeMs() {
-    return lookupContextForCurrentThread().currentSystemTimeMs();
+    return lookupContext().currentSystemTimeMs();
   }
 
   @Override
   public long currentStreamTimeMs() {
-    return lookupContextForCurrentThread().currentStreamTimeMs();
+    return lookupContext().currentStreamTimeMs();
   }
 }

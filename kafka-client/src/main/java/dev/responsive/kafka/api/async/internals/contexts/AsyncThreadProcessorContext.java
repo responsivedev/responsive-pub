@@ -16,8 +16,8 @@
 
 package dev.responsive.kafka.api.async.internals.contexts;
 
-import dev.responsive.kafka.api.async.internals.records.AsyncEvent;
-import dev.responsive.kafka.api.async.internals.records.DelayedForward;
+import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
+import dev.responsive.kafka.api.async.internals.events.DelayedForward;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
@@ -60,6 +60,8 @@ public class AsyncThreadProcessorContext<KOut, VOut>
     //  but will be more aligned with the streamTime being tracked & used by the
     //  state store internals
     super.prepareForDelayedExecution(nextEventToProcess.recordContext());
+
+    currentAsyncEvent.transitionToProcessing();
   }
 
   @SuppressWarnings("unchecked")

@@ -17,7 +17,7 @@
 package dev.responsive.kafka.api.async;
 
 import dev.responsive.kafka.api.async.internals.AsyncProcessor;
-import dev.responsive.kafka.api.async.internals.AsyncStoreBuilder;
+import dev.responsive.kafka.api.async.internals.stores.AsyncStoreBuilder;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreBuilder;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreBuilder.StoreType;
 import java.util.HashMap;
@@ -33,8 +33,6 @@ import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.TimestampedKeyValueStore;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.AsyncTimestampedKeyValueStoreBuilder;
 
 /**
@@ -137,7 +135,7 @@ public final class AsyncProcessorSupplier<KIn, VIn, KOut, VOut> implements Proce
             asyncStoreBuilders.put(
                 storeName,
                 new AsyncTimestampedKeyValueStoreBuilder<>(
-                    (ResponsiveStoreBuilder<?, ValueAndTimestamp<?>, TimestampedKeyValueStore<?, ?>>) responsiveBuilder)
+                    responsiveBuilder)
                     (KeyValueBytesStoreSupplier) responsiveBuilder.storeSupplier(),
                     responsiveBuilder.keySerde(),
                     responsiveBuilder.valueSerde(),

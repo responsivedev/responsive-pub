@@ -14,7 +14,7 @@
  *  limitations under the License.
  */
 
-package dev.responsive.kafka.api.async.internals.records;
+package dev.responsive.kafka.api.async.internals.events;
 
 
 /**

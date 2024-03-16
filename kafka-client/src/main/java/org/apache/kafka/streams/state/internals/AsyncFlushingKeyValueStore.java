@@ -16,8 +16,13 @@
 
 package org.apache.kafka.streams.state.internals;
 
+import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
+
+import dev.responsive.kafka.api.async.internals.stores.AsyncProcessorFlushers.AsyncFlushListenerSupplier;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.slf4j.Logger;
 
@@ -31,28 +36,44 @@ import org.slf4j.Logger;
  * upon upgrade. (This is also why it's placed in the o.a.k.streams.state.internals
  * package -- so we can call the package-private constructor of the super class)
  */
-public class AsyncCachingKeyValueStore extends CachingKeyValueStore {
+public class AsyncFlushingKeyValueStore implements AsyncFlushingStore
+    extends CachingKeyValueStore {
 
   private final Logger log;
 
+  // These two values, together with the partition (which we can't get until #init
+  // as discussed in the comment below), allow us to uniquely identify the specific
+  // AsyncProcessor instance this store belongs to, and ultimately obtain the
+  // correct flush listener for that processor
+  private final String streamThreadName;
+  private final String storeName;
+  private final AsyncFlushListenerSupplier listenerSupplier;
+
   // Unfortunately the store builders are all constructed from the main application,
   // not the StreamThread we need to issue the flush call on, and these builders
-  // will build the actual StateStore layers (including this) when the task is
-  // first created, meaning this constructor is invoked before we get the call
-  // to AsyncProcessor#init which is the first time we get control of the
-  // StreamThread within the async processing pipeline. This means we have to
-  // wait until #init until we can initialize this, but after that point it is
-  // effectively final
+  // will build the actual StateStore layers (including this) as well as the
+  // AsyncProcessor instance when the task is first created, at which point we
+  // don't have access to all the information we need to actually link them
+  // together (specifically, the partition). We have to wait until #init is
+  // called on both the AsyncProcessor and the StateStore so we can access the
+  // partition info, and then together with the StreamThread name and store name,
+  // can finally determine which AsyncProcessor we should hook up to and flush
+  // when a commit occurs.
+
+  // However, once initialized, this field is effectively final and should never
+  // change
   private Runnable flushAsyncBuffers;
 
-  public AsyncCachingKeyValueStore(
+  public AsyncFlushingKeyValueStore(
       final KeyValueStore<Bytes, byte[]> underlying,
       final boolean timestampedSchema
   ) {
     super(underlying, timestampedSchema);
+    this.storeName = underlying.name();
+    this.streamThreadName = Thread.currentThread().getName();
     this.log = new LogContext(
-        String.format("async-kv-store [%s]", super.name())
-    ).logger(AsyncCachingKeyValueStore.class);
+        String.format("stream-thread [%s] %s: ", streamThreadName, storeName)
+    ).logger(AsyncFlushingKeyValueStore.class);
   }
 
   /**
@@ -75,6 +96,17 @@ public class AsyncCachingKeyValueStore extends CachingKeyValueStore {
       final boolean sendOldValues
   ) {
     return super.setFlushListener(listener, sendOldValues);
+  }
+
+  @Override
+  public void init(final StateStoreContext context,
+                   final StateStore root) {
+
+    initInternal(asInternalProcessorContext(context));
+    super.init(context, root);
+    // save the stream thread as we only ever want to trigger a flush
+    // when the stream thread is the current thread.
+    streamThread = Thread.currentThread();
   }
 
   @Override

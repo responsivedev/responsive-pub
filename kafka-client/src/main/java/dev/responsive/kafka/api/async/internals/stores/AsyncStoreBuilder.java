@@ -14,12 +14,17 @@
  *  limitations under the License.
  */
 
-package dev.responsive.kafka.api.async.internals;
+package dev.responsive.kafka.api.async.internals.stores;
 
+import dev.responsive.kafka.api.async.internals.stores.AsyncProcessorFlushers.AsyncFlushListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 
 public interface AsyncStoreBuilder<T extends StateStore> extends StoreBuilder<T> {
 
-
+  void registerNewProcessorForThread(
+      final String streamThreadName,
+      final int partition,
+      final AsyncFlushListener processorFlushListener
+  );
 }

@@ -19,7 +19,7 @@ package dev.responsive.kafka.api.async.internals;
 import dev.responsive.kafka.api.async.internals.contexts.AsyncThreadProcessorContext;
 import dev.responsive.kafka.api.async.internals.queues.FinalizingQueue;
 import dev.responsive.kafka.api.async.internals.queues.ProcessingQueue;
-import dev.responsive.kafka.api.async.internals.records.AsyncEvent;
+import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -98,8 +98,13 @@ public class AsyncThread extends Thread implements Closeable {
     finalizingQueue.scheduleForFinalization(currentEvent);
   }
 
+  /**
+   * AsyncThreads are daemons and hold no resources, so it is technically
+   * not an issue if they are, which can occur in the case of
+   * a StreamThread that dies during processing. . or wait for all threads to join
+   */
   @Override
-  public void close() throws IOException {
+  public void close() {
     shutdownRequested.setOpaque(true);
   }
 }
