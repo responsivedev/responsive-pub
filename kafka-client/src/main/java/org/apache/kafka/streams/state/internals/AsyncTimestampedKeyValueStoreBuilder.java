@@ -16,7 +16,10 @@
 
 package org.apache.kafka.streams.state.internals;
 
-import dev.responsive.kafka.api.async.internals.stores.AsyncProcessorFlushers.AsyncFlushListener;
+import dev.responsive.kafka.api.async.internals.stores.AsyncFlushingKeyValueStore;
+import dev.responsive.kafka.api.async.internals.stores.StreamThreadFlushListeners;
+import dev.responsive.kafka.api.async.internals.stores.StreamThreadFlushListeners.AsyncFlushListener;
+import dev.responsive.kafka.api.async.internals.stores.StreamThreadFlushListeners.UninitializedFlushListeners;
 import dev.responsive.kafka.api.async.internals.stores.AsyncStoreBuilder;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreBuilder;
 import java.util.Map;
@@ -42,9 +45,11 @@ public class AsyncTimestampedKeyValueStoreBuilder<K, V> extends TimestampedKeyVa
   private final ValueAndTimestampSerde<V> valueSerde;
   private final Time time;
 
-  // We need to maintain a reference to the method that will flush the async buffers and block
-  // on their
-  private final Map<String, AsyncFlushingKeyValueStore> streamThreadToFlushCallback = new ConcurrentHashMap<>();
+  // Since there is only StoreBuilder instance for each store, it is used by all of the
+  // StreamThreads in an app, and so we must account for which StreamThread is building
+  // or accessing which stores
+  private final Map<String, StreamThreadFlushListeners> streamThreadToFlushListeners =
+      new ConcurrentHashMap<>();
 
   @SuppressWarnings("unchecked")
   public AsyncTimestampedKeyValueStoreBuilder(
@@ -75,45 +80,85 @@ public class AsyncTimestampedKeyValueStoreBuilder<K, V> extends TimestampedKeyVa
   }
 
   @Override
-  public void registerNewProcessorForThread(
+  public void maybeRegisterNewStreamThread(
+      final String threadName
+  ) {
+    if (!streamThreadToFlushListeners.containsKey(threadName)) {
+      streamThreadToFlushListeners.put(
+          threadName,
+          new StreamThreadFlushListeners(threadName, name)
+      );
+    }
+  }
+
+  @Override
+  public void registerFlushListenerForPartition(
       final String streamThreadName,
       final int partition,
       final AsyncFlushListener processorFlushListener
   ) {
+    final StreamThreadFlushListeners threadListeners =
+        streamThreadToFlushListeners.get(streamThreadName);
+    if (threadListeners == null) {
+      throw new IllegalStateException("Unable to locate flush listener metadata "
+                                          + "for the current StreamThread");
+    }
+    threadListeners.registerListenerForPartition(partition, processorFlushListener);
+  }
 
+  @Override
+  public void unregisterFlushListenerForPartition(
+      final String streamThreadName,
+      final int partition
+  ) {
+    final StreamThreadFlushListeners threadListeners =
+        streamThreadToFlushListeners.get(streamThreadName);
+
+    if (threadListeners == null) {
+      throw new IllegalStateException("Unable to locate flush listener metadata "
+                                          + "for the current StreamThread");
+    }
+
+    threadListeners.unregisterListenerForPartition(partition);
   }
 
   // When a StreamThread creates a newly-assigned tasks, it firsts builds the subtopology
   // which always starts by building the Processor instance itself (from ProcessorSupplier#get)
   // and then goes on to build any state stores, ie invoking this call
   // This means we can rely on the Processor to
-    @Override
-    public TimestampedKeyValueStore<K, V> build() {
-      return new MeteredTimestampedKeyValueStore<>(
-          maybeWrapCaching(maybeWrapLogging(storeSupplier.get())),
-          storeSupplier.metricsScope(),
-          time,
-          keySerde,
-          valueSerde
-      );
-    }
+  @Override
+  public TimestampedKeyValueStore<K, V> build() {
+    return new MeteredTimestampedKeyValueStore<>(
+        wrapAsyncFlushing(
+            maybeWrapCaching(
+                maybeWrapLogging(storeSupplier.get()))
+        ),
+        storeSupplier.metricsScope(),
+        time,
+        keySerde,
+        valueSerde
+    );
+  }
 
-  /**
-   * This is somewhat hacky, but because we hook into the StreamThread's commit
-   * via the {@link CachedStateStore#flushCache()} API, we need
-   */
+  private KeyValueStore<Bytes, byte[]> wrapAsyncFlushing(final KeyValueStore<Bytes, byte[]> inner) {
+    final StreamThreadFlushListeners threadFlushListeners =
+        streamThreadToFlushListeners.get(Thread.currentThread().getName());
+
+    return new AsyncFlushingKeyValueStore(inner, threadFlushListeners);
+  }
+
   private KeyValueStore<Bytes, byte[]> maybeWrapCaching(final KeyValueStore<Bytes, byte[]> inner) {
-      if (!storeBuilder.cachingEnabled()) {
-        return inner;
-      }
-      return new AsyncFlushingKeyValueStore(inner, true);
+    if (!storeBuilder.cachingEnabled()) {
+      return inner;
     }
+    return new CachingKeyValueStore(inner, true);
+  }
 
-    private KeyValueStore<Bytes, byte[]> maybeWrapLogging(final KeyValueStore<Bytes, byte[]> inner) {
-      if (!storeBuilder.loggingEnabled()) {
-        return inner;
-      }
-      return new ChangeLoggingTimestampedKeyValueBytesStore(inner);
+  private KeyValueStore<Bytes, byte[]> maybeWrapLogging(final KeyValueStore<Bytes, byte[]> inner) {
+    if (!storeBuilder.loggingEnabled()) {
+      return inner;
     }
+    return new ChangeLoggingTimestampedKeyValueBytesStore(inner);
+  }
 
 }

@@ -31,7 +31,7 @@ import org.apache.kafka.streams.processor.ConnectedStoreProvider;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
-import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.AsyncTimestampedKeyValueStoreBuilder;
 
@@ -73,17 +73,36 @@ import org.apache.kafka.streams.state.internals.AsyncTimestampedKeyValueStoreBui
  * <p>
  *
  * Current limitations:
- * 0) Does not yet support read-your-write semantics -- a #get after a #put is not necessarily
- *    guaranteed to return the inserted record, or include it in the case of range scans.
- *    This is only true within an invocation of #process -- all previous input records of the
- *    same key will always be processed in full before a new record with that key is picked up.
- * 1) *Not compatible with punctuators or input records that originate in upstream punctuators
- * 2) Key-Value stores only at this time: async window and session stores coming soon
- * 3) Cannot be used for global state stores
- * 4) Supports only one upstream inputsenderte topic (specifically for records which will be forwarded to
- *    this processor -- multiple input topics for a subtopology are allowed if the records from
- *    additional input topics do not flow through this processor
- * 5) State stores within an async processor must have the same key and value types
+ * 0) Does not support read-your-write semantics WITHIN a single invocation of #process -- in
+ *    other words, a #get after a #put on the same key is not necessarily guaranteed to return
+ *    the value that was just inserted with #put, or include the new record in the results of
+ *    a range scan.
+ *    Note that this is only true within an invocation of #process: not from one invocation
+ *    of #process to another, ie between different input records. The async processing framework
+ *    guarantees that all previous input records of the same key will be processed in full
+ *    before a new record with that key is picked up for async execution. This means any #put
+ *    calls made while processing an input record at offset N will be reflected in the results
+ *    of any #get calls on the same key when processing any input record at offset N + 1 or
+ *    beyond.
+ * 1) Proceed with caution when using range queries or performing any operations that affect,
+ *    or depend on, the results or state of input records associated with a different key
+ *    than that of the record which was passed into the current iteration of #process.
+ *    Cross-key range scans, for example, will not necessarily include all records with
+ *    a lower offset that have a different key. These may behave in a non-deterministic fashion
+ *    as input records are only guaranteed to be processed in offset order relative to other
+ *    input records with the same key. Since by definition, records of different keys are
+ *    processed in parallel during async processing, you may see unpredictable results when
+ *    attempting any operation that affects/uses other keys (such as {@link KeyValueStore#range}
+ * 2) *Not compatible with punctuators or input records that originate in upstream punctuators
+ * 3) Key-Value stores only at this time: async window and session stores coming soon
+ * 4) Cannot be used for global state stores
+ * 5) Async processors with multiple state stores cannot have state stores of different types,
+ *    ie they must all use the same type of keySerde and the same type of valueSerde (though
+ *    the keySerde and valueSerde themselves can be any type and don't need to match each other)
+ * 6) Async processing will not be compatible with the new/upcoming "shareable state stores"
+ *    feature -- an async processor must be the sole owner of any state stores connected
+ *    to it. You can still access these stores from outside the async processor by using IQ,
+ *    you just cannot access them from another processor or app by "sharing" them.
  */
 public final class AsyncProcessorSupplier<KIn, VIn, KOut, VOut> implements ProcessorSupplier<KIn, VIn, KOut, VOut> {
 
@@ -130,19 +149,20 @@ public final class AsyncProcessorSupplier<KIn, VIn, KOut, VOut> implements Proce
         final ResponsiveStoreBuilder<?, ?, ?> responsiveBuilder = (ResponsiveStoreBuilder<?, ?, ?>) builder;
 
         final StoreType storeType = responsiveBuilder.storeType();
-        switch (storeType) {
-          case TIMESTAMPED_KEY_VALUE:
-            asyncStoreBuilders.put(
-                storeName,
-                new AsyncTimestampedKeyValueStoreBuilder<>(
-                    responsiveBuilder)
-                    (KeyValueBytesStoreSupplier) responsiveBuilder.storeSupplier(),
-                    responsiveBuilder.keySerde(),
-                    responsiveBuilder.valueSerde(),
-                    responsiveBuilder.time())
-            );
-            break;
-          default:
+
+        if (storeType.equals(StoreType.TIMESTAMPED_KEY_VALUE)) {
+          final AsyncStoreBuilder<?> storeBuilder =
+              new AsyncTimestampedKeyValueStoreBuilder<>(
+                  responsiveBuilder
+              );
+
+              asyncStoreBuilders.put(
+                  storeName,
+                  storeBuilder
+              );
+          storeBuilder.maybeRegisterNewStreamThread(Thread.currentThread().getName());
+
+        } else {
             throw new UnsupportedOperationException("Only timestamped key-value stores are "
                                                         + "supported by async processors at this time");
         }

@@ -27,11 +27,11 @@ import dev.responsive.kafka.api.async.internals.queues.ProcessingQueue;
 import dev.responsive.kafka.api.async.internals.queues.SchedulingQueue;
 import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
 import dev.responsive.kafka.api.async.internals.stores.AsyncKeyValueStore;
-import dev.responsive.kafka.api.async.internals.stores.AsyncProcessorFlushers.AsyncFlushListener;
+import dev.responsive.kafka.api.async.internals.stores.StreamThreadFlushListeners.AsyncFlushListener;
 import dev.responsive.kafka.api.async.internals.stores.AsyncStoreBuilder;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.apache.kafka.common.utils.LogContext;
@@ -160,7 +160,10 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn,
     verifyConnectedStateStores(accessedStores, connectedStoreBuilders, log);
 
     registerFlushListenerForStoreBuilders(
-        streamThreadName, taskId.partition(), connectedStoreBuilders, this::flushAndAwaitCompletion
+        streamThreadName,
+        taskId.partition(),
+        connectedStoreBuilders.values(),
+        this::flushAndAwaitCompletion
     );
   }
 
@@ -199,11 +202,11 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn,
   private static void registerFlushListenerForStoreBuilders(
       final String streamThreadName,
       final int partition,
-      final List<AsyncStoreBuilder<?>> asyncStoreBuilders,
+      final Collection<AsyncStoreBuilder<?>> asyncStoreBuilders,
       final AsyncFlushListener flushAllAsyncEvents
   ) {
     for (final AsyncStoreBuilder<?> builder : asyncStoreBuilders) {
-      builder.registerNewProcessorForThread(streamThreadName, partition, flushAllAsyncEvents);
+      builder.registerFlushListenerForPartition(streamThreadName, partition, flushAllAsyncEvents);
     }
   }
 
