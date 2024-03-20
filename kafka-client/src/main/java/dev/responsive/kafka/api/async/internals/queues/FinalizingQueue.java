@@ -94,5 +94,40 @@ public class FinalizingQueue<KIn, VIn> {
     return finalizableRecords.isEmpty();
   }
 
+  public ReadOnlyFinalizingQueue<KIn, VIn> readOnly() {
+    return new ReadOnlyFinalizingQueue<>(this);
+  }
+
+  public WriteOnlyFinalizingQueue<KIn, VIn> writeOnly() {
+    return new WriteOnlyFinalizingQueue<>(this);
+  }
+
+  public static class ReadOnlyFinalizingQueue<KIn, VIn> {
+    private final FinalizingQueue<KIn, VIn> delegate;
+
+    public ReadOnlyFinalizingQueue(FinalizingQueue<KIn, VIn> delegate) {
+      this.delegate = delegate;
+    }
+
+    public AsyncEvent<KIn, VIn> nextFinalizableEvent() {
+      return delegate.nextFinalizableEvent();
+    }
+
+    public boolean isEmpty() {
+      return delegate.isEmpty();
+    }
+  }
+
+  public static class WriteOnlyFinalizingQueue<KIn, VIn> {
+    private final FinalizingQueue<KIn, VIn> delegate;
+
+    public WriteOnlyFinalizingQueue(FinalizingQueue<KIn, VIn> delegate) {
+      this.delegate = delegate;
+    }
+
+    public void scheduleForFinalization(final AsyncEvent<?, ?> processedEvent) {
+      this.delegate.scheduleForFinalization(processedEvent);
+    }
+  }
 }
 

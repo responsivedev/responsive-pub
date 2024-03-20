@@ -19,8 +19,8 @@ package dev.responsive.kafka.api.async.internals;
 import static dev.responsive.kafka.internal.utils.Utils.extractStreamThreadIndex;
 
 import dev.responsive.kafka.api.async.internals.contexts.AsyncThreadProcessorContext;
-import dev.responsive.kafka.api.async.internals.queues.FinalizingQueue;
-import dev.responsive.kafka.api.async.internals.queues.ProcessingQueue;
+import dev.responsive.kafka.api.async.internals.queues.FinalizingQueue.WriteOnlyFinalizingQueue;
+import dev.responsive.kafka.api.async.internals.queues.ProcessingQueue.ReadOnlyProcessingQueue;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -45,8 +45,8 @@ public class AsyncThreadPool {
       final int threadPoolSize,
       final ProcessorContext<?, ?> originalContext,
       final String streamThreadName,
-      final ProcessingQueue<?, ?> processableRecords,
-      final FinalizingQueue<?, ?> finalizableRecords
+      final ReadOnlyProcessingQueue<?, ?> processableRecords,
+      final WriteOnlyFinalizingQueue<?, ?> finalizableRecords
       ) {
     this.log = new LogContext(String.format(
         "stream-thread [%s]", streamThreadName)

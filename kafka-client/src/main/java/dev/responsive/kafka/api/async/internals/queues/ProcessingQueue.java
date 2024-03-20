@@ -16,9 +16,8 @@
 
 package dev.responsive.kafka.api.async.internals.queues;
 
-import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
 import dev.responsive.kafka.api.async.internals.AsyncThread;
-
+import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import org.apache.kafka.common.utils.LogContext;
@@ -80,4 +79,35 @@ public class ProcessingQueue<KIn, VIn> {
     }
   }
 
+  public ReadOnlyProcessingQueue<KIn, VIn> readOnly() {
+    return new ReadOnlyProcessingQueue<>(this);
+  }
+
+  public WriteOnlyProcessingQueue<KIn, VIn> writeOnly() {
+    return new WriteOnlyProcessingQueue<>(this);
+  }
+
+  public static class ReadOnlyProcessingQueue<KIn, VIn> {
+    private final ProcessingQueue<KIn, VIn> delegate;
+
+    public ReadOnlyProcessingQueue(ProcessingQueue<KIn, VIn> delegate) {
+      this.delegate = delegate;
+    }
+
+    public AsyncEvent<KIn, VIn> nextProcessableEvent() {
+      return delegate.nextProcessableEvent();
+    }
+  }
+
+  public static class WriteOnlyProcessingQueue<KIn, VIn> {
+    private final ProcessingQueue<KIn, VIn> delegate;
+
+    public WriteOnlyProcessingQueue(ProcessingQueue<KIn, VIn> delegate) {
+      this.delegate = delegate;
+    }
+
+    public void scheduleForProcessing(final AsyncEvent<KIn, VIn> processableEvent) {
+      delegate.scheduleForProcessing(processableEvent);
+    }
+  }
 }
