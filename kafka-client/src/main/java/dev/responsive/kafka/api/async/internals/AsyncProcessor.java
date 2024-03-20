@@ -20,15 +20,17 @@ import dev.responsive.kafka.api.async.AsyncProcessorSupplier;
 import dev.responsive.kafka.api.async.internals.contexts.AsyncContextRouter;
 import dev.responsive.kafka.api.async.internals.contexts.AsyncThreadProcessorContext;
 import dev.responsive.kafka.api.async.internals.contexts.StreamThreadProcessorContext;
+import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
 import dev.responsive.kafka.api.async.internals.events.DelayedForward;
 import dev.responsive.kafka.api.async.internals.events.DelayedWrite;
 import dev.responsive.kafka.api.async.internals.queues.FinalizingQueue;
+import dev.responsive.kafka.api.async.internals.queues.FinalizingQueue.ReadOnlyFinalizingQueue;
 import dev.responsive.kafka.api.async.internals.queues.ProcessingQueue;
+import dev.responsive.kafka.api.async.internals.queues.ProcessingQueue.WriteOnlyProcessingQueue;
 import dev.responsive.kafka.api.async.internals.queues.SchedulingQueue;
-import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
 import dev.responsive.kafka.api.async.internals.stores.AsyncKeyValueStore;
-import dev.responsive.kafka.api.async.internals.stores.StreamThreadFlushListeners.AsyncFlushListener;
 import dev.responsive.kafka.api.async.internals.stores.AsyncStoreBuilder;
+import dev.responsive.kafka.api.async.internals.stores.StreamThreadFlushListeners.AsyncFlushListener;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -83,8 +85,8 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn,
   private String asyncProcessorName;
   private TaskId taskId;
   private AsyncThreadPool threadPool;
-  private ProcessingQueue<KIn, VIn> processableRecords;
-  private FinalizingQueue<KIn, VIn> finalizableRecords;
+  private WriteOnlyProcessingQueue<KIn, VIn> processableRecords;
+  private ReadOnlyFinalizingQueue<KIn, VIn> finalizableRecords;
 
   // the context passed to us in init, ie the one that is used by Streams everywhere else
   private InternalProcessorContext<KOut, VOut> originalContext;
@@ -128,15 +130,20 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn,
     );
     this.log = new LogContext(logPrefix).logger(AsyncProcessor.class);
 
-    this.processableRecords = new ProcessingQueue<>(asyncProcessorName, taskId.partition());
-    this.finalizableRecords = new FinalizingQueue<>(asyncProcessorName, taskId.partition());
+    final ProcessingQueue<KIn, VIn> processingQueue =
+        new ProcessingQueue<>(asyncProcessorName, taskId.partition());
+    this.processableRecords = processingQueue.writeOnly();
+
+    final FinalizingQueue<KIn, VIn> finalizingQueue =
+        new FinalizingQueue<>(asyncProcessorName, taskId.partition());
+    this.finalizableRecords = finalizingQueue.readOnly();
 
     this.threadPool = new AsyncThreadPool(
         THREAD_POOL_SIZE,
         context,
         streamThreadName,
-        processableRecords,
-        finalizableRecords
+        processingQueue.readOnly(),
+        finalizingQueue.writeOnly()
     );
 
     final Map<String, AsyncThreadProcessorContext<KOut, VOut>> asyncThreadToContext =

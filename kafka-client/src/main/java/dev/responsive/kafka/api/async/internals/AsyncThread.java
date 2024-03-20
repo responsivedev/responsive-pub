@@ -17,11 +17,10 @@
 package dev.responsive.kafka.api.async.internals;
 
 import dev.responsive.kafka.api.async.internals.contexts.AsyncThreadProcessorContext;
-import dev.responsive.kafka.api.async.internals.queues.FinalizingQueue;
-import dev.responsive.kafka.api.async.internals.queues.ProcessingQueue;
 import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
+import dev.responsive.kafka.api.async.internals.queues.FinalizingQueue.WriteOnlyFinalizingQueue;
+import dev.responsive.kafka.api.async.internals.queues.ProcessingQueue.ReadOnlyProcessingQueue;
 import java.io.Closeable;
-import java.io.IOException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
@@ -37,14 +36,14 @@ public class AsyncThread extends Thread implements Closeable {
   //  will need to become a map from processor to context/queue as there should be
   //  an async context per processor instance
   private final AsyncThreadProcessorContext<?, ?> asyncContext;
-  private final ProcessingQueue<?, ?> processingQueue;
-  private final FinalizingQueue<?, ?> finalizingQueue;
+  private final ReadOnlyProcessingQueue<?, ?> processingQueue;
+  private final WriteOnlyFinalizingQueue<?, ?> finalizingQueue;
 
   public AsyncThread(
       final String name,
       final ProcessorContext<?, ?> context,
-      final ProcessingQueue<?, ?> processingQueue,
-      final FinalizingQueue<?, ?> finalizingQueue
+      final ReadOnlyProcessingQueue<?, ?> processingQueue,
+      final WriteOnlyFinalizingQueue<?, ?> finalizingQueue
   ) {
     super(name);
     this.asyncContext = new AsyncThreadProcessorContext<>(context);
