@@ -38,14 +38,11 @@ import org.apache.kafka.streams.state.KeyValueStore;
 public class StreamThreadProcessorContext<KOut, VOut> extends AsyncProcessorContext<KOut, VOut> {
 
   private final Map<String, AsyncKeyValueStore<?, ?>> storeNameToAsyncStore = new HashMap<>();
-  private final Map<String, AsyncThreadProcessorContext<KOut, VOut>> asyncThreadToContext;
 
   public StreamThreadProcessorContext(
-      final ProcessorContext<KOut, VOut> delegate,
-      final Map<String, AsyncThreadProcessorContext<KOut, VOut>> asyncThreadToContext
+      final ProcessorContext<KOut, VOut> delegate
   ) {
     super(delegate);
-    this.asyncThreadToContext = asyncThreadToContext;
   }
 
   @Override

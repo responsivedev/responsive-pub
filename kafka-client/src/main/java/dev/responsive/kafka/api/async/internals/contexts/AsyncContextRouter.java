@@ -92,6 +92,7 @@ public class AsyncContextRouter<KOut, VOut> implements ProcessorContext<KOut, VO
   // When false, only AsyncThreads should be accessing this router
   private final AtomicBoolean isInProcessingMode = new AtomicBoolean(false);
 
+  private final Map<String, AsyncThreadProcessorContext<KOut, VOut>> asyncThreadToContext;
   private final StreamThreadProcessorContext<KOut, VOut> streamThreadProcessorContext;
 
   public AsyncContextRouter(
@@ -116,7 +117,7 @@ public class AsyncContextRouter<KOut, VOut> implements ProcessorContext<KOut, VO
    */
   private AsyncProcessorContext<KOut, VOut> lookupContext() {
     if (isInProcessingMode.getOpaque()) {
-      return lookupContext();
+      return lookupContextForAsyncThread();
     } else {
       return streamThreadProcessorContext;
     }

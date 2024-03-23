@@ -27,6 +27,7 @@ import java.util.Set;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.slf4j.Logger;
 
 /**
@@ -39,35 +40,29 @@ public class AsyncThreadPool {
 
   // TODO: start up new threads when existing ones die to maintain the target size
   private final int threadPoolSize;
+  private final String streamThreadName;
   private final Map<String, AsyncThread> threadPool;
 
   public AsyncThreadPool(
-      final int threadPoolSize,
-      final ProcessorContext<?, ?> originalContext,
       final String streamThreadName,
-      final ProcessingQueue<?, ?> processableRecords,
-      final FinalizingQueue<?, ?> finalizableRecords
-      ) {
+      final int threadPoolSize
+  ) {
+    this.streamThreadName = streamThreadName;
+    this.threadPoolSize = threadPoolSize;
+    this.threadPool = new HashMap<>(threadPoolSize);
     this.log = new LogContext(String.format(
         "stream-thread [%s]", streamThreadName)
     ).logger(AsyncThreadPool.class);
+  }
 
-    this.threadPoolSize = threadPoolSize;
-    this.threadPool = new HashMap<>(threadPoolSize);
-
+  public void start() {
     final String streamThreadIndex = extractStreamThreadIndex(streamThreadName);
 
     for (int i = 0; i < threadPoolSize; ++i) {
       final String name = generateAsyncThreadName(streamThreadIndex, i);
-      final AsyncThread thread = new AsyncThread(
-          name,
-          originalContext,
-          processableRecords,
-          finalizableRecords
-      );
+      final AsyncThread thread = new AsyncThread(name);
 
       thread.setDaemon(true);
-
       threadPool.put(name, thread);
     }
 
@@ -78,14 +73,35 @@ public class AsyncThreadPool {
     log.info("Started up all {} async threads in this pool", threadPoolSize);
   }
 
-  public Set<String> asyncThreadNames() {
-    return threadPool.keySet();
+  public void addProcessor(
+      final int partition,
+      final String asyncProcessorName,
+      final InternalProcessorContext<?, ?> originalContext,
+      final ProcessingQueue<?, ?> processingQueue,
+      final FinalizingQueue<?, ?> finalizingQueue
+  ) {
+    final AsyncProcessorContainer processorContainer = new AsyncProcessorContainer(
+        streamThreadName,
+        partition,
+        asyncProcessorName,
+        new AsyncThreadProcessorContext<>(originalContext),
+        processingQueue,
+        finalizingQueue
+    );
+
+    for (final AsyncThread thread : threadPool.values()) {
+      thread.addProcessor(processorContainer);
+    }
+
   }
 
-  public <KOut, VOut> AsyncThreadProcessorContext<KOut, VOut> asyncContextForThread(
-      final String threadName
+  public void removeProcessor(
+      final int partition,
+      final String asyncProcessorName
   ) {
-    return threadPool.get(threadName).context();
+    for (final AsyncThread thread : threadPool.values()) {
+      thread.removeProcessor(partition, asyncProcessorName);
+    }
   }
 
   private static String generateAsyncThreadName(
@@ -96,45 +112,39 @@ public class AsyncThreadPool {
   }
 
   /**
-   * Shutdown and optionally await all AsyncThreads in this pool. The thread
-   * pool should not be closed before the StreamThread that owns it is
-   * shut down as well.
+   * Starts up a daemon thread that will send the shutdown signal to
+   * all AsyncThreads in this pool, then wait for them to join.
    * <p>
-   * AsyncThreads are all daemons and hold no resources, so it is technically
-   * not an issue if shutdown is not called on an AsyncThreadPool, which is
-   * possible if the StreamThread that owns this pool dies during processing
-   * or in some rare cases, if the {@link KafkaStreams#close()} timeout is
-   * exceeded.
-   * It also means we do not need to wait for the threads to join and can
-   * simply send the shutdown signal and exit. Note that during a graceful
-   * shutdown, all in-flight events for all async processors will have
-   * already been completed and committed prior to the StreamThread and
-   * AsyncThreadPool being shut down, so the AsyncThreads are likely to
-   * be idling and won't take long to rejoin.
-   * During an unclean shutdown, the AsyncThreads may remain actively
-   * processing new events when the shutdown signal is sent. In this
-   * case, it may take longer for the AsyncThreads to rejoin, and their
-   * progress since the last commit will be lost anyway, so it is
-   * recommended to just send the shutdown signal and return without
-   * waiting for them
+   * Should be called by the StreamThread that owns this pool
+   * when it is time for the StreamThread itself to shut down.
+   * The AsyncThreadPool is tied to the lifecycle of a StreamThread's
+   * main consumer, and will be created and closed alongside it.
    */
-  public void shutdown(final boolean waitForThreads) {
-    for (final AsyncThread thread : threadPool.values()) {
-      thread.close();
-    }
+  public void shutdown() {
+    final Thread shutdownThread = shutdownThread();
+    shutdownThread.setDaemon(true);
+    shutdownThread.start();
+  }
 
-    if (waitForThreads) {
+  private Thread shutdownThread() {
+    return new Thread(() -> {
+
+      log.info("Sending shutdown signal to all async threads in this pool");
       for (final AsyncThread thread : threadPool.values()) {
-        try {
-          thread.join(1_000L);
-        } catch (final InterruptedException e) {
-          log.warn("Interrupted while waiting on AsyncThread {} to join, will "
-                       + "skip waiting for any remaining threads to join and "
-                       + "proceed with the shutdown", thread.getName());
-          return;
-        }
+        thread.close();
       }
-    }
+
+      for (final AsyncThread thread : threadPool.values()) {
+          try {
+            thread.join();
+          } catch (final InterruptedException e) {
+            log.warn("Interrupted while waiting on AsyncThread {} to join, will "
+                         + "skip waiting for any remaining threads to join and "
+                         + "proceed to shutdown", thread.getName());
+            Thread.currentThread().interrupt();
+          }
+        }
+    });
   }
 
 }

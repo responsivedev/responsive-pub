@@ -189,6 +189,13 @@ public class ResponsiveConfig extends AbstractConfig {
   private static final String MONGO_COLLECTION_SHARDING_CHUNKS_DOC = "For sharded collections, sets the number of "
       + "initial chunks to create the collection with.";
 
+  public static final String ASYNC_THREAD_POOL_SIZE_CONFIG = "responsive.async.thread.pool.size";
+  private static final int ASYNC_THREAD_POOL_SIZE_DEFAULT = 0;
+  private static final String ASYNC_THREAD_POOL_SIZE_DOC = "The number of async processing threads to "
+      + "start up for each StreamThread in this app. Setting this to 0 (the default) means async processing "
+      + "will not be enabled. Setting this to a positive integer will enable async processing, but only if "
+      + "there is at least one AsyncProcessor in the topology. See javadocs for AsyncProcessorSupplier for details.";
+
 
   // ------------------ WindowStore configurations ----------------------
 

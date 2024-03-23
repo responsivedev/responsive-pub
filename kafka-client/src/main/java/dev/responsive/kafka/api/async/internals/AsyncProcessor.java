@@ -16,6 +16,8 @@
 
 package dev.responsive.kafka.api.async.internals;
 
+import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadAsyncThreadPoolRegistry;
+
 import dev.responsive.kafka.api.async.AsyncProcessorSupplier;
 import dev.responsive.kafka.api.async.internals.contexts.AsyncContextRouter;
 import dev.responsive.kafka.api.async.internals.contexts.AsyncThreadProcessorContext;
@@ -35,6 +37,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.Processor;
@@ -116,12 +119,13 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn,
 
   @Override
   public void init(final ProcessorContext<KOut, VOut> context) {
-    this.taskId = context.taskId();
     this.originalContext = (InternalProcessorContext<KOut, VOut>) context;
+    this.streamThreadContext = new StreamThreadProcessorContext<>(originalContext);
+    this.userContext = new AsyncContextRouter<>(logPrefix, streamThreadContext);
 
     final String streamThreadName = Thread.currentThread().getName();
+    this.taskId = context.taskId();
     this.asyncProcessorName = originalContext.currentNode().name();
-
     this.logPrefix = String.format(
         "stream-thread [%s] [%s-%d] ",
         streamThreadName, originalContext.currentNode().name(), taskId.partition()
@@ -131,22 +135,14 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn,
     this.processableRecords = new ProcessingQueue<>(asyncProcessorName, taskId.partition());
     this.finalizableRecords = new FinalizingQueue<>(asyncProcessorName, taskId.partition());
 
-    this.threadPool = new AsyncThreadPool(
-        THREAD_POOL_SIZE,
-        context,
-        streamThreadName,
+    this.threadPool = extractAsyncThreadPool(context, streamThreadName);
+    this.threadPool.addProcessor(
+        taskId.partition(),
+        asyncProcessorName,
+        originalContext,
         processableRecords,
         finalizableRecords
     );
-
-    final Map<String, AsyncThreadProcessorContext<KOut, VOut>> asyncThreadToContext =
-        asyncThreadToContext(threadPool);
-
-    this.streamThreadContext = new StreamThreadProcessorContext<>(
-            originalContext, asyncThreadToContext
-    );
-
-    userContext = new AsyncContextRouter<>(logPrefix, streamThreadContext);
 
     userProcessor.init(userContext);
 
@@ -193,6 +189,8 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn,
                    + "happen if the task was shut down dirty and not flushed/committed "
                    + "prior to being closed");
     }
+
+    threadPool.removeProcessor(taskId.partition(), asyncProcessorName);
     // Tell the user context to turn off processing mode so it knows to expect no
     // further calls from an AsyncThread after this
     userContext.endProcessingMode();
@@ -228,24 +226,6 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn,
         throw new StreamsException("Interrupted while waiting for async completion", taskId);
       }
     }
-  }
-
-  private Map<String, AsyncThreadProcessorContext<KOut, VOut>> asyncThreadToContext(
-      final AsyncThreadPool threadPool
-  ) {
-    final Set<String> asyncThreadNames = threadPool.asyncThreadNames();
-
-    final Map<String, AsyncThreadProcessorContext<KOut, VOut>> asyncThreadToContext =
-        new HashMap<>(asyncThreadNames.size());
-
-    for (final String asyncThread : asyncThreadNames) {
-      asyncThreadToContext.put(
-          asyncThread,
-          threadPool.asyncContextForThread(asyncThread)
-      );
-    }
-
-    return asyncThreadToContext;
   }
 
   /**
@@ -359,4 +339,16 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn,
                                           + "provided to the AsyncProcessorSupplier");
     }
   }
+
+  private static <KOut, VOut> AsyncThreadPool extractAsyncThreadPool(
+      final ProcessorContext<KOut, VOut> context,
+      final String streamThreadName
+  ) {
+    final AsyncThreadPoolRegistry registry = loadAsyncThreadPoolRegistry(
+        context.appConfigsWithPrefix(StreamsConfig.MAIN_CONSUMER_PREFIX)
+    );
+
+    return registry.asyncThreadPoolForStreamThread(streamThreadName);
+  }
+
 }

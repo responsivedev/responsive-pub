@@ -31,6 +31,22 @@ import org.apache.kafka.streams.processor.api.Record;
  * {@link ProcessorContext#forward(Record)} in order to hand them back to the original
  * StreamThread.
  * <p>
+ * Besides intercepting calls to forward and preparing internal metadata, the other
+ * important job of this specific context type is to protect the underlying context
+ * from being mutated while the StreamThread is using it elsewhere in the topology,
+ * and likewise to protect the users from the StreamThread's mutations so that any
+ * metadata they access through public APIs reflects the async processor and not
+ * whatever processor is being executed by the StreamThread with the "real" context.
+ * <p>
+ * In short, the AsyncThreadProcessorContext must completely wrap and copy
+ * the state of the underlying context so that any public APIs exposed to
+ * users are consistent with the state when #process was called, and don't
+ * need to rely on the underlying context.
+ * So while the StreamThread's async context enables delayed operations by
+ * (re)setting any internal state of the underlying context, the AsyncThread's
+ * context does the opposite and instead protects the underlying context from
+ * being mutated.
+ * <p>
  * Threading notes:
  * -For use by AsyncThreads only
  * -One per AsyncThread per StreamThread per task

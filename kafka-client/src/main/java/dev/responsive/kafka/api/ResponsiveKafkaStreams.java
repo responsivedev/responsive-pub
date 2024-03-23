@@ -16,6 +16,7 @@
 
 package dev.responsive.kafka.api;
 
+import static dev.responsive.kafka.api.config.ResponsiveConfig.ASYNC_THREAD_POOL_SIZE_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.CLIENT_ID_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.CLIENT_SECRET_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.METRICS_ENABLED_CONFIG;
@@ -27,7 +28,9 @@ import static org.apache.kafka.streams.StreamsConfig.APPLICATION_ID_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.METRICS_NUM_SAMPLES_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.NUM_STREAM_THREADS_CONFIG;
 
+import dev.responsive.kafka.api.async.internals.AsyncThreadPoolRegistry;
 import dev.responsive.kafka.api.config.CompatibilityMode;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.clients.ResponsiveKafkaClientSupplier;
@@ -263,8 +266,14 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
   ) {
     final Properties propsWithOverrides = new Properties();
 
+    final AsyncThreadPoolRegistry asyncRegistry = new AsyncThreadPoolRegistry(
+        configs.getInt(NUM_STREAM_THREADS_CONFIG),
+        configs.getInt(ASYNC_THREAD_POOL_SIZE_CONFIG)
+    );
+
     propsWithOverrides.putAll(configs.originals());
     propsWithOverrides.putAll(new InternalSessionConfigs.Builder()
+            .withAsyncThreadPoolRegistry(asyncRegistry)
             .withSessionClients(sessionClients)
             .withStoreRegistry(storeRegistry)
             .withTopologyDescription(topologyDescription)
