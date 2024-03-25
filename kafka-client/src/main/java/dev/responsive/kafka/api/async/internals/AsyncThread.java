@@ -17,16 +17,14 @@
 package dev.responsive.kafka.api.async.internals;
 
 import dev.responsive.kafka.api.async.internals.contexts.AsyncThreadProcessorContext;
-import dev.responsive.kafka.api.async.internals.queues.FinalizingQueue;
-import dev.responsive.kafka.api.async.internals.queues.ProcessingQueue;
 import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
+import dev.responsive.kafka.api.async.internals.queues.MultiplexBlockingQueue;
 import java.io.Closeable;
-import java.io.IOException;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.slf4j.Logger;
 
 public class AsyncThread extends Thread implements Closeable {
@@ -35,35 +33,32 @@ public class AsyncThread extends Thread implements Closeable {
 
   private final AtomicBoolean shutdownRequested = new AtomicBoolean(false);
 
-  // TODO: once we allow multiple async processors per topology, this
-  //  should map processor name to the map of partition to container
-  private final Map<Integer, AsyncProcessorContainer> partitionToAsyncProcessor;
+  private final Map<String, >
+  private final Map<AsyncNodeId, AsyncNodeContainer> nodeIdToContainer;
 
   public AsyncThread(final String name) {
     super(name);
-    // must be concurrent b/c new processors are added by StreamThread
-    this.partitionToAsyncProcessor = new ConcurrentHashMap<>();
+    // concurrent b/c new processors are added by StreamThread via AsyncThreadPool
+    this.nodeIdToContainer = new ConcurrentHashMap<>();
     this.log = new LogContext(String.format("async-thread [%s] ", name)).logger(AsyncThread.class);
   }
 
   public void addProcessor(
-      final AsyncProcessorContainer processorContainer
+      final AsyncNodeId nodeId,
+      final AsyncNodeContainer processorContainer
   ) {
-    partitionToAsyncProcessor.put(processorContainer.partition(), processorContainer);
+    nodeIdToContainer.put(nodeId, processorContainer);
   }
 
   public void removeProcessor(
-      final int partition,
-      final String asyncProcessorName
+      final AsyncNodeId nodeId
   ) {
-    partitionToAsyncProcessor.remove(partition);
+    nodeIdToContainer.remove(nodeId);
   }
 
-  // TODO: once thread pool and processor are decoupled, this should look up the
-  //  context in the map by processor node name
   @SuppressWarnings("unchecked")
-  public <KOut, VOut> AsyncThreadProcessorContext<KOut, VOut> context(final int partition) {
-    final var context = partitionToAsyncProcessor.get(partition).asyncContext();
+  public <KOut, VOut> AsyncThreadProcessorContext<KOut, VOut> context(final AsyncNodeId nodeId) {
+    final var context = nodeIdToContainer.get(nodeId).asyncContext();
     return (AsyncThreadProcessorContext<KOut, VOut>) context;
   }
 
@@ -96,7 +91,7 @@ public class AsyncThread extends Thread implements Closeable {
    *    such as issuing forwards or writes
    */
   private void processOneEvent() {
-    final AsyncEvent<?, ?> currentEvent = processingQueue.nextProcessableEvent();
+    final AsyncEvent<?, ?> currentEvent = asyncProcessorToQueue.nextProcessableEvent();
 
     asyncContext.prepareToProcessNewEvent(currentEvent);
 

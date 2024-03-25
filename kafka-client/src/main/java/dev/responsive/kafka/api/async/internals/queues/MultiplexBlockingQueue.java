@@ -67,8 +67,8 @@ public class MultiplexBlockingQueue {
   private final Set<Integer> nonEmptyQueues;
   private final Map<Integer, Queue<AsyncEvent>> partitions;
 
-  public MultiplexBlockingQueue(final String logPrefix) {
-    this.log = new LogContext(logPrefix).logger(MultiplexBlockingQueue.class);
+  public MultiplexBlockingQueue(final LogContext logPrefix) {
+    this.log = logPrefix.logger(MultiplexBlockingQueue.class);
 
     // could use per-partition or read-write locks but reads are fast so it's probably not worth it
     this.lock = new ReentrantLock();

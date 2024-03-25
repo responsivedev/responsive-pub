@@ -18,7 +18,7 @@ package dev.responsive.kafka.api.async.internals;
 
 import dev.responsive.kafka.api.async.internals.contexts.AsyncThreadProcessorContext;
 import dev.responsive.kafka.api.async.internals.queues.FinalizingQueue;
-import dev.responsive.kafka.api.async.internals.queues.ProcessingQueue;
+import dev.responsive.kafka.api.async.internals.queues.MultiplexBlockingQueue;
 
 /**
  * A simple container for all the "stuff" that's owned by and used for a
@@ -30,36 +30,35 @@ import dev.responsive.kafka.api.async.internals.queues.ProcessingQueue;
  *  guarantee thread safety for its contents (ie they should also be
  *  thread-safe)
  * -one per physical AsyncProcessor
- *  ie per partition per processor per StreamThread
+ *  ie per nodeId per StreamThread
  * -used by the AsyncThreads to keep track of everything that corresponds
  *  to a particular partition (and StreamThread) in one place
  */
-public final class AsyncProcessorContainer {
+public final class AsyncNodeContainer {
 
-  // Three fields that uniquely identify the AsyncProcessor instance
+  // Three fields that uniquely identify the async processor node instance
   private final String streamThreadName;
-  private final int partition;
-  private final String asyncProcessorName;
+  private final AsyncNodeId nodeId;
 
-  // The actual data structures needed to asynchronously process this instance
+  // Data structures owned by/unique to this specific node/partition
   private final AsyncThreadProcessorContext<?, ?> asyncContext;
-  private final ProcessingQueue<?, ?> processingQueue;
   private final FinalizingQueue<?, ?> finalizingQueue;
 
-  public AsyncProcessorContainer(
+  // Shared by all nodes for this processor, ie used for all partitions
+  private final MultiplexBlockingQueue processingQueue;
+
+  public AsyncNodeContainer(
       final String streamThreadName,
-      final int partition,
-      final String asyncProcessorName,
+      final AsyncNodeId nodeId,
       final AsyncThreadProcessorContext<?, ?> asyncContext,
-      final ProcessingQueue<?, ?> processingQueue,
-      final FinalizingQueue<?, ?> finalizingQueue
+      final FinalizingQueue<?, ?> finalizingQueue,
+      final MultiplexBlockingQueue processingQueue
   ) {
     this.streamThreadName = streamThreadName;
-    this.partition = partition;
-    this.asyncProcessorName = asyncProcessorName;
+    this.nodeId = nodeId;
     this.asyncContext = asyncContext;
-    this.processingQueue = processingQueue;
     this.finalizingQueue = finalizingQueue;
+    this.processingQueue = processingQueue;
   }
 
   public String streamThreadName() {
@@ -67,22 +66,26 @@ public final class AsyncProcessorContainer {
   }
 
   public int partition() {
-    return partition;
+    return nodeId.partition();
   }
 
   public String asyncProcessorName() {
-    return asyncProcessorName;
+    return nodeId.asyncProcessorName();
+  }
+
+  public AsyncNodeId asyncNodeId() {
+    return nodeId;
   }
 
   public AsyncThreadProcessorContext<?, ?> asyncContext() {
     return asyncContext;
   }
 
-  public ProcessingQueue<?, ?> processingQueue() {
-    return processingQueue;
-  }
-
   public FinalizingQueue<?, ?> finalizingQueue() {
     return finalizingQueue;
+  }
+
+  public MultiplexBlockingQueue processingQueue() {
+    return processingQueue;
   }
 }

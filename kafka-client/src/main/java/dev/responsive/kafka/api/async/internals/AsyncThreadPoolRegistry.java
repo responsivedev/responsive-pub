@@ -55,7 +55,7 @@ public class AsyncThreadPoolRegistry {
    */
   public void startNewAsyncThreadPool(final String streamThreadName) {
     final AsyncThreadPool newThreadPool = new AsyncThreadPool(streamThreadName, asyncThreadPoolSize);
-    newThreadPool.start();
+    newThreadPool.startThreads();
 
     final AsyncThreadPool oldThreadPool = streamThreadToAsyncPool.put(streamThreadName, newThreadPool);
     if (oldThreadPool != null) {
