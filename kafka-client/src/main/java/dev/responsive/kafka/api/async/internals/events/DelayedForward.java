@@ -17,6 +17,7 @@
 package dev.responsive.kafka.api.async.internals.events;
 
 import java.util.Objects;
+import org.apache.kafka.streams.processor.api.FixedKeyRecord;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 
@@ -40,20 +41,54 @@ import org.apache.kafka.streams.processor.api.Record;
  */
 public class DelayedForward<KOut, VOut> {
 
-  // Actual inputs to #forward
+  // Exactly one record is non-null, and the other is always null
+  // Sadly these don't extend a common API in Streams, so this messy handling
+  // we have to do is the same way Streams handles these
+  private final FixedKeyRecord<KOut, VOut> fixedKeyRecord;
   private final Record<KOut, VOut> record;
+
   private final String childName; // may be null
 
-  public DelayedForward(
+  public static <KOut, VOut> DelayedForward<KOut, VOut> ofRecord(
       final Record<KOut, VOut> record,
       final String childName
   ) {
+    return new DelayedForward<>(record, null, childName);
+  }
+
+  public static <KOut, VOut> DelayedForward<KOut, VOut> ofFixedKeyRecord(
+      final FixedKeyRecord<KOut, VOut> fixedKeyRecord,
+      final String childName
+  ) {
+    return new DelayedForward<>(null, fixedKeyRecord, childName);
+  }
+
+  private DelayedForward(
+      final Record<KOut, VOut> record,
+      final FixedKeyRecord<KOut, VOut> fixedKeyRecord,
+      final String childName
+  ) {
     this.record = record;
+    this.fixedKeyRecord = fixedKeyRecord;
     this.childName = childName;
+
+    if (record == null && fixedKeyRecord == null) {
+      throw new IllegalStateException("Both record and fixedKeyRecord were null");
+    } else if (record != null && fixedKeyRecord != null) {
+      throw new IllegalStateException("Both record and fixedKeyRecord were non-null");
+    }
+  }
+
+  public boolean isFixedKey() {
+    return fixedKeyRecord != null;
   }
 
   public Record<KOut, VOut> record() {
     return record;
+  }
+
+  public FixedKeyRecord<KOut, VOut> fixedKeyRecord() {
+    return fixedKeyRecord;
   }
 
   public String childName() {

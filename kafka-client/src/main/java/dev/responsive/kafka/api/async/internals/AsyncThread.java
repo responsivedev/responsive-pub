@@ -33,10 +33,10 @@ public class AsyncThread extends Thread implements Closeable {
 
   private final AtomicBoolean shutdownRequested = new AtomicBoolean(false);
 
-  private final Map<String, >
-  private final Map<AsyncNodeId, AsyncNodeContainer> nodeIdToContainer;
+  private final MultiplexBlockingQueue processingQueue;
+  private final Map<Integer, AsyncNodeContainer> nodeIdToContainer;
 
-  public AsyncThread(final String name) {
+  public AsyncThread(final String name, final MultiplexBlockingQueue processingQueue) {
     super(name);
     // concurrent b/c new processors are added by StreamThread via AsyncThreadPool
     this.nodeIdToContainer = new ConcurrentHashMap<>();
@@ -44,21 +44,20 @@ public class AsyncThread extends Thread implements Closeable {
   }
 
   public void addProcessor(
-      final AsyncNodeId nodeId,
       final AsyncNodeContainer processorContainer
   ) {
-    nodeIdToContainer.put(nodeId, processorContainer);
+    nodeIdToContainer.put(processorContainer.partition(), processorContainer);
   }
 
   public void removeProcessor(
-      final AsyncNodeId nodeId
+      final int partition
   ) {
-    nodeIdToContainer.remove(nodeId);
+    nodeIdToContainer.remove(partition);
   }
 
   @SuppressWarnings("unchecked")
-  public <KOut, VOut> AsyncThreadProcessorContext<KOut, VOut> context(final AsyncNodeId nodeId) {
-    final var context = nodeIdToContainer.get(nodeId).asyncContext();
+  public <KOut, VOut> AsyncThreadProcessorContext<KOut, VOut> context(final int partition) {
+    final var context = nodeIdToContainer.get(partition).asyncContext();
     return (AsyncThreadProcessorContext<KOut, VOut>) context;
   }
 
@@ -91,13 +90,21 @@ public class AsyncThread extends Thread implements Closeable {
    *    such as issuing forwards or writes
    */
   private void processOneEvent() {
-    final AsyncEvent<?, ?> currentEvent = asyncProcessorToQueue.nextProcessableEvent();
+    final AsyncEvent currentEvent;
+    try {
+      currentEvent = processingQueue.take();
+    } catch (final InterruptedException e) {
+      log.error("Interrupted while waiting for next event to process", e);
+      close();
+      return;
+    }
+    final AsyncNodeContainer container = nodeIdToContainer.get(currentEvent.partition());
 
-    asyncContext.prepareToProcessNewEvent(currentEvent);
+    container.asyncContext().prepareToProcessNewEvent(currentEvent);
 
     currentEvent.inputRecordProcessor().run();
 
-    finalizingQueue.scheduleForFinalization(currentEvent);
+    container.finalizingQueue().scheduleForFinalization(currentEvent);
   }
 
   /**
@@ -107,6 +114,7 @@ public class AsyncThread extends Thread implements Closeable {
    */
   @Override
   public void close() {
+    log.info("Shutting down async thread");
     shutdownRequested.setOpaque(true);
   }
 }

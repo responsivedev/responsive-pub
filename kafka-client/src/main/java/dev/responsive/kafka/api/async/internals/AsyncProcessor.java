@@ -25,6 +25,7 @@ import dev.responsive.kafka.api.async.internals.contexts.StreamThreadProcessorCo
 import dev.responsive.kafka.api.async.internals.events.DelayedForward;
 import dev.responsive.kafka.api.async.internals.events.DelayedWrite;
 import dev.responsive.kafka.api.async.internals.queues.FinalizingQueue;
+import dev.responsive.kafka.api.async.internals.queues.MultiplexBlockingQueue;
 import dev.responsive.kafka.api.async.internals.queues.ProcessingQueue;
 import dev.responsive.kafka.api.async.internals.queues.SchedulingQueue;
 import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
@@ -62,8 +63,6 @@ import org.slf4j.Logger;
  */
 public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn, KOut, VOut> {
 
-  private static final int THREAD_POOL_SIZE = 10;
-
   private final Processor<KIn, VIn, KOut, VOut> userProcessor;
   private final Map<String, AsyncStoreBuilder<?>> connectedStoreBuilders;
 
@@ -75,7 +74,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn,
   // input record into the #process method of this AsyncProcessor, but have not yet reached
   // the DONE state and completed all execution of input and output records.
   // The StreamThread must wait until this set is empty before proceeding with an offset commit
-  private final Set<AsyncEvent<KIn, VIn>> inFlightEvents = new HashSet<>();
+  private final Set<AsyncEvent> inFlightEvents = new HashSet<>();
 
   // Everything below this line is effectively final and just has to be initialized in #init
   // TODO: extract into class that allows us to make these final, eg an InitializedAsyncProcessor
@@ -86,7 +85,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn,
   private String asyncProcessorName;
   private TaskId taskId;
   private AsyncThreadPool threadPool;
-  private ProcessingQueue<KIn, VIn> processableRecords;
+  private MultiplexBlockingQueue<KIn, VIn> processableRecords;
   private FinalizingQueue<KIn, VIn> finalizableRecords;
 
   // the context passed to us in init, ie the one that is used by Streams everywhere else
@@ -119,16 +118,17 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn,
 
   @Override
   public void init(final ProcessorContext<KOut, VOut> context) {
+    this.taskId = context.taskId();
+
     this.originalContext = (InternalProcessorContext<KOut, VOut>) context;
     this.streamThreadContext = new StreamThreadProcessorContext<>(originalContext);
-    this.userContext = new AsyncContextRouter<>(logPrefix, streamThreadContext);
+    this.userContext = new AsyncContextRouter<>(logPrefix, taskId.partition(), streamThreadContext);
 
     final String streamThreadName = Thread.currentThread().getName();
-    this.taskId = context.taskId();
     this.asyncProcessorName = originalContext.currentNode().name();
     this.logPrefix = String.format(
         "stream-thread [%s] [%s-%d] ",
-        streamThreadName, originalContext.currentNode().name(), taskId.partition()
+        streamThreadName, asyncProcessorName, taskId.partition()
     );
     this.log = new LogContext(logPrefix).logger(AsyncProcessor.class);
 
@@ -165,10 +165,12 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn,
 
   @Override
   public void process(final Record<KIn, VIn> record) {
-    final AsyncEvent<KIn, VIn> newEvent = new AsyncEvent<>(
-        asyncProcessorName,
+    final AsyncEvent newEvent = new AsyncEvent(
+        logPrefix,
         record,
         originalContext.recordContext(),
+        originalContext.currentStreamTimeMs(),
+        originalContext.currentSystemTimeMs(),
         () -> userProcessor.process(record)
     );
     inFlightEvents.add(newEvent);
@@ -264,7 +266,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn,
 
   private void drainFinalizingQueue() {
     while (!finalizableRecords.isEmpty()) {
-      final AsyncEvent<KIn, VIn> event = finalizableRecords.nextFinalizableEvent();
+      final AsyncEvent event = finalizableRecords.nextFinalizableEvent();
 
       streamThreadContext.prepareToFinalizeEvent(event.recordContext());
 
@@ -274,7 +276,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn,
     }
   }
 
-  private void finalizeEvent(final AsyncEvent<KIn, VIn> event) {
+  private void finalizeEvent(final AsyncEvent event) {
     event.transitionToFinalizing();
 
     while (!event.isDone()) {

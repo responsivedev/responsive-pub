@@ -107,27 +107,38 @@ public class AsyncEvent {
   private State currentState;
 
   private final Record<?, ?> inputRecord;
-  private final ProcessorRecordContext recordContext;
+
+  private final ProcessorRecordContext recordContext; // may be null if punctuator-created
+  private final long systemTime;
+  private final long streamTime;
+
   private final Runnable processInputRecord;
 
   private final Queue<DelayedForward<?, ?>> outputForwards = new LinkedList<>();
   private final Queue<DelayedWrite<?, ?>> outputWrites = new LinkedList<>();
 
   public AsyncEvent(
-      final String asyncProcessorName,
+      final String logPrefix,
       final Record<?, ?> inputRecord,
       final ProcessorRecordContext recordContext,
+      final long currentStreamTime,
+      final long currentSystemTime,
       final Runnable processInputRecord
   ) {
     this.currentState = State.SCHEDULING;
-    this.log = new LogContext(String.format(
-        "async-event [%s-%d] %s[%d]",
-        asyncProcessorName, recordContext.partition(), recordContext.topic(), recordContext.offset()
-    )).logger(AsyncEvent.class);
-
     this.inputRecord = inputRecord;
     this.recordContext = recordContext;
+    this.streamTime = currentStreamTime;
+    this.systemTime = currentSystemTime;
     this.processInputRecord = processInputRecord;
+
+    if (recordContext == null) {
+      this.log = new LogContext(logPrefix).logger(AsyncEvent.class);
+    } else {
+      this.log = new LogContext(String.format(
+          "%s <%d> ", logPrefix, recordContext.offset()
+      )).logger(AsyncEvent.class);
+    }
   }
 
   public Runnable inputRecordProcessor() {
@@ -223,6 +234,14 @@ public class AsyncEvent {
 
   public ProcessorRecordContext recordContext() {
     return recordContext;
+  }
+
+  public long streamTime() {
+    return streamTime;
+  }
+
+  public long systemTime() {
+    return systemTime;
   }
 
   public int partition() {

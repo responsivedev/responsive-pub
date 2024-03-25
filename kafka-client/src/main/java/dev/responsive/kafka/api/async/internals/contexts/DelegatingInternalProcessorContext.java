@@ -16,7 +16,6 @@
 
 package dev.responsive.kafka.api.async.internals.contexts;
 
-import dev.responsive.kafka.api.async.internals.contexts.AsyncProcessorContext;
 import java.io.File;
 import java.time.Duration;
 import java.util.Map;
@@ -54,7 +53,6 @@ import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListe
  * This allows us to override only the methods we actually want to implement in the
  * implementation class to avoid it getting too long & unwieldy.
  * <p>
- * See also {@link AsyncProcessorContext}
  */
 public abstract class DelegatingInternalProcessorContext<KOut, VOut>
     implements InternalProcessorContext<KOut, VOut> {

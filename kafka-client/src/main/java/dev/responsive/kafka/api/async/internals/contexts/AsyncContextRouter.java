@@ -86,20 +86,23 @@ public class AsyncContextRouter<KOut, VOut> implements ProcessorContext<KOut, VO
 
   private final Logger log;
 
+  private final int partition;
+
   // Flipped to true once regular processing begins, ie between when #init and #close
   // are invoked on the AsyncProcessor.
   // When true, the StreamThread should be executing and its context used to delegate
   // When false, only AsyncThreads should be accessing this router
   private final AtomicBoolean isInProcessingMode = new AtomicBoolean(false);
 
-  private final Map<String, AsyncThreadProcessorContext<KOut, VOut>> asyncThreadToContext;
   private final StreamThreadProcessorContext<KOut, VOut> streamThreadProcessorContext;
 
   public AsyncContextRouter(
       final String logPrefix,
+      final int partition,
       final StreamThreadProcessorContext<KOut, VOut> streamThreadProcessorContext
   ) {
     this.log = new LogContext(logPrefix).logger(AsyncContextRouter.class);
+    this.partition = partition;
 
     this.streamThreadProcessorContext = streamThreadProcessorContext;
   }
@@ -115,7 +118,7 @@ public class AsyncContextRouter<KOut, VOut> implements ProcessorContext<KOut, VO
   /**
    * Look up the appropriate context based on whether processing mode is on
    */
-  private AsyncProcessorContext<KOut, VOut> lookupContext() {
+  private ProcessorContext<KOut, VOut> lookupContext() {
     if (isInProcessingMode.getOpaque()) {
       return lookupContextForAsyncThread();
     } else {
@@ -129,7 +132,7 @@ public class AsyncContextRouter<KOut, VOut> implements ProcessorContext<KOut, VO
    */
   private AsyncThreadProcessorContext<KOut, VOut> lookupContextForAsyncThread() {
     if (Thread.currentThread() instanceof AsyncThread) {
-      return ((AsyncThread) Thread.currentThread()).context();
+      return ((AsyncThread) Thread.currentThread()).context(partition);
     } else {
       log.error("Attempted to look up async processor context but is not executing "
                     + "on an AsyncThread");
