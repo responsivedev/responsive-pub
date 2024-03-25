@@ -64,7 +64,7 @@ public class SchedulingQueue<KIn, VIn> {
    * use a PriorityQueue<AsyncEvent> that sorts according to offset (and secondarily topic -- but
    * how do we handle punctuator-created records??)
    * This PriorityQueue would only contain one event per key, and only events that are processable.
-   * Every time an in-flight recrd is completed, we
+   * Every time an in-flight record is completed, we
    *
    * We also have a Map<Key -> Queue<AsyncEvent>> with ALL events awaiting scheduling, with each
    * key pointing to a queue/linked list with the events of the same key in offset order

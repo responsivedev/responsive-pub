@@ -20,6 +20,7 @@ import static dev.responsive.kafka.internal.utils.Utils.extractStreamThreadIndex
 
 import dev.responsive.kafka.api.async.internals.contexts.AsyncThreadProcessorContext;
 import dev.responsive.kafka.api.async.internals.queues.FinalizingQueue;
+import dev.responsive.kafka.api.async.internals.queues.MultiplexBlockingQueue;
 import dev.responsive.kafka.api.async.internals.queues.ProcessingQueue;
 import java.util.HashMap;
 import java.util.Map;
@@ -77,7 +78,7 @@ public class AsyncThreadPool {
       final int partition,
       final String asyncProcessorName,
       final InternalProcessorContext<?, ?> originalContext,
-      final ProcessingQueue<?, ?> processingQueue,
+      final MultiplexBlockingQueue processingQueue,
       final FinalizingQueue<?, ?> finalizingQueue
   ) {
     final AsyncProcessorContainer processorContainer = new AsyncProcessorContainer(

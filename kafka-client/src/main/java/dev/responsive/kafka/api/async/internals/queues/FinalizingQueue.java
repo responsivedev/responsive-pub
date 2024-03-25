@@ -47,7 +47,7 @@ public class FinalizingQueue<KIn, VIn> {
   public FinalizingQueue(final String asyncProcessorName, final int partition) {
     this.log = new LogContext(
         String.format("finalizing-queue [%s-%d]", asyncProcessorName, partition)
-    ).logger(dev.responsive.kafka.api.async.internals.queues.ProcessingQueue.class);
+    ).logger(dev.responsive.kafka.api.async.internals.queues.FinalizingQueue.class);
   }
 
   /**

@@ -88,7 +88,7 @@ import org.slf4j.Logger;
  * it is always the input record that determines the characteristics and ordering of
  * the overall event
  */
-public class AsyncEvent<KIn, VIn> {
+public class AsyncEvent {
 
   // State machine for an async event lifecycle. Every event must pass through each
   // state exactly once and progress these following the same order in which they
@@ -106,7 +106,7 @@ public class AsyncEvent<KIn, VIn> {
 
   private State currentState;
 
-  private final Record<KIn, VIn> inputRecord;
+  private final Record<?, ?> inputRecord;
   private final ProcessorRecordContext recordContext;
   private final Runnable processInputRecord;
 
@@ -115,7 +115,7 @@ public class AsyncEvent<KIn, VIn> {
 
   public AsyncEvent(
       final String asyncProcessorName,
-      final Record<KIn, VIn> inputRecord,
+      final Record<?, ?> inputRecord,
       final ProcessorRecordContext recordContext,
       final Runnable processInputRecord
   ) {
@@ -225,8 +225,13 @@ public class AsyncEvent<KIn, VIn> {
     return recordContext;
   }
 
-  public KIn inputKey() {
-    return inputRecord.key();
+  public int partition() {
+    return recordContext.partition();
+  }
+
+  @SuppressWarnings("unchecked")
+  public <KIn> KIn inputKey() {
+    return (KIn) inputRecord.key();
   }
 
   @Override
@@ -238,7 +243,7 @@ public class AsyncEvent<KIn, VIn> {
       return false;
     }
 
-    final AsyncEvent<?, ?> that = (AsyncEvent<?, ?>) o;
+    final AsyncEvent that = (AsyncEvent) o;
 
     if (!log.equals(that.log)) {
       return false;

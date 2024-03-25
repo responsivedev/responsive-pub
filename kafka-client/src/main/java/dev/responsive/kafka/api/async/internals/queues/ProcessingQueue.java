@@ -21,23 +21,27 @@ import dev.responsive.kafka.api.async.internals.AsyncThread;
 
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.locks.Lock;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
 /**
  * A queue for events with processable records that have been scheduled and are waiting to be
  * picked up and executed by an {@link AsyncThread} from the pool. Essentially the
- * input queue to the async processing thread pool
+ * input queue to the async processing thread pool.
+ * <p>
+ * Each StreamThread will have one ProcessingQueue for each
  * <p>
  * Threading notes:
  * -Produces to queue --> StreamThread
  * -Consumes from queue --> AsyncThread
- * -One per physical AsyncProcessor instance
- *   (ie per logical processor per partition per StreamThread)
+ * -One per async processor node per StreamThread
+ *   (ie per logical processor and shared/used for all partitions assigned to the StreamThread)
  */
 public class ProcessingQueue<KIn, VIn> {
   private final Logger log;
 
+  private final Lock
 
   private final BlockingQueue<AsyncEvent<KIn, VIn>> processableEvents = new LinkedBlockingQueue<>();
 
