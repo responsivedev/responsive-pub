@@ -85,7 +85,6 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn,
   private String asyncProcessorName;
   private TaskId taskId;
   private AsyncThreadPool threadPool;
-  private MultiplexBlockingQueue<KIn, VIn> processableRecords;
   private FinalizingQueue<KIn, VIn> finalizableRecords;
 
   // the context passed to us in init, ie the one that is used by Streams everywhere else
@@ -132,15 +131,12 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn,
     );
     this.log = new LogContext(logPrefix).logger(AsyncProcessor.class);
 
-    this.processableRecords = new ProcessingQueue<>(asyncProcessorName, taskId.partition());
     this.finalizableRecords = new FinalizingQueue<>(asyncProcessorName, taskId.partition());
 
     this.threadPool = extractAsyncThreadPool(context, streamThreadName);
     this.threadPool.addProcessor(
         taskId.partition(),
-        asyncProcessorName,
         originalContext,
-        processableRecords,
         finalizableRecords
     );
 
@@ -192,7 +188,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn,
                    + "prior to being closed");
     }
 
-    threadPool.removeProcessor(taskId.partition(), asyncProcessorName);
+    threadPool.removeProcessor(taskId.partition());
     // Tell the user context to turn off processing mode so it knows to expect no
     // further calls from an AsyncThread after this
     userContext.endProcessingMode();
@@ -258,8 +254,8 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn,
 
   private void drainSchedulingQueue() {
     while (schedulingQueue.hasProcessableRecord()) {
-      final AsyncEvent<KIn, VIn> processableEvent = schedulingQueue.poll();
-      processableRecords.scheduleForProcessing(processableEvent);
+      final AsyncEvent processableEvent = schedulingQueue.poll();
+      threadPool.scheduleForProcessing(processableEvent);
       processableEvent.transitionToInputReady();
     }
   }
@@ -304,7 +300,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn,
    * @return true iff all records have been fully processed from start to finish
    */
   private boolean isCompleted() {
-    return finalizableRecords.isEmpty();
+    return inFlightEvents.isEmpty();
   }
 
   /**

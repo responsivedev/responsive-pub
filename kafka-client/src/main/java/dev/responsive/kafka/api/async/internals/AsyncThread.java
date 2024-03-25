@@ -38,9 +38,12 @@ public class AsyncThread extends Thread implements Closeable {
 
   public AsyncThread(final String name, final MultiplexBlockingQueue processingQueue) {
     super(name);
+    this.log = new LogContext(String.format("async-thread [%s] ", name)).logger(AsyncThread.class);
+
+    this.processingQueue = processingQueue;
+
     // concurrent b/c new processors are added by StreamThread via AsyncThreadPool
     this.nodeIdToContainer = new ConcurrentHashMap<>();
-    this.log = new LogContext(String.format("async-thread [%s] ", name)).logger(AsyncThread.class);
   }
 
   public void addProcessor(

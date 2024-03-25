@@ -38,27 +38,22 @@ public final class AsyncNodeContainer {
 
   // Three fields that uniquely identify the async processor node instance
   private final String streamThreadName;
-  private final AsyncNodeId nodeId;
+  private final int partition;
 
   // Data structures owned by/unique to this specific node/partition
   private final AsyncThreadProcessorContext<?, ?> asyncContext;
   private final FinalizingQueue<?, ?> finalizingQueue;
 
-  // Shared by all nodes for this processor, ie used for all partitions
-  private final MultiplexBlockingQueue processingQueue;
-
   public AsyncNodeContainer(
       final String streamThreadName,
-      final AsyncNodeId nodeId,
+      final int partition,
       final AsyncThreadProcessorContext<?, ?> asyncContext,
-      final FinalizingQueue<?, ?> finalizingQueue,
-      final MultiplexBlockingQueue processingQueue
+      final FinalizingQueue<?, ?> finalizingQueue
   ) {
     this.streamThreadName = streamThreadName;
-    this.nodeId = nodeId;
+    this.partition = partition;
     this.asyncContext = asyncContext;
     this.finalizingQueue = finalizingQueue;
-    this.processingQueue = processingQueue;
   }
 
   public String streamThreadName() {
@@ -66,15 +61,7 @@ public final class AsyncNodeContainer {
   }
 
   public int partition() {
-    return nodeId.partition();
-  }
-
-  public String asyncProcessorName() {
-    return nodeId.asyncProcessorName();
-  }
-
-  public AsyncNodeId asyncNodeId() {
-    return nodeId;
+    return partition;
   }
 
   public AsyncThreadProcessorContext<?, ?> asyncContext() {
@@ -85,7 +72,4 @@ public final class AsyncNodeContainer {
     return finalizingQueue;
   }
 
-  public MultiplexBlockingQueue processingQueue() {
-    return processingQueue;
-  }
 }

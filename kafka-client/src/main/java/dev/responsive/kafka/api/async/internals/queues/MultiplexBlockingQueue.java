@@ -144,9 +144,10 @@ public class MultiplexBlockingQueue {
   }
 
   /**
-   * @return the next available event across any partitions
+   * Non-blocking write API. Schedules the given event for processing on the
+   * corresponding partition
    */
-  public void offer(final AsyncEvent event) throws InterruptedException {
+  public void offer(final AsyncEvent event)  {
     final int partition = event.partition();
     final Queue<AsyncEvent> partitionQueue = partitions.get(partition);
 
@@ -162,6 +163,5 @@ public class MultiplexBlockingQueue {
       lock.unlock();
     }
   }
-
 
 }

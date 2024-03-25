@@ -37,7 +37,7 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
 
 /**
- * A specific variant of the async processor context to be used by the AsyncThread.
+ * A special kind of mock/wrapper context to be used by the AsyncThread.
  * This context handles everything needed to execute the user's
  * {@link Processor#process} method asynchronously, such as preparing the metadata
  * and internal state to reflect what the record would have seen when it was first
@@ -52,18 +52,16 @@ import org.apache.kafka.streams.processor.api.RecordMetadata;
  * metadata they access through public APIs reflects the async processor and not
  * whatever processor is being executed by the StreamThread with the "real" context.
  * <p>
- * In short, the AsyncThreadProcessorContext must completely wrap and copy
- * the state of the underlying context so that any public APIs exposed to
- * users are consistent with the state when #process was called, and don't
- * need to rely on the underlying context.
- * So while the StreamThread's async context enables delayed operations by
+ * While the StreamThread's async context enables delayed operations by
  * (re)setting any internal state of the underlying context, the AsyncThread's
  * context does the opposite and instead protects the underlying context from
  * being mutated.
  * <p>
  * Threading notes:
  * -For use by AsyncThreads only
- * -One per AsyncThread per StreamThread per task
+ * -One per AsyncThread per physical AsyncProcessor instance
+ *   (ie one per AsyncThread per StreamThread per async processor per partition)
+ *   Equivalently, one per AsyncThread for each "original" ProcessorContext in Streams
  */
 public class AsyncThreadProcessorContext<KOut, VOut>
     implements ProcessorContext<KOut, VOut>, FixedKeyProcessorContext<KOut, VOut> {

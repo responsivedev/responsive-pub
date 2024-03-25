@@ -17,6 +17,7 @@
 package dev.responsive.kafka.api.async.internals;
 
 import dev.responsive.kafka.api.async.internals.contexts.AsyncThreadProcessorContext;
+import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
 import dev.responsive.kafka.api.async.internals.queues.FinalizingQueue;
 import dev.responsive.kafka.api.async.internals.queues.MultiplexBlockingQueue;
 import java.util.HashMap;
@@ -39,7 +40,7 @@ public class AsyncThreadPool {
   // TODO: start up new threads when existing ones die to maintain the target size
   private final int threadPoolSize;
   private final Map<String, AsyncThread> threadPool;
-  private final Map<String, MultiplexBlockingQueue> asyncProcessorToQueue;
+  private final MultiplexBlockingQueue processingQueue;
 
   public AsyncThreadPool(
       final String streamThreadName,
@@ -48,16 +49,17 @@ public class AsyncThreadPool {
     this.streamThreadName = streamThreadName;
     this.threadPoolSize = threadPoolSize;
     this.threadPool = new HashMap<>(threadPoolSize);
-    this.asyncProcessorToQueue = new HashMap<>();
 
     this.logPrefix = new LogContext(String.format("stream-thread [%s]", streamThreadName));
     this.log = logPrefix.logger(AsyncThreadPool.class);
+
+    this.processingQueue = new MultiplexBlockingQueue(logPrefix);
   }
 
   public void startThreads() {
     for (int i = 0; i < threadPoolSize; ++i) {
       final String name = generateAsyncThreadName(streamThreadName, i);
-      final AsyncThread thread = new AsyncThread(name);
+      final AsyncThread thread = new AsyncThread(name, processingQueue);
 
       thread.setDaemon(true);
       threadPool.put(name, thread);
@@ -70,51 +72,39 @@ public class AsyncThreadPool {
     log.info("Started up all {} async threads in this pool", threadPoolSize);
   }
 
-  /**
-   * @return the processing queue for this logical async processor, creating
-   *         one if this is the first time we've seen a processor with this name
-   */
-  private MultiplexBlockingQueue getQueueForProcessor(final String asyncProcessorName) {
-    return asyncProcessorToQueue.computeIfAbsent(
-        asyncProcessorName,
-        k -> new MultiplexBlockingQueue(logPrefix)
-    );
-  }
-
   public void addProcessor(
       final int partition,
-      final String asyncProcessorName,
       final InternalProcessorContext<?, ?> originalContext,
       final FinalizingQueue<?, ?> finalizingQueue
   ) {
-    final MultiplexBlockingQueue processingQueue = getQueueForProcessor(asyncProcessorName);
     processingQueue.addPartition(partition);
 
-    final AsyncNodeId nodeId = new AsyncNodeId(asyncProcessorName, partition);
     final AsyncNodeContainer processorContainer = new AsyncNodeContainer(
         streamThreadName,
-        nodeId,
+        partition,
         new AsyncThreadProcessorContext<>(originalContext),
         finalizingQueue
     );
 
     for (final AsyncThread thread : threadPool.values()) {
-      thread.addProcessor(nodeId, processorContainer);
+      thread.addProcessor(processorContainer);
     }
-
   }
 
   public void removeProcessor(
-      final int partition,
-      final String asyncProcessorName
+      final int partition
   ) {
-    final MultiplexBlockingQueue processingQueue = getQueueForProcessor(asyncProcessorName);
     processingQueue.removePartition(partition);
 
-    final AsyncNodeId nodeId = new AsyncNodeId(asyncProcessorName, partition);
     for (final AsyncThread thread : threadPool.values()) {
-      thread.removeProcessor(nodeId);
+      thread.removeProcessor(partition);
     }
+  }
+
+  // Used by the StreamThread to hand off events to the AsyncThreads and
+  // schedule them for processing
+  public void scheduleForProcessing(final AsyncEvent event) {
+    processingQueue.offer(event);
   }
 
   /**

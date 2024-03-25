@@ -16,6 +16,8 @@
 
 package dev.responsive.kafka.api.async;
 
+import static dev.responsive.kafka.api.async.internals.Utils.initializeAsyncBuilders;
+
 import dev.responsive.kafka.api.async.internals.AsyncProcessor;
 import dev.responsive.kafka.api.async.internals.stores.AsyncStoreBuilder;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreBuilder;
@@ -103,6 +105,9 @@ import org.apache.kafka.streams.state.internals.AsyncTimestampedKeyValueStoreBui
  *    feature -- an async processor must be the sole owner of any state stores connected
  *    to it. You can still access these stores from outside the async processor by using IQ,
  *    you just cannot access them from another processor or app by "sharing" them.
+ * 7) Only single stateful processors are supported at this time. In other words, you can only
+ *    enable async processing for a single node in the topology, which must be expressed as a
+ *    {@link Processor} and requires at least one state store be connected.
  */
 public final class AsyncProcessorSupplier<KIn, VIn, KOut, VOut> implements ProcessorSupplier<KIn, VIn, KOut, VOut> {
 
@@ -126,7 +131,7 @@ public final class AsyncProcessorSupplier<KIn, VIn, KOut, VOut> implements Proce
       final ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier
   ) {
     this.userProcessorSupplier = processorSupplier;
-    this.asyncStoreBuilders.putAll(initializeAsyncBuilders(userProcessorSupplier));
+    this.asyncStoreBuilders.putAll(initializeAsyncBuilders(userProcessorSupplier.stores()));
   }
 
   @Override
@@ -137,42 +142,5 @@ public final class AsyncProcessorSupplier<KIn, VIn, KOut, VOut> implements Proce
   @Override
   public Set<StoreBuilder<?>> stores() {
     return new HashSet<>(asyncStoreBuilders.values());
-  }
-
-  private static <KIn, VIn, KOut, VOut> Map<String, AsyncStoreBuilder<?>> initializeAsyncBuilders(
-      final ProcessorSupplier<KIn, VIn, KOut, VOut> userProcessorSupplier
-  ) {
-    final Map<String, AsyncStoreBuilder<?>> asyncStoreBuilders = new HashMap<>();
-    for (final StoreBuilder<?> builder : userProcessorSupplier.stores()) {
-      final String storeName = builder.name();
-      if (builder instanceof ResponsiveStoreBuilder) {
-        final ResponsiveStoreBuilder<?, ?, ?> responsiveBuilder = (ResponsiveStoreBuilder<?, ?, ?>) builder;
-
-        final StoreType storeType = responsiveBuilder.storeType();
-
-        if (storeType.equals(StoreType.TIMESTAMPED_KEY_VALUE)) {
-          final AsyncStoreBuilder<?> storeBuilder =
-              new AsyncTimestampedKeyValueStoreBuilder<>(
-                  responsiveBuilder
-              );
-
-              asyncStoreBuilders.put(
-                  storeName,
-                  storeBuilder
-              );
-          storeBuilder.maybeRegisterNewStreamThread(Thread.currentThread().getName());
-
-        } else {
-            throw new UnsupportedOperationException("Only timestamped key-value stores are "
-                                                        + "supported by async processors at this time");
-        }
-      } else {
-        throw new IllegalStateException(String.format(
-            "Detected the StoreBuilder for %s was not created via the ResponsiveStores factory, "
-                + "please ensure that all store builders and suppliers are provided through the "
-                + "appropriate API from ResponsiveStores", storeName));
-      }
-    }
-    return asyncStoreBuilders;
   }
 }
