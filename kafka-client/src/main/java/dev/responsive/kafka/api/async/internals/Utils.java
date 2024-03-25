@@ -27,7 +27,7 @@ import org.apache.kafka.streams.state.internals.AsyncTimestampedKeyValueStoreBui
 
 public class Utils {
 
-  public static Map<String, AsyncStoreBuilder<?>> initializeAsyncBuilders(
+  public static Set<AsyncStoreBuilder<?>> initializeAsyncBuilders(
       final Set<StoreBuilder<?>> userConnectedStores
   ) {
     validateStoresConnectedToUserProcessor(userConnectedStores);

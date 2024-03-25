@@ -141,6 +141,6 @@ public final class AsyncProcessorSupplier<KIn, VIn, KOut, VOut> implements Proce
 
   @Override
   public Set<StoreBuilder<?>> stores() {
-    return new HashSet<>(asyncStoreBuilders.values());
+    return asyncStoreBuilders;
   }
 }

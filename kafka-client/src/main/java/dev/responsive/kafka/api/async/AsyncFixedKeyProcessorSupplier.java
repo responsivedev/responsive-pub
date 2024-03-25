@@ -16,11 +16,17 @@
 
 package dev.responsive.kafka.api.async;
 
+import static dev.responsive.kafka.api.async.internals.Utils.initializeAsyncBuilders;
+
+import dev.responsive.kafka.api.async.internals.AsyncFixedKeyProcessor;
 import dev.responsive.kafka.api.async.internals.stores.AsyncStoreBuilder;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.state.StoreBuilder;
 
 /**
  * A fixed-key version of the async processing api, for topologies that use the
@@ -46,13 +52,12 @@ public class AsyncFixedKeyProcessorSupplier<KIn, VIn, VOut> implements FixedKeyP
   }
 
   @Override
-  public AsyncProcessor<KIn, VIn, KOut, VOut> get() {
-    return new AsyncProcessor<>(userProcessorSupplier.get(), asyncStoreBuilders);
+  public AsyncFixedKeyProcessor<KIn, VIn, VOut> get() {
+    return new AsyncFixedKeyProcessor<>(userProcessorSupplier.get(), asyncStoreBuilders);
   }
 
   @Override
   public Set<StoreBuilder<?>> stores() {
     return new HashSet<>(asyncStoreBuilders.values());
   }
-}
 }

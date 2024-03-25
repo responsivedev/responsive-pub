@@ -20,20 +20,16 @@ import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadAs
 
 import dev.responsive.kafka.api.async.AsyncProcessorSupplier;
 import dev.responsive.kafka.api.async.internals.contexts.AsyncContextRouter;
-import dev.responsive.kafka.api.async.internals.contexts.AsyncThreadProcessorContext;
 import dev.responsive.kafka.api.async.internals.contexts.StreamThreadProcessorContext;
 import dev.responsive.kafka.api.async.internals.events.DelayedForward;
 import dev.responsive.kafka.api.async.internals.events.DelayedWrite;
 import dev.responsive.kafka.api.async.internals.queues.FinalizingQueue;
-import dev.responsive.kafka.api.async.internals.queues.MultiplexBlockingQueue;
-import dev.responsive.kafka.api.async.internals.queues.ProcessingQueue;
 import dev.responsive.kafka.api.async.internals.queues.SchedulingQueue;
 import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
 import dev.responsive.kafka.api.async.internals.stores.AsyncKeyValueStore;
 import dev.responsive.kafka.api.async.internals.stores.StreamThreadFlushListeners.AsyncFlushListener;
 import dev.responsive.kafka.api.async.internals.stores.AsyncStoreBuilder;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -133,7 +129,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn,
 
     this.finalizableRecords = new FinalizingQueue<>(asyncProcessorName, taskId.partition());
 
-    this.threadPool = extractAsyncThreadPool(context, streamThreadName);
+    this.threadPool = getAsyncThreadPool(context, streamThreadName);
     this.threadPool.addProcessor(
         taskId.partition(),
         originalContext,
@@ -338,7 +334,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn,
     }
   }
 
-  private static <KOut, VOut> AsyncThreadPool extractAsyncThreadPool(
+  private static <KOut, VOut> AsyncThreadPool getAsyncThreadPool(
       final ProcessorContext<KOut, VOut> context,
       final String streamThreadName
   ) {
