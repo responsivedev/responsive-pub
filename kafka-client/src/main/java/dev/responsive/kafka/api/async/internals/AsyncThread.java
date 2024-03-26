@@ -19,6 +19,7 @@ package dev.responsive.kafka.api.async.internals;
 import dev.responsive.kafka.api.async.internals.contexts.AsyncThreadProcessorContext;
 import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
 import dev.responsive.kafka.api.async.internals.queues.ProcessingQueue;
+import dev.responsive.kafka.api.async.internals.queues.ReadOnlyProcessingQueue;
 import java.io.Closeable;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -32,7 +33,7 @@ public class AsyncThread extends Thread implements Closeable {
 
   private final AtomicBoolean shutdownRequested = new AtomicBoolean(false);
 
-  private final ProcessingQueue processingQueue;
+  private final ReadOnlyProcessingQueue processingQueue;
   private final Map<Integer, AsyncNodeContainer> nodeIdToContainer;
 
   public AsyncThread(final String name, final ProcessingQueue processingQueue) {
@@ -92,14 +93,18 @@ public class AsyncThread extends Thread implements Closeable {
    *    such as issuing forwards or writes
    */
   private void processOneEvent() {
-    final AsyncEvent currentEvent;
-    try {
-      currentEvent = processingQueue.take();
-    } catch (final InterruptedException e) {
-      log.error("Interrupted while waiting for next event to process", e);
-      close();
-      return;
+    final AsyncEvent currentEvent = nextProcessableEvent();
+
+    // This should only happen if the queue was closed or thread was interrupted.
+    // In either case, the thread should be shutting down
+    if (currentEvent == null) {
+      if (!shutdownRequested.getOpaque()) {
+        log.warn("Processing queue returned null but thread was not requested to shut down");
+        close();
+        return;
+      }
     }
+
     final AsyncNodeContainer container = nodeIdToContainer.get(currentEvent.partition());
 
     container.asyncContext().prepareToProcessNewEvent(currentEvent);
@@ -109,10 +114,19 @@ public class AsyncThread extends Thread implements Closeable {
     container.finalizingQueue().scheduleForFinalization(currentEvent);
   }
 
+  private AsyncEvent nextProcessableEvent() {
+    try {
+      return processingQueue.take();
+    } catch (final InterruptedException e) {
+      log.error("Interrupted while waiting for next processable event", e);
+      close();
+      return null;
+    }
+  }
+
   /**
-   * AsyncThreads are daemons and hold no resources, so it is technically
-   * not an issue if they are, which can occur in the case of
-   * a StreamThread that dies during processing. . or wait for all threads to join
+   * Send a shutdown signal to this AsyncThread to make it exit the
+   * main processing loop
    */
   @Override
   public void close() {

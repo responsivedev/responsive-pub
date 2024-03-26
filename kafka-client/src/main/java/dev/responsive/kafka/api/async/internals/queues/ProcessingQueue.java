@@ -17,13 +17,10 @@
 package dev.responsive.kafka.api.async.internals.queues;
 
 import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.Queue;
-import java.util.Set;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -51,54 +48,40 @@ import org.slf4j.Logger;
  * added to any of the underlying partition queues.
  * <p>
  * Threading notes:
- * -one per AsyncThreadPool per processor node
+ * -written to by StreamThread, read from by AsyncThread(s)
+ * -one per physical AsyncProcessor instance
+ *  (ie per logical processor per partition per StreamThread)
+ * -notably, the same queue is used for all partitions and
  */
-public class ProcessingQueue {
+public class ProcessingQueue implements ReadOnlyProcessingQueue, WriteOnlyProcessingQueue {
 
   private final Logger log;
 
   private final Lock lock;
-  // condition for writer to signal when new events are added
-  private final Condition newEventsCondition;
-  // condition for readers to signal when all queues are empty
-  private final Condition emptyCondition;
+  private final Condition condition; // signals when new events are added
 
-
-  private final Set<Integer> nonEmptyQueues;
   private final Map<Integer, Queue<AsyncEvent>> partitions;
+
+  private volatile boolean closed;
 
   public ProcessingQueue(final LogContext logPrefix) {
     this.log = logPrefix.logger(ProcessingQueue.class);
 
     // could use per-partition or read-write locks but reads are fast so it's probably not worth it
     this.lock = new ReentrantLock();
-    this.newEventsCondition = lock.newCondition();
-    this.emptyCondition = lock.newCondition();
+    this.condition = lock.newCondition();
 
-    this.nonEmptyQueues = new HashSet<>();
-    this.partitions = new HashMap<>();
+    this.partitions = new ConcurrentHashMap<>();
   }
 
-  /**
-   * Register a new partition queue.
-   * <p>
-   * Threading notes:
-   * -only invoked by StreamThread
-   * -no locking/signalling required since partitions are stored in concurrent map
-   *   and we don't add new records in this method, just a new/empty queue
-   */
+  /** See {@link WriteOnlyProcessingQueue#addPartition(int)} */
+  @Override
   public void addPartition(final int partition) {
     partitions.put(partition, new LinkedList<>());
   }
 
-  /**
-   * Unregister an existing partition queue and remove any scheduled events
-   * <p>
-   * Threading notes:
-   * -only invoked by StreamThread
-   * -no locking/signalling required since partitions are stored in concurrent map
-   * -removed partitions will be empty anyways, unless we hit an unclean shutdown
-   */
+  /** See {@link WriteOnlyProcessingQueue#removePartition(int)} */
+  @Override
   public void removePartition(final int partition) {
     final var removedPartitionQueue = partitions.remove(partition);
     if (!removedPartitionQueue.isEmpty()) {
@@ -107,46 +90,18 @@ public class ProcessingQueue {
     }
   }
 
-  /**
-   * Blocks until all partition-queues are empty or until the timeout is hit.
-   *
-   * @return true if the queues are indeed empty, false if we returned early due to timeout
-   */
-  public boolean awaitEmpty(final long timeout, final TimeUnit unit) throws InterruptedException {
-
-    // This method is only available to writers and isEmpty is volatile, so we
-    // can return immediately if it's already true as no other threads will add events
-    while (!isEmpty) {
-      try {
-        lock.lock();
-        if (!isEmpty) {
-          final boolean timeoutHit = !emptyCondition.await(timeout, unit);
-          if (timeoutHit) {
-            return false;
-          }
-        }
-
-      } finally {
-        lock.unlock();
-      }
-    }
-
-    return true;
-  }
-
-  /**
-   * Blocking read API
-   *
-   * @return the next available event across any partitions
-   */
+  /** See {@link ReadOnlyProcessingQueue#take()} */
+  @Override
   public AsyncEvent take() throws InterruptedException {
+    while (!closed) {
 
+    }
+    log.info("Processing queue was closed while waiting for an event");
+    return null;
   }
 
-  /**
-   * Non-blocking write API. Schedules the given event for processing on the
-   * corresponding partition
-   */
+  /** See {@link WriteOnlyProcessingQueue#offer(AsyncEvent)} */
+  @Override
   public void offer(final AsyncEvent event)  {
     final int partition = event.partition();
     final Queue<AsyncEvent> partitionQueue = partitions.get(partition);
@@ -162,6 +117,19 @@ public class ProcessingQueue {
     } finally {
       lock.unlock();
     }
+  }
+
+  /** See {@link WriteOnlyProcessingQueue#close()} */
+  @Override
+  public void close() {
+    closed = true;
+    try {
+      lock.lock();
+      condition.signalAll();
+    } finally {
+      lock.unlock();
+    }
+    log.info("Closed the processing queue and notified waiting threads");
   }
 
 }

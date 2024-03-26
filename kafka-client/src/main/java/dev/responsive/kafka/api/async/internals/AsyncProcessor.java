@@ -263,9 +263,9 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
       // from here whether that was the case. Log a warning here so that it's
       // possible to determine whether something went wrong or not by looking
       // at the complete logs for the task/thread
-      log.warn("Closing async processor with in-flight events, this should only "
+      log.warn("Closing async processor with {} in-flight events, this should only "
                    + "happen if the task was shut down dirty and not flushed/committed "
-                   + "prior to being closed");
+                   + "prior to being closed", inFlightEvents.size());
     }
 
     threadPool.removeProcessor(taskId.partition());
@@ -365,6 +365,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
       finalizeEvent(event);
 
       inFlightEvents.remove(event);
+      schedulingQueue.unblockKey(event.inputKey());
     }
   }
 
@@ -388,7 +389,6 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
       nextDelayedForward = event.nextForward();
     }
     event.transitionToDone();
-    schedulingQueue.unblockKey(event.inputKey());
   }
 
   /**

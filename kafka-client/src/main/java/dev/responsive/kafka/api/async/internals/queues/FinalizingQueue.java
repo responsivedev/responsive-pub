@@ -17,7 +17,9 @@
 package dev.responsive.kafka.api.async.internals.queues;
 
 import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
+import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
@@ -41,7 +43,7 @@ import org.slf4j.Logger;
 public class FinalizingQueue {
 
   private final Logger log;
-  private final BlockingQueue<AsyncEvent> finalizableRecords = new LinkedBlockingQueue<>();
+  private final Queue<AsyncEvent> finalizableRecords = new ConcurrentLinkedQueue<>();
 
   public FinalizingQueue(final String logPrefix) {
     this.log = new LogContext(logPrefix).logger(FinalizingQueue.class);
@@ -51,7 +53,7 @@ public class FinalizingQueue {
    * Schedules a record that the AsyncThread finished processing and inserts it
    * into the queue for the StreamThread to pick up for finalization
    * <p>
-   * To be executed by the StreamThread only
+   * To be executed by AsyncThreads only
    */
   public void scheduleForFinalization(
       final AsyncEvent processedEvent
@@ -60,30 +62,16 @@ public class FinalizingQueue {
     // and is currently awaiting finalization by the StreamThread
     processedEvent.transitionToOutputReady();
 
-    try {
-      finalizableRecords.put(processedEvent);
-    } catch (final InterruptedException e) {
-      // Just throw an exception for now to ensure shutdown occurs
-      log.info("Interrupted while attempting to schedule an event for finalization");
-      throw new RuntimeException("Interrupt triggered when passing a processed event back to"
-                                     + "the StreamThread for finalization");
-    }
+    finalizableRecords.add(processedEvent);
   }
 
   /**
-   * Returns the next processable async event or blocks until one becomes available
-   * if the queue is empty.
+   * @return the next finalizable event, or null if there are none
    * <p>
-   * To be executed by an AsyncThread only.
+   * To be executed by the StreamThread only
    */
   public AsyncEvent nextFinalizableEvent() {
-    try {
-      return finalizableRecords.take();
-    } catch (final InterruptedException e) {
-      // Just throw an exception for now to ensure shutdown occurs
-      log.info("Interrupted while waiting to poll the next processed event");
-      throw new RuntimeException("Interrupted during blocking poll");
-    }
+    return finalizableRecords.poll();
   }
 
   public boolean isEmpty() {

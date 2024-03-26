@@ -20,6 +20,7 @@ import dev.responsive.kafka.api.async.internals.contexts.AsyncThreadProcessorCon
 import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
 import dev.responsive.kafka.api.async.internals.queues.FinalizingQueue;
 import dev.responsive.kafka.api.async.internals.queues.ProcessingQueue;
+import dev.responsive.kafka.api.async.internals.queues.WriteOnlyProcessingQueue;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.common.utils.LogContext;
@@ -40,7 +41,7 @@ public class AsyncThreadPool {
   // TODO: start up new threads when existing ones die to maintain the target size
   private final int threadPoolSize;
   private final Map<String, AsyncThread> threadPool;
-  private final ProcessingQueue processingQueue;
+  private final WriteOnlyProcessingQueue processingQueue;
 
   public AsyncThreadPool(
       final String streamThreadName,
@@ -53,10 +54,12 @@ public class AsyncThreadPool {
     this.logPrefix = new LogContext(String.format("stream-thread [%s]", streamThreadName));
     this.log = logPrefix.logger(AsyncThreadPool.class);
 
-    this.processingQueue = new ProcessingQueue(logPrefix);
+    final ProcessingQueue processingQueue = new ProcessingQueue(logPrefix);
+    this.processingQueue = processingQueue;
+    startThreads(processingQueue);
   }
 
-  public void startThreads() {
+  private void startThreads(final ProcessingQueue processingQueue) {
     for (int i = 0; i < threadPoolSize; ++i) {
       final String name = generateAsyncThreadName(streamThreadName, i);
       final AsyncThread thread = new AsyncThread(name, processingQueue);
@@ -101,8 +104,6 @@ public class AsyncThreadPool {
     }
   }
 
-  // Used by the StreamThread to hand off events to the AsyncThreads and
-  // schedule them for processing
   public void scheduleForProcessing(final AsyncEvent event) {
     processingQueue.offer(event);
   }
@@ -141,6 +142,10 @@ public class AsyncThreadPool {
       for (final AsyncThread thread : threadPool.values()) {
         thread.close();
       }
+
+      // Close the queue after sending the shutdown signal to all threads to
+      // interrupt any threads that are stuck blocking on the queue
+      processingQueue.close();
 
       for (final AsyncThread thread : threadPool.values()) {
           try {
