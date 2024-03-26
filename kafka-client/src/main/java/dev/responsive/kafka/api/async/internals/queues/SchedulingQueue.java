@@ -156,7 +156,7 @@ public class SchedulingQueue<KIn, VIn> {
     tail.previous = node;
   }
 
-  private AsyncEvent<KIn, VIn> remove(final EventNode node) {
+  private AsyncEvent remove(final EventNode node) {
     node.next.previous = node.previous;
     node.previous.next = node.next;
     return node.asyncEvent;

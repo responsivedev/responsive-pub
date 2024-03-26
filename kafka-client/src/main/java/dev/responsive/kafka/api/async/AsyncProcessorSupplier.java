@@ -16,13 +16,11 @@
 
 package dev.responsive.kafka.api.async;
 
+import static dev.responsive.kafka.api.async.internals.AsyncProcessor.createAsyncProcessor;
 import static dev.responsive.kafka.api.async.internals.Utils.initializeAsyncBuilders;
 
 import dev.responsive.kafka.api.async.internals.AsyncProcessor;
 import dev.responsive.kafka.api.async.internals.stores.AsyncStoreBuilder;
-import dev.responsive.kafka.internal.stores.ResponsiveStoreBuilder;
-import dev.responsive.kafka.internal.stores.ResponsiveStoreBuilder.StoreType;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -30,20 +28,29 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.processor.ConnectedStoreProvider;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.internals.AsyncTimestampedKeyValueStoreBuilder;
 
 /**
  * Instructions:
- * 1) Simply wrap your regular {@link ProcessorSupplier} in the async supplier by passing
- *    it into the {@link AsyncProcessorSupplier} constructor, and then pass in the
- *    AsyncProcessorSupplier instead of your ProcessorSupplier when defining the application
- *    topology. The async framework will take care of the rest, and no further code
- *    changes are required to enable async processing!
+ * 1) Simply wrap your regular {@link ProcessorSupplier} or {@link FixedKeyProcessorSupplier}
+ *    in the async supplier by passing it into the static constructor for the corresponding
+ *    async processor supplier class, ie {@link #createAsyncProcessorSupplier(ProcessorSupplier)}
+ *    or {@link AsyncFixedKeyProcessorSupplier#createAsyncProcessorSupplier(FixedKeyProcessorSupplier)}
+ *    You can then turn on async processing by passing in the {@link AsyncProcessorSupplier}
+ *    or {@link AsyncFixedKeyProcessorSupplier} to your application and
+ *    substituting it into the topology wherever you were previously
+ *    passing in a {@link ProcessorSupplier} or {@link FixedKeyProcessorSupplier}.
+ *    The async framework will take care of the rest, and no further code changes are required to
+ *    enable async processing!
+ *    Please review the requirements and current limits for what kind of features
+ *    and semantics are supported at this time. Contact us if you need something
+ *    that is currently not compatible with async processing to discuss adding it
+ *    to the framework.
  *
  * <p>
  *
@@ -112,35 +119,45 @@ import org.apache.kafka.streams.state.internals.AsyncTimestampedKeyValueStoreBui
 public final class AsyncProcessorSupplier<KIn, VIn, KOut, VOut> implements ProcessorSupplier<KIn, VIn, KOut, VOut> {
 
   private final ProcessorSupplier<KIn, VIn, KOut, VOut> userProcessorSupplier;
-  private final Map<String, AsyncStoreBuilder<?>> asyncStoreBuilders = new HashMap<>();
+  private final Map<String, AsyncStoreBuilder<?>> asyncStoreBuilders;
 
   /**
-   * Create an async wrapper around your custom {@link ProcessorSupplier} to enable parallel
-   * processing of long/blocking calls and state store accesses. All the usual requirements for
-   * the underlying {@link ProcessorSupplier} remain, such as connecting state stores to the
-   * processor in your topology, which you must do via the automatic process ie overriding the
-   * {@link ConnectedStoreProvider#stores()} method in your {@link ProcessorSupplier}
-   * implementation and supplying a {@link StoreBuilder} for each state store that will be
-   * accessed by this processor using {@link ProcessorContext#getStateStore(String)}
+   * Create an AsyncProcessorSupplier that wraps a custom {@link ProcessorSupplier}
+   * to enable async processing. If you have a fixed-key processor, use
+   * {@link AsyncFixedKeyProcessorSupplier#createAsyncProcessorSupplier} instead
    *
    * @param processorSupplier the {@link ProcessorSupplier} that returns a (new) instance
    *                          of your custom {@link Processor} on each invocation of
    *                          {@link ProcessorSupplier#get}
    */
-  public AsyncProcessorSupplier(
+  public static <KIn, VIn, KOut, VOut> AsyncProcessorSupplier<KIn, VIn, KOut, VOut> createAsyncProcessorSupplier(
       final ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier
   ) {
-    this.userProcessorSupplier = processorSupplier;
-    this.asyncStoreBuilders.putAll(initializeAsyncBuilders(userProcessorSupplier.stores()));
+    return new AsyncProcessorSupplier<>(processorSupplier, processorSupplier.stores());
+  }
+
+  private AsyncProcessorSupplier(
+      final ProcessorSupplier<KIn, VIn, KOut, VOut> userProcessorSupplier,
+      final Set<StoreBuilder<?>> userStoreBuilders
+  ) {
+    if (userStoreBuilders == null || userStoreBuilders.isEmpty()) {
+      throw new UnsupportedOperationException("Async processing currently requires "
+                                                  + "at least one state store be connected to the async processor, and that "
+                                                  + "stores be connected by implementing the #stores method in your processor supplier");
+    }
+
+    this.userProcessorSupplier = userProcessorSupplier;
+    this.asyncStoreBuilders = initializeAsyncBuilders(userStoreBuilders);
   }
 
   @Override
   public AsyncProcessor<KIn, VIn, KOut, VOut> get() {
-    return new AsyncProcessor<>(userProcessorSupplier.get(), asyncStoreBuilders);
+    return createAsyncProcessor(userProcessorSupplier.get(), asyncStoreBuilders);
   }
 
   @Override
   public Set<StoreBuilder<?>> stores() {
-    return asyncStoreBuilders;
+    return new HashSet<>(asyncStoreBuilders.values());
   }
+
 }

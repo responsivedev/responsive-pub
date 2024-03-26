@@ -31,6 +31,8 @@ import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessorContext;
+import org.apache.kafka.streams.processor.api.FixedKeyRecord;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
@@ -82,7 +84,8 @@ import org.slf4j.Logger;
  *  methods that the user invokes from their processor (whether in #init, #process,
  *  or #close)
  */
-public class AsyncContextRouter<KOut, VOut> implements ProcessorContext<KOut, VOut> {
+public class AsyncContextRouter<KOut, VOut>
+    implements ProcessorContext<KOut, VOut>, FixedKeyProcessorContext<KOut, VOut> {
 
   private final Logger log;
 
@@ -127,6 +130,21 @@ public class AsyncContextRouter<KOut, VOut> implements ProcessorContext<KOut, VO
   }
 
   /**
+   * Look up the appropriate context based on whether processing mode is on,
+   * and return it as a fixed-key context. This is needed because unfortunately
+   * there is no ProcessorContext interface with all #forward overloads beneath
+   * and so we have to split this method up into two versions, even though they
+   * do the exact same thing inside.
+   */
+  private FixedKeyProcessorContext<KOut, VOut> lookupFixedKeyContext() {
+    if (isInProcessingMode.getOpaque()) {
+      return lookupContextForAsyncThread();
+    } else {
+      return streamThreadProcessorContext;
+    }
+  }
+
+  /**
    * Look up the context when you know it should be an AsyncThreadProcessorContext.
    * This method includes a safety check to verify that assumption
    */
@@ -145,25 +163,28 @@ public class AsyncContextRouter<KOut, VOut> implements ProcessorContext<KOut, VO
 
   @Override
   public <K extends KOut, V extends VOut> void forward(final Record<K, V> record) {
-    if (!isInProcessingMode.getOpaque()) {
-      log.error("Call to context#forward while the processor had not yet begun processing");
-
-      throw new UnsupportedOperationException("Records can not be forwarded from an async "
-                                                  + "processor except inside #process");
-    }
-    lookupContextForAsyncThread().forward(record);
+    lookupContext().forward(record);
   }
 
   @Override
   public <K extends KOut, V extends VOut> void forward(final Record<K, V> record, final String childName) {
-    if (!isInProcessingMode.getOpaque()) {
-      log.error("Call to context#forward while the processor had not yet begun processing");
+    lookupContext().forward(record, childName);
+  }
 
-      throw new UnsupportedOperationException("Records can not be forwarded from an async "
-                                                  + "processor except inside #process");
-    }
 
-    lookupContextForAsyncThread().forward(record, childName);
+  @Override
+  public <K extends KOut, V extends VOut> void forward(
+      final FixedKeyRecord<K, V> record
+  ) {
+    lookupFixedKeyContext().forward(record);
+  }
+
+  @Override
+  public <K extends KOut, V extends VOut> void forward(
+      final FixedKeyRecord<K, V> record,
+      final String childName
+  ) {
+    lookupFixedKeyContext().forward(record);
   }
 
   @Override
@@ -246,4 +267,5 @@ public class AsyncContextRouter<KOut, VOut> implements ProcessorContext<KOut, VO
   public long currentStreamTimeMs() {
     return lookupContext().currentStreamTimeMs();
   }
+
 }

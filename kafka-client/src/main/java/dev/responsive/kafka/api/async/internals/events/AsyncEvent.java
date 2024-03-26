@@ -23,6 +23,7 @@ import dev.responsive.kafka.api.async.internals.contexts.AsyncThreadProcessorCon
 import java.util.LinkedList;
 import java.util.Queue;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.streams.processor.api.FixedKeyRecord;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.slf4j.Logger;
@@ -106,7 +107,7 @@ public class AsyncEvent {
 
   private State currentState;
 
-  private final Record<?, ?> inputRecord;
+  private final Object inputRecordKey;
 
   private final ProcessorRecordContext recordContext; // may be null if punctuator-created
   private final long systemTime;
@@ -126,7 +127,31 @@ public class AsyncEvent {
       final Runnable processInputRecord
   ) {
     this.currentState = State.SCHEDULING;
-    this.inputRecord = inputRecord;
+    this.inputRecordKey = inputRecord.key();
+    this.recordContext = recordContext;
+    this.streamTime = currentStreamTime;
+    this.systemTime = currentSystemTime;
+    this.processInputRecord = processInputRecord;
+
+    if (recordContext == null) {
+      this.log = new LogContext(logPrefix).logger(AsyncEvent.class);
+    } else {
+      this.log = new LogContext(String.format(
+          "%s <%d> ", logPrefix, recordContext.offset()
+      )).logger(AsyncEvent.class);
+    }
+  }
+
+  public AsyncEvent(
+      final String logPrefix,
+      final FixedKeyRecord<?, ?> fixedKeyInputRecord,
+      final ProcessorRecordContext recordContext,
+      final long currentStreamTime,
+      final long currentSystemTime,
+      final Runnable processInputRecord
+  ) {
+    this.currentState = State.SCHEDULING;
+    this.inputRecordKey = fixedKeyInputRecord.key();
     this.recordContext = recordContext;
     this.streamTime = currentStreamTime;
     this.systemTime = currentSystemTime;
@@ -151,14 +176,6 @@ public class AsyncEvent {
 
   public void addWrittenRecord(final DelayedWrite<?, ?> delayedWrite) {
     outputWrites.add(delayedWrite);
-  }
-
-  public boolean hasNextForward() {
-    return !outputForwards.isEmpty();
-  }
-
-  public boolean hasNextWrite() {
-    return !outputWrites.isEmpty();
   }
 
   @SuppressWarnings("unchecked")
@@ -250,7 +267,7 @@ public class AsyncEvent {
 
   @SuppressWarnings("unchecked")
   public <KIn> KIn inputKey() {
-    return (KIn) inputRecord.key();
+    return (KIn) inputRecordKey;
   }
 
   @Override
@@ -270,7 +287,7 @@ public class AsyncEvent {
     if (currentState != that.currentState) {
       return false;
     }
-    if (!inputRecord.equals(that.inputRecord)) {
+    if (!inputRecordKey.equals(that.inputRecordKey)) {
       return false;
     }
     if (!recordContext.equals(that.recordContext)) {
@@ -289,7 +306,7 @@ public class AsyncEvent {
   public int hashCode() {
     int result = log.hashCode();
     result = 31 * result + currentState.hashCode();
-    result = 31 * result + inputRecord.hashCode();
+    result = 31 * result + inputRecordKey.hashCode();
     result = 31 * result + processorRecordContextHashCode(recordContext, true);
     result = 31 * result + processInputRecord.hashCode();
     result = 31 * result + outputForwards.hashCode();

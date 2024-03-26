@@ -37,6 +37,9 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessorContext;
+import org.apache.kafka.streams.processor.api.FixedKeyRecord;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
@@ -57,9 +60,13 @@ import org.slf4j.Logger;
  * -Is exclusively owned and accessed by the StreamThread
  * -Coordinates the handoff of records between the StreamThread and AyncThreads
  */
-public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn, KOut, VOut> {
+public class AsyncProcessor<KIn, VIn, KOut, VOut>
+    implements Processor<KIn, VIn, KOut, VOut>, FixedKeyProcessor<KIn, VIn, VOut> {
 
+  // Exactly one of these is non-null and the other is null
   private final Processor<KIn, VIn, KOut, VOut> userProcessor;
+  private final FixedKeyProcessor<KIn, VIn, VOut> userFixedKeyProcessor;
+
   private final Map<String, AsyncStoreBuilder<?>> connectedStoreBuilders;
 
   // Owned and solely accessed by this StreamThread, stashes waiting events that are blocked
@@ -98,28 +105,89 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn,
   //   AsyncThread in between those, ie when the user's #process is invoked
   private AsyncContextRouter<KOut, VOut> userContext;
 
+  public static <KIn, VIn, KOut, VOut> AsyncProcessor<KIn, VIn, KOut, VOut> createAsyncProcessor(
+      final Processor<KIn, VIn, KOut, VOut> userProcessor,
+      final Map<String, AsyncStoreBuilder<?>> connectedStoreBuilders
+  ) {
+    return new AsyncProcessor<>(userProcessor, null, connectedStoreBuilders);
+  }
+
+  public static <KIn, VIn, VOut> AsyncProcessor<KIn, VIn, KIn, VOut> createAsyncFixedKeyProcessor(
+      final FixedKeyProcessor<KIn, VIn, VOut> userProcessor,
+      final Map<String, AsyncStoreBuilder<?>> connectedStoreBuilders
+  ) {
+    return new AsyncProcessor<>(null, userProcessor, connectedStoreBuilders);
+  }
+
   // Note: the constructor will be called from the main application thread (ie the
   // one that creates/starts the KafkaStreams object) so we have to delay the creation
   // of most objects until #init since (a) that will be invoked by the actual
   // StreamThread processing this, and (b) we need the context supplied to init for
   // some of the setup
-  public AsyncProcessor(
+  private AsyncProcessor(
       final Processor<KIn, VIn, KOut, VOut> userProcessor,
+      final FixedKeyProcessor<KIn, VIn, VOut> userFixedKeyProcessor,
       final Map<String, AsyncStoreBuilder<?>> connectedStoreBuilders
   ) {
     this.userProcessor = userProcessor;
+    this.userFixedKeyProcessor = userFixedKeyProcessor;
     this.connectedStoreBuilders = connectedStoreBuilders;
+
+    if (userProcessor == null && userFixedKeyProcessor == null) {
+      throw new IllegalStateException("Both the Processor and FixedKeyProcessor were null");
+    } else if (userProcessor != null && userFixedKeyProcessor != null) {
+      throw new IllegalStateException("Both the Processor and FixedKeyProcessor were non-null");
+    }
   }
 
   @Override
   public void init(final ProcessorContext<KOut, VOut> context) {
+    final String streamThreadName = Thread.currentThread().getName();
+
+    initFields(
+        (InternalProcessorContext<KOut, VOut>) context,
+        streamThreadName
+    );
+
+    userProcessor.init(userContext);
+
+    completeInitialization(streamThreadName);
+  }
+
+  // Note: we have to cast and suppress warnings in this version of #init but
+  // not the other due to the KOut parameter being squashed into KIn in the
+  // fixed-key version of the processor. However, we know this cast is safe,
+  // since by definition KIn and KOut are the same type
+  @SuppressWarnings("unchecked")
+  @Override
+  public void init(final FixedKeyProcessorContext<KIn, VOut> context) {
+    final String streamThreadName = Thread.currentThread().getName();
+
+    initFields(
+        (InternalProcessorContext<KOut, VOut>) context,
+        streamThreadName
+    );
+    userFixedKeyProcessor.init((FixedKeyProcessorContext<KIn, VOut>) userContext);
+
+    completeInitialization(streamThreadName);
+  }
+
+  /**
+   * Performs the first half of initialization by setting all the class fields
+   * that have to wait for the context to be passed in to #init to be initialized.
+   * Initialization itself is broken up into two stages, field initialization and
+   *
+   */
+  private void initFields(
+      final InternalProcessorContext<KOut, VOut> context,
+      final String streamThreadName
+  ) {
     this.taskId = context.taskId();
 
-    this.originalContext = (InternalProcessorContext<KOut, VOut>) context;
+    this.originalContext = context;
     this.streamThreadContext = new StreamThreadProcessorContext<>(originalContext);
     this.userContext = new AsyncContextRouter<>(logPrefix, taskId.partition(), streamThreadContext);
 
-    final String streamThreadName = Thread.currentThread().getName();
     this.asyncProcessorName = originalContext.currentNode().name();
     this.logPrefix = String.format(
         "stream-thread [%s] [%s-%d] ",
@@ -135,9 +203,9 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn,
         originalContext,
         finalizableRecords
     );
+  }
 
-    userProcessor.init(userContext);
-
+  private void completeInitialization(final String streamThreadName) {
     // Set the user's context to processing mode so it knows to expect any calls after
     // this point to come from the AsyncThread that is processing the event
     userContext.startProcessingMode();
@@ -165,8 +233,27 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn,
         originalContext.currentSystemTimeMs(),
         () -> userProcessor.process(record)
     );
-    inFlightEvents.add(newEvent);
-    schedulingQueue.put(newEvent);
+
+    processInternal(newEvent);
+  }
+
+  @Override
+  public void process(final FixedKeyRecord<KIn, VIn> record) {
+    final AsyncEvent newEvent = new AsyncEvent(
+        logPrefix,
+        record,
+        originalContext.recordContext(),
+        originalContext.currentStreamTimeMs(),
+        originalContext.currentSystemTimeMs(),
+        () -> userFixedKeyProcessor.process(record)
+    );
+
+    processInternal(newEvent);
+  }
+
+  private void processInternal(final AsyncEvent event) {
+    inFlightEvents.add(event);
+    schedulingQueue.put(event);
 
     executeAvailableEvents();
   }

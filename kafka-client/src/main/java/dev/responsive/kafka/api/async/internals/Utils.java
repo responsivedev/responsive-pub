@@ -27,11 +27,9 @@ import org.apache.kafka.streams.state.internals.AsyncTimestampedKeyValueStoreBui
 
 public class Utils {
 
-  public static Set<AsyncStoreBuilder<?>> initializeAsyncBuilders(
+  public static Map<String, AsyncStoreBuilder<?>> initializeAsyncBuilders(
       final Set<StoreBuilder<?>> userConnectedStores
   ) {
-    validateStoresConnectedToUserProcessor(userConnectedStores);
-
     final Map<String, AsyncStoreBuilder<?>> asyncStoreBuilders = new HashMap<>();
     for (final StoreBuilder<?> builder : userConnectedStores) {
       final String storeName = builder.name();
@@ -64,16 +62,6 @@ public class Utils {
       }
     }
     return asyncStoreBuilders;
-  }
-
-  private static void validateStoresConnectedToUserProcessor(
-      final Set<StoreBuilder<?>> userConnectedStores
-  ) {
-    if (userConnectedStores == null || userConnectedStores.isEmpty()) {
-      throw new UnsupportedOperationException("Async processing currently requires "
-                                                  + "at least one state store be connected to the async processor, and that "
-                                                  + "stores be connected by implementing the #stores method in your processor supplier");
-    }
   }
 
 }

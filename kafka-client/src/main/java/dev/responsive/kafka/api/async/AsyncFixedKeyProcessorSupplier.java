@@ -16,14 +16,15 @@
 
 package dev.responsive.kafka.api.async;
 
+import static dev.responsive.kafka.api.async.internals.AsyncProcessor.createAsyncFixedKeyProcessor;
 import static dev.responsive.kafka.api.async.internals.Utils.initializeAsyncBuilders;
 
-import dev.responsive.kafka.api.async.internals.AsyncFixedKeyProcessor;
+import dev.responsive.kafka.api.async.internals.AsyncProcessor;
 import dev.responsive.kafka.api.async.internals.stores.AsyncStoreBuilder;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -39,21 +40,40 @@ import org.apache.kafka.streams.state.StoreBuilder;
 public class AsyncFixedKeyProcessorSupplier<KIn, VIn, VOut> implements FixedKeyProcessorSupplier<KIn, VIn, VOut> {
 
   private final FixedKeyProcessorSupplier<KIn, VIn, VOut> userProcessorSupplier;
-  private final Map<String, AsyncStoreBuilder<?>> asyncStoreBuilders = new HashMap<>();
+  private final Map<String, AsyncStoreBuilder<?>> asyncStoreBuilders;
 
   /**
-   * See {@link AsyncProcessorSupplier#AsyncProcessorSupplier(ProcessorSupplier)}
+   * Create an AsyncProcessorSupplier that wraps a custom {@link ProcessorSupplier}
+   * to enable async processing. If you aren't using a fixed-key processor, use
+   * {@link AsyncProcessorSupplier#createAsyncProcessorSupplier} instead
+   *
+   * @param processorSupplier the {@link FixedKeyProcessorSupplier} that returns a (new)
+   *                          instance of your custom {@link FixedKeyProcessor} on each
+   *                          invocation of {@link ProcessorSupplier#get}
    */
-  public AsyncFixedKeyProcessorSupplier(
+  public static <KIn, VIn, VOut> AsyncFixedKeyProcessorSupplier<KIn, VIn, VOut> createAsyncProcessorSupplier(
       final FixedKeyProcessorSupplier<KIn, VIn, VOut> processorSupplier
   ) {
-    this.userProcessorSupplier = processorSupplier;
-    this.asyncStoreBuilders.putAll(initializeAsyncBuilders(userProcessorSupplier.stores()));
+    return new AsyncFixedKeyProcessorSupplier<>(processorSupplier, processorSupplier.stores());
+  }
+
+  private AsyncFixedKeyProcessorSupplier(
+      final FixedKeyProcessorSupplier<KIn, VIn, VOut> userProcessorSupplier,
+      final Set<StoreBuilder<?>> userStoreBuilders
+  ) {
+    if (userStoreBuilders == null || userStoreBuilders.isEmpty()) {
+      throw new UnsupportedOperationException("Async processing currently requires "
+                                                  + "at least one state store be connected to the async processor, and that "
+                                                  + "stores be connected by implementing the #stores method in your processor supplier");
+    }
+
+    this.userProcessorSupplier = userProcessorSupplier;
+    this.asyncStoreBuilders = initializeAsyncBuilders(userStoreBuilders);
   }
 
   @Override
-  public AsyncFixedKeyProcessor<KIn, VIn, VOut> get() {
-    return new AsyncFixedKeyProcessor<>(userProcessorSupplier.get(), asyncStoreBuilders);
+  public AsyncProcessor<KIn, VIn, KIn, VOut> get() {
+    return createAsyncFixedKeyProcessor(userProcessorSupplier.get(), asyncStoreBuilders);
   }
 
   @Override
