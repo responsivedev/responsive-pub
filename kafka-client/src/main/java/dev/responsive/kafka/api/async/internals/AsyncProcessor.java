@@ -71,7 +71,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
 
   // Owned and solely accessed by this StreamThread, stashes waiting events that are blocked
   // on previous events with the same key that are still in flight
-  private final SchedulingQueue<KIn, VIn> schedulingQueue = new SchedulingQueue<>();
+  private final SchedulingQueue<KIn> schedulingQueue = new SchedulingQueue<>();
   // Owned and solely accessed by this StreamThread, simply keeps track of the events that
   // are currently "in flight" which includes all events that were created by passing an
   // input record into the #process method of this AsyncProcessor, but have not yet reached

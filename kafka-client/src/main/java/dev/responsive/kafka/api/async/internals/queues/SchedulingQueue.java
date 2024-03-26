@@ -18,25 +18,17 @@ package dev.responsive.kafka.api.async.internals.queues;
 
 import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
 import java.util.HashMap;
-import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.Map;
-import java.util.Set;
+import java.util.Queue;
 
-// TODO:
-//  1) implement predicate/isProcessable checking,
-//  2) potentially save "cursor" in dll and have it automatically "reset" to the next oldest
-//  node if/when they go from un-processable to processable via completion of pending records
-//  3) make #poll blocking with Condition to notify when record becomes processable
 /**
- * A non-blocking queue for input records waiting to be passed from the StreamThread to
+ * A non-blocking queue for async events waiting to be passed from the StreamThread to
  * the async thread pool and scheduled for execution. This queue is not thread safe and
- * should be owned and exclusively accessed by the StreamThread. Records that are
- * processable -- that is, not blocked on previous records with the same key that have
- * not yet been fully processed -- will be polled from this queue and then passed on to
- * the async thread pool by the StreamThread.
- * <p>
- * We implement a custom doubly-linked list to enable conditional queue-like semantics
- * with efficient arbitrary removal of the first element that meets the condition.
+ * should be owned and exclusively accessed by the StreamThread. Events that are
+ * processable -- that is, not blocked on previously scheduled events with
+ * the same key that have not yet been fully processed -- will be polled from
+ * this queue and then "scheduled" by passing them on to the {@link ProcessingQueue}
  * <p>
  * Threading notes:
  * -Should only be accessed from the StreamThread
@@ -45,47 +37,8 @@ import java.util.Set;
  */
 public class SchedulingQueue<KIn> {
 
-  /**
-   * TODO: idea
-   *
-   * class EventKeyStatus {
-   *   Queue<AsyncEvent> waitingEvents;
-   *   boolean inFlightEvent;
-   *
-   *   set inFlight to true when an event of this key is polled from the PriorityQueue
-   *
-   *   when adding new events, check
-   *   if (inFlightEvent ||   PriorityQueue.containsKEy(key)) --> add to waitingEvents queue
-   *   else --> add to PriorityQueue
-   *
-   *   when an event is marked done, set inFlightEvent to false and move the first event in
-   *   waitingEvents from the  key-specific Queue to the PriorityQueue
-   * }
-   *
-   * use a PriorityQueue<AsyncEvent> that sorts according to offset (and secondarily topic -- but
-   * how do we handle punctuator-created records??)
-   * This PriorityQueue would only contain one event per key, and only events that are processable.
-   * Every time an in-flight record is completed, we
-   *
-   * We also have a Map<Key -> Queue<AsyncEvent>> with ALL events awaiting scheduling, with each
-   * key pointing to a queue/linked list with the events of the same key in offset order
-   *
-   * When an event is marked done by the StreamThread, it just passes it in here and we
-   * will poll the next event from that key's queue and replace the
-   */
-
-  private final EventNode head;
-  private final EventNode tail;
-  private final Map<KIn, EventNode> inFlightNodesByKey = new HashMap<>();
-  private final Set<KIn> blockedKeys = new HashSet<>();
-
-  public SchedulingQueue() {
-    this.head = new EventNode(null, null, null);
-    this.tail = new EventNode(null, null, null);
-
-    head.next = tail;
-    tail.previous = head;
-  }
+  private final Map<KIn, KeyStatus> blockedEvents = new HashMap<>();
+  private final Queue<AsyncEvent> processableEvents = new LinkedList<>();
 
   /**
    * Mark the given key as unblocked and free up the next record with
@@ -93,27 +46,26 @@ public class SchedulingQueue<KIn> {
    * Called upon the finalization of an async event with the given input key
    */
   public void unblockKey(final KIn key) {
+    final KeyStatus keyStatus = getOrCreateKeyStatus(key);
+    if (!keyStatus.isBlocked()) {
+      throw new IllegalStateException("Attempted to unblock a key but it was not blocked");
+    }
 
+    final AsyncEvent nextProcessableEvent = keyStatus.nextEvent();
+    if (nextProcessableEvent != null) {
+      // If there are blocked events waiting, promote one but don't unblock
+      processableEvents.offer(nextProcessableEvent);
+    } else {
+      keyStatus.unblock();
+    }
   }
 
   /**
    * @return whether there are any remaining records in the queue which are currently
    *         ready for processing
-   *         Note: this differs from {@link #isEmpty()} in that it tests whether there
-   *         are processable records, so it's possible for #isEmpty to return false
-   *         while this also returns false
    */
   public boolean hasProcessableRecord() {
-    return nextProcessableRecordNode() != null;
-  }
-
-  /**
-   * @return true iff there are any pending records, whether or not they're processable
-   *         If you want to know if there are any available records that are actually
-   *         ready for processing, use {@link #hasProcessableRecord()} instead
-   */
-  public boolean isEmpty() {
-    return head == tail;
+    return !processableEvents.isEmpty();
   }
 
   /**
@@ -124,10 +76,7 @@ public class SchedulingQueue<KIn> {
    *         or {@code null} if there are no processable records
    */
   public AsyncEvent poll() {
-    final EventNode nextProcessableRecordNode = nextProcessableRecordNode();
-    return nextProcessableRecordNode != null
-        ? nextProcessableRecordNode.asyncEvent
-        : null;
+    return processableEvents.poll();
   }
 
   /**
@@ -136,64 +85,61 @@ public class SchedulingQueue<KIn> {
    * in other words, excluding those that are awaiting previous same-key records to complete.
    */
   public void offer(
-      final AsyncEvent newAsyncEvent
+      final AsyncEvent event
   ) {
-    addToTail(newAsyncEvent);
+    final KeyStatus keyStatus = getOrCreateKeyStatus(event.inputKey());
+    if (keyStatus.isBlocked()) {
+      keyStatus.addBlockedEvent(event);
+    } else {
+      keyStatus.block();
+      processableEvents.offer(event);
+    }
   }
 
-  private EventNode nextProcessableRecordNode() {
-    EventNode current = head.next;
-    while (current != tail) {
+  private KeyStatus getOrCreateKeyStatus(final KIn key) {
+    return blockedEvents.computeIfAbsent(key, k -> new KeyStatus());
+  }
 
-      if (canBeScheduled(current)) {
-        remove(current);
+  /**
+   * Tracks the blocked events waiting to be scheduled and the current status
+   * of this key, ie whether there is an in-flight event of the same key that
+   * is currently blocking other events from being scheduled.
+   * <p>
+   * A KeyStatus, and all events with that input key, are considered blocked
+   * if there is an async event currently in-flight with this key. An
+   * event is "in-flight" from the moment it leaves the blockedEvents queue
+   * until the moment it is finalized and marked done. An event that is in
+   * the processableEvents queue but has not yet been pulled from the
+   * SchedulingQueue and passed on to the AsyncThreadPool is still considered
+   * to be "in-flight", and should block any other events with that key from
+   * being added to the processableEvents queue.
+   */
+  private static class KeyStatus {
+    private final Queue<AsyncEvent> blockedEvents = new LinkedList<>();
+    private boolean hasInFlightEvent = false;
 
-        return current;
-      } else {
-        current = current.next;
+    private boolean isBlocked() {
+      return hasInFlightEvent;
+    }
+
+    private void unblock() {
+      hasInFlightEvent = false;
+    }
+
+    private void block() {
+      hasInFlightEvent = true;
+    }
+
+    private AsyncEvent nextEvent() {
+      return blockedEvents.poll();
+    }
+
+    private void addBlockedEvent(final AsyncEvent event) {
+      if (!isBlocked()) {
+        throw new IllegalStateException("Attempted to add event to blocked queue, but "
+                                            + "this key is not currently blocked");
       }
+      blockedEvents.add(event);
     }
-    return null;
-  }
-
-  private void addToTail(final AsyncEvent<KIn, VIn> asyncEvent) {
-    final EventNode node = new EventNode(
-        asyncEvent,
-        canBeScheduled(asyncEvent.inputKey()),
-        tail,
-        tail.previous
-    );
-    tail.previous.next = node;
-    tail.previous = node;
-  }
-
-  private AsyncEvent remove(final EventNode node) {
-    node.next.previous = node.previous;
-    node.previous.next = node.next;
-    return node.asyncEvent;
-  }
-
-
-  private boolean canBeScheduled(final KIn eventKey) {
-    //TODO -- are there any other records scheduled ahead of this one OR a currently pending record?
-    return !inFlightNodesByKey.containsKey(eventKey);
-  }
-
-  private class EventNode {
-    private final AsyncEvent<KIn, VIn> asyncEvent;
-
-    private EventNode next;
-    private EventNode previous;
-
-    public EventNode(
-        final AsyncEvent<KIn, VIn> asyncEvent,
-        final EventNode next,
-        final EventNode previous
-    ) {
-      this.asyncEvent = asyncEvent;
-      this.next = next;
-      this.previous = previous;
-    }
-
   }
 }
