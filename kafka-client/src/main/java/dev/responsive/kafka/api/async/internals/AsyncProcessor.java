@@ -85,10 +85,12 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   private String logPrefix;
   private Logger log;
 
+  private String streamThreadName;
   private String asyncProcessorName;
   private TaskId taskId;
+
   private AsyncThreadPool threadPool;
-  private FinalizingQueue<KIn, VIn> finalizableRecords;
+  private FinalizingQueue finalizableRecords;
 
   // the context passed to us in init, ie the one that is used by Streams everywhere else
   private InternalProcessorContext<KOut, VOut> originalContext;
@@ -142,16 +144,12 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
 
   @Override
   public void init(final ProcessorContext<KOut, VOut> context) {
-    final String streamThreadName = Thread.currentThread().getName();
 
-    initFields(
-        (InternalProcessorContext<KOut, VOut>) context,
-        streamThreadName
-    );
+    initFields((InternalProcessorContext<KOut, VOut>) context);
 
     userProcessor.init(userContext);
 
-    completeInitialization(streamThreadName);
+    completeInitialization();
   }
 
   // Note: we have to cast and suppress warnings in this version of #init but
@@ -161,15 +159,12 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   @SuppressWarnings("unchecked")
   @Override
   public void init(final FixedKeyProcessorContext<KIn, VOut> context) {
-    final String streamThreadName = Thread.currentThread().getName();
 
-    initFields(
-        (InternalProcessorContext<KOut, VOut>) context,
-        streamThreadName
-    );
+    initFields((InternalProcessorContext<KOut, VOut>) context);
+
     userFixedKeyProcessor.init((FixedKeyProcessorContext<KIn, VOut>) userContext);
 
-    completeInitialization(streamThreadName);
+    completeInitialization();
   }
 
   /**
@@ -179,9 +174,9 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    *
    */
   private void initFields(
-      final InternalProcessorContext<KOut, VOut> context,
-      final String streamThreadName
+      final InternalProcessorContext<KOut, VOut> context
   ) {
+    this.streamThreadName = Thread.currentThread().getName();
     this.taskId = context.taskId();
 
     this.originalContext = context;
@@ -195,7 +190,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     );
     this.log = new LogContext(logPrefix).logger(AsyncProcessor.class);
 
-    this.finalizableRecords = new FinalizingQueue<>(asyncProcessorName, taskId.partition());
+    this.finalizableRecords = new FinalizingQueue(logPrefix);
 
     this.threadPool = getAsyncThreadPool(context, streamThreadName);
     this.threadPool.addProcessor(
@@ -228,6 +223,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     final AsyncEvent newEvent = new AsyncEvent(
         logPrefix,
         record,
+        taskId.partition(),
         originalContext.recordContext(),
         originalContext.currentStreamTimeMs(),
         originalContext.currentSystemTimeMs(),
@@ -242,6 +238,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     final AsyncEvent newEvent = new AsyncEvent(
         logPrefix,
         record,
+        taskId.partition(),
         originalContext.recordContext(),
         originalContext.currentStreamTimeMs(),
         originalContext.currentSystemTimeMs(),
@@ -272,10 +269,26 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     }
 
     threadPool.removeProcessor(taskId.partition());
+    unregisterFlushListenerForStoreBuilders(
+        streamThreadName,
+        taskId.partition(),
+        connectedStoreBuilders.values()
+    );
+
     // Tell the user context to turn off processing mode so it knows to expect no
     // further calls from an AsyncThread after this
     userContext.endProcessingMode();
     userProcessor.close();
+  }
+
+  private static void unregisterFlushListenerForStoreBuilders(
+      final String streamThreadName,
+      final int partition,
+      final Collection<AsyncStoreBuilder<?>> asyncStoreBuilders
+  ) {
+    for (final AsyncStoreBuilder<?> builder : asyncStoreBuilders) {
+      builder.unregisterFlushListenerForPartition(streamThreadName, partition);
+    }
   }
 
   private static void registerFlushListenerForStoreBuilders(

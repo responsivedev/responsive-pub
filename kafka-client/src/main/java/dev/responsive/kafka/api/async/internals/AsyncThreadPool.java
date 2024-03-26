@@ -19,7 +19,7 @@ package dev.responsive.kafka.api.async.internals;
 import dev.responsive.kafka.api.async.internals.contexts.AsyncThreadProcessorContext;
 import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
 import dev.responsive.kafka.api.async.internals.queues.FinalizingQueue;
-import dev.responsive.kafka.api.async.internals.queues.MultiplexBlockingQueue;
+import dev.responsive.kafka.api.async.internals.queues.ProcessingQueue;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.common.utils.LogContext;
@@ -40,7 +40,7 @@ public class AsyncThreadPool {
   // TODO: start up new threads when existing ones die to maintain the target size
   private final int threadPoolSize;
   private final Map<String, AsyncThread> threadPool;
-  private final MultiplexBlockingQueue processingQueue;
+  private final ProcessingQueue processingQueue;
 
   public AsyncThreadPool(
       final String streamThreadName,
@@ -53,7 +53,7 @@ public class AsyncThreadPool {
     this.logPrefix = new LogContext(String.format("stream-thread [%s]", streamThreadName));
     this.log = logPrefix.logger(AsyncThreadPool.class);
 
-    this.processingQueue = new MultiplexBlockingQueue(logPrefix);
+    this.processingQueue = new ProcessingQueue(logPrefix);
   }
 
   public void startThreads() {
@@ -75,7 +75,7 @@ public class AsyncThreadPool {
   public void addProcessor(
       final int partition,
       final InternalProcessorContext<?, ?> originalContext,
-      final FinalizingQueue<?, ?> finalizingQueue
+      final FinalizingQueue finalizingQueue
   ) {
     processingQueue.addPartition(partition);
 

@@ -29,6 +29,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
@@ -36,7 +37,8 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 // TODO:
 //  1) make sure we're resolving serdes correctly in terms of raw vs timestamped values
 //  2) test with passing in null serdes to builder
-public class AsyncTimestampedKeyValueStoreBuilder<K, V> extends TimestampedKeyValueStoreBuilder<K, V>
+public class AsyncTimestampedKeyValueStoreBuilder<K, V>
+    extends AbstractStoreBuilder<K, ValueAndTimestamp<V>, TimestampedKeyValueStore<K, V>>
     implements AsyncStoreBuilder<TimestampedKeyValueStore<K, V>> {
 
   private final KeyValueBytesStoreSupplier storeSupplier;
@@ -45,7 +47,7 @@ public class AsyncTimestampedKeyValueStoreBuilder<K, V> extends TimestampedKeyVa
   private final ValueAndTimestampSerde<V> valueSerde;
   private final Time time;
 
-  // Since there is only StoreBuilder instance for each store, it is used by all of the
+  // Since there is only one StoreBuilder instance for each store, it is used by all of the
   // StreamThreads in an app, and so we must account for which StreamThread is building
   // or accessing which stores
   private final Map<String, StreamThreadFlushListeners> streamThreadToFlushListeners =
@@ -55,7 +57,6 @@ public class AsyncTimestampedKeyValueStoreBuilder<K, V> extends TimestampedKeyVa
   public AsyncTimestampedKeyValueStoreBuilder(
       final ResponsiveStoreBuilder<?, ?, ?> responsiveBuilder
   ) {
-    this(
         (ResponsiveStoreBuilder<K, ValueAndTimestamp<V>, TimestampedKeyValueStore<K, V>>) responsiveBuilder,
         (KeyValueBytesStoreSupplier) responsiveBuilder.storeSupplier(),
         ((ResponsiveStoreBuilder<K, ValueAndTimestamp<V>, TimestampedKeyValueStore<K, V>>) responsiveBuilder).keySerde(),
@@ -71,7 +72,7 @@ public class AsyncTimestampedKeyValueStoreBuilder<K, V> extends TimestampedKeyVa
       final Serde<V> valueSerde,
       final Time time
   ) {
-    super(storeSupplier, keySerde, valueSerde, time);
+    super(storeBuilder.name(), keySerde, valueSerde, time);
     this.storeSupplier = storeSupplier;
     this.storeBuilder = storeBuilder;
     this.keySerde = keySerde;
@@ -122,16 +123,18 @@ public class AsyncTimestampedKeyValueStoreBuilder<K, V> extends TimestampedKeyVa
     threadListeners.unregisterListenerForPartition(partition);
   }
 
-  // When a StreamThread creates a newly-assigned tasks, it firsts builds the subtopology
-  // which always starts by building the Processor instance itself (from ProcessorSupplier#get)
-  // and then goes on to build any state stores, ie invoking this call
-  // This means we can rely on the Processor to
   @Override
   public TimestampedKeyValueStore<K, V> build() {
+    final KeyValueStore<Bytes, byte[]> store = storeSupplier.get();
+    if (!(store instanceof TimestampedBytesStore)) {
+      throw new IllegalStateException("Timestamped store builder expects store supplier to provide"
+                                          + "store that implements TimestampedBytesStore");
+    }
+
     return new MeteredTimestampedKeyValueStore<>(
         wrapAsyncFlushing(
             maybeWrapCaching(
-                maybeWrapLogging(storeSupplier.get()))
+                maybeWrapLogging(store))
         ),
         storeSupplier.metricsScope(),
         time,

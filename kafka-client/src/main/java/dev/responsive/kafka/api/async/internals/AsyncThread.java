@@ -18,9 +18,8 @@ package dev.responsive.kafka.api.async.internals;
 
 import dev.responsive.kafka.api.async.internals.contexts.AsyncThreadProcessorContext;
 import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
-import dev.responsive.kafka.api.async.internals.queues.MultiplexBlockingQueue;
+import dev.responsive.kafka.api.async.internals.queues.ProcessingQueue;
 import java.io.Closeable;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -33,10 +32,10 @@ public class AsyncThread extends Thread implements Closeable {
 
   private final AtomicBoolean shutdownRequested = new AtomicBoolean(false);
 
-  private final MultiplexBlockingQueue processingQueue;
+  private final ProcessingQueue processingQueue;
   private final Map<Integer, AsyncNodeContainer> nodeIdToContainer;
 
-  public AsyncThread(final String name, final MultiplexBlockingQueue processingQueue) {
+  public AsyncThread(final String name, final ProcessingQueue processingQueue) {
     super(name);
     this.log = new LogContext(String.format("async-thread [%s] ", name)).logger(AsyncThread.class);
 

@@ -18,7 +18,6 @@ package dev.responsive.kafka.api.async.internals;
 
 import dev.responsive.kafka.api.async.internals.contexts.AsyncThreadProcessorContext;
 import dev.responsive.kafka.api.async.internals.queues.FinalizingQueue;
-import dev.responsive.kafka.api.async.internals.queues.MultiplexBlockingQueue;
 
 /**
  * A simple container for all the "stuff" that's owned by and used for a
@@ -42,13 +41,13 @@ public final class AsyncNodeContainer {
 
   // Data structures owned by/unique to this specific node/partition
   private final AsyncThreadProcessorContext<?, ?> asyncContext;
-  private final FinalizingQueue<?, ?> finalizingQueue;
+  private final FinalizingQueue finalizingQueue;
 
   public AsyncNodeContainer(
       final String streamThreadName,
       final int partition,
       final AsyncThreadProcessorContext<?, ?> asyncContext,
-      final FinalizingQueue<?, ?> finalizingQueue
+      final FinalizingQueue finalizingQueue
   ) {
     this.streamThreadName = streamThreadName;
     this.partition = partition;
@@ -68,7 +67,7 @@ public final class AsyncNodeContainer {
     return asyncContext;
   }
 
-  public FinalizingQueue<?, ?> finalizingQueue() {
+  public FinalizingQueue finalizingQueue() {
     return finalizingQueue;
   }
 

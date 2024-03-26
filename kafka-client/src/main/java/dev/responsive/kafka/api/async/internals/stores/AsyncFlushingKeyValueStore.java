@@ -120,23 +120,17 @@ public class AsyncFlushingKeyValueStore
   }
 
   /**
-   * Clear the cache; this is used when a task/store is changed in such a way
-   * that the cache is invalidated/out of date, such as when an active task
-   * is recycled into a standby (since only active task stores get a Streams cache)
-   * <p>
-   * Note this call should not try to flush the cache, and it's assumed that the cache
-   * has already been flushed and thus does not contain any dirty and
-   * unwritten/unprocessed pending entries
-   * <p>
-   * Note to self: the Streams javadocs claim this method is a "hack" and will be removed
-   * when we decouple caching from emitting in the future. We should keep an eye on this
-   * but that entails a huge refactor that is unlikely to happen any time soon. Perhaps
-   * more relevantly, a Responsive store should never be transitioned from active to standby,
-   * so this should really never be called -- at least not when using Responsive.
+   * Used by Streams to clear the cache (without flushing) when a task is transitioning
+   * from active to standby and the state stores are being recycled. Standby tasks
+   * have no caching layer, so Streams simply clears the cache here in case the
+   * task is re-recycled back into an active task and the caching layer is revived.
    */
   @Override
   public void clearCache() {
-    super.clearCache();
+    // this is technically a Responsive-specific constraint, and should be relaxed if we open
+    // up the async framework to general use cases
+    throw new IllegalStateException("Attempted to clear cache of async store, this implies "
+                                        + "the task is transitioning to standby which should not happen");
   }
 
   @Override

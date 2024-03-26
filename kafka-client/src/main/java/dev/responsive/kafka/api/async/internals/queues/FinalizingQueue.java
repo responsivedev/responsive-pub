@@ -38,16 +38,13 @@ import org.slf4j.Logger;
  * -One per physical AsyncProcessor instance
  *   (ie per logical processor per partition per StreamThread)
  */
-public class FinalizingQueue<KIn, VIn> {
+public class FinalizingQueue {
 
   private final Logger log;
+  private final BlockingQueue<AsyncEvent> finalizableRecords = new LinkedBlockingQueue<>();
 
-  private final BlockingQueue<AsyncEvent<KIn, VIn>> finalizableRecords = new LinkedBlockingQueue<>();
-
-  public FinalizingQueue(final String asyncProcessorName, final int partition) {
-    this.log = new LogContext(
-        String.format("finalizing-queue [%s-%d]", asyncProcessorName, partition)
-    ).logger(dev.responsive.kafka.api.async.internals.queues.FinalizingQueue.class);
+  public FinalizingQueue(final String logPrefix) {
+    this.log = new LogContext(logPrefix).logger(FinalizingQueue.class);
   }
 
   /**
@@ -56,16 +53,15 @@ public class FinalizingQueue<KIn, VIn> {
    * <p>
    * To be executed by the StreamThread only
    */
-  @SuppressWarnings("unchecked")
   public void scheduleForFinalization(
-      final AsyncEvent<?, ?> processedEvent
+      final AsyncEvent processedEvent
   ) {
     // Transition to OUTPUT_READY to signal that the event is done with processing
     // and is currently awaiting finalization by the StreamThread
     processedEvent.transitionToOutputReady();
 
     try {
-      finalizableRecords.put((AsyncEvent<KIn, VIn>) processedEvent);
+      finalizableRecords.put(processedEvent);
     } catch (final InterruptedException e) {
       // Just throw an exception for now to ensure shutdown occurs
       log.info("Interrupted while attempting to schedule an event for finalization");
@@ -80,7 +76,7 @@ public class FinalizingQueue<KIn, VIn> {
    * <p>
    * To be executed by an AsyncThread only.
    */
-  public AsyncEvent<KIn, VIn> nextFinalizableEvent() {
+  public AsyncEvent nextFinalizableEvent() {
     try {
       return finalizableRecords.take();
     } catch (final InterruptedException e) {

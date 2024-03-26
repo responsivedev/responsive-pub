@@ -126,9 +126,9 @@ public class StreamThreadFlushListeners {
    * <p>
    * Note: this method is idempotent and safe to call on a partition for which the
    * listener was already retrieved and removed from the map. This allows the
-   * processor to safely unregister partitions when a task/store is closed, without
-   * having to keep track of whether the store was initialized with its listener
-   * already or not.
+   * processor to safely unregister partitions when a processor is closed, without
+   * having to keep track of whether each of its stores were initialized with a
+   * listener before being closed.
    */
   public void unregisterListenerForPartition(
       final int partition

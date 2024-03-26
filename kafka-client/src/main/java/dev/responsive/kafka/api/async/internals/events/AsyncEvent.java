@@ -16,11 +16,13 @@
 
 package dev.responsive.kafka.api.async.internals.events;
 
+import static dev.responsive.kafka.api.async.internals.Utils.processorRecordContextHashCode;
 import static dev.responsive.kafka.internal.utils.Utils.processorRecordContextHashCode;
 
 import dev.responsive.kafka.api.async.internals.AsyncProcessor;
 import dev.responsive.kafka.api.async.internals.contexts.AsyncThreadProcessorContext;
 import java.util.LinkedList;
+import java.util.Objects;
 import java.util.Queue;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.api.FixedKeyRecord;
@@ -108,10 +110,11 @@ public class AsyncEvent {
   private State currentState;
 
   private final Object inputRecordKey;
-
-  private final ProcessorRecordContext recordContext; // may be null if punctuator-created
+  private final int partition;
   private final long systemTime;
   private final long streamTime;
+
+  private final ProcessorRecordContext recordContext; // may be null if punctuator-created
 
   private final Runnable processInputRecord;
 
@@ -121,6 +124,7 @@ public class AsyncEvent {
   public AsyncEvent(
       final String logPrefix,
       final Record<?, ?> inputRecord,
+      final int partition,
       final ProcessorRecordContext recordContext,
       final long currentStreamTime,
       final long currentSystemTime,
@@ -128,9 +132,10 @@ public class AsyncEvent {
   ) {
     this.currentState = State.SCHEDULING;
     this.inputRecordKey = inputRecord.key();
-    this.recordContext = recordContext;
+    this.partition = partition;
     this.streamTime = currentStreamTime;
     this.systemTime = currentSystemTime;
+    this.recordContext = recordContext;
     this.processInputRecord = processInputRecord;
 
     if (recordContext == null) {
@@ -145,6 +150,7 @@ public class AsyncEvent {
   public AsyncEvent(
       final String logPrefix,
       final FixedKeyRecord<?, ?> fixedKeyInputRecord,
+      final int partition,
       final ProcessorRecordContext recordContext,
       final long currentStreamTime,
       final long currentSystemTime,
@@ -152,9 +158,10 @@ public class AsyncEvent {
   ) {
     this.currentState = State.SCHEDULING;
     this.inputRecordKey = fixedKeyInputRecord.key();
-    this.recordContext = recordContext;
+    this.partition = partition;
     this.streamTime = currentStreamTime;
     this.systemTime = currentSystemTime;
+    this.recordContext = recordContext;
     this.processInputRecord = processInputRecord;
 
     if (recordContext == null) {
@@ -262,7 +269,7 @@ public class AsyncEvent {
   }
 
   public int partition() {
-    return recordContext.partition();
+    return partition;
   }
 
   @SuppressWarnings("unchecked")
@@ -281,36 +288,28 @@ public class AsyncEvent {
 
     final AsyncEvent that = (AsyncEvent) o;
 
-    if (!log.equals(that.log)) {
+    if (partition != that.partition) {
       return false;
     }
-    if (currentState != that.currentState) {
+    if (systemTime != that.systemTime) {
+      return false;
+    }
+    if (streamTime != that.streamTime) {
       return false;
     }
     if (!inputRecordKey.equals(that.inputRecordKey)) {
       return false;
     }
-    if (!recordContext.equals(that.recordContext)) {
-      return false;
-    }
-    if (!processInputRecord.equals(that.processInputRecord)) {
-      return false;
-    }
-    if (!outputForwards.equals(that.outputForwards)) {
-      return false;
-    }
-    return outputWrites.equals(that.outputWrites);
+    return Objects.equals(recordContext, that.recordContext);
   }
 
   @Override
   public int hashCode() {
-    int result = log.hashCode();
-    result = 31 * result + currentState.hashCode();
-    result = 31 * result + inputRecordKey.hashCode();
-    result = 31 * result + processorRecordContextHashCode(recordContext, true);
-    result = 31 * result + processInputRecord.hashCode();
-    result = 31 * result + outputForwards.hashCode();
-    result = 31 * result + outputWrites.hashCode();
+    int result = inputRecordKey.hashCode();
+    result = 31 * result + partition;
+    result = 31 * result + (int) (systemTime ^ (systemTime >>> 32));
+    result = 31 * result + (int) (streamTime ^ (streamTime >>> 32));
+    result = 31 * result + (recordContext != null ? processorRecordContextHashCode(recordContext, false) : 0);
     return result;
   }
 }

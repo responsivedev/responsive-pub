@@ -37,12 +37,14 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.StoreQueryUtils;
 import org.slf4j.Logger;
 
-public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
+public class ResponsiveWindowStore
+    implements WindowStore<Bytes, byte[]>, TimestampedBytesStore {
   private final Logger log;
 
   private final ResponsiveWindowParams params;
