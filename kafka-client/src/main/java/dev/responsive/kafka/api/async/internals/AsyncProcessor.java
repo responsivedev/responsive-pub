@@ -200,7 +200,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     );
   }
 
-  private void completeInitialization(final String streamThreadName) {
+  private void completeInitialization() {
     // Set the user's context to processing mode so it knows to expect any calls after
     // this point to come from the AsyncThread that is processing the event
     userContext.startProcessingMode();
@@ -250,7 +250,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
 
   private void processInternal(final AsyncEvent event) {
     inFlightEvents.add(event);
-    schedulingQueue.put(event);
+    schedulingQueue.offer(event);
 
     executeAvailableEvents();
   }
@@ -371,25 +371,24 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   private void finalizeEvent(final AsyncEvent event) {
     event.transitionToFinalizing();
 
-    while (!event.isDone()) {
+    DelayedWrite<?, ?> nextDelayedWrite = event.nextWrite();
+    DelayedForward<KOut, VOut> nextDelayedForward = event.nextForward();
+    while (nextDelayedWrite != null || nextDelayedForward != null) {
 
-      final DelayedWrite<?, ?> delayedWrite = event.nextWrite();
-      final boolean hasDelayedWrite = delayedWrite != null;
-      if (hasDelayedWrite) {
-        streamThreadContext.executeDelayedWrite(delayedWrite);
+      if (nextDelayedWrite != null) {
+        streamThreadContext.executeDelayedWrite(nextDelayedWrite);
       }
 
-      final DelayedForward<KOut, VOut> delayedForward = event.nextForward();
-      final boolean hasDelayedForward = delayedForward != null;
 
-      if (hasDelayedForward) {
-        streamThreadContext.executeDelayedForward(delayedForward);
+      if (nextDelayedForward != null) {
+        streamThreadContext.executeDelayedForward(nextDelayedForward);
       }
 
-      if (!hasDelayedWrite && !hasDelayedForward) {
-        event.transitionToDone();
-      }
+      nextDelayedWrite = event.nextWrite();
+      nextDelayedForward = event.nextForward();
     }
+    event.transitionToDone();
+    schedulingQueue.unblockKey(event.inputKey());
   }
 
   /**

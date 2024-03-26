@@ -17,9 +17,10 @@
 package dev.responsive.kafka.api.async.internals.queues;
 
 import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
-import dev.responsive.kafka.api.async.internals.events.ScheduleableRecord;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 // TODO:
 //  1) implement predicate/isProcessable checking,
@@ -42,7 +43,7 @@ import java.util.Map;
  * -One per physical AsyncProcessor instance
  *   (ie per logical processor per partition per StreamThread)
  */
-public class SchedulingQueue<KIn, VIn> {
+public class SchedulingQueue<KIn> {
 
   /**
    * TODO: idea
@@ -76,6 +77,7 @@ public class SchedulingQueue<KIn, VIn> {
   private final EventNode head;
   private final EventNode tail;
   private final Map<KIn, EventNode> inFlightNodesByKey = new HashMap<>();
+  private final Set<KIn> blockedKeys = new HashSet<>();
 
   public SchedulingQueue() {
     this.head = new EventNode(null, null, null);
@@ -83,6 +85,15 @@ public class SchedulingQueue<KIn, VIn> {
 
     head.next = tail;
     tail.previous = head;
+  }
+
+  /**
+   * Mark the given key as unblocked and free up the next record with
+   * the same key that's waiting to be scheduled.
+   * Called upon the finalization of an async event with the given input key
+   */
+  public void unblockKey(final KIn key) {
+
   }
 
   /**
@@ -112,11 +123,22 @@ public class SchedulingQueue<KIn, VIn> {
    * @return the next available event that is ready for processing
    *         or {@code null} if there are no processable records
    */
-  public AsyncEvent<KIn, VIn> poll() {
+  public AsyncEvent poll() {
     final EventNode nextProcessableRecordNode = nextProcessableRecordNode();
     return nextProcessableRecordNode != null
         ? nextProcessableRecordNode.asyncEvent
         : null;
+  }
+
+  /**
+   * Add a new input record to the queue. Records will be processing in modified FIFO
+   * order; essentially picking up the next oldest record that is ready to be processed,
+   * in other words, excluding those that are awaiting previous same-key records to complete.
+   */
+  public void offer(
+      final AsyncEvent newAsyncEvent
+  ) {
+    addToTail(newAsyncEvent);
   }
 
   private EventNode nextProcessableRecordNode() {
@@ -132,17 +154,6 @@ public class SchedulingQueue<KIn, VIn> {
       }
     }
     return null;
-  }
-
-  /**
-   * Add a new input record to the queue. Records will be processing in modified FIFO
-   * order; essentially picking up the next oldest record that is ready to be processed,
-   * in other words, excluding those that are awaiting previous same-key records to complete.
-   */
-  public void put(
-      final AsyncEvent<KIn, VIn> newAsyncEvent
-  ) {
-    addToTail(newAsyncEvent);
   }
 
   private void addToTail(final AsyncEvent<KIn, VIn> asyncEvent) {

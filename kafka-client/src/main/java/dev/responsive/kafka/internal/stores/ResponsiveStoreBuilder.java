@@ -30,7 +30,8 @@ public class ResponsiveStoreBuilder<K, V, T extends StateStore> implements Store
   private final StoreSupplier<?> userStoreSupplier;
   private final StoreBuilder<T> userStoreBuilder;
   private final Serde<K> keySerde;
-  private final Serde<V> valueSerde;
+  // Note: the valueSerde is not necessary of type V, eg in case of timestamped stores
+  private final Serde<?> valueSerde;
   private final Time time;
   private final boolean truncateChangelog;
 
@@ -49,7 +50,7 @@ public class ResponsiveStoreBuilder<K, V, T extends StateStore> implements Store
       final StoreSupplier<?> userStoreSupplier,
       final StoreBuilder<T> userStoreBuilder,
       final Serde<K> keySerde,
-      final Serde<V> valueSerde,
+      final Serde<?> valueSerde,
       final boolean truncateChangelog
   ) {
     // the time parameter only exists for Streams unit tests and in non-testing code
@@ -70,7 +71,7 @@ public class ResponsiveStoreBuilder<K, V, T extends StateStore> implements Store
       final StoreSupplier<?> userStoreSupplier,
       final StoreBuilder<T> userStoreBuilder,
       final Serde<K> keySerde,
-      final Serde<V> valueSerde,
+      final Serde<?> valueSerde,
       final Time time,
       final boolean truncateChangelog
   ) {
@@ -99,8 +100,12 @@ public class ResponsiveStoreBuilder<K, V, T extends StateStore> implements Store
     return keySerde;
   }
 
-  public Serde<V> valueSerde() {
-    return valueSerde;
+  // For timestamped stores, this will be the serde for the inner value type
+  // which will not be the same type as V, which is the store's actual V type
+  // (and would actually be TimestampAndValue<VInner> for timestamped stores)
+  @SuppressWarnings("unchecked")
+  public <VInner> Serde<VInner> innerValueSerde() {
+    return (Serde<VInner>) valueSerde;
   }
 
   public Time time() {

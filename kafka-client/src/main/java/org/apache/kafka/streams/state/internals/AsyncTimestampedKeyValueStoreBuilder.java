@@ -19,7 +19,6 @@ package org.apache.kafka.streams.state.internals;
 import dev.responsive.kafka.api.async.internals.stores.AsyncFlushingKeyValueStore;
 import dev.responsive.kafka.api.async.internals.stores.StreamThreadFlushListeners;
 import dev.responsive.kafka.api.async.internals.stores.StreamThreadFlushListeners.AsyncFlushListener;
-import dev.responsive.kafka.api.async.internals.stores.StreamThreadFlushListeners.UninitializedFlushListeners;
 import dev.responsive.kafka.api.async.internals.stores.AsyncStoreBuilder;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreBuilder;
 import java.util.Map;
@@ -33,19 +32,20 @@ import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
-
-// TODO:
-//  1) make sure we're resolving serdes correctly in terms of raw vs timestamped values
-//  2) test with passing in null serdes to builder
+/**
+ * Essentially a copy of the {@link TimestampedKeyValueStoreBuilder} class that
+ * allows us to inject an additional layer, the {@link AsyncFlushingKeyValueStore}.
+ * We also use this builder to coordinate between the async processor (which is
+ * responsible for creating this builder) and the async flushing store (which is
+ * created by this builder).
+ */
 public class AsyncTimestampedKeyValueStoreBuilder<K, V>
     extends AbstractStoreBuilder<K, ValueAndTimestamp<V>, TimestampedKeyValueStore<K, V>>
     implements AsyncStoreBuilder<TimestampedKeyValueStore<K, V>> {
 
   private final KeyValueBytesStoreSupplier storeSupplier;
-  private final ResponsiveStoreBuilder<K, ValueAndTimestamp<V>, TimestampedKeyValueStore<K, V>> storeBuilder;
-  private final Serde<K> keySerde;
-  private final ValueAndTimestampSerde<V> valueSerde;
-  private final Time time;
+  private final boolean cachingEnabled;
+  private final boolean loggingEnabled;
 
   // Since there is only one StoreBuilder instance for each store, it is used by all of the
   // StreamThreads in an app, and so we must account for which StreamThread is building
@@ -57,27 +57,33 @@ public class AsyncTimestampedKeyValueStoreBuilder<K, V>
   public AsyncTimestampedKeyValueStoreBuilder(
       final ResponsiveStoreBuilder<?, ?, ?> responsiveBuilder
   ) {
-        (ResponsiveStoreBuilder<K, ValueAndTimestamp<V>, TimestampedKeyValueStore<K, V>>) responsiveBuilder,
+    this(
         (KeyValueBytesStoreSupplier) responsiveBuilder.storeSupplier(),
         ((ResponsiveStoreBuilder<K, ValueAndTimestamp<V>, TimestampedKeyValueStore<K, V>>) responsiveBuilder).keySerde(),
-        ((ResponsiveStoreBuilder<K, ValueAndTimestamp<V>, TimestampedKeyValueStore<K, V>>) responsiveBuilder).valueSerde(),
-        responsiveBuilder.time()
+        responsiveBuilder.innerValueSerde(),
+        responsiveBuilder.time(),
+        responsiveBuilder.cachingEnabled(),
+        responsiveBuilder.loggingEnabled()
     );
   }
 
   private AsyncTimestampedKeyValueStoreBuilder(
-      final ResponsiveStoreBuilder<K, ValueAndTimestamp<V>, TimestampedKeyValueStore<K, V>> storeBuilder,
       final KeyValueBytesStoreSupplier storeSupplier,
       final Serde<K> keySerde,
       final Serde<V> valueSerde,
-      final Time time
+      final Time time,
+      final boolean cachingEnabled,
+      final boolean loggingEnabled
   ) {
-    super(storeBuilder.name(), keySerde, valueSerde, time);
+    super(
+        storeSupplier.name(),
+        keySerde,
+        valueSerde == null ? null : new ValueAndTimestampSerde<>(valueSerde),
+        time
+    );
     this.storeSupplier = storeSupplier;
-    this.storeBuilder = storeBuilder;
-    this.keySerde = keySerde;
-    this.valueSerde = valueSerde == null ? null : new ValueAndTimestampSerde<>(valueSerde);
-    this.time = time;
+    this.cachingEnabled = cachingEnabled;
+    this.loggingEnabled = loggingEnabled;
   }
 
   @Override
@@ -151,14 +157,14 @@ public class AsyncTimestampedKeyValueStoreBuilder<K, V>
   }
 
   private KeyValueStore<Bytes, byte[]> maybeWrapCaching(final KeyValueStore<Bytes, byte[]> inner) {
-    if (!storeBuilder.cachingEnabled()) {
+    if (!cachingEnabled) {
       return inner;
     }
     return new CachingKeyValueStore(inner, true);
   }
 
   private KeyValueStore<Bytes, byte[]> maybeWrapLogging(final KeyValueStore<Bytes, byte[]> inner) {
-    if (!storeBuilder.loggingEnabled()) {
+    if (!loggingEnabled) {
       return inner;
     }
     return new ChangeLoggingTimestampedKeyValueBytesStore(inner);
