@@ -56,7 +56,7 @@ public class SchedulingQueue<KIn> {
       // If there are blocked events waiting, promote one but don't unblock
       processableEvents.offer(nextProcessableEvent);
     } else {
-      keyStatus.unblock();
+      blockedEvents.remove(key);
     }
   }
 
@@ -120,10 +120,6 @@ public class SchedulingQueue<KIn> {
 
     private boolean isBlocked() {
       return hasInFlightEvent;
-    }
-
-    private void unblock() {
-      hasInFlightEvent = false;
     }
 
     private void block() {

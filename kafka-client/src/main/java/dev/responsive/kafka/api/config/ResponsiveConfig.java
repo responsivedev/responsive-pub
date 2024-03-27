@@ -16,10 +16,12 @@
 
 package dev.responsive.kafka.api.config;
 
+import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Range.between;
 
 import com.datastax.oss.driver.api.core.ConsistencyLevel;
 import com.datastax.oss.driver.api.core.DefaultConsistencyLevel;
+import com.google.common.collect.Range;
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.internal.db.partitioning.Murmur3Hasher;
 import java.time.Duration;
@@ -412,6 +414,13 @@ public class ResponsiveConfig extends AbstractConfig {
           MONGO_COLLECTION_SHARDING_CHUNKS_DEFAULT,
           Importance.LOW,
           MONGO_COLLECTION_SHARDING_CHUNKS_DOC
+      ).define(
+          ASYNC_THREAD_POOL_SIZE_CONFIG,
+          Type.INT,
+          ASYNC_THREAD_POOL_SIZE_DEFAULT,
+          atLeast(0),
+          Importance.LOW,
+          ASYNC_THREAD_POOL_SIZE_DOC
       ).define(
           MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_CONFIG,
           Type.BOOLEAN,
