@@ -27,7 +27,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.AsyncTimestampedKeyValueStoreBuilder;
 
-public class Utils {
+public class AsyncUtils {
 
   public static Map<String, AsyncStoreBuilder<?>> initializeAsyncBuilders(
       final Set<StoreBuilder<?>> userConnectedStores
@@ -36,7 +36,8 @@ public class Utils {
     for (final StoreBuilder<?> builder : userConnectedStores) {
       final String storeName = builder.name();
       if (builder instanceof ResponsiveStoreBuilder) {
-        final ResponsiveStoreBuilder<?, ?, ?> responsiveBuilder = (ResponsiveStoreBuilder<?, ?, ?>) builder;
+        final ResponsiveStoreBuilder<?, ?, ?> responsiveBuilder =
+            (ResponsiveStoreBuilder<?, ?, ?>) builder;
 
         final StoreType storeType = responsiveBuilder.storeType();
 
@@ -53,8 +54,8 @@ public class Utils {
           storeBuilder.maybeRegisterNewStreamThread(Thread.currentThread().getName());
 
         } else {
-          throw new UnsupportedOperationException("Only timestamped key-value stores are "
-                                                      + "supported by async processors at this time");
+          throw new UnsupportedOperationException(
+              "Only timestamped key-value stores are supported by async processors at this time");
         }
       } else {
         throw new IllegalStateException(String.format(

@@ -149,15 +149,15 @@ public class AsyncThreadPool {
       processingQueue.close();
 
       for (final AsyncThread thread : threadPool.values()) {
-          try {
-            thread.join();
-          } catch (final InterruptedException e) {
-            log.warn("Interrupted while waiting on AsyncThread {} to join, will "
-                         + "skip waiting for any remaining threads to join and "
-                         + "proceed to shutdown", thread.getName());
-            Thread.currentThread().interrupt();
-          }
+        try {
+          thread.join();
+        } catch (final InterruptedException e) {
+          log.warn("Interrupted while waiting on AsyncThread {} to join, will "
+                       + "skip waiting for any remaining threads to join and "
+                       + "proceed to shutdown", thread.getName());
+          Thread.currentThread().interrupt();
         }
+      }
     });
   }
 

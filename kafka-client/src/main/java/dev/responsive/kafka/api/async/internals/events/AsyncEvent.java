@@ -16,7 +16,7 @@
 
 package dev.responsive.kafka.api.async.internals.events;
 
-import static dev.responsive.kafka.api.async.internals.Utils.processorRecordContextHashCode;
+import static dev.responsive.kafka.api.async.internals.AsyncUtils.processorRecordContextHashCode;
 
 import dev.responsive.kafka.api.async.internals.AsyncProcessor;
 import dev.responsive.kafka.api.async.internals.contexts.AsyncThreadProcessorContext;
@@ -240,16 +240,19 @@ public class AsyncEvent {
 
   public void transitionToDone() {
     if (!currentState.equals(State.FINALIZING)) {
-      log.error("[{}] Attempted to mark an async event as DONE but the event not "
-                    + "in the FINALIZING state", currentState.name());
-      throw new IllegalStateException("Cannot transition to DONE from the state "
-                                          + currentState.name());
+      log.error(
+          "[{}] Attempted to mark an async event as DONE but the event not "
+              + "in the FINALIZING state",
+          currentState.name());
+      throw new IllegalStateException(
+          "Cannot transition to DONE from the state " + currentState.name());
     } else if (!(outputForwards.isEmpty() && outputWrites.isEmpty())) {
-      log.error("[{}] Attempted to mark an async event as complete without draining all output queues"
-                    + "first. Remaining forwards={} and remaining writes={}",
-                currentState.name(), outputForwards.size(), outputWrites.size());
-      throw new IllegalStateException("Can't transition to DONE when there are still records "
-                                          + "in the output buffers");
+      log.error(
+          "[{}] Attempted to mark an async event as complete without draining all output queues"
+              + "first. Remaining forwards={} and remaining writes={}",
+          currentState.name(), outputForwards.size(), outputWrites.size());
+      throw new IllegalStateException(
+          "Can't transition to DONE when there are still records in the output buffers");
     }
 
     currentState = State.DONE;
@@ -308,7 +311,8 @@ public class AsyncEvent {
     result = 31 * result + partition;
     result = 31 * result + (int) (systemTime ^ (systemTime >>> 32));
     result = 31 * result + (int) (streamTime ^ (streamTime >>> 32));
-    result = 31 * result + (recordContext != null ? processorRecordContextHashCode(recordContext, false) : 0);
+    result = 31 * result
+        + (recordContext != null ? processorRecordContextHashCode(recordContext, false) : 0);
     return result;
   }
 }

@@ -22,9 +22,10 @@ import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
 /**
- * A class for tracking all of the {@link AsyncFlushingStore}s within a given
- * AsyncProcessor that have been created by this StreamThread, and facilitating
- * the connection between the individual AsyncFlushingStore instances and the
+ * A class for tracking all of the async flushing stores (eg
+ * {@link AsyncFlushingKeyValueStore}) within a givenAsyncProcessor that
+ * have been created by this StreamThread, and facilitating the connection
+ * between the individual AsyncFlushingStore instances and the
  * {@link AsyncFlushListener}s they need in order to hook into the correct
  * AsyncProcessor instance and flush it during a commit.
  * <p>
@@ -150,9 +151,9 @@ public class StreamThreadFlushListeners {
     return listener;
   }
 
- public String streamThreadName() {
+  public String streamThreadName() {
     return streamThreadName;
- }
+  }
 
   @FunctionalInterface
   public interface AsyncFlushListener {

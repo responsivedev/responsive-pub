@@ -17,7 +17,7 @@
 package dev.responsive.kafka.api.async;
 
 import static dev.responsive.kafka.api.async.internals.AsyncProcessor.createAsyncProcessor;
-import static dev.responsive.kafka.api.async.internals.Utils.initializeAsyncBuilders;
+import static dev.responsive.kafka.api.async.internals.AsyncUtils.initializeAsyncBuilders;
 
 import dev.responsive.kafka.api.async.internals.AsyncProcessor;
 import dev.responsive.kafka.api.async.internals.stores.AsyncStoreBuilder;
@@ -39,8 +39,9 @@ import org.apache.kafka.streams.state.StoreBuilder;
  * Instructions:
  * 1) Simply wrap your regular {@link ProcessorSupplier} or {@link FixedKeyProcessorSupplier}
  *    in the async supplier by passing it into the static constructor for the corresponding
- *    async processor supplier class, ie {@link #createAsyncProcessorSupplier(ProcessorSupplier)}
- *    or {@link AsyncFixedKeyProcessorSupplier#createAsyncProcessorSupplier(FixedKeyProcessorSupplier)}
+ *    async processor supplier class, ie
+ *    {@link #createAsyncProcessorSupplier(ProcessorSupplier)} or
+ *    {@link AsyncFixedKeyProcessorSupplier#createAsyncProcessorSupplier(FixedKeyProcessorSupplier)}
  *    You can then turn on async processing by passing in the {@link AsyncProcessorSupplier}
  *    or {@link AsyncFixedKeyProcessorSupplier} to your application and
  *    substituting it into the topology wherever you were previously
@@ -116,7 +117,8 @@ import org.apache.kafka.streams.state.StoreBuilder;
  *    enable async processing for a single node in the topology, which must be expressed as a
  *    {@link Processor} and requires at least one state store be connected.
  */
-public final class AsyncProcessorSupplier<KIn, VIn, KOut, VOut> implements ProcessorSupplier<KIn, VIn, KOut, VOut> {
+public final class AsyncProcessorSupplier<KIn, VIn, KOut, VOut>
+    implements ProcessorSupplier<KIn, VIn, KOut, VOut> {
 
   private final ProcessorSupplier<KIn, VIn, KOut, VOut> userProcessorSupplier;
   private final Map<String, AsyncStoreBuilder<?>> asyncStoreBuilders;
@@ -130,6 +132,7 @@ public final class AsyncProcessorSupplier<KIn, VIn, KOut, VOut> implements Proce
    *                          of your custom {@link Processor} on each invocation of
    *                          {@link ProcessorSupplier#get}
    */
+  @SuppressWarnings("checkstyle:linelength")
   public static <KIn, VIn, KOut, VOut> AsyncProcessorSupplier<KIn, VIn, KOut, VOut> createAsyncProcessorSupplier(
       final ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier
   ) {
@@ -141,9 +144,10 @@ public final class AsyncProcessorSupplier<KIn, VIn, KOut, VOut> implements Proce
       final Set<StoreBuilder<?>> userStoreBuilders
   ) {
     if (userStoreBuilders == null || userStoreBuilders.isEmpty()) {
-      throw new UnsupportedOperationException("Async processing currently requires "
-                                                  + "at least one state store be connected to the async processor, and that "
-                                                  + "stores be connected by implementing the #stores method in your processor supplier");
+      throw new UnsupportedOperationException(
+          "Async processing currently requires at least one state store be "
+              + "connected to the async processor, and that stores be connected "
+              + "by implementing the #stores method in your processor supplier");
     }
 
     this.userProcessorSupplier = userProcessorSupplier;

@@ -149,7 +149,7 @@ public class AsyncThreadProcessorContext<KOut, VOut>
     // If this method is hit we can assume the user invoked it from their
     // #process method, instead of during #init as intended, since this context
     // type is only accessed by AsyncThreads which only invoke #process
-    throw new IllegalStateException("Must initialize state stores during the Processor's #init method");
+    throw new IllegalStateException("Must call #getStateStore during the Processor's #init method");
   }
 
   @Override

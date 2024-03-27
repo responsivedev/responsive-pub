@@ -50,6 +50,7 @@ public class AsyncKeyValueStore<KS, VS> implements KeyValueStore<KS, VS> {
 
   private final Logger log;
 
+  private final int partition;
   private final KeyValueStore<KS, VS> userDelegate;
 
   @SuppressWarnings("unchecked")
@@ -62,6 +63,7 @@ public class AsyncKeyValueStore<KS, VS> implements KeyValueStore<KS, VS> {
         .logger(AsyncKeyValueStore.class);
 
     this.userDelegate = (KeyValueStore<KS, VS>) userDelegate;
+    this.partition = partition;
   }
 
   public void executeDelayedWrite(final DelayedWrite<KS, VS> delayedWrite) {
@@ -82,8 +84,8 @@ public class AsyncKeyValueStore<KS, VS> implements KeyValueStore<KS, VS> {
     final Thread currentThread = Thread.currentThread();
 
     if (currentThread instanceof AsyncThread) {
-      final AsyncEvent<?, ?> currentAsyncEvent =
-          ((AsyncThread) currentThread).context().currentAsyncEvent();
+      final AsyncEvent currentAsyncEvent =
+          ((AsyncThread) currentThread).context(partition).currentAsyncEvent();
 
       currentAsyncEvent.addWrittenRecord(new DelayedWrite<>(key, value, name()));
     } else {
@@ -169,7 +171,11 @@ public class AsyncKeyValueStore<KS, VS> implements KeyValueStore<KS, VS> {
   }
 
   @Override
-  public <R> QueryResult<R> query(final Query<R> query, final PositionBound positionBound, final QueryConfig config) {
+  public <R> QueryResult<R> query(
+      final Query<R> query,
+      final PositionBound positionBound,
+      final QueryConfig config
+  ) {
     throw new UnsupportedOperationException("IQv2 not yet supported with async processing");
   }
 
@@ -185,22 +191,33 @@ public class AsyncKeyValueStore<KS, VS> implements KeyValueStore<KS, VS> {
 
   @Override
   public KeyValueIterator<KS, VS> reverseRange(final KS from, final KS to) {
-    throw new UnsupportedOperationException("#reverseRange is not yet supported with async processing");
+    throw new UnsupportedOperationException(
+        "#reverseRange is not yet supported with async processing"
+    );
   }
 
   @Override
   public KeyValueIterator<KS, VS> all() {
-    throw new UnsupportedOperationException("#all is not yet supported with async processing");
+    throw new UnsupportedOperationException(
+        "#all is not yet supported with async processing"
+    );
   }
 
   @Override
   public KeyValueIterator<KS, VS> reverseAll() {
-    throw new UnsupportedOperationException("#reverseAll is not yet supported with async processing");
+    throw new UnsupportedOperationException(
+        "#reverseAll is not yet supported with async processing"
+    );
   }
 
   @Override
-  public <PS extends Serializer<P>, P> KeyValueIterator<KS, VS> prefixScan(final P prefix, final PS prefixKeySerializer) {
-    throw new UnsupportedOperationException("#prefixScan is not yet supported with async processing");
+  public <PS extends Serializer<P>, P> KeyValueIterator<KS, VS> prefixScan(
+      final P prefix,
+      final PS prefixKeySerializer
+  ) {
+    throw new UnsupportedOperationException(
+        "#prefixScan is not yet supported with async processing"
+    );
   }
 
   @Override

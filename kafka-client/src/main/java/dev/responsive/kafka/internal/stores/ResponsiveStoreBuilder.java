@@ -55,15 +55,15 @@ public class ResponsiveStoreBuilder<K, V, T extends StateStore> implements Store
   ) {
     // the time parameter only exists for Streams unit tests and in non-testing code
     // will always hard-code Time.SYSTEM
-   this(
-       storeType,
-       userStoreSupplier,
-       userStoreBuilder,
-       keySerde,
-       valueSerde,
-       Time.SYSTEM,
-       truncateChangelog
-   );
+    this(
+        storeType,
+        userStoreSupplier,
+        userStoreBuilder,
+        keySerde,
+        valueSerde,
+        Time.SYSTEM,
+        truncateChangelog
+    );
   }
 
   public ResponsiveStoreBuilder(

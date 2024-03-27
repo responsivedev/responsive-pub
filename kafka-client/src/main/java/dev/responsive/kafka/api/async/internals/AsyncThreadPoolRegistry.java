@@ -54,11 +54,19 @@ public class AsyncThreadPoolRegistry {
    * Registers and starts up a new AsyncThreadPool for the given StreamThread
    */
   public void startNewAsyncThreadPool(final String streamThreadName) {
-    final AsyncThreadPool newThreadPool = new AsyncThreadPool(streamThreadName, asyncThreadPoolSize);
+    final AsyncThreadPool newThreadPool = new AsyncThreadPool(
+        streamThreadName, asyncThreadPoolSize
+    );
 
-    final AsyncThreadPool oldThreadPool = streamThreadToAsyncPool.put(streamThreadName, newThreadPool);
+    final AsyncThreadPool oldThreadPool = streamThreadToAsyncPool.put(
+        streamThreadName,
+        newThreadPool
+    );
     if (oldThreadPool != null) {
-      LOG.warn("Shutting down old orphaned async thread pool for StreamThread {}", streamThreadName);
+      LOG.warn(
+          "Shutting down old orphaned async thread pool for StreamThread {}",
+          streamThreadName
+      );
       oldThreadPool.shutdown();
     }
   }

@@ -17,7 +17,6 @@
 package dev.responsive.kafka.internal.clients;
 
 
-import dev.responsive.kafka.api.async.internals.AsyncThreadPoolRegistry;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
@@ -36,7 +35,7 @@ public class ResponsiveConsumer<K, V> extends DelegatingConsumer<K, V> {
   private final Logger log;
 
   private final List<Listener> listeners;
-  private final AsyncThreadPoolRegistry asyncThreadPoolRegistry;
+  private final Runnable shutdownAsyncThreadPool;
 
   private static class RebalanceListener implements ConsumerRebalanceListener {
     private final ConsumerRebalanceListener wrappedRebalanceListener;
@@ -82,14 +81,14 @@ public class ResponsiveConsumer<K, V> extends DelegatingConsumer<K, V> {
       final String clientId,
       final Consumer<K, V> delegate,
       final List<Listener> listeners,
-      final AsyncThreadPoolRegistry asyncThreadPoolRegistry
+      final Runnable shutdownAsyncThreadPool
   ) {
     super(delegate);
     this.log = new LogContext(
         String.format("responsive-consumer [%s]", Objects.requireNonNull(clientId))
     ).logger(ResponsiveConsumer.class);
     this.listeners = Objects.requireNonNull(listeners);
-    this.asyncThreadPoolRegistry = asyncThreadPoolRegistry;
+    this.shutdownAsyncThreadPool = shutdownAsyncThreadPool;
   }
 
   @Override
@@ -121,14 +120,14 @@ public class ResponsiveConsumer<K, V> extends DelegatingConsumer<K, V> {
 
   @Override
   public void close() {
-    asyncThreadPoolRegistry.shutdownAsyncThreadPool(Thread.currentThread().getName());
+    shutdownAsyncThreadPool.run();
     super.close();
     listeners.forEach(l -> ignoreException(l::onClose));
   }
 
   @Override
   public void close(final Duration timeout) {
-    asyncThreadPoolRegistry.shutdownAsyncThreadPool(Thread.currentThread().getName());
+    shutdownAsyncThreadPool.run();
     super.close(timeout);
     listeners.forEach(l -> ignoreException(l::onClose));
   }

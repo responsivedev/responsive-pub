@@ -54,6 +54,7 @@ import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListe
  * implementation class to avoid it getting too long & unwieldy.
  * <p>
  */
+@SuppressWarnings("checkstyle:overloadmethodsdeclarationorder")
 public abstract class DelegatingInternalProcessorContext<KOut, VOut>
     implements InternalProcessorContext<KOut, VOut> {
 

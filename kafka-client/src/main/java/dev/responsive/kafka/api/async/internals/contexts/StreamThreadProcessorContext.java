@@ -16,9 +16,9 @@
 
 package dev.responsive.kafka.api.async.internals.contexts;
 
-import dev.responsive.kafka.api.async.internals.stores.AsyncKeyValueStore;
 import dev.responsive.kafka.api.async.internals.events.DelayedForward;
 import dev.responsive.kafka.api.async.internals.events.DelayedWrite;
+import dev.responsive.kafka.api.async.internals.stores.AsyncKeyValueStore;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.streams.processor.StateStore;
@@ -42,7 +42,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
  *  (ie one per async processor per partition per StreamThread)
  */
 public class StreamThreadProcessorContext<KOut, VOut>
-    extends DelegatingInternalProcessorContext <KOut, VOut> {
+    extends DelegatingInternalProcessorContext<KOut, VOut> {
 
   private final Map<String, AsyncKeyValueStore<?, ?>> storeNameToAsyncStore = new HashMap<>();
   private final ProcessorNode<?, ?, ?, ?> asyncProcessorNode;

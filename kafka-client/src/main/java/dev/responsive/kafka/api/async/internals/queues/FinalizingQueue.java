@@ -18,9 +18,7 @@ package dev.responsive.kafka.api.async.internals.queues;
 
 import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
 import java.util.Queue;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.LinkedBlockingQueue;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 

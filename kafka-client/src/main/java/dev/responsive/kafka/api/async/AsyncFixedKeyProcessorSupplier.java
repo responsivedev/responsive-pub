@@ -17,7 +17,7 @@
 package dev.responsive.kafka.api.async;
 
 import static dev.responsive.kafka.api.async.internals.AsyncProcessor.createAsyncFixedKeyProcessor;
-import static dev.responsive.kafka.api.async.internals.Utils.initializeAsyncBuilders;
+import static dev.responsive.kafka.api.async.internals.AsyncUtils.initializeAsyncBuilders;
 
 import dev.responsive.kafka.api.async.internals.AsyncProcessor;
 import dev.responsive.kafka.api.async.internals.stores.AsyncStoreBuilder;
@@ -37,7 +37,8 @@ import org.apache.kafka.streams.state.StoreBuilder;
  * See javadocs for {@link AsyncProcessorSupplier} for full instructions and
  * documentation on the async processing framework.
  */
-public class AsyncFixedKeyProcessorSupplier<KIn, VIn, VOut> implements FixedKeyProcessorSupplier<KIn, VIn, VOut> {
+public class AsyncFixedKeyProcessorSupplier<KIn, VIn, VOut>
+    implements FixedKeyProcessorSupplier<KIn, VIn, VOut> {
 
   private final FixedKeyProcessorSupplier<KIn, VIn, VOut> userProcessorSupplier;
   private final Map<String, AsyncStoreBuilder<?>> asyncStoreBuilders;
@@ -51,6 +52,7 @@ public class AsyncFixedKeyProcessorSupplier<KIn, VIn, VOut> implements FixedKeyP
    *                          instance of your custom {@link FixedKeyProcessor} on each
    *                          invocation of {@link ProcessorSupplier#get}
    */
+  @SuppressWarnings("checkstyle:linelength")
   public static <KIn, VIn, VOut> AsyncFixedKeyProcessorSupplier<KIn, VIn, VOut> createAsyncProcessorSupplier(
       final FixedKeyProcessorSupplier<KIn, VIn, VOut> processorSupplier
   ) {
@@ -62,9 +64,10 @@ public class AsyncFixedKeyProcessorSupplier<KIn, VIn, VOut> implements FixedKeyP
       final Set<StoreBuilder<?>> userStoreBuilders
   ) {
     if (userStoreBuilders == null || userStoreBuilders.isEmpty()) {
-      throw new UnsupportedOperationException("Async processing currently requires "
-                                                  + "at least one state store be connected to the async processor, and that "
-                                                  + "stores be connected by implementing the #stores method in your processor supplier");
+      throw new UnsupportedOperationException(
+          "Async processing currently requires at least one state store be "
+              + "connected to the async processor, and that stores be connected "
+              + "by implementing the #stores method in your processor supplier");
     }
 
     this.userProcessorSupplier = userProcessorSupplier;

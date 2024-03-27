@@ -17,9 +17,9 @@
 package org.apache.kafka.streams.state.internals;
 
 import dev.responsive.kafka.api.async.internals.stores.AsyncFlushingKeyValueStore;
+import dev.responsive.kafka.api.async.internals.stores.AsyncStoreBuilder;
 import dev.responsive.kafka.api.async.internals.stores.StreamThreadFlushListeners;
 import dev.responsive.kafka.api.async.internals.stores.StreamThreadFlushListeners.AsyncFlushListener;
-import dev.responsive.kafka.api.async.internals.stores.AsyncStoreBuilder;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreBuilder;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -53,7 +53,7 @@ public class AsyncTimestampedKeyValueStoreBuilder<K, V>
   private final Map<String, StreamThreadFlushListeners> streamThreadToFlushListeners =
       new ConcurrentHashMap<>();
 
-  @SuppressWarnings("unchecked")
+  @SuppressWarnings({"unchecked", "checkstyle:linelength"})
   public AsyncTimestampedKeyValueStoreBuilder(
       final ResponsiveStoreBuilder<?, ?, ?> responsiveBuilder
   ) {

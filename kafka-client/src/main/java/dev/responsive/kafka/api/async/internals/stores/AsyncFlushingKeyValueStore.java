@@ -129,8 +129,9 @@ public class AsyncFlushingKeyValueStore
   public void clearCache() {
     // this is technically a Responsive-specific constraint, and should be relaxed if we open
     // up the async framework to general use cases
-    throw new IllegalStateException("Attempted to clear cache of async store, this implies "
-                                        + "the task is transitioning to standby which should not happen");
+    throw new IllegalStateException(
+        "Attempted to clear cache of async store, this implies the task is "
+            + "transitioning to standby which should not happen");
   }
 
   @Override

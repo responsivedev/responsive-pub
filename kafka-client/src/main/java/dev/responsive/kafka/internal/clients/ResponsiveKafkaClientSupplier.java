@@ -19,7 +19,6 @@ package dev.responsive.kafka.internal.clients;
 import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadAsyncThreadPoolRegistry;
 import static org.apache.kafka.streams.StreamsConfig.AT_LEAST_ONCE;
 
-import dev.responsive.kafka.api.async.internals.AsyncThreadPool;
 import dev.responsive.kafka.api.async.internals.AsyncThreadPoolRegistry;
 import dev.responsive.kafka.api.config.CompatibilityMode;
 import dev.responsive.kafka.internal.metrics.EndOffsetsPoller;
@@ -167,7 +166,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
             tc.endOffsetsPollerListener,
             new CloseListener(tid)
         ),
-        asyncThreadPoolRegistry
+        () -> asyncThreadPoolRegistry.shutdownAsyncThreadPool(Thread.currentThread().getName())
     );
   }
 
@@ -377,9 +376,9 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
         final String clientId,
         final Consumer<K, V> wrapped,
         final List<ResponsiveConsumer.Listener> listeners,
-        final AsyncThreadPoolRegistry asyncThreadPoolRegistry
+        final Runnable shutdownAsyncThreadPool
     ) {
-      return new ResponsiveConsumer<>(clientId, wrapped, listeners, asyncThreadPoolRegistry);
+      return new ResponsiveConsumer<>(clientId, wrapped, listeners, shutdownAsyncThreadPool);
     }
 
     default <K, V> ResponsiveGlobalConsumer createGlobalConsumer(

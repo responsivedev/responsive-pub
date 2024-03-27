@@ -19,7 +19,6 @@ package dev.responsive.kafka.api.async.internals.contexts;
 import dev.responsive.kafka.api.async.internals.AsyncThread;
 import java.io.File;
 import java.time.Duration;
-import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -84,6 +83,7 @@ import org.slf4j.Logger;
  *  methods that the user invokes from their processor (whether in #init, #process,
  *  or #close)
  */
+@SuppressWarnings("checkstyle:overloadmethodsdeclarationorder")
 public class AsyncContextRouter<KOut, VOut>
     implements ProcessorContext<KOut, VOut>, FixedKeyProcessorContext<KOut, VOut> {
 
@@ -167,10 +167,12 @@ public class AsyncContextRouter<KOut, VOut>
   }
 
   @Override
-  public <K extends KOut, V extends VOut> void forward(final Record<K, V> record, final String childName) {
+  public <K extends KOut, V extends VOut> void forward(
+      final Record<K, V> record,
+      final String childName
+  ) {
     lookupContext().forward(record, childName);
   }
-
 
   @Override
   public <K extends KOut, V extends VOut> void forward(
