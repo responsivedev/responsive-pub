@@ -18,6 +18,7 @@ package dev.responsive.kafka.api.async.internals.queues;
 
 import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
@@ -60,9 +61,12 @@ public class ProcessingQueue implements ReadOnlyProcessingQueue, WriteOnlyProces
   private final Lock lock;
   private final Condition condition; // signals when new events are added
 
-  private final Map<Integer, Queue<AsyncEvent>> partitions;
-
   private volatile boolean closed;
+  // a circular queue of non-empty partitions to pick from next
+  private final Queue<PartitionQueue> nonEmptyPartitionQueues = new LinkedList<>();
+
+  // not protected by the lock
+  private final Map<Integer, PartitionQueue> allPartitionQueues = new ConcurrentHashMap<>();
 
   public ProcessingQueue(final LogContext logPrefix) {
     this.log = logPrefix.logger(ProcessingQueue.class);
@@ -70,23 +74,21 @@ public class ProcessingQueue implements ReadOnlyProcessingQueue, WriteOnlyProces
     // could use per-partition or read-write locks but reads are fast so it's probably not worth it
     this.lock = new ReentrantLock();
     this.condition = lock.newCondition();
-
-    this.partitions = new ConcurrentHashMap<>();
   }
 
   /** See {@link WriteOnlyProcessingQueue#addPartition(int)} */
   @Override
   public void addPartition(final int partition) {
-    partitions.put(partition, new LinkedList<>());
+    allPartitionQueues.put(partition, new PartitionQueue(partition));
   }
 
   /** See {@link WriteOnlyProcessingQueue#removePartition(int)} */
   @Override
   public void removePartition(final int partition) {
-    final var removedPartitionQueue = partitions.remove(partition);
+    final PartitionQueue removedPartitionQueue = allPartitionQueues.remove(partition);
     if (!removedPartitionQueue.isEmpty()) {
       log.warn("Found {} unprocessed events when removing async queue for partition {}",
-               removedPartitionQueue.size(), partition);
+               removedPartitionQueue.numberOfEvents(), partition);
     }
   }
 
@@ -94,24 +96,72 @@ public class ProcessingQueue implements ReadOnlyProcessingQueue, WriteOnlyProces
   @Override
   public AsyncEvent take() throws InterruptedException {
     while (!closed) {
+      try {
+        lock.lock();
+        final PartitionQueue nonEmptyPartitionQueue = nextNonEmptyPartitionQueue();
 
+        if (nonEmptyPartitionQueue == null) {
+          condition.await();
+        } else {
+          final AsyncEvent event = nonEmptyPartitionQueue.nextEvent();
+          if (!nonEmptyPartitionQueue.isEmpty()) {
+            // reschedule at the back of the queue if there are more events
+            nonEmptyPartitionQueues.add(nonEmptyPartitionQueue);
+          }
+          return event;
+        }
+
+      } finally {
+        lock.unlock();
+      }
     }
     log.info("Processing queue was closed while waiting for an event");
     return null;
   }
 
-  /** See {@link WriteOnlyProcessingQueue#offer(AsyncEvent)} */
+  private PartitionQueue nextNonEmptyPartitionQueue() {
+    while (!nonEmptyPartitionQueues.isEmpty()) {
+      final PartitionQueue partitionQueue = nonEmptyPartitionQueues.poll();
+
+      // It's possible this partition was recently removed, in which case
+      // just discard it from the nonEmptyPartitions queue and move on
+      if (!allPartitionQueues.containsKey(partitionQueue.partition())) {
+        continue;
+      // It's possible the queue is actually empty if it was removed and then
+      // added back before that partition came up in the nonEmptyPartitions queue
+      } else if (partitionQueue.isEmpty()) {
+        // This is technically possible but unlikely/infrequent in practice, so
+        // log a warning just in case
+        log.warn("Partition {} was marked non-empty but had no events", partitionQueue.partition());
+        continue;
+      }
+      return partitionQueue;
+    }
+    return null;
+  }
+
+  /** See {@link WriteOnlyProcessingQueue#offer(int, List)} */
   @Override
-  public void offer(final AsyncEvent event)  {
-    final int partition = event.partition();
-    final Queue<AsyncEvent> partitionQueue = partitions.get(partition);
+  public void offer(final int partition, final List<AsyncEvent> events)  {
+    final PartitionQueue partitionQueue = allPartitionQueues.get(partition);
 
     try {
       lock.lock();
+      final boolean wasEmptyQueue = partitionQueue.isEmpty();
 
-      partitionQueue.offer(event);
-      if (isEmpty) {
-        isEmpty = false;
+      for (final AsyncEvent event : events) {
+        partitionQueue.addEvent(event);
+      }
+
+      if (wasEmptyQueue) {
+        nonEmptyPartitionQueues.add(partitionQueue);
+
+        if (events.size() == 1) {
+          condition.signal();
+        } else {
+          // If we scheduled more than one event, just signal all the threads
+          condition.signalAll();
+        }
       }
 
     } finally {
@@ -130,6 +180,36 @@ public class ProcessingQueue implements ReadOnlyProcessingQueue, WriteOnlyProces
       lock.unlock();
     }
     log.info("Closed the processing queue and notified waiting threads");
+  }
+
+  private static class PartitionQueue {
+    private final int partition;
+    private final Queue<AsyncEvent> events;
+
+    public PartitionQueue(final int partition) {
+      this.partition = partition;
+      this.events = new LinkedList<>();
+    }
+
+    private int partition() {
+      return partition;
+    }
+
+    private boolean isEmpty() {
+      return events.isEmpty();
+    }
+
+    private AsyncEvent nextEvent() {
+      return events.poll();
+    }
+
+    private void addEvent(final AsyncEvent event) {
+      events.add(event);
+    }
+
+    private int numberOfEvents() {
+      return events.size();
+    }
   }
 
 }

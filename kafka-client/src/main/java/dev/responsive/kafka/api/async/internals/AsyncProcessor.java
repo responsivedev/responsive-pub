@@ -31,6 +31,8 @@ import dev.responsive.kafka.api.async.internals.stores.StreamThreadFlushListener
 import dev.responsive.kafka.api.async.internals.stores.AsyncStoreBuilder;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.apache.kafka.common.utils.LogContext;
@@ -46,19 +48,11 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.slf4j.Logger;
 
-// TODO:
-//  1) add an equivalent form for FixedKeyProcessorSupplier and the like
-//  2) share single thread pool across all async processors per StreamThread
-//  3) make thread pool size configurable
-//  6) Should we reuse the same async context or is it ok to construct a new wrapper each #init?
-//  7) Need to somehow associate per-record metadata with each input record AND provide
-//     thread-safe access to the AsyncProcessorContext (perhaps via a wrapper that
-//     designates a single, separate instance of the underlying context for each thread
-//     (in the thread pool as well as the StreamThread itself)
 /**
  * Threading notes:
  * -Is exclusively owned and accessed by the StreamThread
  * -Coordinates the handoff of records between the StreamThread and AyncThreads
+ * -The starting and ending point of all async events -- see {@link AsyncEvent}
  */
 public class AsyncProcessor<KIn, VIn, KOut, VOut>
     implements Processor<KIn, VIn, KOut, VOut>, FixedKeyProcessor<KIn, VIn, VOut> {
@@ -72,12 +66,19 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   // Owned and solely accessed by this StreamThread, stashes waiting events that are blocked
   // on previous events with the same key that are still in flight
   private final SchedulingQueue<KIn> schedulingQueue = new SchedulingQueue<>();
-  // Owned and solely accessed by this StreamThread, simply keeps track of the events that
-  // are currently "in flight" which includes all events that were created by passing an
-  // input record into the #process method of this AsyncProcessor, but have not yet reached
-  // the DONE state and completed all execution of input and output records.
-  // The StreamThread must wait until this set is empty before proceeding with an offset commit
-  private final Set<AsyncEvent> inFlightEvents = new HashSet<>();
+
+  // Owned and solely accessed by this StreamThread, simply keeps track of the events
+  // that are waiting to be scheduled or are currently "in flight", ie all events
+  // for which we received an input record but have not yet finished processing either
+  // the input record itself, or any output records that were a side effect of this
+  // input record (such as records forwarded to the context or written to a state
+  // store during #process).
+  // An event is placed into this set when the corresponding record is first passed
+  // in to this AsyncProcessor, and is removed from the set when it reaches the
+  // DONE state and has completed all input and output execution in full.
+  // The StreamThread must wait until this set is empty before proceeding
+  // with an offset commit
+  private final Set<AsyncEvent> pendingEvents = new HashSet<>();
 
   // Everything below this line is effectively final and just has to be initialized in #init
   // TODO: extract into class that allows us to make these final, eg an InitializedAsyncProcessor
@@ -230,7 +231,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
         () -> userProcessor.process(record)
     );
 
-    processInternal(newEvent);
+    processNewAsyncEvent(newEvent);
   }
 
   @Override
@@ -245,11 +246,11 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
         () -> userFixedKeyProcessor.process(record)
     );
 
-    processInternal(newEvent);
+    processNewAsyncEvent(newEvent);
   }
 
-  private void processInternal(final AsyncEvent event) {
-    inFlightEvents.add(event);
+  private void processNewAsyncEvent(final AsyncEvent event) {
+    pendingEvents.add(event);
     schedulingQueue.offer(event);
 
     executeAvailableEvents();
@@ -257,7 +258,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
 
   @Override
   public void close() {
-    if (!inFlightEvents.isEmpty()) {
+    if (!pendingEvents.isEmpty()) {
       // This doesn't necessarily indicate an issue, it just should only ever
       // happen if the task is closed dirty, but unfortunately we can't tell
       // from here whether that was the case. Log a warning here so that it's
@@ -265,7 +266,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
       // at the complete logs for the task/thread
       log.warn("Closing async processor with {} in-flight events, this should only "
                    + "happen if the task was shut down dirty and not flushed/committed "
-                   + "prior to being closed", inFlightEvents.size());
+                   + "prior to being closed", pendingEvents.size());
     }
 
     threadPool.removeProcessor(taskId.partition());
@@ -349,11 +350,14 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   }
 
   private void drainSchedulingQueue() {
+    final List<AsyncEvent> eventsToSchedule = new LinkedList<>();
+
     while (schedulingQueue.hasProcessableRecord()) {
       final AsyncEvent processableEvent = schedulingQueue.poll();
-      threadPool.scheduleForProcessing(processableEvent);
       processableEvent.transitionToInputReady();
+      eventsToSchedule.add(processableEvent);
     }
+    threadPool.scheduleForProcessing(taskId.partition(), eventsToSchedule);
   }
 
   private void drainFinalizingQueue() {
@@ -364,7 +368,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
 
       finalizeEvent(event);
 
-      inFlightEvents.remove(event);
+      pendingEvents.remove(event);
       schedulingQueue.unblockKey(event.inputKey());
     }
   }
@@ -395,7 +399,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    * @return true iff all records have been fully processed from start to finish
    */
   private boolean isCompleted() {
-    return inFlightEvents.isEmpty();
+    return pendingEvents.isEmpty();
   }
 
   /**

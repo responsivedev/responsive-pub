@@ -22,6 +22,7 @@ import dev.responsive.kafka.api.async.internals.queues.FinalizingQueue;
 import dev.responsive.kafka.api.async.internals.queues.ProcessingQueue;
 import dev.responsive.kafka.api.async.internals.queues.WriteOnlyProcessingQueue;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
@@ -104,8 +105,8 @@ public class AsyncThreadPool {
     }
   }
 
-  public void scheduleForProcessing(final AsyncEvent event) {
-    processingQueue.offer(event);
+  public void scheduleForProcessing(final int partition, final List<AsyncEvent> events) {
+    processingQueue.offer(partition, events);
   }
 
   /**

@@ -17,7 +17,6 @@
 package dev.responsive.kafka.api.async.internals.events;
 
 import static dev.responsive.kafka.api.async.internals.Utils.processorRecordContextHashCode;
-import static dev.responsive.kafka.internal.utils.Utils.processorRecordContextHashCode;
 
 import dev.responsive.kafka.api.async.internals.AsyncProcessor;
 import dev.responsive.kafka.api.async.internals.contexts.AsyncThreadProcessorContext;

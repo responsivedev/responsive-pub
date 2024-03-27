@@ -17,6 +17,7 @@
 package dev.responsive.kafka.api.async.internals.queues;
 
 import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
+import java.util.List;
 
 /**
  * An interface with only the write APIs of a {@link ProcessingQueue}, to ensure
@@ -51,10 +52,10 @@ public interface WriteOnlyProcessingQueue {
   void removePartition(final int partition);
 
   /**
-   * Non-blocking write API. Schedules the given event for processing on the
-   * corresponding partition
+   * Non-blocking write API. Schedules a list of events for processing while
+   * maintaining order within the associated partition
    */
-  void offer(final AsyncEvent event);
+  void offer(final int partition, final List<AsyncEvent> events);
 
   /**
    * Mark the queue as closed and notify any waiting threads.
