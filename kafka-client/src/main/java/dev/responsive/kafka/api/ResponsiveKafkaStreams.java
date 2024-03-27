@@ -430,6 +430,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     public Params build() {
       this.responsiveKafkaClientSupplier = new ResponsiveKafkaClientSupplier(
           clientSupplier,
+          responsiveConfig,
           streamsConfig,
           storeRegistry,
           metrics,

@@ -140,11 +140,13 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
       final Bytes to,
       final long minValidTs
   ) {
+    // NOTE: Make sure to handle filtering of tombstones in the remote range scan.
     throw new UnsupportedOperationException();
   }
 
   @Override
   public KeyValueIterator<Bytes, byte[]> all(final int kafkaPartition, final long minValidTs) {
+    // NOTE: Make sure to handle filtering of tombstones in the remote range scan.
     throw new UnsupportedOperationException();
   }
 

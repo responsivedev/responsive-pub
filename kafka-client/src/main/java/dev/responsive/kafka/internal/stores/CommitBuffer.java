@@ -459,11 +459,6 @@ public class CommitBuffer<K extends Comparable<K>, P>
 
     flushTriggers.reset();
 
-    if (buffer.getReader().isEmpty()) {
-      log.debug("Ignoring flush() of empty commit buffer");
-      return;
-    }
-
     doFlush(consumedOffset, maxBatchSize);
 
     lastFlush = clock.get();

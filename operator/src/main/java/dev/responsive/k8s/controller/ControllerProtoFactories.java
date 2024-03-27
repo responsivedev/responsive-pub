@@ -74,8 +74,6 @@ public final class ControllerProtoFactories {
       final ResponsivePolicy policy
   ) {
     final String prefix = environment.isEmpty() ? "" : environment + "/";
-    return prefix
-        + policy.getSpec().getApplicationNamespace()
-        + "/" + policy.getSpec().getApplicationName();
+    return prefix + policy.getSpec().getApplicationId();
   }
 }

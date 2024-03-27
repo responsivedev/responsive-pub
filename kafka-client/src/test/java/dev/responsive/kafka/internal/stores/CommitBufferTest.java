@@ -581,6 +581,25 @@ public class CommitBufferTest {
     }
   }
 
+  @Test
+  public void shouldUpdateOffsetWhenNoRecordsInBuffer() {
+    // Given:
+    // just use an atomic reference as a mutable reference type
+    final AtomicReference<Instant> clock = new AtomicReference<>(Instant.now());
+    try (final CommitBuffer<Bytes, Integer> buffer = createCommitBuffer(
+        FlushTriggers.ofInterval(Duration.ofSeconds(30)),
+        100,
+        clock::get
+    )) {
+      // when:
+      clock.updateAndGet(old -> Instant.ofEpochSecond(old.getEpochSecond() + 32));
+      buffer.flush(10L);
+
+      // Then:
+      assertThat(table.fetchOffset(KAFKA_PARTITION), is(10L));
+    }
+  }
+
   // measure how long before the commit buffer actually flushes the buffer (1-second granularity)
   // the measurement is taken by iterating until the flush succeeds, advancing the clock by
   // 1 second at each iteration.

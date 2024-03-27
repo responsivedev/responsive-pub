@@ -100,9 +100,10 @@ class ResponsivePolicyReconcilerTest {
     policy.setSpec(new ResponsivePolicySpec(
         "ping",
         "pong",
+        "pop",
         PolicyStatus.POLICY_STATUS_MANAGED,
         ResponsivePolicySpec.PolicyType.DEMO,
-        Optional.of(new DemoPolicySpec(123, 7, 1, Optional.empty())),
+        Optional.of(new DemoPolicySpec(123, 7, 1, Optional.empty(), Optional.empty())),
         Optional.empty()
     ));
     reconciler = new dev.responsive.k8s.operator.reconciler.ResponsivePolicyReconciler(
@@ -136,9 +137,10 @@ class ResponsivePolicyReconcilerTest {
     when(resource.getSpec()).thenReturn(new ResponsivePolicySpec(
         "ping",
         "pong",
+        "pop",
         PolicyStatus.POLICY_STATUS_MANAGED,
         ResponsivePolicySpec.PolicyType.DEMO,
-        Optional.of(new DemoPolicySpec(123, 10, 1, Optional.empty())),
+        Optional.of(new DemoPolicySpec(123, 10, 1, Optional.empty(), Optional.empty())),
         Optional.empty()
     ));
     when(controllerClient.getTargetState(any())).thenThrow(new RuntimeException("oops"));
@@ -184,9 +186,10 @@ class ResponsivePolicyReconcilerTest {
     policy.setSpec(new ResponsivePolicySpec(
         "foo",
         null,
+        "bar",
         PolicyStatus.POLICY_STATUS_MANAGED,
         PolicyType.DEMO,
-        Optional.of(new DemoPolicySpec(10, 0, 1, Optional.empty())),
+        Optional.of(new DemoPolicySpec(10, 0, 1, Optional.empty(), Optional.empty())),
         Optional.empty()
     ));
 

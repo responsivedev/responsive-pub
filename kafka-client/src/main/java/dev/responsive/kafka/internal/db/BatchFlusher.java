@@ -62,20 +62,24 @@ public class BatchFlusher<K extends Comparable<K>, P> {
     }
 
     // the offset is only used for recovery, so it can (and should) be set only
-    // if/when the entire batch of flushes has completed successfully
-    final RemoteWriteResult<P> flushResult;
-    try {
-      flushResult = flushBatch(batchWriters)
-          .get(Constants.BLOCKING_TIMEOUT_VALUE, Constants.BLOCKING_TIMEOUT_UNIT);
-    } catch (final InterruptedException | ExecutionException | TimeoutException e) {
-      log.error("Unexpected exception while flushing to remote", e);
-      throw new RuntimeException("Failed while flushing batch for kafka partition "
-                                     + kafkaPartition + " to remote", e);
-    }
-    if (!flushResult.wasApplied()) {
-      log.warn("Failed to flush write batch (consumedOffset={}) on table partition {}",
-               consumedOffset, flushResult.tablePartition());
-      return FlushResult.failed(flushResult, flushManager);
+    // if/when the entire batch of flushes has completed successfully -- it should
+    // also be set if we flush when there are no records to flush
+    if (!bufferedWrites.isEmpty()) {
+      final RemoteWriteResult<P> flushResult;
+      try {
+        flushResult = flushBatch(batchWriters)
+            .get(Constants.BLOCKING_TIMEOUT_VALUE, Constants.BLOCKING_TIMEOUT_UNIT);
+      } catch (final InterruptedException | ExecutionException | TimeoutException e) {
+        log.error("Unexpected exception while flushing to remote", e);
+        throw new RuntimeException("Failed while flushing batch for kafka partition "
+            + kafkaPartition + " to remote", e);
+      }
+      if (!flushResult.wasApplied()) {
+        log.warn("Failed to flush write batch (consumedOffset={}) on table partition {}",
+            consumedOffset, flushResult.tablePartition()
+        );
+        return FlushResult.failed(flushResult, flushManager);
+      }
     }
 
     final var postFlushResult = flushManager.postFlush(consumedOffset);

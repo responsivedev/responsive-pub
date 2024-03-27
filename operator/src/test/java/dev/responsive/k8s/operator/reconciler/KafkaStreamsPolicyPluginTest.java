@@ -151,9 +151,10 @@ class KafkaStreamsPolicyPluginTest {
         new ResponsivePolicySpec(
             "biz",
             "baz",
+            "bop",
             PolicyStatus.POLICY_STATUS_MANAGED,
             ResponsivePolicySpec.PolicyType.DEMO,
-            Optional.of(new DemoPolicySpec(123, 7, 1, Optional.empty())),
+            Optional.of(new DemoPolicySpec(123, 7, 1, Optional.empty(), Optional.empty())),
             Optional.empty()
         )
     );

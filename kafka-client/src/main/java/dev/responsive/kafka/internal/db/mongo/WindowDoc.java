@@ -23,6 +23,8 @@ import dev.responsive.kafka.internal.utils.WindowedKey;
 import java.util.Arrays;
 import java.util.Objects;
 import org.apache.kafka.common.utils.Bytes;
+import org.bson.codecs.pojo.annotations.BsonCreator;
+import org.bson.codecs.pojo.annotations.BsonProperty;
 
 public class WindowDoc {
 
@@ -39,6 +41,17 @@ public class WindowDoc {
   long epoch;
 
   public WindowDoc() {
+  }
+
+  @BsonCreator
+  public WindowDoc(
+      @BsonProperty(ID) BasicDBObject id,
+      @BsonProperty(VALUE) byte[] value,
+      @BsonProperty(EPOCH) long epoch
+  ) {
+    this.id = id;
+    this.value = value;
+    this.epoch = epoch;
   }
 
   public BasicDBObject getKey() {
