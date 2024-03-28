@@ -24,6 +24,7 @@ import static dev.responsive.kafka.internal.metrics.ApplicationMetrics.NUM_RESTO
 import static dev.responsive.kafka.internal.metrics.ApplicationMetrics.NUM_RESTORING_CHANGELOGS_DESCRIPTION;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.TIME_RESTORING;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.TIME_RESTORING_DESCRIPTION;
+import static dev.responsive.kafka.internal.utils.Utils.extractThreadId;
 
 import java.io.Closeable;
 import java.util.concurrent.ConcurrentHashMap;
@@ -59,7 +60,11 @@ public class ResponsiveRestoreListener implements StateRestoreListener, Closeabl
     return metrics.metricName(
         TIME_RESTORING,
         TIME_RESTORING_DESCRIPTION,
-        metrics.storeLevelMetric(metrics.computeThreadId(), topicPartition, storeName)
+        metrics.storeLevelMetric(
+            extractThreadId(Thread.currentThread().getName()),
+            topicPartition,
+            storeName
+        )
     );
   }
 

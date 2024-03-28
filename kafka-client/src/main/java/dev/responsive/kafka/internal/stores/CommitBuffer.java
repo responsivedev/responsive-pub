@@ -38,6 +38,7 @@ import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_TOTAL;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_TOTAL_DESCRIPTION;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.TIME_SINCE_LAST_FLUSH;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.TIME_SINCE_LAST_FLUSH_DESCRIPTION;
+import static dev.responsive.kafka.internal.utils.Utils.extractThreadId;
 import static org.apache.kafka.clients.admin.RecordsToDelete.beforeOffset;
 
 import dev.responsive.kafka.api.config.ResponsiveConfig;
@@ -204,10 +205,13 @@ public class CommitBuffer<K extends Comparable<K>, P>
     flushErrorsSensorName = getSensorName(FLUSH_ERRORS, changelog);
     failedTruncationsSensorName = getSensorName(FAILED_TRUNCATIONS, changelog);
 
+
+    final String streamThreadId = extractThreadId(Thread.currentThread().getName());
+
     lastFlushMetric = metrics.metricName(
         TIME_SINCE_LAST_FLUSH,
         TIME_SINCE_LAST_FLUSH_DESCRIPTION,
-        metrics.storeLevelMetric(metrics.computeThreadId(), changelog, storeName)
+        metrics.storeLevelMetric(streamThreadId, changelog, storeName)
     );
     metrics.addMetric(
         lastFlushMetric,
@@ -219,14 +223,14 @@ public class CommitBuffer<K extends Comparable<K>, P>
         metrics.metricName(
             FLUSH_RATE,
             FLUSH_RATE_DESCRIPTION,
-            metrics.storeLevelMetric(metrics.computeThreadId(), changelog, storeName)),
+            metrics.storeLevelMetric(streamThreadId, changelog, storeName)),
         new Rate()
     );
     flushSensor.add(
         metrics.metricName(
             FLUSH_TOTAL,
             FLUSH_TOTAL_DESCRIPTION,
-            metrics.storeLevelMetric(metrics.computeThreadId(), changelog, storeName)),
+            metrics.storeLevelMetric(streamThreadId, changelog, storeName)),
         new CumulativeCount()
     );
 
@@ -235,14 +239,14 @@ public class CommitBuffer<K extends Comparable<K>, P>
         metrics.metricName(
             FLUSH_LATENCY_AVG,
             FLUSH_LATENCY_AVG_DESCRIPTION,
-            metrics.storeLevelMetric(metrics.computeThreadId(), changelog, storeName)),
+            metrics.storeLevelMetric(streamThreadId, changelog, storeName)),
         new Avg()
     );
     flushLatencySensor.add(
         metrics.metricName(
             FLUSH_LATENCY_MAX,
             FLUSH_LATENCY_MAX_DESCRIPTION,
-            metrics.storeLevelMetric(metrics.computeThreadId(), changelog, storeName)),
+            metrics.storeLevelMetric(streamThreadId, changelog, storeName)),
         new Max()
     );
 
@@ -251,14 +255,14 @@ public class CommitBuffer<K extends Comparable<K>, P>
         metrics.metricName(
             FLUSH_ERRORS_RATE,
             FLUSH_ERRORS_RATE_DESCRIPTION,
-            metrics.storeLevelMetric(metrics.computeThreadId(), changelog, storeName)),
+            metrics.storeLevelMetric(streamThreadId, changelog, storeName)),
         new Rate()
     );
     flushErrorsSensor.add(
         metrics.metricName(
             FLUSH_ERRORS_TOTAL,
             FLUSH_ERRORS_TOTAL_DESCRIPTION,
-            metrics.storeLevelMetric(metrics.computeThreadId(), changelog, storeName)),
+            metrics.storeLevelMetric(streamThreadId, changelog, storeName)),
         new CumulativeCount()
     );
 
@@ -278,14 +282,14 @@ public class CommitBuffer<K extends Comparable<K>, P>
             metrics.metricName(
                 FAILED_TRUNCATIONS_RATE,
                 FAILED_TRUNCATIONS_RATE_DESCRIPTION,
-                metrics.storeLevelMetric(metrics.computeThreadId(), changelog, storeName)),
+                metrics.storeLevelMetric(streamThreadId, changelog, storeName)),
             new Rate()
         );
         failedTruncationsSensor.add(
             metrics.metricName(
                 FAILED_TRUNCATIONS_TOTAL,
                 FAILED_TRUNCATIONS_TOTAL_DESCRIPTION,
-                metrics.storeLevelMetric(metrics.computeThreadId(), changelog, storeName)),
+                metrics.storeLevelMetric(streamThreadId, changelog, storeName)),
             new CumulativeCount()
         );
       }

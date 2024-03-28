@@ -32,8 +32,10 @@ import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
 public class ResponsiveConsumer<K, V> extends DelegatingConsumer<K, V> {
-  private final List<Listener> listeners;
   private final Logger log;
+
+  private final List<Listener> listeners;
+  private final Runnable shutdownAsyncThreadPool;
 
   private static class RebalanceListener implements ConsumerRebalanceListener {
     private final ConsumerRebalanceListener wrappedRebalanceListener;
@@ -78,13 +80,15 @@ public class ResponsiveConsumer<K, V> extends DelegatingConsumer<K, V> {
   public ResponsiveConsumer(
       final String clientId,
       final Consumer<K, V> delegate,
-      final List<Listener> listeners
+      final List<Listener> listeners,
+      final Runnable shutdownAsyncThreadPool
   ) {
     super(delegate);
     this.log = new LogContext(
         String.format("responsive-consumer [%s]", Objects.requireNonNull(clientId))
     ).logger(ResponsiveConsumer.class);
     this.listeners = Objects.requireNonNull(listeners);
+    this.shutdownAsyncThreadPool = shutdownAsyncThreadPool;
   }
 
   @Override
@@ -116,12 +120,14 @@ public class ResponsiveConsumer<K, V> extends DelegatingConsumer<K, V> {
 
   @Override
   public void close() {
+    shutdownAsyncThreadPool.run();
     super.close();
     listeners.forEach(l -> ignoreException(l::onClose));
   }
 
   @Override
   public void close(final Duration timeout) {
+    shutdownAsyncThreadPool.run();
     super.close(timeout);
     listeners.forEach(l -> ignoreException(l::onClose));
   }

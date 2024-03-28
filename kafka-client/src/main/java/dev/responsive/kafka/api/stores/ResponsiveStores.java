@@ -18,6 +18,7 @@ package dev.responsive.kafka.api.stores;
 
 import dev.responsive.kafka.internal.stores.ResponsiveMaterialized;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreBuilder;
+import dev.responsive.kafka.internal.stores.ResponsiveStoreBuilder.StoreType;
 import java.time.Duration;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
@@ -120,7 +121,11 @@ public final class ResponsiveStores {
       final Serde<V> valueSerde
   ) {
     return new ResponsiveStoreBuilder<>(
+        StoreType.KEY_VALUE,
+        storeSupplier,
         Stores.keyValueStoreBuilder(storeSupplier, keySerde, valueSerde),
+        keySerde,
+        valueSerde,
         false
     );
   }
@@ -149,11 +154,14 @@ public final class ResponsiveStores {
       final Serde<V> valueSerde
   ) {
     return new ResponsiveStoreBuilder<>(
+        StoreType.TIMESTAMPED_KEY_VALUE,
+        storeSupplier,
         Stores.timestampedKeyValueStoreBuilder(
             storeSupplier,
             keySerde,
-            valueSerde
-        ),
+            valueSerde),
+        keySerde,
+        valueSerde,
         false
     );
   }
@@ -248,7 +256,11 @@ public final class ResponsiveStores {
       final Serde<V> valueSerde
   ) {
     return new ResponsiveStoreBuilder<>(
+        StoreType.WINDOW,
+        storeSupplier,
         Stores.windowStoreBuilder(storeSupplier, keySerde, valueSerde),
+        keySerde,
+        valueSerde,
         false
     );
   }
@@ -272,11 +284,14 @@ public final class ResponsiveStores {
       final Serde<V> valueSerde
   ) {
     return new ResponsiveStoreBuilder<>(
+        StoreType.TIMESTAMPED_WINDOW,
+        storeSupplier,
         Stores.timestampedWindowStoreBuilder(
             storeSupplier,
             keySerde,
-            valueSerde
-        ),
+            valueSerde),
+        keySerde,
+        valueSerde,
         false
     );
   }
@@ -317,7 +332,11 @@ public final class ResponsiveStores {
       final Serde<V> valueSerde
   ) {
     return new ResponsiveStoreBuilder<>(
+        StoreType.SESSION,
+        storeSupplier,
         Stores.sessionStoreBuilder(storeSupplier, keySerde, valueSerde),
+        keySerde,
+        valueSerde,
         false
     );
   }
@@ -334,7 +353,7 @@ public final class ResponsiveStores {
   public static <K, V> Materialized<K, V, SessionStore<Bytes, byte[]>> sessionMaterialized(
       final ResponsiveSessionParams params
   ) {
-    return new ResponsiveMaterialized<K, V, SessionStore<Bytes, byte[]>>(
+    return new ResponsiveMaterialized<>(
         Materialized.as(new ResponsiveSessionStoreSupplier(params)),
         params.truncateChangelog()
     );

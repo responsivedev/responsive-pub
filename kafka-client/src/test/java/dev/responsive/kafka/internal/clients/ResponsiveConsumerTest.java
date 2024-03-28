@@ -57,7 +57,8 @@ class ResponsiveConsumerTest {
 
   @BeforeEach
   public void setup() {
-    consumer = new ResponsiveConsumer<>("clientid", wrapped, List.of(listener1, listener2));
+    consumer = new ResponsiveConsumer<>(
+        "clientid", wrapped, List.of(listener1, listener2), () -> {});
   }
 
   @Test
