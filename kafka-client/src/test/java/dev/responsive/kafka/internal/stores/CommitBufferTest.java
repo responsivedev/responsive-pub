@@ -173,7 +173,7 @@ public class CommitBufferTest {
     session = CqlSession.builder()
         .addContactPoint(cassandra.getContactPoint())
         .withLocalDatacenter(cassandra.getLocalDatacenter())
-        .withKeyspace("responsive_clients") // NOTE: this keyspace is expected to exist
+        .withKeyspace("responsive_itests") // NOTE: this keyspace is expected to exist
         .build();
     client = new CassandraClient(session, config);
     sessionClients = new SessionClients(

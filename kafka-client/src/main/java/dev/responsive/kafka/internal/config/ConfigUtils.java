@@ -16,7 +16,10 @@
 
 package dev.responsive.kafka.internal.config;
 
+import static dev.responsive.kafka.api.config.ResponsiveConfig.CONTROLLER_ENDPOINT_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_APPLICATION_ID_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_ENV_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_ORG_CONFIG;
 
 import dev.responsive.kafka.api.config.CompatibilityMode;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
@@ -35,6 +38,19 @@ public class ConfigUtils {
 
   private ConfigUtils() {
     /* Empty constructor for public class */
+  }
+
+  public static String tenant(final ResponsiveConfig config) {
+    return config.getString(RESPONSIVE_ORG_CONFIG) + "-" + config.getString(RESPONSIVE_ENV_CONFIG);
+  }
+
+  public static String cassandraKeyspace(final ResponsiveConfig config) {
+    return config.getString(RESPONSIVE_ORG_CONFIG) + "_" + config.getString(RESPONSIVE_ENV_CONFIG);
+  }
+
+  public static String controllerUri(final ResponsiveConfig config) {
+    final var controllerUri = config.getString(CONTROLLER_ENDPOINT_CONFIG);
+    return tenant(config) + "." + controllerUri;
   }
 
   public static StorageBackend storageBackend(final ResponsiveConfig config) {

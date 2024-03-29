@@ -16,7 +16,7 @@
 
 package dev.responsive.kafka.integration;
 
-import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_DESIRED_NUM_PARTITION_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.CASSANDRA_DESIRED_NUM_PARTITION_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.STORE_FLUSH_RECORDS_TRIGGER_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.SUBPARTITION_HASHER_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.responsiveConfig;
@@ -132,7 +132,7 @@ public class TablePartitionerIntegrationTest {
     final CqlSession session = CqlSession.builder()
         .addContactPoint(cassandra.getContactPoint())
         .withLocalDatacenter(cassandra.getLocalDatacenter())
-        .withKeyspace("responsive_clients") // NOTE: this keyspace is expected to exist
+        .withKeyspace("responsive_itests") // NOTE: this keyspace is expected to exist
         .build();
     client = new CassandraClient(session, responsiveConfig(responsiveProps));
   }
@@ -384,7 +384,7 @@ public class TablePartitionerIntegrationTest {
     properties.put(consumerPrefix(ConsumerConfig.METADATA_MAX_AGE_CONFIG), "1000");
     properties.put(consumerPrefix(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG), "earliest");
 
-    properties.put(STORAGE_DESIRED_NUM_PARTITION_CONFIG, 32);
+    properties.put(CASSANDRA_DESIRED_NUM_PARTITION_CONFIG, 32);
     properties.put(STORE_FLUSH_RECORDS_TRIGGER_CONFIG, FLUSH_THRESHOLD);
     properties.put(SUBPARTITION_HASHER_CONFIG, LongBytesHasher.class);
 

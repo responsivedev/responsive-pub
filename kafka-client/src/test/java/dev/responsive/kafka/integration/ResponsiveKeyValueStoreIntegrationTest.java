@@ -16,7 +16,6 @@
 
 package dev.responsive.kafka.integration;
 
-import static dev.responsive.kafka.api.config.ResponsiveConfig.REQUEST_TIMEOUT_MS_CONFIG;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.pipeRecords;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.startAppAndAwaitRunning;
 import static org.apache.kafka.clients.CommonClientConfigs.SESSION_TIMEOUT_MS_CONFIG;
@@ -213,7 +212,6 @@ public class ResponsiveKeyValueStoreIntegrationTest {
     properties.put(NUM_STREAM_THREADS_CONFIG, 1);
     properties.put(COMMIT_INTERVAL_MS_CONFIG, 1); // commit as often as possible
 
-    properties.put(consumerPrefix(REQUEST_TIMEOUT_MS_CONFIG), 5_000);
     properties.put(consumerPrefix(SESSION_TIMEOUT_MS_CONFIG), 5_000 - 1);
 
     properties.put(consumerPrefix(MAX_POLL_RECORDS_CONFIG), 1);

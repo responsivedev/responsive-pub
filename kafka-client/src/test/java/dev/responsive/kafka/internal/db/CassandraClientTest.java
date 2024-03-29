@@ -47,9 +47,10 @@ class CassandraClientTest {
     final CassandraClient client = new CassandraClient(
         session,
         ResponsiveConfig.loggedConfig(Map.of(
-            ResponsiveConfig.TENANT_ID_CONFIG, "ignored",
-            ResponsiveConfig.STORAGE_HOSTNAME_CONFIG, "ignored",
-            ResponsiveConfig.STORAGE_PORT_CONFIG, 0
+            ResponsiveConfig.RESPONSIVE_ORG_CONFIG, "ignored",
+            ResponsiveConfig.RESPONSIVE_ENV_CONFIG, "ignored",
+            ResponsiveConfig.CASSANDRA_HOSTNAME_CONFIG, "ignored",
+            ResponsiveConfig.CASSANDRA_PORT_CONFIG, 0
         ))
     );
     when(session.execute(statementCaptor.capture())).thenReturn(null);
@@ -68,9 +69,10 @@ class CassandraClientTest {
     final CassandraClient client = new CassandraClient(
         session,
         ResponsiveConfig.loggedConfig(Map.of(
-            ResponsiveConfig.TENANT_ID_CONFIG, "ignored",
-            ResponsiveConfig.STORAGE_HOSTNAME_CONFIG, "ignored",
-            ResponsiveConfig.STORAGE_PORT_CONFIG, 0
+            ResponsiveConfig.RESPONSIVE_ORG_CONFIG, "ignored",
+            ResponsiveConfig.RESPONSIVE_ENV_CONFIG, "ignored",
+            ResponsiveConfig.CASSANDRA_HOSTNAME_CONFIG, "ignored",
+            ResponsiveConfig.CASSANDRA_PORT_CONFIG, 0
         ))
     );
     when(session.prepare((SimpleStatement) statementCaptor.capture())).thenReturn(null);
@@ -89,9 +91,10 @@ class CassandraClientTest {
     final CassandraClient client = new CassandraClient(
         session,
         ResponsiveConfig.loggedConfig(Map.of(
-            ResponsiveConfig.TENANT_ID_CONFIG, "ignored",
-            ResponsiveConfig.STORAGE_HOSTNAME_CONFIG, "ignored",
-            ResponsiveConfig.STORAGE_PORT_CONFIG, 0
+            ResponsiveConfig.RESPONSIVE_ORG_CONFIG, "ignored",
+            ResponsiveConfig.RESPONSIVE_ENV_CONFIG, "ignored",
+            ResponsiveConfig.CASSANDRA_HOSTNAME_CONFIG, "ignored",
+            ResponsiveConfig.CASSANDRA_PORT_CONFIG, 0
         ))
     );
     when(session.prepare((SimpleStatement) statementCaptor.capture())).thenReturn(null);
@@ -110,9 +113,10 @@ class CassandraClientTest {
     final CassandraClient client = new CassandraClient(
         session,
         ResponsiveConfig.loggedConfig(Map.of(
-            ResponsiveConfig.TENANT_ID_CONFIG, "ignored",
-            ResponsiveConfig.STORAGE_HOSTNAME_CONFIG, "ignored",
-            ResponsiveConfig.STORAGE_PORT_CONFIG, 0,
+            ResponsiveConfig.RESPONSIVE_ORG_CONFIG, "ignored",
+            ResponsiveConfig.RESPONSIVE_ENV_CONFIG, "ignored",
+            ResponsiveConfig.CASSANDRA_HOSTNAME_CONFIG, "ignored",
+            ResponsiveConfig.CASSANDRA_PORT_CONFIG, 0,
             ResponsiveConfig.READ_CONSISTENCY_LEVEL_CONFIG, "ALL"
         ))
     );
@@ -132,9 +136,10 @@ class CassandraClientTest {
     final CassandraClient client = new CassandraClient(
         session,
         ResponsiveConfig.loggedConfig(Map.of(
-            ResponsiveConfig.TENANT_ID_CONFIG, "ignored",
-            ResponsiveConfig.STORAGE_HOSTNAME_CONFIG, "ignored",
-            ResponsiveConfig.STORAGE_PORT_CONFIG, 0,
+            ResponsiveConfig.RESPONSIVE_ORG_CONFIG, "ignored",
+            ResponsiveConfig.RESPONSIVE_ENV_CONFIG, "ignored",
+            ResponsiveConfig.CASSANDRA_HOSTNAME_CONFIG, "ignored",
+            ResponsiveConfig.CASSANDRA_PORT_CONFIG, 0,
             ResponsiveConfig.WRITE_CONSISTENCY_LEVEL_CONFIG, "ALL"
         ))
     );

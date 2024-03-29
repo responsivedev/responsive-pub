@@ -60,15 +60,15 @@ public class OtelMetricsService implements MetricsExportService  {
   ) {
     final OtlpGrpcMetricExporterBuilder builder = OtlpGrpcMetricExporter.builder();
 
-    final String apiKey = config.getString(ResponsiveConfig.METRICS_API_KEY_CONFIG);
-    final Password secret = config.getPassword(ResponsiveConfig.METRICS_SECRET_CONFIG);
+    final String apiKey = config.getString(ResponsiveConfig.PLATFORM_API_KEY_CONFIG);
+    final Password secret = config.getPassword(ResponsiveConfig.PLATFORM_API_SECRET_CONFIG);
     if (secret == null ^ apiKey == null) {
       throw new IllegalArgumentException(String.format(
           "Invalid configuration, if configured to report metrics using %s, "
               + "then values for both %s and %s must be provided.",
           ResponsiveConfig.METRICS_ENABLED_CONFIG,
-          ResponsiveConfig.METRICS_API_KEY_CONFIG,
-          ResponsiveConfig.METRICS_SECRET_CONFIG
+          ResponsiveConfig.PLATFORM_API_KEY_CONFIG,
+          ResponsiveConfig.PLATFORM_API_SECRET_CONFIG
       ));
     } else if (secret != null) {
       builder.addHeader(ApiKeyHeaders.API_KEY_METADATA_KEY, apiKey);

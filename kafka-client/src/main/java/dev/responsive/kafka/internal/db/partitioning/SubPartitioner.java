@@ -16,7 +16,7 @@
 
 package dev.responsive.kafka.internal.db.partitioning;
 
-import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_DESIRED_NUM_PARTITION_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.CASSANDRA_DESIRED_NUM_PARTITION_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.SUBPARTITION_HASHER_CONFIG;
 
 import com.datastax.oss.driver.shaded.guava.common.annotations.VisibleForTesting;
@@ -65,7 +65,7 @@ public class SubPartitioner implements TablePartitioner<Bytes, Integer> {
       final ResponsiveConfig config,
       final String changelogTopicName
   ) {
-    final int requestedNumSubPartitions = config.getInt(STORAGE_DESIRED_NUM_PARTITION_CONFIG);
+    final int requestedNumSubPartitions = config.getInt(CASSANDRA_DESIRED_NUM_PARTITION_CONFIG);
 
     final int factor = (requestedNumSubPartitions == ResponsiveConfig.NO_SUBPARTITIONS)
         ? 1 : (int) Math.ceil((double) requestedNumSubPartitions / numKafkaPartitions);
@@ -79,9 +79,9 @@ public class SubPartitioner implements TablePartitioner<Bytes, Integer> {
                   + "for table %s (remote partitions must be a multiple of the kafka partitions). "
                   + "The remote store is already initialized with %d partitions - it is backwards "
                   + "incompatible to change this. Please set %s to %d.",
-              STORAGE_DESIRED_NUM_PARTITION_CONFIG, requestedNumSubPartitions, numKafkaPartitions,
+              CASSANDRA_DESIRED_NUM_PARTITION_CONFIG, requestedNumSubPartitions, numKafkaPartitions,
               changelogTopicName, computedRemoteNum, tableName,
-              actualRemoteCount.getAsInt(), STORAGE_DESIRED_NUM_PARTITION_CONFIG,
+              actualRemoteCount.getAsInt(), CASSANDRA_DESIRED_NUM_PARTITION_CONFIG,
               actualRemoteCount.getAsInt()));
     }
 

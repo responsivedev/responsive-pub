@@ -56,18 +56,19 @@ public final class SessionUtil {
       final InetSocketAddress address,
       final String datacenter,
       final String keyspace,
-      @Nullable final String clientId,
-      @Nullable final String clientSecret,
+      @Nullable final String username,
+      @Nullable final String password,
       final int maxConcurrentRequests
   ) {
     final CqlSessionBuilder sessionBuilder = CqlSession.builder()
         .addContactPoint(address)
         .withLocalDatacenter(datacenter);
 
-    if (clientId != null && clientSecret != null) {
-      sessionBuilder.withAuthCredentials(clientId, clientSecret);
-    } else if (clientId == null ^ clientSecret == null) {
-      throw new IllegalArgumentException("Must specify both or neither clientId and clientSecret.");
+    if (username != null && password != null) {
+      sessionBuilder.withAuthCredentials(username, password);
+    } else if (username == null ^ password == null) {
+      throw new IllegalArgumentException(
+          "Must specify both or neither Cassandra username and password.");
     }
 
     return sessionBuilder
@@ -105,7 +106,8 @@ public final class SessionUtil {
           hostname
       );
     } else if (clientId == null ^ clientSecret == null) {
-      throw new IllegalArgumentException("Must specify both or neither clientId and clientSecret.");
+      throw new IllegalArgumentException(
+          "Must specify both or neither Mongo username and password.");
     } else {
       // TODO(agavra): TestContainers uses a different connection string, for now
       // we just assume that all non authenticated usage is via test containers
