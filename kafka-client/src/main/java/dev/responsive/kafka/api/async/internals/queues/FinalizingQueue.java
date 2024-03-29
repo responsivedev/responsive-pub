@@ -28,7 +28,7 @@ import org.slf4j.Logger;
  * StreamThread picks up events from this queue in order to execute any outputs
  * that were intercepted during processing, such as forwards and writes, before
  * ultimating marking the async event as completed. This queue is conceptually
- * the reverse of the {@link ProcessingQueue} in that it forms a channel from
+ * the reverse of the processing queue in that it forms a channel from
  * the AsyncThread(s) to the StreamThread, whereas the ProcessingQueue does the
  * exact opposite.
  * <p>
