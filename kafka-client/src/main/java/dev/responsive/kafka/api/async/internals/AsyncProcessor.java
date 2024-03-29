@@ -19,7 +19,8 @@ package dev.responsive.kafka.api.async.internals;
 import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadAsyncThreadPoolRegistry;
 
 import dev.responsive.kafka.api.async.AsyncProcessorSupplier;
-import dev.responsive.kafka.api.async.internals.contexts.AsyncContextRouter;
+import dev.responsive.kafka.api.async.internals.contexts.AsyncProcessorContext;
+import dev.responsive.kafka.api.async.internals.contexts.AsyncThreadProcessorContext;
 import dev.responsive.kafka.api.async.internals.contexts.StreamThreadProcessorContext;
 import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
 import dev.responsive.kafka.api.async.internals.events.DelayedForward;
@@ -106,7 +107,8 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   // Will route to the streamThreadContext when inside the user's #init or #close
   // will route to the asyncThreadContext belonging to the currently executing
   //   AsyncThread in between those, ie when the user's #process is invoked
-  private AsyncContextRouter<KOut, VOut> userContext;
+  private AsyncProcessorContext<KOut, VOut> userContext;
+  private AsyncThreadProcessorContext userThreadContext;
 
   public static <KIn, VIn, KOut, VOut> AsyncProcessor<KIn, VIn, KOut, VOut> createAsyncProcessor(
       final Processor<KIn, VIn, KOut, VOut> userProcessor,
@@ -148,6 +150,9 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
 
     initFields((InternalProcessorContext<KOut, VOut>) context);
 
+    userThreadContext = new AsyncThreadProcessorContext<>(originalContext);
+
+    userContext.setDelegateForCurrentThread(streamThreadContext);
     userProcessor.init(userContext);
 
     completeInitialization();
@@ -181,8 +186,11 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     this.taskId = context.taskId();
 
     this.originalContext = context;
-    this.streamThreadContext = new StreamThreadProcessorContext<>(originalContext);
-    this.userContext = new AsyncContextRouter<>(logPrefix, taskId.partition(), streamThreadContext);
+    this.userContext = new AsyncProcessorContext<>();
+    this.streamThreadContext = new StreamThreadProcessorContext<>(
+        originalContext,
+        userContext
+    );
 
     this.asyncProcessorName = originalContext.currentNode().name();
     this.logPrefix = String.format(
@@ -194,18 +202,9 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     this.finalizableRecords = new FinalizingQueue(logPrefix);
 
     this.threadPool = getAsyncThreadPool(context, streamThreadName);
-    this.threadPool.addProcessor(
-        taskId.partition(),
-        originalContext,
-        finalizableRecords
-    );
   }
 
   private void completeInitialization() {
-    // Set the user's context to processing mode so it knows to expect any calls after
-    // this point to come from the AsyncThread that is processing the event
-    userContext.startProcessingMode();
-
     final Map<String, AsyncKeyValueStore<?, ?>> accessedStores =
         streamThreadContext.getAllAsyncStores();
 
@@ -276,9 +275,6 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
         connectedStoreBuilders.values()
     );
 
-    // Tell the user context to turn off processing mode so it knows to expect no
-    // further calls from an AsyncThread after this
-    userContext.endProcessingMode();
     userProcessor.close();
   }
 
@@ -357,7 +353,13 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
       processableEvent.transitionToInputReady();
       eventsToSchedule.add(processableEvent);
     }
-    threadPool.scheduleForProcessing(taskId.partition(), eventsToSchedule);
+    threadPool.scheduleForProcessing(
+        taskId.partition(),
+        eventsToSchedule,
+        finalizableRecords,
+        userThreadContext,
+        userContext
+    );
   }
 
   private void drainFinalizingQueue() {

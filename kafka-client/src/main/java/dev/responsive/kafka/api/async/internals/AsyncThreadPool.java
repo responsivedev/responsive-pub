@@ -1,164 +1,78 @@
-/*
- * Copyright 2024 Responsive Computing, Inc.
- *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
- */
-
 package dev.responsive.kafka.api.async.internals;
 
+import dev.responsive.kafka.api.async.internals.contexts.AsyncProcessorContext;
 import dev.responsive.kafka.api.async.internals.contexts.AsyncThreadProcessorContext;
 import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
 import dev.responsive.kafka.api.async.internals.queues.FinalizingQueue;
-import dev.responsive.kafka.api.async.internals.queues.ProcessingQueue;
-import dev.responsive.kafka.api.async.internals.queues.WriteOnlyProcessingQueue;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
-import org.slf4j.Logger;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
-/**
- * Coordinates communication between the StreamThread and execution threads, as
- * well as protecting and managing shared objects and accesses
- */
 public class AsyncThreadPool {
+  private final ExecutorService executorService;
+  private final Map<Integer, Map<AsyncEvent, Future<?>>> inFlight = new HashMap<>();
 
-  private final LogContext logPrefix;
-  private final Logger log;
-
-  private final String streamThreadName;
-
-  // TODO: start up new threads when existing ones die to maintain the target size
-  private final int threadPoolSize;
-  private final Map<String, AsyncThread> threadPool;
-  private final WriteOnlyProcessingQueue processingQueue;
-
-  public AsyncThreadPool(
-      final String streamThreadName,
-      final int threadPoolSize
-  ) {
-    this.streamThreadName = streamThreadName;
-    this.threadPoolSize = threadPoolSize;
-    this.threadPool = new HashMap<>(threadPoolSize);
-
-    this.logPrefix = new LogContext(String.format("stream-thread [%s]", streamThreadName));
-    this.log = logPrefix.logger(AsyncThreadPool.class);
-
-    final ProcessingQueue processingQueue = new ProcessingQueue(logPrefix);
-    this.processingQueue = processingQueue;
-    startThreads(processingQueue);
+  public AsyncThreadPool(final String name, final int size) {
+    // todo: set the thread names
+    executorService = Executors.newFixedThreadPool(size);
   }
 
-  private void startThreads(final ProcessingQueue processingQueue) {
-    for (int i = 0; i < threadPoolSize; ++i) {
-      final String name = generateAsyncThreadName(streamThreadName, i);
-      final AsyncThread thread = new AsyncThread(name, processingQueue);
-
-      thread.setDaemon(true);
-      threadPool.put(name, thread);
-    }
-
-    for (final AsyncThread thread : threadPool.values()) {
-      thread.start();
-    }
-
-    log.info("Started up all {} async threads in this pool", threadPoolSize);
+  public void removeProcessor(final int partition) {
+    final Map<AsyncEvent, Future<?>> inFlightForTask = inFlight.get(partition);
+    inFlightForTask.values().forEach(f -> f.cancel(true));
   }
 
-  public void addProcessor(
-      final int partition,
-      final InternalProcessorContext<?, ?> originalContext,
-      final FinalizingQueue finalizingQueue
-  ) {
-    processingQueue.addPartition(partition);
-
-    final AsyncNodeContainer processorContainer = new AsyncNodeContainer(
-        streamThreadName,
-        partition,
-        new AsyncThreadProcessorContext<>(originalContext),
-        finalizingQueue
-    );
-
-    for (final AsyncThread thread : threadPool.values()) {
-      thread.addProcessor(processorContainer);
+  public <KOut, VOut> void scheduleForProcessing(
+      final int taskId,
+      final List<AsyncEvent> events,
+      final FinalizingQueue finalizingQueue,
+      final AsyncThreadProcessorContext<KOut, VOut> asyncThreadProcessorContext,
+      final AsyncProcessorContext<KOut, VOut> asyncProcessorContext
+      ) {
+    // todo: can also check in-flight for failed tasks
+    for (final var e : events) {
+      final Future<?> future = executorService.submit(new AsyncEventTask<>(
+          e,
+          asyncThreadProcessorContext,
+          asyncProcessorContext,
+          finalizingQueue));
+      inFlight.putIfAbsent(taskId, new HashMap<>());
+      inFlight.get(taskId).put(e, future);
     }
   }
 
-  public void removeProcessor(
-      final int partition
-  ) {
-    processingQueue.removePartition(partition);
-
-    for (final AsyncThread thread : threadPool.values()) {
-      thread.removeProcessor(partition);
-    }
-  }
-
-  public void scheduleForProcessing(final int partition, final List<AsyncEvent> events) {
-    processingQueue.offer(partition, events);
-  }
-
-  /**
-   * @return the name for this AsyncThread, formatted by appending a unique
-   *         index i with the base name of the StreamThread with index n, ie
-   *         AsyncThread.getName() --> {clientId}-StreamThread-{n}-{i}
-   */
-  private static String generateAsyncThreadName(
-      final String streamThreadName,
-      final int asyncThreadIndex
-  ) {
-    return String.format("%s-%d", streamThreadName, asyncThreadIndex);
-  }
-
-  /**
-   * Starts up a daemon thread that will send the shutdown signal to
-   * all AsyncThreads in this pool, then wait for them to join.
-   * <p>
-   * Should be called by the StreamThread that owns this pool
-   * when it is time for the StreamThread itself to shut down.
-   * The AsyncThreadPool is tied to the lifecycle of a StreamThread's
-   * main consumer, and will be created and closed alongside it.
-   */
   public void shutdown() {
-    final Thread shutdownThread = shutdownThread();
-    shutdownThread.setDaemon(true);
-    shutdownThread.start();
+    // todo: make me more orderly, but you get the basic idea
+    executorService.shutdownNow();
   }
 
-  private Thread shutdownThread() {
-    return new Thread(() -> {
+  private static class AsyncEventTask<KOut, VOut> implements Runnable {
+    private final AsyncEvent event;
+    private final AsyncThreadProcessorContext<KOut, VOut> context;
+    private final AsyncProcessorContext<KOut, VOut> wrappingContext;
+    private final FinalizingQueue finalizingQueue;
 
-      log.info("Sending shutdown signal to all async threads in this pool");
-      for (final AsyncThread thread : threadPool.values()) {
-        thread.close();
-      }
+    private AsyncEventTask(
+        final AsyncEvent event,
+        final AsyncThreadProcessorContext<KOut, VOut> context,
+        final AsyncProcessorContext<KOut, VOut> wrappingContext,
+        final FinalizingQueue finalizingQueue
+    ) {
+      this.event = event;
+      this.context = context;
+      this.wrappingContext = wrappingContext;
+      this.finalizingQueue = finalizingQueue;
+    }
 
-      // Close the queue after sending the shutdown signal to all threads to
-      // interrupt any threads that are stuck blocking on the queue
-      processingQueue.close();
-
-      for (final AsyncThread thread : threadPool.values()) {
-        try {
-          thread.join();
-        } catch (final InterruptedException e) {
-          log.warn("Interrupted while waiting on AsyncThread {} to join, will "
-                       + "skip waiting for any remaining threads to join and "
-                       + "proceed to shutdown", thread.getName());
-          Thread.currentThread().interrupt();
-        }
-      }
-    });
+    @Override
+    public void run() {
+      context.prepareToProcessNewEvent(event);
+      wrappingContext.setDelegateForCurrentThread(context);
+      event.inputRecordProcessor().run();
+      finalizingQueue.scheduleForFinalization(event);
+    }
   }
-
 }

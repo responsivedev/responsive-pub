@@ -21,6 +21,7 @@ import dev.responsive.kafka.api.async.internals.events.DelayedWrite;
 import dev.responsive.kafka.api.async.internals.stores.AsyncKeyValueStore;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
@@ -42,28 +43,38 @@ import org.apache.kafka.streams.state.KeyValueStore;
  *  (ie one per async processor per partition per StreamThread)
  */
 public class StreamThreadProcessorContext<KOut, VOut>
-    extends DelegatingInternalProcessorContext<KOut, VOut> {
+    extends DelegatingInternalProcessorContext<KOut, VOut, InternalProcessorContext<KOut, VOut>> {
 
   private final Map<String, AsyncKeyValueStore<?, ?>> storeNameToAsyncStore = new HashMap<>();
   private final ProcessorNode<?, ?, ?, ?> asyncProcessorNode;
+  private final InternalProcessorContext<KOut, VOut> delegate;
+  private final AsyncProcessorContext asyncProcessorContext;
+
+  @Override
+  public InternalProcessorContext<KOut, VOut> delegate() {
+    return delegate;
+  }
 
   public StreamThreadProcessorContext(
-      final ProcessorContext<KOut, VOut> delegate
+      final InternalProcessorContext<KOut, VOut> delegate,
+      final AsyncProcessorContext<KOut, VOut> asyncProcessorContext
   ) {
-    super((InternalProcessorContext<KOut, VOut>) delegate);
-
-    asyncProcessorNode = super.currentNode();
+    super();
+    this.delegate = Objects.requireNonNull(delegate);
+    this.asyncProcessorContext = Objects.requireNonNull(asyncProcessorContext);
+    asyncProcessorNode = delegate.currentNode();
   }
 
   @Override
   @SuppressWarnings("unchecked")
   public <S extends StateStore> S getStateStore(final String name) {
-    final S userDelegate = super.getStateStore(name);
+    final S userDelegate = delegate.getStateStore(name);
     if (userDelegate instanceof KeyValueStore) {
       final var asyncStore = new AsyncKeyValueStore<>(
           name,
-          super.partition(),
-          (KeyValueStore<?, ?>) userDelegate
+          delegate.partition(),
+          (KeyValueStore<?, ?>) userDelegate,
+          asyncProcessorContext
       );
       storeNameToAsyncStore.put(name, asyncStore);
       return (S) asyncStore;
@@ -83,8 +94,8 @@ public class StreamThreadProcessorContext<KOut, VOut>
     // both ultimately just return the recordContext we set here. So we don't need to
     // worry about setting the recordMetadata separately, even though #recordMetadata is
     // exposed to the user, since #setRecordContext takes care of that
-    super.setRecordContext(recordContext);
-    super.setCurrentNode(asyncProcessorNode);
+    delegate.setRecordContext(recordContext);
+    delegate.setCurrentNode(asyncProcessorNode);
   }
 
   public <KS, VS> void executeDelayedWrite(
@@ -100,9 +111,9 @@ public class StreamThreadProcessorContext<KOut, VOut>
       final DelayedForward<K, V> delayedForward
   ) {
     if (delayedForward.isFixedKey()) {
-      super.forward(delayedForward.fixedKeyRecord(), delayedForward.childName());
+      delegate.forward(delayedForward.fixedKeyRecord(), delayedForward.childName());
     } else {
-      super.forward(delayedForward.record(), delayedForward.childName());
+      delegate.forward(delayedForward.record(), delayedForward.childName());
     }
   }
 

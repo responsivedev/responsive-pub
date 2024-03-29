@@ -63,8 +63,7 @@ import org.apache.kafka.streams.processor.api.RecordMetadata;
  *   (ie one per AsyncThread per StreamThread per async processor per partition)
  *   Equivalently, one per AsyncThread for each "original" ProcessorContext in Streams
  */
-public class AsyncThreadProcessorContext<KOut, VOut>
-    implements ProcessorContext<KOut, VOut>, FixedKeyProcessorContext<KOut, VOut> {
+public class AsyncThreadProcessorContext<KOut, VOut> implements MergedProcessorContext<KOut, VOut> {
 
   // The AsyncEvent that is currently being processed by this AsyncThread. Updated each
   // time a new event is picked up from the processing queue but before beginning
