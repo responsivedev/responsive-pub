@@ -34,7 +34,8 @@ import org.apache.kafka.streams.TopologyDescription;
 import org.apache.kafka.streams.TopologyTestDriver;
 
 public class ResponsiveTopologyTestDriver extends TopologyTestDriver {
-  public static final String RESPONSIVE_TTD_ID = "Responsive_TopologyTestDriver";
+  public static final String RESPONSIVE_TTD_ORG = "Responsive";
+  public static final String RESPONSIVE_TTD_ENV = "TopologyTestDriver";
 
   private final TTDCassandraClient client;
 
@@ -156,11 +157,15 @@ public class ResponsiveTopologyTestDriver extends TopologyTestDriver {
     final Properties props = new Properties();
     props.putAll(userProps);
 
-    props.put(ResponsiveConfig.TENANT_ID_CONFIG, RESPONSIVE_TTD_ID);
+    props.put(ResponsiveConfig.RESPONSIVE_ORG_CONFIG, RESPONSIVE_TTD_ORG);
+    props.put(ResponsiveConfig.RESPONSIVE_ENV_CONFIG, RESPONSIVE_TTD_ENV);
     props.put(ResponsiveConfig.STORE_FLUSH_INTERVAL_TRIGGER_MS_CONFIG, 0);
 
     props.putIfAbsent(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
-    props.putIfAbsent(StreamsConfig.APPLICATION_ID_CONFIG, RESPONSIVE_TTD_ID);
+    props.putIfAbsent(
+        StreamsConfig.APPLICATION_ID_CONFIG,
+        RESPONSIVE_TTD_ORG + "-" + RESPONSIVE_TTD_ENV
+    );
     return props;
   }
 

@@ -16,9 +16,9 @@
 
 package dev.responsive.kafka.integration;
 
-import static dev.responsive.kafka.api.config.ResponsiveConfig.CLIENT_ID_CONFIG;
-import static dev.responsive.kafka.api.config.ResponsiveConfig.CLIENT_SECRET_CONFIG;
-import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_HOSTNAME_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_ENDPOINT_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_PASSWORD_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_USERNAME_CONFIG;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.getCassandraValidName;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.pipeInput;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_CONFIG;
@@ -413,13 +413,13 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
           throw new IllegalArgumentException("Unexpected type " + type);
       }
     } else if (EXTENSION.backend == StorageBackend.MONGO_DB) {
-      final var hostname = config.getString(STORAGE_HOSTNAME_CONFIG);
-      final String clientId = config.getString(CLIENT_ID_CONFIG);
-      final Password clientSecret = config.getPassword(CLIENT_SECRET_CONFIG);
+      final var hostname = config.getString(MONGO_ENDPOINT_CONFIG);
+      final String user = config.getString(MONGO_USERNAME_CONFIG);
+      final Password pass = config.getPassword(MONGO_PASSWORD_CONFIG);
       final var mongoClient = SessionUtil.connect(
           hostname,
-          clientId,
-          clientSecret == null ? null : clientSecret.value()
+          user,
+          pass == null ? null : pass.value()
       );
       table = new MongoKVTable(
           mongoClient,

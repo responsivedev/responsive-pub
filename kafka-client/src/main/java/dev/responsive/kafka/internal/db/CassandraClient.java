@@ -141,7 +141,7 @@ public class CassandraClient {
     return new RemoteMonitor(
         executor,
         checkRemote,
-        Duration.ofMillis(config.getLong(ResponsiveConfig.REMOTE_TABLE_CHECK_INTERVAL_MS_CONFIG))
+        Duration.ofMillis(config.getLong(ResponsiveConfig.CASSANDRA_CHECK_INTERVAL_MS))
     );
   }
 
