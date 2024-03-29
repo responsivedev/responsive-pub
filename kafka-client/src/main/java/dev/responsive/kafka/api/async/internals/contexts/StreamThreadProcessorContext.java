@@ -24,6 +24,7 @@ import dev.responsive.kafka.api.async.internals.stores.AsyncKeyValueStore;
 import dev.responsive.kafka.api.async.internals.stores.AsyncTimestampedKeyValueStore;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
@@ -54,15 +55,18 @@ public class StreamThreadProcessorContext<KOut, VOut>
   private final Map<String, AsyncKeyValueStore<?, ?>> storeNameToAsyncStore = new HashMap<>();
   private final ProcessorNode<?, ?, ?, ?> asyncProcessorNode;
   private final InternalProcessorContext<KOut, VOut> originalContext;
+  private final AsyncUserProcessorContext<KOut, VOut> userProcessorContext;
 
   public StreamThreadProcessorContext(
       final String logPrefix,
-      final InternalProcessorContext<KOut, VOut> originalContext
+      final InternalProcessorContext<KOut, VOut> originalContext,
+      final AsyncUserProcessorContext<KOut, VOut> userProcessorContext
   ) {
     super();
     this.log = new LogContext(logPrefix).logger(StreamThreadProcessorContext.class);
     this.asyncProcessorNode = originalContext.currentNode();
     this.originalContext = originalContext;
+    this.userProcessorContext = Objects.requireNonNull(userProcessorContext);
   }
 
   @Override
@@ -84,8 +88,9 @@ public class StreamThreadProcessorContext<KOut, VOut>
     } else if (userDelegate instanceof KeyValueStore) {
       final var asyncStore = new AsyncKeyValueStore<>(
           name,
-          taskId().partition(),
-          (KeyValueStore<?, ?>) userDelegate
+          originalContext.partition(),
+          (KeyValueStore<?, ?>) userDelegate,
+          userProcessorContext
       );
       storeNameToAsyncStore.put(name, asyncStore);
       return (S) asyncStore;
@@ -139,6 +144,7 @@ public class StreamThreadProcessorContext<KOut, VOut>
     }
   }
 
+  @Override
   public InternalProcessorContext<KOut, VOut> delegate() {
     return originalContext;
   }

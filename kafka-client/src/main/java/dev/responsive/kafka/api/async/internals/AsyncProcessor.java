@@ -99,6 +99,8 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   // the async context owned by the StreamThread that is running this processor/task
   private StreamThreadProcessorContext<KOut, VOut> streamThreadContext;
 
+  private InternalProcessorContext<KOut, VOut> originalContext;
+
   // Wrap the context handed to the user in the async router, to ensure that
   // subsequent calls to processor context APIs made within the user's #process
   // implementation will be routed to the specific async context corresponding
@@ -188,9 +190,17 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
         streamThreadName, asyncProcessorName, taskId.partition()
     );
     this.log = new LogContext(logPrefix).logger(AsyncProcessor.class);
-
-    this.streamThreadContext = new StreamThreadProcessorContext<>(logPrefix, internalContext);
-    this.userContext = new AsyncUserProcessorContext<>(streamThreadName, taskContext, logPrefix);
+    this.originalContext = internalContext;
+    this.userContext = new AsyncUserProcessorContext<>(
+        streamThreadName,
+        internalContext,
+        logPrefix
+    );
+    this.streamThreadContext = new StreamThreadProcessorContext<>(
+        logPrefix,
+        originalContext,
+        userContext
+    );
     userContext.setDelegateForStreamThread(streamThreadContext);
 
     final ResponsiveConfig configs = ResponsiveConfig.responsiveConfig(userContext.appConfigs());
@@ -200,12 +210,6 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     this.finalizingQueue = new FinalizingQueue(logPrefix);
 
     this.threadPool = getAsyncThreadPool(internalContext, streamThreadName);
-    this.threadPool.addProcessor(
-        asyncProcessorName,
-        taskId.partition(),
-        userContext,
-        finalizingQueue
-    );
   }
 
   private void completeInitialization() {
@@ -448,7 +452,14 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     }
     final int numScheduled = eventsToSchedule.size();
     if (numScheduled > 0) {
-      threadPool.scheduleForProcessing(taskId.partition(), eventsToSchedule);
+      threadPool.scheduleForProcessing(
+          asyncProcessorName,
+          taskId.partition(),
+          eventsToSchedule,
+          finalizableRecords,
+          originalContext,
+          userContext
+      );
     }
 
     return numScheduled;
