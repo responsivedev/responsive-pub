@@ -55,9 +55,7 @@ public class ResponsiveConfig extends AbstractConfig {
 
   public static final String CONTROLLER_ENDPOINT_CONFIG = "responsive.controller.endpoint";
   private static final String CONTROLLER_ENDPOINT_DOC = "The endpoint of the running responsive "
-      + "cloud controller (not including the tenant prefix). If enabled, metrics will be sent to "
-      + "this endpoint.";
-  private static final String CONTROLLER_ENDPOINT_DEFAULT = "ctl.us-west-2.aws.cloud.responsive.dev";
+      + "cloud controller. If enabled, metrics will be sent to this endpoint.";
 
   public static final String PLATFORM_API_KEY_CONFIG = "responsive.platform.api.key";
   private static final String PLATFORM_API_KEY_DOC = "The API Key provided for Metrics access.";
@@ -78,13 +76,13 @@ public class ResponsiveConfig extends AbstractConfig {
   // ------------------ MongoDB specific configurations -----------------------
 
   public static final String MONGO_USERNAME_CONFIG = "responsive.mongo.username";
-  private static final String MONGO_USERNAME_DOC = "";
+  private static final String MONGO_USERNAME_DOC = "The username to use when connecting to MongoDB.";
 
   public static final String MONGO_PASSWORD_CONFIG = "responsive.mongo.password";
-  private static final String MONGO_PASSWORD_DOC = "";
+  private static final String MONGO_PASSWORD_DOC = "The password to use when connecting to MongoDB.";
 
   public static final String MONGO_ENDPOINT_CONFIG = "responsive.mongo.endpoint";
-  private static final String MONGO_ENDPOINT_DOC = "";
+  private static final String MONGO_ENDPOINT_DOC = "The MongoDB endpoint to connect to.";
 
   public static final String MONGO_COLLECTION_SHARDING_ENABLED_CONFIG = "responsive.mongo.collection.sharding.enabled";
   private static final boolean MONGO_COLLECTION_SHARDING_ENABLED_DEFAULT = false;
@@ -108,19 +106,19 @@ public class ResponsiveConfig extends AbstractConfig {
   // ------------------ ScyllaDB specific configurations ----------------------
 
   public static final String CASSANDRA_USERNAME_CONFIG = "responsive.cassandra.username";
-  private static final String CASSANDRA_USERNAME_DOC = "";
+  private static final String CASSANDRA_USERNAME_DOC = "The username to use when connecting to Cassandra";
 
   public static final String CASSANDRA_PASSWORD_CONFIG = "responsive.cassandra.password";
-  private static final String CASSANDRA_PASSWORD_DOC = "";
+  private static final String CASSANDRA_PASSWORD_DOC = "The password to use when connecting to Cassandra";
 
   public static final String CASSANDRA_HOSTNAME_CONFIG = "responsive.cassandra.hostname";
-  private static final String CASSANDRA_HOSTNAME_DOC = "";
+  private static final String CASSANDRA_HOSTNAME_DOC = "The hostname to use when connecting to Cassandra";
 
   public static final String CASSANDRA_PORT_CONFIG = "responsive.cassandra.port";
-  private static final String CASSANDRA_PORT_DOC = "";
+  private static final String CASSANDRA_PORT_DOC = "The port to use when connecting to Cassandra";
 
   public static final String CASSANDRA_DATACENTER_CONFIG = "responsive.cassandra.datacenter";
-  private static final String CASSANDRA_DATACENTER_DOC = "";
+  private static final String CASSANDRA_DATACENTER_DOC = "The datacenter to use when connecting to Cassandra";
 
   public static final String READ_CONSISTENCY_LEVEL_CONFIG = "responsive.cassandra.consistency.reads";
   private static final String READ_CONSISTENCY_LEVEL_DEFAULT = ConsistencyLevel.QUORUM.name();
@@ -357,7 +355,7 @@ public class ResponsiveConfig extends AbstractConfig {
       ).define(
           CONTROLLER_ENDPOINT_CONFIG,
           Type.STRING,
-          CONTROLLER_ENDPOINT_DEFAULT,
+          "",
           Importance.HIGH,
           CONTROLLER_ENDPOINT_DOC
       ). define(
