@@ -97,9 +97,9 @@ public class AsyncEvent {
   // are defined below
   public enum State {
     SCHEDULING,
-    INPUT_READY,
+    TO_PROCESS,
     PROCESSING,
-    OUTPUT_READY,
+    TO_FINALIZE,
     FINALIZING,
     DONE
   }
@@ -198,40 +198,40 @@ public class AsyncEvent {
     return currentState.equals(State.DONE);
   }
 
-  public void transitionToInputReady() {
+  public void transitionToToProcess() {
     if (!currentState.equals(State.SCHEDULING)) {
       log.error("[{}] Attempted to mark an async event as ready for processing but the event was "
                     + "not in the SCHEDULING state", currentState.name());
-      throw new IllegalStateException("Cannot transition to INPUT_READY from the state "
+      throw new IllegalStateException("Cannot transition to AWAITING_PROCESS from the state "
                                           + currentState.name());
     }
-    currentState = State.INPUT_READY;
+    currentState = State.TO_PROCESS;
   }
 
   public void transitionToProcessing() {
-    if (!currentState.equals(State.INPUT_READY)) {
+    if (!currentState.equals(State.TO_PROCESS)) {
       log.error("[{}] Attempted to mark an async event as being processed but the event was "
-                    + "not in the INPUT_READY state", currentState.name());
+                    + "not in the TO_PROCESS state", currentState.name());
       throw new IllegalStateException("Cannot transition to PROCESSING from the state "
                                           + currentState.name());
     }
     currentState = State.PROCESSING;
   }
 
-  public void transitionToOutputReady() {
+  public void transitionToToFinalize() {
     if (!currentState.equals(State.PROCESSING)) {
-      log.error("[{}] Attempted to mark an async event as ready for output processing but "
+      log.error("[{}] Attempted to mark an async event as ready for finalization but "
                     + "the event was not in the PROCESSING state", currentState.name());
-      throw new IllegalStateException("Cannot transition to OUTPUT_READY from the state "
+      throw new IllegalStateException("Cannot transition to TO_FINALIZE from the state "
                                           + currentState.name());
     }
-    currentState = State.OUTPUT_READY;
+    currentState = State.TO_FINALIZE;
   }
 
   public void transitionToFinalizing() {
-    if (!currentState.equals(State.OUTPUT_READY)) {
+    if (!currentState.equals(State.TO_FINALIZE)) {
       log.error("[{}] Attempted to mark an async event as finalizing but the event was not "
-                    + "in the OUTPUT_READY state", currentState.name());
+                    + "in the AWAITING_FINALIZE state", currentState.name());
       throw new IllegalStateException("Cannot transition to FINALIZING from the state "
                                           + currentState.name());
     }

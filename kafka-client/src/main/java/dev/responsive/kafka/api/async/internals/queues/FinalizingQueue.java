@@ -58,7 +58,7 @@ public class FinalizingQueue {
   ) {
     // Transition to OUTPUT_READY to signal that the event is done with processing
     // and is currently awaiting finalization by the StreamThread
-    processedEvent.transitionToOutputReady();
+    processedEvent.transitionToToFinalize();
 
     finalizableRecords.add(processedEvent);
   }

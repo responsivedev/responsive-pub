@@ -354,7 +354,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
 
     while (schedulingQueue.hasProcessableRecord()) {
       final AsyncEvent processableEvent = schedulingQueue.poll();
-      processableEvent.transitionToInputReady();
+      processableEvent.transitionToToProcess();
       eventsToSchedule.add(processableEvent);
     }
     threadPool.scheduleForProcessing(taskId.partition(), eventsToSchedule);
