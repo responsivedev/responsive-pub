@@ -18,6 +18,7 @@ package dev.responsive.kafka.internal.stores;
 
 import com.datastax.oss.driver.shaded.guava.common.annotations.VisibleForTesting;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.function.Consumer;
 import org.apache.kafka.common.TopicPartition;
@@ -32,6 +33,7 @@ public final class ResponsiveStoreRegistration {
   private final TopicPartition changelogTopicPartition;
   private final Consumer<Long> onCommit;
   private final String threadId;
+  private final InjectedStoreArgs injectedStoreArgs = new InjectedStoreArgs();
 
   private final OptionalLong startOffset; // stored offset during init, (where restore should start)
 
@@ -68,6 +70,10 @@ public final class ResponsiveStoreRegistration {
 
   public Consumer<Long> onCommit() {
     return onCommit;
+  }
+
+  public InjectedStoreArgs injectedStoreArgs() {
+    return injectedStoreArgs;
   }
 
   public String threadId() {

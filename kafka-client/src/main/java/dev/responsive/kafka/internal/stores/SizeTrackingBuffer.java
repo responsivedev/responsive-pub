@@ -23,6 +23,7 @@ import java.util.Collections;
 import java.util.NavigableMap;
 import java.util.Objects;
 import java.util.TreeMap;
+import java.util.concurrent.ConcurrentSkipListMap;
 
 public class SizeTrackingBuffer<K extends Comparable<K>> {
   private final NavigableMap<K, Result<K>> buffer;
@@ -32,7 +33,7 @@ public class SizeTrackingBuffer<K extends Comparable<K>> {
 
   public SizeTrackingBuffer(final KeySpec<K> extractor) {
     this.extractor = Objects.requireNonNull(extractor);
-    buffer = new TreeMap<>();
+    buffer = new ConcurrentSkipListMap<>();
     reader = Collections.unmodifiableNavigableMap(buffer);
   }
 
