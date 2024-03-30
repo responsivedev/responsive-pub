@@ -59,7 +59,8 @@ public class AsyncFlushingKeyValueStore
     this.flushListeners = flushListeners;
     this.log = new LogContext(
         String.format("stream-thread [%s] %s: ",
-                      flushListeners.streamThreadName(), inner.name())
+                      flushListeners.streamThreadName(),
+                      inner.name())
     ).logger(AsyncFlushingKeyValueStore.class);
   }
 

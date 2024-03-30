@@ -17,7 +17,7 @@
 package dev.responsive.kafka.integration;
 
 import static dev.responsive.kafka.api.config.ResponsiveConfig.REQUEST_TIMEOUT_MS_CONFIG;
-import static dev.responsive.kafka.testutils.IntegrationTestUtils.pipeRecords;
+import static dev.responsive.kafka.testutils.IntegrationTestUtils.pipeTimestampedRecords;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.startAppAndAwaitRunning;
 import static org.apache.kafka.clients.CommonClientConfigs.SESSION_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
@@ -178,7 +178,7 @@ public class ResponsiveKeyValueStoreIntegrationTest {
             new ResponsiveKafkaStreams(builder.build(), properties)
     ) {
       startAppAndAwaitRunning(Duration.ofSeconds(15), kafkaStreams);
-      pipeRecords(producer, inputTopic(), inputEvents);
+      pipeTimestampedRecords(producer, inputTopic(), inputEvents);
 
       final long maxWait = inputEvents.get(inputEvents.size() - 1).timestamp() + 2_000;
       assertThat(

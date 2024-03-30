@@ -186,6 +186,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     super(
         params.topology,
         propsWithOverrides(
+            params.streamsConfig.getInt(NUM_STREAM_THREADS_CONFIG),
             params.responsiveConfig,
             params.sessionClients,
             params.storeRegistry,
@@ -259,6 +260,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
    * before these get finalized as a {@link StreamsConfig} object
    */
   private static Properties propsWithOverrides(
+      final int numStreamThreads,
       final ResponsiveConfig configs,
       final SessionClients sessionClients,
       final ResponsiveStoreRegistry storeRegistry,
@@ -267,7 +269,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     final Properties propsWithOverrides = new Properties();
 
     final AsyncThreadPoolRegistry asyncRegistry = new AsyncThreadPoolRegistry(
-        configs.getInt(NUM_STREAM_THREADS_CONFIG),
+        numStreamThreads,
         configs.getInt(ASYNC_THREAD_POOL_SIZE_CONFIG)
     );
 
