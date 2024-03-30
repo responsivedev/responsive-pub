@@ -17,8 +17,8 @@
 package dev.responsive.kafka.api.async.internals.queues;
 
 import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
-import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
@@ -32,27 +32,30 @@ import org.slf4j.Logger;
  * the AsyncThread(s) to the StreamThread, whereas the ProcessingQueue does the
  * exact opposite.
  * <p>
+ * Events in this queue are in the {@link AsyncEvent.State#FINALIZING} state
+ * <p>
  * Threading notes:
- * -Produces to queue --> AsyncThread
- * -Consumes from queue --> StreamThread
+ * -Produces to queue --> AsyncThread (see {@link WriteOnlyFinalizingQueue})
+ * -Consumes from queue --> StreamThread (see {@link ReadOnlyFinalizingQueue})
  * -One per physical AsyncProcessor instance
  *   (ie per logical processor per partition per StreamThread)
+ *
+ * <p> TODO: implement mechanism for AsyncThreads to forward processing errors
+ *       to the StreamThread to rethrow
  */
-public class FinalizingQueue {
+public class FinalizingQueue implements ReadOnlyFinalizingQueue, WriteOnlyFinalizingQueue {
 
   private final Logger log;
-  private final Queue<AsyncEvent> finalizableRecords = new ConcurrentLinkedQueue<>();
+  private final BlockingQueue<AsyncEvent> finalizableRecords = new LinkedBlockingQueue<>();
 
   public FinalizingQueue(final String logPrefix) {
     this.log = new LogContext(logPrefix).logger(FinalizingQueue.class);
   }
 
   /**
-   * Schedules a record that the AsyncThread finished processing and inserts it
-   * into the queue for the StreamThread to pick up for finalization
-   * <p>
-   * To be executed by AsyncThreads only
+   * See {@link WriteOnlyFinalizingQueue#scheduleForFinalization(AsyncEvent)}
    */
+  @Override
   public void scheduleForFinalization(
       final AsyncEvent processedEvent
   ) {
@@ -64,14 +67,25 @@ public class FinalizingQueue {
   }
 
   /**
-   * @return the next finalizable event, or null if there are none
-   * <p>
-   * To be executed by the StreamThread only
+   * See {@link ReadOnlyFinalizingQueue#nextFinalizableEvent()}
    */
+  @Override
   public AsyncEvent nextFinalizableEvent() {
     return finalizableRecords.poll();
   }
 
+  /**
+   * See {@link ReadOnlyFinalizingQueue#waitForFinalizableEvent()}
+   */
+  @Override
+  public AsyncEvent waitForFinalizableEvent() throws InterruptedException {
+    return finalizableRecords.take();
+  }
+
+  /**
+   * See {@link ReadOnlyFinalizingQueue#isEmpty()}
+   */
+  @Override
   public boolean isEmpty() {
     return finalizableRecords.isEmpty();
   }

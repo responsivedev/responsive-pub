@@ -16,17 +16,21 @@
 
 package dev.responsive.kafka.api.async.internals.contexts;
 
+import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
+import dev.responsive.kafka.api.async.internals.events.AsyncEvent.State;
 import dev.responsive.kafka.api.async.internals.events.DelayedForward;
 import dev.responsive.kafka.api.async.internals.events.DelayedWrite;
 import dev.responsive.kafka.api.async.internals.stores.AsyncKeyValueStore;
 import java.util.HashMap;
 import java.util.Map;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.slf4j.Logger;
 
 /**
  * A wrapper around the original processor context to be used by the StreamThread.
@@ -44,15 +48,19 @@ import org.apache.kafka.streams.state.KeyValueStore;
 public class StreamThreadProcessorContext<KOut, VOut>
     extends DelegatingInternalProcessorContext<KOut, VOut> {
 
+  private final Logger log;
+
   private final Map<String, AsyncKeyValueStore<?, ?>> storeNameToAsyncStore = new HashMap<>();
   private final ProcessorNode<?, ?, ?, ?> asyncProcessorNode;
 
   public StreamThreadProcessorContext(
+      final String logPrefix,
       final ProcessorContext<KOut, VOut> delegate
   ) {
     super((InternalProcessorContext<KOut, VOut>) delegate);
 
-    asyncProcessorNode = super.currentNode();
+    this.log = new LogContext(logPrefix).logger(StreamThreadProcessorContext.class);
+    this.asyncProcessorNode = super.currentNode();
   }
 
   @Override
@@ -68,6 +76,7 @@ public class StreamThreadProcessorContext<KOut, VOut>
       storeNameToAsyncStore.put(name, asyncStore);
       return (S) asyncStore;
     } else {
+      log.error("Attempted to connect window/session store with async processor");
       throw new UnsupportedOperationException(
           "Window and Session stores are not yet supported with async processing");
     }
@@ -77,7 +86,17 @@ public class StreamThreadProcessorContext<KOut, VOut>
    * (Re)set all inner state and metadata to prepare for a delayed async execution
    * such as processing input records or forwarding output records
    */
-  public void prepareToFinalizeEvent(final ProcessorRecordContext recordContext) {
+  public void prepareToFinalizeEvent(final AsyncEvent event) {
+    if (!event.currentState().equals(State.PROCESSING)) {
+      log.error("Attempted to prepare event for finalization but currentState was {}",
+                event.currentState());
+      throw new IllegalStateException(
+          "Must prepare event for finalization while it's in the PROCESSING state"
+      );
+    }
+
+    final ProcessorRecordContext recordContext = event.recordContext();
+
     // Note: the "RecordContext" and "RecordMetadata" refer to/are the same thing, and
     // even though they have separate getters with slightly different return types, they
     // both ultimately just return the recordContext we set here. So we don't need to

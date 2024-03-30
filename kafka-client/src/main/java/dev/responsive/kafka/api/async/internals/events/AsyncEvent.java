@@ -194,8 +194,8 @@ public class AsyncEvent {
     return (DelayedWrite<KS, VS>) outputWrites.poll();
   }
 
-  public boolean isDone() {
-    return currentState.equals(State.DONE);
+  public State currentState() {
+    return currentState;
   }
 
   public void transitionToToProcess() {

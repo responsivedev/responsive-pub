@@ -177,19 +177,20 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   private void initFields(
       final InternalProcessorContext<KOut, VOut> context
   ) {
-    this.streamThreadName = Thread.currentThread().getName();
-    this.taskId = context.taskId();
-
     this.originalContext = context;
-    this.streamThreadContext = new StreamThreadProcessorContext<>(originalContext);
-    this.userContext = new AsyncContextRouter<>(logPrefix, taskId.partition(), streamThreadContext);
 
+    this.streamThreadName = Thread.currentThread().getName();
+    this.taskId = originalContext.taskId();
     this.asyncProcessorName = originalContext.currentNode().name();
+
     this.logPrefix = String.format(
         "stream-thread [%s] [%s-%d] ",
         streamThreadName, asyncProcessorName, taskId.partition()
     );
     this.log = new LogContext(logPrefix).logger(AsyncProcessor.class);
+
+    this.streamThreadContext = new StreamThreadProcessorContext<>(logPrefix, originalContext);
+    this.userContext = new AsyncContextRouter<>(logPrefix, taskId.partition(), streamThreadContext);
 
     this.finalizableRecords = new FinalizingQueue(logPrefix);
 
@@ -215,7 +216,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
         streamThreadName,
         taskId.partition(),
         connectedStoreBuilders.values(),
-        this::flushAndAwaitCompletion
+        this::flushAndAwaitPendingEvents
     );
   }
 
@@ -308,18 +309,34 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    * the topology, as well as all state store operations to be applied. Called at the beginning of
    * each commit, similar to #flushCache
    */
-  public void flushAndAwaitCompletion() {
+  public void flushAndAwaitPendingEvents() {
+
+    // Make a (non-blocking) pass through the finalizing queue up front, to
+    // free up any recently-processed events before we attempt to drain the
+    // scheduling queue
+    drainFinalizingQueue();
+
     while (!isCompleted()) {
 
-      drainSchedulingQueue();
-      drainFinalizingQueue();
+      // Start by scheduling all unblocked events to hand off any events that
+      // were just unblocked by whatever we just finalized
+      final int numScheduled = drainSchedulingQueue();
 
-      // TODO: use a Condition to avoid busy waiting
-      try {
-        Thread.sleep(1);
-      } catch (final InterruptedException e) {
-        throw new StreamsException("Interrupted while waiting for async completion", taskId);
+      // Need to finalize at least one event per iteration, otherwise there's no
+      // point returning to the scheduling queue since nothing new was unblocked
+      final int numFinalized = drainFinalizingQueue();
+      if (numFinalized == 0) {
+        try {
+          final AsyncEvent finalizableEvent = finalizableRecords.waitForFinalizableEvent();
+          completePendingEvent(finalizableEvent);
+        } catch (final Exception e) {
+          log.error("Exception caught while waiting for an event to finalize", e);
+          throw new StreamsException("Failed to flush async processor", e, taskId);
+        }
       }
+      log.debug("Scheduled {} events and finalized {} events",
+                numScheduled, numFinalized == 0 ? 1 : numFinalized
+      );
     }
   }
 
@@ -342,14 +359,29 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     // Start by going through the events waiting to be finalized and finish executing their
     // outputs, if any, so we can mark them complete and potentially free up blocked events
     // waiting to be scheduled.
-    drainFinalizingQueue();
+    final int numFinalized = drainFinalizingQueue();
+    log.trace("Finalized {} events", numFinalized);
 
     // Then we check the scheduling queue and hand everything that is able to be processed
     // off to the processing queue for the AsyncThread to continue from here
-    drainSchedulingQueue();
+    final int numScheduled = drainSchedulingQueue();
+    log.trace("Scheduled {} events", numScheduled);
   }
 
-  private void drainSchedulingQueue() {
+  /**
+   * Polls all the available records from the {@link SchedulingQueue}
+   * without waiting for any blocked events to become schedulable.
+   * Makes a single pass and schedules only the current set of
+   * schedulable events.
+   * <p>
+   * There may be blocked events still waiting in the scheduling queue
+   * after each invocation of this method, so the caller should make
+   * sure to test whether the scheduling queue is empty after this method
+   * returns, if the goal is to schedule all pending events.
+   *
+   * @return the number of events that were scheduled
+   */
+  private int drainSchedulingQueue() {
     final List<AsyncEvent> eventsToSchedule = new LinkedList<>();
 
     while (schedulingQueue.hasProcessableRecord()) {
@@ -358,26 +390,55 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
       eventsToSchedule.add(processableEvent);
     }
     threadPool.scheduleForProcessing(taskId.partition(), eventsToSchedule);
+    return eventsToSchedule.size();
   }
 
-  private void drainFinalizingQueue() {
+  /**
+   * Polls all the available records from the {@link FinalizingQueue}
+   * without waiting for any new events to arrive. Makes a single pass
+   * and completes only the current set of finalizable events, which
+   * means there will most likely be pending events still in flight
+   * for this processor that will need to be finalized later.
+   *
+   * @return the number of events that were finalized
+   */
+  private int drainFinalizingQueue() {
+    int count = 0;
     while (!finalizableRecords.isEmpty()) {
       final AsyncEvent event = finalizableRecords.nextFinalizableEvent();
-
-      streamThreadContext.prepareToFinalizeEvent(event.recordContext());
-
-      finalizeEvent(event);
-
-      pendingEvents.remove(event);
-      schedulingQueue.unblockKey(event.inputKey());
+      completePendingEvent(event);
+      ++count;
     }
+    return count;
   }
 
-  private void finalizeEvent(final AsyncEvent event) {
-    event.transitionToFinalizing();
+  /**
+   * Complete processing one pending event.
+   * Accepts an event pulled from the {@link FinalizingQueue} and finalizes
+   * it before marking the event as done.
+   */
+  private void completePendingEvent(final AsyncEvent finalizableEvent) {
+    preFinalize(finalizableEvent);
+    finalize(finalizableEvent);
+    postFinalize(finalizableEvent);
+  }
 
+  /**
+   * Prepare to finalize an event by
+   */
+  private void preFinalize(final AsyncEvent event) {
+    streamThreadContext.prepareToFinalizeEvent(event);
+    event.transitionToFinalizing();
+  }
+
+  /**
+   * Perform finalization of this event by processing output records,
+   * ie executing forwards and writes that were intercepted from #process
+   */
+  private void finalize(final AsyncEvent event) {
     DelayedWrite<?, ?> nextDelayedWrite = event.nextWrite();
     DelayedForward<KOut, VOut> nextDelayedForward = event.nextForward();
+
     while (nextDelayedWrite != null || nextDelayedForward != null) {
 
       if (nextDelayedWrite != null) {
@@ -392,7 +453,17 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
       nextDelayedWrite = event.nextWrite();
       nextDelayedForward = event.nextForward();
     }
+  }
+
+  /**
+   * After finalization, the event can be transitioned to {@link AsyncEvent.State#DONE}
+   * and cleared from the set of pending events, unblocking that key.
+   */
+  private void postFinalize(final AsyncEvent event) {
     event.transitionToDone();
+
+    pendingEvents.remove(event);
+    schedulingQueue.unblockKey(event.inputKey());
   }
 
   /**
