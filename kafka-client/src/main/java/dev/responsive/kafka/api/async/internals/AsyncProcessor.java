@@ -280,7 +280,12 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     // Tell the user context to turn off processing mode so it knows to expect no
     // further calls from an AsyncThread after this
     userContext.endProcessingMode();
-    userProcessor.close();
+
+    if (userProcessor != null) {
+      userProcessor.close();
+    } else {
+      userFixedKeyProcessor.close();
+    }
   }
 
   private static void unregisterFlushListenerForStoreBuilders(
@@ -297,10 +302,10 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
       final String streamThreadName,
       final int partition,
       final Collection<AsyncStoreBuilder<?>> asyncStoreBuilders,
-      final AsyncFlushListener flushAllAsyncEvents
+      final AsyncFlushListener flushPendingEvents
   ) {
     for (final AsyncStoreBuilder<?> builder : asyncStoreBuilders) {
-      builder.registerFlushListenerForPartition(streamThreadName, partition, flushAllAsyncEvents);
+      builder.registerFlushListenerWithAsyncStore(streamThreadName, partition, flushPendingEvents);
     }
   }
 

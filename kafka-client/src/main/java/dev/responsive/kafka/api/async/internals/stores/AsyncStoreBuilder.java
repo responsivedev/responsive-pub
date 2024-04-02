@@ -23,18 +23,10 @@ import org.apache.kafka.streams.state.StoreBuilder;
 public interface AsyncStoreBuilder<T extends StateStore> extends StoreBuilder<T> {
 
   /**
-   * Register a new StreamThread and initialize its metadata object, if new.
-   * This should be a no-op if the builder has already registered this thread.
-   */
-  void maybeRegisterNewStreamThread(
-      final String threadName
-  );
-
-  /**
    * Register a flush listener and the partition it's associated with for the
    * given StreamThread.
    */
-  void registerFlushListenerForPartition(
+  void registerFlushListenerWithAsyncStore(
       final String streamThreadName,
       final int partition,
       final AsyncFlushListener processorFlushListener

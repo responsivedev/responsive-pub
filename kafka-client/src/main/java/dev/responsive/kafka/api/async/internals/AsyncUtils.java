@@ -51,7 +51,6 @@ public class AsyncUtils {
               storeName,
               storeBuilder
           );
-          storeBuilder.maybeRegisterNewStreamThread(Thread.currentThread().getName());
 
         } else {
           throw new UnsupportedOperationException(

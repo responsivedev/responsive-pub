@@ -24,8 +24,25 @@ public final class Utils {
 
   private static final Logger LOG = LoggerFactory.getLogger(Utils.class);
 
+  private static final Pattern THREAD_NAME_CONSUMER_REGEX = Pattern.compile("(.*)-consumer$");
+
   private static final Pattern STREAM_THREAD_REGEX = Pattern.compile(".*-(StreamThread-\\d+)");
   private static final Pattern GLOBAL_THREAD_REGEX = Pattern.compile(".*-(GlobalStreamThread+)");
+
+  /**
+   * @param clientId the consumer client id
+   * @return the full thread name of the StreamThread that owns this consumer,
+   *         of the form <processId>-StreamThread-n
+   */
+  public static String extractThreadNameFromConsumerClientId(final String clientId) {
+    final var threadNameMatcher = THREAD_NAME_CONSUMER_REGEX.matcher(clientId);
+    if (!threadNameMatcher.find()) {
+      throw new IllegalArgumentException("Attempted to extract threadName from consumer clientId "
+                                             + "but no matches were found in " + clientId);
+    }
+    return threadNameMatcher.group(1);
+
+  }
 
   /**
    * Compute/extract the full thread id suffix of this stream thread or global thread.

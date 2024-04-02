@@ -86,20 +86,23 @@ public class AsyncTimestampedKeyValueStoreBuilder<K, V>
     this.loggingEnabled = loggingEnabled;
   }
 
-  @Override
-  public void maybeRegisterNewStreamThread(
-      final String threadName
+  /**
+   * Return the {@link StreamThreadFlushListeners} for this StreamThread,
+   * creating/registering a new one if this is the first time we're seeing
+   * the current StreamThread.
+   * This should be a no-op if the builder has already registered this thread.
+   */
+  private StreamThreadFlushListeners getOrCreateFlushListeners(
+      final String streamThreadName
   ) {
-    if (!streamThreadToFlushListeners.containsKey(threadName)) {
-      streamThreadToFlushListeners.put(
-          threadName,
-          new StreamThreadFlushListeners(threadName, name)
-      );
-    }
+    return streamThreadToFlushListeners.computeIfAbsent(
+        streamThreadName,
+        k -> new StreamThreadFlushListeners(streamThreadName, name)
+    );
   }
 
   @Override
-  public void registerFlushListenerForPartition(
+  public void registerFlushListenerWithAsyncStore(
       final String streamThreadName,
       final int partition,
       final AsyncFlushListener processorFlushListener
@@ -151,7 +154,7 @@ public class AsyncTimestampedKeyValueStoreBuilder<K, V>
 
   private KeyValueStore<Bytes, byte[]> wrapAsyncFlushing(final KeyValueStore<Bytes, byte[]> inner) {
     final StreamThreadFlushListeners threadFlushListeners =
-        streamThreadToFlushListeners.get(Thread.currentThread().getName());
+        getOrCreateFlushListeners(Thread.currentThread().getName());
 
     return new AsyncFlushingKeyValueStore(inner, threadFlushListeners);
   }

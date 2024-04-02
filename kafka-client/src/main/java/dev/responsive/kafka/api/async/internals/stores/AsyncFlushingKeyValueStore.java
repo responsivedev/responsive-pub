@@ -64,38 +64,13 @@ public class AsyncFlushingKeyValueStore
     ).logger(AsyncFlushingKeyValueStore.class);
   }
 
-  /**
-   * Invoked when the state store is initialized and we can finally access the partition
-   * of the task it belongs to, which is the final puzzle piece needed to uniquely
-   * identify the AsyncProcessor this store is connected to and initialize the correct
-   * async flush listener for it.
-   */
-  private void initializeAsyncFlushListener(final int partition) {
-    flushAsyncProcessor = flushListeners.retrieveListenerForPartition(partition);
-  }
-
-  /**
-   * NOTE: this is NOT the same as the AsyncFlushListener, which is used to flush the entire
-   * async processor when the cache is flushed as part of a Streams commit.
-   * This API is used by Streams, internally, to register a listener for the records that
-   * are evicted from the Streams cache and need to be forwarded downstream through the
-   * topology. This method would be better named #setCacheEvictionListener since evictions
-   * can happen when a new record is added that pushes the cache beyond its maximum size,
-   * and not just when the cache is flushed. Unfortunately, it's a Streams API that we're
-   * being forced to implement here, not something we can control.
-   */
-  @Override
-  public boolean setFlushListener(
-      final CacheFlushListener<byte[], byte[]> listener,
-      final boolean sendOldValues
-  ) {
-    return super.setFlushListener(listener, sendOldValues);
-  }
-
   @Override
   public void init(final StateStoreContext context,
                    final StateStore root) {
-    initializeAsyncFlushListener(context.taskId().partition());
+    flushListeners.registerStoreConnectorForPartition(
+        context.taskId().partition(),
+        flushListener -> flushAsyncProcessor = flushListener
+    );
 
     super.init(context, root);
   }
@@ -173,5 +148,23 @@ public class AsyncFlushingKeyValueStore
   @Override
   public long approximateNumEntries() {
     return wrapped().approximateNumEntries();
+  }
+
+  /**
+   * NOTE: this is NOT the same as the AsyncFlushListener, which is used to flush the entire
+   * async processor when the cache is flushed as part of a Streams commit.
+   * This API is used by Streams, internally, to register a listener for the records that
+   * are evicted from the Streams cache and need to be forwarded downstream through the
+   * topology. This method would be better named #setCacheEvictionListener since evictions
+   * can happen when a new record is added that pushes the cache beyond its maximum size,
+   * and not just when the cache is flushed. Unfortunately, it's a Streams API that we're
+   * being forced to implement here, not something we can control.
+   */
+  @Override
+  public boolean setFlushListener(
+      final CacheFlushListener<byte[], byte[]> listener,
+      final boolean sendOldValues
+  ) {
+    return super.setFlushListener(listener, sendOldValues);
   }
 }

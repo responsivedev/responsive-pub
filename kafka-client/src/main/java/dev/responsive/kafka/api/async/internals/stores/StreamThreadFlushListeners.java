@@ -16,6 +16,7 @@
 
 package dev.responsive.kafka.api.async.internals.stores;
 
+import dev.responsive.kafka.api.async.internals.AsyncProcessor;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.common.utils.LogContext;
@@ -89,7 +90,7 @@ public class StreamThreadFlushListeners {
 
   private final Logger log;
   private final String streamThreadName;
-  private final Map<Integer, AsyncFlushListener> partitionToListener = new HashMap<>();
+  private final Map<Integer, FlushListenerConnector> partitionToStoreConnector = new HashMap<>();
 
   public StreamThreadFlushListeners(
       final String streamThreadName,
@@ -101,20 +102,28 @@ public class StreamThreadFlushListeners {
     )).logger(StreamThreadFlushListeners.class);
   }
 
+  /**
+   * Use the partitionToStoreConnector map to look up the async flushing store
+   * for this partition and StreamThread, and then pass in the {@link AsyncFlushListener}
+   * that matches.
+   * Called by the {@link AsyncProcessor} from its #init method, after the
+   * store has been initialized and registered a connector for its partition
+   */
   public void registerListenerForPartition(
       final int partition,
       final AsyncFlushListener listener
   ) {
-    if (partitionToListener.containsKey(partition)) {
-      log.error("Tried to register a new listener for partition {} while a listener "
-                    + "already existed for that partition. There should be exactly one "
-                    + "listener per partition for each state store that's connected to "
-                    + "an async processor from an assigned task's subtopology.", partition);
+    final FlushListenerConnector storeConnector = partitionToStoreConnector.remove(partition);
+    if (storeConnector == null) {
+      log.error("Tried to register the flush listener for this processor with"
+                    + "the corresponding async store, but no store for this partition "
+                    + "had registered a connector to hook up the listener to the store");
       throw new IllegalStateException("Failed to register new async flush listener "
                                           + "for partition " + partition + " because "
-                                          + "a listener already exists for that partition");
+                                          + "no connector exists for that partition");
     }
-    partitionToListener.put(partition, listener);
+
+    storeConnector.registerFlushListenerWithStore(listener);
   }
 
   /**
@@ -122,7 +131,7 @@ public class StreamThreadFlushListeners {
    * example if the corresponding task is closed before it goes through initialization
    * and won't be able to retrieve the listener via the usual means.
    * <p>
-   * If you want to return the listener after removing, use {@link #retrieveListenerForPartition}
+   * If you want to return the listener after removing, use {@link #registerStoreConnectorForPartition}
    * instead.
    * <p>
    * Note: this method is idempotent and safe to call on a partition for which the
@@ -134,25 +143,38 @@ public class StreamThreadFlushListeners {
   public void unregisterListenerForPartition(
       final int partition
   ) {
-    partitionToListener.remove(partition);
+    partitionToStoreConnector.remove(partition);
   }
 
   /**
-   * Removes and returns the flush listener associated with the given partition
+   * Called by the async flushing store when the store is initialized, which
+   * must happen before the processor is initialized and retrieves the connector.
    */
-  public AsyncFlushListener retrieveListenerForPartition(final int partition) {
-    final AsyncFlushListener listener = partitionToListener.remove(partition);
-    if (listener == null) {
-      log.error("No flush listeners were found for partition {}", partition);
-      throw new IllegalStateException("Unable to locate the listener for "
-                                          + "partition " + partition);
+  public void registerStoreConnectorForPartition(
+      final int partition,
+      final FlushListenerConnector storeConnector
+  ) {
+    if (partitionToStoreConnector.containsKey(partition)) {
+      log.error("Tried to register a new connector for partition {} but one already exists.",
+                partition);
+      throw new IllegalStateException("Failed to register new store connector for partition "
+                                          + partition + " because a connector already exists");
     }
-
-    return listener;
+    partitionToStoreConnector.put(partition, storeConnector);
   }
 
   public String streamThreadName() {
     return streamThreadName;
+  }
+
+  @FunctionalInterface
+  public interface FlushListenerConnector {
+
+    /**
+     * A simple functional interface which should, when invoked, register the
+     * flush listener provider with the corresponding async flushing store
+     */
+    void registerFlushListenerWithStore(final AsyncFlushListener flushListener);
   }
 
   @FunctionalInterface
