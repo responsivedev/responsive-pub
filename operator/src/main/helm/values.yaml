@@ -3,7 +3,7 @@
 # Declare variables to be passed into your templates.
 
 image:
-  repository: public.ecr.aws/j8q9y0n6/responsiveinc/responsive-operator
+  repository: responsivedev/responsive-operator
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
   tag: ""

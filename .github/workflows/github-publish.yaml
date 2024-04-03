@@ -128,10 +128,10 @@ jobs:
         working-directory: sindri
         if: ${{ inputs.module == 'operator' }}
         run: |
-          ./scripts/update-versions -s responsiveOperator -e local -i public.ecr.aws/j8q9y0n6/responsiveinc/responsive-operator:$OPERATOR_VERSION
+          ./scripts/update-versions -s responsiveOperator -e local -i responsivedev/responsive-operator:$OPERATOR_VERSION
           ./scripts/run-smoke-test -s release -w system-tests-pub-release
           git checkout -- .
-          ./scripts/update-versions -u -s responsiveOperator -e local -i public.ecr.aws/j8q9y0n6/responsiveinc/responsive-operator:$OPERATOR_VERSION
+          ./scripts/update-versions -u -s responsiveOperator -e local -i responsivedev/responsive-operator:$OPERATOR_VERSION
         env:
           DD_SERVICE: "https://us5.datadoghq.com/"
           DD_API_KEY: ${{ secrets.DD_API_KEY }}
@@ -141,10 +141,10 @@ jobs:
         working-directory: sindri
         if: ${{ inputs.module == 'kafka-client' }}
         run: |
-            ./scripts/update-client-versions -s release -p true -i public.ecr.aws/j8q9y0n6/responsiveinc/simple-example -t $KAFKA_CLIENTS_VERSION
+            ./scripts/update-client-versions -s release -p true -i responsivedev/simple-example -t $KAFKA_CLIENTS_VERSION
             ./scripts/run-smoke-test -s release -w system-tests-pub-release
             git checkout -- .
-            ./scripts/update-client-versions -u -s release -p true -i public.ecr.aws/j8q9y0n6/responsiveinc/simple-example -t $KAFKA_CLIENTS_VERSION
+            ./scripts/update-client-versions -u -s release -p true -i responsivedev/simple-example -t $KAFKA_CLIENTS_VERSION
         env:
           DD_SERVICE: "https://us5.datadoghq.com/"
           DD_API_KEY: ${{ secrets.DD_API_KEY }}

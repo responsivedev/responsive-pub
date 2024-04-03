@@ -62,6 +62,7 @@ jobs:
           role-to-assume: arn:aws:iam::292505934682:role/github-responsivedev-org
           role-session-name: github-pr-builder
           aws-region: us-west-2
+        secrets: inherit
 
       - name: "Install Kind"
         uses: helm/kind-action@v1.5.0

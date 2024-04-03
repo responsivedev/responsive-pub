@@ -32,7 +32,7 @@ class HelmPlugin : Plugin<Project> {
             if (project.hasProperty("helmRegistry")) {
                 helmRegistry = project.property("helmRegistry") as String
             } else {
-                helmRegistry = "public.ecr.aws/j8q9y0n6"
+                helmRegistry = "docker.io"
             }
         }
 
@@ -62,8 +62,8 @@ class HelmPlugin : Plugin<Project> {
             commandLine(
                     "helm",
                     "push",
-                    "responsive-operator-" + version + ".tgz",
-                    "oci://" + helmRegistry + "/responsiveinc/charts"
+                    "responsive-operator-helm-" + version + ".tgz",
+                    "oci://" + helmRegistry + "/responsivedev"
             )
         }
     }

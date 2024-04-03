@@ -34,9 +34,9 @@ class DockerPlugin : Plugin<Project> {
         if (!config.dockerRepoBase.isPresent()) {
             if (project.hasProperty("dockerRegistry")) {
                 val dockerRegistry = project.property("dockerRegistry") as String
-                dockerRepoBase = dockerRegistry + "/responsiveinc/"
+                dockerRepoBase = dockerRegistry + "/responsivedev/"
             } else {
-                dockerRepoBase = "public.ecr.aws/j8q9y0n6/responsiveinc/"
+                dockerRepoBase = "responsivedev"
             }
         } else {
             dockerRepoBase = config.dockerRepoBase.get()
