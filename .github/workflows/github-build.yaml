@@ -29,20 +29,8 @@ jobs:
       id-token: write # This is required for requesting the JWT
       contents: read  # This is required for actions/checkout
     steps:
-      - name: "Checkout"
-        uses: actions/checkout@v3
-        with:
-          submodules: recursive
-          fetch-depth: 0
-
-      - name: "Set up JDK 11"
-        uses: actions/setup-java@v3
-        with:
-          java-version: '11'
-          distribution: 'temurin'
-
-      - name: "Setup Gradle"
-        uses: gradle/gradle-build-action@v2.9.0
+      - name: "Build"
+        uses: ./.github/actions/build
 
       - name: "test"
         run: ./gradlew test
@@ -55,20 +43,8 @@ jobs:
       id-token: write # This is required for requesting the JWT
       contents: read  # This is required for actions/checkout
     steps:
-      - name: "Checkout"
-        uses: actions/checkout@v3
-        with:
-          submodules: recursive
-          fetch-depth: 0
-
-      - name: "Set up JDK 11"
-        uses: actions/setup-java@v3
-        with:
-          java-version: '11'
-          distribution: 'temurin'
-
-      - name: "Setup Gradle"
-        uses: gradle/gradle-build-action@v2.9.0
+      - name: "Build"
+        uses: ./.github/actions/build
 
       - name: "Build Docker Images"
         run: ./gradlew buildDocker -x test
