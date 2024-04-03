@@ -7,23 +7,13 @@ on:
 
 jobs:
 
-  # ===================     CLEAN       ===================
-
-  clean:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Free Disk Space (Ubuntu)
-        uses: jlumbroso/free-disk-space@main
-        with:
-          tool-cache: false
-
   # ===================   JAVA TESTS    ===================
   # NOTE: I considered caching the result of the docker build and uploading
   # the artifacts so that we wouldn't need to rebuild them again for the
   # smoke test, but this proved to take just as long as building it from scratch
   # (without running tests) and doesn't take up space in the GHA cache
 
-  java-test:
+  java:
     runs-on: ubuntu-latest
     permissions:
       id-token: write # This is required for requesting the JWT
@@ -35,8 +25,8 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: "Build"
-        uses: ./.github/actions/build
+      - name: "Setup"
+        uses: ./.github/actions/setup
 
       - name: "test"
         run: ./gradlew test
@@ -55,8 +45,8 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: "Build"
-        uses: ./.github/actions/build
+      - name: "Setup"
+        uses: ./.github/actions/setup
 
       - name: "Build Docker Images"
         run: ./gradlew buildDocker -x test
@@ -73,6 +63,16 @@ jobs:
         uses: helm/kind-action@v1.5.0
         with:
           install_only: true
+
+      - name: "AWS Login"
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: arn:aws:iam::292505934682:role/github-responsivedev-org
+          role-session-name: gha-smoke-test
+          aws-region: us-west-2
+
+      - name: "ECR Login"
+        uses: aws-actions/amazon-ecr-login@v1
 
       - name: "Run Smoke Test"
         run: |
