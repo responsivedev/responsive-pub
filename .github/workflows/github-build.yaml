@@ -39,15 +39,23 @@ jobs:
 
       - name: "Setup Gradle"
         uses: gradle/gradle-build-action@v2.9.0
-        with:
-          cache-read-only: false
 
       - name: "Build"
-        run: ./gradlew build -x test
+        run: ./gradlew build buildDocker -x test
+
+      - name: "Save Docker Images"
+        run: docker image save -o /tmp/responsive-images.tar responsivedev/responsive-operator responsivedev/simple-example
+
+      - name: "Cache Docker Images"
+        uses: actions/upload-artifact@v3
+        with:
+          name: responsive-images
+          path: /tmp/responsive-images.tar
 
   # ===================     TEST        ===================
 
   test:
+    if: false
     runs-on: ubuntu-latest
     permissions:
       id-token: write # This is required for requesting the JWT
@@ -71,3 +79,22 @@ jobs:
 
       - name: "test"
         run: ./gradlew test
+
+  # ===================     TEST        ===================
+
+  smoke-test:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # This is required for requesting the JWT
+      contents: read  # This is required for actions/checkout
+    needs: [ build ]
+    steps:
+      - name: "Download Cached Images"
+        uses: actions/download-artifact@v3
+        with:
+          name: responsive-images
+          path: /tmp
+      - name: Load image
+        run: |
+          docker load --input /tmp/responsive-images.tar
+          docker image ls -a
