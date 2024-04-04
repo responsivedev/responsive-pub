@@ -26,8 +26,8 @@ import dev.responsive.kafka.api.async.internals.events.DelayedForward;
 import dev.responsive.kafka.api.async.internals.events.DelayedWrite;
 import dev.responsive.kafka.api.async.internals.queues.FinalizingQueue;
 import dev.responsive.kafka.api.async.internals.queues.SchedulingQueue;
+import dev.responsive.kafka.api.async.internals.stores.AbstractAsyncStoreBuilder;
 import dev.responsive.kafka.api.async.internals.stores.AsyncKeyValueStore;
-import dev.responsive.kafka.api.async.internals.stores.AsyncStoreBuilder;
 import dev.responsive.kafka.api.async.internals.stores.StreamThreadFlushListeners.AsyncFlushListener;
 import java.util.Collection;
 import java.util.HashSet;
@@ -61,7 +61,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   private final Processor<KIn, VIn, KOut, VOut> userProcessor;
   private final FixedKeyProcessor<KIn, VIn, VOut> userFixedKeyProcessor;
 
-  private final Map<String, AsyncStoreBuilder<?>> connectedStoreBuilders;
+  private final Map<String, AbstractAsyncStoreBuilder<?, ?, ?>> connectedStoreBuilders;
 
   // Owned and solely accessed by this StreamThread, stashes waiting events that are blocked
   // on previous events with the same key that are still in flight
@@ -110,14 +110,14 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
 
   public static <KIn, VIn, KOut, VOut> AsyncProcessor<KIn, VIn, KOut, VOut> createAsyncProcessor(
       final Processor<KIn, VIn, KOut, VOut> userProcessor,
-      final Map<String, AsyncStoreBuilder<?>> connectedStoreBuilders
+      final Map<String, AbstractAsyncStoreBuilder<?, ?, ?>> connectedStoreBuilders
   ) {
     return new AsyncProcessor<>(userProcessor, null, connectedStoreBuilders);
   }
 
   public static <KIn, VIn, VOut> AsyncProcessor<KIn, VIn, KIn, VOut> createAsyncFixedKeyProcessor(
       final FixedKeyProcessor<KIn, VIn, VOut> userProcessor,
-      final Map<String, AsyncStoreBuilder<?>> connectedStoreBuilders
+      final Map<String, AbstractAsyncStoreBuilder<?, ?, ?>> connectedStoreBuilders
   ) {
     return new AsyncProcessor<>(null, userProcessor, connectedStoreBuilders);
   }
@@ -130,7 +130,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   private AsyncProcessor(
       final Processor<KIn, VIn, KOut, VOut> userProcessor,
       final FixedKeyProcessor<KIn, VIn, VOut> userFixedKeyProcessor,
-      final Map<String, AsyncStoreBuilder<?>> connectedStoreBuilders
+      final Map<String, AbstractAsyncStoreBuilder<?, ?, ?>> connectedStoreBuilders
   ) {
     this.userProcessor = userProcessor;
     this.userFixedKeyProcessor = userFixedKeyProcessor;
@@ -292,9 +292,9 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   private static void unregisterFlushListenerForStoreBuilders(
       final String streamThreadName,
       final int partition,
-      final Collection<AsyncStoreBuilder<?>> asyncStoreBuilders
+      final Collection<AbstractAsyncStoreBuilder<?, ?, ?>> asyncStoreBuilders
   ) {
-    for (final AsyncStoreBuilder<?> builder : asyncStoreBuilders) {
+    for (final AbstractAsyncStoreBuilder<?, ?, ?> builder : asyncStoreBuilders) {
       builder.unregisterFlushListenerForPartition(streamThreadName, partition);
     }
   }
@@ -302,10 +302,10 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   private static void registerFlushListenerForStoreBuilders(
       final String streamThreadName,
       final int partition,
-      final Collection<AsyncStoreBuilder<?>> asyncStoreBuilders,
+      final Collection<AbstractAsyncStoreBuilder<?, ?, ?>> asyncStoreBuilders,
       final AsyncFlushListener flushPendingEvents
   ) {
-    for (final AsyncStoreBuilder<?> builder : asyncStoreBuilders) {
+    for (final AbstractAsyncStoreBuilder<?, ?, ?> builder : asyncStoreBuilders) {
       builder.registerFlushListenerWithAsyncStore(streamThreadName, partition, flushPendingEvents);
     }
   }
@@ -494,7 +494,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    */
   private static void verifyConnectedStateStores(
       final Map<String, AsyncKeyValueStore<?, ?>> accessedStores,
-      final Map<String, AsyncStoreBuilder<?>> connectedStores,
+      final Map<String, AbstractAsyncStoreBuilder<?, ?, ?>> connectedStores,
       final Logger log
   ) {
     if (accessedStores.size() != connectedStores.size()) {

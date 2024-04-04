@@ -113,7 +113,7 @@ public class AsyncEvent {
   private final long systemTime;
   private final long streamTime;
 
-  private final ProcessorRecordContext recordContext; // may be null if punctuator-created
+  private final ProcessorRecordContext recordContext; // null if transfoerm/punctuator-created
 
   private final Runnable processInputRecord;
 
@@ -318,12 +318,12 @@ public class AsyncEvent {
 
   @Override
   public String toString() {
-    return "AsyncEvent{" +
-        "currentState=" + currentState +
-        ", inputRecordKey=" + inputRecordKey +
-        ", recordContext=" + recordContext +
-        ", numForwards=" + outputForwards.size() +
-        ", numWrites=" + outputWrites.size() +
-        '}';
+    return "AsyncEvent{"
+        + "currentState=" + currentState
+        + ", inputRecordKey=" + inputRecordKey
+        + ", recordContext=" + recordContext
+        + ", numForwards=" + outputForwards.size()
+        + ", numWrites=" + outputWrites.size()
+        + '}';
   }
 }

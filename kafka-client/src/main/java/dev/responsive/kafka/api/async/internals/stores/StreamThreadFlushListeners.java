@@ -131,8 +131,8 @@ public class StreamThreadFlushListeners {
    * example if the corresponding task is closed before it goes through initialization
    * and won't be able to retrieve the listener via the usual means.
    * <p>
-   * If you want to return the listener after removing, use {@link #registerStoreConnectorForPartition}
-   * instead.
+   * If you want to return the listener after removing, use
+   * {@link #registerStoreConnectorForPartition} instead.
    * <p>
    * Note: this method is idempotent and safe to call on a partition for which the
    * listener was already retrieved and removed from the map. This allows the
@@ -193,9 +193,9 @@ public class StreamThreadFlushListeners {
      * <p>
      * When a StreamThread creates a newly-assigned task and builds a new
      * AsyncProcessor instance in the topology, that processor will register
-     * a new AsyncFlushListener with the processor's AsyncStoreBuilder (which
+     * a new AsyncFlushListener with the processor's AbstractAsyncStoreBuilder (which
      * is shared by all StreamThreads). The StreamThread will then build any
-     * state stores in the processor, at which time the AsyncStoreBuilder will
+     * state stores in the processor, at which time the AbstractAsyncStoreBuilder will
      * pass the AsyncFlushListener that corresponds to the current StreamThread,
      * <p>
      * Threading notes:

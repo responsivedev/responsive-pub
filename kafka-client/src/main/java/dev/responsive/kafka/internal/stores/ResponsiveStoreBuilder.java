@@ -23,7 +23,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.StoreSupplier;
-import org.apache.kafka.streams.state.internals.ValueAndTimestampSerde;
 
 public class ResponsiveStoreBuilder<K, V, T extends StateStore> implements StoreBuilder<T> {
 
@@ -35,8 +34,6 @@ public class ResponsiveStoreBuilder<K, V, T extends StateStore> implements Store
   private final Serde<?> valueSerde;
   private final Time time;
   private final boolean truncateChangelog;
-
-  private boolean cachingEnabled;
 
   public enum StoreType {
     KEY_VALUE,
@@ -93,17 +90,8 @@ public class ResponsiveStoreBuilder<K, V, T extends StateStore> implements Store
     return userStoreSupplier;
   }
 
-  public boolean cachingEnabled() {
-    return cachingEnabled;
-  }
-
   public Serde<K> keySerde() {
     return keySerde;
-  }
-
-  @SuppressWarnings("unchecked")
-  public ValueAndTimestampSerde<V> timestampedValueSerde() {
-    return new ValueAndTimestampSerde<>((Serde<V>)valueSerde);
   }
 
   // For timestamped stores, this will be the serde for the inner value type
@@ -121,14 +109,12 @@ public class ResponsiveStoreBuilder<K, V, T extends StateStore> implements Store
   @Override
   public StoreBuilder<T> withCachingEnabled() {
     userStoreBuilder.withCachingEnabled();
-    cachingEnabled = true;
     return this;
   }
 
   @Override
   public StoreBuilder<T> withCachingDisabled() {
     userStoreBuilder.withCachingDisabled();
-    cachingEnabled = false;
     return this;
   }
 

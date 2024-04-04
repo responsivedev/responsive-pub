@@ -32,7 +32,7 @@ public final class Utils {
   /**
    * @param clientId the consumer client id
    * @return the full thread name of the StreamThread that owns this consumer,
-   *         of the form <processId>-StreamThread-n
+   *         of the form [processId]-StreamThread-n
    */
   public static String extractThreadNameFromConsumerClientId(final String clientId) {
     final var threadNameMatcher = THREAD_NAME_CONSUMER_REGEX.matcher(clientId);

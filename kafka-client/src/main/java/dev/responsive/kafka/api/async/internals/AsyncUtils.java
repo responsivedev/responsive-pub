@@ -16,7 +16,7 @@
 
 package dev.responsive.kafka.api.async.internals;
 
-import dev.responsive.kafka.api.async.internals.stores.AsyncStoreBuilder;
+import dev.responsive.kafka.api.async.internals.stores.AbstractAsyncStoreBuilder;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreBuilder;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreBuilder.StoreType;
 import java.util.HashMap;
@@ -30,10 +30,10 @@ import org.apache.kafka.streams.state.internals.AsyncTimestampedKeyValueStoreBui
 
 public class AsyncUtils {
 
-  public static Map<String, AsyncStoreBuilder<?>> initializeAsyncBuilders(
+  public static Map<String, AbstractAsyncStoreBuilder<?, ?, ?>> initializeAsyncBuilders(
       final Set<StoreBuilder<?>> userConnectedStores
   ) {
-    final Map<String, AsyncStoreBuilder<?>> asyncStoreBuilders = new HashMap<>();
+    final Map<String, AbstractAsyncStoreBuilder<?, ?, ?>> asyncStoreBuilders = new HashMap<>();
     for (final StoreBuilder<?> builder : userConnectedStores) {
       final String storeName = builder.name();
       if (builder instanceof ResponsiveStoreBuilder) {
@@ -42,9 +42,9 @@ public class AsyncUtils {
 
         final StoreType storeType = responsiveBuilder.storeType();
 
-        final AsyncStoreBuilder<?> storeBuilder;
+        final AbstractAsyncStoreBuilder<?, ?, ?> storeBuilder;
         if (storeType.equals(StoreType.TIMESTAMPED_KEY_VALUE)) {
-           storeBuilder = new AsyncTimestampedKeyValueStoreBuilder<>(responsiveBuilder);
+          storeBuilder = new AsyncTimestampedKeyValueStoreBuilder<>(responsiveBuilder);
         } else if (storeType.equals(StoreType.KEY_VALUE)) {
           storeBuilder = new AsyncKeyValueStoreBuilder<>(responsiveBuilder);
         } else {

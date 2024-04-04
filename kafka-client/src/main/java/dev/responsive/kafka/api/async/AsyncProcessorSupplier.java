@@ -20,7 +20,7 @@ import static dev.responsive.kafka.api.async.internals.AsyncProcessor.createAsyn
 import static dev.responsive.kafka.api.async.internals.AsyncUtils.initializeAsyncBuilders;
 
 import dev.responsive.kafka.api.async.internals.AsyncProcessor;
-import dev.responsive.kafka.api.async.internals.stores.AsyncStoreBuilder;
+import dev.responsive.kafka.api.async.internals.stores.AbstractAsyncStoreBuilder;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -121,7 +121,7 @@ public final class AsyncProcessorSupplier<KIn, VIn, KOut, VOut>
     implements ProcessorSupplier<KIn, VIn, KOut, VOut> {
 
   private final ProcessorSupplier<KIn, VIn, KOut, VOut> userProcessorSupplier;
-  private final Map<String, AsyncStoreBuilder<?>> asyncStoreBuilders;
+  private final Map<String, AbstractAsyncStoreBuilder<?, ?, ?>> asyncStoreBuilders;
 
   /**
    * Create an AsyncProcessorSupplier that wraps a custom {@link ProcessorSupplier}

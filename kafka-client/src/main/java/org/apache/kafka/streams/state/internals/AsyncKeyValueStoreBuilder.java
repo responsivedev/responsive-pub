@@ -16,6 +16,82 @@
 
 package org.apache.kafka.streams.state.internals;
 
-public class AsyncKeyValueStoreBuilder {
+import dev.responsive.kafka.api.async.internals.stores.AbstractAsyncStoreBuilder;
+import dev.responsive.kafka.api.async.internals.stores.AsyncFlushingKeyValueStore;
+import dev.responsive.kafka.internal.stores.ResponsiveStoreBuilder;
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
+import org.apache.kafka.streams.state.KeyValueStore;
+
+/**
+ * Essentially a copy of the {@link KeyValueStoreBuilder} class that
+ * allows us to inject an additional layer, the {@link AsyncFlushingKeyValueStore}.
+ * We also use this builder to coordinate between the async processor (which is
+ * responsible for creating this builder) and the async flushing store (which is
+ * created by this builder).
+ */
+public class AsyncKeyValueStoreBuilder<K, V>
+    extends AbstractAsyncStoreBuilder<K, V, KeyValueStore<K, V>> {
+
+  private final KeyValueBytesStoreSupplier storeSupplier;
+
+  @SuppressWarnings("unchecked")
+  public AsyncKeyValueStoreBuilder(
+      final ResponsiveStoreBuilder<?, ?, ?> responsiveBuilder
+  ) {
+    this(
+        (KeyValueBytesStoreSupplier) responsiveBuilder.storeSupplier(),
+        (Serde<K>) responsiveBuilder.keySerde(),
+        responsiveBuilder.innerValueSerde(),
+        responsiveBuilder.time()
+    );
+  }
+
+  private AsyncKeyValueStoreBuilder(
+      final KeyValueBytesStoreSupplier storeSupplier,
+      final Serde<K> keySerde,
+      final Serde<V> valueSerde,
+      final Time time
+  ) {
+    super(
+        storeSupplier.name(),
+        keySerde,
+        valueSerde,
+        time
+    );
+    this.storeSupplier = storeSupplier;
+  }
+
+  @Override
+  public KeyValueStore<K, V> build() {
+    final KeyValueStore<Bytes, byte[]> store = storeSupplier.get();
+
+    return new MeteredKeyValueStore<>(
+        wrapAsyncFlushingKV(
+            maybeWrapCaching(
+                maybeWrapLogging(store))
+        ),
+        storeSupplier.metricsScope(),
+        time,
+        keySerde,
+        valueSerde
+    );
+  }
+
+  private KeyValueStore<Bytes, byte[]> maybeWrapCaching(final KeyValueStore<Bytes, byte[]> inner) {
+    if (!cachingEnabled()) {
+      return inner;
+    }
+    return new CachingKeyValueStore(inner, true);
+  }
+
+  private KeyValueStore<Bytes, byte[]> maybeWrapLogging(final KeyValueStore<Bytes, byte[]> inner) {
+    if (!loggingEnabled()) {
+      return inner;
+    }
+    return new ChangeLoggingTimestampedKeyValueBytesStore(inner);
+  }
 
 }

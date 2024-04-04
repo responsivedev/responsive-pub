@@ -16,13 +16,9 @@
 
 package org.apache.kafka.streams.state.internals;
 
+import dev.responsive.kafka.api.async.internals.stores.AbstractAsyncStoreBuilder;
 import dev.responsive.kafka.api.async.internals.stores.AsyncFlushingKeyValueStore;
-import dev.responsive.kafka.api.async.internals.stores.AsyncStoreBuilder;
-import dev.responsive.kafka.api.async.internals.stores.StreamThreadFlushListeners;
-import dev.responsive.kafka.api.async.internals.stores.StreamThreadFlushListeners.AsyncFlushListener;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreBuilder;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
@@ -40,30 +36,19 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
  * created by this builder).
  */
 public class AsyncTimestampedKeyValueStoreBuilder<K, V>
-    extends AbstractStoreBuilder<K, ValueAndTimestamp<V>, TimestampedKeyValueStore<K, V>>
-    implements AsyncStoreBuilder<TimestampedKeyValueStore<K, V>> {
+    extends AbstractAsyncStoreBuilder<K, ValueAndTimestamp<V>, TimestampedKeyValueStore<K, V>> {
 
   private final KeyValueBytesStoreSupplier storeSupplier;
-  private final boolean cachingEnabled;
-  private final boolean loggingEnabled;
 
-  // Since there is only one StoreBuilder instance for each store, it is used by all of the
-  // StreamThreads in an app, and so we must account for which StreamThread is building
-  // or accessing which stores
-  private final Map<String, StreamThreadFlushListeners> streamThreadToFlushListeners =
-      new ConcurrentHashMap<>();
-
-  @SuppressWarnings({"unchecked", "checkstyle:linelength"})
+  @SuppressWarnings("unchecked")
   public AsyncTimestampedKeyValueStoreBuilder(
       final ResponsiveStoreBuilder<?, ?, ?> responsiveBuilder
   ) {
     this(
         (KeyValueBytesStoreSupplier) responsiveBuilder.storeSupplier(),
-        ((ResponsiveStoreBuilder<K, ValueAndTimestamp<V>, TimestampedKeyValueStore<K, V>>) responsiveBuilder).keySerde(),
+        (Serde<K>) responsiveBuilder.keySerde(),
         responsiveBuilder.innerValueSerde(),
-        responsiveBuilder.time(),
-        responsiveBuilder.cachingEnabled(),
-        responsiveBuilder.loggingEnabled()
+        responsiveBuilder.time()
     );
   }
 
@@ -71,9 +56,7 @@ public class AsyncTimestampedKeyValueStoreBuilder<K, V>
       final KeyValueBytesStoreSupplier storeSupplier,
       final Serde<K> keySerde,
       final Serde<V> valueSerde,
-      final Time time,
-      final boolean cachingEnabled,
-      final boolean loggingEnabled
+      final Time time
   ) {
     super(
         storeSupplier.name(),
@@ -82,54 +65,6 @@ public class AsyncTimestampedKeyValueStoreBuilder<K, V>
         time
     );
     this.storeSupplier = storeSupplier;
-    this.cachingEnabled = cachingEnabled;
-    this.loggingEnabled = loggingEnabled;
-  }
-
-  /**
-   * Return the {@link StreamThreadFlushListeners} for this StreamThread,
-   * creating/registering a new one if this is the first time we're seeing
-   * the current StreamThread.
-   * This should be a no-op if the builder has already registered this thread.
-   */
-  private StreamThreadFlushListeners getOrCreateFlushListeners(
-      final String streamThreadName
-  ) {
-    return streamThreadToFlushListeners.computeIfAbsent(
-        streamThreadName,
-        k -> new StreamThreadFlushListeners(streamThreadName, name)
-    );
-  }
-
-  @Override
-  public void registerFlushListenerWithAsyncStore(
-      final String streamThreadName,
-      final int partition,
-      final AsyncFlushListener processorFlushListener
-  ) {
-    final StreamThreadFlushListeners threadListeners =
-        streamThreadToFlushListeners.get(streamThreadName);
-    if (threadListeners == null) {
-      throw new IllegalStateException("Unable to locate flush listener metadata "
-                                          + "for the current StreamThread");
-    }
-    threadListeners.registerListenerForPartition(partition, processorFlushListener);
-  }
-
-  @Override
-  public void unregisterFlushListenerForPartition(
-      final String streamThreadName,
-      final int partition
-  ) {
-    final StreamThreadFlushListeners threadListeners =
-        streamThreadToFlushListeners.get(streamThreadName);
-
-    if (threadListeners == null) {
-      throw new IllegalStateException("Unable to locate flush listener metadata "
-                                          + "for the current StreamThread");
-    }
-
-    threadListeners.unregisterListenerForPartition(partition);
   }
 
   @Override
@@ -141,7 +76,7 @@ public class AsyncTimestampedKeyValueStoreBuilder<K, V>
     }
 
     return new MeteredTimestampedKeyValueStore<>(
-        wrapAsyncFlushing(
+        wrapAsyncFlushingKV(
             maybeWrapCaching(
                 maybeWrapLogging(store))
         ),
@@ -152,22 +87,15 @@ public class AsyncTimestampedKeyValueStoreBuilder<K, V>
     );
   }
 
-  private KeyValueStore<Bytes, byte[]> wrapAsyncFlushing(final KeyValueStore<Bytes, byte[]> inner) {
-    final StreamThreadFlushListeners threadFlushListeners =
-        getOrCreateFlushListeners(Thread.currentThread().getName());
-
-    return new AsyncFlushingKeyValueStore(inner, threadFlushListeners);
-  }
-
   private KeyValueStore<Bytes, byte[]> maybeWrapCaching(final KeyValueStore<Bytes, byte[]> inner) {
-    if (!cachingEnabled) {
+    if (!cachingEnabled()) {
       return inner;
     }
     return new CachingKeyValueStore(inner, true);
   }
 
   private KeyValueStore<Bytes, byte[]> maybeWrapLogging(final KeyValueStore<Bytes, byte[]> inner) {
-    if (!loggingEnabled) {
+    if (!loggingEnabled()) {
       return inner;
     }
     return new ChangeLoggingTimestampedKeyValueBytesStore(inner);
