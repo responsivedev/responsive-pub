@@ -49,19 +49,33 @@ public class AsyncThread extends Thread implements Closeable {
   public void addProcessor(
       final AsyncNodeContainer processorContainer
   ) {
+    log.debug("Adding partition {} of processor {}",
+              processorContainer.partition(), processorContainer.asyncProcessorName());
     nodeIdToContainer.put(processorContainer.partition(), processorContainer);
   }
 
   public void removeProcessor(
+      final String asyncProcessorName,
       final int partition
   ) {
-    nodeIdToContainer.remove(partition);
+    final AsyncNodeContainer processorContainer = nodeIdToContainer.remove(partition);
+    if (processorContainer == null) {
+      log.error("Attempted to remove partition {} of processor {} but it was not found",
+                partition, asyncProcessorName);
+    }
+
+    log.debug("Removing processor {} for partition {}", asyncProcessorName, partition);
   }
 
   @SuppressWarnings("unchecked")
   public <KOut, VOut> AsyncThreadProcessorContext<KOut, VOut> context(final int partition) {
-    final var context = nodeIdToContainer.get(partition).asyncContext();
-    return (AsyncThreadProcessorContext<KOut, VOut>) context;
+    final var container = nodeIdToContainer.get(partition);
+    if (container == null) {
+      log.error("Unable to locate processor node for partition {}", partition);
+      throw new IllegalStateException("Failed to map async context to partition");
+    }
+
+    return (AsyncThreadProcessorContext<KOut, VOut>) container.asyncContext();
   }
 
   @Override

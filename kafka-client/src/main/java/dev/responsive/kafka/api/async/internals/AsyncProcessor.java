@@ -196,6 +196,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
 
     this.threadPool = getAsyncThreadPool(context, streamThreadName);
     this.threadPool.addProcessor(
+        asyncProcessorName,
         taskId.partition(),
         originalContext,
         finalizableRecords
@@ -270,7 +271,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
                    + "prior to being closed", pendingEvents.size());
     }
 
-    threadPool.removeProcessor(taskId.partition());
+    threadPool.removeProcessor(asyncProcessorName, taskId.partition());
     unregisterFlushListenerForStoreBuilders(
         streamThreadName,
         taskId.partition(),
@@ -359,6 +360,8 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    * The queues are checked in an order that maximizes overall throughput, and
    * prioritizes moving events through the async processing pipeline over
    * maximizing the number of events we can get through in each call
+   * <p>
+   * Note: all per-event logging should be at TRACE to avoid spam
    */
   private void executeAvailableEvents() {
     // Start by going through the events waiting to be finalized and finish executing their
@@ -394,8 +397,12 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
       processableEvent.transitionToToProcess();
       eventsToSchedule.add(processableEvent);
     }
-    threadPool.scheduleForProcessing(taskId.partition(), eventsToSchedule);
-    return eventsToSchedule.size();
+    final int numScheduled = eventsToSchedule.size();
+    if (numScheduled > 0) {
+      threadPool.scheduleForProcessing(taskId.partition(), eventsToSchedule);
+    }
+
+    return numScheduled;
   }
 
   /**

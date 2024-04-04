@@ -108,6 +108,7 @@ public class ProcessingQueue implements ReadOnlyProcessingQueue, WriteOnlyProces
             // reschedule at the back of the queue if there are more events
             nonEmptyPartitionQueues.add(nonEmptyPartitionQueue);
           }
+
           return event;
         }
 
@@ -119,6 +120,11 @@ public class ProcessingQueue implements ReadOnlyProcessingQueue, WriteOnlyProces
     return null;
   }
 
+  /**
+   * Grab the next non-empty queue, if any exist, otherwise return null
+   * <p>
+   * Callers must have already acquired the lock when invoking this method
+   */
   private PartitionQueue nextNonEmptyPartitionQueue() {
     while (!nonEmptyPartitionQueues.isEmpty()) {
       final PartitionQueue partitionQueue = nonEmptyPartitionQueues.poll();
@@ -129,9 +135,8 @@ public class ProcessingQueue implements ReadOnlyProcessingQueue, WriteOnlyProces
         continue;
       // It's possible the queue is actually empty if it was removed and then
       // added back before that partition came up in the nonEmptyPartitions queue
+      // This should be infrequent, so we just log a warning
       } else if (partitionQueue.isEmpty()) {
-        // This is technically possible but unlikely/infrequent in practice, so
-        // log a warning just in case
         log.warn("Partition {} was marked non-empty but had no events", partitionQueue.partition());
         continue;
       }

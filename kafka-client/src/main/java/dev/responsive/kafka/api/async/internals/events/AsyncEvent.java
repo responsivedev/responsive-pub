@@ -315,4 +315,15 @@ public class AsyncEvent {
         + (recordContext != null ? processorRecordContextHashCode(recordContext, false) : 0);
     return result;
   }
+
+  @Override
+  public String toString() {
+    return "AsyncEvent{" +
+        "currentState=" + currentState +
+        ", inputRecordKey=" + inputRecordKey +
+        ", recordContext=" + recordContext +
+        ", numForwards=" + outputForwards.size() +
+        ", numWrites=" + outputWrites.size() +
+        '}';
+  }
 }

@@ -52,7 +52,7 @@ public class AsyncThreadPool {
     this.threadPoolSize = threadPoolSize;
     this.threadPool = new HashMap<>(threadPoolSize);
 
-    this.logPrefix = new LogContext(String.format("stream-thread [%s]", streamThreadName));
+    this.logPrefix = new LogContext(String.format("stream-thread [%s] ", streamThreadName));
     this.log = logPrefix.logger(AsyncThreadPool.class);
 
     final ProcessingQueue processingQueue = new ProcessingQueue(logPrefix);
@@ -77,6 +77,7 @@ public class AsyncThreadPool {
   }
 
   public void addProcessor(
+      final String asyncProcessorName,
       final int partition,
       final InternalProcessorContext<?, ?> originalContext,
       final FinalizingQueue finalizingQueue
@@ -85,6 +86,7 @@ public class AsyncThreadPool {
 
     final AsyncNodeContainer processorContainer = new AsyncNodeContainer(
         streamThreadName,
+        asyncProcessorName,
         partition,
         new AsyncThreadProcessorContext<>(originalContext),
         finalizingQueue
@@ -96,12 +98,13 @@ public class AsyncThreadPool {
   }
 
   public void removeProcessor(
+      final String asyncProcessorName,
       final int partition
   ) {
     processingQueue.removePartition(partition);
 
     for (final AsyncThread thread : threadPool.values()) {
-      thread.removeProcessor(partition);
+      thread.removeProcessor(asyncProcessorName, partition);
     }
   }
 

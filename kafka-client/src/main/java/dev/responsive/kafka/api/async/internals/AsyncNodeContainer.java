@@ -37,6 +37,7 @@ public final class AsyncNodeContainer {
 
   // Three fields that uniquely identify the async processor node instance
   private final String streamThreadName;
+  private final String asyncProcessorName;
   private final int partition;
 
   // Data structures owned by/unique to this specific node/partition
@@ -45,11 +46,13 @@ public final class AsyncNodeContainer {
 
   public AsyncNodeContainer(
       final String streamThreadName,
+      final String asyncProcessorName,
       final int partition,
       final AsyncThreadProcessorContext<?, ?> asyncContext,
       final FinalizingQueue finalizingQueue
   ) {
     this.streamThreadName = streamThreadName;
+    this.asyncProcessorName = asyncProcessorName;
     this.partition = partition;
     this.asyncContext = asyncContext;
     this.finalizingQueue = finalizingQueue;
@@ -57,6 +60,10 @@ public final class AsyncNodeContainer {
 
   public String streamThreadName() {
     return streamThreadName;
+  }
+
+  public String asyncProcessorName() {
+    return asyncProcessorName;
   }
 
   public int partition() {

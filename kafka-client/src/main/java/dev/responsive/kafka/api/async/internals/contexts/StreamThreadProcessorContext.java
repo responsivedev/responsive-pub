@@ -70,7 +70,7 @@ public class StreamThreadProcessorContext<KOut, VOut>
     if (userDelegate instanceof KeyValueStore) {
       final var asyncStore = new AsyncKeyValueStore<>(
           name,
-          super.partition(),
+          taskId().partition(),
           (KeyValueStore<?, ?>) userDelegate
       );
       storeNameToAsyncStore.put(name, asyncStore);
@@ -87,11 +87,11 @@ public class StreamThreadProcessorContext<KOut, VOut>
    * such as processing input records or forwarding output records
    */
   public void prepareToFinalizeEvent(final AsyncEvent event) {
-    if (!event.currentState().equals(State.PROCESSING)) {
+    if (!event.currentState().equals(State.TO_FINALIZE)) {
       log.error("Attempted to prepare event for finalization but currentState was {}",
                 event.currentState());
       throw new IllegalStateException(
-          "Must prepare event for finalization while it's in the PROCESSING state"
+          "Must prepare event for finalization while it's in the TO_FINALIZE state"
       );
     }
 

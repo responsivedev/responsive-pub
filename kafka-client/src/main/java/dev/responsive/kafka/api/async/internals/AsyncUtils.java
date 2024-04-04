@@ -25,6 +25,7 @@ import java.util.Set;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.internals.AsyncKeyValueStoreBuilder;
 import org.apache.kafka.streams.state.internals.AsyncTimestampedKeyValueStoreBuilder;
 
 public class AsyncUtils {
@@ -41,21 +42,21 @@ public class AsyncUtils {
 
         final StoreType storeType = responsiveBuilder.storeType();
 
+        final AsyncStoreBuilder<?> storeBuilder;
         if (storeType.equals(StoreType.TIMESTAMPED_KEY_VALUE)) {
-          final AsyncStoreBuilder<?> storeBuilder =
-              new AsyncTimestampedKeyValueStoreBuilder<>(
-                  responsiveBuilder
-              );
-
-          asyncStoreBuilders.put(
-              storeName,
-              storeBuilder
-          );
-
+           storeBuilder = new AsyncTimestampedKeyValueStoreBuilder<>(responsiveBuilder);
+        } else if (storeType.equals(StoreType.KEY_VALUE)) {
+          storeBuilder = new AsyncKeyValueStoreBuilder<>(responsiveBuilder);
         } else {
           throw new UnsupportedOperationException(
               "Only timestamped key-value stores are supported by async processors at this time");
         }
+
+        asyncStoreBuilders.put(
+            storeName,
+            storeBuilder
+        );
+
       } else {
         throw new IllegalStateException(String.format(
             "Detected the StoreBuilder for %s was not created via the ResponsiveStores factory, "
