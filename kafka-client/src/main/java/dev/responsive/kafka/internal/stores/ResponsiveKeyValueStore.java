@@ -38,7 +38,7 @@ import org.apache.kafka.streams.state.internals.StoreQueryUtils;
 import org.slf4j.Logger;
 
 public class ResponsiveKeyValueStore
-    implements KeyValueStore<Bytes, byte[]>, TimestampedBytesStore {
+    implements KeyValueStore<Bytes, byte[]> {
 
   private final ResponsiveKeyValueParams params;
   private final TableName name;

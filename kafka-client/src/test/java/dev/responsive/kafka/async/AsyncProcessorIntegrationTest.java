@@ -142,12 +142,13 @@ public class AsyncProcessorIntegrationTest {
 
       final List<KeyValue<String, String>> inputRecords = new LinkedList<>();
 
-      final List<String> keys = List.of("A", "B", "C", "D", "E");
-      int value = 0;
-      for (final String key : keys) {
-        // produce 10 records for each key, with the value increasing by 1 for each new record
-        for (int i = 0; i < 10; ++i) {
-          inputRecords.add(new KeyValue<>(key, Integer.toString(value)));
+      final List<String> keys = List.of("a", "b", "c", "d", "e");
+
+      // produce a record for each key, 5 times with value based on iteration
+      for (int val = 1; val < 5; ++val) {
+        for (final String key : keys) {
+
+            inputRecords.add(new KeyValue<>(key, key + val));
         }
       }
 
@@ -159,11 +160,11 @@ public class AsyncProcessorIntegrationTest {
       assertThat(
           kvs,
           hasItems(
-              new KeyValue<>("A", "123456789"),
-              new KeyValue<>("B", "10111213141516171819"),
-              new KeyValue<>("C", "20212223242526272829"),
-              new KeyValue<>("D", "30313233343536373839"),
-              new KeyValue<>("E", "40414243444546474849"))
+              new KeyValue<>("a", "a1a2a3a4a5"),
+              new KeyValue<>("b", "b1b2b3b4b5"),
+              new KeyValue<>("c", "c1c2c3c4c5"),
+              new KeyValue<>("d", "d1d2d3d4d5"),
+              new KeyValue<>("e", "e1e2e3e4e5"))
       );
 
     }
@@ -196,14 +197,14 @@ public class AsyncProcessorIntegrationTest {
       this.kvStore = context.getStateStore(ASYNC_KV_STORE);
       this.partition = context.taskId().partition();
 
-      System.out.printf("stream-thread [%s][%s] Initialized processor",
+      System.out.printf("stream-thread [%s][%s] Initialized processor%n",
                         streamThreadName, partition
       );
     }
 
     @Override
     public void process(final FixedKeyRecord<String, String> record) {
-      System.out.printf("stream-thread [%s][%d] Processing record: <%s, %s>",
+      System.out.printf("stream-thread [%s][%d] Processing record: <%s, %s>%n",
                         streamThreadName, partition, record.key(), record.value()
       );
       
@@ -219,7 +220,7 @@ public class AsyncProcessorIntegrationTest {
     
     @Override
     public void close() {
-      System.out.printf("stream-thread [%s][%s] Closed processor",
+      System.out.printf("stream-thread [%s][%s] Closed processor%n",
                         streamThreadName, partition
       );
     }
@@ -247,7 +248,7 @@ public class AsyncProcessorIntegrationTest {
 
     @Override
     public Set<StoreBuilder<?>> stores() {
-      return Collections.singleton(ResponsiveStores.timestampedKeyValueStoreBuilder(
+      return Collections.singleton(ResponsiveStores.keyValueStoreBuilder(
           ResponsiveStores.keyValueStore(ResponsiveKeyValueParams.keyValue(ASYNC_KV_STORE)),
           Serdes.String(),
           Serdes.String()

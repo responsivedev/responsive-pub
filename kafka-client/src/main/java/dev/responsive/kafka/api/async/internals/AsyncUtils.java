@@ -49,7 +49,7 @@ public class AsyncUtils {
           storeBuilder = new AsyncKeyValueStoreBuilder<>(responsiveBuilder);
         } else {
           throw new UnsupportedOperationException(
-              "Only timestamped key-value stores are supported by async processors at this time");
+              "Only key-value stores are supported by async processors at this time");
         }
 
         asyncStoreBuilders.put(

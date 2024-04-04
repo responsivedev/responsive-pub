@@ -27,6 +27,8 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Essentially a copy of the {@link TimestampedKeyValueStoreBuilder} class that
@@ -38,6 +40,8 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 public class AsyncTimestampedKeyValueStoreBuilder<K, V>
     extends AbstractAsyncStoreBuilder<K, ValueAndTimestamp<V>, TimestampedKeyValueStore<K, V>> {
 
+  private static final Logger LOG =
+      LoggerFactory.getLogger(AsyncTimestampedKeyValueStoreBuilder.class);
   private final KeyValueBytesStoreSupplier storeSupplier;
 
   @SuppressWarnings("unchecked")
@@ -65,6 +69,7 @@ public class AsyncTimestampedKeyValueStoreBuilder<K, V>
         time
     );
     this.storeSupplier = storeSupplier;
+    LOG.debug("Created async timestamped-KV store builder with valueSerde = {}", valueSerde);
   }
 
   @Override

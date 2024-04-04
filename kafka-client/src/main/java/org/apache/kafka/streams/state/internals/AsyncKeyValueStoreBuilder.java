@@ -24,6 +24,8 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Essentially a copy of the {@link KeyValueStoreBuilder} class that
@@ -35,6 +37,8 @@ import org.apache.kafka.streams.state.KeyValueStore;
 public class AsyncKeyValueStoreBuilder<K, V>
     extends AbstractAsyncStoreBuilder<K, V, KeyValueStore<K, V>> {
 
+  private static final Logger LOG =
+      LoggerFactory.getLogger(AsyncKeyValueStoreBuilder.class);
   private final KeyValueBytesStoreSupplier storeSupplier;
 
   @SuppressWarnings("unchecked")
@@ -62,6 +66,7 @@ public class AsyncKeyValueStoreBuilder<K, V>
         time
     );
     this.storeSupplier = storeSupplier;
+    LOG.debug("Created async KV store builder with valueSerde = {}", valueSerde);
   }
 
   @Override
@@ -91,7 +96,7 @@ public class AsyncKeyValueStoreBuilder<K, V>
     if (!loggingEnabled()) {
       return inner;
     }
-    return new ChangeLoggingTimestampedKeyValueBytesStore(inner);
+    return new ChangeLoggingKeyValueBytesStore(inner);
   }
 
 }
