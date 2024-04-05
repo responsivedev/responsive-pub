@@ -75,6 +75,7 @@ public class OtelMetricsService implements MetricsExportService  {
       builder.addHeader(ApiKeyHeaders.SECRET_METADATA_KEY, secret.value());
     }
 
+    builder.setCompression("gzip");
     builder.setEndpoint(config.getString(ResponsiveConfig.CONTROLLER_ENDPOINT_CONFIG));
 
     final var exporter = builder.build();
