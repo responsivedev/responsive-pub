@@ -42,7 +42,6 @@ import dev.responsive.kafka.internal.utils.TableName;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
-import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;

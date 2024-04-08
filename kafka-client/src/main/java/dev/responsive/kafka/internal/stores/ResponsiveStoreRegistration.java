@@ -18,7 +18,6 @@ package dev.responsive.kafka.internal.stores;
 
 import com.datastax.oss.driver.shaded.guava.common.annotations.VisibleForTesting;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.function.Consumer;
 import org.apache.kafka.common.TopicPartition;
