@@ -137,6 +137,8 @@ public class AsyncProcessorIntegrationTest {
             ASYNC_KV_STORE)
         .to(outputTopic());
 
+    final int numOutput = 25;
+
     try (final var streams = new ResponsiveKafkaStreams(builder.build(), properties)) {
       startAppAndAwaitRunning(Duration.ofSeconds(10), streams);
 
@@ -145,7 +147,7 @@ public class AsyncProcessorIntegrationTest {
       final List<String> keys = List.of("a", "b", "c", "d", "e");
 
       // produce a record for each key, 5 times with value based on iteration
-      for (int val = 1; val < 5; ++val) {
+      for (int val = 1; val < 6; ++val) {
         for (final String key : keys) {
 
             inputRecords.add(new KeyValue<>(key, key + val));
@@ -156,7 +158,7 @@ public class AsyncProcessorIntegrationTest {
       pipeRecords(producer, inputTopic(), inputRecords);
 
       // Then:
-      final var kvs = readOutput(outputTopic(), 0, 50, true, properties);
+      final var kvs = readOutput(outputTopic(), 0, numOutput, true, properties);
       assertThat(
           kvs,
           hasItems(
@@ -168,7 +170,7 @@ public class AsyncProcessorIntegrationTest {
       );
 
     }
-    assertThat(processed.get(), equalTo(50));
+    assertThat(processed.get(), equalTo(numOutput));
   }
   
   private static class UserFixedKeyProcessor implements FixedKeyProcessor<String, String, String> {
@@ -208,8 +210,10 @@ public class AsyncProcessorIntegrationTest {
                         streamThreadName, partition, record.key(), record.value()
       );
       
-      final String val = kvStore.get(record.key());
-      final String newVal = val + record.value();
+      final String oldVal = kvStore.get(record.key());
+      final String newVal = oldVal == null
+          ? record.value()
+          : oldVal + record.value();
       
       kvStore.put(record.key(), newVal);
       context.forward(record.withValue(newVal));
