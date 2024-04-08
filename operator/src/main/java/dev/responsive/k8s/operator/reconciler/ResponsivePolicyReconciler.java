@@ -24,6 +24,8 @@ import dev.responsive.k8s.crd.ResponsivePolicy;
 import dev.responsive.k8s.crd.ResponsivePolicySpec;
 import dev.responsive.k8s.crd.ResponsivePolicySpec.PolicyType;
 import dev.responsive.k8s.crd.ResponsivePolicyStatus;
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
 import io.javaoperatorsdk.operator.api.reconciler.Context;
 import io.javaoperatorsdk.operator.api.reconciler.ControllerConfiguration;
 import io.javaoperatorsdk.operator.api.reconciler.EventSourceContext;
@@ -32,11 +34,15 @@ import io.javaoperatorsdk.operator.api.reconciler.Reconciler;
 import io.javaoperatorsdk.operator.api.reconciler.UpdateControl;
 import io.javaoperatorsdk.operator.processing.event.source.EventSource;
 import io.javaoperatorsdk.operator.processing.event.source.polling.PerResourcePollingEventSource;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import responsive.controller.v1.controller.proto.ControllerOuterClass;
+import responsive.controller.v1.controller.proto.ControllerOuterClass.ApplicationState;
 
 /**
  * Core reconciliation handler for operator
@@ -74,27 +80,54 @@ public class ResponsivePolicyReconciler implements
     this.plugins = Objects.requireNonNull(plugins);
   }
 
+  private Optional<ApplicationState> pollTargetState(final ResponsivePolicy policy) {
+    try {
+      return Optional.of(responsiveCtx.getControllerClient().getTargetState(
+          ControllerProtoFactories.emptyRequest(environment, policy)));
+    } catch (final StatusRuntimeException e) {
+      if (e.getStatus().getCode().equals(Status.NOT_FOUND.getCode())) {
+        LOG.info("no target state found");
+        return Optional.empty();
+      }
+      throw e;
+    }
+  }
+
+  private List<ControllerOuterClass.Action> pollActions(final ResponsivePolicy policy) {
+    try {
+      return responsiveCtx.getControllerClient().getCurrentActions(
+          ControllerProtoFactories.emptyRequest(environment, policy)
+      );
+    } catch (final StatusRuntimeException e) {
+      if (e.getStatus().getCode().equals(Status.UNIMPLEMENTED.getCode())) {
+        LOG.info("controller has not implemented GetCurrentActions. Return empty list");
+        return List.of();
+      }
+      throw e;
+    }
+  }
+
   @Override
   public Map<String, EventSource> prepareEventSources(EventSourceContext<ResponsivePolicy> ctx) {
     final var poller = new PerResourcePollingEventSource<>(
         policy -> {
           try {
-            return ImmutableSet.of(new TargetStateWithTimestamp(
-                // TODO(rohan): this is a hack to force an event at each poll interval.
-                // we should either: 1. make the controller robust to not rely on polling
-                //                   2. poll in some less hacky way (while still using events)
-                responsiveCtx.getControllerClient()
-                    .getTargetState(ControllerProtoFactories.emptyRequest(environment, policy))));
+            // TODO(rohan): this is a hack to force an event at each poll interval.
+            // we should either: 1. make the controller robust to not rely on polling
+            //                   2. poll in some less hacky way (while still using events)
+            final var targetState = pollTargetState(policy);
+            final var actions =  pollActions(policy);
+            return ImmutableSet.of(new ActionsWithTimestamp(targetState, actions));
           } catch (final Throwable t) {
             LOG.error("Error fetching target state", t);
             // We return an empty target state to force reconciliation to run, since right now the
             // controller is stateless and relies on periodic updates after it restarts
-            return ImmutableSet.of(new TargetStateWithTimestamp());
+            return ImmutableSet.of(new ActionsWithTimestamp());
           }
         },
         ctx.getPrimaryCache(),
         10000L,
-        TargetStateWithTimestamp.class
+        ActionsWithTimestamp.class
     );
     final var builder = ImmutableMap.<String, EventSource>builder();
     builder.putAll(EventSourceInitializer.nameEventSources(poller));

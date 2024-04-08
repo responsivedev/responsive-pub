@@ -35,6 +35,8 @@ import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import responsive.controller.v1.controller.proto.ControllerOuterClass;
+import responsive.controller.v1.controller.proto.ControllerOuterClass.Action;
+import responsive.controller.v1.controller.proto.ControllerOuterClass.UpdateActionStatusRequest;
 
 public class KafkaStreamsPolicyPlugin implements PolicyPlugin {
   private static final Logger LOG = LoggerFactory.getLogger(KafkaStreamsPolicyPlugin.class);
@@ -84,7 +86,8 @@ public class KafkaStreamsPolicyPlugin implements PolicyPlugin {
 
     LOG.info("Found type {} for app {}/{}", managedApp.appType(), appNamespace, appName);
 
-    responsiveCtx.getControllerClient().currentState(
+    final var controllerClient = responsiveCtx.getControllerClient();
+    controllerClient.currentState(
         ControllerProtoFactories.currentStateRequest(
             environment,
             policy,
@@ -92,7 +95,7 @@ public class KafkaStreamsPolicyPlugin implements PolicyPlugin {
     );
 
     final var maybeTargetState =
-        ctx.getSecondaryResource(TargetStateWithTimestamp.class);
+        ctx.getSecondaryResource(ActionsWithTimestamp.class);
     if (maybeTargetState.isEmpty()) {
       LOG.warn("No target state present in ctx. This should not happen");
       return;
@@ -101,13 +104,80 @@ public class KafkaStreamsPolicyPlugin implements PolicyPlugin {
     final var targetState = maybeTargetState.get();
     LOG.info("target state for app {} {}", appName, targetState);
 
-    if (targetState.getTargetState().isEmpty()) {
+    if (targetState.getTargetState().isPresent()) {
       LOG.info(
           "we were not able to get a target state from controller, so don't try to reconcile one");
-      return;
+      maybeScaleApplication(
+          targetState.getTargetState().get().getKafkaStreamsState().getReplicas(),
+          managedApp,
+          appNamespace,
+          appName,
+          ctx
+      );
     }
-    final var targetReplicas = targetState.getTargetState().get().getKafkaStreamsState()
-        .getReplicas();
+
+    for (final Action action : targetState.getActions()) {
+      switch (action.getActionCase()) {
+        case SCALE_APPLICATION:
+          maybeScaleApplication(
+              action.getScaleApplication().getReplicas(),
+              managedApp,
+              appNamespace,
+              appName,
+              ctx
+          );
+          controllerClient.updateActionStatus(actionSuccess(environment, policy, action));
+          break;
+        case RESTART_POD:
+        default:
+          controllerClient.updateActionStatus(
+              actionFailed(
+                  environment,
+                  policy,
+                  action,
+                  "Action is not suppported by operator")
+          );
+          break;
+      }
+    }
+  }
+
+  private UpdateActionStatusRequest actionSuccess(
+      final String env,
+      final ResponsivePolicy policy,
+      final Action action
+  ) {
+    return ControllerProtoFactories.updateActionStatusRequest(
+        env,
+        policy,
+        action.getId(),
+        ControllerOuterClass.ActionStatus.Status.COMPLETED,
+        "Action completed successfully"
+    );
+  }
+
+  private UpdateActionStatusRequest actionFailed(
+      final String env,
+      final ResponsivePolicy policy,
+      final Action action,
+      final String reason
+  ) {
+    return ControllerProtoFactories.updateActionStatusRequest(
+        env,
+        policy,
+        action.getId(),
+        ControllerOuterClass.ActionStatus.Status.FAILED,
+        reason
+    );
+  }
+
+  private void maybeScaleApplication(
+      final int targetReplicas,
+      final ManagedApplication managedApp,
+      final String appNamespace,
+      final String appName,
+      final Context<ResponsivePolicy> ctx
+  ) {
     if (targetReplicas != managedApp.getReplicas()) {
       LOG.info(
           "Scaling {}/{} from {} to {}",

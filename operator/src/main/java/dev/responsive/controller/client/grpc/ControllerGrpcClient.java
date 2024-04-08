@@ -26,11 +26,13 @@ import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.TlsChannelCredentials;
 import io.grpc.stub.MetadataUtils;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import responsive.controller.v1.controller.proto.ControllerGrpc;
 import responsive.controller.v1.controller.proto.ControllerOuterClass;
+import responsive.controller.v1.controller.proto.ControllerOuterClass.UpdateActionStatusRequest;
 import responsive.platform.auth.ApiKeyHeaders;
 
 public class ControllerGrpcClient implements ControllerClient {
@@ -100,6 +102,20 @@ public class ControllerGrpcClient implements ControllerClient {
       throw new RuntimeException(rsp.getError());
     }
     return rsp.getState();
+  }
+
+  @Override
+  public List<ControllerOuterClass.Action> getCurrentActions(
+      final ControllerOuterClass.EmptyRequest request) {
+    final var rsp = stub.withDeadlineAfter(5, TimeUnit.SECONDS)
+        .getCurrentActions(request);
+    return rsp.getActionsList();
+  }
+
+  @Override
+  public void updateActionStatus(final UpdateActionStatusRequest request) {
+    // todo: make sure this doesn't return an error and only throws
+    stub.withDeadlineAfter(5, TimeUnit.SECONDS).updateActionStatus(request);
   }
 
   private void throwOnError(final ControllerOuterClass.SimpleResponse rsp) {

@@ -16,9 +16,12 @@
 
 package dev.responsive.controller.client;
 
+import java.util.List;
+import responsive.controller.v1.controller.proto.ControllerOuterClass.Action;
 import responsive.controller.v1.controller.proto.ControllerOuterClass.ApplicationState;
 import responsive.controller.v1.controller.proto.ControllerOuterClass.CurrentStateRequest;
 import responsive.controller.v1.controller.proto.ControllerOuterClass.EmptyRequest;
+import responsive.controller.v1.controller.proto.ControllerOuterClass.UpdateActionStatusRequest;
 import responsive.controller.v1.controller.proto.ControllerOuterClass.UpsertPolicyRequest;
 
 /**
@@ -42,4 +45,8 @@ public interface ControllerClient {
    * @return the target application state that the operator should resolve
    */
   ApplicationState getTargetState(final EmptyRequest request);
+
+  List<Action> getCurrentActions(final EmptyRequest request);
+
+  void updateActionStatus(final UpdateActionStatusRequest request);
 }

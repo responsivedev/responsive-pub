@@ -44,6 +44,22 @@ public final class ControllerProtoFactories {
         .build();
   }
 
+  public static ControllerOuterClass.UpdateActionStatusRequest updateActionStatusRequest(
+      final String environment,
+      final ResponsivePolicy policy,
+      final String actionId,
+      final ControllerOuterClass.ActionStatus.Status status,
+      final String reason
+  ) {
+    return ControllerOuterClass.UpdateActionStatusRequest.newBuilder()
+        .setApplicationId(getFullApplicationName(environment, policy))
+        .setActionId(actionId)
+        .setStatus(ControllerOuterClass.ActionStatus.newBuilder()
+            .setStatus(status)
+            .setDetails(reason))
+        .build();
+  }
+
   public static ControllerOuterClass.EmptyRequest emptyRequest(
       final String environment,
       final ResponsivePolicy policy
