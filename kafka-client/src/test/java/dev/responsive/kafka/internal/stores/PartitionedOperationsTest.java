@@ -77,6 +77,7 @@ class PartitionedOperationsTest {
         true,
         MIGRATE_START_TTL.toEpochMilli()
     );
+    when(registration.injectedStoreArgs()).thenReturn(new InjectedStoreArgs());
   }
 
   @Test
