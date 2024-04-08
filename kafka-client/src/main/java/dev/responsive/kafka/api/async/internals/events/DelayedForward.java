@@ -116,4 +116,13 @@ public class DelayedForward<KOut, VOut> {
   public int hashCode() {
     return 31 * record.hashCode() + (childName != null ? childName.hashCode() : 0);
   }
+
+  @Override
+  public String toString() {
+    if (isFixedKey()) {
+      return String.format("DelayedForward<%s, %s>", fixedKeyRecord.key(), fixedKeyRecord.value());
+    } else {
+      return String.format("DelayedForward<%s, %s>", record.key(), record.value());
+    }
+  }
 }

@@ -66,6 +66,10 @@ public class StreamThreadProcessorContext<KOut, VOut>
   @Override
   @SuppressWarnings("unchecked")
   public <S extends StateStore> S getStateStore(final String name) {
+    if (storeNameToAsyncStore.containsKey(name)) {
+      return (S) storeNameToAsyncStore.get(name);
+    }
+    
     final S userDelegate = super.getStateStore(name);
     if (userDelegate instanceof KeyValueStore) {
       final var asyncStore = new AsyncKeyValueStore<>(

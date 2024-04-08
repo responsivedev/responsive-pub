@@ -115,8 +115,9 @@ public class AsyncThread extends Thread implements Closeable {
       if (!shutdownRequested.getOpaque()) {
         log.warn("Processing queue returned null but thread was not requested to shut down");
         close();
-        return;
       }
+
+      return;
     }
 
     final AsyncNodeContainer container = nodeIdToContainer.get(currentEvent.partition());

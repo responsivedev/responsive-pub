@@ -184,7 +184,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     this.asyncProcessorName = originalContext.currentNode().name();
 
     this.logPrefix = String.format(
-        "stream-thread [%s] [%s-%d] ",
+        "stream-thread [%s] %s[%d] ",
         streamThreadName, asyncProcessorName, taskId.partition()
     );
     this.log = new LogContext(logPrefix).logger(AsyncProcessor.class);

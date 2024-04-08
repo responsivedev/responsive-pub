@@ -75,4 +75,8 @@ public class DelayedWrite<KS, VS> {
     return 31 * recordKey.hashCode() + storeName.hashCode();
   }
 
+  @Override
+  public String toString() {
+    return "DelayedWrite<" + recordKey + ", " + recordValue + ">";
+  }
 }
