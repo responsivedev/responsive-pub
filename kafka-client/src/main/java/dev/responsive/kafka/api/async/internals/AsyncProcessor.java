@@ -211,7 +211,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     final Map<String, AsyncKeyValueStore<?, ?>> accessedStores =
         streamThreadContext.getAllAsyncStores();
 
-    verifyConnectedStateStores(accessedStores, connectedStoreBuilders, log);
+    verifyConnectedStateStores(accessedStores, connectedStoreBuilders);
 
     registerFlushListenerForStoreBuilders(
         streamThreadName,
@@ -492,10 +492,9 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    * procedure for async processors. For more details, see the instructions
    * in the javadocs for {@link AsyncProcessorSupplier}.
    */
-  private static void verifyConnectedStateStores(
+  private void verifyConnectedStateStores(
       final Map<String, AsyncKeyValueStore<?, ?>> accessedStores,
-      final Map<String, AbstractAsyncStoreBuilder<?, ?, ?>> connectedStores,
-      final Logger log
+      final Map<String, AbstractAsyncStoreBuilder<?, ?, ?>> connectedStores
   ) {
     if (accessedStores.size() != connectedStores.size()) {
       log.error(
@@ -509,19 +508,6 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
           "Number of actual stores initialized by this processor does not "
               + "match the number of connected store names that were provided "
               + "to the AsyncProcessorSupplier");
-    } else if (!connectedStores.keySet().containsAll(accessedStores.keySet())) {
-      log.error(
-          "The list of connected store names was not identical to the set of store names "
-              + "that were used to access state stores via the ProcessorContext#getStateStore "
-              + "method during initialization. Double check the list of store names that are "
-              + "being passed in to the AsyncProcessorSupplier, and make sure it aligns with "
-              + "the actual store names being used by the processor itself. "
-              + "Got connectedStoreNames=[{}] and actualStoreNames=[{}]",
-          connectedStores.keySet(), accessedStores.keySet());
-      throw new IllegalStateException(
-          "The names of actual stores initialized by this processor do"
-              + "not match the names of connected stores that were "
-              + "provided to the AsyncProcessorSupplier");
     }
   }
 

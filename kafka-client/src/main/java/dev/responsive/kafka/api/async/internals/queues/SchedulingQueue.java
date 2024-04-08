@@ -51,7 +51,7 @@ public class SchedulingQueue<KIn> {
       throw new IllegalStateException("Attempted to unblock a key but it was not blocked");
     }
 
-    final AsyncEvent nextProcessableEvent = keyStatus.nextEvent();
+    final AsyncEvent nextProcessableEvent = keyStatus.scheduleNextEvent();
     if (nextProcessableEvent != null) {
       // If there are blocked events waiting, promote one but don't unblock
       processableEvents.offer(nextProcessableEvent);
@@ -91,7 +91,7 @@ public class SchedulingQueue<KIn> {
     if (keyStatus.isBlocked()) {
       keyStatus.addBlockedEvent(event);
     } else {
-      keyStatus.block();
+      keyStatus.scheduleNewEvent(event);
       processableEvents.offer(event);
     }
   }
@@ -116,18 +116,32 @@ public class SchedulingQueue<KIn> {
    */
   private static class KeyStatus {
     private final Queue<AsyncEvent> blockedEvents = new LinkedList<>();
-    private boolean hasInFlightEvent = false;
+    private AsyncEvent inFlightEvent;
 
     private boolean isBlocked() {
-      return hasInFlightEvent;
+      return inFlightEvent != null;
     }
 
-    private void block() {
-      hasInFlightEvent = true;
+    private void scheduleNewEvent(final AsyncEvent newEvent) {
+      if (isBlocked()) {
+        throw new IllegalStateException(
+            "Attempted to schedule new event while blocked by in-flight event"
+        );
+      }
+
+      inFlightEvent = newEvent;
     }
 
-    private AsyncEvent nextEvent() {
-      return blockedEvents.poll();
+    private AsyncEvent scheduleNextEvent() {
+      if (!isBlocked()) {
+        throw new IllegalStateException(
+            "Attempted to schedule next event but there was no in-flight event"
+        );
+      }
+
+      final AsyncEvent next = blockedEvents.poll();
+      inFlightEvent = next;
+      return next;
     }
 
     private void addBlockedEvent(final AsyncEvent event) {
