@@ -149,8 +149,7 @@ public class AsyncProcessorIntegrationTest {
       // produce a record for each key, 5 times with value based on iteration
       for (int val = 1; val < 6; ++val) {
         for (final String key : keys) {
-
-            inputRecords.add(new KeyValue<>(key, key + val));
+          inputRecords.add(new KeyValue<>(key, key + val));
         }
       }
 

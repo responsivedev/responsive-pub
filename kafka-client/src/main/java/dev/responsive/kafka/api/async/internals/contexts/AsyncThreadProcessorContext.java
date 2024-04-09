@@ -29,7 +29,6 @@ import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.api.FixedKeyProcessorContext;
 import org.apache.kafka.streams.processor.api.FixedKeyRecord;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
@@ -57,14 +56,20 @@ import org.apache.kafka.streams.processor.api.RecordMetadata;
  * context does the opposite and instead protects the underlying context from
  * being mutated.
  * <p>
+ * Note: while semantically we could have this class extend the {@link DelegatingProcessorContext}
+ * like the {@link StreamThreadProcessorContext} does, we intentionally implement only the
+ * {@link MergedProcessorContext} instead for safety/compatibility reasons. This is to
+ * make sure we catch any new additions to the public ProcessorContext interface, in
+ * case we need to intercept them since it is essential that we protect the
+ * underlying context when accessed through the async threads.
+ * <p>
  * Threading notes:
  * -For use by AsyncThreads only
  * -One per AsyncThread per physical AsyncProcessor instance
  *   (ie one per AsyncThread per StreamThread per async processor per partition)
  *   Equivalently, one per AsyncThread for each "original" ProcessorContext in Streams
  */
-public class AsyncThreadProcessorContext<KOut, VOut>
-    implements ProcessorContext<KOut, VOut>, FixedKeyProcessorContext<KOut, VOut> {
+public class AsyncThreadProcessorContext<KOut, VOut> implements MergedProcessorContext<KOut, VOut> {
 
   // The AsyncEvent that is currently being processed by this AsyncThread. Updated each
   // time a new event is picked up from the processing queue but before beginning
@@ -82,7 +87,6 @@ public class AsyncThreadProcessorContext<KOut, VOut>
       final ProcessorContext<?, ?> originalContext
   ) {
     this.originalContext = originalContext;
-
   }
 
   // TODO: we won't need to do this until we support async with the DSL and support

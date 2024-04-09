@@ -25,7 +25,6 @@ import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
@@ -46,21 +45,22 @@ import org.slf4j.Logger;
  *  (ie one per async processor per partition per StreamThread)
  */
 public class StreamThreadProcessorContext<KOut, VOut>
-    extends DelegatingInternalProcessorContext<KOut, VOut> {
+    extends DelegatingProcessorContext<KOut, VOut, InternalProcessorContext<KOut, VOut>> {
 
   private final Logger log;
 
   private final Map<String, AsyncKeyValueStore<?, ?>> storeNameToAsyncStore = new HashMap<>();
   private final ProcessorNode<?, ?, ?, ?> asyncProcessorNode;
+  private final InternalProcessorContext<KOut, VOut> originalContext;
 
   public StreamThreadProcessorContext(
       final String logPrefix,
-      final ProcessorContext<KOut, VOut> delegate
+      final InternalProcessorContext<KOut, VOut> originalContext
   ) {
-    super((InternalProcessorContext<KOut, VOut>) delegate);
-
+    super();
     this.log = new LogContext(logPrefix).logger(StreamThreadProcessorContext.class);
-    this.asyncProcessorNode = super.currentNode();
+    this.asyncProcessorNode = originalContext.currentNode();
+    this.originalContext = originalContext;
   }
 
   @Override
@@ -106,8 +106,8 @@ public class StreamThreadProcessorContext<KOut, VOut>
     // both ultimately just return the recordContext we set here. So we don't need to
     // worry about setting the recordMetadata separately, even though #recordMetadata is
     // exposed to the user, since #setRecordContext takes care of that
-    super.setRecordContext(recordContext);
-    super.setCurrentNode(asyncProcessorNode);
+    originalContext.setRecordContext(recordContext);
+    originalContext.setCurrentNode(asyncProcessorNode);
   }
 
   public <KS, VS> void executeDelayedWrite(
@@ -127,6 +127,10 @@ public class StreamThreadProcessorContext<KOut, VOut>
     } else {
       super.forward(delayedForward.record(), delayedForward.childName());
     }
+  }
+
+  public InternalProcessorContext<KOut, VOut> delegate() {
+    return originalContext;
   }
 
   @SuppressWarnings("unchecked")
