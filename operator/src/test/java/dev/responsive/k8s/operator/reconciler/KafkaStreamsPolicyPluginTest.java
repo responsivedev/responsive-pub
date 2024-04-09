@@ -21,6 +21,7 @@ import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -35,6 +36,8 @@ import dev.responsive.k8s.crd.ResponsivePolicySpec;
 import dev.responsive.k8s.crd.kafkastreams.DemoPolicySpec;
 import io.fabric8.kubernetes.api.model.HasMetadata;
 import io.fabric8.kubernetes.api.model.ObjectMeta;
+import io.fabric8.kubernetes.api.model.Pod;
+import io.fabric8.kubernetes.api.model.PodList;
 import io.fabric8.kubernetes.api.model.apps.Deployment;
 import io.fabric8.kubernetes.api.model.apps.DeploymentList;
 import io.fabric8.kubernetes.api.model.apps.DeploymentSpec;
@@ -45,6 +48,7 @@ import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.dsl.AppsAPIGroupDSL;
 import io.fabric8.kubernetes.client.dsl.MixedOperation;
 import io.fabric8.kubernetes.client.dsl.NonNamespaceOperation;
+import io.fabric8.kubernetes.client.dsl.PodResource;
 import io.fabric8.kubernetes.client.dsl.RollableScalableResource;
 import io.javaoperatorsdk.operator.api.config.ControllerConfiguration;
 import io.javaoperatorsdk.operator.api.reconciler.Context;
@@ -57,6 +61,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.UnaryOperator;
+import java.util.stream.Stream;
 import org.hamcrest.MatcherAssert;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -66,6 +71,7 @@ import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import responsive.controller.v1.controller.proto.ControllerOuterClass;
+import responsive.controller.v1.controller.proto.ControllerOuterClass.Action.RestartPod;
 import responsive.controller.v1.controller.proto.ControllerOuterClass.Action.ScaleApplication;
 import responsive.controller.v1.controller.proto.ControllerOuterClass.ActionStatus.Status;
 import responsive.controller.v1.controller.proto.ControllerOuterClass.PolicyStatus;
@@ -74,6 +80,7 @@ import responsive.controller.v1.controller.proto.ControllerOuterClass.UpdateActi
 @ExtendWith(MockitoExtension.class)
 class KafkaStreamsPolicyPluginTest {
   private static final String SCALING_ACTION_ID = "scaling-action-id";
+  private static final String RESTART_POD_ACTION_ID = "restart-pod-action-id";
   private static final int SCALING_ACTION_REPLICAS = 5;
   private static final int BASE_REPLICAS = 3;
 
@@ -87,6 +94,10 @@ class KafkaStreamsPolicyPluginTest {
   private KubernetesClient client;
   @Mock
   private AppsAPIGroupDSL appsClient;
+  @Mock
+  private MixedOperation<Pod, PodList, PodResource> podsClient;
+  @Mock
+  private NonNamespaceOperation<Pod, PodList, PodResource> nsPodClient;
   @Mock
   private MixedOperation<Deployment, DeploymentList, RollableScalableResource<Deployment>>
       deploymentsClient;
@@ -113,6 +124,8 @@ class KafkaStreamsPolicyPluginTest {
   private ArgumentCaptor<ControllerOuterClass.CurrentStateRequest> currentStateRequestCaptor;
   @Mock
   private ControllerClient controllerClient;
+  private final PodResource pod1 = mockPodResource("p1");
+  private final PodResource pod2 = mockPodResource("p2");
 
   private final KafkaStreamsPolicyPlugin
       plugin = new KafkaStreamsPolicyPlugin("testenv");
@@ -177,6 +190,7 @@ class KafkaStreamsPolicyPluginTest {
 
     lenient().when(ctx.getClient()).thenReturn(client);
     lenient().when(client.apps()).thenReturn(appsClient);
+    lenient().when(client.pods()).thenReturn(podsClient);
     lenient().when(ctx.getSecondaryResource(
             ActionsWithTimestamp.class))
         .thenReturn(Optional.of(new ActionsWithTimestamp()));
@@ -400,6 +414,38 @@ class KafkaStreamsPolicyPluginTest {
     verifyNoInteractions(rsDeployment);
   }
 
+  @Test
+  public void shouldDeletePodIfActionIsRestartPod() {
+    // given:
+    setupForDeployment();
+    givenRestartPod("p1");
+
+    // when:
+    plugin.reconcile(policy, ctx, responsiveCtx);
+
+    // then:
+    verify(pod1).delete();
+    verify(controllerClient).updateActionStatus(updateActionStatusCaptor.capture());
+    final var updateActionStatus = updateActionStatusCaptor.getValue();
+    assertThat(updateActionStatus.getActionId(), is(RESTART_POD_ACTION_ID));
+    assertThat(updateActionStatus.getStatus().getStatus(), is(Status.COMPLETED));
+  }
+
+  @Test
+  public void shouldUpdateControllerWithErrorOnNoPodFound() {
+    // given:
+    setupForDeployment();
+    givenRestartPod("p10");
+
+    // when:
+    plugin.reconcile(policy, ctx, responsiveCtx);
+
+    // then:
+    verify(controllerClient).updateActionStatus(updateActionStatusCaptor.capture());
+    final var updateActionStatus = updateActionStatusCaptor.getValue();
+    assertThat(updateActionStatus.getActionId(), is(RESTART_POD_ACTION_ID));
+    assertThat(updateActionStatus.getStatus().getStatus(), is(Status.FAILED));
+  }
 
   @Test
   public void shouldAddStatefulSetSource() {
@@ -551,6 +597,19 @@ class KafkaStreamsPolicyPluginTest {
         .build();
   }
 
+  private void givenRestartPod(final String podId) {
+    when(ctx.getSecondaryResource(ActionsWithTimestamp.class))
+        .thenReturn(Optional.of(
+            new ActionsWithTimestamp(List.of(ControllerOuterClass.Action.newBuilder()
+                .setId(RESTART_POD_ACTION_ID)
+                .setRestartPod(RestartPod.newBuilder()
+                    .setPodId(podId)
+                    .build())
+                .build()
+            ))
+        ));
+  }
+
   private void givenScalingAction() {
     givenScalingAction(SCALING_ACTION_REPLICAS);
   }
@@ -582,6 +641,24 @@ class KafkaStreamsPolicyPluginTest {
     return Optional.empty();
   }
 
+  private PodResource mockPodResource(final String id) {
+    final var podResource = mock(PodResource.class);
+    final Pod pod = new Pod();
+    pod.setMetadata(new ObjectMeta());
+    pod.getMetadata().setName(id);
+    lenient().when(podResource.get()).thenReturn(pod);
+    return podResource;
+  }
+
+  private void setupPodsToBeReturned(final Deployment deployment) {
+    lenient().when(podsClient.inNamespace(deployment.getMetadata().getNamespace()))
+        .thenReturn(nsPodClient);
+    lenient().when(nsPodClient.withLabelSelector(deployment.getSpec().getSelector()))
+        .thenReturn(nsPodClient);
+    lenient().when(nsPodClient.resources())
+        .thenReturn(Stream.of(pod1, pod2));
+  }
+
   private void setupDeploymentToBeReturned(final Deployment deployment) {
     lenient().when(deploymentsClient.inNamespace(deployment.getMetadata().getNamespace()))
         .thenReturn(nsDeploymentsClient);
@@ -592,6 +669,7 @@ class KafkaStreamsPolicyPluginTest {
     final DeploymentList list = new DeploymentList();
     list.setItems(List.of(deployment));
     lenient().when(nsDeploymentsClient.list()).thenReturn(list);
+    setupPodsToBeReturned(deployment);
   }
 
   private void setupStatefulSetToBeReturned(final StatefulSet statefulSet) {

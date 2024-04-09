@@ -17,6 +17,7 @@
 package dev.responsive.k8s.operator.reconciler;
 
 import com.google.common.collect.ImmutableSet;
+import dev.responsive.controller.client.ControllerClient;
 import dev.responsive.k8s.controller.ControllerProtoFactories;
 import dev.responsive.k8s.crd.ResponsivePolicy;
 import io.fabric8.kubernetes.api.model.HasMetadata;
@@ -130,6 +131,9 @@ public class KafkaStreamsPolicyPlugin implements PolicyPlugin {
           controllerClient.updateActionStatus(actionSuccess(environment, policy, action));
           break;
         case RESTART_POD:
+          restartPod(
+              environment, policy, action, managedApp, controllerClient, ctx);
+          break;
         default:
           controllerClient.updateActionStatus(
               actionFailed(
@@ -141,6 +145,33 @@ public class KafkaStreamsPolicyPlugin implements PolicyPlugin {
           break;
       }
     }
+  }
+
+  private void restartPod(
+      final String environment,
+      final ResponsivePolicy policy,
+      final ControllerOuterClass.Action restartPod,
+      final ManagedApplication managedApp,
+      final ControllerClient controllerClient,
+      final Context<ResponsivePolicy> context
+  ) {
+    LOG.info("executing restart pod for {}", restartPod.getRestartPod().getPodId());
+    try {
+      managedApp.restartPod(restartPod.getRestartPod().getPodId(), context);
+    } catch (final RuntimeException e) {
+      // just pass exceptions back up to the controller for this action
+      LOG.error("pod restart failed with", e);
+      controllerClient.updateActionStatus(
+          actionFailed(
+              environment,
+              policy,
+              restartPod,
+              "restart failed with: " + e.getMessage()
+          )
+      );
+      return;
+    }
+    controllerClient.updateActionStatus(actionSuccess(environment, policy, restartPod));
   }
 
   private UpdateActionStatusRequest actionSuccess(
