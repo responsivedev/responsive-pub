@@ -8,10 +8,30 @@ import "responsive/controller/v1/controller.proto";
 service Internal {
   rpc DumpState(DumpStateRequest) returns (EmptyResponse) {}
   rpc GetPolicy(GetPolicyRequest) returns (GetPolicyResponse) {}
+  rpc CreateAction(InternalCreateActionRequest) returns (InternalCreateActionResponse) {}
+  rpc GetActionStatus(InternalGetActionStatusRequest) returns (InternalGetActionStatusResponse) {}
 }
 
 message DumpStateRequest {
   optional string path = 1;
+}
+
+message InternalCreateActionRequest {
+  responsive.controller.internal.v1.controller.proto.ApplicationId application_id = 1;
+  responsive.controller.v1.controller.proto.Action action = 2;
+}
+
+message InternalCreateActionResponse {
+  responsive.controller.v1.controller.proto.Action action = 1;
+}
+
+message InternalGetActionStatusRequest {
+  responsive.controller.internal.v1.controller.proto.ApplicationId application_id = 1;
+  string ation_id = 2;
+}
+
+message InternalGetActionStatusResponse {
+  responsive.controller.v1.controller.proto.ActionStatus status = 1;
 }
 
 message GetPolicyRequest {
