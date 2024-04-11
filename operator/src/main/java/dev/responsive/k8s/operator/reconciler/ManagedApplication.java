@@ -2,11 +2,15 @@ package dev.responsive.k8s.operator.reconciler;
 
 import dev.responsive.k8s.crd.ResponsivePolicy;
 import io.fabric8.kubernetes.api.model.HasMetadata;
+import io.fabric8.kubernetes.api.model.LabelSelector;
 import io.fabric8.kubernetes.api.model.apps.Deployment;
 import io.fabric8.kubernetes.api.model.apps.StatefulSet;
+import io.fabric8.kubernetes.client.ResourceNotFoundException;
 import io.fabric8.kubernetes.client.dsl.AppsAPIGroupDSL;
+import io.fabric8.kubernetes.client.dsl.PodResource;
 import io.javaoperatorsdk.operator.api.reconciler.Context;
 import java.util.Map;
+import java.util.Optional;
 
 public abstract class ManagedApplication {
   public abstract int getReplicas();
@@ -14,12 +18,34 @@ public abstract class ManagedApplication {
   public abstract void setReplicas(final Integer targetReplicas,
                                    final Context<ResponsivePolicy> context);
 
+  public abstract void restartPod(final String podId, final Context<ResponsivePolicy> context);
+
   public abstract String appType();
 
   public abstract String getResourceVersion();
 
   public abstract void maybeAddResponsiveLabel(Context<ResponsivePolicy> ctx,
                                                ResponsivePolicy policy);
+
+  PodResource findPod(
+      final String podId,
+      final Context<ResponsivePolicy> context,
+      final String namespace,
+      final LabelSelector podSelector
+  ) {
+    final Optional<PodResource> pod = context.getClient().pods()
+        .inNamespace(namespace)
+        .withLabelSelector(podSelector)
+        .resources()
+        .filter(pr -> pr.get().getMetadata().getName().equals(podId))
+        .findFirst();
+    if (pod.isPresent()) {
+      return pod.get();
+    } else {
+      throw new ResourceNotFoundException(
+          String.format("pod with id %s not found in deployment", podId));
+    }
+  }
 
   public static ManagedApplication build(Context<ResponsivePolicy> ctx,
                                          ResponsivePolicy policy) {

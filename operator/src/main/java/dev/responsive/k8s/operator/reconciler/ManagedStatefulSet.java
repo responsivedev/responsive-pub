@@ -42,6 +42,15 @@ public class ManagedStatefulSet extends ManagedApplication {
   }
 
   @Override
+  public void restartPod(final String podId, final Context<ResponsivePolicy> context) {
+    final var sts = context.getClient().apps().statefulSets()
+        .inNamespace(namespace)
+        .withName(appName);
+    final var podSelector = sts.get().getSpec().getSelector();
+    findPod(podId, context, namespace, podSelector).delete();
+  }
+
+  @Override
   public String appType() {
     return "StatefulSet";
   }
