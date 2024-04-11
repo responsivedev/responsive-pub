@@ -22,14 +22,15 @@ message PolicyState {
   int64 transition_time = 4;
   responsive.controller.v1.controller.proto.ApplicationPolicySpec policy = 5;
   responsive.controller.v1.controller.proto.ApplicationState current_state = 6;
-  Action ongoing_action = 7;
+  responsive.controller.v1.controller.proto.Action ongoing_action = 7;
   int64 last_eval_time = 8;
+  repeated CompletedAction action_log = 9;
 }
 
-message Action {
-  oneof action {
-    ChangeApplicationState change_application_state = 1;
-  }
+message CompletedAction {
+  int64 completed_time = 1;
+  responsive.controller.v1.controller.proto.Action action = 2;
+  responsive.controller.v1.controller.proto.ActionStatus status = 3;
 }
 
 message ChangeApplicationState {

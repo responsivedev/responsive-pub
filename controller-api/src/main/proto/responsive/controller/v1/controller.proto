@@ -12,6 +12,8 @@ service Controller {
   rpc UpsertPolicy(UpsertPolicyRequest) returns (SimpleResponse) {}
   rpc CurrentState(CurrentStateRequest) returns (SimpleResponse) {}
   rpc GetTargetState(EmptyRequest) returns (GetTargetStateResponse) {}
+  rpc CreateAction(CreateActionRequest) returns (CreateActionResponse) {}
+  rpc GetActionStatus(GetActionStatusRequest) returns (GetActionStatusResponse) {}
   rpc GetCurrentActions(EmptyRequest) returns (GetCurrentActionsResponse) {}
   rpc UpdateActionStatus(UpdateActionStatusRequest) returns (SimpleResponse)  {}
   rpc ListApplications(EmptyUnspecificRequest) returns (ListApplicationsResponse) {}
@@ -59,6 +61,24 @@ message GetTargetStateResponse {
   int64 last_eval_time_ms = 3;
 }
 
+message CreateActionRequest {
+  string application_id = 1;
+  Action action = 2;
+}
+
+message CreateActionResponse {
+  Action action = 1;
+}
+
+message GetActionStatusRequest {
+  string application_id = 1;
+  string action_id = 2;
+}
+
+message GetActionStatusResponse {
+  ActionStatus status = 1;
+}
+
 message GetCurrentActionsResponse {
   repeated Action actions = 1;
   int64 last_eval_time_ms = 2;
@@ -74,6 +94,7 @@ message ActionStatus {
   enum Status {
     COMPLETED = 0;
     FAILED = 1;
+    PENDING = 2;
   }
   Status status = 1;
   string details = 2;
