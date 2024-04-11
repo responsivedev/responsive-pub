@@ -146,7 +146,7 @@ class ResponsivePolicyReconcilerTest {
     when(controllerClient.getTargetState(any())).thenThrow(new RuntimeException("oops"));
 
     // when:
-    final var ret = (Optional<TargetStateWithTimestamp>) source.getSecondaryResource(resource);
+    final var ret = (Optional<ActionsWithTimestamp>) source.getSecondaryResource(resource);
 
     // then:
     assertThat(ret.isPresent(), is(true));

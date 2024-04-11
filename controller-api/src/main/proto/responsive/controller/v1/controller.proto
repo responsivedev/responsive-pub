@@ -12,6 +12,8 @@ service Controller {
   rpc UpsertPolicy(UpsertPolicyRequest) returns (SimpleResponse) {}
   rpc CurrentState(CurrentStateRequest) returns (SimpleResponse) {}
   rpc GetTargetState(EmptyRequest) returns (GetTargetStateResponse) {}
+  rpc GetCurrentActions(EmptyRequest) returns (GetCurrentActionsResponse) {}
+  rpc UpdateActionStatus(UpdateActionStatusRequest) returns (SimpleResponse)  {}
   rpc ListApplications(EmptyUnspecificRequest) returns (ListApplicationsResponse) {}
 }
 
@@ -55,6 +57,43 @@ message GetTargetStateResponse {
   string error = 1;
   ApplicationState state = 2;
   int64 last_eval_time_ms = 3;
+}
+
+message GetCurrentActionsResponse {
+  repeated Action actions = 1;
+  int64 last_eval_time_ms = 2;
+}
+
+message UpdateActionStatusRequest {
+  string application_id = 1;
+  string action_id = 2;
+  ActionStatus status = 3;
+}
+
+message ActionStatus {
+  enum Status {
+    COMPLETED = 0;
+    FAILED = 1;
+  }
+  Status status = 1;
+  string details = 2;
+}
+
+message Action {
+  string id = 1;
+
+  message ScaleApplication {
+    uint32 replicas = 1;
+  }
+
+  message RestartPod {
+    string pod_id = 1;
+  }
+
+  oneof action {
+    ScaleApplication scale_application = 2;
+    RestartPod restart_pod = 3;
+  }
 }
 
 // TODO(rohan): move these to a common proto file. this file is just the grpc api
