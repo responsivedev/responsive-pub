@@ -86,7 +86,7 @@ public class ResponsivePolicyReconciler implements
           ControllerProtoFactories.emptyRequest(environment, policy)));
     } catch (final StatusRuntimeException e) {
       if (e.getStatus().getCode().equals(Status.NOT_FOUND.getCode())) {
-        LOG.info("no target state found");
+        LOG.debug("no target state found");
         return Optional.empty();
       }
       throw e;

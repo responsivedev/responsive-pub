@@ -105,8 +105,9 @@ public class KafkaStreamsPolicyPlugin implements PolicyPlugin {
     LOG.info("target state for app {} {}", appName, targetState);
 
     if (targetState.getTargetState().isPresent()) {
-      LOG.info(
-          "we were not able to get a target state from controller, so don't try to reconcile one");
+      LOG.debug(
+          "we were not able to get a target state from controller, either due to error or"
+              + "there not being a current target. so don't try to reconcile one");
       maybeScaleApplication(
           targetState.getTargetState().get().getKafkaStreamsState().getReplicas(),
           managedApp,
