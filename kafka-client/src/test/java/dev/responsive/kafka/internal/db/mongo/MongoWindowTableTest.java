@@ -16,7 +16,7 @@
 
 package dev.responsive.kafka.internal.db.mongo;
 
-import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_HOSTNAME_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_ENDPOINT_CONFIG;
 import static org.hamcrest.MatcherAssert.assertThat;
 
 import com.mongodb.client.MongoClient;
@@ -56,7 +56,7 @@ class MongoWindowTableTest {
   ) {
     name = info.getDisplayName().replace("()", "");
 
-    final String mongoConnection = (String) props.get(STORAGE_HOSTNAME_CONFIG);
+    final String mongoConnection = (String) props.get(MONGO_ENDPOINT_CONFIG);
     client = SessionUtil.connect(mongoConnection, null, null);
   }
 

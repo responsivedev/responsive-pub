@@ -124,9 +124,9 @@ public class SimpleApplication {
   }
 
   private void maybeCreateKeyspace() {
-    LOG.info("create keyspace test");
+    LOG.info("create keyspace responsive_test");
     try (final CqlSession session = cqlSession()) {
-      final CreateKeyspace createKeyspace = SchemaBuilder.createKeyspace("test")
+      final CreateKeyspace createKeyspace = SchemaBuilder.createKeyspace("responsive_test")
           .ifNotExists()
           .withSimpleStrategy(1);
       session.execute(createKeyspace.build());

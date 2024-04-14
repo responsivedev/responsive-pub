@@ -17,11 +17,11 @@
 package dev.responsive.kafka.api;
 
 import static dev.responsive.kafka.api.config.ResponsiveConfig.ASYNC_THREAD_POOL_SIZE_CONFIG;
-import static dev.responsive.kafka.api.config.ResponsiveConfig.CLIENT_ID_CONFIG;
-import static dev.responsive.kafka.api.config.ResponsiveConfig.CLIENT_SECRET_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.METRICS_ENABLED_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_ENDPOINT_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_PASSWORD_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_USERNAME_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_CONFIG;
-import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_HOSTNAME_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.TASK_ASSIGNOR_CLASS_OVERRIDE;
 import static dev.responsive.kafka.internal.metrics.ResponsiveMetrics.RESPONSIVE_METRICS_NAMESPACE;
 import static org.apache.kafka.streams.StreamsConfig.APPLICATION_ID_CONFIG;
@@ -456,9 +456,9 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
           );
           break;
         case MONGO_DB:
-          final var hostname = responsiveConfig.getString(STORAGE_HOSTNAME_CONFIG);
-          final String clientId = responsiveConfig.getString(CLIENT_ID_CONFIG);
-          final Password clientSecret = responsiveConfig.getPassword(CLIENT_SECRET_CONFIG);
+          final var hostname = responsiveConfig.getString(MONGO_ENDPOINT_CONFIG);
+          final String clientId = responsiveConfig.getString(MONGO_USERNAME_CONFIG);
+          final Password clientSecret = responsiveConfig.getPassword(MONGO_PASSWORD_CONFIG);
           final var mongoClient = SessionUtil.connect(
               hostname,
               clientId,

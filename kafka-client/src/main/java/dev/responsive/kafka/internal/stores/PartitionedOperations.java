@@ -46,6 +46,7 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Supplier;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Bytes;
@@ -238,14 +239,14 @@ public class PartitionedOperations implements KeyValueOperations {
       // is fresher than the starting timestamp
       return;
     }
-    buffer.put(key, value, context.timestamp());
+    buffer.put(key, value, currentRecordTimestamp());
   }
 
   @Override
   public byte[] delete(final Bytes key) {
     // single writer prevents races (see putIfAbsent)
     final byte[] old = get(key);
-    buffer.tombstone(key, context.timestamp());
+    buffer.tombstone(key, currentRecordTimestamp());
 
     return old;
   }
@@ -338,11 +339,20 @@ public class PartitionedOperations implements KeyValueOperations {
     buffer.restoreBatch(records);
   }
 
+  private long currentRecordTimestamp() {
+    final InjectedStoreArgs injectedStoreArgs = registration.injectedStoreArgs();
+    final Optional<Supplier<Long>> injectedClock = injectedStoreArgs.recordTimestampClock();
+    if (injectedClock.isPresent()) {
+      return injectedClock.get().get();
+    }
+    return context.timestamp();
+  }
+
   private long minValidTimestamp() {
     // TODO: unwrapping the ttl from Duration to millis is somewhat heavy for the hot path
     return params
         .timeToLive()
-        .map(ttl -> context.timestamp() - ttl.toMillis())
+        .map(ttl -> currentRecordTimestamp() - ttl.toMillis())
         .orElse(-1L);
   }
 
@@ -353,7 +363,7 @@ public class PartitionedOperations implements KeyValueOperations {
     if (startingTimestamp > 0) {
       // we are bootstrapping a store. Only apply the write if the timestamp
       // is fresher than the starting timestamp
-      return context.timestamp() < startingTimestamp;
+      return currentRecordTimestamp() < startingTimestamp;
     }
     return false;
   }

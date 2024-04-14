@@ -16,7 +16,7 @@
 
 package dev.responsive.kafka.internal.db;
 
-import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_DESIRED_NUM_PARTITION_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.CASSANDRA_DESIRED_NUM_PARTITION_CONFIG;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.copyConfigWithOverrides;
 import static java.util.Collections.singletonMap;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -65,14 +65,14 @@ public class CassandraKVTableIntegrationTest {
     final CqlSession session = CqlSession.builder()
         .addContactPoint(cassandra.getContactPoint())
         .withLocalDatacenter(cassandra.getLocalDatacenter())
-        .withKeyspace("responsive_clients") // NOTE: this keyspace is expected to exist
+        .withKeyspace("responsive_itests") // NOTE: this keyspace is expected to exist
         .build();
     client = new CassandraClient(session, config);
 
     final String name = info.getTestMethod().orElseThrow().getName();
     final ResponsiveConfig partitionerConfig = copyConfigWithOverrides(
         config,
-        singletonMap(STORAGE_DESIRED_NUM_PARTITION_CONFIG, NUM_SUBPARTITIONS_TOTAL)
+        singletonMap(CASSANDRA_DESIRED_NUM_PARTITION_CONFIG, NUM_SUBPARTITIONS_TOTAL)
     );
     final var partitioner = SubPartitioner.create(
         OptionalInt.empty(),

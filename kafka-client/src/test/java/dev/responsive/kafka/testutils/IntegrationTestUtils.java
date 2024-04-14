@@ -73,19 +73,21 @@ public final class IntegrationTestUtils {
 
   public static ResponsiveConfig dummyConfig() {
     final Properties props = new Properties();
-    props.put(ResponsiveConfig.STORAGE_DATACENTER_CONFIG, "responsive");
-    props.put(ResponsiveConfig.STORAGE_HOSTNAME_CONFIG, "localhost");
-    props.put(ResponsiveConfig.STORAGE_PORT_CONFIG, 666);
-    props.put(ResponsiveConfig.TENANT_ID_CONFIG, "responsive-test");
+    props.put(ResponsiveConfig.CASSANDRA_DATACENTER_CONFIG, "responsive");
+    props.put(ResponsiveConfig.CASSANDRA_HOSTNAME_CONFIG, "localhost");
+    props.put(ResponsiveConfig.CASSANDRA_PORT_CONFIG, 666);
+    props.put(ResponsiveConfig.RESPONSIVE_ORG_CONFIG, "responsive");
+    props.put(ResponsiveConfig.RESPONSIVE_ENV_CONFIG, "itest");
     return ResponsiveConfig.responsiveConfig(props);
   }
 
   public static ResponsiveConfig dummyConfig(final Map<?, ?> overrides) {
     final Properties props = new Properties();
-    props.put(ResponsiveConfig.STORAGE_DATACENTER_CONFIG, "responsive");
-    props.put(ResponsiveConfig.STORAGE_HOSTNAME_CONFIG, "localhost");
-    props.put(ResponsiveConfig.STORAGE_PORT_CONFIG, 666);
-    props.put(ResponsiveConfig.TENANT_ID_CONFIG, "TTD");
+    props.put(ResponsiveConfig.CASSANDRA_DATACENTER_CONFIG, "responsive");
+    props.put(ResponsiveConfig.CASSANDRA_HOSTNAME_CONFIG, "localhost");
+    props.put(ResponsiveConfig.CASSANDRA_PORT_CONFIG, 666);
+    props.put(ResponsiveConfig.RESPONSIVE_ORG_CONFIG, "responsive");
+    props.put(ResponsiveConfig.RESPONSIVE_ENV_CONFIG, "ttd");
     props.putAll(overrides);
     return ResponsiveConfig.responsiveConfig(props);
   }

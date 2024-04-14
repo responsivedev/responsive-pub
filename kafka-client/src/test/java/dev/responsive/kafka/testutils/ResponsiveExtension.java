@@ -16,14 +16,16 @@
 
 package dev.responsive.kafka.testutils;
 
-import static dev.responsive.kafka.api.config.ResponsiveConfig.REMOTE_TABLE_CHECK_INTERVAL_MS_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.CASSANDRA_CHECK_INTERVAL_MS;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.CASSANDRA_DATACENTER_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.CASSANDRA_DESIRED_NUM_PARTITION_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.CASSANDRA_HOSTNAME_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.CASSANDRA_PORT_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_ENDPOINT_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_ENV_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_ORG_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_BACKEND_TYPE_CONFIG;
-import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_DATACENTER_CONFIG;
-import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_DESIRED_NUM_PARTITION_CONFIG;
-import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_HOSTNAME_CONFIG;
-import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_PORT_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.TASK_ASSIGNOR_CLASS_OVERRIDE;
-import static dev.responsive.kafka.api.config.ResponsiveConfig.TENANT_ID_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.loggedConfig;
 import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS;
@@ -115,23 +117,24 @@ public class ResponsiveExtension implements BeforeAllCallback, AfterAllCallback,
       return admin;
     } else if (isContainerConfig(parameterContext)) {
       final Map<String, Object> map = new HashMap<>(Map.of(
-          TENANT_ID_CONFIG, "responsive_clients",
+          RESPONSIVE_ORG_CONFIG, "responsive",
+          RESPONSIVE_ENV_CONFIG, "itests",
           INTERNAL_TASK_ASSIGNOR_CLASS, TASK_ASSIGNOR_CLASS_OVERRIDE,
           BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers(),
-          STORAGE_DESIRED_NUM_PARTITION_CONFIG, -1,
-          REMOTE_TABLE_CHECK_INTERVAL_MS_CONFIG, 100
+          CASSANDRA_DESIRED_NUM_PARTITION_CONFIG, -1,
+          CASSANDRA_CHECK_INTERVAL_MS, 100
       ));
 
       switch (backend) {
         case CASSANDRA:
           map.put(STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.CASSANDRA.name());
-          map.put(STORAGE_HOSTNAME_CONFIG, cassandra.getContactPoint().getHostName());
-          map.put(STORAGE_PORT_CONFIG, cassandra.getContactPoint().getPort());
-          map.put(STORAGE_DATACENTER_CONFIG, cassandra.getLocalDatacenter());
+          map.put(CASSANDRA_HOSTNAME_CONFIG, cassandra.getContactPoint().getHostName());
+          map.put(CASSANDRA_PORT_CONFIG, cassandra.getContactPoint().getPort());
+          map.put(CASSANDRA_DATACENTER_CONFIG, cassandra.getLocalDatacenter());
           break;
         case MONGO_DB:
           map.put(STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.MONGO_DB.name());
-          map.put(STORAGE_HOSTNAME_CONFIG, mongo.getConnectionString());
+          map.put(MONGO_ENDPOINT_CONFIG, mongo.getConnectionString());
           break;
         default:
           throw new IllegalStateException("Unexpected value: " + backend);

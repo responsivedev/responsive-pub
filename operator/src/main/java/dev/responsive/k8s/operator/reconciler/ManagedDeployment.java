@@ -42,6 +42,15 @@ public class ManagedDeployment extends ManagedApplication {
   }
 
   @Override
+  public void restartPod(final String podId, final Context<ResponsivePolicy> context) {
+    final var deployment = context.getClient().apps().deployments()
+        .inNamespace(namespace)
+        .withName(appName);
+    final var podSelector = deployment.get().getSpec().getSelector();
+    findPod(podId, context, namespace, podSelector).delete();
+  }
+
+  @Override
   public String appType() {
     return "Deployment";
   }
