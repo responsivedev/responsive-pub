@@ -35,6 +35,7 @@ import static org.apache.kafka.streams.StreamsConfig.STATESTORE_CACHE_MAX_BYTES_
 import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasItems;
 
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
@@ -120,6 +121,24 @@ public class AsyncProcessorIntegrationTest {
   @Test
   public void shouldProcessEventsInOrderByKey() throws Exception {
     // Given:
+    final List<String> keys = List.of("a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k",
+                                      "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v",
+                                      "w", "x", "y", "z");
+
+    // produce 5 records for each key, with all keys intertwined between iterations
+    final List<KeyValue<String, String>> inputRecords = new LinkedList<>();
+    for (int val = 1; val < 6; ++val) {
+      for (final String key : keys) {
+        inputRecords.add(new KeyValue<>(key, key + val));
+      }
+    }
+
+    final Map<String, String> finalOutputRecords = new HashMap<>(keys.size());
+    for (final String key : keys) {
+      final String finalValue = String.format("%s1%s2%s3%s4%s5", key, key, key, key, key);
+      finalOutputRecords.put(key, finalValue);
+    }
+
     final Map<String, Object> properties = getMutableProperties();
     final KafkaProducer<String, String> producer = new KafkaProducer<>(properties);
     
@@ -137,39 +156,26 @@ public class AsyncProcessorIntegrationTest {
             ASYNC_KV_STORE)
         .to(outputTopic());
 
-    final int numOutput = 25;
+    // The total number of records processed, equal to the total number of output records
+    // ONLY when caching is disabled
+    final int numProcessedRecords = keys.size() * 5;
 
     try (final var streams = new ResponsiveKafkaStreams(builder.build(), properties)) {
       startAppAndAwaitRunning(Duration.ofSeconds(10), streams);
-
-      final List<KeyValue<String, String>> inputRecords = new LinkedList<>();
-
-      final List<String> keys = List.of("a", "b", "c", "d", "e");
-
-      // produce a record for each key, 5 times with value based on iteration
-      for (int val = 1; val < 6; ++val) {
-        for (final String key : keys) {
-          inputRecords.add(new KeyValue<>(key, key + val));
-        }
-      }
 
       // When:
       pipeRecords(producer, inputTopic(), inputRecords);
 
       // Then:
-      final var kvs = readOutput(outputTopic(), 0, numOutput, true, properties);
-      assertThat(
-          kvs,
-          hasItems(
-              new KeyValue<>("a", "a1a2a3a4a5"),
-              new KeyValue<>("b", "b1b2b3b4b5"),
-              new KeyValue<>("c", "c1c2c3c4c5"),
-              new KeyValue<>("d", "d1d2d3d4d5"),
-              new KeyValue<>("e", "e1e2e3e4e5"))
-      );
+      final var kvs = readOutput(outputTopic(), 0, numProcessedRecords, true, properties);
 
+      for (final String key : keys) {
+        final String finalValue = finalOutputRecords.get(key);
+        assertThat(kvs, hasItem(new KeyValue<>(key, finalValue)));
+      }
     }
-    assertThat(processed.get(), equalTo(numOutput));
+    assertThat(processed.get(), equalTo(numProcessedRecords));
+    assertThat(latestValues, equalTo(finalOutputRecords));
   }
   
   private static class UserFixedKeyProcessor implements FixedKeyProcessor<String, String, String> {

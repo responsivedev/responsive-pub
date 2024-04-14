@@ -82,12 +82,12 @@ public class AsyncThreadProcessorContext<KOut, VOut> implements MergedProcessorC
   // in to the async processor during init. This MUST be protected from
   // any mutations and should only be delegated to in pure getters that
   // access immutable fields (such as applicationId)
-  private final ProcessingContext originalContext;
+  private final ProcessingContext taskContext;
 
   public AsyncThreadProcessorContext(
-      final ProcessingContext originalContext
+      final ProcessingContext taskContext
   ) {
-    this.originalContext = originalContext;
+    this.taskContext = taskContext;
   }
 
   // TODO: we won't need to do this until we support async with the DSL and support
@@ -154,7 +154,9 @@ public class AsyncThreadProcessorContext<KOut, VOut> implements MergedProcessorC
     // If this method is hit we can assume the user invoked it from their
     // #process method, instead of during #init as intended, since this context
     // type is only accessed by AsyncThreads which only invoke #process
-    throw new IllegalStateException("Must call #getStateStore during the Processor's #init method");
+    throw new UnsupportedOperationException(
+        "Must call #getStateStore during the Processor's #init method"
+    );
   }
 
   @Override
@@ -168,11 +170,14 @@ public class AsyncThreadProcessorContext<KOut, VOut> implements MergedProcessorC
 
   @Override
   public void commit() {
-    // We can support this by using a simple AtomicBoolean to flag commit requests and signal
-    // the StreamThread to delegate the request down to the original context when it next
-    // re-enters the async processor
-    throw new UnsupportedOperationException("Requesting commits is not yet supported with"
-                                                + "async processing");
+    // This is technically not thread-safe since it sets a simple (non-volatile) commitRequested
+    // flag in the StreamTask, but since a commit request is only best-effort and there's no
+    // guarantee of when the commit will actually occur, we aren't technically violating
+    // the semantics here.
+    // We can support this for real by using a simple AtomicBoolean to flag commit requests
+    // and signal the StreamThread to delegate the request down to the original context
+    // when it next re-enters the async processor. But that feels like overkill
+    taskContext.commit();
   }
 
   @Override
@@ -203,48 +208,48 @@ public class AsyncThreadProcessorContext<KOut, VOut> implements MergedProcessorC
   @Override
   // This is an immutable field so it's safe to delegate
   public String applicationId() {
-    return originalContext.applicationId();
+    return taskContext.applicationId();
   }
 
   @Override
   // This is an immutable field so it's safe to delegate
   public TaskId taskId() {
-    return originalContext.taskId();
+    return taskContext.taskId();
   }
 
   @Override
   // This just looks up the default serde in the configs so it's safe
   public Serde<?> keySerde() {
-    return originalContext.keySerde();
+    return taskContext.keySerde();
   }
 
   @Override
   // This just looks up the default serde in the configs so it's safe
   public Serde<?> valueSerde() {
-    return originalContext.valueSerde();
+    return taskContext.valueSerde();
   }
 
   @Override
   // This is an immutable field so it's safe to delegate
   public File stateDir() {
-    return originalContext.stateDir();
+    return taskContext.stateDir();
   }
 
   @Override
   // This is an immutable field so it's safe to delegate
   public StreamsMetrics metrics() {
-    return originalContext.metrics();
+    return taskContext.metrics();
   }
 
   @Override
   // Safe to delegate since all StreamThreads share the same configs anyway
   public Map<String, Object> appConfigs() {
-    return originalContext.appConfigs();
+    return taskContext.appConfigs();
   }
 
   @Override
   // Safe to delegate since all StreamThreads share the same configs anyway
   public Map<String, Object> appConfigsWithPrefix(final String prefix) {
-    return originalContext.appConfigsWithPrefix(prefix);
+    return taskContext.appConfigsWithPrefix(prefix);
   }
 }
