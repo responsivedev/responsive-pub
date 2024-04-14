@@ -26,7 +26,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.streams.processor.api.ProcessingContext;
 import org.slf4j.Logger;
 
 /**

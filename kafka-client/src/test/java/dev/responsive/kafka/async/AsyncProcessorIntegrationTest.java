@@ -101,7 +101,7 @@ public class AsyncProcessorIntegrationTest {
     this.responsiveProps.putAll(responsiveProps);
 
     this.admin = admin;
-    createTopicsAndWait(admin, Map.of(inputTopic(), 2, outputTopic(), 1));
+    createTopicsAndWait(admin, Map.of(inputTopic(), 10, outputTopic(), 1));
   }
 
   @AfterEach
@@ -264,7 +264,7 @@ public class AsyncProcessorIntegrationTest {
     final Map<String, Object> properties = new HashMap<>(responsiveProps);
     
     properties.put(ResponsiveConfig.ASYNC_THREAD_POOL_SIZE_CONFIG, 5);
-    properties.put(NUM_STREAM_THREADS_CONFIG, 1);
+    properties.put(NUM_STREAM_THREADS_CONFIG, 5);
 
     properties.put(KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
     properties.put(VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
