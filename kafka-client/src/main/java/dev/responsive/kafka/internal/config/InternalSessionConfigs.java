@@ -104,7 +104,7 @@ public final class InternalSessionConfigs {
      * prefix-based submap, such as the one passed in to the KafkaClientSupplier for
      * the main consumer or the one returned from the
      * {@link ProcessorContext#appConfigsWithPrefix(String)} API.
-     * The {@link #loadAsyncThreadPoolManager(Map)} method assumes the prefix has been
+     * The {@link #loadAsyncThreadPoolRegistry(Map)} method assumes the prefix has been
      * stripped and therefore only works on filtered submaps like in the two
      * examples above
      */

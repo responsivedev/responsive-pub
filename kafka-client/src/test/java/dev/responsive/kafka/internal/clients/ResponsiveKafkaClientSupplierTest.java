@@ -16,6 +16,7 @@
 
 package dev.responsive.kafka.internal.clients;
 
+
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
@@ -25,8 +26,10 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import dev.responsive.kafka.api.async.internals.AsyncThreadPoolRegistry;
 import dev.responsive.kafka.api.config.CompatibilityMode;
 import dev.responsive.kafka.internal.clients.ResponsiveKafkaClientSupplier.Factories;
+import dev.responsive.kafka.internal.config.InternalSessionConfigs;
 import dev.responsive.kafka.internal.metrics.EndOffsetsPoller;
 import dev.responsive.kafka.internal.metrics.MetricPublishingCommitListener;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
@@ -64,6 +67,7 @@ class ResponsiveKafkaClientSupplierTest {
       StreamsConfig.APPLICATION_ID_CONFIG, "appid",
       StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092"
   );
+
   private static final Map<String, Object> PRODUCER_CONFIGS = configsWithOverrides(
       Map.of(
           ProducerConfig.CLIENT_ID_CONFIG, "foo-StreamThread-0-producer"
@@ -286,7 +290,7 @@ class ResponsiveKafkaClientSupplierTest {
     return new ResponsiveKafkaClientSupplier(
         factories,
         wrapped,
-        new StreamsConfig(CONFIGS),
+        new StreamsConfig(configs),
         storeRegistry,
         metrics,
         compat,
@@ -300,10 +304,14 @@ class ResponsiveKafkaClientSupplierTest {
 
   private static Map<String, Object> configsWithOverrides(
       final Map<String, Object> configs,
-      final Map<String, Object> overrides) {
+      final Map<String, Object> overrides
+  ) {
     final var intermediate = new HashMap<String, Object>();
     intermediate.putAll(configs);
     intermediate.putAll(overrides);
+    intermediate.put(
+        "__internal.responsive.async.thread.pool.registry__", new AsyncThreadPoolRegistry(2, 5)
+    );
     return Map.copyOf(intermediate);
   }
 }
