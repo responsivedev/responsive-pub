@@ -264,6 +264,7 @@ public class AsyncProcessorIntegrationTest {
     final Map<String, Object> properties = new HashMap<>(responsiveProps);
     
     properties.put(ResponsiveConfig.ASYNC_THREAD_POOL_SIZE_CONFIG, 5);
+    properties.put(NUM_STREAM_THREADS_CONFIG, 1);
 
     properties.put(KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
     properties.put(VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
@@ -273,7 +274,6 @@ public class AsyncProcessorIntegrationTest {
     properties.put(APPLICATION_ID_CONFIG, name);
     properties.put(DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class.getName());
     properties.put(DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class.getName());
-    properties.put(NUM_STREAM_THREADS_CONFIG, 1);
     properties.put(STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
     properties.put(STORE_FLUSH_RECORDS_TRIGGER_CONFIG, 1);
     properties.put(COMMIT_INTERVAL_MS_CONFIG, 1);

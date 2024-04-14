@@ -30,6 +30,7 @@ import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.FixedKeyRecord;
+import org.apache.kafka.streams.processor.api.ProcessingContext;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
@@ -81,10 +82,10 @@ public class AsyncThreadProcessorContext<KOut, VOut> implements MergedProcessorC
   // in to the async processor during init. This MUST be protected from
   // any mutations and should only be delegated to in pure getters that
   // access immutable fields (such as applicationId)
-  private final ProcessorContext<?, ?> originalContext;
+  private final ProcessingContext originalContext;
 
   public AsyncThreadProcessorContext(
-      final ProcessorContext<?, ?> originalContext
+      final ProcessingContext originalContext
   ) {
     this.originalContext = originalContext;
   }

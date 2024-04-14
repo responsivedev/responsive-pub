@@ -17,6 +17,7 @@
 package dev.responsive.kafka.api.async.internals;
 
 import dev.responsive.kafka.api.async.internals.contexts.AsyncThreadProcessorContext;
+import dev.responsive.kafka.api.async.internals.contexts.AsyncUserProcessorContext;
 import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
 import dev.responsive.kafka.api.async.internals.queues.FinalizingQueue;
 import dev.responsive.kafka.api.async.internals.queues.ProcessingQueue;
@@ -25,7 +26,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.api.ProcessingContext;
 import org.slf4j.Logger;
 
 /**
@@ -78,24 +79,27 @@ public class AsyncThreadPool {
     log.info("Started up all {} async threads in this pool", threadPoolSize);
   }
 
-  public void addProcessor(
+  public <KOut, VOut> void addProcessor(
       final String asyncProcessorName,
       final int partition,
-      final InternalProcessorContext<?, ?> originalContext,
+      final AsyncUserProcessorContext<KOut, VOut> userContext,
       final FinalizingQueue finalizingQueue
   ) {
     processingQueue.addPartition(partition);
 
-    final AsyncNodeContainer processorContainer = new AsyncNodeContainer(
-        streamThreadName,
-        asyncProcessorName,
-        partition,
-        new AsyncThreadProcessorContext<>(originalContext),
-        finalizingQueue
-    );
-
     for (final AsyncThread thread : threadPool.values()) {
-      thread.addProcessor(processorContainer);
+      final AsyncThreadProcessorContext<KOut, VOut> threadLocalContext =
+          new AsyncThreadProcessorContext<>(userContext.taskContext());
+
+      final AsyncNodeContainer processorContainer = new AsyncNodeContainer(
+          streamThreadName,
+          asyncProcessorName,
+          partition,
+          threadLocalContext,
+          finalizingQueue
+      );
+
+      thread.addProcessor(processorContainer, threadLocalContext, userContext);
     }
   }
 
