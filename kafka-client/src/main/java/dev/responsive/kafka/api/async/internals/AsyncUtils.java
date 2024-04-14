@@ -16,6 +16,8 @@
 
 package dev.responsive.kafka.api.async.internals;
 
+import static dev.responsive.kafka.api.async.internals.AsyncThreadPool.ASYNC_THREAD_NAME;
+
 import dev.responsive.kafka.api.async.internals.stores.AbstractAsyncStoreBuilder;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreBuilder;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreBuilder.StoreType;
@@ -29,6 +31,37 @@ import org.apache.kafka.streams.state.internals.AsyncKeyValueStoreBuilder;
 import org.apache.kafka.streams.state.internals.AsyncTimestampedKeyValueStoreBuilder;
 
 public class AsyncUtils {
+
+  /**
+   * @return true if the {@code threadName} is a StreamThread
+   */
+  public static boolean isStreamThread(
+      final String threadName,
+      final String streamThreadName
+  ) {
+    return threadName.equals(streamThreadName);
+  }
+
+  /**
+   * @return true if the {@code threadName} is an AsyncThread
+   */
+  public static boolean isAsyncThread(
+      final String threadName,
+      final String streamThreadName
+  ) {
+    return threadName.startsWith(streamThreadName) && threadName.contains(ASYNC_THREAD_NAME);
+  }
+
+  /**
+   * @return true if the {@code threadName} is either a StreamThread or an AsyncThread
+   */
+  public static boolean isStreamThreadOrAsyncThread(
+      final String threadName,
+      final String streamThreadName
+  ) {
+    return isAsyncThread(threadName, streamThreadName)
+        || isStreamThread(threadName, streamThreadName);
+  }
 
   public static Map<String, AbstractAsyncStoreBuilder<?, ?, ?>> initializeAsyncBuilders(
       final Set<StoreBuilder<?>> userConnectedStores

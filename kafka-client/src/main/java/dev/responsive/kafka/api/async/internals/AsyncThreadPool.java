@@ -34,6 +34,8 @@ import org.slf4j.Logger;
  */
 public class AsyncThreadPool {
 
+  public static final String ASYNC_THREAD_NAME = "AsyncThread";
+
   private final LogContext logPrefix;
   private final Logger log;
 
@@ -61,8 +63,8 @@ public class AsyncThreadPool {
   }
 
   private void startThreads(final ProcessingQueue processingQueue) {
-    for (int i = 0; i < threadPoolSize; ++i) {
-      final String name = generateAsyncThreadName(streamThreadName, i);
+    for (int asyncThreadIndex = 0; asyncThreadIndex < threadPoolSize; ++asyncThreadIndex) {
+      final String name = generateAsyncThreadName(streamThreadName, asyncThreadIndex);
       final AsyncThread thread = new AsyncThread(name, processingQueue);
 
       thread.setDaemon(true);
@@ -113,15 +115,16 @@ public class AsyncThreadPool {
   }
 
   /**
-   * @return the name for this AsyncThread, formatted by appending a unique
-   *         index i with the base name of the StreamThread with index n, ie
-   *         AsyncThread.getName() --> {clientId}-StreamThread-{n}-{i}
+   * @return the name for this AsyncThread, formatted by appending the async thread suffix
+   *         based on a unique async-thread index i and the base name of the StreamThread
+   *         with index n, ie
+   *         AsyncThread.getName() --> {clientId}-StreamThread-{n}-AsyncThread-{i}
    */
   private static String generateAsyncThreadName(
       final String streamThreadName,
       final int asyncThreadIndex
   ) {
-    return String.format("%s-%d", streamThreadName, asyncThreadIndex);
+    return String.format("%s-%s-%d", streamThreadName, ASYNC_THREAD_NAME, asyncThreadIndex);
   }
 
   /**

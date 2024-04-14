@@ -16,19 +16,68 @@
 
 package dev.responsive.kafka.api.async.internals.contexts;
 
+import static dev.responsive.kafka.api.async.internals.AsyncThreadPool.ASYNC_THREAD_NAME;
+import static dev.responsive.kafka.api.async.internals.AsyncUtils.isAsyncThread;
+import static dev.responsive.kafka.api.async.internals.AsyncUtils.isStreamThread;
+import static dev.responsive.kafka.api.async.internals.AsyncUtils.isStreamThreadOrAsyncThread;
+
+import org.apache.kafka.common.utils.LogContext;
+import org.slf4j.Logger;
+
 public class AsyncProcessorContext<KOut, VOut>
     extends DelegatingProcessorContext<KOut, VOut, MergedProcessorContext<KOut, VOut>> {
+
+  private final Logger log;
+  private final String streamThreadName;
 
   private final ThreadLocal<MergedProcessorContext<KOut, VOut>> threadLocalDelegate =
       new ThreadLocal<>();
 
-  @Override
-  public MergedProcessorContext<KOut, VOut> delegate() {
-    // todo: assert this is only called from stream thread or async processor thread
-    return threadLocalDelegate.get();
+  public AsyncProcessorContext(
+      final String streamThreadName,
+      final String logPrefix
+  ) {
+    this.streamThreadName = streamThreadName;
+    this.log = new LogContext(logPrefix).logger(AsyncProcessorContext.class);
   }
 
-  public void setDelegateForCurrentThread(final MergedProcessorContext<KOut, VOut> delegate) {
+  @Override
+  public MergedProcessorContext<KOut, VOut> delegate() {
+    final var threadLocalContext = threadLocalDelegate.get();
+
+    // Unfortunately the ThreadLocal's #isPresent method is only package-private
+    if (threadLocalContext == null) {
+      final String threadName = Thread.currentThread().getName();
+      if (isStreamThreadOrAsyncThread(threadName, streamThreadName)) {
+        log.error("Thread {} attempted to access the context but it was not initialized",
+                  threadName);
+        throw new IllegalStateException("Uninitialized thread requested context access");
+      } else {
+        log.error("Unexpected thread type attempted to access the context. Thread name: {}",
+                  threadName);
+        throw new UnsupportedOperationException("Illegal external thread requested context access");
+      }
+    }
+
+    return threadLocalContext;
+  }
+
+  public void setDelegateForStreamThread(final StreamThreadProcessorContext<KOut, VOut> delegate) {
+    final String threadName = Thread.currentThread().getName();
+    if (!isStreamThread(threadName, streamThreadName)) {
+      log.error("Attempted to set StreamThread context but thread name was {}", threadName);
+      throw new IllegalStateException("Incorrect thread initializing StreamThread context");
+    }
     threadLocalDelegate.set(delegate);
   }
+
+  public void setDelegateForAsyncThread(final AsyncThreadProcessorContext<KOut, VOut> delegate) {
+    final String threadName = Thread.currentThread().getName();
+    if (!isAsyncThread(threadName, streamThreadName)) {
+      log.error("Attempted to set AsyncThread context but thread name was {}", threadName);
+      throw new IllegalStateException("Incorrect thread initializing AsyncThread context");
+    }
+    threadLocalDelegate.set(delegate);
+  }
+
 }
