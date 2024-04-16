@@ -205,6 +205,22 @@ public final class IntegrationTestUtils {
   public static <K, V> void pipeRecords(
       final KafkaProducer<K, V> producer,
       final String topic,
+      final List<KeyValue<K, V>> records
+  ) {
+    for (final KeyValue<K, V> record : records) {
+      producer.send(new ProducerRecord<>(
+          topic,
+          0,
+          record.key,
+          record.value
+      ));
+    }
+    producer.flush();
+  }
+
+  public static <K, V> void pipeTimestampedRecords(
+      final KafkaProducer<K, V> producer,
+      final String topic,
       final List<KeyValueTimestamp<K, V>> records
   ) {
     for (final KeyValueTimestamp<K, V> record : records) {
@@ -218,7 +234,6 @@ public final class IntegrationTestUtils {
     }
     producer.flush();
   }
-
 
   public static void awaitOutput(
       final String topic,

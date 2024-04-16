@@ -16,6 +16,7 @@
 
 package dev.responsive.kafka.api.config;
 
+import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Range.between;
 
 import com.datastax.oss.driver.api.core.ConsistencyLevel;
@@ -202,6 +203,13 @@ public class ResponsiveConfig extends AbstractConfig {
   public static final String SUBPARTITION_HASHER_CONFIG = "responsive.subpartition.hasher";
   private static final String SUBPARTITION_HASHER_DOC = "Hasher to use for sub-partitioning.";
   private static final Class<?> SUBPARTITION_HASHER_DEFAULT = Murmur3Hasher.class;
+
+  public static final String ASYNC_THREAD_POOL_SIZE_CONFIG = "responsive.async.thread.pool.size";
+  private static final int ASYNC_THREAD_POOL_SIZE_DEFAULT = 0;
+  private static final String ASYNC_THREAD_POOL_SIZE_DOC = "The number of async processing threads to "
+      + "start up for each StreamThread in this app. Setting this to 0 (the default) means async processing "
+      + "will not be enabled. Setting this to a positive integer will enable async processing, but only if "
+      + "there is at least one AsyncProcessor in the topology. See javadocs for AsyncProcessorSupplier for details.";
 
 
   // ------------------ WindowStore configurations ----------------------
@@ -430,6 +438,13 @@ public class ResponsiveConfig extends AbstractConfig {
           MONGO_COLLECTION_SHARDING_CHUNKS_DEFAULT,
           Importance.LOW,
           MONGO_COLLECTION_SHARDING_CHUNKS_DOC
+      ).define(
+          ASYNC_THREAD_POOL_SIZE_CONFIG,
+          Type.INT,
+          ASYNC_THREAD_POOL_SIZE_DEFAULT,
+          atLeast(0),
+          Importance.LOW,
+          ASYNC_THREAD_POOL_SIZE_DOC
       ).define(
           MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_CONFIG,
           Type.BOOLEAN,

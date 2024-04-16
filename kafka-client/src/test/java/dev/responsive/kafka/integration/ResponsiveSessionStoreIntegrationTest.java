@@ -17,7 +17,7 @@
 package dev.responsive.kafka.integration;
 
 import static dev.responsive.kafka.api.config.ResponsiveConfig.STORE_FLUSH_RECORDS_TRIGGER_CONFIG;
-import static dev.responsive.kafka.testutils.IntegrationTestUtils.pipeRecords;
+import static dev.responsive.kafka.testutils.IntegrationTestUtils.pipeTimestampedRecords;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.startAppAndAwaitRunning;
 import static java.util.Arrays.asList;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
@@ -178,7 +178,7 @@ public class ResponsiveSessionStoreIntegrationTest {
             new ResponsiveKafkaStreams(builder.build(), properties);
     ) {
       startAppAndAwaitRunning(Duration.ofSeconds(15), kafkaStreams);
-      pipeRecords(producer, inputTopic(), inputEvents);
+      pipeTimestampedRecords(producer, inputTopic(), inputEvents);
 
       final boolean awaited = outputLatch.await(5_000, TimeUnit.MILLISECONDS);
       assertThat(

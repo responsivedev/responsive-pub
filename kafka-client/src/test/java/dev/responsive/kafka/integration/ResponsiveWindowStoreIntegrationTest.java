@@ -17,7 +17,7 @@
 package dev.responsive.kafka.integration;
 
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.minutesToMillis;
-import static dev.responsive.kafka.testutils.IntegrationTestUtils.pipeRecords;
+import static dev.responsive.kafka.testutils.IntegrationTestUtils.pipeTimestampedRecords;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.startAppAndAwaitRunning;
 import static java.util.Arrays.asList;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
@@ -315,7 +315,7 @@ public class ResponsiveWindowStoreIntegrationTest {
           new KeyValueTimestamp<>("key", "k", minutesToMillis(16L))  // [15, 30] --> "degk"
       );
 
-      pipeRecords(producer, inputTopic(), input1);
+      pipeTimestampedRecords(producer, inputTopic(), input1);
 
       outputLatch.await();
       assertThat(results.size(), equalTo(3));
@@ -385,7 +385,7 @@ public class ResponsiveWindowStoreIntegrationTest {
           new KeyValueTimestamp<>("key", "h", 5_000L)   // within grace for [5, 15s] window
       );
 
-      pipeRecords(producer, inputTopic(), input1);
+      pipeTimestampedRecords(producer, inputTopic(), input1);
       outputLatch.await();
 
       assertThat(results.size(), equalTo(4));
