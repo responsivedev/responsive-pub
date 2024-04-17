@@ -59,6 +59,10 @@ public final class InternalSessionConfigs {
     );
   }
 
+  public static boolean isAsyncThreadPoolRegistryEnabled(final Map<String, Object> configs) {
+    return configs.containsKey(INTERNAL_ASYNC_THREAD_POOL_REGISTRY_CONFIG);
+  }
+
   // CAUTION: this method assumes the provided config map has stripped away the
   // main.consumer prefix that was added to this config in the original Streams
   // properties. See the javadocs below for the Builder#withAsyncThreadPoolRegistry

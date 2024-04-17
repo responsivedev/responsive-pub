@@ -161,7 +161,7 @@ public class AsyncProcessorIntegrationTest {
     final int numProcessedRecords = keys.size() * 5;
 
     try (final var streams = new ResponsiveKafkaStreams(builder.build(), properties)) {
-      startAppAndAwaitRunning(Duration.ofSeconds(100), streams);
+      startAppAndAwaitRunning(Duration.ofSeconds(10), streams);
 
       // When:
       pipeRecords(producer, inputTopic(), inputRecords);
