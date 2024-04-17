@@ -47,9 +47,11 @@ public class FinalizingQueue implements ReadOnlyFinalizingQueue, WriteOnlyFinali
 
   private final Logger log;
   private final BlockingQueue<AsyncEvent> finalizableRecords = new LinkedBlockingQueue<>();
+  private final int partition;
 
-  public FinalizingQueue(final String logPrefix) {
+  public FinalizingQueue(final String logPrefix, final int partition) {
     this.log = new LogContext(logPrefix).logger(FinalizingQueue.class);
+    this.partition = partition;
   }
 
   /**
@@ -59,6 +61,13 @@ public class FinalizingQueue implements ReadOnlyFinalizingQueue, WriteOnlyFinali
   public void scheduleForFinalization(
       final AsyncEvent processedEvent
   ) {
+    if (processedEvent.partition() != this.partition) {
+      throw new IllegalStateException(String.format(
+          "attempted to finalize an event for partition %d on queue for partition %d",
+          processedEvent.partition(),
+          this.partition
+      ));
+    }
     // Transition to OUTPUT_READY to signal that the event is done with processing
     // and is currently awaiting finalization by the StreamThread
     processedEvent.transitionToToFinalize();

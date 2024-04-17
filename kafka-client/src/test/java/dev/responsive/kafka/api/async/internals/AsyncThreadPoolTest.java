@@ -36,7 +36,8 @@ class AsyncThreadPoolTest {
   private ProcessingContext originalContext;
   @Mock
   private ProcessorRecordContext recordContext;
-  private final FinalizingQueue finalizingQueue = new FinalizingQueue("fq");
+  private final FinalizingQueue finalizingQueue0 = new FinalizingQueue("fq", 0);
+  private final FinalizingQueue finalizingQueue1 = new FinalizingQueue("fq", 1);
 
   private AsyncThreadPool pool;
 
@@ -59,7 +60,7 @@ class AsyncThreadPoolTest {
     task.waitLatch.countDown();
 
     // when:
-    schedule("processor", 0, event);
+    schedule("processor", 0, finalizingQueue0, event);
 
     // then:
     final Map<AsyncEvent, Future<?>> inFlight = pool.getInFlight("processor", 0);
@@ -67,7 +68,7 @@ class AsyncThreadPoolTest {
       final var future = inFlight.get(event);
       future.get(10, TimeUnit.SECONDS);
     }
-    assertThat(finalizingQueue.waitForNextFinalizableEvent(), is(event));
+    assertThat(finalizingQueue0.waitForNextFinalizableEvent(), is(event));
   }
 
   @Test
@@ -79,13 +80,13 @@ class AsyncThreadPoolTest {
     final var event2 = newEvent(task2, 0);
     final var task3 = new TestTask();
     final var event3 = newEvent(task3, 0);
-    schedule("processor", 0, event1, event2, event3);
+    schedule("processor", 0, finalizingQueue0, event1, event2, event3);
     final var taskOtherProcessor = new TestTask();
     final var eventOtherProcessor = newEvent(taskOtherProcessor, 0);
-    schedule("other", 0, eventOtherProcessor);
+    schedule("other", 0, finalizingQueue0, eventOtherProcessor);
     final var taskOtherPartition = new TestTask();
     final var eventOtherPartition = newEvent(taskOtherPartition, 1);
-    schedule("processor", 1, eventOtherPartition);
+    schedule("processor", 1, finalizingQueue1, eventOtherPartition);
     final var processor0InFlight = Map.copyOf(pool.getInFlight("processor", 0));
     final var processor1InFlight = Map.copyOf(pool.getInFlight("processor", 1));
     final var other0InFlight = Map.copyOf(pool.getInFlight("other", 0));
@@ -115,7 +116,12 @@ class AsyncThreadPoolTest {
     }
   }
 
-  private void schedule(final String processor, final int task, final AsyncEvent... events) {
+  private void schedule(
+      final String processor,
+      final int task,
+      final FinalizingQueue finalizingQueue,
+      final AsyncEvent... events
+  ) {
     pool.scheduleForProcessing(
         processor,
         task,

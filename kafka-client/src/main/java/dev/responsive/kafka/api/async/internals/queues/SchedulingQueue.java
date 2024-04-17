@@ -44,11 +44,16 @@ public class SchedulingQueue<KIn> {
   private final Map<KIn, KeyEventQueue> blockedEvents = new HashMap<>();
   private final Queue<AsyncEvent> processableEvents = new LinkedList<>();
 
+
   private final int maxQueueSizePerKey;
 
   public SchedulingQueue(final String logPrefix, final int maxQueueSizePerKey) {
     this.log = new LogContext(logPrefix).logger(SchedulingQueue.class);
     this.maxQueueSizePerKey = maxQueueSizePerKey;
+  }
+
+  public boolean isEmpty() {
+    return processableEvents.isEmpty() && blockedEvents.isEmpty();
   }
 
   /**
