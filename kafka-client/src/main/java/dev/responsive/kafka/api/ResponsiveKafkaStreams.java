@@ -268,7 +268,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
   ) {
     final Properties propsWithOverrides = new Properties();
 
-    final InternalSessionConfigs.Builder internalConfigBuilder = new InternalSessionConfigs.Builder()
+    final InternalSessionConfigs.Builder internalConfBuilder = new InternalSessionConfigs.Builder()
         .withSessionClients(sessionClients)
         .withStoreRegistry(storeRegistry)
         .withTopologyDescription(topologyDescription);
@@ -279,11 +279,11 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
           numStreamThreads,
           configs.getInt(ASYNC_THREAD_POOL_SIZE_CONFIG)
       );
-      internalConfigBuilder.withAsyncThreadPoolRegistry(asyncRegistry);
+      internalConfBuilder.withAsyncThreadPoolRegistry(asyncRegistry);
     }
 
     propsWithOverrides.putAll(configs.originals());
-    propsWithOverrides.putAll(internalConfigBuilder.build());
+    propsWithOverrides.putAll(internalConfBuilder.build());
 
     if (ConfigUtils.compatibilityMode(configs) == CompatibilityMode.METRICS_ONLY) {
       return propsWithOverrides;
