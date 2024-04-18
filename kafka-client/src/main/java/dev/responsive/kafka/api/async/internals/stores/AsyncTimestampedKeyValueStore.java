@@ -6,8 +6,8 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 public class AsyncTimestampedKeyValueStore<KS, VS>
     extends AsyncKeyValueStore<KS, ValueAndTimestamp<VS>>
-    implements TimestampedKeyValueStore<KS, VS>
-{
+    implements TimestampedKeyValueStore<KS, VS> {
+
   public AsyncTimestampedKeyValueStore(
       final String name,
       final int partition,
@@ -15,4 +15,5 @@ public class AsyncTimestampedKeyValueStore<KS, VS>
   ) {
     super(name, partition, userDelegate);
   }
+
 }
