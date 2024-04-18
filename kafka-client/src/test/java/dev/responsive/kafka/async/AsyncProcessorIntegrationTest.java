@@ -69,6 +69,8 @@ import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
 import org.apache.kafka.streams.processor.api.FixedKeyRecord;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -124,7 +126,7 @@ public class AsyncProcessorIntegrationTest {
                                       "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v",
                                       "w", "x", "y", "z");
 
-    // produce 5 records for each key, with all keys intertwined between iterations
+    // produce 5 records for each key, with keys interleaved across iterations
     final List<KeyValue<String, String>> inputRecords = new LinkedList<>();
     for (int val = 1; val < 6; ++val) {
       for (final String key : keys) {
@@ -186,7 +188,7 @@ public class AsyncProcessorIntegrationTest {
     
     private int partition;
     private FixedKeyProcessorContext<String, String> context;
-    private KeyValueStore<String, String> kvStore;
+    private TimestampedKeyValueStore<String, String> kvStore;
 
     public UserFixedKeyProcessor(
         final AtomicInteger processed,
@@ -214,12 +216,12 @@ public class AsyncProcessorIntegrationTest {
                         streamThreadName, partition, record.key(), record.value()
       );
       
-      final String oldVal = kvStore.get(record.key());
-      final String newVal = oldVal == null
+      final ValueAndTimestamp<String> oldValAndTimestamp = kvStore.get(record.key());
+      final String newVal = oldValAndTimestamp == null
           ? record.value()
-          : oldVal + record.value();
-      
-      kvStore.put(record.key(), newVal);
+          : oldValAndTimestamp.value() + record.value();
+
+      kvStore.put(record.key(), ValueAndTimestamp.make(newVal, record.timestamp()));
       context.forward(record.withValue(newVal));
       
       processed.incrementAndGet();
@@ -232,7 +234,6 @@ public class AsyncProcessorIntegrationTest {
                         streamThreadName, partition
       );
     }
-    
   }
   
   private static class UserFixedKeyProcessorSupplier 
@@ -256,13 +257,12 @@ public class AsyncProcessorIntegrationTest {
 
     @Override
     public Set<StoreBuilder<?>> stores() {
-      return Collections.singleton(ResponsiveStores.keyValueStoreBuilder(
+      return Collections.singleton(ResponsiveStores.timestampedKeyValueStoreBuilder(
           ResponsiveStores.keyValueStore(ResponsiveKeyValueParams.keyValue(ASYNC_KV_STORE)),
           Serdes.String(),
           Serdes.String()
       ));
     }
-    
   }
 
   private Map<String, Object> getMutableProperties() {
