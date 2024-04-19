@@ -204,12 +204,22 @@ public class ResponsiveConfig extends AbstractConfig {
   private static final String SUBPARTITION_HASHER_DOC = "Hasher to use for sub-partitioning.";
   private static final Class<?> SUBPARTITION_HASHER_DEFAULT = Murmur3Hasher.class;
 
+
+  // ------------------ Async processing configurations ----------------------
+
   public static final String ASYNC_THREAD_POOL_SIZE_CONFIG = "responsive.async.thread.pool.size";
   private static final int ASYNC_THREAD_POOL_SIZE_DEFAULT = 0;
   private static final String ASYNC_THREAD_POOL_SIZE_DOC = "The number of async processing threads to "
       + "start up for each StreamThread in this app. Setting this to 0 (the default) means async processing "
       + "will not be enabled. Setting this to a positive integer will enable async processing, but only if "
       + "there is at least one AsyncProcessor in the topology. See javadocs for AsyncProcessorSupplier for details.";
+
+  public static final String ASYNC_SCHEDULING_QUEUE_SIZE_CONFIG = "responsive.async.scheduling.queue.size";
+  private static final long ASYNC_SCHEDULING_QUEUE_SIZE_DEFAULT = 1L;
+  private static final String ASYNC_SCHEDULING_QUEUE_SIZE_DOC = "The maximum number of queued-up events that can be "
+      + "waiting to be scheduled on the async processor at a time. This upper bound provides a backpressure mechanism "
+      + "to make sure the StreamThread will back off properly when the async thread pool is struggling to keep up with "
+      + "the rate of input records.";
 
 
   // ------------------ WindowStore configurations ----------------------
@@ -445,6 +455,13 @@ public class ResponsiveConfig extends AbstractConfig {
           atLeast(0),
           Importance.LOW,
           ASYNC_THREAD_POOL_SIZE_DOC
+      ).define(
+          ASYNC_SCHEDULING_QUEUE_SIZE_CONFIG,
+          Type.LONG,
+          ASYNC_SCHEDULING_QUEUE_SIZE_DEFAULT,
+          atLeast(0),
+          Importance.LOW,
+          ASYNC_SCHEDULING_QUEUE_SIZE_DOC
       ).define(
           MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_CONFIG,
           Type.BOOLEAN,

@@ -24,6 +24,7 @@ import java.util.LinkedList;
 import java.util.Objects;
 import java.util.Queue;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.api.FixedKeyRecord;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
@@ -109,6 +110,7 @@ public class AsyncEvent {
   private State currentState;
 
   private final Object inputRecordKey;
+  private final Object inputRecordValue;
   private final int partition;
   private final long systemTime;
   private final long streamTime;
@@ -129,21 +131,15 @@ public class AsyncEvent {
       final long currentSystemTime,
       final Runnable processInputRecord
   ) {
-    this.currentState = State.SCHEDULING;
-    this.inputRecordKey = inputRecord.key();
-    this.partition = partition;
-    this.streamTime = currentStreamTime;
-    this.systemTime = currentSystemTime;
-    this.recordContext = recordContext;
-    this.processInputRecord = processInputRecord;
-
-    if (recordContext == null) {
-      this.log = new LogContext(logPrefix).logger(AsyncEvent.class);
-    } else {
-      this.log = new LogContext(String.format(
-          "%s <%d> ", logPrefix, recordContext.offset()
-      )).logger(AsyncEvent.class);
-    }
+    this(logPrefix,
+         inputRecord.key(),
+         inputRecord.value(),
+         partition,
+         recordContext,
+         currentStreamTime,
+         currentSystemTime,
+         processInputRecord
+    );
   }
 
   public AsyncEvent(
@@ -155,8 +151,30 @@ public class AsyncEvent {
       final long currentSystemTime,
       final Runnable processInputRecord
   ) {
+    this(logPrefix,
+         fixedKeyInputRecord.key(),
+         fixedKeyInputRecord.value(),
+         partition,
+         recordContext,
+         currentStreamTime,
+         currentSystemTime,
+         processInputRecord
+    );
+  }
+
+  private AsyncEvent(
+      final String logPrefix,
+      final Object inputRecordKey,
+      final Object inputRecordValue,
+      final int partition,
+      final ProcessorRecordContext recordContext,
+      final long currentStreamTime,
+      final long currentSystemTime,
+      final Runnable processInputRecord
+  ) {
     this.currentState = State.SCHEDULING;
-    this.inputRecordKey = fixedKeyInputRecord.key();
+    this.inputRecordKey = inputRecordKey;
+    this.inputRecordValue = inputRecordValue;
     this.partition = partition;
     this.streamTime = currentStreamTime;
     this.systemTime = currentSystemTime;
@@ -275,8 +293,14 @@ public class AsyncEvent {
   }
 
   @SuppressWarnings("unchecked")
-  public <KIn> KIn inputKey() {
+  public <KIn> KIn inputRecordKey() {
     return (KIn) inputRecordKey;
+  }
+
+  // Visible for testing
+  @SuppressWarnings("unchecked")
+  public <K, V> KeyValue<K, V> inputRecord() {
+    return (KeyValue<K, V>) new KeyValue<>(inputRecordKey, inputRecordValue);
   }
 
   @Override

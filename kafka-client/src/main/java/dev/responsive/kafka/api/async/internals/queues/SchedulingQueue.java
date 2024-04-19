@@ -21,6 +21,8 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.Queue;
+import org.apache.kafka.common.utils.LogContext;
+import org.slf4j.Logger;
 
 /**
  * A non-blocking queue for async events waiting to be passed from the StreamThread to
@@ -37,8 +39,18 @@ import java.util.Queue;
  */
 public class SchedulingQueue<KIn> {
 
-  private final Map<KIn, KeyStatus> blockedEvents = new HashMap<>();
+  private final Logger log;
+
+  private final Map<KIn, KeyEventQueue> blockedEvents = new HashMap<>();
   private final Queue<AsyncEvent> processableEvents = new LinkedList<>();
+
+  private final long maxSize; // upper bound on queue size to apply backpressure
+  private long currentSize = 0;
+
+  public SchedulingQueue(final String logPrefix, final long maxSize) {
+    this.log = new LogContext(logPrefix).logger(SchedulingQueue.class);
+    this.maxSize = maxSize;
+  }
 
   /**
    * Mark the given key as unblocked and free up the next record with
@@ -46,12 +58,12 @@ public class SchedulingQueue<KIn> {
    * Called upon the finalization of an async event with the given input key
    */
   public void unblockKey(final KIn key) {
-    final KeyStatus keyStatus = getOrCreateKeyStatus(key);
-    if (!keyStatus.isBlocked()) {
+    final KeyEventQueue keyEventQueue = getOrCreateKeyStatus(key);
+    if (!keyEventQueue.isBlocked()) {
       throw new IllegalStateException("Attempted to unblock a key but it was not blocked");
     }
 
-    final AsyncEvent nextProcessableEvent = keyStatus.scheduleNextEvent();
+    final AsyncEvent nextProcessableEvent = keyEventQueue.scheduleNextEvent();
     if (nextProcessableEvent != null) {
       // If there are blocked events waiting, promote one but don't unblock
       processableEvents.offer(nextProcessableEvent);
@@ -76,6 +88,7 @@ public class SchedulingQueue<KIn> {
    *         or {@code null} if there are no processable records
    */
   public AsyncEvent poll() {
+    --currentSize;
     return processableEvents.poll();
   }
 
@@ -87,17 +100,33 @@ public class SchedulingQueue<KIn> {
   public void offer(
       final AsyncEvent event
   ) {
-    final KeyStatus keyStatus = getOrCreateKeyStatus(event.inputKey());
-    if (keyStatus.isBlocked()) {
-      keyStatus.addBlockedEvent(event);
+    if (isFull()) {
+      log.error("Tried to offer new event but the SchedulingQueue's current size {} is equal or "
+                    + "greater than the size limit {}", currentSize, maxSize);
+      throw new IllegalStateException("Attempted to add event while SchedulingQueue was full");
+    }
+
+    final KeyEventQueue keyEventQueue = getOrCreateKeyStatus(event.inputRecordKey());
+    if (keyEventQueue.isBlocked()) {
+      keyEventQueue.addBlockedEvent(event);
     } else {
-      keyStatus.scheduleNewEvent(event);
+      keyEventQueue.scheduleNewEvent(event);
       processableEvents.offer(event);
     }
+
+    ++currentSize;
   }
 
-  private KeyStatus getOrCreateKeyStatus(final KIn key) {
-    return blockedEvents.computeIfAbsent(key, k -> new KeyStatus());
+  public boolean isEmpty() {
+    return currentSize == 0;
+  }
+
+  public boolean isFull() {
+    return currentSize >= maxSize;
+  }
+
+  private KeyEventQueue getOrCreateKeyStatus(final KIn key) {
+    return blockedEvents.computeIfAbsent(key, k -> new KeyEventQueue());
   }
 
   /**
@@ -105,7 +134,7 @@ public class SchedulingQueue<KIn> {
    * of this key, ie whether there is an in-flight event of the same key that
    * is currently blocking other events from being scheduled.
    * <p>
-   * A KeyStatus, and all events with that input key, are considered blocked
+   * A KeyEventQueue, and all events with that input key, are considered blocked
    * if there is an async event currently in-flight with this key. An
    * event is "in-flight" from the moment it leaves the blockedEvents queue
    * until the moment it is finalized and marked done. An event that is in
@@ -114,7 +143,7 @@ public class SchedulingQueue<KIn> {
    * to be "in-flight", and should block any other events with that key from
    * being added to the processableEvents queue.
    */
-  private static class KeyStatus {
+  private static class KeyEventQueue {
     private final Queue<AsyncEvent> blockedEvents = new LinkedList<>();
     private AsyncEvent inFlightEvent;
 
