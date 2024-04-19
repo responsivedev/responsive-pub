@@ -459,7 +459,7 @@ public class ResponsiveConfig extends AbstractConfig {
           ASYNC_THREAD_POOL_SIZE_DOC
       ).define(
           ASYNC_MAX_EVENTS_PER_KEY_CONFIG,
-          Type.LONG,
+          Type.INT,
           ASYNC_MAX_EVENTS_PER_KEY_DEFAULT,
           Importance.LOW,
           ASYNC_MAX_EVENTS_PER_KEY_DOC
