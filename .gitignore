@@ -229,3 +229,8 @@ build
 
 # Sindri build checked out during release
 sindri
+
+# docker-compose mounted files
+kafka-client-examples/e2e-test/docker/antithesis/config/volumes/kafka
+kafka-client-examples/e2e-test/docker/antithesis/config/volumes/scylla
+kafka-client-examples/e2e-test/docker/antithesis/config/volumes/zookeeper
