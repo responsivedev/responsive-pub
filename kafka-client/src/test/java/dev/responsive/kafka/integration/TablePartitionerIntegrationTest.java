@@ -16,7 +16,7 @@
 
 package dev.responsive.kafka.integration;
 
-import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_DESIRED_NUM_PARTITION_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.CASSANDRA_DESIRED_NUM_PARTITION_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.STORE_FLUSH_RECORDS_TRIGGER_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.SUBPARTITION_HASHER_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.responsiveConfig;
@@ -132,7 +132,7 @@ public class TablePartitionerIntegrationTest {
     final CqlSession session = CqlSession.builder()
         .addContactPoint(cassandra.getContactPoint())
         .withLocalDatacenter(cassandra.getLocalDatacenter())
-        .withKeyspace("responsive_clients") // NOTE: this keyspace is expected to exist
+        .withKeyspace("responsive_itests") // NOTE: this keyspace is expected to exist
         .build();
     client = new CassandraClient(session, responsiveConfig(responsiveProps));
   }
@@ -190,18 +190,9 @@ public class TablePartitionerIntegrationTest {
 
       for (long tp = 0; tp < 32; ++tp) {
         final var kBytes = Bytes.wrap(serializer.serialize("", tp));
-        assertThat(
-            deserializer.deserialize(
-                "foo",
-                // these store ValueAndTimestamp, so we need to just pluck the last 8 bytes
-                Arrays.copyOfRange(
-                    table.get(
-                        (int) (tp % NUM_PARTITIONS_INPUT),
-                        kBytes,
-                        MIN_VALID_TS),
-                    8,
-                    16)),
-            is(100L));
+        final byte[] valBytes = table.get((int) tp % NUM_PARTITIONS_INPUT, kBytes, MIN_VALID_TS);
+        final Long val = deserializer.deserialize("foo", Arrays.copyOfRange(valBytes, 8, 16));
+        assertThat(val, is(100L));
       }
     }
   }
@@ -235,7 +226,7 @@ public class TablePartitionerIntegrationTest {
               .boxed()
               .map(k -> new KeyValue<>(k, 100L))
               .collect(Collectors.toSet()),
-          true,
+          false,
           properties
       );
       final String cassandraName = new TableName(storeName).tableName();
@@ -249,23 +240,14 @@ public class TablePartitionerIntegrationTest {
       assertThat(offset0, is(notNullValue()));
       assertThat(offset1, is(notNullValue()));
 
-      // throws because it doesn't exist
       Assertions.assertEquals(table.fetchOffset(2), NO_COMMITTED_OFFSET);
 
       // these store ValueAndTimestamp, so we need to just pluck the last 8 bytes
       for (long k = 0; k < 32; k++) {
         final var kBytes = Bytes.wrap(serializer.serialize("", k));
-        assertThat(
-            deserializer.deserialize(
-                "foo",
-                Arrays.copyOfRange(
-                    table.get(
-                        (int) k % NUM_PARTITIONS_INPUT,
-                        kBytes,
-                        MIN_VALID_TS),
-                    8,
-                    16)),
-            is(100L));
+        final byte[] valBytes = table.get((int) k % NUM_PARTITIONS_INPUT, kBytes, MIN_VALID_TS);
+        final Long val = deserializer.deserialize("foo", Arrays.copyOfRange(valBytes, 8, 16));
+        assertThat(val, is(100L));
       }
     }
   }
@@ -317,7 +299,7 @@ public class TablePartitionerIntegrationTest {
               .boxed()
               .map(k -> new KeyValue<>(k, 100L))
               .collect(Collectors.toSet()),
-          true,
+          false,
           properties
       );
       final String cassandraName = new TableName(storeName).tableName();
@@ -402,7 +384,7 @@ public class TablePartitionerIntegrationTest {
     properties.put(consumerPrefix(ConsumerConfig.METADATA_MAX_AGE_CONFIG), "1000");
     properties.put(consumerPrefix(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG), "earliest");
 
-    properties.put(STORAGE_DESIRED_NUM_PARTITION_CONFIG, 32);
+    properties.put(CASSANDRA_DESIRED_NUM_PARTITION_CONFIG, 32);
     properties.put(STORE_FLUSH_RECORDS_TRIGGER_CONFIG, FLUSH_THRESHOLD);
     properties.put(SUBPARTITION_HASHER_CONFIG, LongBytesHasher.class);
 

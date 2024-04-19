@@ -19,8 +19,8 @@ package dev.responsive.kafka.internal.db;
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.kafka.internal.clients.TTDCassandraClient;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
-import dev.responsive.kafka.internal.db.spec.CassandraTableSpec;
 import dev.responsive.kafka.internal.db.spec.DelegatingTableSpec;
+import dev.responsive.kafka.internal.db.spec.RemoteTableSpec;
 import dev.responsive.kafka.internal.db.spec.TtlTableSpec;
 import dev.responsive.kafka.internal.stores.KVStoreStub;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
@@ -34,18 +34,18 @@ public class TTDKeyValueTable extends TTDTable<Bytes> implements RemoteKVTable<B
   private final KVStoreStub stub;
 
   public static TTDKeyValueTable create(
-      final CassandraTableSpec spec,
+      final RemoteTableSpec spec,
       final CassandraClient client
   ) {
     return new TTDKeyValueTable(spec, (TTDCassandraClient) client);
   }
 
-  public TTDKeyValueTable(final CassandraTableSpec spec, final TTDCassandraClient client) {
+  public TTDKeyValueTable(final RemoteTableSpec spec, final TTDCassandraClient client) {
     super(client);
 
     name = spec.tableName();
     Duration ttl = null;
-    CassandraTableSpec maybeTtlSpec = spec;
+    RemoteTableSpec maybeTtlSpec = spec;
 
     while (maybeTtlSpec instanceof DelegatingTableSpec) {
       if (maybeTtlSpec instanceof TtlTableSpec) {

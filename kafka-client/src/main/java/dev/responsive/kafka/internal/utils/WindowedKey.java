@@ -18,7 +18,6 @@ package dev.responsive.kafka.internal.utils;
 
 import org.apache.kafka.common.utils.Bytes;
 
-// TODO (sophie): rename to WindowedBytes to align with plain key name (ie Bytes)
 public class WindowedKey implements Comparable<WindowedKey> {
 
   public final Bytes key;
@@ -51,4 +50,5 @@ public class WindowedKey implements Comparable<WindowedKey> {
       return Long.compare(this.windowStartMs, o.windowStartMs);
     }
   }
+
 }

@@ -19,6 +19,7 @@ package dev.responsive.kafka.internal.db;
 import static dev.responsive.kafka.internal.db.ColumnName.PARTITION_KEY;
 
 import com.datastax.oss.driver.api.core.CqlSession;
+import com.datastax.oss.driver.api.core.DefaultConsistencyLevel;
 import com.datastax.oss.driver.api.core.cql.AsyncResultSet;
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
@@ -29,6 +30,7 @@ import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.utils.RemoteMonitor;
 import java.time.Duration;
+import java.util.Locale;
 import java.util.OptionalInt;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ScheduledExecutorService;
@@ -49,7 +51,7 @@ public class CassandraClient {
   private final ResponsiveConfig config;
   private final TableCache<RemoteKVTable<BoundStatement>> kvFactory;
   private final TableCache<RemoteKVTable<BoundStatement>> factFactory;
-  private final TableCache<RemoteWindowedTable<BoundStatement>> windowedFactory;
+  private final WindowedTableCache<RemoteWindowedTable<BoundStatement>> windowedFactory;
   private final TableCache<CassandraFactTable> globalFactory;
 
   /**
@@ -64,7 +66,11 @@ public class CassandraClient {
 
     this.kvFactory = new TableCache<>(spec -> CassandraKeyValueTable.create(spec, this));
     this.factFactory = new TableCache<>(spec -> CassandraFactTable.create(spec, this));
-    this.windowedFactory = new TableCache<>(spec -> CassandraWindowedTable.create(spec, this));
+    this.windowedFactory =
+        new WindowedTableCache<>((spec, partitioner) -> CassandraWindowedTable.create(spec,
+            this,
+            partitioner
+        ));
     this.globalFactory = new TableCache<>(spec -> CassandraFactTable.create(spec, this));
   }
 
@@ -95,7 +101,27 @@ public class CassandraClient {
     return session.executeAsync(statement.setIdempotent(true));
   }
 
-  public PreparedStatement prepare(final SimpleStatement statement) {
+  public PreparedStatement prepare(final SimpleStatement statement, final QueryOp operation) {
+    switch (operation) {
+      case READ:
+        final String readCL = config.getString(ResponsiveConfig.READ_CONSISTENCY_LEVEL_CONFIG);
+        if (readCL != null) {
+          return session.prepare(statement.setConsistencyLevel(
+              DefaultConsistencyLevel.valueOf(readCL.toUpperCase(Locale.ROOT)))
+          );
+        }
+        break;
+      case WRITE:
+        final String writeCl = config.getString(ResponsiveConfig.WRITE_CONSISTENCY_LEVEL_CONFIG);
+        if (writeCl != null) {
+          return session.prepare(statement.setConsistencyLevel(
+              DefaultConsistencyLevel.valueOf(writeCl.toUpperCase(Locale.ROOT)))
+          );
+        }
+        break;
+      default:
+        throw new IllegalArgumentException("Unexpected query operation " + operation);
+    }
     return session.prepare(statement);
   }
 
@@ -115,7 +141,7 @@ public class CassandraClient {
     return new RemoteMonitor(
         executor,
         checkRemote,
-        Duration.ofMillis(config.getLong(ResponsiveConfig.REMOTE_TABLE_CHECK_INTERVAL_MS_CONFIG))
+        Duration.ofMillis(config.getLong(ResponsiveConfig.CASSANDRA_CHECK_INTERVAL_MS))
     );
   }
 
@@ -164,7 +190,7 @@ public class CassandraClient {
     return factFactory;
   }
 
-  public TableCache<RemoteWindowedTable<BoundStatement>> windowedFactory() {
+  public WindowedTableCache<RemoteWindowedTable<BoundStatement>> windowedFactory() {
     return windowedFactory;
   }
 }

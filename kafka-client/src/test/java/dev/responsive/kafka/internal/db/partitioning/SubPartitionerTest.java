@@ -16,7 +16,7 @@
 
 package dev.responsive.kafka.internal.db.partitioning;
 
-import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_DESIRED_NUM_PARTITION_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.CASSANDRA_DESIRED_NUM_PARTITION_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.SUBPARTITION_HASHER_CONFIG;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.dummyConfig;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -150,7 +150,7 @@ class SubPartitionerTest {
 
   private ResponsiveConfig responsiveConfig(final int desiredNumSubPartitions) {
     return dummyConfig(Map.of(
-        STORAGE_DESIRED_NUM_PARTITION_CONFIG, desiredNumSubPartitions,
+        CASSANDRA_DESIRED_NUM_PARTITION_CONFIG, desiredNumSubPartitions,
         SUBPARTITION_HASHER_CONFIG, SingleByteHasher.class
     ));
   }

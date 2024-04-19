@@ -16,11 +16,15 @@
 
 package dev.responsive.kafka.api.config;
 
+import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Range.between;
 
+import com.datastax.oss.driver.api.core.ConsistencyLevel;
+import com.datastax.oss.driver.api.core.DefaultConsistencyLevel;
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.internal.db.partitioning.Murmur3Hasher;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.Map;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -37,40 +41,110 @@ import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssigno
 @SuppressWarnings("checkstyle:linelength")
 public class ResponsiveConfig extends AbstractConfig {
 
-  // ------------------ connection configurations -----------------------------
+  // ------------------ general Responsive configurations ---------------------
+
+  public static final String RESPONSIVE_ORG_CONFIG = "responsive.org";
+  private static final String RESPONSIVE_ORG_DOC = "The Responsive organization slug (not the organization ID).";
+
+  public static final String RESPONSIVE_ENV_CONFIG = "responsive.env";
+  private static final String RESPONSIVE_ENV_DOC = "The Responsive environment slug (not the environment ID).";
 
   public static final String COMPATIBILITY_MODE_CONFIG = "responsive.compatibility.mode";
   private static final String COMPATIBILITY_MODE_DOC = "This configuration enables running Responsive "
       + "in compatibility mode, disabling certain features.";
   private static final CompatibilityMode COMPATIBILITY_MODE_DEFAULT = CompatibilityMode.FULL;
 
-  public static final String STORAGE_HOSTNAME_CONFIG = "responsive.storage.hostname";
-  private static final String STORAGE_HOSTNAME_DOC = "The hostname of the storage server.";
+  public static final String CONTROLLER_ENDPOINT_CONFIG = "responsive.controller.endpoint";
+  private static final String CONTROLLER_ENDPOINT_DOC = "The endpoint of the running responsive "
+      + "cloud controller. If enabled, metrics will be sent to this endpoint.";
 
-  public static final String STORAGE_PORT_CONFIG = "responsive.storage.port";
-  private static final String STORAGE_PORT_DOC = "The port of the storage server.";
+  public static final String PLATFORM_API_KEY_CONFIG = "responsive.platform.api.key";
+  private static final String PLATFORM_API_KEY_DOC = "The API Key provided for Metrics access.";
 
-  public static final String STORAGE_DATACENTER_CONFIG = "responsive.storage.datacenter";
-  public static final String STORAGE_DATACENTER_DOC = "The datacenter for the storage server";
-
-  public static final String CONNECTION_BUNDLE_CONFIG = "responsive.connection.bundle";
-  private static final String CONNECTION_BUNDLE_DOC = "Path to the configuration bundle for "
-      + "connecting to Responsive cloud. Either this or " + STORAGE_HOSTNAME_CONFIG
-      + ", " + STORAGE_PORT_CONFIG + " and " + STORAGE_DATACENTER_CONFIG + " must be set.";
-
-  public static final String TENANT_ID_CONFIG = "responsive.tenant.id";
-  private static final String TENANT_ID_DOC = "The tenant ID provided by Responsive for "
-      + "resource isolation.";
-
-  public static final String CLIENT_ID_CONFIG = "responsive.client.id";
-  private static final String CLIENT_ID_DOC = "The client ID for authenticated access";
-
-  public static final String CLIENT_SECRET_CONFIG = "responsive.client.secret";
-  private static final String CLIENT_SECRET_DOC = "The client secret for authenticated access";
+  public static final String PLATFORM_API_SECRET_CONFIG = "responsive.platform.api.secret";
+  private static final String PLATFORM_API_SECRET_DOC = "The Secret provided for Metrics access.";
 
   public static final String STORAGE_BACKEND_TYPE_CONFIG = "responsive.storage.backend.type";
   private static final String STORAGE_BACKEND_TYPE_DOC = "The storage backend";
   private static final StorageBackend STORAGE_BACKEND_TYPE_DEFAULT = StorageBackend.CASSANDRA;
+
+  public static final String RESPONSIVE_MODE = "responsive.mode";
+  public static final String RESPONSIVE_MODE_DEFAULT = ResponsiveMode.RUN.name();
+  public static final String RESPONSIVE_MODE_DOC = "Determines the mode the Responsive application "
+      + "runs in. When set to RUN, runs the Kafka Streams app. When set to MIGRATE, runs app"
+      + " migration.";
+
+  // ------------------ MongoDB specific configurations -----------------------
+
+  public static final String MONGO_USERNAME_CONFIG = "responsive.mongo.username";
+  private static final String MONGO_USERNAME_DOC = "The username to use when connecting to MongoDB.";
+
+  public static final String MONGO_PASSWORD_CONFIG = "responsive.mongo.password";
+  private static final String MONGO_PASSWORD_DOC = "The password to use when connecting to MongoDB.";
+
+  public static final String MONGO_ENDPOINT_CONFIG = "responsive.mongo.endpoint";
+  private static final String MONGO_ENDPOINT_DOC = "The MongoDB endpoint to connect to.";
+
+  public static final String MONGO_COLLECTION_SHARDING_ENABLED_CONFIG = "responsive.mongo.collection.sharding.enabled";
+  private static final boolean MONGO_COLLECTION_SHARDING_ENABLED_DEFAULT = false;
+  private static final String MONGO_COLLECTION_SHARDING_ENABLED_DOC = "Toggles use of sharded collections. Set "
+      + "this to true when running against a sharded mongo cluster, to shard a collection across multiple mongo "
+      + "replica sets.";
+
+  public static final String MONGO_COLLECTION_SHARDING_CHUNKS_CONFIG = "responsive.mongo.collection.sharding.chunks";
+  private static final int MONGO_COLLECTION_SHARDING_CHUNKS_DEFAULT = 4;
+  private static final String MONGO_COLLECTION_SHARDING_CHUNKS_DOC = "For sharded collections, sets the number of "
+      + "initial chunks to create the collection with.";
+
+  public static final String MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_CONFIG = "responsive.mongo.windowed.key.timestamp.first";
+  private static final boolean MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_DEFAULT = false;
+  private static final String MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_DOC = "Whether to put the window start timestamp "
+      + "first in the composite windowed key format for MongoDB. This can be toggled true/false to get better "
+      + "performance depending on the density of unique keys per window, and should be experimented "
+      + "with for best results. However it is important to note that this cannot be changed for "
+      + "an active application. Messing with this can corrupt existing state!";
+
+  // ------------------ ScyllaDB specific configurations ----------------------
+
+  public static final String CASSANDRA_USERNAME_CONFIG = "responsive.cassandra.username";
+  private static final String CASSANDRA_USERNAME_DOC = "The username to use when connecting to Cassandra";
+
+  public static final String CASSANDRA_PASSWORD_CONFIG = "responsive.cassandra.password";
+  private static final String CASSANDRA_PASSWORD_DOC = "The password to use when connecting to Cassandra";
+
+  public static final String CASSANDRA_HOSTNAME_CONFIG = "responsive.cassandra.hostname";
+  private static final String CASSANDRA_HOSTNAME_DOC = "The hostname to use when connecting to Cassandra";
+
+  public static final String CASSANDRA_PORT_CONFIG = "responsive.cassandra.port";
+  private static final String CASSANDRA_PORT_DOC = "The port to use when connecting to Cassandra";
+
+  public static final String CASSANDRA_DATACENTER_CONFIG = "responsive.cassandra.datacenter";
+  private static final String CASSANDRA_DATACENTER_DOC = "The datacenter to use when connecting to Cassandra";
+
+  public static final String READ_CONSISTENCY_LEVEL_CONFIG = "responsive.cassandra.consistency.reads";
+  private static final String READ_CONSISTENCY_LEVEL_DEFAULT = ConsistencyLevel.QUORUM.name();
+  private static final String READ_CONSISTENCY_LEVEL_DOC = "The consistency level to set for reads";
+
+  public static final String WRITE_CONSISTENCY_LEVEL_CONFIG = "responsive.cassandra.consistency.writes";
+  private static final String WRITE_CONSISTENCY_LEVEL_DEFAULT = ConsistencyLevel.QUORUM.name();
+  private static final String WRITE_CONSISTENCY_LEVEL_DOC = "The consistency level to set for writes";
+
+  public static final String CASSANDRA_CHECK_INTERVAL_MS = "responsive.cassandra.check.interval.ms";
+  private static final String CASSANDRA_CHECK_INTERVAL_MS_DOC = "The frequency at which to poll "
+      + "for whether or not a remote table has been created. Mostly used to speed up integration "
+      + "testing.";
+  private static final long CASSANDRA_CHECK_INTERVAL_MS_DEFAULT = 1000L;
+
+  // TODO: we should make this configurable per-store
+  public static final String CASSANDRA_DESIRED_NUM_PARTITION_CONFIG = "responsive.cassandra.desired.num.partitions";
+  private static final String CASSANDRA_DESIRED_NUM_PARTITIONS_DOC = "The desired number of "
+      + "partitions to create in the remote store. This is a best effort target, as the actual "
+      + "number of partitions will be the next multiple of the Kafka topic's number of partitions "
+      + "that is greater than or equal to this number. This configuration does not apply to global "
+      + "stores. A value of -1 indicates to use the number of Kafka Partitions as the remote "
+      + "partitions as well.";
+  public static final int CASSANDRA_DESIRED_NUM_PARTITIONS_DEFAULT = 4096;
+  public static final int NO_SUBPARTITIONS = -1;
 
   // ------------------ metrics configurations --------------------------------
 
@@ -83,42 +157,7 @@ public class ResponsiveConfig extends AbstractConfig {
   public static final String METRICS_ENABLED_CONFIG = "responsive.metrics.enabled";
   private static final String METRICS_ENABLED_DOC = "Whether or not metrics should be sent to Responsive Cloud";
 
-  public static final String CONTROLLER_ENDPOINT_CONFIG = "responsive.controller.endpoint";
-  private static final String CONTROLLER_ENDPOINT_DOC = "The endpoint of the running responsive "
-      + "cloud controller. If enabled, metrics will be sent to this endpoint.";
-
-  // TODO(agavra): we should consolidate API keys, but for now it's OK to use different ones
-  public static final String METRICS_API_KEY_CONFIG = "responsive.metrics.api.key";
-  private static final String METRICS_API_KEY_DOC = "The API Key provided for Metrics access.";
-
-  public static final String METRICS_SECRET_CONFIG = "responsive.metrics.secret";
-  private static final String METRICS_SECRET_DOC = "The Secret provided for Metrics access.";
-
-  // ------------------ request configurations --------------------------------
-
-  public static final String REQUEST_TIMEOUT_MS_CONFIG = "responsive.request.timeout.ms";
-  private static final String REQUEST_TIMEOUT_MS_DOC = "The timeout for making requests to the "
-      + "responsive server. This applies both to metadata requests and query execution.";
-  private static final long REQUEST_TIMEOUT_MS_DEFAULT = 5000L;
-
-  public static final String REMOTE_TABLE_CHECK_INTERVAL_MS_CONFIG = "responsive.remote.table.check.interval.ms";
-  private static final String REMOTE_TABLE_CHECK_INTERVAL_MS_DOC = "The frequency at which to poll "
-      + "for whether or not a remote table has been created. Mostly used to speed up integration "
-      + "testing.";
-  private static final long REMOTE_TABLE_CHECK_INTERVAL_MS_DEFAULT = 1000L;
-
   // ------------------ performance related configurations --------------------
-
-  // TODO: we should make this configurable per-store
-  public static final String STORAGE_DESIRED_NUM_PARTITION_CONFIG = "responsive.storage.desired.num.partitions";
-  private static final String STORAGE_DESIRED_NUM_PARTITIONS_DOC = "The desired number of "
-      + "partitions to create in the remote store. This is a best effort target, as the actual "
-      + "number of partitions will be the next multiple of the Kafka topic's number of partitions "
-      + "that is greater than or equal to this number. This configuration does not apply to global "
-      + "stores. A value of -1 indicates to use the number of Kafka Partitions as the remote "
-      + "partitions as well.";
-  public static final int STORAGE_DESIRED_NUM_PARTITIONS_DEFAULT = 4096;
-  public static final int NO_SUBPARTITIONS = -1;
 
   // TODO: we should have another config that's applied globally, that sets a size bound on
   //       the total amount of buffered data. That config can be used to keep a bound on
@@ -165,27 +204,15 @@ public class ResponsiveConfig extends AbstractConfig {
   private static final String SUBPARTITION_HASHER_DOC = "Hasher to use for sub-partitioning.";
   private static final Class<?> SUBPARTITION_HASHER_DEFAULT = Murmur3Hasher.class;
 
-  public static final String MONGO_COLLECTION_SHARDING_ENABLED_CONFIG = "responsive.mongo.collection.sharding.enabled";
-  private static final boolean MONGO_COLLECTION_SHARDING_ENABLED_DEFAULT = false;
-  private static final String MONGO_COLLECTION_SHARDING_ENABLED_DOC = "Toggles use of sharded collections. Set "
-      + "this to true when running against a sharded mongo cluster, to shard a collection across multiple mongo "
-      + "replica sets.";
-
-  public static final String MONGO_COLLECTION_SHARDING_CHUNKS_CONFIG = "responsive.mongo.collection.sharding.chunks";
-  private static final int MONGO_COLLECTION_SHARDING_CHUNKS_DEFAULT = 4;
-  private static final String MONGO_COLLECTION_SHARDING_CHUNKS_DOC = "For sharded collections, sets the number of "
-      + "initial chunks to create the collection with.";
+  public static final String ASYNC_THREAD_POOL_SIZE_CONFIG = "responsive.async.thread.pool.size";
+  private static final int ASYNC_THREAD_POOL_SIZE_DEFAULT = 0;
+  private static final String ASYNC_THREAD_POOL_SIZE_DOC = "The number of async processing threads to "
+      + "start up for each StreamThread in this app. Setting this to 0 (the default) means async processing "
+      + "will not be enabled. Setting this to a positive integer will enable async processing, but only if "
+      + "there is at least one AsyncProcessor in the topology. See javadocs for AsyncProcessorSupplier for details.";
 
 
   // ------------------ WindowStore configurations ----------------------
-
-  public static final String MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_CONFIG = "responsive.mongo.windowed.key.timestamp.first";
-  private static final boolean MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_DEFAULT = false;
-  private static final String MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_DOC = "Whether to put the window start timestamp "
-      + "first in the composite windowed key format for MongoDB. This can be toggled true/false to get better "
-      + "performance depending on the density of unique keys per window, and should be experimented "
-      + "with for best results. However it is important to note that this cannot be changed for "
-      + "an active application. Messing with this can corrupt existing state!";
 
   public static final String WINDOW_BLOOM_FILTER_COUNT_CONFIG = "responsive.window.bloom.filter.count";
   private static final int WINDOW_BLOOM_FILTER_COUNT_DEFAULT = 0;
@@ -212,6 +239,15 @@ public class ResponsiveConfig extends AbstractConfig {
       + "lookups but requires more heap memory";
 
 
+  // ------------------ Misc functional overrides ----------------------
+  public static final String RESTORE_OFFSET_REPAIR_ENABLED_CONFIG = "responsive.restore.offset.repair.enabled";
+  public static final boolean RESTORE_OFFSET_REPAIR_ENABLED_DEFAULT = false;
+  public static final String RESTORE_OFFSET_REPAIR_ENABLED_DOC = "When set to 'true', " + RESTORE_OFFSET_REPAIR_ENABLED_CONFIG
+      + " will ignore OffsetOutOfRangeException and instead seek to the earliest available offset. This exception "
+      + "should only happen in situations where there is truncation/retention on the changelog topic and restoring from the latest "
+      + "committed offset in the remote store is no longer possible. Note that in some situations this may cause data "
+      + "loss, use this configuration with caution";
+
   // ------------------ StreamsConfig overrides ----------------------
 
   // These configuration values are required by Responsive, and a ConfigException will
@@ -227,53 +263,20 @@ public class ResponsiveConfig extends AbstractConfig {
           ConfigDef.CaseInsensitiveValidString.in(CompatibilityMode.names()),
           Importance.MEDIUM,
           COMPATIBILITY_MODE_DOC
-      )
-      .define(
-          STORAGE_HOSTNAME_CONFIG,
+      ).define(
+          RESPONSIVE_ORG_CONFIG,
           Type.STRING,
           null,
           new ConfigDef.NonEmptyString(),
           Importance.HIGH,
-          STORAGE_HOSTNAME_DOC
+          RESPONSIVE_ORG_DOC
       ).define(
-          STORAGE_PORT_CONFIG,
-          Type.INT,
-          -1,
-          Importance.HIGH,
-          STORAGE_PORT_DOC
-      ).define(
-          STORAGE_DATACENTER_CONFIG,
+          RESPONSIVE_ENV_CONFIG,
           Type.STRING,
           null,
           new ConfigDef.NonEmptyString(),
           Importance.HIGH,
-          STORAGE_DATACENTER_DOC
-      ).define(
-          CONNECTION_BUNDLE_CONFIG,
-          Type.STRING,
-          null,
-          new ConfigDef.NonEmptyString(),
-          Importance.HIGH,
-          CONNECTION_BUNDLE_DOC
-      ).define(
-          TENANT_ID_CONFIG,
-          Type.STRING,
-          Importance.HIGH,
-          TENANT_ID_DOC
-      ).define(
-          CLIENT_ID_CONFIG,
-          Type.STRING,
-          null,
-          new ConfigDef.NonEmptyString(),
-          Importance.HIGH,
-          CLIENT_ID_DOC
-      ).define(
-          CLIENT_SECRET_CONFIG,
-          Type.PASSWORD,
-          null,
-          new NonEmptyPassword(CLIENT_SECRET_CONFIG),
-          Importance.HIGH,
-          CLIENT_SECRET_DOC
+          RESPONSIVE_ENV_DOC
       ).define(
           STORAGE_BACKEND_TYPE_CONFIG,
           Type.STRING,
@@ -281,7 +284,71 @@ public class ResponsiveConfig extends AbstractConfig {
           ConfigDef.CaseInsensitiveValidString.in(StorageBackend.names()),
           Importance.HIGH,
           STORAGE_BACKEND_TYPE_DOC
+      )
+
+      // mongo connection configurations
+      .define(
+          MONGO_USERNAME_CONFIG,
+          Type.STRING,
+          null,
+          new ConfigDef.NonEmptyString(),
+          Importance.HIGH,
+          MONGO_USERNAME_DOC
       ).define(
+          MONGO_PASSWORD_CONFIG,
+          Type.PASSWORD,
+          null,
+          new NonEmptyPassword(MONGO_PASSWORD_CONFIG),
+          Importance.HIGH,
+          MONGO_PASSWORD_DOC
+      ).define(
+          MONGO_ENDPOINT_CONFIG,
+          Type.STRING,
+          null,
+          new ConfigDef.NonEmptyString(),
+          Importance.HIGH,
+          MONGO_ENDPOINT_DOC
+      )
+
+      // cassandra connection configurations
+      .define(
+          CASSANDRA_USERNAME_CONFIG,
+          Type.STRING,
+          null,
+          new ConfigDef.NonEmptyString(),
+          Importance.HIGH,
+          CASSANDRA_USERNAME_DOC
+      ).define(
+          CASSANDRA_PASSWORD_CONFIG,
+          Type.PASSWORD,
+          null,
+          new NonEmptyPassword(MONGO_PASSWORD_CONFIG),
+          Importance.HIGH,
+          CASSANDRA_PASSWORD_DOC
+      ).define(
+          CASSANDRA_HOSTNAME_CONFIG,
+          Type.STRING,
+          null,
+          new ConfigDef.NonEmptyString(),
+          Importance.HIGH,
+          CASSANDRA_HOSTNAME_DOC
+      ).define(
+          CASSANDRA_PORT_CONFIG,
+          Type.INT,
+          -1,
+          Importance.HIGH,
+          CASSANDRA_PORT_DOC
+      ).define(
+          CASSANDRA_DATACENTER_CONFIG,
+          Type.STRING,
+          null,
+          new ConfigDef.NonEmptyString(),
+          Importance.HIGH,
+          CASSANDRA_DATACENTER_DOC
+      )
+
+      // other configs
+      .define(
           RESPONSIVE_APPLICATION_ID_CONFIG,
           Type.STRING,
           "",
@@ -300,23 +367,17 @@ public class ResponsiveConfig extends AbstractConfig {
           Importance.HIGH,
           CONTROLLER_ENDPOINT_DOC
       ). define(
-          METRICS_API_KEY_CONFIG,
+          PLATFORM_API_KEY_CONFIG,
           Type.STRING,
           "",
           Importance.HIGH,
-          METRICS_API_KEY_DOC
+          PLATFORM_API_KEY_DOC
       ).define(
-          METRICS_SECRET_CONFIG,
+          PLATFORM_API_SECRET_CONFIG,
           Type.PASSWORD,
           "",
           Importance.HIGH,
-          METRICS_SECRET_DOC
-      ).define(
-          REQUEST_TIMEOUT_MS_CONFIG,
-          Type.LONG,
-          REQUEST_TIMEOUT_MS_DEFAULT,
-          Importance.MEDIUM,
-          REQUEST_TIMEOUT_MS_DOC
+          PLATFORM_API_SECRET_DOC
       ).define(
           STORE_FLUSH_RECORDS_TRIGGER_CONFIG,
           Type.INT,
@@ -324,11 +385,11 @@ public class ResponsiveConfig extends AbstractConfig {
           Importance.MEDIUM,
           STORE_FLUSH_RECORDS_TRIGGER_DOC
       ).define(
-          STORAGE_DESIRED_NUM_PARTITION_CONFIG,
+          CASSANDRA_DESIRED_NUM_PARTITION_CONFIG,
           Type.INT,
-          STORAGE_DESIRED_NUM_PARTITIONS_DEFAULT,
+          CASSANDRA_DESIRED_NUM_PARTITIONS_DEFAULT,
           Importance.MEDIUM,
-          STORAGE_DESIRED_NUM_PARTITIONS_DOC
+          CASSANDRA_DESIRED_NUM_PARTITIONS_DOC
       ).define(
           MAX_CONCURRENT_REQUESTS_CONFIG,
           Type.INT,
@@ -360,11 +421,11 @@ public class ResponsiveConfig extends AbstractConfig {
           Importance.LOW,
           SUBPARTITION_HASHER_DOC
       ).define(
-          REMOTE_TABLE_CHECK_INTERVAL_MS_CONFIG,
+          CASSANDRA_CHECK_INTERVAL_MS,
           Type.LONG,
-          REMOTE_TABLE_CHECK_INTERVAL_MS_DEFAULT,
+          CASSANDRA_CHECK_INTERVAL_MS_DEFAULT,
           Importance.LOW,
-          REMOTE_TABLE_CHECK_INTERVAL_MS_DOC
+          CASSANDRA_CHECK_INTERVAL_MS_DOC
       ).define(
           MONGO_COLLECTION_SHARDING_ENABLED_CONFIG,
           Type.BOOLEAN,
@@ -377,6 +438,13 @@ public class ResponsiveConfig extends AbstractConfig {
           MONGO_COLLECTION_SHARDING_CHUNKS_DEFAULT,
           Importance.LOW,
           MONGO_COLLECTION_SHARDING_CHUNKS_DOC
+      ).define(
+          ASYNC_THREAD_POOL_SIZE_CONFIG,
+          Type.INT,
+          ASYNC_THREAD_POOL_SIZE_DEFAULT,
+          atLeast(0),
+          Importance.LOW,
+          ASYNC_THREAD_POOL_SIZE_DOC
       ).define(
           MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_CONFIG,
           Type.BOOLEAN,
@@ -402,6 +470,43 @@ public class ResponsiveConfig extends AbstractConfig {
           WINDOW_BLOOM_FILTER_FPP_DEFAULT,
           Importance.LOW,
           WINDOW_BLOOM_FILTER_FPP_DOC
+      ).define(
+          READ_CONSISTENCY_LEVEL_CONFIG,
+          Type.STRING,
+          READ_CONSISTENCY_LEVEL_DEFAULT,
+          ConfigDef.CaseInsensitiveValidString.in(
+              Arrays.stream(DefaultConsistencyLevel.values())
+                  .map(Enum::name)
+                  .toArray(String[]::new)),
+          Importance.MEDIUM,
+          READ_CONSISTENCY_LEVEL_DOC
+      ).define(
+          WRITE_CONSISTENCY_LEVEL_CONFIG,
+          Type.STRING,
+          WRITE_CONSISTENCY_LEVEL_DEFAULT,
+          ConfigDef.CaseInsensitiveValidString.in(
+              Arrays.stream(DefaultConsistencyLevel.values())
+                  .map(Enum::name)
+                  .toArray(String[]::new)),
+          Importance.MEDIUM,
+          WRITE_CONSISTENCY_LEVEL_DOC
+      ).define(
+          RESPONSIVE_MODE,
+          Type.STRING,
+          RESPONSIVE_MODE_DEFAULT,
+          ConfigDef.CaseInsensitiveValidString.in(
+              Arrays.stream(ResponsiveMode.values())
+                  .map(Enum::name)
+                  .toArray(String[]::new)
+          ),
+          Importance.LOW,
+          RESPONSIVE_MODE_DOC
+      ).define(
+          RESTORE_OFFSET_REPAIR_ENABLED_CONFIG,
+          Type.BOOLEAN,
+          RESTORE_OFFSET_REPAIR_ENABLED_DEFAULT,
+          Importance.LOW,
+          RESTORE_OFFSET_REPAIR_ENABLED_DOC
       );
 
   /**

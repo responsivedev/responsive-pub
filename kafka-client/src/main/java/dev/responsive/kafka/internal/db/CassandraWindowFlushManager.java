@@ -19,9 +19,9 @@ package dev.responsive.kafka.internal.db;
 
 import com.datastax.oss.driver.api.core.cql.BatchStatementBuilder;
 import com.datastax.oss.driver.api.core.cql.BatchType;
-import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner;
-import dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.SegmentPartition;
+import dev.responsive.kafka.internal.db.partitioning.Segmenter.SegmentPartition;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
+import dev.responsive.kafka.internal.db.partitioning.WindowSegmentPartitioner;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
 import dev.responsive.kafka.internal.utils.WindowedKey;
 import org.apache.kafka.common.utils.LogContext;
@@ -42,12 +42,12 @@ public class CassandraWindowFlushManager extends WindowFlushManager {
   public CassandraWindowFlushManager(
       final CassandraWindowedTable table,
       final CassandraClient client,
-      final SegmentPartitioner partitioner,
+      final WindowSegmentPartitioner partitioner,
       final int kafkaPartition,
       final long epoch,
       final long streamTime
   ) {
-    super(table.name(), kafkaPartition, partitioner, streamTime);
+    super(table.name(), kafkaPartition, partitioner.segmenter(), streamTime);
     this.table = table;
     this.client = client;
     this.partitioner = partitioner;

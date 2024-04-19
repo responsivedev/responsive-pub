@@ -21,6 +21,7 @@ import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -35,6 +36,8 @@ import dev.responsive.k8s.crd.ResponsivePolicySpec;
 import dev.responsive.k8s.crd.kafkastreams.DemoPolicySpec;
 import io.fabric8.kubernetes.api.model.HasMetadata;
 import io.fabric8.kubernetes.api.model.ObjectMeta;
+import io.fabric8.kubernetes.api.model.Pod;
+import io.fabric8.kubernetes.api.model.PodList;
 import io.fabric8.kubernetes.api.model.apps.Deployment;
 import io.fabric8.kubernetes.api.model.apps.DeploymentList;
 import io.fabric8.kubernetes.api.model.apps.DeploymentSpec;
@@ -45,6 +48,7 @@ import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.dsl.AppsAPIGroupDSL;
 import io.fabric8.kubernetes.client.dsl.MixedOperation;
 import io.fabric8.kubernetes.client.dsl.NonNamespaceOperation;
+import io.fabric8.kubernetes.client.dsl.PodResource;
 import io.fabric8.kubernetes.client.dsl.RollableScalableResource;
 import io.javaoperatorsdk.operator.api.config.ControllerConfiguration;
 import io.javaoperatorsdk.operator.api.reconciler.Context;
@@ -57,6 +61,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.UnaryOperator;
+import java.util.stream.Stream;
 import org.hamcrest.MatcherAssert;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -66,10 +71,19 @@ import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import responsive.controller.v1.controller.proto.ControllerOuterClass;
+import responsive.controller.v1.controller.proto.ControllerOuterClass.Action.RestartPod;
+import responsive.controller.v1.controller.proto.ControllerOuterClass.Action.ScaleApplication;
+import responsive.controller.v1.controller.proto.ControllerOuterClass.ActionStatus.Status;
 import responsive.controller.v1.controller.proto.ControllerOuterClass.PolicyStatus;
+import responsive.controller.v1.controller.proto.ControllerOuterClass.UpdateActionStatusRequest;
 
 @ExtendWith(MockitoExtension.class)
 class KafkaStreamsPolicyPluginTest {
+  private static final String SCALING_ACTION_ID = "scaling-action-id";
+  private static final String RESTART_POD_ACTION_ID = "restart-pod-action-id";
+  private static final int SCALING_ACTION_REPLICAS = 5;
+  private static final int BASE_REPLICAS = 3;
+
   @Mock
   private EventSourceContext<ResponsivePolicy> esCtx;
   @Mock
@@ -81,6 +95,10 @@ class KafkaStreamsPolicyPluginTest {
   @Mock
   private AppsAPIGroupDSL appsClient;
   @Mock
+  private MixedOperation<Pod, PodList, PodResource> podsClient;
+  @Mock
+  private NonNamespaceOperation<Pod, PodList, PodResource> nsPodClient;
+  @Mock
   private MixedOperation<Deployment, DeploymentList, RollableScalableResource<Deployment>>
       deploymentsClient;
   @Mock
@@ -90,6 +108,8 @@ class KafkaStreamsPolicyPluginTest {
   private RollableScalableResource<Deployment> rsDeployment;
   @Captor
   private ArgumentCaptor<UnaryOperator<Deployment>> deploymentEdit;
+  @Captor
+  private ArgumentCaptor<UpdateActionStatusRequest> updateActionStatusCaptor;
   @Mock
   private MixedOperation<StatefulSet, StatefulSetList, RollableScalableResource<StatefulSet>>
       statefulSetClient;
@@ -104,6 +124,8 @@ class KafkaStreamsPolicyPluginTest {
   private ArgumentCaptor<ControllerOuterClass.CurrentStateRequest> currentStateRequestCaptor;
   @Mock
   private ControllerClient controllerClient;
+  private final PodResource pod1 = mockPodResource("p1");
+  private final PodResource pod2 = mockPodResource("p2");
 
   private final KafkaStreamsPolicyPlugin
       plugin = new KafkaStreamsPolicyPlugin("testenv");
@@ -113,7 +135,7 @@ class KafkaStreamsPolicyPluginTest {
   private final ControllerOuterClass.ApplicationState targetState =
       ControllerOuterClass.ApplicationState.newBuilder()
           .setKafkaStreamsState(ControllerOuterClass.KafkaStreamsApplicationState.newBuilder()
-              .setReplicas(5)
+              .setReplicas(SCALING_ACTION_REPLICAS)
               .build())
           .build();
   private dev.responsive.k8s.operator.reconciler.ResponsiveContext responsiveCtx;
@@ -125,7 +147,7 @@ class KafkaStreamsPolicyPluginTest {
         "baz",
         "biz",
         "v1",
-        3,
+        BASE_REPLICAS,
         ImmutableMap.of(
             dev.responsive.k8s.operator.reconciler.ResponsivePolicyReconciler.NAME_LABEL, "bar",
             dev.responsive.k8s.operator.reconciler.ResponsivePolicyReconciler.NAMESPACE_LABEL, "foo"
@@ -137,7 +159,7 @@ class KafkaStreamsPolicyPluginTest {
         "baz",
         "biz",
         "v1",
-        3,
+        BASE_REPLICAS,
         ImmutableMap.of(
             dev.responsive.k8s.operator.reconciler.ResponsivePolicyReconciler.NAME_LABEL, "bar",
             dev.responsive.k8s.operator.reconciler.ResponsivePolicyReconciler.NAMESPACE_LABEL, "foo"
@@ -151,9 +173,10 @@ class KafkaStreamsPolicyPluginTest {
         new ResponsivePolicySpec(
             "biz",
             "baz",
+            "bop",
             PolicyStatus.POLICY_STATUS_MANAGED,
             ResponsivePolicySpec.PolicyType.DEMO,
-            Optional.of(new DemoPolicySpec(123, 7, 1, Optional.empty())),
+            Optional.of(new DemoPolicySpec(123, 7, 1, Optional.empty(), Optional.empty())),
             Optional.empty()
         )
     );
@@ -167,10 +190,13 @@ class KafkaStreamsPolicyPluginTest {
 
     lenient().when(ctx.getClient()).thenReturn(client);
     lenient().when(client.apps()).thenReturn(appsClient);
+    lenient().when(client.pods()).thenReturn(podsClient);
     lenient().when(ctx.getSecondaryResource(
-            dev.responsive.k8s.operator.reconciler.TargetStateWithTimestamp.class))
-        .thenReturn(Optional.of(new TargetStateWithTimestamp(targetState)));
+            ActionsWithTimestamp.class))
+        .thenReturn(Optional.of(new ActionsWithTimestamp()));
   }
+
+
 
   @Test
   public void shouldAddDeploymentEventSource() {
@@ -273,7 +299,7 @@ class KafkaStreamsPolicyPluginTest {
                 ControllerOuterClass.ApplicationState.newBuilder()
                     .setKafkaStreamsState(
                         ControllerOuterClass.KafkaStreamsApplicationState.newBuilder()
-                            .setReplicas(3)
+                            .setReplicas(BASE_REPLICAS)
                             .build())
                     .build()
             )
@@ -282,7 +308,10 @@ class KafkaStreamsPolicyPluginTest {
   }
 
   @Test
-  public void shouldPatchDeploymentIfReplicasChanged() {
+  public void shouldPatchDeploymentIfReplicasChangedInAction() {
+    // given:
+    givenScalingAction();
+
     // when:
     setupForDeployment();
     plugin.reconcile(policy, ctx, responsiveCtx);
@@ -291,13 +320,66 @@ class KafkaStreamsPolicyPluginTest {
     verify(rsDeployment).edit(deploymentEdit.capture());
     final var edit = deploymentEdit.getValue();
     final var blank = createDeployment("biz", "baz",
-        "v1", 3, Collections.emptyMap());
+        "v1", BASE_REPLICAS, Collections.emptyMap());
     edit.apply(blank);
-    assertThat(blank.getSpec().getReplicas(), is(5));
+    assertThat(blank.getSpec().getReplicas(), is(SCALING_ACTION_REPLICAS));
+  }
+
+  @Test
+  public void shouldNotifyControllerAboutScalingAction() {
+    // given:
+    givenScalingAction();
+
+    // when:
+    setupForDeployment();
+    plugin.reconcile(policy, ctx, responsiveCtx);
+
+    // then:
+    verify(controllerClient).updateActionStatus(updateActionStatusCaptor.capture());
+    final var updateActionStatus = updateActionStatusCaptor.getValue();
+    assertThat(updateActionStatus.getActionId(), is(SCALING_ACTION_ID));
+    assertThat(updateActionStatus.getStatus().getStatus(), is(Status.COMPLETED));
+  }
+
+  @Test
+  public void shouldNotifyControllerAboutNoopScalingAction() {
+    // given:
+    givenScalingAction(BASE_REPLICAS);
+
+    // when:
+    setupForDeployment();
+    plugin.reconcile(policy, ctx, responsiveCtx);
+
+    // then:
+    verify(controllerClient).updateActionStatus(updateActionStatusCaptor.capture());
+    final var updateActionStatus = updateActionStatusCaptor.getValue();
+    assertThat(updateActionStatus.getActionId(), is(SCALING_ACTION_ID));
+    assertThat(updateActionStatus.getStatus().getStatus(), is(Status.COMPLETED));
+  }
+
+  @Test
+  public void shouldPatchDeploymentIfReplicasChangedInTargetState() {
+    // given:
+    givenTargetState(targetState);
+
+    // when:
+    setupForDeployment();
+    plugin.reconcile(policy, ctx, responsiveCtx);
+
+    // then:
+    verify(rsDeployment).edit(deploymentEdit.capture());
+    final var edit = deploymentEdit.getValue();
+    final var blank = createDeployment("biz", "baz",
+        "v1", BASE_REPLICAS, Collections.emptyMap());
+    edit.apply(blank);
+    assertThat(blank.getSpec().getReplicas(), is(SCALING_ACTION_REPLICAS));
   }
 
   @Test
   public void shouldNotCloseAppClientWhenPatchDeploymentReplicas() {
+    // given:
+    givenScalingAction();
+
     // when:
     setupForDeployment();
     plugin.reconcile(policy, ctx, responsiveCtx);
@@ -310,7 +392,8 @@ class KafkaStreamsPolicyPluginTest {
   public void shouldNotPatchDeploymentIfReplicasNotChanged() {
     // given:
     setupForDeployment();
-    deployment.getSpec().setReplicas(5);
+    givenScalingAction();
+    deployment.getSpec().setReplicas(SCALING_ACTION_REPLICAS);
 
     // when:
     plugin.reconcile(policy, ctx, responsiveCtx);
@@ -323,8 +406,6 @@ class KafkaStreamsPolicyPluginTest {
   public void shouldNotPatchDeploymentIfNoTargetStateSpecified() {
     // given:
     setupForDeployment();
-    when(ctx.getSecondaryResource(TargetStateWithTimestamp.class))
-        .thenReturn(Optional.of(new TargetStateWithTimestamp()));
 
     // when:
     plugin.reconcile(policy, ctx, responsiveCtx);
@@ -333,6 +414,38 @@ class KafkaStreamsPolicyPluginTest {
     verifyNoInteractions(rsDeployment);
   }
 
+  @Test
+  public void shouldDeletePodIfActionIsRestartPod() {
+    // given:
+    setupForDeployment();
+    givenRestartPod("p1");
+
+    // when:
+    plugin.reconcile(policy, ctx, responsiveCtx);
+
+    // then:
+    verify(pod1).delete();
+    verify(controllerClient).updateActionStatus(updateActionStatusCaptor.capture());
+    final var updateActionStatus = updateActionStatusCaptor.getValue();
+    assertThat(updateActionStatus.getActionId(), is(RESTART_POD_ACTION_ID));
+    assertThat(updateActionStatus.getStatus().getStatus(), is(Status.COMPLETED));
+  }
+
+  @Test
+  public void shouldUpdateControllerWithErrorOnNoPodFound() {
+    // given:
+    setupForDeployment();
+    givenRestartPod("p10");
+
+    // when:
+    plugin.reconcile(policy, ctx, responsiveCtx);
+
+    // then:
+    verify(controllerClient).updateActionStatus(updateActionStatusCaptor.capture());
+    final var updateActionStatus = updateActionStatusCaptor.getValue();
+    assertThat(updateActionStatus.getActionId(), is(RESTART_POD_ACTION_ID));
+    assertThat(updateActionStatus.getStatus().getStatus(), is(Status.FAILED));
+  }
 
   @Test
   public void shouldAddStatefulSetSource() {
@@ -420,6 +533,9 @@ class KafkaStreamsPolicyPluginTest {
 
   @Test
   public void shouldPatchStatefulSetIfReplicasChanged() {
+    // given:
+    givenScalingAction();
+
     // when:
     setupForStatefulSet();
     plugin.reconcile(policy, ctx, responsiveCtx);
@@ -428,13 +544,16 @@ class KafkaStreamsPolicyPluginTest {
     verify(rsStatefulSet).edit(statefulSetEdit.capture());
     final var edit = statefulSetEdit.getValue();
     final var blank = createStatefulSet("biz", "baz", "v1",
-        3, Collections.emptyMap());
+        BASE_REPLICAS, Collections.emptyMap());
     edit.apply(blank);
-    assertThat(blank.getSpec().getReplicas(), is(5));
+    assertThat(blank.getSpec().getReplicas(), is(SCALING_ACTION_REPLICAS));
   }
 
   @Test
   public void shouldNotCloseAppClientWhenPatchingStatefulSetReplicas() {
+    // given:
+    givenScalingAction();
+
     // when:
     setupForStatefulSet();
     plugin.reconcile(policy, ctx, responsiveCtx);
@@ -443,12 +562,12 @@ class KafkaStreamsPolicyPluginTest {
     verify(appsClient, times(0)).close();
   }
 
-
   @Test
   public void shouldNotPatchStatefulSetIfReplicasNotChanged() {
     // given:
     setupForStatefulSet();
-    statefulSet.getSpec().setReplicas(5);
+    givenScalingAction();
+    statefulSet.getSpec().setReplicas(SCALING_ACTION_REPLICAS);
 
     // when:
     plugin.reconcile(policy, ctx, responsiveCtx);
@@ -461,14 +580,49 @@ class KafkaStreamsPolicyPluginTest {
   public void shouldNotPatchStatefulSetIfNoTargetStateSpecified() {
     // given:
     setupForStatefulSet();
-    when(ctx.getSecondaryResource(TargetStateWithTimestamp.class))
-        .thenReturn(Optional.of(new TargetStateWithTimestamp()));
 
     // when:
     plugin.reconcile(policy, ctx, responsiveCtx);
 
     // then:
     verifyNoInteractions(rsStatefulSet);
+  }
+
+  private ControllerOuterClass.Action createScalingAction(final int replicas) {
+    return ControllerOuterClass.Action.newBuilder()
+        .setId(SCALING_ACTION_ID)
+        .setScaleApplication(ScaleApplication.newBuilder()
+            .setReplicas(replicas)
+            .build())
+        .build();
+  }
+
+  private void givenRestartPod(final String podId) {
+    when(ctx.getSecondaryResource(ActionsWithTimestamp.class))
+        .thenReturn(Optional.of(
+            new ActionsWithTimestamp(List.of(ControllerOuterClass.Action.newBuilder()
+                .setId(RESTART_POD_ACTION_ID)
+                .setRestartPod(RestartPod.newBuilder()
+                    .setPodId(podId)
+                    .build())
+                .build()
+            ))
+        ));
+  }
+
+  private void givenScalingAction() {
+    givenScalingAction(SCALING_ACTION_REPLICAS);
+  }
+
+  private void givenScalingAction(final int replicas) {
+    when(ctx.getSecondaryResource(ActionsWithTimestamp.class))
+        .thenReturn(Optional.of(
+            new ActionsWithTimestamp(List.of(createScalingAction(replicas)))));
+  }
+
+  private void givenTargetState(final ControllerOuterClass.ApplicationState targetState) {
+    when(ctx.getSecondaryResource(ActionsWithTimestamp.class))
+        .thenReturn(Optional.of(new ActionsWithTimestamp(Optional.of(targetState), List.of())));
   }
 
   @SuppressWarnings("unchecked")
@@ -487,6 +641,24 @@ class KafkaStreamsPolicyPluginTest {
     return Optional.empty();
   }
 
+  private PodResource mockPodResource(final String id) {
+    final var podResource = mock(PodResource.class);
+    final Pod pod = new Pod();
+    pod.setMetadata(new ObjectMeta());
+    pod.getMetadata().setName(id);
+    lenient().when(podResource.get()).thenReturn(pod);
+    return podResource;
+  }
+
+  private void setupPodsToBeReturned(final Deployment deployment) {
+    lenient().when(podsClient.inNamespace(deployment.getMetadata().getNamespace()))
+        .thenReturn(nsPodClient);
+    lenient().when(nsPodClient.withLabelSelector(deployment.getSpec().getSelector()))
+        .thenReturn(nsPodClient);
+    lenient().when(nsPodClient.resources())
+        .thenReturn(Stream.of(pod1, pod2));
+  }
+
   private void setupDeploymentToBeReturned(final Deployment deployment) {
     lenient().when(deploymentsClient.inNamespace(deployment.getMetadata().getNamespace()))
         .thenReturn(nsDeploymentsClient);
@@ -497,6 +669,7 @@ class KafkaStreamsPolicyPluginTest {
     final DeploymentList list = new DeploymentList();
     list.setItems(List.of(deployment));
     lenient().when(nsDeploymentsClient.list()).thenReturn(list);
+    setupPodsToBeReturned(deployment);
   }
 
   private void setupStatefulSetToBeReturned(final StatefulSet statefulSet) {

@@ -9,6 +9,7 @@ import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistry;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.OptionalLong;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -30,7 +31,7 @@ class StoreCommitListenerTest {
   @Mock
   private Consumer<Long> store2Flush;
   private final ResponsiveStoreRegistry registry = new ResponsiveStoreRegistry();
-  private final OffsetRecorder offsetRecorder = new OffsetRecorder(true);
+  private final OffsetRecorder offsetRecorder = new OffsetRecorder(true, "thread1");
   private StoreCommitListener commitListener;
 
   @BeforeEach
@@ -38,14 +39,16 @@ class StoreCommitListenerTest {
     registry.registerStore(new ResponsiveStoreRegistration(
         "store1",
         PARTITION1,
-        0,
-        store1Flush
+        OptionalLong.of(0),
+        store1Flush,
+        "thread1"
     ));
     registry.registerStore(new ResponsiveStoreRegistration(
         "store2",
         PARTITION2,
-        0,
-        store2Flush
+        OptionalLong.of(0),
+        store2Flush,
+        "thread1"
     ));
     commitListener = new StoreCommitListener(registry, offsetRecorder);
   }

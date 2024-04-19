@@ -32,6 +32,7 @@ import io.opentelemetry.instrumentation.jmx.yaml.JmxConfig;
 import io.opentelemetry.instrumentation.jmx.yaml.JmxRule;
 import io.opentelemetry.instrumentation.jmx.yaml.RuleParser;
 import io.opentelemetry.instrumentation.resources.ContainerResource;
+import io.opentelemetry.instrumentation.resources.HostResource;
 import io.opentelemetry.sdk.OpenTelemetrySdk;
 import io.opentelemetry.sdk.metrics.SdkMeterProvider;
 import io.opentelemetry.sdk.metrics.export.PeriodicMetricReader;
@@ -59,21 +60,22 @@ public class OtelMetricsService implements MetricsExportService  {
   ) {
     final OtlpGrpcMetricExporterBuilder builder = OtlpGrpcMetricExporter.builder();
 
-    final String apiKey = config.getString(ResponsiveConfig.METRICS_API_KEY_CONFIG);
-    final Password secret = config.getPassword(ResponsiveConfig.METRICS_SECRET_CONFIG);
+    final String apiKey = config.getString(ResponsiveConfig.PLATFORM_API_KEY_CONFIG);
+    final Password secret = config.getPassword(ResponsiveConfig.PLATFORM_API_SECRET_CONFIG);
     if (secret == null ^ apiKey == null) {
       throw new IllegalArgumentException(String.format(
           "Invalid configuration, if configured to report metrics using %s, "
               + "then values for both %s and %s must be provided.",
           ResponsiveConfig.METRICS_ENABLED_CONFIG,
-          ResponsiveConfig.METRICS_API_KEY_CONFIG,
-          ResponsiveConfig.METRICS_SECRET_CONFIG
+          ResponsiveConfig.PLATFORM_API_KEY_CONFIG,
+          ResponsiveConfig.PLATFORM_API_SECRET_CONFIG
       ));
     } else if (secret != null) {
       builder.addHeader(ApiKeyHeaders.API_KEY_METADATA_KEY, apiKey);
       builder.addHeader(ApiKeyHeaders.SECRET_METADATA_KEY, secret.value());
     }
 
+    builder.setCompression("gzip");
     builder.setEndpoint(config.getString(ResponsiveConfig.CONTROLLER_ENDPOINT_CONFIG));
 
     final var exporter = builder.build();
@@ -87,6 +89,7 @@ public class OtelMetricsService implements MetricsExportService  {
     final var resource = Resource
         .empty() // the .default() one has attributes we don't care about
         .merge(ContainerResource.get())
+        .merge(HostResource.get())
         .merge(Resource.create(
             Attributes.builder()
                 .put(SERVICE_NAME_ATTR, appId + "-otel")

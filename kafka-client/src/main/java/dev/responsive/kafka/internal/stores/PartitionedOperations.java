@@ -18,26 +18,35 @@ package dev.responsive.kafka.internal.stores;
 
 import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadSessionClients;
 import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadStoreRegistry;
+import static dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration.NO_COMMITTED_OFFSET;
 import static dev.responsive.kafka.internal.utils.StoreUtil.numPartitionsForKafkaTopic;
+import static dev.responsive.kafka.internal.utils.StoreUtil.streamThreadId;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.changelogFor;
 
 import dev.responsive.kafka.api.config.ResponsiveConfig;
+import dev.responsive.kafka.api.config.ResponsiveMode;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
+import dev.responsive.kafka.internal.config.ConfigUtils;
 import dev.responsive.kafka.internal.db.BatchFlusher;
 import dev.responsive.kafka.internal.db.BytesKeySpec;
-import dev.responsive.kafka.internal.db.CassandraTableSpecFactory;
 import dev.responsive.kafka.internal.db.FlushManager;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
+import dev.responsive.kafka.internal.db.RemoteTableSpecFactory;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
 import dev.responsive.kafka.internal.utils.Result;
 import dev.responsive.kafka.internal.utils.SessionClients;
 import dev.responsive.kafka.internal.utils.TableName;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Collection;
+import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.OptionalLong;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Supplier;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Bytes;
@@ -61,6 +70,8 @@ public class PartitionedOperations implements KeyValueOperations {
   private final ResponsiveStoreRegistry storeRegistry;
   private final ResponsiveStoreRegistration registration;
   private final ResponsiveRestoreListener restoreListener;
+  private final boolean migrationMode;
+  private final long startingTimestamp;
 
   public static PartitionedOperations create(
       final TableName name,
@@ -122,10 +133,20 @@ public class PartitionedOperations implements KeyValueOperations {
     final var registration = new ResponsiveStoreRegistration(
         name.kafkaName(),
         changelog,
-        restoreStartOffset == -1 ? 0 : restoreStartOffset,
-        buffer::flush
+        restoreStartOffset == NO_COMMITTED_OFFSET
+            ? OptionalLong.empty()
+            : OptionalLong.of(restoreStartOffset),
+        buffer::flush,
+        streamThreadId()
     );
     storeRegistry.registerStore(registration);
+
+    final boolean migrationMode = ConfigUtils.responsiveMode(config) == ResponsiveMode.MIGRATE;
+    long startingTimestamp = -1;
+    final Optional<Duration> ttl = params.timeToLive();
+    if (migrationMode && ttl.isPresent()) {
+      startingTimestamp = Instant.now().minus(ttl.get()).toEpochMilli();
+    }
 
     return new PartitionedOperations(
         log,
@@ -136,7 +157,9 @@ public class PartitionedOperations implements KeyValueOperations {
         changelog,
         storeRegistry,
         registration,
-        sessionClients.restoreListener()
+        sessionClients.restoreListener(),
+        migrationMode,
+        startingTimestamp
     );
   }
 
@@ -164,7 +187,7 @@ public class PartitionedOperations implements KeyValueOperations {
             changelogTopicName
         );
     final var client = sessionClients.cassandraClient();
-    final var spec = CassandraTableSpecFactory.fromKVParams(params, partitioner);
+    final var spec = RemoteTableSpecFactory.fromKVParams(params, partitioner);
     switch (params.schemaType()) {
       case KEY_VALUE:
         return client.kvFactory().create(spec);
@@ -192,7 +215,9 @@ public class PartitionedOperations implements KeyValueOperations {
       final TopicPartition changelog,
       final ResponsiveStoreRegistry storeRegistry,
       final ResponsiveStoreRegistration registration,
-      final ResponsiveRestoreListener restoreListener
+      final ResponsiveRestoreListener restoreListener,
+      final boolean migrationMode,
+      final long startingTimestamp
   ) {
     this.log = log;
     this.context = context;
@@ -203,24 +228,40 @@ public class PartitionedOperations implements KeyValueOperations {
     this.storeRegistry = storeRegistry;
     this.registration = registration;
     this.restoreListener = restoreListener;
+    this.migrationMode = migrationMode;
+    this.startingTimestamp = startingTimestamp;
   }
 
   @Override
   public void put(final Bytes key, final byte[] value) {
-    buffer.put(key, value, context.timestamp());
+    if (migratingAndTimestampTooEarly()) {
+      // we are bootstrapping a store. Only apply the write if the timestamp
+      // is fresher than the starting timestamp
+      return;
+    }
+    buffer.put(key, value, currentRecordTimestamp());
   }
 
   @Override
   public byte[] delete(final Bytes key) {
     // single writer prevents races (see putIfAbsent)
     final byte[] old = get(key);
-    buffer.tombstone(key, context.timestamp());
+    buffer.tombstone(key, currentRecordTimestamp());
 
     return old;
   }
 
   @Override
   public byte[] get(final Bytes key) {
+    if (migrationMode) {
+      // we don't want to issue gets in migration mode since
+      // we're just reading from the changelog. the problem is
+      // that materialized tables issue get() on every put() to
+      // send the "undo" data downstream -- we intercept all gets
+      // and just return null
+      return null;
+    }
+
     // try the buffer first, it acts as a local cache
     // but this is also necessary for correctness as
     // it is possible that the data is either uncommitted
@@ -298,11 +339,32 @@ public class PartitionedOperations implements KeyValueOperations {
     buffer.restoreBatch(records);
   }
 
+  private long currentRecordTimestamp() {
+    final InjectedStoreArgs injectedStoreArgs = registration.injectedStoreArgs();
+    final Optional<Supplier<Long>> injectedClock = injectedStoreArgs.recordTimestampClock();
+    if (injectedClock.isPresent()) {
+      return injectedClock.get().get();
+    }
+    return context.timestamp();
+  }
+
   private long minValidTimestamp() {
     // TODO: unwrapping the ttl from Duration to millis is somewhat heavy for the hot path
     return params
         .timeToLive()
-        .map(ttl -> context.timestamp() - ttl.toMillis())
+        .map(ttl -> currentRecordTimestamp() - ttl.toMillis())
         .orElse(-1L);
+  }
+
+  private boolean migratingAndTimestampTooEarly() {
+    if (!migrationMode) {
+      return false;
+    }
+    if (startingTimestamp > 0) {
+      // we are bootstrapping a store. Only apply the write if the timestamp
+      // is fresher than the starting timestamp
+      return currentRecordTimestamp() < startingTimestamp;
+    }
+    return false;
   }
 }

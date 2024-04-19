@@ -77,19 +77,21 @@ public final class IntegrationTestUtils {
 
   public static ResponsiveConfig dummyConfig() {
     final Properties props = new Properties();
-    props.put(ResponsiveConfig.STORAGE_DATACENTER_CONFIG, "responsive");
-    props.put(ResponsiveConfig.STORAGE_HOSTNAME_CONFIG, "localhost");
-    props.put(ResponsiveConfig.STORAGE_PORT_CONFIG, 666);
-    props.put(ResponsiveConfig.TENANT_ID_CONFIG, "responsive-test");
+    props.put(ResponsiveConfig.CASSANDRA_DATACENTER_CONFIG, "responsive");
+    props.put(ResponsiveConfig.CASSANDRA_HOSTNAME_CONFIG, "localhost");
+    props.put(ResponsiveConfig.CASSANDRA_PORT_CONFIG, 666);
+    props.put(ResponsiveConfig.RESPONSIVE_ORG_CONFIG, "responsive");
+    props.put(ResponsiveConfig.RESPONSIVE_ENV_CONFIG, "itest");
     return ResponsiveConfig.responsiveConfig(props);
   }
 
   public static ResponsiveConfig dummyConfig(final Map<?, ?> overrides) {
     final Properties props = new Properties();
-    props.put(ResponsiveConfig.STORAGE_DATACENTER_CONFIG, "responsive");
-    props.put(ResponsiveConfig.STORAGE_HOSTNAME_CONFIG, "localhost");
-    props.put(ResponsiveConfig.STORAGE_PORT_CONFIG, 666);
-    props.put(ResponsiveConfig.TENANT_ID_CONFIG, "TTD");
+    props.put(ResponsiveConfig.CASSANDRA_DATACENTER_CONFIG, "responsive");
+    props.put(ResponsiveConfig.CASSANDRA_HOSTNAME_CONFIG, "localhost");
+    props.put(ResponsiveConfig.CASSANDRA_PORT_CONFIG, 666);
+    props.put(ResponsiveConfig.RESPONSIVE_ORG_CONFIG, "responsive");
+    props.put(ResponsiveConfig.RESPONSIVE_ENV_CONFIG, "ttd");
     props.putAll(overrides);
     return ResponsiveConfig.responsiveConfig(props);
   }
@@ -102,6 +104,8 @@ public final class IntegrationTestUtils {
     // add displayName to name to account for parameterized tests
     return info.getTestMethod().orElseThrow().getName().toLowerCase(Locale.ROOT)
         + info.getDisplayName().substring("[X] ".length()).toLowerCase(Locale.ROOT)
+        .replace(" ", "") // this can happen if multiple params in parameterized test
+        .replace(",", "") // this can happen if multiple params in parameterized test
         .replace("_", ""); // keep only valid cassandra chars to keep testing code easier
   }
 
@@ -205,6 +209,22 @@ public final class IntegrationTestUtils {
   public static <K, V> void pipeRecords(
       final KafkaProducer<K, V> producer,
       final String topic,
+      final List<KeyValue<K, V>> records
+  ) {
+    for (final KeyValue<K, V> record : records) {
+      producer.send(new ProducerRecord<>(
+          topic,
+          0,
+          record.key,
+          record.value
+      ));
+    }
+    producer.flush();
+  }
+
+  public static <K, V> void pipeTimestampedRecords(
+      final KafkaProducer<K, V> producer,
+      final String topic,
       final List<KeyValueTimestamp<K, V>> records
   ) {
     for (final KeyValueTimestamp<K, V> record : records) {
@@ -218,7 +238,6 @@ public final class IntegrationTestUtils {
     }
     producer.flush();
   }
-
 
   public static <K, V> void awaitOutput(
       final String topic,

@@ -26,7 +26,7 @@ import java.util.EnumSet;
  * Defines the table specifications for a {@link RemoteTable} that are
  * independent of the schema of the table.
  */
-public interface CassandraTableSpec {
+public interface RemoteTableSpec {
 
   String tableName();
 

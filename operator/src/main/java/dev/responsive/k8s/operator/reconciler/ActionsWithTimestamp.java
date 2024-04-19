@@ -17,26 +17,38 @@
 package dev.responsive.k8s.operator.reconciler;
 
 import java.time.Instant;
+import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import responsive.controller.v1.controller.proto.ControllerOuterClass;
 
-class TargetStateWithTimestamp {
+class ActionsWithTimestamp {
   private final Instant timestamp;
   private final Optional<ControllerOuterClass.ApplicationState> targetState;
+  private final List<ControllerOuterClass.Action> actions;
 
-  TargetStateWithTimestamp(final ControllerOuterClass.ApplicationState targetState) {
-    this(Instant.now(), Optional.of(targetState));
+  ActionsWithTimestamp(
+      final Optional<ControllerOuterClass.ApplicationState> targetState,
+      final List<ControllerOuterClass.Action> actions
+  ) {
+    this(Instant.now(), targetState, actions);
   }
 
-  TargetStateWithTimestamp() {
-    this(Instant.now(), Optional.empty());
+  ActionsWithTimestamp(final List<ControllerOuterClass.Action> actions) {
+    this(Instant.now(), Optional.empty(), actions);
   }
 
-  TargetStateWithTimestamp(final Instant timestamp,
-                           final Optional<ControllerOuterClass.ApplicationState> targetState) {
+  ActionsWithTimestamp() {
+    this(Instant.now(), Optional.empty(), Collections.emptyList());
+  }
+
+  ActionsWithTimestamp(final Instant timestamp,
+                       final Optional<ControllerOuterClass.ApplicationState> targetState,
+                       final List<ControllerOuterClass.Action> actions) {
     this.timestamp = Objects.requireNonNull(timestamp);
     this.targetState = Objects.requireNonNull(targetState);
+    this.actions = List.copyOf(Objects.requireNonNull(actions));
   }
 
   public Instant getTimestamp() {
@@ -47,6 +59,10 @@ class TargetStateWithTimestamp {
     return targetState;
   }
 
+  public List<ControllerOuterClass.Action> getActions() {
+    return actions;
+  }
+
   @Override
   public boolean equals(final Object o) {
     if (this == o) {
@@ -55,7 +71,7 @@ class TargetStateWithTimestamp {
     if (o == null || getClass() != o.getClass()) {
       return false;
     }
-    final TargetStateWithTimestamp that = (TargetStateWithTimestamp) o;
+    final ActionsWithTimestamp that = (ActionsWithTimestamp) o;
     return Objects.equals(timestamp, that.timestamp)
         && Objects.equals(targetState, that.targetState);
   }

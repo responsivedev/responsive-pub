@@ -17,3 +17,12 @@ rules:
   - patch
   - update
   - watch
+- apiGroups:
+  - '*'
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+  - delete

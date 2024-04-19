@@ -19,7 +19,7 @@ package dev.responsive.kafka.internal.stores;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.WINDOW_BLOOM_FILTER_COUNT_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.WINDOW_BLOOM_FILTER_EXPECTED_KEYS_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.WINDOW_BLOOM_FILTER_FPP_CONFIG;
-import static dev.responsive.kafka.internal.db.partitioning.SegmentPartitioner.UNINITIALIZED_STREAM_TIME;
+import static dev.responsive.kafka.internal.db.partitioning.Segmenter.UNINITIALIZED_STREAM_TIME;
 
 import com.google.common.hash.BloomFilter;
 import com.google.common.hash.Funnels;
@@ -37,12 +37,14 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.StoreQueryUtils;
 import org.slf4j.Logger;
 
-public class ResponsiveWindowStore implements WindowStore<Bytes, byte[]> {
+public class ResponsiveWindowStore
+    implements WindowStore<Bytes, byte[]>, TimestampedBytesStore {
   private final Logger log;
 
   private final ResponsiveWindowParams params;

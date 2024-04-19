@@ -20,6 +20,7 @@ import static dev.responsive.kafka.internal.metrics.TopicMetrics.END_OFFSET;
 import static dev.responsive.kafka.internal.metrics.TopicMetrics.END_OFFSET_DESCRIPTION;
 
 import dev.responsive.kafka.internal.clients.ResponsiveConsumer;
+import dev.responsive.kafka.internal.utils.Constants;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.HashMap;
@@ -32,6 +33,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -205,8 +207,9 @@ public class EndOffsetsPoller {
       final var result = adminClient.listOffsets(partitions);
       final Map<TopicPartition, ListOffsetsResultInfo> endOffsets;
       try {
-        endOffsets = result.all().get();
-      } catch (final InterruptedException | ExecutionException e) {
+        endOffsets = result.all()
+            .get(Constants.BLOCKING_TIMEOUT_VALUE, Constants.BLOCKING_TIMEOUT_UNIT);
+      } catch (final InterruptedException | ExecutionException | TimeoutException e) {
         throw new RuntimeException(e);
       }
       threadMetrics.forEach(tm -> tm.update(endOffsets));

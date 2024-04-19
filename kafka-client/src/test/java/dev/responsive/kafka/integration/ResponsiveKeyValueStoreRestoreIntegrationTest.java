@@ -16,9 +16,9 @@
 
 package dev.responsive.kafka.integration;
 
-import static dev.responsive.kafka.api.config.ResponsiveConfig.CLIENT_ID_CONFIG;
-import static dev.responsive.kafka.api.config.ResponsiveConfig.CLIENT_SECRET_CONFIG;
-import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_HOSTNAME_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_ENDPOINT_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_PASSWORD_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_USERNAME_CONFIG;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.getCassandraValidName;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.pipeInput;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_CONFIG;
@@ -75,6 +75,7 @@ import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -90,9 +91,11 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.LongStream;
+import java.util.stream.Stream;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.OffsetSpec;
+import org.apache.kafka.clients.admin.RecordsToDelete;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -100,6 +103,8 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
@@ -118,7 +123,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 
 public class ResponsiveKeyValueStoreRestoreIntegrationTest {
 
@@ -169,13 +176,26 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
   }
 
   @ParameterizedTest
-  @EnumSource(KVSchema.class)
-  public void shouldFlushStoresBeforeClose(final KVSchema type) throws Exception {
+  @MethodSource("shouldFlushTestParams")
+  public void shouldFlushStoresBeforeClose(
+      final KVSchema type,
+      final boolean startWithTruncatedCL
+  ) throws Exception {
     final Map<String, Object> properties = getMutableProperties();
     final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties);
     final KafkaClientSupplier defaultClientSupplier = new DefaultKafkaClientSupplier();
     final CassandraClientFactory defaultFactory = new DefaultCassandraClientFactory();
     final TopicPartition input = new TopicPartition(inputTopic(), 0);
+    final TopicPartition changelog = new TopicPartition(name + "-" + aggName() + "-changelog", 0);
+
+    if (startWithTruncatedCL) {
+      // send some data
+      for (int i = 0; i < 10; i++) {
+        producer.send(new ProducerRecord<>(changelog.topic(), changelog.partition(), 1L, 1L)).get();
+      }
+      // truncate the topic
+      admin.deleteRecords(Map.of(changelog, RecordsToDelete.beforeOffset(9L))).all().get();
+    }
 
     try (final ResponsiveKafkaStreams streams
              = buildAggregatorApp(properties, defaultClientSupplier, defaultFactory, type, false)) {
@@ -184,9 +204,6 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
       pipeInput(inputTopic(), 1, producer, System::currentTimeMillis, 0, 10, 0);
       // Wait for it to be processed
       waitTillFullyConsumed(input, Duration.ofSeconds(120));
-
-      final TopicPartition changelog
-          = new TopicPartition(name + "-" + aggName() + "-changelog", 0);
 
       // Make sure changelog is even w/ cassandra
       final ResponsiveConfig config = ResponsiveConfig.responsiveConfig(properties);
@@ -199,6 +216,84 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
           = slurpPartition(changelog, properties);
       final long last = changelogRecords.get(changelogRecords.size() - 1).offset();
       assertThat(cassandraOffset, equalTo(last));
+    }
+  }
+
+  private static Stream<Arguments> shouldFlushTestParams() {
+    return Arrays.stream(KVSchema.values())
+        .flatMap(schema -> Stream.of(
+            Arguments.of(schema, true),
+            Arguments.of(schema, false))
+        );
+  }
+
+  @ParameterizedTest
+  @EnumSource(KVSchema.class)
+  public void shouldRepairOffsetsIfOutOfRangeAndConfigured(final KVSchema type) throws Exception {
+    // Given:
+    final Map<String, Object> properties = getMutableProperties();
+    properties.put(ResponsiveConfig.RESTORE_OFFSET_REPAIR_ENABLED_CONFIG, true);
+    final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties);
+    final KafkaClientSupplier defaultClientSupplier = new DefaultKafkaClientSupplier();
+    final CassandraClientFactory defaultFactory = new DefaultCassandraClientFactory();
+    final TopicPartition input = new TopicPartition(inputTopic(), 0);
+    final TopicPartition changelog = new TopicPartition(name + "-" + aggName() + "-changelog", 0);
+
+    // When:
+    final long clOffset;
+    try (final ResponsiveKafkaStreams streams
+             = buildAggregatorApp(properties, defaultClientSupplier, defaultFactory, type, false)) {
+      IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(30), streams);
+      // Send some data through
+      pipeInput(
+          inputTopic(),
+          1,
+          producer,
+          System::currentTimeMillis,
+          0,
+          1,
+          LongStream.range(0, 100).toArray()
+      );
+      // Wait for it to be processed
+      waitTillFullyConsumed(input, Duration.ofSeconds(120));
+
+      final List<ConsumerRecord<Long, Long>> changelogRecords
+          = slurpPartition(changelog, properties);
+      clOffset = changelogRecords.get(changelogRecords.size() - 1).offset();
+    }
+
+    // produce some data so we can truncate the data that has been committed
+    final RecordMetadata recordMetadata =
+        producer.send(new ProducerRecord<>(changelog.topic(), changelog.partition(), -1L, -1L))
+            .get();
+
+    // truncate the offset that exists in remote
+    admin.deleteRecords(
+        Map.of(changelog, RecordsToDelete.beforeOffset(recordMetadata.offset()))
+    ).all().get();
+
+    // run another application
+    try (final ResponsiveKafkaStreams streams
+             = buildAggregatorApp(properties, defaultClientSupplier, defaultFactory, type, false)) {
+      IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(30), streams);
+      // Send some data through
+      pipeInput(
+          inputTopic(),
+          1,
+          producer,
+          System::currentTimeMillis,
+          0,
+          1,
+          LongStream.range(0, 100).toArray()
+      );
+      // Wait for it to be processed
+      waitTillFullyConsumed(input, Duration.ofSeconds(120));
+
+      // Verify it made progress
+      final List<ConsumerRecord<Long, Long>> changelogRecords
+          = slurpPartition(changelog, properties);
+      final long last = changelogRecords.get(changelogRecords.size() - 1).offset();
+      assertThat(last, greaterThan(clOffset));
     }
   }
 
@@ -318,13 +413,13 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
           throw new IllegalArgumentException("Unexpected type " + type);
       }
     } else if (EXTENSION.backend == StorageBackend.MONGO_DB) {
-      final var hostname = config.getString(STORAGE_HOSTNAME_CONFIG);
-      final String clientId = config.getString(CLIENT_ID_CONFIG);
-      final Password clientSecret = config.getPassword(CLIENT_SECRET_CONFIG);
+      final var hostname = config.getString(MONGO_ENDPOINT_CONFIG);
+      final String user = config.getString(MONGO_USERNAME_CONFIG);
+      final Password pass = config.getPassword(MONGO_PASSWORD_CONFIG);
       final var mongoClient = SessionUtil.connect(
           hostname,
-          clientId,
-          clientSecret == null ? null : clientSecret.value()
+          user,
+          pass == null ? null : pass.value()
       );
       table = new MongoKVTable(
           mongoClient,

@@ -32,7 +32,7 @@ import com.datastax.oss.driver.api.core.type.DataTypes;
 import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
 import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
 import com.datastax.oss.driver.api.querybuilder.schema.CreateTableWithOptions;
-import dev.responsive.kafka.internal.db.spec.CassandraTableSpec;
+import dev.responsive.kafka.internal.db.spec.RemoteTableSpec;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.List;
@@ -76,7 +76,7 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
   }
 
   public static CassandraFactTable create(
-      final CassandraTableSpec spec,
+      final RemoteTableSpec spec,
       final CassandraClient client
   ) {
     final String name = spec.tableName();
@@ -107,7 +107,8 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
             .value(DATA_KEY.column(), bindMarker(DATA_KEY.bind()))
             .value(TIMESTAMP.column(), bindMarker(TIMESTAMP.bind()))
             .value(DATA_VALUE.column(), bindMarker(DATA_VALUE.bind()))
-            .build()
+            .build(),
+        QueryOp.WRITE
     );
 
     final var get = client.prepare(
@@ -120,7 +121,8 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
             // ALLOW FILTERING is OK b/c the query only scans one partition (it actually  only
             // returns a single value)
             .allowFiltering()
-            .build()
+            .build(),
+        QueryOp.READ
     );
 
     final var delete = client.prepare(
@@ -128,7 +130,8 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
             .deleteFrom(name)
             .where(ROW_TYPE.relation().isEqualTo(RowType.DATA_ROW.literal()))
             .where(DATA_KEY.relation().isEqualTo(bindMarker(DATA_KEY.bind())))
-            .build()
+            .build(),
+        QueryOp.WRITE
     );
 
     final var fetchOffset = client.prepare(
@@ -137,7 +140,8 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
             .column(OFFSET.column())
             .where(ROW_TYPE.relation().isEqualTo(RowType.METADATA_ROW.literal()))
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
-            .build()
+            .build(),
+        QueryOp.READ
     );
 
     final var setOffset = client.prepare(
@@ -146,7 +150,8 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
             .setColumn(OFFSET.column(), bindMarker(OFFSET.bind()))
             .where(ROW_TYPE.relation().isEqualTo(RowType.METADATA_ROW.literal()))
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
-            .build()
+            .build(),
+        QueryOp.WRITE
     );
 
     return new CassandraFactTable(
@@ -225,7 +230,8 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
 
   @Override
   public long approximateNumEntries(final int kafkaPartition) {
-    return client.count(name(), kafkaPartition);
+    throw new UnsupportedOperationException(
+        "approximateNumEntries is not supported on fact tables");
   }
 
   @Override
@@ -278,14 +284,14 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
       final Bytes from,
       final Bytes to,
       long minValidTs) {
-    throw new UnsupportedOperationException("range scans are not supported on Idempotent schemas.");
+    throw new UnsupportedOperationException("range scans are not supported on fact tables.");
   }
 
   @Override
   public KeyValueIterator<Bytes, byte[]> all(
       final int kafkaPartition,
       long minValidTs) {
-    throw new UnsupportedOperationException("all is not supported on Idempotent schemas");
+    throw new UnsupportedOperationException("all is not supported on fact tables");
   }
 
   private static String metadataTable(final String tableName) {

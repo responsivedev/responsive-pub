@@ -23,7 +23,7 @@ public class TtlTableSpec extends DelegatingTableSpec {
 
   private final Duration ttl;
 
-  public TtlTableSpec(final CassandraTableSpec delegate, final Duration ttl) {
+  public TtlTableSpec(final RemoteTableSpec delegate, final Duration ttl) {
     super(delegate);
     this.ttl = ttl;
   }

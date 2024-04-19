@@ -17,6 +17,7 @@
 package dev.responsive.k8s.operator.reconciler;
 
 import com.google.common.collect.ImmutableSet;
+import dev.responsive.controller.client.ControllerClient;
 import dev.responsive.k8s.controller.ControllerProtoFactories;
 import dev.responsive.k8s.crd.ResponsivePolicy;
 import io.fabric8.kubernetes.api.model.HasMetadata;
@@ -35,6 +36,8 @@ import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import responsive.controller.v1.controller.proto.ControllerOuterClass;
+import responsive.controller.v1.controller.proto.ControllerOuterClass.Action;
+import responsive.controller.v1.controller.proto.ControllerOuterClass.UpdateActionStatusRequest;
 
 public class KafkaStreamsPolicyPlugin implements PolicyPlugin {
   private static final Logger LOG = LoggerFactory.getLogger(KafkaStreamsPolicyPlugin.class);
@@ -84,7 +87,8 @@ public class KafkaStreamsPolicyPlugin implements PolicyPlugin {
 
     LOG.info("Found type {} for app {}/{}", managedApp.appType(), appNamespace, appName);
 
-    responsiveCtx.getControllerClient().currentState(
+    final var controllerClient = responsiveCtx.getControllerClient();
+    controllerClient.currentState(
         ControllerProtoFactories.currentStateRequest(
             environment,
             policy,
@@ -92,7 +96,7 @@ public class KafkaStreamsPolicyPlugin implements PolicyPlugin {
     );
 
     final var maybeTargetState =
-        ctx.getSecondaryResource(TargetStateWithTimestamp.class);
+        ctx.getSecondaryResource(ActionsWithTimestamp.class);
     if (maybeTargetState.isEmpty()) {
       LOG.warn("No target state present in ctx. This should not happen");
       return;
@@ -101,13 +105,111 @@ public class KafkaStreamsPolicyPlugin implements PolicyPlugin {
     final var targetState = maybeTargetState.get();
     LOG.info("target state for app {} {}", appName, targetState);
 
-    if (targetState.getTargetState().isEmpty()) {
-      LOG.info(
-          "we were not able to get a target state from controller, so don't try to reconcile one");
+    if (targetState.getTargetState().isPresent()) {
+      LOG.debug(
+          "we were not able to get a target state from controller, either due to error or"
+              + "there not being a current target. so don't try to reconcile one");
+      maybeScaleApplication(
+          targetState.getTargetState().get().getKafkaStreamsState().getReplicas(),
+          managedApp,
+          appNamespace,
+          appName,
+          ctx
+      );
+    }
+
+    for (final Action action : targetState.getActions()) {
+      switch (action.getActionCase()) {
+        case SCALE_APPLICATION:
+          maybeScaleApplication(
+              action.getScaleApplication().getReplicas(),
+              managedApp,
+              appNamespace,
+              appName,
+              ctx
+          );
+          controllerClient.updateActionStatus(actionSuccess(environment, policy, action));
+          break;
+        case RESTART_POD:
+          restartPod(
+              environment, policy, action, managedApp, controllerClient, ctx);
+          break;
+        default:
+          controllerClient.updateActionStatus(
+              actionFailed(
+                  environment,
+                  policy,
+                  action,
+                  "Action is not suppported by operator")
+          );
+          break;
+      }
+    }
+  }
+
+  private void restartPod(
+      final String environment,
+      final ResponsivePolicy policy,
+      final ControllerOuterClass.Action restartPod,
+      final ManagedApplication managedApp,
+      final ControllerClient controllerClient,
+      final Context<ResponsivePolicy> context
+  ) {
+    LOG.info("executing restart pod for {}", restartPod.getRestartPod().getPodId());
+    try {
+      managedApp.restartPod(restartPod.getRestartPod().getPodId(), context);
+    } catch (final RuntimeException e) {
+      // just pass exceptions back up to the controller for this action
+      LOG.error("pod restart failed with", e);
+      controllerClient.updateActionStatus(
+          actionFailed(
+              environment,
+              policy,
+              restartPod,
+              "restart failed with: " + e.getMessage()
+          )
+      );
       return;
     }
-    final var targetReplicas = targetState.getTargetState().get().getKafkaStreamsState()
-        .getReplicas();
+    controllerClient.updateActionStatus(actionSuccess(environment, policy, restartPod));
+  }
+
+  private UpdateActionStatusRequest actionSuccess(
+      final String env,
+      final ResponsivePolicy policy,
+      final Action action
+  ) {
+    return ControllerProtoFactories.updateActionStatusRequest(
+        env,
+        policy,
+        action.getId(),
+        ControllerOuterClass.ActionStatus.Status.COMPLETED,
+        "Action completed successfully"
+    );
+  }
+
+  private UpdateActionStatusRequest actionFailed(
+      final String env,
+      final ResponsivePolicy policy,
+      final Action action,
+      final String reason
+  ) {
+    return ControllerProtoFactories.updateActionStatusRequest(
+        env,
+        policy,
+        action.getId(),
+        ControllerOuterClass.ActionStatus.Status.FAILED,
+        reason
+    );
+  }
+
+  private void maybeScaleApplication(
+      final int targetReplicas,
+      final ManagedApplication managedApp,
+      final String appNamespace,
+      final String appName,
+      final Context<ResponsivePolicy> ctx
+  ) {
     if (targetReplicas != managedApp.getReplicas()) {
       LOG.info(
           "Scaling {}/{} from {} to {}",

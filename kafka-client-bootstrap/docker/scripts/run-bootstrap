@@ -1,0 +1,1 @@
+exec java -Dorg.apache.logging.log4j.level=INFO -cp "/usr/share/java/kafka-client-bootstrap/*" dev.responsive.kafka.bootstrap.main.BootstrapMain ${BOOTSTRAP_ARGS}

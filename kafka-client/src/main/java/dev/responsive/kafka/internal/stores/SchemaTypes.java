@@ -73,4 +73,19 @@ public class SchemaTypes {
      */
     STREAM
   }
+
+  public enum SessionSchema {
+
+    /**
+     * A general purpose session store that supports fencing zombie
+     * writers to ensure values are consistent with the latest write.
+     * Follows regular update/overwrite semantics with exactly one
+     * value per session per key.
+     * <p>
+     * Should be used for all session aggregation operators in the DSL
+     * (eg count, reduce, aggregate), and generally recommended for any
+     * true "session windowed" data in the PAPI.
+     */
+    SESSION,
+  }
 }

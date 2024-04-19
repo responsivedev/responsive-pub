@@ -12,29 +12,51 @@ import org.junit.jupiter.api.Test;
 
 class ResponsiveStoreRegistryTest {
   private static final TopicPartition TOPIC_PARTITION = new TopicPartition("changelog-topic", 5);
+  private static final TopicPartition UNINIT_TOPIC_PARTITION =
+      new TopicPartition("changelog-topic", 2);
   private static final ResponsiveStoreRegistration REGISTRATION = new ResponsiveStoreRegistration(
       "store",
       TOPIC_PARTITION,
-      123L,
-      o -> {}
+      OptionalLong.of(123L),
+      o -> {},
+      "thread"
   );
+
+  private static final ResponsiveStoreRegistration UNINIT_REGISTRATION =
+      new ResponsiveStoreRegistration(
+          "store",
+          UNINIT_TOPIC_PARTITION,
+          OptionalLong.empty(),
+          o -> { },
+          "thread"
+      );
 
   private final ResponsiveStoreRegistry registry = new ResponsiveStoreRegistry();
 
   @BeforeEach
   public void setup() {
     registry.registerStore(REGISTRATION);
+    registry.registerStore(UNINIT_REGISTRATION);
   }
 
   @Test
   public void shouldGetCommittedOffsetFromRegisteredStore() {
-    assertThat(registry.getCommittedOffset(TOPIC_PARTITION), is(OptionalLong.of(123L)));
+    assertThat(registry.getCommittedOffset(TOPIC_PARTITION, "thread"),
+        is(OptionalLong.of(123L)));
   }
 
   @Test
   public void shouldReturnEmptyCommittedOffsetFromNotRegisteredStore() {
     assertThat(
-        registry.getCommittedOffset(new TopicPartition("foo", 1)),
+        registry.getCommittedOffset(new TopicPartition("foo", 1), "thread"),
+        is(OptionalLong.empty())
+    );
+  }
+
+  @Test
+  public void shouldReturnEmptyCommittedOffsetFromChangelogWithNoOffset() {
+    assertThat(
+        registry.getCommittedOffset(UNINIT_TOPIC_PARTITION, "thread"),
         is(OptionalLong.empty())
     );
   }
@@ -45,7 +67,7 @@ class ResponsiveStoreRegistryTest {
     registry.deregisterStore(REGISTRATION);
 
     // when:
-    final OptionalLong offset = registry.getCommittedOffset(TOPIC_PARTITION);
+    final OptionalLong offset = registry.getCommittedOffset(TOPIC_PARTITION, "thread");
 
     // then:
     assertThat(offset, is(OptionalLong.empty()));

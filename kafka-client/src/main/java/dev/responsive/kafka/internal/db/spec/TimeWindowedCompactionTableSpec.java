@@ -26,7 +26,7 @@ import java.util.concurrent.TimeUnit;
 
 public class TimeWindowedCompactionTableSpec extends DelegatingTableSpec {
 
-  public TimeWindowedCompactionTableSpec(final CassandraTableSpec delegate) {
+  public TimeWindowedCompactionTableSpec(final RemoteTableSpec delegate) {
     super(delegate);
   }
 

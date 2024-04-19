@@ -61,7 +61,7 @@ class CassandraFactTableIntegrationTest {
     session = CqlSession.builder()
         .addContactPoint(cassandra.getContactPoint())
         .withLocalDatacenter(cassandra.getLocalDatacenter())
-        .withKeyspace("responsive_clients") // NOTE: this keyspace is expected to exist
+        .withKeyspace("responsive_itests") // NOTE: this keyspace is expected to exist
         .build();
     client = new CassandraClient(session, ResponsiveConfig.responsiveConfig(responsiveProps));
   }
@@ -73,7 +73,7 @@ class CassandraFactTableIntegrationTest {
     final String tableName = params.name().tableName();
     final CassandraFactTable schema = (CassandraFactTable) client
         .factFactory()
-        .create(CassandraTableSpecFactory.fromKVParams(params, defaultPartitioner()));
+        .create(RemoteTableSpecFactory.fromKVParams(params, defaultPartitioner()));
 
     // When:
     final var token = schema.init(1);
@@ -105,7 +105,7 @@ class CassandraFactTableIntegrationTest {
 
     // When:
     client.factFactory()
-        .create(CassandraTableSpecFactory.fromKVParams(params, defaultPartitioner()));
+        .create(RemoteTableSpecFactory.fromKVParams(params, defaultPartitioner()));
 
     // Then:
     final var table = session.getMetadata()
@@ -132,7 +132,7 @@ class CassandraFactTableIntegrationTest {
 
     // When:
     client.factFactory()
-        .create(CassandraTableSpecFactory.fromKVParams(params, defaultPartitioner()));
+        .create(RemoteTableSpecFactory.fromKVParams(params, defaultPartitioner()));
 
     // Then:
     final var table = session.getMetadata()
@@ -151,7 +151,7 @@ class CassandraFactTableIntegrationTest {
     params = ResponsiveKeyValueParams.fact(storeName);
     final RemoteKVTable<BoundStatement> table = client
         .factFactory()
-        .create(CassandraTableSpecFactory.fromKVParams(params, defaultPartitioner()));
+        .create(RemoteTableSpecFactory.fromKVParams(params, defaultPartitioner()));
 
     table.init(1);
 
@@ -177,7 +177,7 @@ class CassandraFactTableIntegrationTest {
 
     final RemoteKVTable<BoundStatement> table = client
         .factFactory()
-        .create(CassandraTableSpecFactory.fromKVParams(params, defaultPartitioner()));
+        .create(RemoteTableSpecFactory.fromKVParams(params, defaultPartitioner()));
 
     table.init(1);
 

@@ -18,6 +18,7 @@ package dev.responsive.kafka.internal.stores;
 
 import com.datastax.oss.driver.shaded.guava.common.annotations.VisibleForTesting;
 import java.util.Objects;
+import java.util.OptionalLong;
 import java.util.function.Consumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
@@ -30,27 +31,31 @@ public final class ResponsiveStoreRegistration {
   private final String storeName;
   private final TopicPartition changelogTopicPartition;
   private final Consumer<Long> onCommit;
+  private final String threadId;
+  private final InjectedStoreArgs injectedStoreArgs = new InjectedStoreArgs();
 
-  private final long startOffset; // stored offset during init, ie where restore should start
+  private final OptionalLong startOffset; // stored offset during init, (where restore should start)
 
   @VisibleForTesting
   public ResponsiveStoreRegistration(
       final String storeName,
       final TopicPartition changelogTopicPartition,
-      final long startOffset,
-      final Consumer<Long> onCommit
+      final OptionalLong startOffset,
+      final Consumer<Long> onCommit,
+      final String threadId
   ) {
     this.storeName = Objects.requireNonNull(storeName);
     this.changelogTopicPartition = Objects.requireNonNull(changelogTopicPartition);
     this.startOffset = startOffset;
     this.onCommit = Objects.requireNonNull(onCommit);
+    this.threadId = Objects.requireNonNull(threadId);
     this.log = new LogContext(
         String.format("changelog [%s]", changelogTopicPartition)
     ).logger(ResponsiveStoreRegistration.class);
     log.debug("Created store registration with stored offset={}", startOffset);
   }
 
-  public long startOffset() {
+  public OptionalLong startOffset() {
     return startOffset;
   }
 
@@ -64,5 +69,13 @@ public final class ResponsiveStoreRegistration {
 
   public Consumer<Long> onCommit() {
     return onCommit;
+  }
+
+  public InjectedStoreArgs injectedStoreArgs() {
+    return injectedStoreArgs;
+  }
+
+  public String threadId() {
+    return threadId;
   }
 }

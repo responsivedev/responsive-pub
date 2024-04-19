@@ -23,6 +23,6 @@ repositories {
 }
 
 dependencies {
-    implementation("pl.allegro.tech.build:axion-release-plugin:1.15.2")
+    implementation("pl.allegro.tech.build:axion-release-plugin:1.16.1")
     implementation("com.adarshr:gradle-test-logger-plugin:3.2.0")
 }

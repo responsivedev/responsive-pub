@@ -21,7 +21,7 @@ import com.datastax.oss.driver.api.querybuilder.schema.CreateTableWithOptions;
 
 public class GlobalTableSpec extends DelegatingTableSpec {
 
-  public GlobalTableSpec(final CassandraTableSpec delegate) {
+  public GlobalTableSpec(final RemoteTableSpec delegate) {
     super(delegate);
   }
 

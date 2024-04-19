@@ -17,7 +17,8 @@
 package dev.responsive.kafka.api;
 
 import static dev.responsive.kafka.api.config.ResponsiveConfig.COMPATIBILITY_MODE_CONFIG;
-import static dev.responsive.kafka.api.config.ResponsiveConfig.TENANT_ID_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_ENV_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_ORG_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
@@ -119,7 +120,8 @@ class ResponsiveKafkaStreamsTest {
     properties.put(DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.LongSerde.class.getName());
     properties.put(DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.LongSerde.class.getName());
 
-    properties.put(TENANT_ID_CONFIG, "test");
+    properties.put(RESPONSIVE_ORG_CONFIG, "responsive");
+    properties.put(RESPONSIVE_ENV_CONFIG, "test");
   }
 
   @SuppressWarnings("resource")

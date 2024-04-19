@@ -20,6 +20,8 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
+import java.util.regex.Pattern;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.config.TopicConfig;
 import org.slf4j.Logger;
@@ -38,11 +40,11 @@ public final class StoreUtil {
     try {
       return admin.describeTopics(List.of(topicName))
           .allTopicNames()
-          .get()
+          .get(Constants.BLOCKING_TIMEOUT_VALUE, Constants.BLOCKING_TIMEOUT_UNIT)
           .get(topicName)
           .partitions()
           .size();
-    } catch (final InterruptedException | ExecutionException e) {
+    } catch (final InterruptedException | ExecutionException | TimeoutException e) {
       throw new RuntimeException(e);
     }
   }
@@ -89,6 +91,17 @@ public final class StoreUtil {
     } catch (final ArithmeticException e) {
       throw new IllegalArgumentException(errorMsgPrefix + " due to arithmetic exception", e);
     }
+  }
+
+  public static String streamThreadId() {
+    final String threadId = Thread.currentThread().getName();
+    final var regex = Pattern.compile(".*-(StreamThread-\\d+)");
+    final var match = regex.matcher(threadId);
+    if (!match.find()) {
+      LOG.warn("Unable to parse stream thread id from thread name = {}", threadId);
+      return threadId;
+    }
+    return match.group(1);
   }
 
   private StoreUtil() {

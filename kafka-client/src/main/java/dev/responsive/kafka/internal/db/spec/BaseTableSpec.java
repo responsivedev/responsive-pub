@@ -21,7 +21,7 @@ import dev.responsive.kafka.internal.db.TableOperations;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import java.util.EnumSet;
 
-public class BaseTableSpec implements CassandraTableSpec {
+public class BaseTableSpec implements RemoteTableSpec {
 
   private final String name;
   final TablePartitioner<?, ?> partitioner;

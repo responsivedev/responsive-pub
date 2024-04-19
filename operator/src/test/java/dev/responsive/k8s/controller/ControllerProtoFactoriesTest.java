@@ -47,10 +47,11 @@ class ControllerProtoFactoriesTest {
     final var spec = new ResponsivePolicySpec(
         "gouda",
         "cheddar",
+        "brie",
         ControllerOuterClass.PolicyStatus.POLICY_STATUS_MANAGED,
         ResponsivePolicySpec.PolicyType.DEMO,
         Optional.of(new DemoPolicySpec(
-            123, 7, 1, Optional.empty())),
+            123, 7, 1, Optional.empty(), Optional.empty())),
         Optional.empty()
     );
     kafkaStreamsPolicy.setSpec(spec);
@@ -70,7 +71,7 @@ class ControllerProtoFactoriesTest {
     final var request = ControllerProtoFactories.upsertPolicyRequest(TESTENV, kafkaStreamsPolicy);
 
     // then:
-    assertThat(request.getApplicationId(), is("testenv/gouda/cheddar"));
+    assertThat(request.getApplicationId(), is("testenv/brie"));
     assertThat(request.getPolicy().hasKafkaStreamsPolicy(), is(true));
     assertThat(
         request.getPolicy().getStatus(),
@@ -87,10 +88,11 @@ class ControllerProtoFactoriesTest {
     return new ResponsivePolicySpec(
         "gouda",
         "cheddar",
+        "brie",
         ControllerOuterClass.PolicyStatus.POLICY_STATUS_MANAGED,
         ResponsivePolicySpec.PolicyType.DEMO,
         Optional.of(new DemoPolicySpec(
-            123, 7, 1, Optional.of(List.of(diagnoserSpec)))),
+            123, 7, 1, Optional.of(List.of(diagnoserSpec)), Optional.empty())),
         Optional.empty()
     );
   }
@@ -173,7 +175,7 @@ class ControllerProtoFactoriesTest {
         = ControllerProtoFactories.upsertPolicyRequest("", kafkaStreamsPolicy);
 
     // then:
-    assertThat(request.getApplicationId(), is("gouda/cheddar"));
+    assertThat(request.getApplicationId(), is("brie"));
   }
 
   @Test
@@ -334,7 +336,7 @@ class ControllerProtoFactoriesTest {
         TESTENV, kafkaStreamsPolicy, kafkaStreamsApplicationState);
 
     // Then:
-    assertThat(request.getApplicationId(), is("testenv/gouda/cheddar"));
+    assertThat(request.getApplicationId(), is("testenv/brie"));
     assertThat(request.getState().hasKafkaStreamsState(), is(true));
     assertThat(request.getState().getKafkaStreamsState().getReplicas(), is(3));
   }
@@ -346,20 +348,20 @@ class ControllerProtoFactoriesTest {
         "", kafkaStreamsPolicy, kafkaStreamsApplicationState);
 
     // Then:
-    assertThat(request.getApplicationId(), is("gouda/cheddar"));
+    assertThat(request.getApplicationId(), is("brie"));
   }
 
   @Test
   public void shouldCreateEmptyRequest() {
     final var request = ControllerProtoFactories.emptyRequest(TESTENV, kafkaStreamsPolicy);
 
-    assertThat(request.getApplicationId(), is("testenv/gouda/cheddar"));
+    assertThat(request.getApplicationId(), is("testenv/brie"));
   }
 
   @Test
   public void shouldCreateEmptyRequestWhenEnvEmpty() {
     final var request = ControllerProtoFactories.emptyRequest("", kafkaStreamsPolicy);
 
-    assertThat(request.getApplicationId(), is("gouda/cheddar"));
+    assertThat(request.getApplicationId(), is("brie"));
   }
 }

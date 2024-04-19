@@ -17,9 +17,12 @@
 package dev.responsive.kafka.internal.config;
 
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_APPLICATION_ID_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_ENV_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_ORG_CONFIG;
 
 import dev.responsive.kafka.api.config.CompatibilityMode;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
+import dev.responsive.kafka.api.config.ResponsiveMode;
 import dev.responsive.kafka.api.config.StorageBackend;
 import java.util.Locale;
 import org.apache.kafka.streams.StreamsConfig;
@@ -36,6 +39,10 @@ public class ConfigUtils {
     /* Empty constructor for public class */
   }
 
+  public static String cassandraKeyspace(final ResponsiveConfig config) {
+    return config.getString(RESPONSIVE_ORG_CONFIG) + "_" + config.getString(RESPONSIVE_ENV_CONFIG);
+  }
+
   public static StorageBackend storageBackend(final ResponsiveConfig config) {
     final var backend = config
         .getString(ResponsiveConfig.STORAGE_BACKEND_TYPE_CONFIG)
@@ -50,6 +57,14 @@ public class ConfigUtils {
         .toUpperCase(Locale.ROOT);
 
     return CompatibilityMode.valueOf(backend);
+  }
+
+  public static ResponsiveMode responsiveMode(final ResponsiveConfig config) {
+    final var mode = config
+        .getString(ResponsiveConfig.RESPONSIVE_MODE)
+        .toUpperCase(Locale.ROOT);
+
+    return ResponsiveMode.valueOf(mode);
   }
 
   public static String responsiveAppId(

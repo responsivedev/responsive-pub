@@ -16,9 +16,14 @@
 
 package dev.responsive.kafka.internal.clients;
 
+import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadAsyncThreadPoolRegistry;
+import static dev.responsive.kafka.internal.utils.Utils.extractThreadId;
+import static dev.responsive.kafka.internal.utils.Utils.extractThreadNameFromConsumerClientId;
 import static org.apache.kafka.streams.StreamsConfig.AT_LEAST_ONCE;
 
+import dev.responsive.kafka.api.async.internals.AsyncThreadPoolRegistry;
 import dev.responsive.kafka.api.config.CompatibilityMode;
+import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.metrics.EndOffsetsPoller;
 import dev.responsive.kafka.internal.metrics.MetricPublishingCommitListener;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
@@ -67,15 +72,25 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
   private final String applicationId;
   private final boolean eos;
   private final CompatibilityMode compatibilityMode;
+  private final boolean repairRestoreOffsetOutOfRange;
 
   public ResponsiveKafkaClientSupplier(
       final KafkaClientSupplier clientSupplier,
+      final ResponsiveConfig responsiveConfig,
       final StreamsConfig configs,
       final ResponsiveStoreRegistry storeRegistry,
       final ResponsiveMetrics metrics,
       final CompatibilityMode compatibilityMode
   ) {
-    this(new Factories() {}, clientSupplier, configs, storeRegistry, metrics, compatibilityMode);
+    this(
+        new Factories() {},
+        clientSupplier,
+        configs,
+        storeRegistry,
+        metrics,
+        compatibilityMode,
+        responsiveConfig.getBoolean(ResponsiveConfig.RESTORE_OFFSET_REPAIR_ENABLED_CONFIG)
+    );
   }
 
   ResponsiveKafkaClientSupplier(
@@ -84,13 +99,15 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
       final StreamsConfig configs,
       final ResponsiveStoreRegistry storeRegistry,
       final ResponsiveMetrics metrics,
-      final CompatibilityMode compatibilityMode
+      final CompatibilityMode compatibilityMode,
+      final boolean repairRestoreOffsetOutOfRange
   ) {
     this.factories = factories;
     this.wrapped = wrapped;
     this.storeRegistry = storeRegistry;
     this.metrics = metrics;
     this.compatibilityMode = compatibilityMode;
+    this.repairRestoreOffsetOutOfRange = repairRestoreOffsetOutOfRange;
 
     eos = !(AT_LEAST_ONCE.equals(
         configs.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)));
@@ -139,10 +156,16 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
   public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
     final String clientId = (String) config.get(ConsumerConfig.CLIENT_ID_CONFIG);
     LOG.info("Creating responsive main consumer: {}", clientId);
-    final String tid = threadIdFromConsumerConfig(clientId);
+
+    final String streamThreadName = extractThreadNameFromConsumerClientId(clientId);
+    final String threadId = extractThreadId(streamThreadName);
+
+    final AsyncThreadPoolRegistry asyncThreadPoolRegistry = loadAsyncThreadPoolRegistry(config);
+    asyncThreadPoolRegistry.startNewAsyncThreadPool(streamThreadName);
+
     final ListenersForThread tc = sharedListeners.getAndMaybeInitListenersForThread(
         eos,
-        tid,
+        threadId,
         metrics,
         applicationId,
         config,
@@ -158,8 +181,9 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
             tc.committedOffsetMetricListener,
             tc.offsetRecorder.getConsumerListener(),
             tc.endOffsetsPollerListener,
-            new CloseListener(tid)
-        )
+            new CloseListener(threadId)
+        ),
+        () -> asyncThreadPoolRegistry.shutdownAsyncThreadPool(Thread.currentThread().getName())
     );
   }
 
@@ -171,10 +195,12 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
 
     final String clientId = (String) config.get(ConsumerConfig.CLIENT_ID_CONFIG);
     LOG.info("Creating responsive restore consumer: {}", clientId);
+    final String tid = threadIdFromRestoreConsumerConfig(clientId);
     return factories.createRestoreConsumer(
         clientId,
         wrapped.getRestoreConsumer(config),
-        storeRegistry::getCommittedOffset
+        p -> storeRegistry.getCommittedOffset(p, tid),
+        repairRestoreOffsetOutOfRange
     );
 
   }
@@ -213,15 +239,15 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
   }
 
   /**
-   * @param clientId the consumer client id
+   * @param clientId the restore consumer client id
    * @return the extracted StreamThread id, of the form "StreamThread-n"
    */
-  private String threadIdFromConsumerConfig(final String clientId) {
-    final var regex = Pattern.compile(".*-(StreamThread-\\d+)-consumer$");
+  private String threadIdFromRestoreConsumerConfig(final String clientId) {
+    final var regex = Pattern.compile(".*-(StreamThread-\\d+)-restore-consumer");
     final var match = regex.matcher(clientId);
     if (!match.find()) {
-      LOG.error("Unable to parse thread id from consumer client id = {}", clientId);
-      throw new RuntimeException("Unexpected client id " + clientId);
+      LOG.error("Unable to parse thread id from producer client id = {}", clientId);
+      throw new RuntimeException("unexpected client id " + clientId);
     }
     return match.group(1);
   }
@@ -258,7 +284,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
         tl.ref();
         return tl.getVal();
       }
-      final var offsetRecorder = factories.createOffsetRecorder(eos);
+      final var offsetRecorder = factories.createOffsetRecorder(eos, threadId);
       final var tl = new ReferenceCounted<>(
           String.format("ListenersForThread(%s)", threadId),
           new ListenersForThread(
@@ -368,8 +394,10 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
     default <K, V> ResponsiveConsumer<K, V> createResponsiveConsumer(
         final String clientId,
         final Consumer<K, V> wrapped,
-        final List<ResponsiveConsumer.Listener> listeners) {
-      return new ResponsiveConsumer<>(clientId, wrapped, listeners);
+        final List<ResponsiveConsumer.Listener> listeners,
+        final Runnable shutdownAsyncThreadPool
+    ) {
+      return new ResponsiveConsumer<>(clientId, wrapped, listeners, shutdownAsyncThreadPool);
     }
 
     default <K, V> ResponsiveGlobalConsumer createGlobalConsumer(
@@ -384,8 +412,8 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
       );
     }
 
-    default OffsetRecorder createOffsetRecorder(boolean eos) {
-      return new OffsetRecorder(eos);
+    default OffsetRecorder createOffsetRecorder(boolean eos, final String threadId) {
+      return new OffsetRecorder(eos, threadId);
     }
 
     default MetricPublishingCommitListener createMetricsPublishingCommitListener(
@@ -403,12 +431,14 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
     default ResponsiveRestoreConsumer<byte[], byte[]> createRestoreConsumer(
         final String clientId,
         final Consumer<byte[], byte[]> restoreConsumer,
-        final Function<TopicPartition, OptionalLong> getCommittedOffset
+        final Function<TopicPartition, OptionalLong> getCommittedOffset,
+        final boolean repairRestoreOffsetOutOfRange
     ) {
       return new ResponsiveRestoreConsumer<>(
           clientId,
           restoreConsumer,
-          getCommittedOffset
+          getCommittedOffset,
+          repairRestoreOffsetOutOfRange
       );
     }
   }

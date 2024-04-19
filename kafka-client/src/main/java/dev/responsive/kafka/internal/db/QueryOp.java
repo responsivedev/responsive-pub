@@ -14,15 +14,9 @@
  * limitations under the License.
  */
 
-package dev.responsive.kafka.internal.db.partitioning;
+package dev.responsive.kafka.internal.db;
 
-import dev.responsive.kafka.internal.utils.TableName;
-
-public class SegmentPartitionerTest {
-
-  private static final TableName NAME = new TableName("table");
-  private static final String CHANGELOG_TOPIC_NAME = "changelog";
-
-
-
+public enum QueryOp {
+  READ,
+  WRITE,
 }
