@@ -16,7 +16,6 @@
 
 package dev.responsive.kafka.api.async.internals;
 
-import static dev.responsive.kafka.api.config.ResponsiveConfig.ASYNC_SCHEDULING_QUEUE_SIZE_CONFIG;
 import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadAsyncThreadPoolRegistry;
 
 import dev.responsive.kafka.api.async.AsyncProcessorSupplier;
@@ -195,9 +194,9 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     userContext.setDelegateForStreamThread(streamThreadContext);
 
     final ResponsiveConfig configs = ResponsiveConfig.responsiveConfig(userContext.appConfigs());
-    final long schedulingQueueSize = configs.getLong(ASYNC_SCHEDULING_QUEUE_SIZE_CONFIG);
+    final int maxEventsPerKey = configs.getInt(ResponsiveConfig.ASYNC_MAX_EVENTS_PER_KEY_CONFIG);
 
-    this.schedulingQueue = new SchedulingQueue<>(logPrefix, schedulingQueueSize);
+    this.schedulingQueue = new SchedulingQueue<>(logPrefix, maxEventsPerKey);
     this.finalizingQueue = new FinalizingQueue(logPrefix);
 
     this.threadPool = getAsyncThreadPool(internalContext, streamThreadName);
@@ -256,8 +255,9 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   private void processNewAsyncEvent(final AsyncEvent event) {
     pendingEvents.add(event);
 
-    if (schedulingQueue.isFull()) {
-      backOffSchedulingQueue();
+    final KIn eventKey = event.inputRecordKey();
+    if (schedulingQueue.keyQueueIsFull(eventKey)) {
+      backOffSchedulingQueueForKey(eventKey);
     }
 
     schedulingQueue.offer(event);
@@ -358,16 +358,18 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    */
   private int finalizeAtLeastOneEvent() {
     final int numFinalized = drainFinalizingQueue();
-    if (numFinalized == 0) {
-      try {
-        final AsyncEvent finalizableEvent = finalizingQueue.waitForFinalizableEvent();
-        completePendingEvent(finalizableEvent);
-      } catch (final Exception e) {
-        log.error("Exception caught while waiting for an event to finalize", e);
-        throw new StreamsException("Failed to flush async processor", e, taskId);
-      }
+    if (numFinalized > 0) {
+      return numFinalized;
     }
-    return numFinalized == 0 ? 1 : numFinalized;
+
+    try {
+      final AsyncEvent finalizableEvent = finalizingQueue.waitForNextFinalizableEvent();
+      completePendingEvent(finalizableEvent);
+      return 1;
+    } catch (final Exception e) {
+      log.error("Exception caught while waiting for an event to finalize", e);
+      throw new StreamsException("Failed to flush async processor", e, taskId);
+    }
   }
 
   /**
@@ -380,11 +382,14 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    * finalization, thus freeing up blocked record(s) that were waiting in the
    * SchedulingQueue and can be moved to the ProcessingQueue for processing.
    */
-  private void backOffSchedulingQueue() {
-    while (schedulingQueue.isFull()) {
+  private void backOffSchedulingQueueForKey(final KIn key) {
+    while (schedulingQueue.keyQueueIsFull(key)) {
       drainSchedulingQueue();
 
-      if (schedulingQueue.isFull()) {
+      if (schedulingQueue.keyQueueIsFull(key)) {
+        // we may not actually have finalized an event with this key, but we
+        // may as well return to the loop start so we can potentially schedule
+        // a newly-unblocked event of a different key
         finalizeAtLeastOneEvent();
       }
     }

@@ -214,12 +214,14 @@ public class ResponsiveConfig extends AbstractConfig {
       + "will not be enabled. Setting this to a positive integer will enable async processing, but only if "
       + "there is at least one AsyncProcessor in the topology. See javadocs for AsyncProcessorSupplier for details.";
 
-  public static final String ASYNC_SCHEDULING_QUEUE_SIZE_CONFIG = "responsive.async.scheduling.queue.size";
-  private static final long ASYNC_SCHEDULING_QUEUE_SIZE_DEFAULT = 1L;
-  private static final String ASYNC_SCHEDULING_QUEUE_SIZE_DOC = "The maximum number of queued-up events that can be "
-      + "waiting to be scheduled on the async processor at a time. This upper bound provides a backpressure mechanism "
-      + "to make sure the StreamThread will back off properly when the async thread pool is struggling to keep up with "
-      + "the rate of input records.";
+  public static final String ASYNC_MAX_EVENTS_PER_KEY_CONFIG = "responsive.async.max.events.per.key";
+  private static final int ASYNC_MAX_EVENTS_PER_KEY_DEFAULT = 5;
+  private static final String ASYNC_MAX_EVENTS_PER_KEY_DOC = "The maximum number of pending events at a time for "
+      + "a given key. This puts a limit on how many events for each key can be either currently processing or awaiting "
+      + "processing by the async thread pool. Since all events with the same key must be processed in offset order, this"
+      + "config can be used to limit how many events will have to be processed serially in order to flush the processor, "
+      + "for example during a commit or before closing the task. If you experience long flushes or StreamThreads "
+      + "dropping out of the consumer group due to missing the max.poll.interval.ms, consider lowering this value";
 
 
   // ------------------ WindowStore configurations ----------------------
@@ -456,12 +458,11 @@ public class ResponsiveConfig extends AbstractConfig {
           Importance.LOW,
           ASYNC_THREAD_POOL_SIZE_DOC
       ).define(
-          ASYNC_SCHEDULING_QUEUE_SIZE_CONFIG,
+          ASYNC_MAX_EVENTS_PER_KEY_CONFIG,
           Type.LONG,
-          ASYNC_SCHEDULING_QUEUE_SIZE_DEFAULT,
-          atLeast(0),
+          ASYNC_MAX_EVENTS_PER_KEY_DEFAULT,
           Importance.LOW,
-          ASYNC_SCHEDULING_QUEUE_SIZE_DOC
+          ASYNC_MAX_EVENTS_PER_KEY_DOC
       ).define(
           MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_CONFIG,
           Type.BOOLEAN,

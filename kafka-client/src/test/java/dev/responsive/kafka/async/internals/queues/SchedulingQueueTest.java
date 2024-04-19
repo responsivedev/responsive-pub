@@ -28,8 +28,8 @@ import org.junit.Test;
 
 public class SchedulingQueueTest {
 
-  private static final String LOG_PREFIX = "test";
-  private static final long DEFAULT_QUEUE_SIZE = Long.MAX_VALUE;
+  private static final String LOG_PREFIX = "SchedulingQueueTest:  ";
+  private static final int DEFAULT_QUEUE_SIZE = Integer.MAX_VALUE;
 
   private final SchedulingQueue<String> queue = new SchedulingQueue<>(
       LOG_PREFIX, DEFAULT_QUEUE_SIZE
@@ -91,7 +91,6 @@ public class SchedulingQueueTest {
     queue.poll();
     queue.poll();
     queue.poll();
-    assertThat(queue.isEmpty(), is(true));
 
     // When:
     queue.offer(new AsyncTestEvent("A", "a2"));
@@ -135,9 +134,9 @@ public class SchedulingQueueTest {
   }
 
   @Test
-  public void shouldReturnTrueFromIsFullWhenAtMaxSizeWithAllSameKey() {
+  public void shouldReturnTrueForKeyAtMaxQueueSize() {
     // Given:
-    final long maxEvents = 3;
+    final int maxEvents = 3;
     final SchedulingQueue<String> queue = new SchedulingQueue<>(LOG_PREFIX, maxEvents);
 
     // When:
@@ -146,13 +145,65 @@ public class SchedulingQueueTest {
     queue.offer(new AsyncTestEvent("A", "a3"));
 
     // Then:
-    assertThat(queue.isFull(), is(true));
+    assertThat(queue.keyQueueIsFull("A"), is(true));
   }
 
   @Test
-  public void shouldReturnTrueFromIsFullWhenAtMaxSizeWithAllDifferentKeys() {
+  public void shouldReturnFalseForKeyNotAtMaxQueueSize() {
     // Given:
-    final long maxEvents = 3;
+    final int maxEvents = 3;
+    final SchedulingQueue<String> queue = new SchedulingQueue<>(LOG_PREFIX, maxEvents);
+
+    // When:
+    queue.offer(new AsyncTestEvent("A", "a1"));
+    queue.offer(new AsyncTestEvent("A", "a2"));
+    queue.offer(new AsyncTestEvent("A", "a3"));
+
+    // Then:
+    assertThat(queue.keyQueueIsFull("B"), is(false));
+  }
+
+  @Test
+  public void shouldReturnTrueForKeyAtMaxQueueSizeIncludingInFlightEvents() {
+    // Given:
+    final int maxEvents = 3;
+    final SchedulingQueue<String> queue = new SchedulingQueue<>(LOG_PREFIX, maxEvents);
+
+    queue.offer(new AsyncTestEvent("A", "a1"));
+    queue.offer(new AsyncTestEvent("A", "a2"));
+    queue.offer(new AsyncTestEvent("A", "a3"));
+    assertThat(queue.keyQueueIsFull("A"), is(true));
+
+    // When:
+    queue.poll();
+
+    // Then:
+    assertThat(queue.keyQueueIsFull("A"), is(true));
+  }
+
+  @Test
+  public void shouldReturnFalseForKeyPreviouslyAtMaxQueueSize() {
+    // Given:
+    final int maxEvents = 3;
+    final SchedulingQueue<String> queue = new SchedulingQueue<>(LOG_PREFIX, maxEvents);
+
+    queue.offer(new AsyncTestEvent("A", "a1"));
+    queue.offer(new AsyncTestEvent("A", "a2"));
+    queue.offer(new AsyncTestEvent("A", "a3"));
+    assertThat(queue.keyQueueIsFull("A"), is(true));
+
+    // When:
+    queue.poll();
+    queue.unblockKey("A");
+
+    // Then:
+    assertThat(queue.keyQueueIsFull("A"), is(false));
+  }
+
+  @Test
+  public void shouldReturnFalseFromIsFullWhenAtMaxSizeButWithDifferentKeys() {
+    // Given:
+    final int maxEvents = 3;
     final SchedulingQueue<String> queue = new SchedulingQueue<>(LOG_PREFIX, maxEvents);
 
     // When:
@@ -161,31 +212,13 @@ public class SchedulingQueueTest {
     queue.offer(new AsyncTestEvent("C", "c1"));
 
     // Then:
-    assertThat(queue.isFull(), is(true));
-  }
-
-  @Test
-  public void shouldReturnFalseFromIsFullWhenEventisPolled() {
-    // Given:
-    final long maxEvents = 3;
-    final SchedulingQueue<String> queue = new SchedulingQueue<>(LOG_PREFIX, maxEvents);
-
-    queue.offer(new AsyncTestEvent("A", "a1"));
-    queue.offer(new AsyncTestEvent("A", "a2"));
-    queue.offer(new AsyncTestEvent("B", "b1"));
-    assertThat(queue.isFull(), is(true));
-
-    // When:
-    queue.poll();
-
-    // Then:
-    assertThat(queue.isFull(), is(false));
+    assertThat(queue.keyQueueIsFull("A"), is(false));
   }
 
   @Test
   public void shouldThrowWhenAddingToFullQueue() {
     // Given
-    final long maxEvents = 1;
+    final int maxEvents = 1;
     final SchedulingQueue<String> queue = new SchedulingQueue<>(LOG_PREFIX, maxEvents);
     queue.offer(new AsyncTestEvent("A", "a1"));
 

@@ -44,12 +44,11 @@ public class SchedulingQueue<KIn> {
   private final Map<KIn, KeyEventQueue> blockedEvents = new HashMap<>();
   private final Queue<AsyncEvent> processableEvents = new LinkedList<>();
 
-  private final long maxSize; // upper bound on queue size to apply backpressure
-  private long currentSize = 0;
+  private final int maxQueueSizePerKey;
 
-  public SchedulingQueue(final String logPrefix, final long maxSize) {
+  public SchedulingQueue(final String logPrefix, final int maxQueueSizePerKey) {
     this.log = new LogContext(logPrefix).logger(SchedulingQueue.class);
-    this.maxSize = maxSize;
+    this.maxQueueSizePerKey = maxQueueSizePerKey;
   }
 
   /**
@@ -58,7 +57,7 @@ public class SchedulingQueue<KIn> {
    * Called upon the finalization of an async event with the given input key
    */
   public void unblockKey(final KIn key) {
-    final KeyEventQueue keyEventQueue = getOrCreateKeyStatus(key);
+    final KeyEventQueue keyEventQueue = getOrCreateKeyQueue(key);
     if (!keyEventQueue.isBlocked()) {
       throw new IllegalStateException("Attempted to unblock a key but it was not blocked");
     }
@@ -88,7 +87,6 @@ public class SchedulingQueue<KIn> {
    *         or {@code null} if there are no processable records
    */
   public AsyncEvent poll() {
-    --currentSize;
     return processableEvents.poll();
   }
 
@@ -100,13 +98,7 @@ public class SchedulingQueue<KIn> {
   public void offer(
       final AsyncEvent event
   ) {
-    if (isFull()) {
-      log.error("Tried to offer new event but the SchedulingQueue's current size {} is equal or "
-                    + "greater than the size limit {}", currentSize, maxSize);
-      throw new IllegalStateException("Attempted to add event while SchedulingQueue was full");
-    }
-
-    final KeyEventQueue keyEventQueue = getOrCreateKeyStatus(event.inputRecordKey());
+    final KeyEventQueue keyEventQueue = getOrCreateKeyQueue(event.inputRecordKey());
     if (keyEventQueue.isBlocked()) {
       keyEventQueue.addBlockedEvent(event);
     } else {
@@ -114,19 +106,18 @@ public class SchedulingQueue<KIn> {
       processableEvents.offer(event);
     }
 
-    ++currentSize;
   }
 
-  public boolean isEmpty() {
-    return currentSize == 0;
+  /**
+   * Returns true if the number of events with this key is equal to or
+   * greater than the configured maxQueueSizePerKey
+   */
+  public boolean keyQueueIsFull(final KIn key) {
+    return getOrCreateKeyQueue(key).isFull();
   }
 
-  public boolean isFull() {
-    return currentSize >= maxSize;
-  }
-
-  private KeyEventQueue getOrCreateKeyStatus(final KIn key) {
-    return blockedEvents.computeIfAbsent(key, k -> new KeyEventQueue());
+  private KeyEventQueue getOrCreateKeyQueue(final KIn key) {
+    return blockedEvents.computeIfAbsent(key, k -> new KeyEventQueue(log, maxQueueSizePerKey));
   }
 
   /**
@@ -144,14 +135,25 @@ public class SchedulingQueue<KIn> {
    * being added to the processableEvents queue.
    */
   private static class KeyEventQueue {
+    private final Logger log;
+    private final int maxQueueSizePerKey;
     private final Queue<AsyncEvent> blockedEvents = new LinkedList<>();
     private AsyncEvent inFlightEvent;
 
-    private boolean isBlocked() {
+    public KeyEventQueue(final Logger log, final int maxQueueSizePerKey) {
+      this.log = log;
+      this.maxQueueSizePerKey = maxQueueSizePerKey;
+    }
+
+    public boolean isBlocked() {
       return inFlightEvent != null;
     }
 
-    private void scheduleNewEvent(final AsyncEvent newEvent) {
+    public boolean isFull() {
+      return size() >= maxQueueSizePerKey;
+    }
+
+    public void scheduleNewEvent(final AsyncEvent newEvent) {
       if (isBlocked()) {
         throw new IllegalStateException(
             "Attempted to schedule new event while blocked by in-flight event"
@@ -161,7 +163,7 @@ public class SchedulingQueue<KIn> {
       inFlightEvent = newEvent;
     }
 
-    private AsyncEvent scheduleNextEvent() {
+    public AsyncEvent scheduleNextEvent() {
       if (!isBlocked()) {
         throw new IllegalStateException(
             "Attempted to schedule next event but there was no in-flight event"
@@ -173,12 +175,26 @@ public class SchedulingQueue<KIn> {
       return next;
     }
 
-    private void addBlockedEvent(final AsyncEvent event) {
+    public void addBlockedEvent(final AsyncEvent event) {
       if (!isBlocked()) {
         throw new IllegalStateException("Attempted to add event to blocked queue, but "
                                             + "this key is not currently blocked");
+      } else if (isFull()) {
+        log.error("Tried to offer new event but the key's queue size in SchedulingQueue's is {} "
+                      + "which is equal or greater than the size limit {}",
+                  size(), maxQueueSizePerKey);
+        throw new IllegalStateException("Attempted to add event while key queue was full");
       }
+
       blockedEvents.add(event);
+    }
+
+    public int size() {
+      if (isBlocked()) {
+        return blockedEvents.size() + 1;
+      } else {
+        return blockedEvents.size();
+      }
     }
   }
 }
