@@ -81,7 +81,8 @@ public class StreamThreadProcessorContext<KOut, VOut>
       final var asyncStore = new AsyncTimestampedKeyValueStore<>(
           name,
           taskId().partition(),
-          (KeyValueStore<?, ?>) userDelegate
+          (KeyValueStore<?, ?>) userDelegate,
+          userProcessorContext
       );
       storeNameToAsyncStore.put(name, asyncStore);
       return (S) asyncStore;
