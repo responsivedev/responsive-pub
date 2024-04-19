@@ -1,0 +1,78 @@
+version: '3'
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.3.0
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - ./volumes/zookeeper:/var/lib/zookeeper
+      - ./volumes/zookeeper/log:/var/lib/zookeeper/log
+      - ./volumes/zookeeper/data:/var/lib/zookeeper/data
+
+  broker:
+    image: confluentinc/cp-kafka:7.3.0
+    container_name: broker
+    ports:
+    # To learn about configuring Kafka for access across networks see
+    # https://www.confluent.io/blog/kafka-client-cannot-connect-to-broker-on-aws-on-docker-etc/
+      - "9092:9092"
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker:9092,PLAINTEXT_INTERNAL://broker:29092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: 1000
+    volumes:
+      - ./volumes/kafka:/var/lib/kafka
+      - ./volumes/kafka/data:/var/lib/kafka/data
+
+  scylla:
+    image: scylladb/scylla:latest
+    container_name: scylla
+    ports:
+      - "9042:9042"
+    volumes:
+      - ./volumes/scylla:/var/lib/scylla
+
+  application:
+    image: us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test:antithesis-latest
+    container_name: application
+    depends_on:
+      - broker
+      - scylla
+    environment:
+      NAME: e2e
+      INPUT_TOPIC: input
+      OUTPUT_TOPIC: output
+      PARTITIONS: 8
+      NUM_KEYS: 100
+      MAX_OUTSTANDING: 10000
+      E2E_APP_MODE: APPLICATION
+      CONFIG_PATH: "/app.properties"
+    volumes:
+      - ./volumes/app.properties:/app.properties
+
+  driver:
+    image: us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test:antithesis-latest
+    container_name: driver
+    depends_on:
+      - broker
+      - scylla
+    environment:
+      NAME: e2e
+      INPUT_TOPIC: input
+      OUTPUT_TOPIC: output
+      PARTITIONS: 8
+      NUM_KEYS: 100
+      MAX_OUTSTANDING: 10000
+      E2E_APP_MODE: DRIVER
+      CONFIG_PATH: "/app.properties"
+    volumes:
+      - ./volumes/app.properties:/app.properties
