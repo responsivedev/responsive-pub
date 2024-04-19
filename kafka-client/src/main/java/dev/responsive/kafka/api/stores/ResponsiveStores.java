@@ -153,6 +153,14 @@ public final class ResponsiveStores {
       final Serde<K> keySerde,
       final Serde<V> valueSerde
   ) {
+    if (storeSupplier instanceof ResponsiveKeyValueBytesStoreSupplier) {
+      ((ResponsiveKeyValueBytesStoreSupplier) storeSupplier).asTimestamped();
+    } else {
+      throw new IllegalArgumentException(
+          "Must supply a Responsive StoreSupplier via one of the ResponsiveStores APIs"
+      );
+    }
+
     return new ResponsiveStoreBuilder<>(
         StoreType.TIMESTAMPED_KEY_VALUE,
         storeSupplier,

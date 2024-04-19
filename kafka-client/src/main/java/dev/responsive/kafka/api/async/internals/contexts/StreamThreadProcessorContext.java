@@ -21,6 +21,7 @@ import dev.responsive.kafka.api.async.internals.events.AsyncEvent.State;
 import dev.responsive.kafka.api.async.internals.events.DelayedForward;
 import dev.responsive.kafka.api.async.internals.events.DelayedWrite;
 import dev.responsive.kafka.api.async.internals.stores.AsyncKeyValueStore;
+import dev.responsive.kafka.api.async.internals.stores.AsyncTimestampedKeyValueStore;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.common.utils.LogContext;
@@ -29,6 +30,7 @@ import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.slf4j.Logger;
 
 /**
@@ -69,9 +71,17 @@ public class StreamThreadProcessorContext<KOut, VOut>
     if (storeNameToAsyncStore.containsKey(name)) {
       return (S) storeNameToAsyncStore.get(name);
     }
-    
+
     final S userDelegate = super.getStateStore(name);
-    if (userDelegate instanceof KeyValueStore) {
+    if (userDelegate instanceof TimestampedKeyValueStore) {
+      final var asyncStore = new AsyncTimestampedKeyValueStore<>(
+          name,
+          taskId().partition(),
+          (KeyValueStore<?, ?>) userDelegate
+      );
+      storeNameToAsyncStore.put(name, asyncStore);
+      return (S) asyncStore;
+    } else if (userDelegate instanceof KeyValueStore) {
       final var asyncStore = new AsyncKeyValueStore<>(
           name,
           taskId().partition(),
