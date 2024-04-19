@@ -18,7 +18,6 @@ package dev.responsive.kafka.testutils;
 
 import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
 import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 

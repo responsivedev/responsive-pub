@@ -61,7 +61,7 @@ public class SchedulingQueueTest {
     queue.unblockKey("A");
 
     // Then:
-    assertThat(queue.poll().inputRecord(), is(new KeyValue<>("A", "a2"))); // only queued event is still blocked
+    assertThat(queue.poll().inputRecord(), is(new KeyValue<>("A", "a2")));
   }
 
   @Test
@@ -177,7 +177,7 @@ public class SchedulingQueueTest {
 
     // When:
     queue.poll();
-    
+
     // Then:
     assertThat(queue.isFull(), is(false));
   }
