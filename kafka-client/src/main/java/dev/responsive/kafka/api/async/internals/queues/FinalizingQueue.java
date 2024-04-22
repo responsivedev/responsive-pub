@@ -68,6 +68,8 @@ public class FinalizingQueue implements ReadOnlyFinalizingQueue, WriteOnlyFinali
 
   /**
    * See {@link ReadOnlyFinalizingQueue#nextFinalizableEvent()}
+   * <p>
+   * Note: non-blocking API
    */
   @Override
   public AsyncEvent nextFinalizableEvent() {
@@ -75,10 +77,12 @@ public class FinalizingQueue implements ReadOnlyFinalizingQueue, WriteOnlyFinali
   }
 
   /**
-   * See {@link ReadOnlyFinalizingQueue#waitForFinalizableEvent()}
+   * See {@link ReadOnlyFinalizingQueue#waitForNextFinalizableEvent()}
+   * <p>
+   * Note: blocking API
    */
   @Override
-  public AsyncEvent waitForFinalizableEvent() throws InterruptedException {
+  public AsyncEvent waitForNextFinalizableEvent() throws InterruptedException {
     return finalizableRecords.take();
   }
 

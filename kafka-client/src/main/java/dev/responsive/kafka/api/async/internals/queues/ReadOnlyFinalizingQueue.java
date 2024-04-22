@@ -50,7 +50,7 @@ public interface ReadOnlyFinalizingQueue {
    *         onr is available. Guaranteed to never return null
    * @throws InterruptedException if interrupted while blocking
    */
-  AsyncEvent waitForFinalizableEvent() throws InterruptedException;
+  AsyncEvent waitForNextFinalizableEvent() throws InterruptedException;
 
   /**
    * @return true if there are no currently-available events that are

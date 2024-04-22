@@ -204,12 +204,24 @@ public class ResponsiveConfig extends AbstractConfig {
   private static final String SUBPARTITION_HASHER_DOC = "Hasher to use for sub-partitioning.";
   private static final Class<?> SUBPARTITION_HASHER_DEFAULT = Murmur3Hasher.class;
 
+
+  // ------------------ Async processing configurations ----------------------
+
   public static final String ASYNC_THREAD_POOL_SIZE_CONFIG = "responsive.async.thread.pool.size";
   private static final int ASYNC_THREAD_POOL_SIZE_DEFAULT = 0;
   private static final String ASYNC_THREAD_POOL_SIZE_DOC = "The number of async processing threads to "
       + "start up for each StreamThread in this app. Setting this to 0 (the default) means async processing "
       + "will not be enabled. Setting this to a positive integer will enable async processing, but only if "
       + "there is at least one AsyncProcessor in the topology. See javadocs for AsyncProcessorSupplier for details.";
+
+  public static final String ASYNC_MAX_EVENTS_PER_KEY_CONFIG = "responsive.async.max.events.per.key";
+  private static final int ASYNC_MAX_EVENTS_PER_KEY_DEFAULT = 5;
+  private static final String ASYNC_MAX_EVENTS_PER_KEY_DOC = "The maximum number of pending events at a time for "
+      + "a given key. This puts a limit on how many events for each key can be either currently processing or awaiting "
+      + "processing by the async thread pool. Since all events with the same key must be processed in offset order, this"
+      + "config can be used to limit how many events will have to be processed serially in order to flush the processor, "
+      + "for example during a commit or before closing the task. If you experience long flushes or StreamThreads "
+      + "dropping out of the consumer group due to missing the max.poll.interval.ms, consider lowering this value";
 
 
   // ------------------ WindowStore configurations ----------------------
@@ -445,6 +457,12 @@ public class ResponsiveConfig extends AbstractConfig {
           atLeast(0),
           Importance.LOW,
           ASYNC_THREAD_POOL_SIZE_DOC
+      ).define(
+          ASYNC_MAX_EVENTS_PER_KEY_CONFIG,
+          Type.INT,
+          ASYNC_MAX_EVENTS_PER_KEY_DEFAULT,
+          Importance.LOW,
+          ASYNC_MAX_EVENTS_PER_KEY_DOC
       ).define(
           MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_CONFIG,
           Type.BOOLEAN,
