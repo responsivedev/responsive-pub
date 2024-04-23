@@ -86,7 +86,6 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   private TaskId taskId;
 
   private AsyncThreadPool threadPool;
-  private QueuedEvents queuedEvents;
   private SchedulingQueue<KIn> schedulingQueue;
   private FinalizingQueue finalizingQueue;
 
@@ -197,8 +196,6 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     final int maxEventsPerKey = configs.getInt(ASYNC_MAX_EVENTS_QUEUED_PER_KEY_CONFIG);
 
     this.threadPool = getAsyncThreadPool(taskContext, streamThreadName);
-    this.queuedEvents = threadPool.pendingEvents();
-    queuedEvents.registerPartition(taskId.partition());
 
     this.schedulingQueue = new SchedulingQueue<>(logPrefix, maxEventsPerKey);
     this.finalizingQueue = new FinalizingQueue(logPrefix);
@@ -263,7 +260,6 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
 
   private void processNewAsyncEvent(final AsyncEvent event) {
     pendingEvents.add(event);
-    queuedEvents.enqueueEvent(taskId.partition());
 
     maybeBackOffEnqueuingNewEventWithKey(event.inputRecordKey());
     schedulingQueue.offer(event);
@@ -300,11 +296,6 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
         taskId.partition(),
         connectedStoreBuilders.values()
     );
-
-    // Note: this must be done last (or after removing the processor from the async pool at least)
-    // to make sure all queued events are removed first and won't pick up a new event from the
-    // processing queue and call #dequeueEvent after this partition was unregistered
-    queuedEvents.unregisterPartition(taskId.partition());
 
     if (userProcessor != null) {
       userProcessor.close();
@@ -411,15 +402,18 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   }
 
   /**
-   * Does a single, non-blocking pass over all queues to pull any events that are
+   * Does a single pass over all queues to pull any events that are
    * currently available and ready to pick up to transition to the next stage in
-   * the async event lifecycle. See {@link AsyncEvent.State} for more details on
-   * the lifecycle states and requirements for transition.
+   * the async event lifecycle. Does not wait for more events if the queues are empty,
+   * but may still block when draining the scheduling queue until the processing queue
+   * for the async threadpool goes below the cap on how many events it can have queued
+   * up. See {@link AsyncEvent.State} for more details on the event lifecycle and
+   * requirements for state transitions.
    * <p>
    * While this method will execute all events that are returned from the queues
    * when polled, it does not attempt to fully drain the queues and will not
    * re-check the queues. Any events that become unblocked or are added to a
-   * given queue while processing the other queues is not guaranteed to be
+   * given queue while processing the other queues are not guaranteed to be
    * executed in this method invocation.
    * The queues are checked in an order that maximizes overall throughput, and
    * prioritizes moving events through the async processing pipeline over
@@ -445,6 +439,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    * without waiting for any blocked events to become schedulable.
    * Makes a single pass and schedules only the current set of
    * schedulable events.
+   * May block if the processing queue is at capacity.
    * <p>
    * There may be blocked events still waiting in the scheduling queue
    * after each invocation of this method, so the caller should make

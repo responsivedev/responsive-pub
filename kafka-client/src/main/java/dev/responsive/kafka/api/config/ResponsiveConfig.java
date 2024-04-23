@@ -226,7 +226,7 @@ public class ResponsiveConfig extends AbstractConfig {
       + "unique keys with no updates, consider lowering this value.";
 
   public static final String ASYNC_MAX_EVENTS_QUEUED_PER_KEY_CONFIG = "responsive.async.max.events.queued.per.key";
-  private static final int ASYNC_MAX_EVENTS_QUEUED_PER_KEY_DEFAULT = 5;
+  private static final int ASYNC_MAX_EVENTS_QUEUED_PER_KEY_DEFAULT = 3;
   private static final String ASYNC_MAX_EVENTS_QUEUED_PER_KEY_DOC = "The maximum number of queued events at a time for "
       + "a given key. This puts a limit on how many events for each key can be in-flight, ie awaiting or actively being"
       + "processed by the async thread pool. Since all events with the same key must be processed in offset order, this"

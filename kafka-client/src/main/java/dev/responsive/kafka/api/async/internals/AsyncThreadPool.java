@@ -9,9 +9,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.api.ProcessingContext;
@@ -24,7 +27,7 @@ public class AsyncThreadPool {
 
   private final ExecutorService executorService;
   private final Map<InFlightWorkKey, Map<AsyncEvent, Future<?>>> inFlight = new HashMap<>();
-  private final QueuedEvents queuedEvents;
+  private final BlockingQueue<Runnable> processingQueue;
 
   private final AtomicInteger threadNameIndex = new AtomicInteger(0);
 
@@ -36,14 +39,21 @@ public class AsyncThreadPool {
     final LogContext logPrefix
         = new LogContext(String.format("stream-thread [%s] ", streamThreadName));
     this.log = logPrefix.logger(AsyncThreadPool.class);
-    this.queuedEvents = new QueuedEvents(maxQueuedEvents);
+    this.processingQueue = new LinkedBlockingQueue<>(maxQueuedEvents);
 
-    executorService = Executors.newFixedThreadPool(threadPoolSize, r -> {
-      final var t = new Thread(r);
-      t.setDaemon(true);
-      t.setName(generateAsyncThreadName(streamThreadName, threadNameIndex.getAndIncrement()));
-      return t;
-    });
+    executorService = new ThreadPoolExecutor(
+        threadPoolSize,
+        maxQueuedEvents,
+        Long.MAX_VALUE,
+        TimeUnit.DAYS,
+        processingQueue,
+        r -> {
+          final var t = new Thread(r);
+          t.setDaemon(true);
+          t.setName(generateAsyncThreadName(streamThreadName, threadNameIndex.getAndIncrement()));
+          return t;
+        }
+    );
   }
 
   public void removeProcessor(final String processorName, final int partition) {
@@ -73,6 +83,13 @@ public class AsyncThreadPool {
     return String.format("%s-%s-%d", streamThreadName, ASYNC_THREAD_NAME, asyncThreadIndex);
   }
 
+  /**
+   * Schedule a new event for processing. Must be "processable" ie all previous
+   * same-key events have cleared.
+   * <p>
+   * This is a blocking call, as it will wait until the processing queue has
+   * enough space to accept a new event.
+   */
   public <KOut, VOut> void scheduleForProcessing(
       final String processorName,
       final int taskId,
@@ -87,15 +104,12 @@ public class AsyncThreadPool {
           e,
           taskContext,
           asyncProcessorContext,
-          finalizingQueue));
+          finalizingQueue)
+      );
       final var inFlightKey = InFlightWorkKey.of(processorName, taskId);
       inFlight.putIfAbsent(inFlightKey, new HashMap<>());
       inFlight.get(inFlightKey).put(e, future);
     }
-  }
-
-  public QueuedEvents pendingEvents() {
-    return queuedEvents;
   }
 
   public void shutdown() {
