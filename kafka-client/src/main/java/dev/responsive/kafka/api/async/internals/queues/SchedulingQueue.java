@@ -116,10 +116,6 @@ public class SchedulingQueue<KIn> {
     return getOrCreateKeyQueue(key).isFull();
   }
 
-  public int size() {
-    return blockedEvents.values().stream().map(KeyEventQueue::size).reduce(0, Integer::sum);
-  }
-
   private KeyEventQueue getOrCreateKeyQueue(final KIn key) {
     return blockedEvents.computeIfAbsent(key, k -> new KeyEventQueue(log, maxQueueSizePerKey));
   }

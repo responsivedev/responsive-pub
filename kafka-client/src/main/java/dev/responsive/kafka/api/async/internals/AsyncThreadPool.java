@@ -21,7 +21,6 @@ import dev.responsive.kafka.api.async.internals.contexts.AsyncUserProcessorConte
 import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
 import dev.responsive.kafka.api.async.internals.queues.FinalizingQueue;
 import dev.responsive.kafka.api.async.internals.queues.ProcessingQueue;
-import dev.responsive.kafka.api.async.internals.queues.QueuedEvents;
 import dev.responsive.kafka.api.async.internals.queues.WriteOnlyProcessingQueue;
 import java.util.HashMap;
 import java.util.List;

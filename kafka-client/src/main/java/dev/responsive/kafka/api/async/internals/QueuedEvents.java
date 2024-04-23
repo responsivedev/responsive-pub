@@ -1,4 +1,4 @@
-package dev.responsive.kafka.api.async.internals.queues;
+package dev.responsive.kafka.api.async.internals;
 
 import java.util.HashMap;
 import java.util.Map;
