@@ -16,8 +16,7 @@
 
 package dev.responsive.kafka.api.async.internals.stores;
 
-import dev.responsive.kafka.api.async.internals.AsyncThread;
-import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
+import dev.responsive.kafka.api.async.internals.contexts.DelayedAsyncStoreWriter;
 import dev.responsive.kafka.api.async.internals.events.DelayedWrite;
 import java.util.List;
 import org.apache.kafka.common.serialization.Serializer;
@@ -50,20 +49,20 @@ public class AsyncKeyValueStore<KS, VS> implements KeyValueStore<KS, VS> {
 
   private final Logger log;
 
-  private final int partition;
   private final KeyValueStore<KS, VS> userDelegate;
+  private final DelayedAsyncStoreWriter delayedWriter;
 
   @SuppressWarnings("unchecked")
   public AsyncKeyValueStore(
       final String name,
       final int partition,
-      final KeyValueStore<?, ?> userDelegate
+      final KeyValueStore<?, ?> userDelegate,
+      final DelayedAsyncStoreWriter delayedWriter
   ) {
     this.log = new LogContext(String.format(" async-store [%s-%d]", name, partition))
         .logger(AsyncKeyValueStore.class);
-
     this.userDelegate = (KeyValueStore<KS, VS>) userDelegate;
-    this.partition = partition;
+    this.delayedWriter = delayedWriter;
   }
 
   public void executeDelayedWrite(final DelayedWrite<KS, VS> delayedWrite) {
@@ -81,22 +80,7 @@ public class AsyncKeyValueStore<KS, VS> implements KeyValueStore<KS, VS> {
    */
   @Override
   public void put(KS key, VS value) {
-    final Thread currentThread = Thread.currentThread();
-
-    if (currentThread instanceof AsyncThread) {
-      final AsyncEvent currentAsyncEvent =
-          ((AsyncThread) currentThread).context(partition).currentAsyncEvent();
-
-      currentAsyncEvent.addWrittenRecord(new DelayedWrite<>(key, value, name()));
-    } else {
-      log.error("A non-AsyncThread invoked put on this async store. Caller thread name was {}",
-                currentThread.getName());
-      // The most common reason this case might be hit, besides a bug in the async framework itself,
-      // is if users attempt to insert into a state store from other Processor methods, like
-      // #init or #close
-      throw new IllegalStateException("Can only call #put on an async state store inside the "
-                                          + "#process method of an async processor");
-    }
+    delayedWriter.acceptDelayedWriteToAsyncStore(new DelayedWrite<>(key, value, name()));
   }
 
   @Override

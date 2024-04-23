@@ -93,7 +93,6 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   private String asyncProcessorName;
   private TaskId taskId;
 
-
   private AsyncThreadPool threadPool;
   private FinalizingQueue finalizingQueue;
   private SchedulingQueue<KIn> schedulingQueue;
@@ -195,31 +194,34 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
         streamThreadName, asyncProcessorName, taskId.partition()
     );
     this.log = new LogContext(logPrefix).logger(AsyncProcessor.class);
-
-    this.streamThreadContext = new StreamThreadProcessorContext<>(logPrefix, internalContext);
-    this.userContext = new AsyncUserProcessorContext<>(streamThreadName, taskContext, logPrefix);
+    this.userContext = new AsyncUserProcessorContext<>(
+        streamThreadName,
+        internalContext,
+        logPrefix
+    );
+    this.streamThreadContext = new StreamThreadProcessorContext<>(
+        logPrefix,
+        internalContext,
+        userContext
+    );
     userContext.setDelegateForStreamThread(streamThreadContext);
 
+    this.threadPool = getAsyncThreadPool(taskContext, streamThreadName);
+
     final ResponsiveConfig configs = ResponsiveConfig.responsiveConfig(userContext.appConfigs());
+    final long punctuationInterval = configs.getLong(ASYNC_FLUSH_INTERVAL_MS_CONFIG);
     final int maxEventsPerKey = configs.getInt(ResponsiveConfig.ASYNC_MAX_EVENTS_PER_KEY_CONFIG);
 
     this.schedulingQueue = new SchedulingQueue<>(logPrefix, maxEventsPerKey);
     this.finalizingQueue = new FinalizingQueue(logPrefix);
 
-    this.threadPool = getAsyncThreadPool(internalContext, streamThreadName);
-    this.threadPool.addProcessor(
-        asyncProcessorName,
-        taskId.partition(),
-        userContext,
-        finalizingQueue
-    );
 
-    final long punctuationInterval = configs.getLong(ASYNC_FLUSH_INTERVAL_MS_CONFIG);
     this.punctuator = taskContext.schedule(
         Duration.ofMillis(punctuationInterval),
         PunctuationType.WALL_CLOCK_TIME,
         ts -> executeAvailableEvents()
     );
+
   }
 
   private void completeInitialization() {
@@ -463,7 +465,14 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     }
     final int numScheduled = eventsToSchedule.size();
     if (numScheduled > 0) {
-      threadPool.scheduleForProcessing(taskId.partition(), eventsToSchedule);
+      threadPool.scheduleForProcessing(
+          asyncProcessorName,
+          taskId.partition(),
+          eventsToSchedule,
+          finalizingQueue,
+          taskContext,
+          userContext
+      );
     }
 
     return numScheduled;
