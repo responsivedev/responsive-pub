@@ -30,7 +30,7 @@ import org.slf4j.Logger;
  * should be owned and exclusively accessed by the StreamThread. Events that are
  * processable -- that is, not blocked on previously scheduled events with
  * the same key that have not yet been fully processed -- will be polled from
- * this queue and then "scheduled" by passing them on to the {@link ProcessingQueue}
+ * this queue and then "scheduled" by passing them on to the thread pool
  * <p>
  * Threading notes:
  * -Should only be accessed from the StreamThread

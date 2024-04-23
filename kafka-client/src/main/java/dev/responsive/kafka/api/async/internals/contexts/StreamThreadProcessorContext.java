@@ -24,6 +24,7 @@ import dev.responsive.kafka.api.async.internals.stores.AsyncKeyValueStore;
 import dev.responsive.kafka.api.async.internals.stores.AsyncTimestampedKeyValueStore;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
@@ -54,15 +55,18 @@ public class StreamThreadProcessorContext<KOut, VOut>
   private final Map<String, AsyncKeyValueStore<?, ?>> storeNameToAsyncStore = new HashMap<>();
   private final ProcessorNode<?, ?, ?, ?> asyncProcessorNode;
   private final InternalProcessorContext<KOut, VOut> originalContext;
+  private final DelayedAsyncStoreWriter delayedStoreWriter;
 
   public StreamThreadProcessorContext(
       final String logPrefix,
-      final InternalProcessorContext<KOut, VOut> originalContext
+      final InternalProcessorContext<KOut, VOut> originalContext,
+      final DelayedAsyncStoreWriter delayedStoreWriter
   ) {
     super();
     this.log = new LogContext(logPrefix).logger(StreamThreadProcessorContext.class);
     this.asyncProcessorNode = originalContext.currentNode();
     this.originalContext = originalContext;
+    this.delayedStoreWriter = Objects.requireNonNull(delayedStoreWriter);
   }
 
   @Override
@@ -77,15 +81,17 @@ public class StreamThreadProcessorContext<KOut, VOut>
       final var asyncStore = new AsyncTimestampedKeyValueStore<>(
           name,
           taskId().partition(),
-          (KeyValueStore<?, ?>) userDelegate
+          (KeyValueStore<?, ?>) userDelegate,
+          delayedStoreWriter
       );
       storeNameToAsyncStore.put(name, asyncStore);
       return (S) asyncStore;
     } else if (userDelegate instanceof KeyValueStore) {
       final var asyncStore = new AsyncKeyValueStore<>(
           name,
-          taskId().partition(),
-          (KeyValueStore<?, ?>) userDelegate
+          originalContext.partition(),
+          (KeyValueStore<?, ?>) userDelegate,
+          delayedStoreWriter
       );
       storeNameToAsyncStore.put(name, asyncStore);
       return (S) asyncStore;
@@ -139,6 +145,7 @@ public class StreamThreadProcessorContext<KOut, VOut>
     }
   }
 
+  @Override
   public InternalProcessorContext<KOut, VOut> delegate() {
     return originalContext;
   }
