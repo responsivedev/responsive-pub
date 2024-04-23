@@ -66,7 +66,7 @@ class AsyncThreadPoolTest {
       final var future = inFlight.get(event);
       future.get(10, TimeUnit.SECONDS);
     }
-    assertThat(finalizingQueue.waitForFinalizableEvent(), is(event));
+    assertThat(finalizingQueue.waitForNextFinalizableEvent(), is(event));
   }
 
   @Test

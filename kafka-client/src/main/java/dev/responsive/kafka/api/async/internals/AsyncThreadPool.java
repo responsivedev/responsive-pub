@@ -121,8 +121,8 @@ public class AsyncThreadPool {
       this.partition = partition;
     }
 
-    private static InFlightWorkKey of(final String task, final int partition) {
-      return new InFlightWorkKey(task, partition);
+    private static InFlightWorkKey of(final String processorName, final int partition) {
+      return new InFlightWorkKey(processorName, partition);
     }
 
     @Override

@@ -55,18 +55,18 @@ public class StreamThreadProcessorContext<KOut, VOut>
   private final Map<String, AsyncKeyValueStore<?, ?>> storeNameToAsyncStore = new HashMap<>();
   private final ProcessorNode<?, ?, ?, ?> asyncProcessorNode;
   private final InternalProcessorContext<KOut, VOut> originalContext;
-  private final AsyncUserProcessorContext<KOut, VOut> userProcessorContext;
+  private final DelayedAsyncStoreWriter delayedStoreWriter;
 
   public StreamThreadProcessorContext(
       final String logPrefix,
       final InternalProcessorContext<KOut, VOut> originalContext,
-      final AsyncUserProcessorContext<KOut, VOut> userProcessorContext
+      final DelayedAsyncStoreWriter delayedStoreWriter
   ) {
     super();
     this.log = new LogContext(logPrefix).logger(StreamThreadProcessorContext.class);
     this.asyncProcessorNode = originalContext.currentNode();
     this.originalContext = originalContext;
-    this.userProcessorContext = Objects.requireNonNull(userProcessorContext);
+    this.delayedStoreWriter = Objects.requireNonNull(delayedStoreWriter);
   }
 
   @Override
@@ -82,7 +82,7 @@ public class StreamThreadProcessorContext<KOut, VOut>
           name,
           taskId().partition(),
           (KeyValueStore<?, ?>) userDelegate,
-          userProcessorContext
+          delayedStoreWriter
       );
       storeNameToAsyncStore.put(name, asyncStore);
       return (S) asyncStore;
@@ -91,7 +91,7 @@ public class StreamThreadProcessorContext<KOut, VOut>
           name,
           originalContext.partition(),
           (KeyValueStore<?, ?>) userDelegate,
-          userProcessorContext
+          delayedStoreWriter
       );
       storeNameToAsyncStore.put(name, asyncStore);
       return (S) asyncStore;

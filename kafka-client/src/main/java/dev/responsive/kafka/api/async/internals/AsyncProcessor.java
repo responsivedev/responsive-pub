@@ -456,7 +456,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
           asyncProcessorName,
           taskId.partition(),
           eventsToSchedule,
-          finalizableRecords,
+          finalizingQueue,
           originalContext,
           userContext
       );
