@@ -16,6 +16,7 @@
 
 package dev.responsive.kafka.api;
 
+import static dev.responsive.kafka.api.config.ResponsiveConfig.ASYNC_MAX_EVENTS_QUEUED_PER_ASYNC_THREAD_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.ASYNC_THREAD_POOL_SIZE_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.METRICS_ENABLED_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_ENDPOINT_CONFIG;
@@ -270,7 +271,8 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
 
     final AsyncThreadPoolRegistry asyncRegistry = new AsyncThreadPoolRegistry(
         numStreamThreads,
-        configs.getInt(ASYNC_THREAD_POOL_SIZE_CONFIG)
+        configs.getInt(ASYNC_THREAD_POOL_SIZE_CONFIG),
+        configs.getInt(ASYNC_MAX_EVENTS_QUEUED_PER_ASYNC_THREAD_CONFIG)
     );
 
     propsWithOverrides.putAll(configs.originals());

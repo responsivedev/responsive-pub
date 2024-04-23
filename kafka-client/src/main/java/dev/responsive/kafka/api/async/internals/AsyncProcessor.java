@@ -25,6 +25,7 @@ import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
 import dev.responsive.kafka.api.async.internals.events.DelayedForward;
 import dev.responsive.kafka.api.async.internals.events.DelayedWrite;
 import dev.responsive.kafka.api.async.internals.queues.FinalizingQueue;
+import dev.responsive.kafka.api.async.internals.queues.QueuedEvents;
 import dev.responsive.kafka.api.async.internals.queues.SchedulingQueue;
 import dev.responsive.kafka.api.async.internals.stores.AbstractAsyncStoreBuilder;
 import dev.responsive.kafka.api.async.internals.stores.AsyncKeyValueStore;
@@ -36,6 +37,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -66,22 +68,12 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
 
   private final Map<String, AbstractAsyncStoreBuilder<?, ?, ?>> connectedStoreBuilders;
 
-  // Owned and solely accessed by this StreamThread, simply keeps track of the events
-  // that are waiting to be scheduled or are currently "in flight", ie all events
-  // for which we received an input record but have not yet finished processing either
-  // the input record itself, or any output records that were a side effect of this
-  // input record (such as records forwarded to the context or written to a state
-  // store during #process).
-  // An event is placed into this set when the corresponding record is first passed
-  // in to this AsyncProcessor, and is removed from the set when it reaches the
-  // DONE state and has completed all input and output execution in full.
-  // The StreamThread must wait until this set is empty before proceeding
-  // with an offset commit
+  // Tracks all pending events, ie from moment of creation to end of finalization/transition
+  // to "DONE" state. Used to make sure all events are flushed during a commit
   private final Set<AsyncEvent> pendingEvents = new HashSet<>();
 
-  // Everything below this line is effectively final and just has to be initialized in #init
-  // TODO: extract into class that allows us to make these final, eg an InitializedAsyncProcessor
-  //  that doesn't get created until #init is invoked on this processor
+  // Everything below this line is effectively final and just has to be initialized in #init //
+
   private String logPrefix;
   private Logger log;
 
@@ -90,8 +82,9 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   private TaskId taskId;
 
   private AsyncThreadPool threadPool;
-  private FinalizingQueue finalizingQueue;
+  private QueuedEvents queuedEvents;
   private SchedulingQueue<KIn> schedulingQueue;
+  private FinalizingQueue finalizingQueue;
 
   // the context passed to us in init, ie the one created for this task and owned by Kafka Streams
   private ProcessingContext taskContext;
@@ -99,13 +92,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   // the async context owned by the StreamThread that is running this processor/task
   private StreamThreadProcessorContext<KOut, VOut> streamThreadContext;
 
-  // Wrap the context handed to the user in the async router, to ensure that
-  // subsequent calls to processor context APIs made within the user's #process
-  // implementation will be routed to the specific async context corresponding
-  // to the thread on which the call was made.
-  // Will route to the streamThreadContext when inside the user's #init or #close
-  // Will route to the asyncThreadContext belonging to the currently executing
-  //   AsyncThread in between those, ie when the user's #process is invoked
+  // the context we pass in to the user so it routes to the actual context based on calling thread
   private AsyncUserProcessorContext<KOut, VOut> userContext;
 
   public static <KIn, VIn, KOut, VOut> AsyncProcessor<KIn, VIn, KOut, VOut> createAsyncProcessor(
@@ -189,23 +176,28 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     );
     this.log = new LogContext(logPrefix).logger(AsyncProcessor.class);
 
+    this.threadPool = getAsyncThreadPool(internalContext, streamThreadName);
     this.streamThreadContext = new StreamThreadProcessorContext<>(logPrefix, internalContext);
     this.userContext = new AsyncUserProcessorContext<>(streamThreadName, taskContext, logPrefix);
     userContext.setDelegateForStreamThread(streamThreadContext);
-
+    
     final ResponsiveConfig configs = ResponsiveConfig.responsiveConfig(userContext.appConfigs());
-    final int maxEventsPerKey = configs.getInt(ResponsiveConfig.ASYNC_MAX_EVENTS_PER_KEY_CONFIG);
+    final int maxEventsPerKey =
+        configs.getInt(ResponsiveConfig.ASYNC_MAX_EVENTS_QUEUED_PER_KEY_CONFIG);
 
+    this.queuedEvents = threadPool.pendingEvents();
     this.schedulingQueue = new SchedulingQueue<>(logPrefix, maxEventsPerKey);
     this.finalizingQueue = new FinalizingQueue(logPrefix);
 
-    this.threadPool = getAsyncThreadPool(internalContext, streamThreadName);
-    this.threadPool.addProcessor(
+    queuedEvents.registerPartition(taskId.partition());
+
+    threadPool.addProcessor(
         asyncProcessorName,
         taskId.partition(),
         userContext,
         finalizingQueue
     );
+    
   }
 
   private void completeInitialization() {
@@ -227,6 +219,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     final AsyncEvent newEvent = new AsyncEvent(
         logPrefix,
         record,
+        asyncProcessorName,
         taskId.partition(),
         extractRecordContext(taskContext),
         taskContext.currentStreamTimeMs(),
@@ -242,6 +235,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     final AsyncEvent newEvent = new AsyncEvent(
         logPrefix,
         record,
+        asyncProcessorName,
         taskId.partition(),
         extractRecordContext(taskContext),
         taskContext.currentStreamTimeMs(),
@@ -254,13 +248,11 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
 
   private void processNewAsyncEvent(final AsyncEvent event) {
     pendingEvents.add(event);
+    queuedEvents.enqueueEvent(taskId.partition());
 
-    final KIn eventKey = event.inputRecordKey();
-    if (schedulingQueue.keyQueueIsFull(eventKey)) {
-      backOffSchedulingQueueForKey(eventKey);
-    }
-
+    maybeBackOffEnqueuingNewEventWithKey(event.inputRecordKey());
     schedulingQueue.offer(event);
+
     executeAvailableEvents();
   }
 
@@ -273,8 +265,9 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
 
   @Override
   public void close() {
-    if (!pendingEvents.isEmpty()) {
-      // This doesn't necessarily indicate an issue, it just should only ever
+
+    if (!isCleared()) {
+      // This doesn't necessarily indicate an issue; it just should only ever
       // happen if the task is closed dirty, but unfortunately we can't tell
       // from here whether that was the case. Log a warning here so that it's
       // possible to determine whether something went wrong or not by looking
@@ -285,11 +278,17 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     }
 
     threadPool.removeProcessor(asyncProcessorName, taskId.partition());
+
     unregisterFlushListenerForStoreBuilders(
         streamThreadName,
         taskId.partition(),
         connectedStoreBuilders.values()
     );
+
+    // Note: this must be done last (or after removing the processor from the async pool at least)
+    // to make sure all queued events are removed first and won't pick up a new event from the
+    // processing queue and call #dequeueEvent after this partition was unregistered
+    queuedEvents.unregisterPartition(taskId.partition());
 
     if (userProcessor != null) {
       userProcessor.close();
@@ -331,7 +330,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     // scheduling queue
     drainFinalizingQueue();
 
-    while (!isCompleted()) {
+    while (!isCleared()) {
 
       // Start by scheduling all unblocked events to hand off any events that
       // were just unblocked by whatever we just finalized
@@ -382,7 +381,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    * finalization, thus freeing up blocked record(s) that were waiting in the
    * SchedulingQueue and can be moved to the ProcessingQueue for processing.
    */
-  private void backOffSchedulingQueueForKey(final KIn key) {
+  private void maybeBackOffEnqueuingNewEventWithKey(final KIn key) {
     while (schedulingQueue.keyQueueIsFull(key)) {
       drainSchedulingQueue();
 
@@ -530,7 +529,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   /**
    * @return true iff all records have been fully processed from start to finish
    */
-  private boolean isCompleted() {
+  private boolean isCleared() {
     return pendingEvents.isEmpty();
   }
 
@@ -564,11 +563,16 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
       final ProcessingContext context,
       final String streamThreadName
   ) {
-    final AsyncThreadPoolRegistry registry = loadAsyncThreadPoolRegistry(
-        context.appConfigsWithPrefix(StreamsConfig.MAIN_CONSUMER_PREFIX)
-    );
-
-    return registry.asyncThreadPoolForStreamThread(streamThreadName);
+    try {
+      final AsyncThreadPoolRegistry registry = loadAsyncThreadPoolRegistry(
+          context.appConfigsWithPrefix(StreamsConfig.MAIN_CONSUMER_PREFIX)
+      );
+      return registry.asyncThreadPoolForStreamThread(streamThreadName);
+    } catch (final Exception e) {
+      throw new ConfigException(
+          "Unable to locate async thread pool registry. Make sure to configure "
+              + ResponsiveConfig.ASYNC_THREAD_POOL_SIZE_CONFIG, e);
+    }
   }
 
 }

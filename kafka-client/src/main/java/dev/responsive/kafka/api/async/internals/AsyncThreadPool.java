@@ -21,6 +21,7 @@ import dev.responsive.kafka.api.async.internals.contexts.AsyncUserProcessorConte
 import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
 import dev.responsive.kafka.api.async.internals.queues.FinalizingQueue;
 import dev.responsive.kafka.api.async.internals.queues.ProcessingQueue;
+import dev.responsive.kafka.api.async.internals.queues.QueuedEvents;
 import dev.responsive.kafka.api.async.internals.queues.WriteOnlyProcessingQueue;
 import java.util.HashMap;
 import java.util.List;
@@ -40,6 +41,7 @@ public class AsyncThreadPool {
   private final Logger log;
 
   private final String streamThreadName;
+  private final QueuedEvents queuedEvents;
 
   // TODO: start up new threads when existing ones die to maintain the target size
   private final int threadPoolSize;
@@ -48,8 +50,10 @@ public class AsyncThreadPool {
 
   public AsyncThreadPool(
       final String streamThreadName,
-      final int threadPoolSize
+      final int threadPoolSize,
+      final int maxQueuedEvents
   ) {
+    this.queuedEvents = new QueuedEvents(maxQueuedEvents);
     this.streamThreadName = streamThreadName;
     this.threadPoolSize = threadPoolSize;
     this.threadPool = new HashMap<>(threadPoolSize);
@@ -111,6 +115,10 @@ public class AsyncThreadPool {
     for (final AsyncThread thread : threadPool.values()) {
       thread.removeProcessor(asyncProcessorName, partition);
     }
+  }
+
+  public QueuedEvents pendingEvents() {
+    return queuedEvents;
   }
 
   public void scheduleForProcessing(final int partition, final List<AsyncEvent> events) {

@@ -111,7 +111,10 @@ public class AsyncEvent {
 
   private final Object inputRecordKey;
   private final Object inputRecordValue;
+
+  private final String asyncProcessorName;
   private final int partition;
+
   private final long systemTime;
   private final long streamTime;
 
@@ -125,6 +128,7 @@ public class AsyncEvent {
   public AsyncEvent(
       final String logPrefix,
       final Record<?, ?> inputRecord,
+      final String asyncProcessorName,
       final int partition,
       final ProcessorRecordContext recordContext,
       final long currentStreamTime,
@@ -134,6 +138,7 @@ public class AsyncEvent {
     this(logPrefix,
          inputRecord.key(),
          inputRecord.value(),
+         asyncProcessorName,
          partition,
          recordContext,
          currentStreamTime,
@@ -145,6 +150,7 @@ public class AsyncEvent {
   public AsyncEvent(
       final String logPrefix,
       final FixedKeyRecord<?, ?> fixedKeyInputRecord,
+      final String asyncProcessorName,
       final int partition,
       final ProcessorRecordContext recordContext,
       final long currentStreamTime,
@@ -154,6 +160,7 @@ public class AsyncEvent {
     this(logPrefix,
          fixedKeyInputRecord.key(),
          fixedKeyInputRecord.value(),
+         asyncProcessorName,
          partition,
          recordContext,
          currentStreamTime,
@@ -166,6 +173,7 @@ public class AsyncEvent {
       final String logPrefix,
       final Object inputRecordKey,
       final Object inputRecordValue,
+      final String asyncProcessorName,
       final int partition,
       final ProcessorRecordContext recordContext,
       final long currentStreamTime,
@@ -175,6 +183,7 @@ public class AsyncEvent {
     this.currentState = State.SCHEDULING;
     this.inputRecordKey = inputRecordKey;
     this.inputRecordValue = inputRecordValue;
+    this.asyncProcessorName = asyncProcessorName;
     this.partition = partition;
     this.streamTime = currentStreamTime;
     this.systemTime = currentSystemTime;
@@ -286,6 +295,10 @@ public class AsyncEvent {
 
   public long systemTime() {
     return systemTime;
+  }
+
+  public String asyncProcessorName() {
+    return asyncProcessorName;
   }
 
   public int partition() {
