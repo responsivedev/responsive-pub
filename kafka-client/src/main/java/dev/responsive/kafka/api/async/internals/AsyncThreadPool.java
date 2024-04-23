@@ -61,14 +61,14 @@ public class AsyncThreadPool {
       final int taskId,
       final List<AsyncEvent> events,
       final FinalizingQueue finalizingQueue,
-      final ProcessingContext originalContext,
+      final ProcessingContext taskContext,
       final AsyncUserProcessorContext<KOut, VOut> asyncProcessorContext
   ) {
     // todo: can also check in-flight for failed tasks
     for (final var e : events) {
       final Future<?> future = executorService.submit(new AsyncEventTask<>(
           e,
-          originalContext,
+          taskContext,
           asyncProcessorContext,
           finalizingQueue));
       final var inFlightKey = InFlightWorkKey.of(processorName, taskId);

@@ -16,6 +16,7 @@
 
 package dev.responsive.kafka.api.async.internals;
 
+import static dev.responsive.kafka.api.config.ResponsiveConfig.ASYNC_FLUSH_INTERVAL_MS_CONFIG;
 import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadAsyncThreadPoolRegistry;
 
 import dev.responsive.kafka.api.async.AsyncProcessorSupplier;
@@ -30,6 +31,7 @@ import dev.responsive.kafka.api.async.internals.stores.AbstractAsyncStoreBuilder
 import dev.responsive.kafka.api.async.internals.stores.AsyncKeyValueStore;
 import dev.responsive.kafka.api.async.internals.stores.StreamThreadFlushListeners.AsyncFlushListener;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
+import java.time.Duration;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -39,6 +41,8 @@ import java.util.Set;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.Cancellable;
+import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessorContext;
@@ -93,13 +97,13 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   private FinalizingQueue finalizingQueue;
   private SchedulingQueue<KIn> schedulingQueue;
 
+  private Cancellable punctuator;
+
   // the context passed to us in init, ie the one created for this task and owned by Kafka Streams
   private ProcessingContext taskContext;
 
   // the async context owned by the StreamThread that is running this processor/task
   private StreamThreadProcessorContext<KOut, VOut> streamThreadContext;
-
-  private InternalProcessorContext<KOut, VOut> originalContext;
 
   // Wrap the context handed to the user in the async router, to ensure that
   // subsequent calls to processor context APIs made within the user's #process
@@ -190,7 +194,6 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
         streamThreadName, asyncProcessorName, taskId.partition()
     );
     this.log = new LogContext(logPrefix).logger(AsyncProcessor.class);
-    this.originalContext = internalContext;
     this.userContext = new AsyncUserProcessorContext<>(
         streamThreadName,
         internalContext,
@@ -198,18 +201,27 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     );
     this.streamThreadContext = new StreamThreadProcessorContext<>(
         logPrefix,
-        originalContext,
+        internalContext,
         userContext
     );
     userContext.setDelegateForStreamThread(streamThreadContext);
 
+    this.threadPool = getAsyncThreadPool(taskContext, streamThreadName);
+
     final ResponsiveConfig configs = ResponsiveConfig.responsiveConfig(userContext.appConfigs());
+    final long punctuationInterval = configs.getLong(ASYNC_FLUSH_INTERVAL_MS_CONFIG);
     final int maxEventsPerKey = configs.getInt(ResponsiveConfig.ASYNC_MAX_EVENTS_PER_KEY_CONFIG);
 
     this.schedulingQueue = new SchedulingQueue<>(logPrefix, maxEventsPerKey);
     this.finalizingQueue = new FinalizingQueue(logPrefix);
 
-    this.threadPool = getAsyncThreadPool(internalContext, streamThreadName);
+
+    this.punctuator = taskContext.schedule(
+        Duration.ofMillis(punctuationInterval),
+        PunctuationType.WALL_CLOCK_TIME,
+        ts -> executeAvailableEvents()
+    );
+
   }
 
   private void completeInitialization() {
@@ -288,6 +300,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
                    + "prior to being closed", pendingEvents.size());
     }
 
+    punctuator.cancel();
     threadPool.removeProcessor(asyncProcessorName, taskId.partition());
     unregisterFlushListenerForStoreBuilders(
         streamThreadName,
@@ -457,7 +470,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
           taskId.partition(),
           eventsToSchedule,
           finalizingQueue,
-          originalContext,
+          taskContext,
           userContext
       );
     }
