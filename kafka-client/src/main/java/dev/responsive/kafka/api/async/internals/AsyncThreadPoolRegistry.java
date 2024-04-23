@@ -46,10 +46,10 @@ public class AsyncThreadPoolRegistry {
   public AsyncThreadPoolRegistry(
       final int numStreamThreads,
       final int asyncThreadPoolSize,
-      final int maxQueuedEvents
+      final int maxQueuedEventsPerAsyncThread
   ) {
     this.asyncThreadPoolSize = asyncThreadPoolSize;
-    this.maxQueuedEvents = maxQueuedEvents;
+    this.maxQueuedEvents = maxQueuedEventsPerAsyncThread * asyncThreadPoolSize;
     this.streamThreadToAsyncPool = new ConcurrentHashMap<>(numStreamThreads);
   }
 
