@@ -16,6 +16,7 @@
 
 package dev.responsive.kafka.internal.clients;
 
+import static dev.responsive.kafka.internal.config.InternalSessionConfigs.isAsyncThreadPoolRegistryEnabled;
 import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadAsyncThreadPoolRegistry;
 import static dev.responsive.kafka.internal.utils.Utils.extractThreadId;
 import static dev.responsive.kafka.internal.utils.Utils.extractThreadNameFromConsumerClientId;
@@ -160,8 +161,13 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
     final String streamThreadName = extractThreadNameFromConsumerClientId(clientId);
     final String threadId = extractThreadId(streamThreadName);
 
-    final AsyncThreadPoolRegistry asyncThreadPoolRegistry = loadAsyncThreadPoolRegistry(config);
-    asyncThreadPoolRegistry.startNewAsyncThreadPool(streamThreadName);
+    final AsyncThreadPoolRegistry asyncThreadPoolRegistry;
+    if (isAsyncThreadPoolRegistryEnabled(config)) {
+      asyncThreadPoolRegistry = loadAsyncThreadPoolRegistry(config);
+      asyncThreadPoolRegistry.startNewAsyncThreadPool(streamThreadName);
+    } else {
+      asyncThreadPoolRegistry = null;
+    }
 
     final ListenersForThread tc = sharedListeners.getAndMaybeInitListenersForThread(
         eos,
@@ -183,7 +189,11 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
             tc.endOffsetsPollerListener,
             new CloseListener(threadId)
         ),
-        () -> asyncThreadPoolRegistry.shutdownAsyncThreadPool(Thread.currentThread().getName())
+        () -> {
+          if (asyncThreadPoolRegistry != null) {
+            asyncThreadPoolRegistry.shutdownAsyncThreadPool(Thread.currentThread().getName());
+          }
+        }
     );
   }
 

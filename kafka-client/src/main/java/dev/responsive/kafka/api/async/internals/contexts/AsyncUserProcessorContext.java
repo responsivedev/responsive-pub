@@ -20,6 +20,7 @@ import static dev.responsive.kafka.api.async.internals.AsyncUtils.isAsyncThread;
 import static dev.responsive.kafka.api.async.internals.AsyncUtils.isStreamThread;
 import static dev.responsive.kafka.api.async.internals.AsyncUtils.isStreamThreadOrAsyncThread;
 
+import dev.responsive.kafka.api.async.internals.events.DelayedWrite;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.api.ProcessingContext;
 import org.slf4j.Logger;
@@ -63,7 +64,8 @@ import org.slf4j.Logger;
  *  or #close)
  */
 public class AsyncUserProcessorContext<KOut, VOut>
-    extends DelegatingProcessorContext<KOut, VOut, MergedProcessorContext<KOut, VOut>> {
+    extends DelegatingProcessorContext<KOut, VOut, MergedProcessorContext<KOut, VOut>>
+    implements DelayedAsyncStoreWriter {
 
   private final Logger log;
   private final String streamThreadName;
@@ -132,5 +134,22 @@ public class AsyncUserProcessorContext<KOut, VOut>
       throw new IllegalStateException("Incorrect thread initializing AsyncThread context");
     }
     threadLocalDelegate.set(delegate);
+  }
+
+  @Override
+  public void acceptDelayedWriteToAsyncStore(final DelayedWrite<?, ?> write) {
+    final String threadName = Thread.currentThread().getName();
+    if (!isAsyncThread(threadName, streamThreadName)) {
+      log.error("A non async thread invoked put on an async store. Caller thread name was {}",
+          threadName);
+      // The most common reason this case might be hit, besides a bug in the async framework itself,
+      // is if users attempt to insert into a state store from other Processor methods, like
+      // #init or #close
+      throw new IllegalStateException("Can only call #put on an async state store inside the "
+          + "#process method of an async processor");
+    }
+    final AsyncThreadProcessorContext<KOut, VOut> asyncThreadContext
+        = (AsyncThreadProcessorContext<KOut, VOut>) threadLocalDelegate.get();
+    asyncThreadContext.currentAsyncEvent().addWrittenRecord(write);
   }
 }

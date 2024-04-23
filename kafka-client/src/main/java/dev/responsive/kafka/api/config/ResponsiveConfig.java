@@ -235,6 +235,15 @@ public class ResponsiveConfig extends AbstractConfig {
       + "dropping out of the consumer group due to missing the max.poll.interval.ms, and have many updates ie many input "
       + "records with the same key, consider lowering this value.";
 
+  public static final String ASYNC_FLUSH_INTERVAL_MS_CONFIG = "responsive.async.flush.interval.ms";
+  private static final long ASYNC_FLUSH_INTERVAL_MS_DEFAULT = 5 * 1000L;
+  private static final String ASYNC_FLUSH_INTERVAL_MS_DOC = "The frequency of scheduled punctuations that flush out "
+      + "any events currently waiting to be scheduled or finalized. The async processing framework uses "
+      + "Kafka Streams punctuators to schedule these flushes to make sure async processing can make steady "
+      + "progress when input traffic to the async processors drops or goes to zero. If you expect long pauses "
+      + "or gaps in the upstream input topic traffic, considering setting this to a smaller value to ensure "
+      + "the async processor can continue to operate during the down periods.";
+
 
   // ------------------ WindowStore configurations ----------------------
 
@@ -482,6 +491,12 @@ public class ResponsiveConfig extends AbstractConfig {
           ASYNC_MAX_EVENTS_QUEUED_PER_KEY_DEFAULT,
           Importance.LOW,
           ASYNC_MAX_EVENTS_QUEUED_PER_KEY_DOC
+      ).define(
+          ASYNC_FLUSH_INTERVAL_MS_CONFIG,
+          Type.LONG,
+          ASYNC_FLUSH_INTERVAL_MS_DEFAULT,
+          Importance.LOW,
+          ASYNC_FLUSH_INTERVAL_MS_DOC
       ).define(
           MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_CONFIG,
           Type.BOOLEAN,

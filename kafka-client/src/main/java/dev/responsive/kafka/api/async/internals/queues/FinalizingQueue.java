@@ -28,14 +28,14 @@ import org.slf4j.Logger;
  * StreamThread picks up events from this queue in order to execute any outputs
  * that were intercepted during processing, such as forwards and writes, before
  * ultimating marking the async event as completed. This queue is conceptually
- * the reverse of the {@link ProcessingQueue} in that it forms a channel from
- * the AsyncThread(s) to the StreamThread, whereas the ProcessingQueue does the
- * exact opposite.
+ * the reverse of the thread pool's queue in that it forms a channel from
+ * the thread pool threads to the StreamThread, whereas the pool's queue does
+ * the exact opposite.
  * <p>
  * Events in this queue are in the {@link AsyncEvent.State#FINALIZING} state
  * <p>
  * Threading notes:
- * -Produces to queue --> AsyncThread (see {@link WriteOnlyFinalizingQueue})
+ * -Thread pool --> AsyncThread (see {@link WriteOnlyFinalizingQueue})
  * -Consumes from queue --> StreamThread (see {@link ReadOnlyFinalizingQueue})
  * -One per physical AsyncProcessor instance
  *   (ie per logical processor per partition per StreamThread)

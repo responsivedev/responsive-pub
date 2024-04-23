@@ -16,6 +16,8 @@
 
 package dev.responsive.kafka.api.async.internals;
 
+import static dev.responsive.kafka.api.config.ResponsiveConfig.ASYNC_FLUSH_INTERVAL_MS_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.ASYNC_MAX_EVENTS_QUEUED_PER_KEY_CONFIG;
 import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadAsyncThreadPoolRegistry;
 
 import dev.responsive.kafka.api.async.AsyncProcessorSupplier;
@@ -30,6 +32,7 @@ import dev.responsive.kafka.api.async.internals.stores.AbstractAsyncStoreBuilder
 import dev.responsive.kafka.api.async.internals.stores.AsyncKeyValueStore;
 import dev.responsive.kafka.api.async.internals.stores.StreamThreadFlushListeners.AsyncFlushListener;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
+import java.time.Duration;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -40,6 +43,8 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.Cancellable;
+import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessorContext;
@@ -84,6 +89,8 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   private QueuedEvents queuedEvents;
   private SchedulingQueue<KIn> schedulingQueue;
   private FinalizingQueue finalizingQueue;
+
+  private Cancellable punctuator;
 
   // the context passed to us in init, ie the one created for this task and owned by Kafka Streams
   private ProcessingContext taskContext;
@@ -157,8 +164,6 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   /**
    * Performs the first half of initialization by setting all the class fields
    * that have to wait for the context to be passed in to #init to be initialized.
-   * Initialization itself is broken up into two stages, field initialization and
-   *
    */
   private void initFields(
       final InternalProcessorContext<KOut, VOut> internalContext
@@ -175,30 +180,41 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     );
     this.log = new LogContext(logPrefix).logger(AsyncProcessor.class);
 
-    this.threadPool = getAsyncThreadPool(internalContext, streamThreadName);
-    this.streamThreadContext = new StreamThreadProcessorContext<>(logPrefix, internalContext);
-    this.userContext = new AsyncUserProcessorContext<>(streamThreadName, taskContext, logPrefix);
+    this.userContext = new AsyncUserProcessorContext<>(
+        streamThreadName,
+        taskContext,
+        logPrefix
+    );
+    this.streamThreadContext = new StreamThreadProcessorContext<>(
+        logPrefix,
+        internalContext,
+        userContext
+    );
     userContext.setDelegateForStreamThread(streamThreadContext);
-    
-    final ResponsiveConfig configs = ResponsiveConfig.responsiveConfig(userContext.appConfigs());
-    final int maxEventsPerKey =
-        configs.getInt(ResponsiveConfig.ASYNC_MAX_EVENTS_QUEUED_PER_KEY_CONFIG);
 
+    final ResponsiveConfig configs = ResponsiveConfig.responsiveConfig(userContext.appConfigs());
+    final long punctuationInterval = configs.getLong(ASYNC_FLUSH_INTERVAL_MS_CONFIG);
+    final int maxEventsPerKey = configs.getInt(ASYNC_MAX_EVENTS_QUEUED_PER_KEY_CONFIG);
+
+    this.threadPool = getAsyncThreadPool(taskContext, streamThreadName);
     this.queuedEvents = threadPool.pendingEvents();
+    queuedEvents.registerPartition(taskId.partition());
+
     this.schedulingQueue = new SchedulingQueue<>(logPrefix, maxEventsPerKey);
     this.finalizingQueue = new FinalizingQueue(logPrefix);
 
-    queuedEvents.registerPartition(taskId.partition());
-
-    threadPool.addProcessor(
-        asyncProcessorName,
-        taskId.partition(),
-        userContext,
-        finalizingQueue
+    this.punctuator = taskContext.schedule(
+        Duration.ofMillis(punctuationInterval),
+        PunctuationType.WALL_CLOCK_TIME,
+        ts -> executeAvailableEvents()
     );
-    
   }
 
+  /**
+   * Performs the second half of initialization after calling #init on the user's processor.
+   * Verifies and registers any async stores that were created by the user accessing
+   * connected stores via the {@link ProcessingContext#getStateStore(String)} API during #init
+   */
   private void completeInitialization() {
     final Map<String, AsyncKeyValueStore<?, ?>> accessedStores =
         streamThreadContext.getAllAsyncStores();
@@ -276,6 +292,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
                    + "prior to being closed", pendingEvents.size());
     }
 
+    punctuator.cancel();
     threadPool.removeProcessor(asyncProcessorName, taskId.partition());
 
     unregisterFlushListenerForStoreBuilders(
@@ -446,7 +463,14 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     }
     final int numScheduled = eventsToSchedule.size();
     if (numScheduled > 0) {
-      threadPool.scheduleForProcessing(taskId.partition(), eventsToSchedule);
+      threadPool.scheduleForProcessing(
+          asyncProcessorName,
+          taskId.partition(),
+          eventsToSchedule,
+          finalizingQueue,
+          taskContext,
+          userContext
+      );
     }
 
     return numScheduled;

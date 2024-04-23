@@ -76,19 +76,13 @@ public class AsyncThreadProcessorContext<KOut, VOut> implements MergedProcessorC
   // time a new event is picked up from the processing queue but before beginning
   // to process it (ie invoking #process on the input record for this event), as
   // part of the preparation for each async process
-  private AsyncEvent currentAsyncEvent;
+  private final AsyncEvent currentAsyncEvent;
 
   // The actual context used by Kafka Streams which was originally passed
   // in to the async processor during init. This MUST be protected from
   // any mutations and should only be delegated to in pure getters that
   // access immutable fields (such as applicationId)
   private final ProcessingContext taskContext;
-
-  public AsyncThreadProcessorContext(
-      final ProcessingContext taskContext
-  ) {
-    this.taskContext = taskContext;
-  }
 
   // TODO: we won't need to do this until we support async with the DSL and support
   //  the new windowed emit semantics specifically, which is the only thing using it,
@@ -99,9 +93,12 @@ public class AsyncThreadProcessorContext<KOut, VOut> implements MergedProcessorC
   //  just saving a single long rather than copying an entire map. This feature needs
   //  further inspection but isn't supported by either the async framework or in
   //  Responsive in general, so it's not urgent.
-  public void prepareToProcessNewEvent(final AsyncEvent nextEventToProcess) {
-    currentAsyncEvent = nextEventToProcess;
-    currentAsyncEvent.transitionToProcessing();
+  public AsyncThreadProcessorContext(
+      final ProcessingContext taskContext,
+      final AsyncEvent currentAsyncEvent
+  ) {
+    this.taskContext = taskContext;
+    this.currentAsyncEvent = currentAsyncEvent;
   }
 
   public AsyncEvent currentAsyncEvent() {

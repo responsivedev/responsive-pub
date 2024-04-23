@@ -23,7 +23,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * A simple router that stores a reference to the {@link AsyncThreadPool}
+ * A simple router that stores a reference to the pool
  * for each StreamThread in the Streams client, so that we can get a handle
  * on the thread pool on any StreamThread from anywhere in the app.
  * It is also used to register and deregister the AsyncThreadPool by
