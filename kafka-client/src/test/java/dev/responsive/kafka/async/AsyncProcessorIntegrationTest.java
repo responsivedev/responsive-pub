@@ -257,7 +257,7 @@ public class AsyncProcessorIntegrationTest {
     @Override
     public Set<StoreBuilder<?>> stores() {
       return Collections.singleton(ResponsiveStores.timestampedKeyValueStoreBuilder(
-          ResponsiveStores.keyValueStore(ResponsiveKeyValueParams.keyValue(ASYNC_KV_STORE)),
+          ResponsiveStores.keyValueStore(ResponsiveKeyValueParams.fact(ASYNC_KV_STORE)),
           Serdes.String(),
           Serdes.String()
       ));

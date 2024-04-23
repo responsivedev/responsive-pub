@@ -223,7 +223,7 @@ public class ResponsiveConfig extends AbstractConfig {
       + "for example during a commit or before closing the task. If you experience long flushes or StreamThreads "
       + "dropping out of the consumer group due to missing the max.poll.interval.ms, consider lowering this value";
 
-  public static final String ASYNC_FLUSH_INTERVAL_MS_CONFIG = "responsive.async.flush.interval";
+  public static final String ASYNC_FLUSH_INTERVAL_MS_CONFIG = "responsive.async.flush.interval.ms";
   private static final long ASYNC_FLUSH_INTERVAL_MS_DEFAULT = 5 * 1000L;
   private static final String ASYNC_FLUSH_INTERVAL_MS_DOC = "The frequency of scheduled punctuations that flush out "
       + "any events currently waiting to be scheduled or finalized. The async processing framework uses "
@@ -472,6 +472,12 @@ public class ResponsiveConfig extends AbstractConfig {
           ASYNC_MAX_EVENTS_PER_KEY_DEFAULT,
           Importance.LOW,
           ASYNC_MAX_EVENTS_PER_KEY_DOC
+      ).define(
+          ASYNC_FLUSH_INTERVAL_MS_CONFIG,
+          Type.LONG,
+          ASYNC_FLUSH_INTERVAL_MS_DEFAULT,
+          Importance.LOW,
+          ASYNC_FLUSH_INTERVAL_MS_DOC
       ).define(
           MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_CONFIG,
           Type.BOOLEAN,
