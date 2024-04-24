@@ -29,8 +29,8 @@ import org.slf4j.Logger;
  * tl;dr
  * This class acts as a router to make sure that the correct thread's context is
  * returned whenever the user attempts to access the context from their processor,
- * whether during #process (in which case we serve an {@link AsyncThreadProcessorContext}
- * or during #init or #close (in which case we serve the {@link StreamThreadProcessorContext}
+ * whether during #process (in which case we serve an {@link AsyncThreadProcessorContext})
+ * or during #init or #close (in which case we serve the {@link StreamThreadProcessorContext})
  * This class makes use of {@link ThreadLocal} to map threads to their contexts, and
  * passes the thread-specific local context as the delegate for the
  * {@link DelegatingProcessorContext}

@@ -309,7 +309,7 @@ class ResponsiveKafkaClientSupplierTest {
     intermediate.putAll(configs);
     intermediate.putAll(overrides);
     intermediate.put(
-        "__internal.responsive.async.thread.pool.registry__", new AsyncThreadPoolRegistry(2, 5)
+        "__internal.responsive.async.thread.pool.registry__", new AsyncThreadPoolRegistry(2, 5, 5)
     );
     return Map.copyOf(intermediate);
   }

@@ -40,13 +40,16 @@ public class AsyncThreadPoolRegistry {
   private static final Logger LOG = LoggerFactory.getLogger(AsyncThreadPoolRegistry.class);
 
   private final int asyncThreadPoolSize;
+  private final int maxQueuedEvents;
   private final Map<String, AsyncThreadPool> streamThreadToAsyncPool;
 
   public AsyncThreadPoolRegistry(
       final int numStreamThreads,
-      final int asyncThreadPoolSize
+      final int asyncThreadPoolSize,
+      final int maxQueuedEventsPerAsyncThread
   ) {
     this.asyncThreadPoolSize = asyncThreadPoolSize;
+    this.maxQueuedEvents = maxQueuedEventsPerAsyncThread * asyncThreadPoolSize;
     this.streamThreadToAsyncPool = new ConcurrentHashMap<>(numStreamThreads);
   }
 
@@ -55,7 +58,7 @@ public class AsyncThreadPoolRegistry {
    */
   public void startNewAsyncThreadPool(final String streamThreadName) {
     final AsyncThreadPool newThreadPool = new AsyncThreadPool(
-        streamThreadName, asyncThreadPoolSize
+        streamThreadName, asyncThreadPoolSize, maxQueuedEvents
     );
 
     final AsyncThreadPool oldThreadPool = streamThreadToAsyncPool.put(

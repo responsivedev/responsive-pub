@@ -9,42 +9,51 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.api.ProcessingContext;
 import org.slf4j.Logger;
 
 public class AsyncThreadPool {
-  private final ExecutorService executorService;
-  private final Map<InFlightWorkKey, Map<AsyncEvent, Future<?>>> inFlight = new HashMap<>();
-
   public static final String ASYNC_THREAD_NAME = "AsyncThread";
 
   private final Logger log;
+
+  private final ExecutorService executorService;
+  private final Map<InFlightWorkKey, Map<AsyncEvent, Future<?>>> inFlight = new HashMap<>();
+  private final BlockingQueue<Runnable> processingQueue;
+
   private final AtomicInteger threadNameIndex = new AtomicInteger(0);
 
   public AsyncThreadPool(
       final String streamThreadName,
-      final int size) {
+      final int threadPoolSize,
+      final int maxQueuedEvents
+  ) {
     final LogContext logPrefix
         = new LogContext(String.format("stream-thread [%s] ", streamThreadName));
     this.log = logPrefix.logger(AsyncThreadPool.class);
-    // todo: set the thread names
-    executorService = Executors.newFixedThreadPool(size, r -> {
-      final var t = new Thread(r);
-      t.setDaemon(true);
-      t.setName(
-          streamThreadName + "-" + ASYNC_THREAD_NAME + "-" + threadNameIndex.getAndIncrement());
-      return t;
-    });
-  }
+    this.processingQueue = new LinkedBlockingQueue<>(maxQueuedEvents);
 
-  @VisibleForTesting
-  Map<AsyncEvent, Future<?>> getInFlight(final String processorName, final int partition) {
-    return inFlight.get(InFlightWorkKey.of(processorName, partition));
+    executorService = new ThreadPoolExecutor(
+        threadPoolSize,
+        maxQueuedEvents,
+        Long.MAX_VALUE,
+        TimeUnit.DAYS,
+        processingQueue,
+        r -> {
+          final var t = new Thread(r);
+          t.setDaemon(true);
+          t.setName(generateAsyncThreadName(streamThreadName, threadNameIndex.getAndIncrement()));
+          return t;
+        }
+    );
   }
 
   public void removeProcessor(final String processorName, final int partition) {
@@ -56,6 +65,31 @@ public class AsyncThreadPool {
     }
   }
 
+  @VisibleForTesting
+  Map<AsyncEvent, Future<?>> getInFlight(final String processorName, final int partition) {
+    return inFlight.get(InFlightWorkKey.of(processorName, partition));
+  }
+
+  /**
+   * @return the name for this AsyncThread, formatted by appending the async thread suffix
+   *         based on a unique async-thread index i and the base name of the StreamThread
+   *         with index n, ie
+   *         AsyncThread.getName() --> {clientId}-StreamThread-{n}-AsyncThread-{i}
+   */
+  private static String generateAsyncThreadName(
+      final String streamThreadName,
+      final int asyncThreadIndex
+  ) {
+    return String.format("%s-%s-%d", streamThreadName, ASYNC_THREAD_NAME, asyncThreadIndex);
+  }
+
+  /**
+   * Schedule a new event for processing. Must be "processable" ie all previous
+   * same-key events have cleared.
+   * <p>
+   * This is a blocking call, as it will wait until the processing queue has
+   * enough space to accept a new event.
+   */
   public <KOut, VOut> void scheduleForProcessing(
       final String processorName,
       final int taskId,
@@ -70,7 +104,8 @@ public class AsyncThreadPool {
           e,
           taskContext,
           asyncProcessorContext,
-          finalizingQueue));
+          finalizingQueue)
+      );
       final var inFlightKey = InFlightWorkKey.of(processorName, taskId);
       inFlight.putIfAbsent(inFlightKey, new HashMap<>());
       inFlight.get(inFlightKey).put(e, future);

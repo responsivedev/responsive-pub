@@ -28,6 +28,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class AsyncThreadPoolTest {
   private static final String POOL_NAME = "pool";
   private static final int POOL_SIZE = 2;
+  private static final int POOL_EVENT_LIMIT = 4;
 
   @Mock
   private AsyncUserProcessorContext<String, String> userContext;
@@ -41,7 +42,7 @@ class AsyncThreadPoolTest {
 
   @BeforeEach
   public void setup() {
-    pool = new AsyncThreadPool(POOL_NAME, POOL_SIZE);
+    pool = new AsyncThreadPool(POOL_NAME, POOL_SIZE, POOL_EVENT_LIMIT);
   }
 
   @AfterEach
@@ -129,6 +130,7 @@ class AsyncThreadPoolTest {
     final var event = new AsyncEvent(
         "event",
         new Record<>("k", "v", 0L),
+        "async-processor",
         partition,
         recordContext,
         0L,

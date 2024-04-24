@@ -48,12 +48,13 @@ public class AsyncTestEvent extends AsyncEvent {
       final int partition,
       final String topic
   ) {
-    this(key, value, partition, topic, 0L, 0L);
+    this(key, value, "async-processor", partition, topic, 0L, 0L);
   }
 
   public AsyncTestEvent(
       final String key,
       final String value,
+      final String asyncProcessorName,
       final int partition,
       final String topic,
       final long timestamp,
@@ -62,6 +63,7 @@ public class AsyncTestEvent extends AsyncEvent {
     super(
         String.format("event <%s, %s>[%d]", key, value, partition),
         new Record<>(key, value, timestamp),
+        asyncProcessorName,
         partition,
         new ProcessorRecordContext(
             timestamp,
