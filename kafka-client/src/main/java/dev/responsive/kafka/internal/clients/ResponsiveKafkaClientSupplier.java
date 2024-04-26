@@ -155,19 +155,21 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
 
   @Override
   public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
-    final String clientId = (String) config.get(ConsumerConfig.CLIENT_ID_CONFIG);
-    LOG.info("Creating responsive main consumer: {}", clientId);
+    final Map<String, Object> consumerConfig = new HashMap<>(config);
 
     // Reset the forced override of this config done by Kafka Streams
     // TODO: remove this and use KafkaStreams#close(closeOptions) once KAFKA-16514 is fixed
-    config.put("internal.leave.group.on.close", true);
+    consumerConfig.put("internal.leave.group.on.close", true);
+
+    final String clientId = (String) consumerConfig.get(ConsumerConfig.CLIENT_ID_CONFIG);
+    LOG.info("Creating responsive main consumer: {}", clientId);
 
     final String streamThreadName = extractThreadNameFromConsumerClientId(clientId);
     final String threadId = extractThreadId(streamThreadName);
 
     final AsyncThreadPoolRegistry asyncThreadPoolRegistry;
-    if (isAsyncThreadPoolRegistryEnabled(config)) {
-      asyncThreadPoolRegistry = loadAsyncThreadPoolRegistry(config);
+    if (isAsyncThreadPoolRegistryEnabled(consumerConfig)) {
+      asyncThreadPoolRegistry = loadAsyncThreadPoolRegistry(consumerConfig);
       asyncThreadPoolRegistry.startNewAsyncThreadPool(streamThreadName);
     } else {
       asyncThreadPoolRegistry = null;
@@ -178,7 +180,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
         threadId,
         metrics,
         applicationId,
-        config,
+        consumerConfig,
         endOffsetsPoller,
         storeRegistry,
         factories
@@ -186,7 +188,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
     // TODO: the end offsets poller call is kind of heavy for a synchronized block
     return factories.createResponsiveConsumer(
         clientId,
-        wrapped.getConsumer(config),
+        wrapped.getConsumer(consumerConfig),
         List.of(
             tc.committedOffsetMetricListener,
             tc.offsetRecorder.getConsumerListener(),
