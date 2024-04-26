@@ -1,17 +1,14 @@
 package dev.responsive.kafka.api.async.internals;
 
-import com.google.common.annotations.VisibleForTesting;
 import dev.responsive.kafka.api.async.internals.contexts.AsyncThreadProcessorContext;
 import dev.responsive.kafka.api.async.internals.contexts.AsyncUserProcessorContext;
 import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
-import dev.responsive.kafka.api.async.internals.queues.FinalizingQueue;
-import java.util.HashMap;
+
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Future;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -25,8 +22,7 @@ public class AsyncThreadPool {
 
   private final Logger log;
 
-  private final ExecutorService executorService;
-  private final Map<InFlightWorkKey, Map<AsyncEvent, Future<?>>> inFlight = new HashMap<>();
+  private final ThreadPoolExecutor executor;
   private final BlockingQueue<Runnable> processingQueue;
 
   private final AtomicInteger threadNameIndex = new AtomicInteger(0);
@@ -41,9 +37,9 @@ public class AsyncThreadPool {
     this.log = logPrefix.logger(AsyncThreadPool.class);
     this.processingQueue = new LinkedBlockingQueue<>(maxQueuedEvents);
 
-    executorService = new ThreadPoolExecutor(
+    executor = new ThreadPoolExecutor(
         threadPoolSize,
-        maxQueuedEvents,
+        threadPoolSize,
         Long.MAX_VALUE,
         TimeUnit.DAYS,
         processingQueue,
@@ -54,20 +50,6 @@ public class AsyncThreadPool {
           return t;
         }
     );
-  }
-
-  public void removeProcessor(final String processorName, final int partition) {
-    log.info("clean up records for {}:{}", processorName, partition);
-    final var key = InFlightWorkKey.of(processorName, partition);
-    final Map<AsyncEvent, Future<?>> inFlightForTask = inFlight.remove(key);
-    if (inFlightForTask != null) {
-      inFlightForTask.values().forEach(f -> f.cancel(true));
-    }
-  }
-
-  @VisibleForTesting
-  Map<AsyncEvent, Future<?>> getInFlight(final String processorName, final int partition) {
-    return inFlight.get(InFlightWorkKey.of(processorName, partition));
   }
 
   /**
@@ -90,60 +72,58 @@ public class AsyncThreadPool {
    * This is a blocking call, as it will wait until the processing queue has
    * enough space to accept a new event.
    */
-  public <KOut, VOut> void scheduleForProcessing(
-      final String processorName,
-      final int taskId,
+  public <KOut, VOut> List<CompletableFuture<AsyncEvent>> scheduleForProcessing(
       final List<AsyncEvent> events,
-      final FinalizingQueue finalizingQueue,
       final ProcessingContext taskContext,
       final AsyncUserProcessorContext<KOut, VOut> asyncProcessorContext
   ) {
-    // todo: can also check in-flight for failed tasks
+    final List<CompletableFuture<AsyncEvent>> futures = new ArrayList<>();
     for (final var e : events) {
-      final Future<?> future = executorService.submit(new AsyncEventTask<>(
+      final var task = new AsyncEventTask<>(
           e,
           taskContext,
-          asyncProcessorContext,
-          finalizingQueue)
+          asyncProcessorContext
       );
-      final var inFlightKey = InFlightWorkKey.of(processorName, taskId);
-      inFlight.putIfAbsent(inFlightKey, new HashMap<>());
-      inFlight.get(inFlightKey).put(e, future);
+      final CompletableFuture<AsyncEvent> cf = CompletableFuture.supplyAsync(task::doRun, executor);
+      futures.add(cf);
     }
+    return futures;
   }
 
   public void shutdown() {
     // todo: make me more orderly, but you get the basic idea
-    executorService.shutdownNow();
+    executor.shutdownNow();
   }
 
   private static class AsyncEventTask<KOut, VOut> implements Runnable {
     private final AsyncEvent event;
     private final ProcessingContext originalContext;
     private final AsyncUserProcessorContext<KOut, VOut> wrappingContext;
-    private final FinalizingQueue finalizingQueue;
 
     private AsyncEventTask(
         final AsyncEvent event,
         final ProcessingContext originalContext,
-        final AsyncUserProcessorContext<KOut, VOut> userContext,
-        final FinalizingQueue finalizingQueue
+        final AsyncUserProcessorContext<KOut, VOut> userContext
     ) {
       this.event = event;
       this.originalContext = originalContext;
       this.wrappingContext = userContext;
-      this.finalizingQueue = finalizingQueue;
     }
 
     @Override
     public void run() {
+      doRun();
+    }
+
+    public AsyncEvent doRun() {
       wrappingContext.setDelegateForAsyncThread(new AsyncThreadProcessorContext<>(
           originalContext,
           event
       ));
       event.transitionToProcessing();
       event.inputRecordProcessor().run();
-      finalizingQueue.scheduleForFinalization(event);
+      event.transitionToToFinalize();
+      return event;
     }
   }
 

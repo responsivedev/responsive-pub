@@ -26,19 +26,22 @@ import dev.responsive.kafka.api.async.internals.contexts.StreamThreadProcessorCo
 import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
 import dev.responsive.kafka.api.async.internals.events.DelayedForward;
 import dev.responsive.kafka.api.async.internals.events.DelayedWrite;
-import dev.responsive.kafka.api.async.internals.queues.FinalizingQueue;
 import dev.responsive.kafka.api.async.internals.queues.SchedulingQueue;
 import dev.responsive.kafka.api.async.internals.stores.AbstractAsyncStoreBuilder;
 import dev.responsive.kafka.api.async.internals.stores.AsyncKeyValueStore;
 import dev.responsive.kafka.api.async.internals.stores.StreamThreadFlushListeners.AsyncFlushListener;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
@@ -87,7 +90,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
 
   private AsyncThreadPool threadPool;
   private SchedulingQueue<KIn> schedulingQueue;
-  private FinalizingQueue finalizingQueue;
+  private final List<CompletableFuture<AsyncEvent>> eventsBeingProcessed = new ArrayList<>();
 
   private Cancellable punctuator;
 
@@ -198,7 +201,6 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     this.threadPool = getAsyncThreadPool(taskContext, streamThreadName);
 
     this.schedulingQueue = new SchedulingQueue<>(logPrefix, maxEventsPerKey);
-    this.finalizingQueue = new FinalizingQueue(logPrefix);
 
     this.punctuator = taskContext.schedule(
         Duration.ofMillis(punctuationInterval),
@@ -276,7 +278,6 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
 
   @Override
   public void close() {
-
     if (!isCleared()) {
       // This doesn't necessarily indicate an issue; it just should only ever
       // happen if the task is closed dirty, but unfortunately we can't tell
@@ -289,7 +290,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     }
 
     punctuator.cancel();
-    threadPool.removeProcessor(asyncProcessorName, taskId.partition());
+    eventsBeingProcessed.forEach(cf -> cf.cancel(true));
 
     unregisterFlushListenerForStoreBuilders(
         streamThreadName,
@@ -331,6 +332,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    * each commit, similar to #flushCache
    */
   public void flushAndAwaitPendingEvents() {
+    throwIfAnyFuturesCompletedExceptionally();
 
     // Make a (non-blocking) pass through the finalizing queue up front, to
     // free up any recently-processed events before we attempt to drain the
@@ -352,6 +354,33 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     }
   }
 
+  private AsyncEvent waitOnFuture(final CompletableFuture<?> cf) {
+    try {
+      return (AsyncEvent) cf.get();
+    } catch (final ExecutionException e) {
+      if (e.getCause() instanceof RuntimeException) {
+        throw (RuntimeException) e.getCause();
+      }
+      throw new RuntimeException(e.getCause());
+    } catch (final InterruptedException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  @SuppressWarnings("rawtypes")
+  private void waitOnAnyFuture() {
+    waitOnFuture(CompletableFuture.anyOf(eventsBeingProcessed.toArray(new CompletableFuture[0])));
+  }
+
+  private void throwIfAnyFuturesCompletedExceptionally() {
+    for (final var cf : eventsBeingProcessed) {
+      if (cf.isCompletedExceptionally()) {
+        waitOnFuture(cf);
+        throw new IllegalStateException("the call to waitOnFuture should have thrown");
+      }
+    }
+  }
+
   /**
    * Blocking API that guarantees at least one event has been finalized.
    * <p>
@@ -363,15 +392,9 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    * @return the number of events that were finalized
    */
   private int finalizeAtLeastOneEvent() {
-    final int numFinalized = drainFinalizingQueue();
-    if (numFinalized > 0) {
-      return numFinalized;
-    }
-
     try {
-      final AsyncEvent finalizableEvent = finalizingQueue.waitForNextFinalizableEvent();
-      completePendingEvent(finalizableEvent);
-      return 1;
+      waitOnAnyFuture();
+      return drainFinalizingQueue();
     } catch (final Exception e) {
       log.error("Exception caught while waiting for an event to finalize", e);
       throw new StreamsException("Failed to flush async processor", e, taskId);
@@ -458,21 +481,15 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     }
     final int numScheduled = eventsToSchedule.size();
     if (numScheduled > 0) {
-      threadPool.scheduleForProcessing(
-          asyncProcessorName,
-          taskId.partition(),
-          eventsToSchedule,
-          finalizingQueue,
-          taskContext,
-          userContext
-      );
+      final var futures = threadPool.scheduleForProcessing(eventsToSchedule, taskContext, userContext);
+      this.eventsBeingProcessed.addAll(futures);
     }
 
     return numScheduled;
   }
 
   /**
-   * Polls all the available records from the {@link FinalizingQueue}
+   * Polls all the available records from the pending events
    * without waiting for any new events to arrive. Makes a single pass
    * and completes only the current set of finalizable events, which
    * means there will most likely be pending events still in flight
@@ -482,17 +499,25 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    */
   private int drainFinalizingQueue() {
     int count = 0;
-    while (!finalizingQueue.isEmpty()) {
-      final AsyncEvent event = finalizingQueue.nextFinalizableEvent();
-      completePendingEvent(event);
-      ++count;
+    final var iterator = eventsBeingProcessed.iterator();
+    while (iterator.hasNext()) {
+      final var cf = iterator.next();
+      if (cf.isCompletedExceptionally()) {
+        waitOnFuture(cf);
+        throw new IllegalStateException("the wait call should have thrown");
+      }
+      if (cf.isDone()) {
+        iterator.remove();
+        completePendingEvent(waitOnFuture(cf));
+        ++count;
+      }
     }
     return count;
   }
 
   /**
    * Complete processing one pending event.
-   * Accepts an event pulled from the {@link FinalizingQueue} and finalizes
+   * Accepts an event pulled from the pending events and finalizes
    * it before marking the event as done.
    */
   private void completePendingEvent(final AsyncEvent finalizableEvent) {
