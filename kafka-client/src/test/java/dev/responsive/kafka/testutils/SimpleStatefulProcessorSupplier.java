@@ -45,33 +45,28 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
  * See also: {@link SimpleStatefulProcessor}
  */
 @SuppressWarnings("checkstyle:linelength")
-public class SimpleStatefulProcessorSupplier
-    implements FixedKeyProcessorSupplier<String, String, String> {
+public class SimpleStatefulProcessorSupplier<VIn, VStored, VOut>
+    implements FixedKeyProcessorSupplier<String, VIn, VOut> {
 
   /**
    * A simple container class for the outputs of a {@link SimpleStatefulProcessor},
    * specifically the value to be forwarded downstream and the value to be stored
    * in the local processor state store. These can be different or the same value.
    */
-  public static class SimpleProcessorOutput {
-    public final String forwardedValue;
-    public final String storedValue;
+  public static class SimpleProcessorOutput<VStored, VOut> {
+    public final VOut forwardedValue;
+    public final VStored storedValue;
     
-    public SimpleProcessorOutput(final String forwardedValue, final String storedValue) {
+    public SimpleProcessorOutput(final VOut forwardedValue, final VStored storedValue) {
       this.forwardedValue = forwardedValue;
       this.storedValue = storedValue;
     }
-
-    public SimpleProcessorOutput(final String outputValue) {
-      this(outputValue, outputValue);
-    }
-    
   }
   
-  private final BiFunction<ValueAndTimestamp<String>, FixedKeyRecord<String, String>, SimpleProcessorOutput> computeOutput;
-  
+  private final SimpleStatefulProcessor.ComputeOutput<VIn, VStored, VOut> computeOutput;
+
   private final AtomicInteger processed;
-  private final Map<String, String> latestValues;
+  private final Map<String, VOut> latestValues;
   private final CountDownLatch processingLatch;
   
   private final String storeName;
@@ -82,7 +77,7 @@ public class SimpleStatefulProcessorSupplier
    * @param params        the params to use to build a Responsive timestamped key-value store
    */
   public SimpleStatefulProcessorSupplier(
-      final BiFunction<ValueAndTimestamp<String>, FixedKeyRecord<String, String>, SimpleProcessorOutput> computeOutput,
+      final SimpleStatefulProcessor.ComputeOutput<VIn, VStored, VOut> computeOutput,
       final ResponsiveKeyValueParams params
   ) {
     this(computeOutput, params, new AtomicInteger(), new HashMap<>(), null);
@@ -94,7 +89,7 @@ public class SimpleStatefulProcessorSupplier
    * @param processed     optional counter that can be used to monitor number of input records
    */
   public SimpleStatefulProcessorSupplier(
-      final BiFunction<ValueAndTimestamp<String>, FixedKeyRecord<String, String>, SimpleProcessorOutput> computeOutput,
+      final SimpleStatefulProcessor.ComputeOutput<VIn, VStored, VOut> computeOutput,
       final ResponsiveKeyValueParams params,
       final AtomicInteger processed
   ) {
@@ -108,9 +103,9 @@ public class SimpleStatefulProcessorSupplier
    * @param processingLatch optional latch that counts down on each invocation of process
    */
   public SimpleStatefulProcessorSupplier(
-      final BiFunction<ValueAndTimestamp<String>, FixedKeyRecord<String, String>, SimpleProcessorOutput> computeOutput,
+      final SimpleStatefulProcessor.ComputeOutput<VIn, VStored, VOut> computeOutput,
       final ResponsiveKeyValueParams params,
-      final Map<String, String> latestValues,
+      final Map<String, VOut> latestValues,
       final CountDownLatch processingLatch
   ) {
     this(computeOutput, params, new AtomicInteger(), latestValues, processingLatch);
@@ -123,10 +118,10 @@ public class SimpleStatefulProcessorSupplier
    * @param latestValues  optional map to track latest value computed for each key
    */
   public SimpleStatefulProcessorSupplier(
-      final BiFunction<ValueAndTimestamp<String>, FixedKeyRecord<String, String>, SimpleProcessorOutput> computeOutput,
+      final SimpleStatefulProcessor.ComputeOutput<VIn, VStored, VOut> computeOutput,
       final ResponsiveKeyValueParams params,
       final AtomicInteger processed,
-      final Map<String, String> latestValues,
+      final Map<String, VOut> latestValues,
       final CountDownLatch processingLatch
   ) {
     this.computeOutput = computeOutput;
@@ -141,8 +136,8 @@ public class SimpleStatefulProcessorSupplier
   }
   
   @Override
-  public FixedKeyProcessor<String, String, String> get() {
-    return new SimpleStatefulProcessor(
+  public FixedKeyProcessor<String, VIn, VOut> get() {
+    return new SimpleStatefulProcessor<>(
         computeOutput,
         storeName, 
         processed, 

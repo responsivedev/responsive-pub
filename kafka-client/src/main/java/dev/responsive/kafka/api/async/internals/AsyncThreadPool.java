@@ -5,14 +5,15 @@ import dev.responsive.kafka.api.async.internals.contexts.AsyncThreadProcessorCon
 import dev.responsive.kafka.api.async.internals.contexts.AsyncUserProcessorContext;
 import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
 import dev.responsive.kafka.api.async.internals.queues.FinalizingQueue;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -23,14 +24,13 @@ import org.apache.kafka.streams.processor.api.ProcessingContext;
 import org.slf4j.Logger;
 
 public class AsyncThreadPool {
-  private final ExecutorService executorService;
-  private final ConcurrentMap<InFlightWorkKey, Map<AsyncEvent, Future<?>>> inFlight
-      = new ConcurrentHashMap<>();
-
   public static final String ASYNC_THREAD_NAME = "AsyncThread";
 
   private final Logger log;
 
+  private final ThreadPoolExecutor executor;
+  private final Map<InFlightWorkKey, ConcurrentMap<AsyncEvent, InFlightEvent>> inFlight
+      = new HashMap<>();
   private final BlockingQueue<Runnable> processingQueue;
 
   private final AtomicInteger threadNameIndex = new AtomicInteger(0);
@@ -45,7 +45,7 @@ public class AsyncThreadPool {
     this.log = logPrefix.logger(AsyncThreadPool.class);
     this.processingQueue = new LinkedBlockingQueue<>(maxQueuedEvents);
 
-    executorService = new ThreadPoolExecutor(
+    executor = new ThreadPoolExecutor(
         threadPoolSize,
         maxQueuedEvents,
         Long.MAX_VALUE,
@@ -76,18 +76,32 @@ public class AsyncThreadPool {
     return forTask.isEmpty();
   }
 
-  @VisibleForTesting
-  Map<AsyncEvent, Future<?>> getInFlight(final String processorName, final int partition) {
-    return inFlight.get(InFlightWorkKey.of(processorName, partition));
-  }
-
   public void removeProcessor(final String processorName, final int partition) {
     log.info("clean up records for {}:{}", processorName, partition);
     final var key = InFlightWorkKey.of(processorName, partition);
-    final Map<AsyncEvent, Future<?>> inFlightForTask = inFlight.remove(key);
+    final Map<AsyncEvent, InFlightEvent> inFlightForTask = inFlight.remove(key);
     if (inFlightForTask != null) {
-      inFlightForTask.values().forEach(f -> f.cancel(true));
+      inFlightForTask.values().forEach(f -> f.future().cancel(true));
     }
+  }
+
+  @VisibleForTesting
+  Map<AsyncEvent, InFlightEvent> getInFlight(final String processorName, final int partition) {
+    return inFlight.get(InFlightWorkKey.of(processorName, partition));
+  }
+
+  public Optional<Throwable> checkUncaughtExceptions(
+      final String processorName,
+      final int partition
+  ) {
+    final var key = InFlightWorkKey.of(processorName, partition);
+    final Map<AsyncEvent, InFlightEvent> inFlightForTask
+        = inFlight.computeIfAbsent(key, k -> new ConcurrentHashMap<>());
+    return inFlightForTask.values().stream()
+        .map(InFlightEvent::error)
+        .filter(Optional::isPresent)
+        .map(Optional::get)
+        .findFirst();
   }
 
   /**
@@ -112,38 +126,58 @@ public class AsyncThreadPool {
    */
   public <KOut, VOut> void scheduleForProcessing(
       final String processorName,
-      final int taskId,
+      final int partition,
       final List<AsyncEvent> events,
       final FinalizingQueue finalizingQueue,
       final ProcessingContext taskContext,
       final AsyncUserProcessorContext<KOut, VOut> asyncProcessorContext
   ) {
-    // todo: can also check in-flight for failed tasks
+    final var inFlightKey = InFlightWorkKey.of(processorName, partition);
+    final var inFlightForTask
+        = inFlight.computeIfAbsent(inFlightKey, k -> new ConcurrentHashMap<>());
     for (final var e : events) {
-      final var inFlightKey = InFlightWorkKey.of(processorName, taskId);
-      inFlight.computeIfAbsent(inFlightKey, k -> new ConcurrentHashMap<>());
-      final var inFlightForTask = inFlight.get(inFlightKey);
-      if (inFlightForTask.isEmpty()) {
-        log.debug("added in-flight map for task {}", taskId);
-      }
-      // hold the lock for the in-flight records so that we ensure that the future is inserted
-      // before it is removed by the task
-      synchronized (inFlightForTask) {
-        final Future<?> future = executorService.submit(new AsyncEventTask<>(
-            e,
-            taskContext,
-            asyncProcessorContext,
-            finalizingQueue,
-            inFlightForTask,
-            log));
-        inFlightForTask.put(e, future);
-      }
+      final var future = CompletableFuture.runAsync(
+          new AsyncEventTask<>(
+              e, taskContext, asyncProcessorContext, finalizingQueue, inFlightForTask),
+          executor
+      );
+      final var inFlightEvent = new InFlightEvent(future);
+      inFlightForTask.put(e, inFlightEvent);
+      future.handle((r, t) -> {
+        if (t != null) {
+          inFlightEvent.setError(t);
+        } else {
+          inFlightForTask.remove(e);
+        }
+        return null;
+      });
     }
   }
 
   public void shutdown() {
     // todo: make me more orderly, but you get the basic idea
-    executorService.shutdownNow();
+    executor.shutdownNow();
+  }
+
+  static class InFlightEvent {
+    private final CompletableFuture<Void> future;
+    private Throwable error = null;
+
+    private InFlightEvent(final CompletableFuture<Void> future) {
+      this.future = future;
+    }
+
+    CompletableFuture<Void> future() {
+      return future;
+    }
+
+    public synchronized Optional<Throwable> error() {
+      return Optional.ofNullable(error);
+    }
+
+    public synchronized void setError(final Throwable error) {
+      this.error = error;
+    }
   }
 
   private static class AsyncEventTask<KOut, VOut> implements Runnable {
@@ -151,52 +185,35 @@ public class AsyncThreadPool {
     private final ProcessingContext originalContext;
     private final AsyncUserProcessorContext<KOut, VOut> wrappingContext;
     private final FinalizingQueue finalizingQueue;
-    private final Map<AsyncEvent, Future<?>> inFlightForTask;
-    private final Logger log;
+    private final ConcurrentMap<AsyncEvent, InFlightEvent> inFlightForTask;
 
     private AsyncEventTask(
         final AsyncEvent event,
         final ProcessingContext originalContext,
         final AsyncUserProcessorContext<KOut, VOut> userContext,
         final FinalizingQueue finalizingQueue,
-        final Map<AsyncEvent, Future<?>> inFlightForTask,
-        final Logger log
+        final ConcurrentMap<AsyncEvent, InFlightEvent> inFlightForTask
     ) {
       this.event = event;
       this.originalContext = originalContext;
       this.wrappingContext = userContext;
       this.finalizingQueue = finalizingQueue;
       this.inFlightForTask = inFlightForTask;
-      this.log = log;
     }
 
     @Override
     public void run() {
-      wrappingContext.setDelegateForAsyncThread(new AsyncThreadProcessorContext<>(
-          originalContext,
-          event
-      ));
-      event.transitionToProcessing();
-      event.inputRecordProcessor().run();
-      synchronized (inFlightForTask) {
-        final var previous = inFlightForTask.remove(event);
-        if (previous == null) {
-          if (log.isTraceEnabled()) {
-            log.trace("no in-flight for event {}, remaining events with this key {}",
-                event,
-                inFlightForTask.keySet()
-                    .stream()
-                    .map(AsyncEvent::toString)
-                    .collect(Collectors.joining(",")));
-          }
-          log.error("no in-flight records found for event");
-          throw new IllegalStateException("no in-flight for event");
-        } else {
-          log.trace("found in-flight for event {}, remaining {}", event, inFlightForTask.size());
-        }
+      try {
+        wrappingContext.setDelegateForAsyncThread(new AsyncThreadProcessorContext<>(
+                originalContext,
+                event
+        ));
+        event.transitionToProcessing();
+        event.inputRecordProcessor().run();
+        finalizingQueue.scheduleForFinalization(event);
+      } catch (final RuntimeException e) {
+        finalizingQueue.scheduleFailedForFinalization(event, e);
       }
-      // make sure to schedule for finalization only after removing from in-flight map
-      finalizingQueue.scheduleForFinalization(event);
     }
   }
 

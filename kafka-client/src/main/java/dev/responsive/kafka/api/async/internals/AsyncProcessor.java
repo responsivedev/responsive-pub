@@ -38,7 +38,9 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
@@ -75,6 +77,8 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   // Tracks all pending events, ie from moment of creation to end of finalization/transition
   // to "DONE" state. Used to make sure all events are flushed during a commit
   private final Set<AsyncEvent> pendingEvents = new HashSet<>();
+
+  private RuntimeException processingException = null;
 
   // Everything below this line is effectively final and just has to be initialized in #init //
 
@@ -286,6 +290,11 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   }
 
   private void processNewAsyncEvent(final AsyncEvent event) {
+    if (processingException != null) {
+      throw new IllegalStateException(
+          "process called when already hit exception: " + processingException);
+    }
+
     pendingEvents.add(event);
 
     maybeBackOffEnqueuingNewEventWithKey(event.inputRecordKey());
@@ -358,6 +367,12 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    * each commit, similar to #flushCache
    */
   public void flushAndAwaitPendingEvents() {
+    if (processingException != null) {
+      // if there was a processing exception, processing for the key that hit the processing
+      // exception is blocked, so we don't want to go into the loop below that tries to drain
+      // queues, as the queue for that key will never drain. Instead, just throw here.
+      throw processingException;
+    }
 
     // Make a (non-blocking) pass through the finalizing queue up front, to
     // free up any recently-processed events before we attempt to drain the
@@ -365,6 +380,9 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     drainFinalizingQueue();
 
     while (!isCleared()) {
+      // we need to check this here because the check in finalizeAtLeastOneEvent only
+      // runs if there are currently slow events being handled by the async threads.
+      checkUncaughtExceptionsOnAsyncThreads();
 
       // Start by scheduling all unblocked events to hand off any events that
       // were just unblocked by whatever we just finalized
@@ -379,6 +397,17 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     }
 
     assertQueuesEmpty();
+  }
+
+  private void checkUncaughtExceptionsOnAsyncThreads() {
+    final var uncaught = threadPool.checkUncaughtExceptions(asyncProcessorName, taskId.partition());
+    if (uncaught.isPresent()) {
+      if (processingException != null) {
+        processingException = uncaught.map(t ->
+          t instanceof RuntimeException ? (RuntimeException) t : new RuntimeException(t)).get();
+      }
+      throw processingException;
+    }
   }
 
   /**
@@ -397,13 +426,25 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
       return numFinalized;
     }
 
-    try {
-      final AsyncEvent finalizableEvent = finalizingQueue.waitForNextFinalizableEvent();
-      completePendingEvent(finalizableEvent);
-      return 1;
-    } catch (final Exception e) {
-      log.error("Exception caught while waiting for an event to finalize", e);
-      throw new StreamsException("Failed to flush async processor", e, taskId);
+    while (true) {
+      try {
+        // there is a low chance error here where all events fail, and those failures are the
+        // kind that miss the finalizing queue (which _should_ never happen which is why its
+        // low-chance. To mitigate this we do this in a loop and apply a timeout to the wait
+        // below. At each loop we also check the pending futures.
+        final AsyncEvent finalizableEvent = finalizingQueue.waitForNextFinalizableEvent(
+            100,
+            TimeUnit.MILLISECONDS
+        );
+        if (finalizableEvent != null) {
+          completePendingEvent(finalizableEvent);
+          return 1;
+        }
+        checkUncaughtExceptionsOnAsyncThreads();
+      } catch (final Exception e) {
+        log.error("Exception caught while waiting for an event to finalize", e);
+        throw new StreamsException("Failed to flush async processor", e, taskId);
+      }
     }
   }
 
@@ -547,6 +588,12 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
           event.partition(),
           taskId.toString()));
     }
+    final Optional<RuntimeException> processingException = event.processingException();
+    if (processingException.isPresent()) {
+      pendingEvents.remove(event);
+      this.processingException = processingException.get();
+      throw this.processingException;
+    }
     return streamThreadContext.prepareToFinalizeEvent(event);
   }
 
@@ -634,5 +681,4 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
               + ResponsiveConfig.ASYNC_THREAD_POOL_SIZE_CONFIG, e);
     }
   }
-
 }

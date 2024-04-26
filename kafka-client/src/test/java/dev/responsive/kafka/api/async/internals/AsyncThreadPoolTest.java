@@ -11,7 +11,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import org.apache.kafka.streams.processor.api.ProcessingContext;
@@ -63,12 +62,13 @@ class AsyncThreadPoolTest {
     schedule("processor", 0, finalizingQueue0, event);
 
     // then:
-    final Map<AsyncEvent, Future<?>> inFlight = pool.getInFlight("processor", 0);
+    final Map<AsyncEvent, AsyncThreadPool.InFlightEvent> inFlight
+        = pool.getInFlight("processor", 0);
     if (!inFlight.isEmpty()) {
-      final var future = inFlight.get(event);
+      final var future = inFlight.get(event).future();
       future.get(10, TimeUnit.SECONDS);
     }
-    assertThat(finalizingQueue0.waitForNextFinalizableEvent(), is(event));
+    assertThat(finalizingQueue0.waitForNextFinalizableEvent(1, TimeUnit.MINUTES), is(event));
   }
 
   @Test
@@ -98,9 +98,9 @@ class AsyncThreadPoolTest {
     for (final var t : List.of(task1, task2, task3, taskOtherPartition, taskOtherProcessor)) {
       t.waitLatch.countDown();
     }
-    assertThat(processor0InFlight.get(event3).isCancelled(), is(true));
-    assertThat(processor1InFlight.get(eventOtherPartition).isCancelled(), is(false));
-    assertThat(other0InFlight.get(eventOtherProcessor).isCancelled(), is(false));
+    assertThat(processor0InFlight.get(event3).future().isCancelled(), is(true));
+    assertThat(processor1InFlight.get(eventOtherPartition).future().isCancelled(), is(false));
+    assertThat(other0InFlight.get(eventOtherProcessor).future().isCancelled(), is(false));
   }
 
   private final class TestTask implements Runnable {
