@@ -17,8 +17,13 @@
 package dev.responsive.kafka.api.async.internals.queues;
 
 import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
+
+import java.util.LinkedList;
+import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
+
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
@@ -66,6 +71,12 @@ public class FinalizingQueue implements ReadOnlyFinalizingQueue, WriteOnlyFinali
     finalizableRecords.add(processedEvent);
   }
 
+  @Override
+  public void scheduleFailedForFinalization(final AsyncEvent processedEvent, final RuntimeException exception) {
+    processedEvent.transitionToToFailed(exception);
+    finalizableRecords.add(processedEvent);
+  }
+
   /**
    * See {@link ReadOnlyFinalizingQueue#nextFinalizableEvent()}
    * <p>
@@ -82,8 +93,8 @@ public class FinalizingQueue implements ReadOnlyFinalizingQueue, WriteOnlyFinali
    * Note: blocking API
    */
   @Override
-  public AsyncEvent waitForNextFinalizableEvent() throws InterruptedException {
-    return finalizableRecords.take();
+  public AsyncEvent waitForNextFinalizableEvent(long timeout, TimeUnit unit) throws InterruptedException {
+    return finalizableRecords.poll(timeout, unit);
   }
 
   /**

@@ -19,6 +19,8 @@ package dev.responsive.kafka.api.async.internals.queues;
 import dev.responsive.kafka.api.async.internals.AsyncProcessor;
 import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
 
+import java.util.concurrent.TimeUnit;
+
 /**
  * A read-only version of the {@link FinalizingQueue} intended for the
  * StreamThread to access (by way of the {@link AsyncProcessor}.
@@ -50,7 +52,7 @@ public interface ReadOnlyFinalizingQueue {
    *         onr is available. Guaranteed to never return null
    * @throws InterruptedException if interrupted while blocking
    */
-  AsyncEvent waitForNextFinalizableEvent() throws InterruptedException;
+  AsyncEvent waitForNextFinalizableEvent(long timeout, TimeUnit unit) throws InterruptedException;
 
   /**
    * @return true if there are no currently-available events that are
