@@ -158,6 +158,9 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
     final String clientId = (String) config.get(ConsumerConfig.CLIENT_ID_CONFIG);
     LOG.info("Creating responsive main consumer: {}", clientId);
 
+    // Reset the forced override of this config done by Kafka Streams
+    config.put("internal.leave.group.on.close", true);
+
     final String streamThreadName = extractThreadNameFromConsumerClientId(clientId);
     final String threadId = extractThreadId(streamThreadName);
 
