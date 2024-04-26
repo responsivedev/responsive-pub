@@ -159,6 +159,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
     LOG.info("Creating responsive main consumer: {}", clientId);
 
     // Reset the forced override of this config done by Kafka Streams
+    // TODO: remove this and use KafkaStreams#close(closeOptions) once KAFKA-16514 is fixed
     config.put("internal.leave.group.on.close", true);
 
     final String streamThreadName = extractThreadNameFromConsumerClientId(clientId);
