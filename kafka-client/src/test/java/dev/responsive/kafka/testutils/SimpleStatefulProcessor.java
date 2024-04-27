@@ -65,28 +65,6 @@ public class SimpleStatefulProcessor implements FixedKeyProcessor<String, String
     this.streamThreadName = Thread.currentThread().getName();
   }
 
-  private static String computeNewValue(
-      final String processorIdString,
-      final boolean isDownstreamProcessor,
-      final ValueAndTimestamp<String> oldValAndTimestamp,
-      final FixedKeyRecord<String, String> inputRecord
-  ) {
-    // If this is the first time seeing this key, we need to "start" the chain
-    if (oldValAndTimestamp == null) {
-      if (isDownstreamProcessor) {
-        // If this is a downstream processor then we're actually continuing the chain,
-        // not starting it, so just connect to the upstream chain by starting with a "--"
-        return String.format("--%s%s", inputRecord.key(), processorIdString, inputRecord.value());
-      } else {
-        // If this is the "first" processor in a chain, always start by appending the key
-        return String.format("%s:%s%s", inputRecord.key(), processorIdString, inputRecord.value());
-      }
-    }
-
-    final String oldValue = oldValAndTimestamp.value();
-    return String.format("%s%s%s", oldValue, processorIdString, inputRecord.value());
-  }
-
   @Override
   public void init(final FixedKeyProcessorContext<String, String> context) {
     this.context = context;
