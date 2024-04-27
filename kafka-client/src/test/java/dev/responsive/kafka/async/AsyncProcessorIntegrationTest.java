@@ -162,11 +162,12 @@ public class AsyncProcessorIntegrationTest {
                 ResponsiveKeyValueParams.fact(IN_KV_STORE)),
             IN_KV_STORE)
         .processValues(
-            new SimpleStatefulProcessorSupplier(
-                this::computeNewValueForAsyncProcessor,
-                ResponsiveKeyValueParams.fact(ASYNC_KV_STORE),
-                processed
-            ),
+            createAsyncProcessorSupplier(
+                new SimpleStatefulProcessorSupplier(
+                    this::computeNewValueForAsyncProcessor,
+                    ResponsiveKeyValueParams.fact(ASYNC_KV_STORE),
+                    processed
+                )),
             Named.as("AsyncProcessor"),
             ASYNC_KV_STORE)
         .processValues(
