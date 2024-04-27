@@ -22,6 +22,7 @@ import static dev.responsive.kafka.testutils.IntegrationTestUtils.createTopicsAn
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.pipeRecords;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.readOutput;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.startAppAndAwaitRunning;
+import static java.lang.Integer.valueOf;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
@@ -41,16 +42,15 @@ import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
-import dev.responsive.kafka.api.stores.ResponsiveStores;
+import dev.responsive.kafka.testutils.SimpleStatefulProcessorSupplier;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
+import dev.responsive.kafka.testutils.SimpleStatefulProcessorSupplier.SimpleProcessorOutput;
 import java.time.Duration;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.clients.admin.Admin;
@@ -63,12 +63,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Named;
-import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
-import org.apache.kafka.streams.processor.api.FixedKeyProcessorContext;
-import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
 import org.apache.kafka.streams.processor.api.FixedKeyRecord;
-import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -83,12 +78,17 @@ public class AsyncProcessorIntegrationTest {
 
   private static final String INPUT_TOPIC = "input";
   private static final String OUTPUT_TOPIC = "output";
-  private static final String ASYNC_KV_STORE = "async-kv";
+
+  private static final String IN_KV_STORE = "in-kv-store";
+  private static final String ASYNC_KV_STORE = "async-kv-store";
+  private static final String OUT_KV_STORE = "out-kv-store";
 
   private final Map<String, Object> responsiveProps = new HashMap<>();
 
   private String name;
   private Admin admin;
+
+  private final int numEventsPerKey = 5;
 
   @BeforeEach
   public void before(
@@ -127,7 +127,7 @@ public class AsyncProcessorIntegrationTest {
 
     // produce 5 records for each key, with keys interleaved across iterations
     final List<KeyValue<String, String>> inputRecords = new LinkedList<>();
-    for (int val = 1; val < 6; ++val) {
+    for (int val = 1; val < 1 + numEventsPerKey; ++val) {
       for (final String key : keys) {
         inputRecords.add(new KeyValue<>(key, key + val));
       }
@@ -135,8 +135,15 @@ public class AsyncProcessorIntegrationTest {
 
     final Map<String, String> finalOutputRecords = new HashMap<>(keys.size());
     for (final String key : keys) {
-      final String finalValue = String.format("%s1%s2%s3%s4%s5", key, key, key, key, key);
-      finalOutputRecords.put(key, finalValue);
+      final StringBuilder finalValueStringBuilder = new StringBuilder();
+
+      for (int val = 1; val < 1 + numEventsPerKey; ++val) {
+        finalValueStringBuilder.append(String.format("%s:IN:%d--", key, val));
+      }
+
+      finalValueStringBuilder.append(String.format("%s:END:%d", key, numEventsPerKey));
+
+      finalOutputRecords.put(key, finalValueStringBuilder.toString());
     }
 
     final Map<String, Object> properties = getMutableProperties();
@@ -150,15 +157,29 @@ public class AsyncProcessorIntegrationTest {
     final KStream<String, String> input = builder.stream(inputTopic());
     input
         .processValues(
-            createAsyncProcessorSupplier(
-                new UserFixedKeyProcessorSupplier(processed, latestValues)),
+            new SimpleStatefulProcessorSupplier(
+                this::computeNewValueForSourceProcessor,
+                ResponsiveKeyValueParams.fact(IN_KV_STORE)),
+            IN_KV_STORE)
+        .processValues(
+            new SimpleStatefulProcessorSupplier(
+                this::computeNewValueForAsyncProcessor,
+                ResponsiveKeyValueParams.fact(ASYNC_KV_STORE),
+                processed
+            ),
             Named.as("AsyncProcessor"),
             ASYNC_KV_STORE)
+        .processValues(
+            new SimpleStatefulProcessorSupplier(
+                this::computeNewValueForSinkProcessor,
+                ResponsiveKeyValueParams.fact(OUT_KV_STORE),
+                latestValues),
+            OUT_KV_STORE)
         .to(outputTopic());
 
     // The total number of records processed, equal to the total number of output records
     // ONLY when caching is disabled
-    final int numProcessedRecords = keys.size() * 5;
+    final int numProcessedRecords = keys.size() * numEventsPerKey;
 
     try (final var streams = new ResponsiveKafkaStreams(builder.build(), properties)) {
       startAppAndAwaitRunning(Duration.ofSeconds(10), streams);
@@ -177,91 +198,55 @@ public class AsyncProcessorIntegrationTest {
     assertThat(processed.get(), equalTo(numProcessedRecords));
     assertThat(latestValues, equalTo(finalOutputRecords));
   }
-  
-  private static class UserFixedKeyProcessor implements FixedKeyProcessor<String, String, String> {
-    
-    private final AtomicInteger processed;
-    private final Map<String, String> latestValues;
-    
-    private final String streamThreadName;
-    
-    private int partition;
-    private FixedKeyProcessorContext<String, String> context;
-    private TimestampedKeyValueStore<String, String> kvStore;
 
-    public UserFixedKeyProcessor(
-        final AtomicInteger processed,
-        final Map<String, String> latestValues
-    ) {
-      this.processed = processed;
-      this.latestValues = latestValues;
-      this.streamThreadName = Thread.currentThread().getName();
-    }
+  // The "in"" processor is a simple counter that just forwards the new count appended to
+  // the key and processor name ("IN")
+  // The IN count should always match the END count computed downstream
+  private SimpleProcessorOutput computeNewValueForSourceProcessor(
+      final ValueAndTimestamp<String> oldValAndTimestamp,
+      final FixedKeyRecord<String, String> inputRecord
+  ) {
+    final int newCount = oldValAndTimestamp == null
+        ? 1
+        : 1 + Integer.parseInt(oldValAndTimestamp.value());
 
-    @Override
-    public void init(final FixedKeyProcessorContext<String, String> context) {
-      this.context = context;
-      this.kvStore = context.getStateStore(ASYNC_KV_STORE);
-      this.partition = context.taskId().partition();
-
-      System.out.printf("stream-thread [%s][%s] Initialized processor%n",
-                        streamThreadName, partition
-      );
-    }
-
-    @Override
-    public void process(final FixedKeyRecord<String, String> record) {
-      System.out.printf("stream-thread [%s][%d] Processing record: <%s, %s>%n",
-                        streamThreadName, partition, record.key(), record.value()
-      );
-      
-      final ValueAndTimestamp<String> oldValAndTimestamp = kvStore.get(record.key());
-      final String newVal = oldValAndTimestamp == null
-          ? record.value()
-          : oldValAndTimestamp.value() + record.value();
-
-      kvStore.put(record.key(), ValueAndTimestamp.make(newVal, record.timestamp()));
-      context.forward(record.withValue(newVal));
-      
-      processed.incrementAndGet();
-      latestValues.put(record.key(), newVal);
-    }
-    
-    @Override
-    public void close() {
-      System.out.printf("stream-thread [%s][%s] Closed processor%n",
-                        streamThreadName, partition
-      );
-    }
+    final String forwardedVal = String.format("%s:%s:%d", inputRecord.key(), "IN", newCount);
+    return new SimpleProcessorOutput(forwardedVal, Integer.toString(newCount));
   }
-  
-  private static class UserFixedKeyProcessorSupplier 
-      implements FixedKeyProcessorSupplier<String, String, String> {
 
-    private final AtomicInteger processed;
-    private final Map<String, String> latestValues;
-
-    public UserFixedKeyProcessorSupplier(
-        final AtomicInteger processed,
-        final Map<String, String> latestValues
-    ) {
-      this.processed = processed;
-      this.latestValues = latestValues;
+  // The async processor always forwards the same value that it computes, so over time
+  // it appends all records together into one long chain.
+  // The values computed and saved/forwarded here will include the upstream IN processor results
+  // as a prefix, but won't include the END processor suffix in the async processor results
+  // since by definition, that won't be added until the downstream END processor appends
+  // its own suffix
+  private SimpleProcessorOutput computeNewValueForAsyncProcessor(
+      final ValueAndTimestamp<String> oldValAndTimestamp,
+      final FixedKeyRecord<String, String> inputRecord
+  ) {
+    if (oldValAndTimestamp == null) {
+      return new SimpleProcessorOutput(inputRecord.value());
     }
 
-    @Override
-    public FixedKeyProcessor<String, String, String> get() {
-      return new UserFixedKeyProcessor(processed, latestValues);
-    }
+    final String newVal = String.format("%s--%s", oldValAndTimestamp.value(), inputRecord.value());
+    return new SimpleProcessorOutput(newVal);
+  }
 
-    @Override
-    public Set<StoreBuilder<?>> stores() {
-      return Collections.singleton(ResponsiveStores.timestampedKeyValueStoreBuilder(
-          ResponsiveStores.keyValueStore(ResponsiveKeyValueParams.fact(ASYNC_KV_STORE)),
-          Serdes.String(),
-          Serdes.String()
-      ));
-    }
+  // The "end"" processor is a slightly-more-advanced counter that just forwards the new count
+  // appended to the key and processor name ("END") as well as the input record value
+  // The END count should always match the IN count computed upstream
+  private SimpleProcessorOutput computeNewValueForSinkProcessor(
+      final ValueAndTimestamp<String> oldValAndTimestamp,
+      final FixedKeyRecord<String, String> inputRecord
+  ) {
+    final int newCount = oldValAndTimestamp == null
+        ? 1
+        : 1 + Integer.parseInt(oldValAndTimestamp.value());
+
+    final String forwardedVal = String.format(
+        "%s--%s:%s:%d", inputRecord.value(), inputRecord.key(), "END", newCount
+    );
+    return new SimpleProcessorOutput(forwardedVal, Integer.toString(newCount));
   }
 
   private Map<String, Object> getMutableProperties() {
