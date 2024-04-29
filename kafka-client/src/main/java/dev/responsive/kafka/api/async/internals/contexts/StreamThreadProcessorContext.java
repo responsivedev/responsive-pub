@@ -107,7 +107,7 @@ public class StreamThreadProcessorContext<KOut, VOut>
    * (Re)set all inner state and metadata to prepare for a delayed async execution
    * such as processing input records or forwarding output records
    */
-  public void prepareToFinalizeEvent(final AsyncEvent event) {
+  public PreviousRecordContextAndNode prepareToFinalizeEvent(final AsyncEvent event) {
     if (!event.currentState().equals(State.TO_FINALIZE)) {
       log.error("Attempted to prepare event for finalization but currentState was {}",
                 event.currentState());
@@ -123,13 +123,14 @@ public class StreamThreadProcessorContext<KOut, VOut>
     // both ultimately just return the recordContext we set here. So we don't need to
     // worry about setting the recordMetadata separately, even though #recordMetadata is
     // exposed to the user, since #setRecordContext takes care of that
+    final PreviousRecordContextAndNode previousRecordContextAndNode = new PreviousRecordContextAndNode(
+        originalContext.recordContext(),
+        originalContext.currentNode(),
+        originalContext
+    );
     originalContext.setRecordContext(recordContext);
     originalContext.setCurrentNode(asyncProcessorNode);
-  }
-
-  public void afterFinalizeEvent() {
-    originalContext.setRecordContext(null);
-    originalContext.setCurrentNode(null);
+    return previousRecordContextAndNode;
   }
 
   public <KS, VS> void executeDelayedWrite(
@@ -165,4 +166,24 @@ public class StreamThreadProcessorContext<KOut, VOut>
     return storeNameToAsyncStore;
   }
 
+  public static class PreviousRecordContextAndNode implements AutoCloseable {
+    private final ProcessorRecordContext context;
+    private final ProcessorNode<?, ?, ?, ?> node;
+    private final InternalProcessorContext<?, ?> previousContext;
+
+    public PreviousRecordContextAndNode(
+        final ProcessorRecordContext context,
+        final ProcessorNode<?, ?, ?, ?> node,
+        final InternalProcessorContext<?, ?> previousContext) {
+      this.context = context;
+      this.node = node;
+      this.previousContext = previousContext;
+    }
+
+    @Override
+    public void close() {
+      previousContext.setRecordContext(context);
+      previousContext.setCurrentNode(node);
+    }
+  }
 }

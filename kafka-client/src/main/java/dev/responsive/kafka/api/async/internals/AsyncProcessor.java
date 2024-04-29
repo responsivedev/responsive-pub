@@ -236,12 +236,15 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
 
   void assertQueuesEmpty() {
     if (!schedulingQueue.isEmpty()) {
+      log.error("the scheduling queue for {} was expected to be empty", taskId);
       throw new IllegalStateException("scheduling queue expected to be empty");
     }
     if (!threadPool.isEmpty(asyncProcessorName, taskId.partition())) {
+      log.error("the thread pool for {} was expected to be empty", taskId);
       throw new IllegalStateException("thread pool expected to be empty");
     }
     if (!finalizingQueue.isEmpty()) {
+      log.error("the finalizing queue for {} was expected to be empty", taskId);
       throw new IllegalStateException("finalizing queue expected to be empty");
     }
   }
@@ -522,23 +525,24 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    * it before marking the event as done.
    */
   private void completePendingEvent(final AsyncEvent finalizableEvent) {
-    preFinalize(finalizableEvent);
-    finalize(finalizableEvent);
-    postFinalize(finalizableEvent);
+    try (final var ignored = preFinalize(finalizableEvent)) {
+      finalize(finalizableEvent);
+      postFinalize(finalizableEvent);
+    }
   }
 
   /**
    * Prepare to finalize an event by
    */
-  private void preFinalize(final AsyncEvent event) {
+  private StreamThreadProcessorContext.PreviousRecordContextAndNode preFinalize(final AsyncEvent event) {
     if (!pendingEvents.contains(event)) {
+      log.error("routed event from {} to the wrong processor for {}", event.partition(), taskId.toString());
       throw new IllegalStateException(String.format(
           "routed event from %d to the wrong processor for %s",
           event.partition(),
           taskId.toString()));
     }
-    streamThreadContext.prepareToFinalizeEvent(event);
-    event.transitionToFinalizing();
+    return streamThreadContext.prepareToFinalizeEvent(event);
   }
 
   /**
@@ -546,6 +550,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    * ie executing forwards and writes that were intercepted from #process
    */
   private void finalize(final AsyncEvent event) {
+    event.transitionToFinalizing();
     DelayedWrite<?, ?> nextDelayedWrite = event.nextWrite();
     DelayedForward<KOut, VOut> nextDelayedForward = event.nextForward();
 

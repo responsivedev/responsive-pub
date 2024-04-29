@@ -62,6 +62,10 @@ public class FinalizingQueue implements ReadOnlyFinalizingQueue, WriteOnlyFinali
       final AsyncEvent processedEvent
   ) {
     if (processedEvent.partition() != this.partition) {
+      log.error("attempted to finalize an event for partition {} on queue for partition {}",
+          processedEvent.partition(),
+          this.partition
+      );
       throw new IllegalStateException(String.format(
           "attempted to finalize an event for partition %d on queue for partition %d",
           processedEvent.partition(),

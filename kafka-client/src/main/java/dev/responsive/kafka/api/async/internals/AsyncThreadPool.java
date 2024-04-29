@@ -63,13 +63,14 @@ public class AsyncThreadPool {
   boolean isEmpty(final String processorName, final int partition) {
     final var forTask = inFlight.get(InFlightWorkKey.of(processorName, partition));
     if (forTask == null) {
-      log.debug("no in-flight map found for partition {}", partition);
+      log.debug("no in-flight map found for {}:{}", processorName, partition);
       return true;
     }
     if (log.isTraceEnabled()) {
-      log.trace("found in-flight map for partition {}: {}",
-              partition,
-              forTask.keySet().stream().map(AsyncEvent::toString).collect(Collectors.joining(", "))
+      log.trace("found in-flight map for {}:{}: {}",
+          processorName,
+          partition,
+          forTask.keySet().stream().map(AsyncEvent::toString).collect(Collectors.joining(", "))
       );
     }
     return forTask.isEmpty();
@@ -181,11 +182,12 @@ public class AsyncThreadPool {
         final var previous = inFlightForTask.remove(event);
         if (previous == null) {
           if (log.isTraceEnabled()) {
-            log.trace("no in-flight for event {}, remaining {}", event, inFlightForTask.keySet()
+            log.trace("no in-flight for event {}, remaining events with this key {}", event, inFlightForTask.keySet()
                     .stream()
                     .map(AsyncEvent::toString)
                     .collect(Collectors.joining(",")));
           }
+          log.error("no in-flight records found for event");
           throw new IllegalStateException("no in-flight for event");
         } else {
           log.trace("found in-flight for event {}, remaining {}", event, inFlightForTask.size());
