@@ -35,7 +35,7 @@ import org.slf4j.LoggerFactory;
  * <p>
  * See also: {@link SimpleStatefulProcessorSupplier}
  */
-@SuppressWarnings("checkstyle:linelngth")
+@SuppressWarnings("checkstyle:linelength")
 public class SimpleStatefulProcessor implements FixedKeyProcessor<String, String, String> {
 
   private final Logger log = LoggerFactory.getLogger(SimpleStatefulProcessor.class);
