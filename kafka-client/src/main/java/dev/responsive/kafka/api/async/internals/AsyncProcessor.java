@@ -99,6 +99,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
 
   // the context we pass in to the user so it routes to the actual context based on calling thread
   private AsyncUserProcessorContext<KOut, VOut> userContext;
+  private boolean hasProcessedSomething = false;
 
   public static <KIn, VIn, KOut, VOut> AsyncProcessor<KIn, VIn, KOut, VOut> createAsyncProcessor(
       final Processor<KIn, VIn, KOut, VOut> userProcessor,
@@ -198,7 +199,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     this.threadPool = getAsyncThreadPool(taskContext, streamThreadName);
 
     this.schedulingQueue = new SchedulingQueue<>(logPrefix, maxEventsPerKey);
-    this.finalizingQueue = new FinalizingQueue(logPrefix);
+    this.finalizingQueue = new FinalizingQueue(logPrefix, taskId.partition());
 
     this.punctuator = taskContext.schedule(
         Duration.ofMillis(punctuationInterval),
@@ -226,8 +227,32 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     );
   }
 
+  void assertQueuesEmptyOnFirstProcess() {
+    if (!hasProcessedSomething) {
+      assertQueuesEmpty();
+      hasProcessedSomething = true;
+    }
+  }
+
+  void assertQueuesEmpty() {
+    if (!schedulingQueue.isEmpty()) {
+      log.error("the scheduling queue for {} was expected to be empty", taskId);
+      throw new IllegalStateException("scheduling queue expected to be empty");
+    }
+    if (!threadPool.isEmpty(asyncProcessorName, taskId.partition())) {
+      log.error("the thread pool for {} was expected to be empty", taskId);
+      throw new IllegalStateException("thread pool expected to be empty");
+    }
+    if (!finalizingQueue.isEmpty()) {
+      log.error("the finalizing queue for {} was expected to be empty", taskId);
+      throw new IllegalStateException("finalizing queue expected to be empty");
+    }
+  }
+
   @Override
   public void process(final Record<KIn, VIn> record) {
+    assertQueuesEmptyOnFirstProcess();
+
     final AsyncEvent newEvent = new AsyncEvent(
         logPrefix,
         record,
@@ -244,6 +269,8 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
 
   @Override
   public void process(final FixedKeyRecord<KIn, VIn> record) {
+    assertQueuesEmptyOnFirstProcess();
+
     final AsyncEvent newEvent = new AsyncEvent(
         logPrefix,
         record,
@@ -350,6 +377,8 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
                 numScheduled, numFinalized
       );
     }
+
+    assertQueuesEmpty();
   }
 
   /**
@@ -495,18 +524,30 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    * Accepts an event pulled from the {@link FinalizingQueue} and finalizes
    * it before marking the event as done.
    */
+  @SuppressWarnings("try")
   private void completePendingEvent(final AsyncEvent finalizableEvent) {
-    preFinalize(finalizableEvent);
-    finalize(finalizableEvent);
-    postFinalize(finalizableEvent);
+    try (final var ignored = preFinalize(finalizableEvent)) {
+      finalize(finalizableEvent);
+      postFinalize(finalizableEvent);
+    }
   }
 
   /**
    * Prepare to finalize an event by
    */
-  private void preFinalize(final AsyncEvent event) {
-    streamThreadContext.prepareToFinalizeEvent(event);
-    event.transitionToFinalizing();
+  private StreamThreadProcessorContext.PreviousRecordContextAndNode preFinalize(
+      final AsyncEvent event
+  ) {
+    if (!pendingEvents.contains(event)) {
+      log.error("routed event from {} to the wrong processor for {}",
+          event.partition(),
+          taskId.toString());
+      throw new IllegalStateException(String.format(
+          "routed event from %d to the wrong processor for %s",
+          event.partition(),
+          taskId.toString()));
+    }
+    return streamThreadContext.prepareToFinalizeEvent(event);
   }
 
   /**
@@ -514,6 +555,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    * ie executing forwards and writes that were intercepted from #process
    */
   private void finalize(final AsyncEvent event) {
+    event.transitionToFinalizing();
     DelayedWrite<?, ?> nextDelayedWrite = event.nextWrite();
     DelayedForward<KOut, VOut> nextDelayedForward = event.nextForward();
 
@@ -522,7 +564,6 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
       if (nextDelayedWrite != null) {
         streamThreadContext.executeDelayedWrite(nextDelayedWrite);
       }
-
 
       if (nextDelayedForward != null) {
         streamThreadContext.executeDelayedForward(nextDelayedForward);
@@ -562,17 +603,18 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
       final Map<String, AsyncKeyValueStore<?, ?>> accessedStores,
       final Map<String, AbstractAsyncStoreBuilder<?, ?, ?>> connectedStores
   ) {
-    if (accessedStores.size() != connectedStores.size()) {
+    if (!accessedStores.keySet().equals(connectedStores.keySet())) {
       log.error(
-          "Number of connected store names is not equal to the number of stores retrieved "
+          "Connected stores names not equal to the stores retrieved "
               + "via ProcessorContext#getStateStore during initialization. Make sure to pass "
               + "all state stores used by this processor to the AsyncProcessorSupplier, and "
               + "they are (all) initialized during the Processor#init call before actual "
               + "processing begins. Found {} connected store names and {} actual stores used",
-          connectedStores.size(), accessedStores.keySet().size());
+          String.join(",", connectedStores.keySet()),
+          String.join(", ", accessedStores.keySet()));
       throw new IllegalStateException(
-          "Number of actual stores initialized by this processor does not "
-              + "match the number of connected store names that were provided "
+          "Names of actual stores initialized by this processor does not "
+              + "match the connected store names that were provided "
               + "to the AsyncProcessorSupplier");
     }
   }

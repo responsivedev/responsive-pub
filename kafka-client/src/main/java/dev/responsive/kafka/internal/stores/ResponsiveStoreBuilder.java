@@ -64,7 +64,7 @@ public class ResponsiveStoreBuilder<K, V, T extends StateStore> implements Store
     );
   }
 
-  public ResponsiveStoreBuilder(
+  private ResponsiveStoreBuilder(
       final StoreType storeType,
       final StoreSupplier<?> userStoreSupplier,
       final StoreBuilder<T> userStoreBuilder,

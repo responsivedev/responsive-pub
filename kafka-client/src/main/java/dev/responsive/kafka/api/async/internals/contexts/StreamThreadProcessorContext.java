@@ -63,9 +63,10 @@ public class StreamThreadProcessorContext<KOut, VOut>
       final DelayedAsyncStoreWriter delayedStoreWriter
   ) {
     super();
-    this.log = new LogContext(logPrefix).logger(StreamThreadProcessorContext.class);
+    this.log = new LogContext(Objects.requireNonNull(logPrefix))
+        .logger(StreamThreadProcessorContext.class);
+    this.originalContext = Objects.requireNonNull(originalContext);
     this.asyncProcessorNode = originalContext.currentNode();
-    this.originalContext = originalContext;
     this.delayedStoreWriter = Objects.requireNonNull(delayedStoreWriter);
   }
 
@@ -106,7 +107,7 @@ public class StreamThreadProcessorContext<KOut, VOut>
    * (Re)set all inner state and metadata to prepare for a delayed async execution
    * such as processing input records or forwarding output records
    */
-  public void prepareToFinalizeEvent(final AsyncEvent event) {
+  public PreviousRecordContextAndNode prepareToFinalizeEvent(final AsyncEvent event) {
     if (!event.currentState().equals(State.TO_FINALIZE)) {
       log.error("Attempted to prepare event for finalization but currentState was {}",
                 event.currentState());
@@ -122,8 +123,15 @@ public class StreamThreadProcessorContext<KOut, VOut>
     // both ultimately just return the recordContext we set here. So we don't need to
     // worry about setting the recordMetadata separately, even though #recordMetadata is
     // exposed to the user, since #setRecordContext takes care of that
+    final PreviousRecordContextAndNode previousRecordContextAndNode
+        = new PreviousRecordContextAndNode(
+            originalContext.recordContext(),
+            originalContext.currentNode(),
+            originalContext
+    );
     originalContext.setRecordContext(recordContext);
     originalContext.setCurrentNode(asyncProcessorNode);
+    return previousRecordContextAndNode;
   }
 
   public <KS, VS> void executeDelayedWrite(
@@ -159,4 +167,24 @@ public class StreamThreadProcessorContext<KOut, VOut>
     return storeNameToAsyncStore;
   }
 
+  public static class PreviousRecordContextAndNode implements AutoCloseable {
+    private final ProcessorRecordContext context;
+    private final ProcessorNode<?, ?, ?, ?> node;
+    private final InternalProcessorContext<?, ?> previousContext;
+
+    public PreviousRecordContextAndNode(
+        final ProcessorRecordContext context,
+        final ProcessorNode<?, ?, ?, ?> node,
+        final InternalProcessorContext<?, ?> previousContext) {
+      this.context = context;
+      this.node = node;
+      this.previousContext = previousContext;
+    }
+
+    @Override
+    public void close() {
+      previousContext.setRecordContext(context);
+      previousContext.setCurrentNode(node);
+    }
+  }
 }
