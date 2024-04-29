@@ -123,10 +123,11 @@ public class StreamThreadProcessorContext<KOut, VOut>
     // both ultimately just return the recordContext we set here. So we don't need to
     // worry about setting the recordMetadata separately, even though #recordMetadata is
     // exposed to the user, since #setRecordContext takes care of that
-    final PreviousRecordContextAndNode previousRecordContextAndNode = new PreviousRecordContextAndNode(
-        originalContext.recordContext(),
-        originalContext.currentNode(),
-        originalContext
+    final PreviousRecordContextAndNode previousRecordContextAndNode
+        = new PreviousRecordContextAndNode(
+            originalContext.recordContext(),
+            originalContext.currentNode(),
+            originalContext
     );
     originalContext.setRecordContext(recordContext);
     originalContext.setCurrentNode(asyncProcessorNode);

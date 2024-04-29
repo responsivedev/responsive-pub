@@ -182,7 +182,9 @@ public class AsyncThreadPool {
         final var previous = inFlightForTask.remove(event);
         if (previous == null) {
           if (log.isTraceEnabled()) {
-            log.trace("no in-flight for event {}, remaining events with this key {}", event, inFlightForTask.keySet()
+            log.trace("no in-flight for event {}, remaining events with this key {}",
+                event,
+                inFlightForTask.keySet()
                     .stream()
                     .map(AsyncEvent::toString)
                     .collect(Collectors.joining(",")));

@@ -524,6 +524,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    * Accepts an event pulled from the {@link FinalizingQueue} and finalizes
    * it before marking the event as done.
    */
+  @SuppressWarnings("try")
   private void completePendingEvent(final AsyncEvent finalizableEvent) {
     try (final var ignored = preFinalize(finalizableEvent)) {
       finalize(finalizableEvent);
@@ -534,9 +535,13 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   /**
    * Prepare to finalize an event by
    */
-  private StreamThreadProcessorContext.PreviousRecordContextAndNode preFinalize(final AsyncEvent event) {
+  private StreamThreadProcessorContext.PreviousRecordContextAndNode preFinalize(
+      final AsyncEvent event
+  ) {
     if (!pendingEvents.contains(event)) {
-      log.error("routed event from {} to the wrong processor for {}", event.partition(), taskId.toString());
+      log.error("routed event from {} to the wrong processor for {}",
+          event.partition(),
+          taskId.toString());
       throw new IllegalStateException(String.format(
           "routed event from %d to the wrong processor for %s",
           event.partition(),
@@ -575,8 +580,6 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    */
   private void postFinalize(final AsyncEvent event) {
     event.transitionToDone();
-
-    streamThreadContext.afterFinalizeEvent();
 
     pendingEvents.remove(event);
     schedulingQueue.unblockKey(event.inputRecordKey());
