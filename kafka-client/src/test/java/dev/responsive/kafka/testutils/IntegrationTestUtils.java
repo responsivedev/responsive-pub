@@ -23,6 +23,8 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -210,7 +212,6 @@ public final class IntegrationTestUtils {
     for (final KeyValue<K, V> record : records) {
       producer.send(new ProducerRecord<>(
           topic,
-          0,
           record.key,
           record.value
       ));
@@ -278,15 +279,29 @@ public final class IntegrationTestUtils {
       final boolean readUncommitted,
       final Map<String, Object> originals
   ) throws TimeoutException {
+    return readOutput(topic, from, numEvents, 1, readUncommitted, originals);
+  }
+
+  public static <K, V> List<KeyValue<K, V>> readOutput(
+      final String topic,
+      final long from,
+      final long numEvents,
+      final int numPartitions,
+      final boolean readUncommitted,
+      final Map<String, Object> originals
+  ) throws TimeoutException {
     final Map<String, Object> properties = new HashMap<>(originals);
     properties.put(ISOLATION_LEVEL_CONFIG, readUncommitted
         ? IsolationLevel.READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT)
         : IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT));
 
+    final List<TopicPartition> partitions = IntStream.range(0, numPartitions)
+        .mapToObj(i -> new TopicPartition(topic, i))
+        .collect(Collectors.toList());
+
     try (final KafkaConsumer<K, V> consumer = new KafkaConsumer<>(properties)) {
-      final TopicPartition output = new TopicPartition(topic, 0);
-      consumer.assign(List.of(output));
-      consumer.seek(output, from);
+      consumer.assign(partitions);
+      partitions.forEach(tp -> consumer.seek(tp, from));
 
       final long end = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
       final List<KeyValue<K, V>> result = new ArrayList<>();
@@ -299,7 +314,7 @@ public final class IntegrationTestUtils {
         }
         if (System.nanoTime() > end) {
           throw new TimeoutException(
-              "Timed out trying to read " + numEvents + " events from " + output
+              "Timed out trying to read " + numEvents + " events from " + partitions
                   + ". Read " + result);
         }
       }
