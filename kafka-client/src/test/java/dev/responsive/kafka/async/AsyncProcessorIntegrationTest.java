@@ -43,7 +43,6 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasItem;
 
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
-import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
