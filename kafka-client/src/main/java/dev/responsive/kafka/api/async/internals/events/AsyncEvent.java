@@ -120,7 +120,7 @@ public class AsyncEvent {
   private final long systemTime;
   private final long streamTime;
 
-  private final ProcessorRecordContext recordContext; // null if transfoerm/punctuator-created
+  private final ProcessorRecordContext recordContext; // null if transform/punctuator-created
 
   private final Runnable processInputRecord;
 

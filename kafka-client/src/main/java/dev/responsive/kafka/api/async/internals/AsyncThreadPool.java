@@ -121,7 +121,7 @@ public class AsyncThreadPool {
    * Schedule a new event for processing. Must be "processable" ie all previous
    * same-key events have cleared.
    * <p>
-   * This is a blocking call, as it will wait until the processing queue has
+   * This is a potentially blocking call, as it will wait until the processing queue has
    * enough space to accept a new event.
    */
   public <KOut, VOut> void scheduleForProcessing(
@@ -182,32 +182,32 @@ public class AsyncThreadPool {
 
   private static class AsyncEventTask<KOut, VOut> implements Runnable {
     private final AsyncEvent event;
-    private final ProcessingContext originalContext;
+    private final AsyncThreadProcessorContext<KOut, VOut> asyncThreadContext;
     private final AsyncUserProcessorContext<KOut, VOut> wrappingContext;
     private final FinalizingQueue finalizingQueue;
     private final ConcurrentMap<AsyncEvent, InFlightEvent> inFlightForTask;
 
     private AsyncEventTask(
         final AsyncEvent event,
-        final ProcessingContext originalContext,
+        final ProcessingContext taskContext,
         final AsyncUserProcessorContext<KOut, VOut> userContext,
         final FinalizingQueue finalizingQueue,
         final ConcurrentMap<AsyncEvent, InFlightEvent> inFlightForTask
     ) {
       this.event = event;
-      this.originalContext = originalContext;
       this.wrappingContext = userContext;
       this.finalizingQueue = finalizingQueue;
       this.inFlightForTask = inFlightForTask;
+      this.asyncThreadContext = new AsyncThreadProcessorContext<>(
+          taskContext,
+          event
+      );
     }
 
     @Override
     public void run() {
       try {
-        wrappingContext.setDelegateForAsyncThread(new AsyncThreadProcessorContext<>(
-                originalContext,
-                event
-        ));
+        wrappingContext.setDelegateForAsyncThread(asyncThreadContext);
         event.transitionToProcessing();
         event.inputRecordProcessor().run();
         finalizingQueue.scheduleForFinalization(event);
