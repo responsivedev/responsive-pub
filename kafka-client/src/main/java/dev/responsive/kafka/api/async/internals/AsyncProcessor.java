@@ -82,6 +82,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   // Tracks all pending events, ie from moment of creation to end of finalization/transition
   // to "DONE" state. Used to make sure all events are flushed during a commit
   private final Set<AsyncEvent> pendingEvents = new HashSet<>();
+  private final Map<AsyncEvent, CompletableFuture<Void>> eventsBeingProcessed = new HashMap<>();
 
   private RuntimeException processingException = null;
 
@@ -96,7 +97,6 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
 
   private AsyncThreadPool threadPool;
   private SchedulingQueue<KIn> schedulingQueue;
-  private final Map<AsyncEvent, CompletableFuture<Void>> eventsBeingProcessed = new HashMap<>();
   private FinalizingQueue finalizingQueue;
 
   private Cancellable punctuator;
@@ -516,7 +516,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
       final var overlap = inFlight.keySet().stream()
           .filter(eventsBeingProcessed::containsKey).collect(Collectors.toList());
       if (!overlap.isEmpty()) {
-        throw new IllegalStateException("scheduled evens that are already being processed");
+        throw new IllegalStateException("scheduled events that are already being processed");
       }
       eventsBeingProcessed.putAll(inFlight);
     }
