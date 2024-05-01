@@ -18,6 +18,7 @@ package dev.responsive.kafka.testutils;
 
 import dev.responsive.kafka.testutils.SimpleStatefulProcessorSupplier.SimpleProcessorOutput;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
@@ -44,6 +45,7 @@ public class SimpleStatefulProcessor implements FixedKeyProcessor<String, String
 
   private final AtomicInteger processed;
   private final Map<String, String> latestValues;
+  private final CountDownLatch processingLatch;
 
   private final String storeName;
   private final String streamThreadName;
@@ -56,12 +58,14 @@ public class SimpleStatefulProcessor implements FixedKeyProcessor<String, String
       final BiFunction<ValueAndTimestamp<String>, FixedKeyRecord<String, String>, SimpleProcessorOutput> computeOutput,
       final String storeName,
       final AtomicInteger processed,
-      final Map<String, String> latestValues
+      final Map<String, String> latestValues,
+      final CountDownLatch processingLatch
   ) {
     this.computeOutput = computeOutput;
     this.storeName = storeName;
     this.processed = processed;
     this.latestValues = latestValues;
+    this.processingLatch = processingLatch;
     this.streamThreadName = Thread.currentThread().getName();
   }
 
@@ -92,6 +96,9 @@ public class SimpleStatefulProcessor implements FixedKeyProcessor<String, String
 
     processed.incrementAndGet();
     latestValues.put(record.key(), output.forwardedValue);
+    if (processingLatch != null) {
+      processingLatch.countDown();
+    }
   }
 
   @Override

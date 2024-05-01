@@ -23,6 +23,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
 import org.apache.kafka.common.serialization.Serdes;
@@ -71,6 +72,7 @@ public class SimpleStatefulProcessorSupplier
   
   private final AtomicInteger processed;
   private final Map<String, String> latestValues;
+  private final CountDownLatch processingLatch;
   
   private final String storeName;
   private final Set<StoreBuilder<?>> storeBuilders;
@@ -83,7 +85,7 @@ public class SimpleStatefulProcessorSupplier
       final BiFunction<ValueAndTimestamp<String>, FixedKeyRecord<String, String>, SimpleProcessorOutput> computeOutput,
       final ResponsiveKeyValueParams params
   ) {
-    this(computeOutput, params, new AtomicInteger(), new HashMap<>());
+    this(computeOutput, params, new AtomicInteger(), new HashMap<>(), null);
   }
 
   /**
@@ -96,20 +98,22 @@ public class SimpleStatefulProcessorSupplier
       final ResponsiveKeyValueParams params,
       final AtomicInteger processed
   ) {
-    this(computeOutput, params, processed, new ConcurrentHashMap<>());
+    this(computeOutput, params, processed, new ConcurrentHashMap<>(), null);
   }
 
   /**
-   * @param computeOutput a simple function that computes the output from the input record and old value
-   * @param params        the params to use to build a Responsive timestamped key-value store
-   * @param latestValues  optional map to track latest value computed for each key
+   * @param computeOutput   a simple function that computes the output from the input record and old value
+   * @param params          the params to use to build a Responsive timestamped key-value store
+   * @param latestValues    optional map to track latest value computed for each key
+   * @param processingLatch optional latch that counts down on each invocation of process
    */
   public SimpleStatefulProcessorSupplier(
       final BiFunction<ValueAndTimestamp<String>, FixedKeyRecord<String, String>, SimpleProcessorOutput> computeOutput,
       final ResponsiveKeyValueParams params,
-      final Map<String, String> latestValues
+      final Map<String, String> latestValues,
+      final CountDownLatch processingLatch
   ) {
-    this(computeOutput, params, new AtomicInteger(), latestValues);
+    this(computeOutput, params, new AtomicInteger(), latestValues, processingLatch);
   }
 
   /**
@@ -122,12 +126,14 @@ public class SimpleStatefulProcessorSupplier
       final BiFunction<ValueAndTimestamp<String>, FixedKeyRecord<String, String>, SimpleProcessorOutput> computeOutput,
       final ResponsiveKeyValueParams params,
       final AtomicInteger processed,
-      final Map<String, String> latestValues
+      final Map<String, String> latestValues,
+      final CountDownLatch processingLatch
   ) {
     this.computeOutput = computeOutput;
     this.storeName = params.name().kafkaName();
     this.processed = processed;
     this.latestValues = latestValues;
+    this.processingLatch = processingLatch;
     this.storeBuilders = Collections.singleton(ResponsiveStores.timestampedKeyValueStoreBuilder(
         ResponsiveStores.keyValueStore(params),
         Serdes.String(),
@@ -140,7 +146,8 @@ public class SimpleStatefulProcessorSupplier
         computeOutput,
         storeName, 
         processed, 
-        latestValues
+        latestValues,
+        processingLatch
     );
   }
   

@@ -17,6 +17,11 @@
 package dev.responsive.kafka.async;
 
 import static dev.responsive.kafka.api.async.AsyncFixedKeyProcessorSupplier.createAsyncProcessorSupplier;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.ASYNC_FLUSH_INTERVAL_MS_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.ASYNC_MAX_EVENTS_QUEUED_PER_ASYNC_THREAD_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.ASYNC_MAX_EVENTS_QUEUED_PER_KEY_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.ASYNC_THREAD_POOL_SIZE_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.STORE_FLUSH_INTERVAL_TRIGGER_MS_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.STORE_FLUSH_RECORDS_TRIGGER_CONFIG;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.createTopicsAndWait;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.pipeRecords;
@@ -38,7 +43,6 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasItem;
 
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
-import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
@@ -51,6 +55,8 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -75,6 +81,40 @@ public class AsyncProcessorIntegrationTest {
   @RegisterExtension
   static ResponsiveExtension EXTENSION = new ResponsiveExtension(StorageBackend.CASSANDRA);
 
+  ////////////////// Integration Test Toggles //////////////////
+
+  // Test parameters:
+  // How long to sleep to mock a long/blocking call
+  private static final long ASYNC_SLEEP_DURATION_MS = 100L;
+  // Ratio of input topic partition count to output topic
+  private static final int INPUT_OUTPUT_PARTITION_RATIO = 3;
+  // How many stores in the async processor
+  private static final int NUM_ASYNC_STORES = 1; // TODO: not implemented, changing it has no effect
+
+  /// StreamsConfigs:
+  // commit.interval.ms (default 30s)
+  private static final long COMMIT_INTERVAL_MS = 30 * 1000L;
+
+  // ResponsiveConfigs:
+  // responsive.store.flush.trigger.local.interval (default 30s)
+  private static final long COMMIT_BUFFER_FLUSH_INTERVAL_MS = Long.MAX_VALUE;
+  // responsive.store.flush.trigger.local.records (default MAX_VALUE)
+  private static final int COMMIT_BUFFER_FLUSH_RECORDS = 0;
+  // responsive.async.max.events.queued.per.async.thread
+  private static final int MAX_EVENTS_QUEUED_PER_ASYNC_THREAD = 5;
+  // responsive.async.max.events.queued.per.key
+  private static final int MAX_EVENTS_QUEUED_PER_KEY = 3;
+  // responsive.async.flush.interval.ms
+  private static final long ASYNC_FLUSH_INTERVAL_MS = 5 * 1000L;
+
+  ///////////// CONSTANTS /////////////
+
+  private static final int STREAMTHREADS_PER_APP = 5;
+  private static final int ASYNC_THREADS_PER_STREAMTHREAD = 5;
+  private static final int TASKS_PER_STREAMTHREAD = 2; // approximate/assumes balanced partitioning
+  private static final int KEYS_PAR_TASK = 5; // TODO: implement key list based on this config
+  private static final int INPUT_RECORDS_PER_KEY = 10;
+
   private static final String INPUT_TOPIC = "input";
   private static final String OUTPUT_TOPIC = "output";
 
@@ -86,8 +126,8 @@ public class AsyncProcessorIntegrationTest {
 
   private String name;
   private Admin admin;
-
-  private final int numEventsPerKey = 5;
+  private int numInputPartitions;
+  private int numOutputPartitions;
 
   @BeforeEach
   public void before(
@@ -96,12 +136,17 @@ public class AsyncProcessorIntegrationTest {
       @ResponsiveConfigParam final Map<String, Object> responsiveProps
   ) {
     // add displayName to name to account for parameterized tests
-    name = info.getDisplayName().replace("()", "");
+    this.name = info.getDisplayName().replace("()", "");
 
     this.responsiveProps.putAll(responsiveProps);
-
     this.admin = admin;
-    createTopicsAndWait(admin, Map.of(inputTopic(), 10, outputTopic(), 1));
+
+    this.numInputPartitions = TASKS_PER_STREAMTHREAD * STREAMTHREADS_PER_APP;
+    this.numOutputPartitions = numInputPartitions / INPUT_OUTPUT_PARTITION_RATIO;
+    createTopicsAndWait(
+        admin,
+        Map.of(inputTopic(), numInputPartitions, outputTopic(), numOutputPartitions)
+    );
   }
 
   @AfterEach
@@ -120,13 +165,16 @@ public class AsyncProcessorIntegrationTest {
   @Test
   public void shouldProcessEventsInOrderByKey() throws Exception {
     // Given:
-    final List<String> keys = List.of("a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k",
-                                      "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v",
-                                      "w", "x", "y", "z");
+    final List<String> keys = List.of("a", "b", "c", "d", "e", "f", "g", "h", "i", "j",
+                                      "k", "l", "m", "n", "o", "p", "q", "r", "s", "t",
+                                      "u", "v", "w", "x", "y", "z",
+                                      "aa", "bb", "cc", "dd", "ee", "ff", "gg", "hh", "ii", "jj",
+                                      "kk", "ll", "mm", "nn", "oo", "pp", "qq", "rr", "ss", "tt",
+                                      "uu", "vv", "ww", "xx", "yy", "zz");
 
-    // produce 5 records for each key, with keys interleaved across iterations
+    // produce N records for each key, with same-key events interleaved between other keys
     final List<KeyValue<String, String>> inputRecords = new LinkedList<>();
-    for (int val = 1; val < 1 + numEventsPerKey; ++val) {
+    for (int val = 1; val < 1 + INPUT_RECORDS_PER_KEY; ++val) {
       for (final String key : keys) {
         inputRecords.add(new KeyValue<>(key, key + val));
       }
@@ -136,24 +184,29 @@ public class AsyncProcessorIntegrationTest {
     for (final String key : keys) {
       final StringBuilder finalValueStringBuilder = new StringBuilder();
 
-      for (int val = 1; val < 1 + numEventsPerKey; ++val) {
+      for (int val = 1; val < 1 + INPUT_RECORDS_PER_KEY; ++val) {
         finalValueStringBuilder.append(String.format("%s:IN:%d--", key, val));
       }
 
-      finalValueStringBuilder.append(String.format("%s:END:%d", key, numEventsPerKey));
+      finalValueStringBuilder.append(String.format("%s:END:%d", key, INPUT_RECORDS_PER_KEY));
 
       finalOutputRecords.put(key, finalValueStringBuilder.toString());
     }
 
-    final Map<String, Object> properties = getMutableProperties();
-    final KafkaProducer<String, String> producer = new KafkaProducer<>(properties);
-    
+    // The total number of records processed, equal to the total number of output records
+    // ONLY when caching is disabled
+    final int numInputRecords = keys.size() * INPUT_RECORDS_PER_KEY;
+
     final AtomicInteger processed = new AtomicInteger(0);
     final Map<String, String> latestValues = new ConcurrentHashMap<>();
+    final CountDownLatch inputRecordsLatch = new CountDownLatch(numInputRecords);
+
+    final Map<String, Object> properties = getMutableProperties();
+    final KafkaProducer<String, String> producer = new KafkaProducer<>(properties);
 
     final StreamsBuilder builder = new StreamsBuilder();
-
     final KStream<String, String> input = builder.stream(inputTopic());
+
     input
         .processValues(
             new SimpleStatefulProcessorSupplier(
@@ -173,13 +226,10 @@ public class AsyncProcessorIntegrationTest {
             new SimpleStatefulProcessorSupplier(
                 this::computeNewValueForSinkProcessor,
                 ResponsiveKeyValueParams.fact(OUT_KV_STORE),
-                latestValues),
+                latestValues,
+                inputRecordsLatch),
             OUT_KV_STORE)
         .to(outputTopic());
-
-    // The total number of records processed, equal to the total number of output records
-    // ONLY when caching is disabled
-    final int numProcessedRecords = keys.size() * numEventsPerKey;
 
     try (final var streams = new ResponsiveKafkaStreams(builder.build(), properties)) {
       startAppAndAwaitRunning(Duration.ofSeconds(10), streams);
@@ -188,14 +238,23 @@ public class AsyncProcessorIntegrationTest {
       pipeRecords(producer, inputTopic(), inputRecords);
 
       // Then:
-      final var kvs = readOutput(outputTopic(), 0, numProcessedRecords, true, properties);
+      final long timeout = 2 * ASYNC_SLEEP_DURATION_MS * numInputRecords;
+      final boolean allInputProcessed = inputRecordsLatch.await(timeout, TimeUnit.MILLISECONDS);
+      if (!allInputProcessed) {
+        throw new AssertionError(String.format("Failed to process all %d input records within %dms",
+                                 numInputPartitions, timeout));
+      }
+
+      final var kvs = readOutput(
+          outputTopic(), 0, numInputRecords, numOutputPartitions, true, properties
+      );
 
       for (final String key : keys) {
         final String finalValue = finalOutputRecords.get(key);
         assertThat(kvs, hasItem(new KeyValue<>(key, finalValue)));
       }
     }
-    assertThat(processed.get(), equalTo(numProcessedRecords));
+    assertThat(processed.get(), equalTo(numInputRecords));
     assertThat(latestValues, equalTo(finalOutputRecords));
   }
 
@@ -229,6 +288,12 @@ public class AsyncProcessorIntegrationTest {
     }
 
     final String newVal = String.format("%s--%s", oldValAndTimestamp.value(), inputRecord.value());
+
+    try {
+      Thread.sleep(ASYNC_SLEEP_DURATION_MS);
+    } catch (final InterruptedException e) {
+      throw new RuntimeException("Interrupted during 'RPC' call in async processor", e);
+    }
     return new SimpleProcessorOutput(newVal);
   }
 
@@ -249,11 +314,9 @@ public class AsyncProcessorIntegrationTest {
     return new SimpleProcessorOutput(forwardedVal, Integer.toString(newCount));
   }
 
+  @SuppressWarnings("checkstyle:linelength")
   private Map<String, Object> getMutableProperties() {
     final Map<String, Object> properties = new HashMap<>(responsiveProps);
-    
-    properties.put(ResponsiveConfig.ASYNC_THREAD_POOL_SIZE_CONFIG, 5);
-    properties.put(NUM_STREAM_THREADS_CONFIG, 5);
 
     properties.put(KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
     properties.put(VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
@@ -263,11 +326,20 @@ public class AsyncProcessorIntegrationTest {
     properties.put(APPLICATION_ID_CONFIG, name);
     properties.put(DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class.getName());
     properties.put(DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class.getName());
-    properties.put(STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
-    properties.put(STORE_FLUSH_RECORDS_TRIGGER_CONFIG, 1);
-    properties.put(COMMIT_INTERVAL_MS_CONFIG, 1);
 
-    properties.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 1);
+    properties.put(ASYNC_THREAD_POOL_SIZE_CONFIG, ASYNC_THREADS_PER_STREAMTHREAD);
+    properties.put(NUM_STREAM_THREADS_CONFIG, STREAMTHREADS_PER_APP);
+
+    properties.put(COMMIT_INTERVAL_MS_CONFIG, COMMIT_INTERVAL_MS);
+    properties.put(STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
+
+    properties.put(STORE_FLUSH_RECORDS_TRIGGER_CONFIG, COMMIT_BUFFER_FLUSH_RECORDS);
+    properties.put(STORE_FLUSH_INTERVAL_TRIGGER_MS_CONFIG, COMMIT_BUFFER_FLUSH_INTERVAL_MS);
+
+    properties.put(ASYNC_MAX_EVENTS_QUEUED_PER_ASYNC_THREAD_CONFIG, MAX_EVENTS_QUEUED_PER_ASYNC_THREAD);
+    properties.put(ASYNC_MAX_EVENTS_QUEUED_PER_KEY_CONFIG, MAX_EVENTS_QUEUED_PER_KEY);
+    properties.put(ASYNC_FLUSH_INTERVAL_MS_CONFIG, ASYNC_FLUSH_INTERVAL_MS);
+
     properties.put(consumerPrefix(ConsumerConfig.METADATA_MAX_AGE_CONFIG), "1000");
     properties.put(consumerPrefix(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG), "earliest");
 
