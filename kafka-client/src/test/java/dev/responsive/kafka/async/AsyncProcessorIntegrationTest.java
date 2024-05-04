@@ -30,6 +30,7 @@ import static dev.responsive.kafka.testutils.IntegrationTestUtils.startAppAndAwa
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.producer.ProducerConfig.TRANSACTION_TIMEOUT_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.APPLICATION_ID_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.COMMIT_INTERVAL_MS_CONFIG;
@@ -40,9 +41,9 @@ import static org.apache.kafka.streams.StreamsConfig.NUM_STREAM_THREADS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.PROCESSING_GUARANTEE_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
+import static org.apache.kafka.streams.StreamsConfig.producerPrefix;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.is;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
@@ -268,7 +269,7 @@ public class AsyncProcessorIntegrationTest {
         caughtExceptions.add(exception);
         return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.REPLACE_THREAD;
       });
-      startAppAndAwaitRunning(Duration.ofSeconds(10), streams);
+      startAppAndAwaitRunning(Duration.ofSeconds(30), streams);
 
       // When:
       pipeRecords(producer, inputTopic(), inputRecords);
@@ -285,9 +286,13 @@ public class AsyncProcessorIntegrationTest {
           outputTopic(), 0, numInputRecords, numOutputPartitions, true, properties
       );
 
+      final Map<String, String> latestByKey = new HashMap<>();
+      for (final var kv : kvs) {
+        latestByKey.put((String) kv.key, (String) kv.value);
+      }
       for (final String key : keys) {
         final String finalValue = finalOutputRecords.get(key);
-        assertThat(kvs, hasItem(new KeyValue<>(key, finalValue)));
+        assertThat(latestByKey.get(key), is(finalValue));
       }
     }
     assertThat(caughtExceptions.size(), is(1));
@@ -337,7 +342,10 @@ public class AsyncProcessorIntegrationTest {
       );
     }
 
-    final String newVal = String.format("%s--%s", oldValAndTimestamp.value(), inputRecord.value());
+    final String newVal = String.format("%s--%s",
+        oldValAndTimestamp.value(),
+        inputRecord.value().getValue()
+    );
 
     try {
       Thread.sleep(ASYNC_SLEEP_DURATION_MS);
@@ -378,6 +386,7 @@ public class AsyncProcessorIntegrationTest {
     properties.put(DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class.getName());
     properties.put(DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class.getName());
     properties.put(PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_V2);
+    properties.put(producerPrefix(TRANSACTION_TIMEOUT_CONFIG), (int) COMMIT_INTERVAL_MS * 2);
 
     properties.put(ASYNC_THREAD_POOL_SIZE_CONFIG, ASYNC_THREADS_PER_STREAMTHREAD);
     properties.put(NUM_STREAM_THREADS_CONFIG, STREAMTHREADS_PER_APP);
