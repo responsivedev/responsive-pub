@@ -429,9 +429,12 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    * tied to events that belong to this specific AsyncProcessor or task.
    */
   private void checkForAsyncThreadPoolExceptions() throws Throwable {
-    final var uncaught = threadPool.checkProcessingExceptions(asyncProcessorName, taskId.partition());
-    if (uncaught.isPresent()) {
-      throw uncaught.get();
+    final Optional<Throwable> fatal = threadPool.checkProcessingExceptions(
+        asyncProcessorName, taskId.partition()
+    );
+    
+    if (fatal.isPresent()) {
+      throw fatal.get();
     }
   }
 
