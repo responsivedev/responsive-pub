@@ -145,21 +145,14 @@ public class AsyncThreadPool {
 
     for (final AsyncEvent event : events) {
       final var future = CompletableFuture.runAsync(
-          new AsyncEventTask<>(event, taskContext, asyncProcessorContext),
+          new AsyncEventTask<>(event, taskContext, asyncProcessorContext, finalizingQueue),
           executor
       );
       final var inFlightEvent = new InFlightEvent(future);
       inFlightForTask.put(event, inFlightEvent);
 
       future
-          .whenComplete((r, t) -> {
-            inFlightForTask.remove(event);
-
-            if (t == null) {
-              finalizingQueue.addFinalizableEvent(event);
-              event.transitionToToFinalize();
-            }
-          })
+          .whenComplete((r, t) -> inFlightForTask.remove(event))
           .exceptionally(processingException -> {
             inFlightEvent.setError(processingException);
             event.transitionToFailed(processingException);
@@ -206,15 +199,17 @@ public class AsyncThreadPool {
     private final AsyncEvent event;
     private final AsyncThreadProcessorContext<KOut, VOut> asyncThreadContext;
     private final AsyncUserProcessorContext<KOut, VOut> wrappingContext;
+    private final FinalizingQueue finalizingQueue;
 
     private AsyncEventTask(
         final AsyncEvent event,
         final ProcessingContext taskContext,
-        final AsyncUserProcessorContext<KOut, VOut> userContext
-
+        final AsyncUserProcessorContext<KOut, VOut> userContext,
+        final FinalizingQueue finalizingQueue
     ) {
       this.event = event;
       this.wrappingContext = userContext;
+      this.finalizingQueue = finalizingQueue;
       this.asyncThreadContext = new AsyncThreadProcessorContext<>(
           taskContext,
           event
@@ -226,6 +221,8 @@ public class AsyncThreadPool {
       wrappingContext.setDelegateForAsyncThread(asyncThreadContext);
       event.transitionToProcessing();
       event.inputRecordProcessor().run();
+      finalizingQueue.addFinalizableEvent(event);
+      event.transitionToToFinalize();
     }
   }
 
