@@ -283,7 +283,7 @@ public class AsyncProcessorIntegrationTest {
       }
 
       final var kvs = readOutput(
-          outputTopic(), 0, numInputRecords, numOutputPartitions, true, properties
+          outputTopic(), 0, numInputRecords, numOutputPartitions, false, properties
       );
 
       final Map<String, String> latestByKey = new HashMap<>();
