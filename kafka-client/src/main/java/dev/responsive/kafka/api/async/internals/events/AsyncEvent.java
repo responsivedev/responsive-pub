@@ -95,15 +95,18 @@ import org.slf4j.Logger;
 public class AsyncEvent {
 
   // State machine for an async event lifecycle. Every event must pass through each
-  // state exactly once and progress these following the same order in which they
-  // are defined below
+  // state exactly once and progress linearly following the order in which they
+  // are defined below. The one exception to this is the FAILED state which can be
+  // transitioned to at any point. However the terminal state for all events is DONE,
+  // whether failed or not -- an event that has hit an error will remain in the FAILED
+  // state until that error is picked up and acknowledged by the StreamThread.
   public enum State {
     SCHEDULING,
     TO_PROCESS,
     PROCESSING,
-    FAILED_PROCESSING,
     TO_FINALIZE,
     FINALIZING,
+    FAILED,
     DONE
   }
 
@@ -126,7 +129,8 @@ public class AsyncEvent {
 
   private final Queue<DelayedForward<?, ?>> outputForwards = new LinkedList<>();
   private final Queue<DelayedWrite<?, ?>> outputWrites = new LinkedList<>();
-  private RuntimeException processingException = null;
+
+  private Throwable processingException = null;
 
   public AsyncEvent(
       final String logPrefix,
@@ -214,7 +218,7 @@ public class AsyncEvent {
     outputWrites.add(delayedWrite);
   }
 
-  public Optional<RuntimeException> processingException() {
+  public Optional<Throwable> processingException() {
     return Optional.ofNullable(processingException);
   }
 
@@ -232,14 +236,16 @@ public class AsyncEvent {
     return currentState;
   }
 
-  public void transitionToToFailed(RuntimeException exception) {
-    if (!currentState.equals(State.PROCESSING)) {
-      log.warn(
-          "[{}] attempted to mark async event as failed but the event was not in PROCESSING state",
+  public void transitionToFailed(final Throwable throwable) {
+    if (currentState.equals(State.DONE)) {
+      log.error(
+          "[{}] Attempted to mark async event as failed but it was already in the DONE state",
           currentState.name());
+      throw new IllegalStateException("Cannot transition to FAILED from the state "
+                                          + currentState.name());
     }
-    currentState = State.FAILED_PROCESSING;
-    processingException = exception;
+    currentState = State.FAILED;
+    processingException = throwable;
   }
 
   public void transitionToToProcess() {
@@ -283,10 +289,10 @@ public class AsyncEvent {
   }
 
   public void transitionToDone() {
-    if (!currentState.equals(State.FINALIZING)) {
+    if (!(currentState.equals(State.FINALIZING) || currentState.equals(State.FAILED))) {
       log.error(
-          "[{}] Attempted to mark an async event as DONE but the event not "
-              + "in the FINALIZING state",
+          "[{}] Attempted to mark an async event as DONE but the event was not "
+              + "in the FINALIZING or FAILED state",
           currentState.name());
       throw new IllegalStateException(
           "Cannot transition to DONE from the state " + currentState.name());

@@ -10,7 +10,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -32,10 +31,12 @@ public class AsyncThreadPool {
   private final ThreadPoolExecutor executor;
   private final Map<InFlightWorkKey, ConcurrentMap<AsyncEvent, InFlightEvent>> inFlight
       = new HashMap<>();
-
-  private final Map<InFlightWorkKey, Queue<AsyncEvent> inFlight
-      = new HashMap<>();
   private final BlockingQueue<Runnable> processingQueue;
+
+  // TODO: we don't really need to track this by processor/partition, technically an
+  //  error anywhere is fatal for the StreamThread and all processors + all further
+  //  processing should shut down ASAP to minimize ALOS overcounting
+  private final Map<InFlightWorkKey, Throwable> fatalExceptions = new ConcurrentHashMap<>();
 
   private final AtomicInteger threadNameIndex = new AtomicInteger(0);
 
@@ -49,7 +50,7 @@ public class AsyncThreadPool {
     this.log = logPrefix.logger(AsyncThreadPool.class);
     this.processingQueue = new LinkedBlockingQueue<>(maxQueuedEvents);
 
-    executor = new ThreadPoolExecutor(
+    this.executor = new ThreadPoolExecutor(
         threadPoolSize,
         maxQueuedEvents,
         Long.MAX_VALUE,
@@ -64,14 +65,14 @@ public class AsyncThreadPool {
     );
   }
 
-  boolean isEmpty(final String processorName, final int partition) {
+  public boolean isEmpty(final String processorName, final int partition) {
     final var forTask = inFlight.get(InFlightWorkKey.of(processorName, partition));
     if (forTask == null) {
-      log.debug("no in-flight map found for {}:{}", processorName, partition);
+      log.debug("No in-flight map found for {}[{}]", processorName, partition);
       return true;
     }
     if (log.isTraceEnabled()) {
-      log.trace("found in-flight map for {}:{}: {}",
+      log.trace("Found in-flight map for {}[{}]: {}",
           processorName,
           partition,
           forTask.keySet().stream().map(AsyncEvent::toString).collect(Collectors.joining(", "))
@@ -81,10 +82,14 @@ public class AsyncThreadPool {
   }
 
   public void removeProcessor(final String processorName, final int partition) {
-    log.info("clean up records for {}:{}", processorName, partition);
+    log.debug("Removing {}[{}] from async thread pool", processorName, partition);
     final var key = InFlightWorkKey.of(processorName, partition);
     final Map<AsyncEvent, InFlightEvent> inFlightForTask = inFlight.remove(key);
+
+
     if (inFlightForTask != null) {
+      log.info("Cancelling {} pending records for {}[{}]",
+               inFlightForTask.size(), processorName, partition);
       inFlightForTask.values().forEach(f -> f.future().cancel(true));
     }
   }
@@ -102,14 +107,7 @@ public class AsyncThreadPool {
       final String processorName,
       final int partition
   ) {
-    final var key = InFlightWorkKey.of(processorName, partition);
-    final Map<AsyncEvent, InFlightEvent> inFlightForTask
-        = inFlight.computeIfAbsent(key, k -> new ConcurrentHashMap<>());
-    return inFlightForTask.values().stream()
-        .map(InFlightEvent::error)
-        .filter(Optional::isPresent)
-        .map(Optional::get)
-        .findFirst();
+    return Optional.ofNullable(fatalExceptions.get(new InFlightWorkKey(processorName, partition)));
   }
 
   /**
@@ -143,34 +141,37 @@ public class AsyncThreadPool {
     final var inFlightKey = InFlightWorkKey.of(processorName, partition);
     final var inFlightForTask
         = inFlight.computeIfAbsent(inFlightKey, k -> new ConcurrentHashMap<>());
-    for (final var e : events) {
+
+    for (final AsyncEvent event : events) {
       final var future = CompletableFuture.runAsync(
-          new AsyncEventTask<>(
-              e, taskContext, asyncProcessorContext, finalizingQueue, inFlightForTask),
+          new AsyncEventTask<>(event, taskContext, asyncProcessorContext),
           executor
       );
       final var inFlightEvent = new InFlightEvent(future);
-      inFlightForTask.put(e, inFlightEvent);
-      future.handle((r, t) -> {
-        if (t != null) {
-          inFlightEvent.setError(t);
-        } else {
-          inFlightForTask.remove(e);
-        }
-        return null;
-      });
-    }
-  }
+      inFlightForTask.put(event, inFlightEvent);
 
-  /**
-   * Cancel all pending events and prevent further processing by this threadpool.
-   * Events that are actively being processed will not be interrupted, but no
-   * new in-flight events will be picked up to process after this is called.
-   * Used to mitigate ALOS overcounting in case of a fatal exception in the
-   * StreamThread
-   */
-  public void suspend() {
-    throw new UnsupportedOperationException("implement me");
+      future
+          .whenComplete((r, t) -> {
+            inFlightForTask.remove(event);
+
+            if (t == null) {
+              finalizingQueue.addFinalizableEvent(event);
+              event.transitionToToFinalize();
+            }
+          })
+          .exceptionally(processingException -> {
+            inFlightEvent.setError(processingException);
+            event.transitionToFailed(processingException);
+            finalizingQueue.addFailedEvent(event, processingException);
+            return null;
+          })
+          .exceptionally(processingException -> {
+            // do this in separate stage to ensure we always catch a fatal exception, even
+            // if we somehow hit another exception in the previous exception handling stage
+            fatalExceptions.computeIfAbsent(inFlightKey, k -> processingException);
+            return null;
+          });
+    }
   }
 
   public void shutdown() {
@@ -200,22 +201,18 @@ public class AsyncThreadPool {
   }
 
   private static class AsyncEventTask<KOut, VOut> implements Runnable {
+
     private final AsyncEvent event;
     private final AsyncThreadProcessorContext<KOut, VOut> asyncThreadContext;
     private final AsyncUserProcessorContext<KOut, VOut> wrappingContext;
-    private final FinalizingQueue finalizingQueue;
 
     private AsyncEventTask(
         final AsyncEvent event,
         final ProcessingContext taskContext,
-        final AsyncUserProcessorContext<KOut, VOut> userContext,
-        final FinalizingQueue finalizingQueue,
-        final ConcurrentMap<AsyncEvent, InFlightEvent> inFlightForTask
+        final AsyncUserProcessorContext<KOut, VOut> userContext
     ) {
       this.event = event;
       this.wrappingContext = userContext;
-      this.finalizingQueue = finalizingQueue;
-      this.inFlightForTask = inFlightForTask;
       this.asyncThreadContext = new AsyncThreadProcessorContext<>(
           taskContext,
           event
@@ -224,17 +221,13 @@ public class AsyncThreadPool {
 
     @Override
     public void run() {
-      try {
-        wrappingContext.setDelegateForAsyncThread(asyncThreadContext);
-        event.transitionToProcessing();
-        event.inputRecordProcessor().run();
-        finalizingQueue.scheduleForFinalization(event);
-      } catch (final RuntimeException e) {
-        finalizingQueue.scheduleFailedForFinalization(event, e);
-      }
+      wrappingContext.setDelegateForAsyncThread(asyncThreadContext);
+      event.transitionToProcessing();
+      event.inputRecordProcessor().run();
     }
   }
 
+  // TODO: think of a better name for this class
   private static class InFlightWorkKey {
     private final String processorName;
     private final int partition;

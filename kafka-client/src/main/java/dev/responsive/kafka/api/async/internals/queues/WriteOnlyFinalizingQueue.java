@@ -32,17 +32,19 @@ import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
 public interface WriteOnlyFinalizingQueue {
 
   /**
-   * Schedules a record that the AsyncThread finished processing and inserts it
-   * into the queue for the StreamThread to pick up and finalize
+   * Adds a record that the AsyncThread finished processing successfully
+   * and inserts it into the back of the queue for the StreamThread to pick up
+   * and finalize.
    */
-  void scheduleForFinalization(final AsyncEvent processedEvent);
+  void addFinalizableEvent(final AsyncEvent processedEvent);
 
   /**
-   * Schedules a record that the AsyncThread failed to process and inserts it
-   * into the queue for the StreamThread to pick up and finalize
+   * Adds a record that the AsyncThread failed to process successfully
+   * and inserts it into the front of the queue for the StreamThread to pick up
+   * and handle.
    */
-  void scheduleFailedForFinalization(
+  void addFailedEvent(
       final AsyncEvent processedEvent,
-      final RuntimeException exception
+      final Throwable throwable
   );
 }

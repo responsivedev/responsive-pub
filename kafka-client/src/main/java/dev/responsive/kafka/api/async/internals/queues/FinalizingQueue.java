@@ -17,8 +17,8 @@
 package dev.responsive.kafka.api.async.internals.queues;
 
 import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.BlockingDeque;
+import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.TimeUnit;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
@@ -44,7 +44,7 @@ import org.slf4j.Logger;
 public class FinalizingQueue implements ReadOnlyFinalizingQueue, WriteOnlyFinalizingQueue {
 
   private final Logger log;
-  private final BlockingQueue<AsyncEvent> finalizableRecords = new LinkedBlockingQueue<>();
+  private final BlockingDeque<AsyncEvent> finalizableRecords = new LinkedBlockingDeque<>();
   private final int partition;
 
   public FinalizingQueue(final String logPrefix, final int partition) {
@@ -53,37 +53,35 @@ public class FinalizingQueue implements ReadOnlyFinalizingQueue, WriteOnlyFinali
   }
 
   /**
-   * See {@link WriteOnlyFinalizingQueue#scheduleForFinalization}
+   * See {@link WriteOnlyFinalizingQueue#addFinalizableEvent}
    */
   @Override
-  public void scheduleForFinalization(
-      final AsyncEvent processedEvent
+  public void addFinalizableEvent(
+      final AsyncEvent event
   ) {
-    if (processedEvent.partition() != this.partition) {
-      log.error("attempted to finalize an event for partition {} on queue for partition {}",
-          processedEvent.partition(),
+    if (event.partition() != this.partition) {
+      final String errorMsg = String.format(
+          "Attempted to finalize an event for partition %d on queue for partition %d",
+          event.partition(),
           this.partition
       );
-      throw new IllegalStateException(String.format(
-          "attempted to finalize an event for partition %d on queue for partition %d",
-          processedEvent.partition(),
-          this.partition
-      ));
+      log.error(errorMsg);
+      throw new IllegalStateException(errorMsg);
     }
-    processedEvent.transitionToToFinalize();
-    finalizableRecords.add(processedEvent);
+
+    finalizableRecords.addLast(event);
   }
 
   /**
-   * See {@link WriteOnlyFinalizingQueue#scheduleFailedForFinalization}
+   * See {@link WriteOnlyFinalizingQueue#addFailedEvent}
    */
   @Override
-  public void scheduleFailedForFinalization(
-      final AsyncEvent processedEvent,
-      final RuntimeException exception
+  public void addFailedEvent(
+      final AsyncEvent event,
+      final Throwable throwable
   ) {
-    processedEvent.transitionToToFailed(exception);
-    finalizableRecords.add(processedEvent);
+    // Failed events get to jump the line to make sure the StreamThread fails fast
+    finalizableRecords.addFirst(event);
   }
 
   /**
