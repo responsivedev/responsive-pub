@@ -16,11 +16,8 @@
 
 package dev.responsive.kafka.internal.metrics;
 
-import dev.responsive.kafka.internal.metrics.ResponsiveMetrics.MetricGroup;
-import java.util.LinkedHashMap;
-
 @SuppressWarnings("checkstyle:linelength")
-public class TopicMetrics implements MetricGroup {
+public class TopicMetrics {
   
   public static final String TOPIC_METRIC_GROUP = "topic-metrics";
 
@@ -29,20 +26,4 @@ public class TopicMetrics implements MetricGroup {
 
   public static final String END_OFFSET = "end-offset";
   public static final String END_OFFSET_DESCRIPTION = "The end offset of this topic partition";
-
-  private final LinkedHashMap<String, String> tags;
-
-  TopicMetrics(final LinkedHashMap<String, String> tags) {
-    this.tags = tags;
-  }
-  
-  @Override
-  public String groupName() {
-    return TOPIC_METRIC_GROUP;
-  }
-
-  @Override
-  public LinkedHashMap<String, String> tags() {
-    return tags;
-  }
 }

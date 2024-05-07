@@ -20,7 +20,9 @@ import static dev.responsive.kafka.api.async.internals.AsyncUtils.processorRecor
 
 import dev.responsive.kafka.api.async.internals.AsyncProcessor;
 import dev.responsive.kafka.api.async.internals.contexts.AsyncThreadProcessorContext;
+import java.time.Instant;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Queue;
@@ -114,6 +116,7 @@ public class AsyncEvent {
 
   private final Logger log;
 
+  private Instant transitionTime;
   private State currentState;
 
   private final Object inputRecordKey;
@@ -129,6 +132,8 @@ public class AsyncEvent {
 
   private final Runnable processInputRecord;
 
+  private final List<StateTransitionListener> stateTransitionListeners;
+
   private final Queue<DelayedForward<?, ?>> outputForwards = new LinkedList<>();
   private final Queue<DelayedWrite<?, ?>> outputWrites = new LinkedList<>();
 
@@ -142,7 +147,8 @@ public class AsyncEvent {
       final ProcessorRecordContext recordContext,
       final long currentStreamTime,
       final long currentSystemTime,
-      final Runnable processInputRecord
+      final Runnable processInputRecord,
+      final List<StateTransitionListener> stateTransitionListeners
   ) {
     this(logPrefix,
          inputRecord.key(),
@@ -152,7 +158,8 @@ public class AsyncEvent {
          recordContext,
          currentStreamTime,
          currentSystemTime,
-         processInputRecord
+         processInputRecord,
+        stateTransitionListeners
     );
   }
 
@@ -164,7 +171,8 @@ public class AsyncEvent {
       final ProcessorRecordContext recordContext,
       final long currentStreamTime,
       final long currentSystemTime,
-      final Runnable processInputRecord
+      final Runnable processInputRecord,
+      final List<StateTransitionListener> stateTransitionListeners
   ) {
     this(logPrefix,
          fixedKeyInputRecord.key(),
@@ -174,7 +182,8 @@ public class AsyncEvent {
          recordContext,
          currentStreamTime,
          currentSystemTime,
-         processInputRecord
+         processInputRecord,
+        stateTransitionListeners
     );
   }
 
@@ -187,9 +196,11 @@ public class AsyncEvent {
       final ProcessorRecordContext recordContext,
       final long currentStreamTime,
       final long currentSystemTime,
-      final Runnable processInputRecord
+      final Runnable processInputRecord,
+      final List<StateTransitionListener> stateTransitionListeners
   ) {
     this.currentState = State.SCHEDULING;
+    this.transitionTime = Instant.now();
     this.inputRecordKey = inputRecordKey;
     this.inputRecordValue = inputRecordValue;
     this.asyncProcessorName = asyncProcessorName;
@@ -198,6 +209,7 @@ public class AsyncEvent {
     this.systemTime = currentSystemTime;
     this.recordContext = recordContext;
     this.processInputRecord = processInputRecord;
+    this.stateTransitionListeners = stateTransitionListeners;
 
     if (recordContext == null) {
       this.log = new LogContext(logPrefix).logger(AsyncEvent.class);
@@ -238,6 +250,18 @@ public class AsyncEvent {
     return currentState;
   }
 
+  private void transitionTo(final State newState) {
+    final Instant transitionTime = Instant.now();
+    stateTransitionListeners.forEach(l -> l.onStateTransition(
+        currentState,
+        this.transitionTime,
+        newState,
+        transitionTime
+    ));
+    this.transitionTime = transitionTime;
+    this.currentState = newState;
+  }
+
   public void transitionToFailed(final RuntimeException exception) {
     if (currentState.equals(State.DONE)) {
       log.error(
@@ -246,7 +270,7 @@ public class AsyncEvent {
       throw new IllegalStateException("Cannot transition to FAILED from the state "
                                           + currentState.name());
     }
-    currentState = State.FAILED;
+    transitionTo(State.FAILED_PROCESSING);
     processingException = exception;
   }
 
@@ -257,7 +281,7 @@ public class AsyncEvent {
       throw new IllegalStateException("Cannot transition to AWAITING_PROCESS from the state "
                                           + currentState.name());
     }
-    currentState = State.TO_PROCESS;
+    transitionTo(State.TO_PROCESS);
   }
 
   public void transitionToProcessing() {
@@ -267,7 +291,7 @@ public class AsyncEvent {
       throw new IllegalStateException("Cannot transition to PROCESSING from the state "
                                           + currentState.name());
     }
-    currentState = State.PROCESSING;
+    transitionTo(State.PROCESSING);
   }
 
   public void transitionToToFinalize() {
@@ -277,7 +301,7 @@ public class AsyncEvent {
       throw new IllegalStateException("Cannot transition to TO_FINALIZE from the state "
                                           + currentState.name());
     }
-    currentState = State.TO_FINALIZE;
+    transitionTo(State.TO_FINALIZE);
   }
 
   public void transitionToFinalizing() {
@@ -287,7 +311,7 @@ public class AsyncEvent {
       throw new IllegalStateException("Cannot transition to FINALIZING from the state "
                                           + currentState.name());
     }
-    currentState = State.FINALIZING;
+    transitionTo(State.FINALIZING);
   }
 
   public void transitionToDone() {
@@ -307,7 +331,7 @@ public class AsyncEvent {
           "Can't transition to DONE when there are still records in the output buffers");
     }
 
-    currentState = State.DONE;
+    transitionTo(State.DONE);
   }
 
   public ProcessorRecordContext recordContext() {
@@ -391,5 +415,9 @@ public class AsyncEvent {
         + ", numForwards=" + outputForwards.size()
         + ", numWrites=" + outputWrites.size()
         + '}';
+  }
+
+  public interface StateTransitionListener {
+    void onStateTransition(State from, Instant fromTime, State to, Instant toTime);
   }
 }

@@ -4,7 +4,12 @@ import com.google.common.annotations.VisibleForTesting;
 import dev.responsive.kafka.api.async.internals.contexts.AsyncThreadProcessorContext;
 import dev.responsive.kafka.api.async.internals.contexts.AsyncUserProcessorContext;
 import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
+import dev.responsive.kafka.api.async.internals.metrics.AsyncProcessorMetricsRecorder;
+import dev.responsive.kafka.api.async.internals.metrics.AsyncThreadPoolMetricsRecorder;
 import dev.responsive.kafka.api.async.internals.queues.FinalizingQueue;
+import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,6 +37,7 @@ public class AsyncThreadPool {
 
   private final Logger log;
 
+  private final AsyncThreadPoolMetricsRecorder metricsRecorder;
   private final ThreadPoolExecutor executor;
   private final Map<InFlightWorkKey, ConcurrentMap<AsyncEvent, InFlightEvent>> inFlight
       = new HashMap<>();
@@ -49,7 +55,8 @@ public class AsyncThreadPool {
   public AsyncThreadPool(
       final String streamThreadName,
       final int threadPoolSize,
-      final int maxQueuedEvents
+      final int maxQueuedEvents,
+      final ResponsiveMetrics responsiveMetrics
   ) {
     final LogContext logPrefix
         = new LogContext(String.format("stream-thread [%s] ", streamThreadName));
@@ -69,6 +76,11 @@ public class AsyncThreadPool {
           t.setName(generateAsyncThreadName(streamThreadName, threadNameIndex.getAndIncrement()));
           return t;
         }
+    );
+    this.metricsRecorder = new AsyncThreadPoolMetricsRecorder(
+        responsiveMetrics,
+        streamThreadName,
+        processingQueue::size
     );
   }
 
@@ -146,8 +158,9 @@ public class AsyncThreadPool {
       final List<AsyncEvent> events,
       final FinalizingQueue finalizingQueue,
       final ProcessingContext taskContext,
-      final AsyncUserProcessorContext<KOut, VOut> asyncProcessorContext
-  ) {
+      final AsyncUserProcessorContext<KOut, VOut> asyncProcessorContext,
+      final AsyncProcessorMetricsRecorder processorMetricsRecorder
+      ) {
     final var inFlightKey = InFlightWorkKey.of(processorName, taskId.partition());
     final var inFlightForTask
         = inFlight.computeIfAbsent(inFlightKey, k -> new ConcurrentHashMap<>());
@@ -163,7 +176,8 @@ public class AsyncThreadPool {
               event,
               taskContext,
               asyncProcessorContext,
-              queueSemaphore
+              queueSemaphore,
+              processorMetricsRecorder
           ),
           executor
       );
@@ -202,7 +216,7 @@ public class AsyncThreadPool {
   }
 
   public void shutdown() {
-    // todo: make me more orderly, but you get the basic idea
+    metricsRecorder.close();
     executor.shutdownNow();
   }
 
@@ -224,12 +238,14 @@ public class AsyncThreadPool {
     private final AsyncThreadProcessorContext<KOut, VOut> asyncThreadContext;
     private final AsyncUserProcessorContext<KOut, VOut> wrappingContext;
     private final Semaphore queueSemaphore;
+    private final AsyncProcessorMetricsRecorder metricsRecorder;
 
     private AsyncEventTask(
         final AsyncEvent event,
         final ProcessingContext taskContext,
         final AsyncUserProcessorContext<KOut, VOut> userContext,
         final Semaphore queueSemaphore
+        final AsyncProcessorMetricsRecorder metricsRecorder
     ) {
       this.event = event;
       this.wrappingContext = userContext;
@@ -238,10 +254,12 @@ public class AsyncThreadPool {
           event
       );
       this.queueSemaphore = queueSemaphore;
+      this.metricsRecorder = metricsRecorder;
     }
 
     @Override
     public StreamsException get() {
+      final Instant start = Instant.now();
       queueSemaphore.release();
       wrappingContext.setDelegateForAsyncThread(asyncThreadContext);
       event.transitionToProcessing();
@@ -253,6 +271,7 @@ public class AsyncThreadPool {
       }
 
       event.transitionToToFinalize();
+      metricsRecorder.recordEventProcess(Duration.between(start, Instant.now()));
       return null;
     }
   }

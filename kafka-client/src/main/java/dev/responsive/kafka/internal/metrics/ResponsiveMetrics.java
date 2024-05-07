@@ -21,12 +21,14 @@ import dev.responsive.kafka.internal.metrics.exporter.NoopMetricsExporterService
 import java.io.Closeable;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.stream.Collectors;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.MetricValueProvider;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -82,35 +84,87 @@ public class ResponsiveMetrics implements Closeable {
     );
   }
 
-  public interface MetricGroup {
+  public static class MetricScope {
+    private final String groupName;
+    private final LinkedHashMap<String, String> tags;
 
-    String groupName();
+    // make this private so that users have to create one of the scopes defined below
+    private MetricScope(final String groupName, final LinkedHashMap<String, String> tags) {
+      this.groupName = groupName;
+      this.tags = tags;
+    }
+
+    public String groupName() {
+      return groupName;
+    }
 
     // Enforce LinkedHashMap to maintain tag ordering in mbean name
-    LinkedHashMap<String, String> tags();
+    public LinkedHashMap<String, String> tags() {
+      return tags;
+    }
+
+    public String sensorName(final String name) {
+      return String.join("/",
+          groupName(),
+          name,
+          tags().entrySet().stream()
+              .map(e -> e.getKey() + ":" + e.getValue()).collect(Collectors.joining(","))
+      );
+    }
+
+    public MetricScope withTags(final String key, final String val) {
+      final LinkedHashMap<String, String> updated = new LinkedHashMap<>(tags);
+      if (tags.containsKey(key)) {
+        throw new IllegalStateException("Duplicate tag key " + key);
+      }
+      updated.put(key, val);
+      return new MetricScope(groupName, updated);
+    }
   }
 
-  public MetricGroup applicationLevelMetric() {
-    return new ApplicationMetrics(
+  public MetricScope applicationLevelMetric(final String group) {
+    return new MetricScope(
+        group,
         orderedTagsSupplier.applicationGroupTags()
     );
   }
 
-  public MetricGroup topicLevelMetric(
+  public MetricScope processorLevelMetric(
+      final String group,
+      final String threadId,
+      final TaskId taskId,
+      final String processorName
+  ) {
+    return new MetricScope(
+        group,
+        orderedTagsSupplier.processorGroupTags(threadId, taskId, processorName));
+  }
+
+  public MetricScope threadLevelMetric(final String group, final String threadId) {
+    return new MetricScope(
+        group,
+        orderedTagsSupplier.threadGroupTags(threadId));
+  }
+
+  public MetricScope topicLevelMetric(
+      final String group,
       final String threadId,
       final TopicPartition topicPartition
   ) {
-    return new TopicMetrics(
+    return new MetricScope(
+        group,
         orderedTagsSupplier.topicGroupTags(threadId, topicPartition)
     );
   }
 
-  public MetricGroup storeLevelMetric(
+  public MetricScope storeLevelMetric(
+      final String group,
       final String threadId,
       final TopicPartition changelog,
       final String storeName
   ) {
-    return new StoreMetrics(
+    return new MetricScope(
+        group,
         orderedTagsSupplier.storeGroupTags(threadId, changelog, storeName)
     );
   }
@@ -118,7 +172,7 @@ public class ResponsiveMetrics implements Closeable {
   /**
    * @param metricName        a unique name for this metric
    * @param metricDescription a short description of the recorded metric
-   * @param metricGroup       the {@link MetricGroup} containing the corresponding group tags
+   * @param metricScope       the {@link MetricScope} containing the corresponding group tags
    *
    * @return                  the {@link MetricName}, which should be saved so that this
    *                          metric can be cleaned up when the associated resource is closed
@@ -126,13 +180,38 @@ public class ResponsiveMetrics implements Closeable {
   public MetricName metricName(
       final String metricName,
       final String metricDescription,
-      final MetricGroup metricGroup
+      final MetricScope metricScope
   ) {
     return new MetricName(
         metricName,
-        metricGroup.groupName(),
+        metricScope.groupName(),
         metricDescription,
-        metricGroup.tags()
+        metricScope.tags()
+    );
+  }
+
+  /**
+   * @param metricName        a unique name for this metric
+   * @param metricDescription a short description of the recorded metric
+   * @param metricScope       the {@link MetricScope} containing the corresponding group tags
+   * @param additionalTags    a set of additional tags to be attached to the metric
+   *
+   * @return                  the {@link MetricName}, which should be saved so that this
+   *                          metric can be cleaned up when the associated resource is closed
+   */
+  public MetricName metricName(
+      final String metricName,
+      final String metricDescription,
+      final MetricScope metricScope,
+      final LinkedHashMap<String, String> additionalTags
+  ) {
+    final LinkedHashMap<String, String> allTags = new LinkedHashMap<>(metricScope.tags());
+    allTags.putAll(additionalTags);
+    return new MetricName(
+        metricName,
+        metricScope.groupName(),
+        metricDescription,
+        allTags
     );
   }
 

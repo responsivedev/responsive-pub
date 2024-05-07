@@ -26,12 +26,16 @@ import dev.responsive.kafka.api.async.internals.contexts.StreamThreadProcessorCo
 import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
 import dev.responsive.kafka.api.async.internals.events.DelayedForward;
 import dev.responsive.kafka.api.async.internals.events.DelayedWrite;
+import dev.responsive.kafka.api.async.internals.metrics.AsyncProcessorMetricsRecorder;
 import dev.responsive.kafka.api.async.internals.queues.FinalizingQueue;
+import dev.responsive.kafka.api.async.internals.queues.KeyOrderPreservingQueue;
+import dev.responsive.kafka.api.async.internals.queues.MeteredSchedulingQueue;
 import dev.responsive.kafka.api.async.internals.queues.SchedulingQueue;
 import dev.responsive.kafka.api.async.internals.stores.AbstractAsyncStoreBuilder;
 import dev.responsive.kafka.api.async.internals.stores.AsyncKeyValueStore;
 import dev.responsive.kafka.api.async.internals.stores.StreamThreadFlushListeners.AsyncFlushListener;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
+import dev.responsive.kafka.internal.config.InternalSessionConfigs;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.HashSet;
@@ -40,6 +44,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.LogContext;
@@ -76,8 +81,10 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   private final Map<String, AbstractAsyncStoreBuilder<?, ?, ?>> connectedStoreBuilders;
 
   // Tracks all pending events, ie from moment of creation to end of finalization/transition
-  // to "DONE" state. Used to make sure all events are flushed during a commit
-  private final Set<AsyncEvent> pendingEvents = new HashSet<>();
+  // to "DONE" state. Used to make sure all events are flushed during a commit.
+  // We use a concurrent map here so metrics readers can query its size. Otherwise, only
+  // the stream thread should access this.
+  private final Map<AsyncEvent, Object> pendingEvents = new ConcurrentHashMap<>();
 
 
   // This is set at most once. When its set, the thread should immediately throw, and no longer
@@ -109,6 +116,8 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   // the context we pass in to the user so it routes to the actual context based on calling thread
   private AsyncUserProcessorContext<KOut, VOut> userContext;
   private boolean hasProcessedSomething = false;
+
+  private AsyncProcessorMetricsRecorder metricsRecorder;
 
   public static <KIn, VIn, KOut, VOut> AsyncProcessor<KIn, VIn, KOut, VOut> createAsyncProcessor(
       final Processor<KIn, VIn, KOut, VOut> userProcessor,
@@ -201,13 +210,25 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     );
     userContext.setDelegateForStreamThread(streamThreadContext);
 
-    final ResponsiveConfig configs = ResponsiveConfig.responsiveConfig(userContext.appConfigs());
+    final Map<String, Object> appConfigs = userContext.appConfigs();
+    final var responsiveMetrics = InternalSessionConfigs.loadMetrics(appConfigs);
+    metricsRecorder = new AsyncProcessorMetricsRecorder(
+        streamThreadName,
+        taskId,
+        asyncProcessorName,
+        responsiveMetrics,
+        pendingEvents::size
+    );
+    final ResponsiveConfig configs = ResponsiveConfig.responsiveConfig(appConfigs);
     final long punctuationInterval = configs.getLong(ASYNC_FLUSH_INTERVAL_MS_CONFIG);
     final int maxEventsPerKey = configs.getInt(ASYNC_MAX_EVENTS_QUEUED_PER_KEY_CONFIG);
 
     this.threadPool = getAsyncThreadPool(taskContext, streamThreadName);
 
-    this.schedulingQueue = new SchedulingQueue<>(logPrefix, maxEventsPerKey);
+    this.schedulingQueue = new MeteredSchedulingQueue<>(
+        metricsRecorder,
+        new KeyOrderPreservingQueue<>(logPrefix, maxEventsPerKey)
+    );
     this.finalizingQueue = new FinalizingQueue(logPrefix, taskId.partition());
 
     this.punctuator = taskContext.schedule(
@@ -270,7 +291,8 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
         extractRecordContext(taskContext),
         taskContext.currentStreamTimeMs(),
         taskContext.currentSystemTimeMs(),
-        () -> userProcessor.process(record)
+        () -> userProcessor.process(record),
+        List.of(metricsRecorder::recordStateTransition)
     );
 
     processNewAsyncEvent(newEvent);
@@ -288,7 +310,8 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
         extractRecordContext(taskContext),
         taskContext.currentStreamTimeMs(),
         taskContext.currentSystemTimeMs(),
-        () -> userFixedKeyProcessor.process(record)
+        () -> userFixedKeyProcessor.process(record),
+        List.of(metricsRecorder::recordStateTransition)
     );
 
     processNewAsyncEvent(newEvent);
@@ -302,7 +325,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     }
 
     try {
-      pendingEvents.add(event);
+      pendingEvents.put(event, new Object());
 
       maybeBackOffEnqueuingNewEventWithKey(event.inputRecordKey());
       schedulingQueue.offer(event);
@@ -331,7 +354,6 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
 
   @Override
   public void close() {
-
     if (!isCleared()) {
       // This doesn't necessarily indicate an issue; it just should only ever
       // happen if the task is closed dirty, but unfortunately we can't tell
@@ -342,6 +364,8 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
                    + "happen if the task was shut down dirty and not flushed/committed "
                    + "prior to being closed", pendingEvents.size());
     }
+
+    metricsRecorder.close();
 
     punctuator.cancel();
     threadPool.removeProcessor(asyncProcessorName, taskId.partition());
@@ -548,7 +572,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   }
 
   /**
-   * Polls all the available records from the {@link SchedulingQueue}
+   * Polls all the available records from the {@link KeyOrderPreservingQueue}
    * without waiting for any blocked events to become schedulable.
    * Makes a single pass and schedules only the current set of
    * schedulable events.
@@ -577,7 +601,8 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
           eventsToSchedule,
           finalizingQueue,
           taskContext,
-          userContext
+          userContext,
+          metricsRecorder
       );
     }
 
@@ -625,7 +650,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
       final AsyncEvent event
   )  {
 
-    if (!pendingEvents.contains(event)) {
+    if (!pendingEvents.containsKey(event)) {
       log.error("routed event from {} to the wrong processor for {}",
           event.partition(),
           taskId.toString());

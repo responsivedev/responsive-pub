@@ -2,10 +2,13 @@ package dev.responsive.kafka.api.async.internals;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
+import static org.mockito.Mockito.mock;
 
 import dev.responsive.kafka.api.async.internals.contexts.AsyncUserProcessorContext;
 import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
+import dev.responsive.kafka.api.async.internals.metrics.AsyncProcessorMetricsRecorder;
 import dev.responsive.kafka.api.async.internals.queues.FinalizingQueue;
+import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -43,7 +46,12 @@ class AsyncThreadPoolTest {
 
   @BeforeEach
   public void setup() {
-    pool = new AsyncThreadPool(POOL_NAME, POOL_SIZE, POOL_EVENT_LIMIT);
+    pool = new AsyncThreadPool(
+        POOL_NAME,
+        POOL_SIZE,
+        POOL_EVENT_LIMIT,
+        mock(ResponsiveMetrics.class)
+    );
   }
 
   @AfterEach
@@ -130,7 +138,8 @@ class AsyncThreadPoolTest {
         Arrays.asList(events),
         finalizingQueue,
         originalContext,
-        userContext
+        userContext,
+        mock(AsyncProcessorMetricsRecorder.class)
     );
   }
 
@@ -143,7 +152,8 @@ class AsyncThreadPoolTest {
         recordContext,
         0L,
         0L,
-        task
+        task,
+        List.of()
     );
     event.transitionToToProcess();
     return event;

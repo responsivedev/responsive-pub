@@ -22,6 +22,7 @@ import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -309,7 +310,12 @@ class ResponsiveKafkaClientSupplierTest {
     intermediate.putAll(configs);
     intermediate.putAll(overrides);
     intermediate.put(
-        "__internal.responsive.async.thread.pool.registry__", new AsyncThreadPoolRegistry(2, 5, 5)
+        "__internal.responsive.async.thread.pool.registry__", new AsyncThreadPoolRegistry(
+            2,
+            5,
+            5,
+            mock(ResponsiveMetrics.class)
+        )
     );
     return Map.copyOf(intermediate);
   }

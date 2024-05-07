@@ -18,6 +18,7 @@ package dev.responsive.kafka.internal.metrics;
 
 import static dev.responsive.kafka.internal.metrics.TopicMetrics.COMMITTED_OFFSET;
 import static dev.responsive.kafka.internal.metrics.TopicMetrics.COMMITTED_OFFSET_DESCRIPTION;
+import static dev.responsive.kafka.internal.metrics.TopicMetrics.TOPIC_METRIC_GROUP;
 
 import dev.responsive.kafka.internal.clients.OffsetRecorder;
 import dev.responsive.kafka.internal.clients.OffsetRecorder.RecordingKey;
@@ -81,7 +82,7 @@ public class MetricPublishingCommitListener implements Listener, Closeable {
     return metrics.metricName(
         COMMITTED_OFFSET,
         COMMITTED_OFFSET_DESCRIPTION,
-        metrics.topicLevelMetric(threadId, topicPartition));
+        metrics.topicLevelMetric(TOPIC_METRIC_GROUP, threadId, topicPartition));
   }
 
   private void commitCallback(

@@ -16,11 +16,8 @@
 
 package dev.responsive.kafka.internal.metrics;
 
-import dev.responsive.kafka.internal.metrics.ResponsiveMetrics.MetricGroup;
-import java.util.LinkedHashMap;
-
 @SuppressWarnings("checkstyle:linelength")
-public class ApplicationMetrics implements MetricGroup {
+public class ApplicationMetrics {
 
   // Responsive application metrics scoped to the Streams client level
   public static final String APPLICATION_METRIC_GROUP = "application-metrics";
@@ -34,19 +31,6 @@ public class ApplicationMetrics implements MetricGroup {
   public static final String NUM_INTERRUPTED_CHANGELOGS = "num-interrupted-changelogs";
   public static final String NUM_INTERRUPTED_CHANGELOGS_DESCRIPTION = "The total number of changelog partitions that began restoring but did not complete";
 
-  private final LinkedHashMap<String, String> tags;
-  
-  ApplicationMetrics(final LinkedHashMap<String, String> tags) {
-    this.tags = tags;
-  }
-
-  @Override
-  public String groupName() {
-    return APPLICATION_METRIC_GROUP;
-  }
-
-  @Override
-  public LinkedHashMap<String, String> tags() {
-    return tags;
+  private ApplicationMetrics() {
   }
 }
