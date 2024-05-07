@@ -37,9 +37,4 @@ public interface WriteOnlyFinalizingQueue {
    */
   void scheduleForFinalization(final AsyncEvent processedEvent);
 
-  /**
-   * Schedules a record that the AsyncThread failed to process and inserts it
-   * into the queue for the StreamThread to pick up and finalize
-   */
-  void scheduleFailedForFinalization(final AsyncEvent processedEvent, final RuntimeException exception);
 }

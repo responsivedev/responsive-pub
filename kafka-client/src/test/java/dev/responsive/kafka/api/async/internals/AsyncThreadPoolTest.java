@@ -21,6 +21,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
@@ -32,7 +33,7 @@ class AsyncThreadPoolTest {
   @Mock
   private AsyncUserProcessorContext<String, String> userContext;
   @Mock
-  private ProcessingContext originalContext;
+  private ProcessingContext taskContext;
   @Mock
   private ProcessorRecordContext recordContext;
   private final FinalizingQueue finalizingQueue = new FinalizingQueue("fq");
@@ -42,6 +43,7 @@ class AsyncThreadPoolTest {
   @BeforeEach
   public void setup() {
     pool = new AsyncThreadPool(POOL_NAME, POOL_SIZE, POOL_EVENT_LIMIT);
+    Mockito.when(userContext.taskContext()).thenReturn(taskContext);
   }
 
   @AfterEach
@@ -63,7 +65,7 @@ class AsyncThreadPoolTest {
 
     // then:
     CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).get();
-    assertThat(finalizingQueue.waitForNextFinalizableEvent(10, TimeUnit.SECONDS), is(event));
+    assertThat(finalizingQueue.waitForNextFinalizableEvent(), is(event));
   }
 
   private final class TestTask implements Runnable {
@@ -83,7 +85,6 @@ class AsyncThreadPoolTest {
     return pool.scheduleForProcessing(
         Arrays.asList(events),
         finalizingQueue,
-        originalContext,
         userContext
     );
   }

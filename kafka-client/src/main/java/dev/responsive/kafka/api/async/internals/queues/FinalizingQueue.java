@@ -61,19 +61,6 @@ public class FinalizingQueue implements ReadOnlyFinalizingQueue, WriteOnlyFinali
   public void scheduleForFinalization(
       final AsyncEvent processedEvent
   ) {
-    processedEvent.transitionToToFinalize();
-    finalizableRecords.add(processedEvent);
-  }
-
-  /**
-   * See {@link WriteOnlyFinalizingQueue#scheduleFailedForFinalization}
-   */
-  @Override
-  public void scheduleFailedForFinalization(
-      final AsyncEvent processedEvent,
-      final RuntimeException exception
-  ) {
-    processedEvent.transitionToToFailed(exception);
     finalizableRecords.add(processedEvent);
   }
 
@@ -93,8 +80,8 @@ public class FinalizingQueue implements ReadOnlyFinalizingQueue, WriteOnlyFinali
    * Note: blocking API
    */
   @Override
-  public AsyncEvent waitForNextFinalizableEvent(long timeout, TimeUnit unit) throws InterruptedException {
-    return finalizableRecords.poll(timeout, unit);
+  public AsyncEvent waitForNextFinalizableEvent() throws InterruptedException {
+    return finalizableRecords.take();
   }
 
   /**
