@@ -78,7 +78,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   // to "DONE" state. Used to make sure all events are flushed during a commit
   private final Set<AsyncEvent> pendingEvents = new HashSet<>();
 
-  private RuntimeException processingException = null;
+  private RuntimeException fatalException = null;
 
   // Everything below this line is effectively final and just has to be initialized in #init //
 
@@ -233,8 +233,12 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
 
   void assertQueuesEmptyOnFirstProcess() {
     if (!hasProcessedSomething) {
-      assertQueuesEmpty();
-      hasProcessedSomething = true;
+      try {
+        assertQueuesEmpty();
+        hasProcessedSomething = true;
+      } catch (final RuntimeException e) {
+        throw new StreamsException(e, taskId);
+      }
     }
   }
 
@@ -290,17 +294,28 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   }
 
   private void processNewAsyncEvent(final AsyncEvent event) {
-    if (processingException != null) {
+    if (fatalException != null) {
       throw new IllegalStateException(
-          "process called when already hit exception: " + processingException);
+          "process called when already hit exception: " + fatalException);
     }
 
-    pendingEvents.add(event);
+    try {
+      pendingEvents.add(event);
 
-    maybeBackOffEnqueuingNewEventWithKey(event.inputRecordKey());
-    schedulingQueue.offer(event);
+      maybeBackOffEnqueuingNewEventWithKey(event.inputRecordKey());
+      schedulingQueue.offer(event);
 
-    executeAvailableEvents();
+      executeAvailableEvents();
+
+    } catch (final StreamsException streamsException) {
+      fatalException = streamsException.taskId().isPresent()
+          ? streamsException
+          : new StreamsException(streamsException, taskId);
+      throw fatalException;
+    } catch (final Throwable t) {
+      fatalException = new StreamsException(t, taskId);
+      throw fatalException;
+    }
   }
 
   @SuppressWarnings("unchecked")
@@ -367,46 +382,60 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    * each commit, similar to #flushCache
    */
   public void flushAndAwaitPendingEvents() {
-    if (processingException != null) {
+    if (fatalException != null) {
       // if there was a processing exception, processing for the key that hit the processing
       // exception is blocked, so we don't want to go into the loop below that tries to drain
       // queues, as the queue for that key will never drain. Instead, just throw here.
-      throw processingException;
+      throw fatalException;
     }
 
-    // Make a (non-blocking) pass through the finalizing queue up front, to
-    // free up any recently-processed events before we attempt to drain the
-    // scheduling queue
-    drainFinalizingQueue();
+    try {
+      // Make a (non-blocking) pass through the finalizing queue up front, to
+      // free up any recently-processed events before we attempt to drain the
+      // scheduling queue
+      drainFinalizingQueue();
 
-    while (!isCleared()) {
-      // we need to check this here because the check in finalizeAtLeastOneEvent only
-      // runs if there are currently slow events being handled by the async threads.
-      checkUncaughtExceptionsOnAsyncThreads();
+      while (!isCleared()) {
+        // we need to check this here because the check in finalizeAtLeastOneEvent only
+        // runs if there are currently slow events being handled by the async threads.
+        checkForAsyncThreadPoolExceptions();
 
-      // Start by scheduling all unblocked events to hand off any events that
-      // were just unblocked by whatever we just finalized
-      final int numScheduled = drainSchedulingQueue();
+        // Start by scheduling all unblocked events to hand off any events that
+        // were just unblocked by whatever we just finalized
+        final int numScheduled = drainSchedulingQueue();
 
-      // Need to finalize at least one event per iteration, otherwise there's no
-      // point returning to the scheduling queue since nothing new was unblocked
-      final int numFinalized = finalizeAtLeastOneEvent();
-      log.debug("Scheduled {} events and finalized {} events",
-                numScheduled, numFinalized
-      );
+        // Need to finalize at least one event per iteration, otherwise there's no
+        // point returning to the scheduling queue since nothing new was unblocked
+        final int numFinalized = finalizeAtLeastOneEvent();
+        log.debug("Scheduled {} events and finalized {} events",
+                  numScheduled, numFinalized
+        );
+      }
+
+      assertQueuesEmpty();
+
+    } catch (final StreamsException streamsException) {
+      fatalException = streamsException.taskId().isPresent()
+        ? streamsException
+        : new StreamsException(streamsException, taskId);
+      throw fatalException;
+    } catch (final Throwable t) {
+      fatalException = new StreamsException(t, taskId);
+      throw fatalException;
     }
-
-    assertQueuesEmpty();
   }
 
-  private void checkUncaughtExceptionsOnAsyncThreads() {
-    final var uncaught = threadPool.checkUncaughtExceptions(asyncProcessorName, taskId.partition());
+  /**
+   * Check the AsyncThreadPool for any uncaught exceptions that arose while processing
+   * events or other fatal errors in the AsyncThreadPool itself.
+   * Note: since it's important to fail as quickly as possible in the event of a
+   * fatal exception, we don't limit the scope of this check to only errors
+   * tied to events that belong to this specific AsyncProcessor or task.
+   */
+  private void checkForAsyncThreadPoolExceptions() throws Throwable {
+    final var uncaught = threadPool.checkProcessingExceptions(asyncProcessorName, taskId.partition());
     if (uncaught.isPresent()) {
-      if (processingException != null) {
-        processingException = uncaught.map(t ->
-          t instanceof RuntimeException ? (RuntimeException) t : new RuntimeException(t)).get();
-      }
-      throw processingException;
+      throw uncaught.get();
     }
   }
 
@@ -440,7 +469,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
           completePendingEvent(finalizableEvent);
           return 1;
         }
-        checkUncaughtExceptionsOnAsyncThreads();
+        checkForAsyncThreadPoolExceptions();
       } catch (final Exception e) {
         log.error("Exception caught while waiting for an event to finalize", e);
         throw new StreamsException("Failed to flush async processor", e, taskId);
@@ -591,8 +620,8 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     final Optional<RuntimeException> processingException = event.processingException();
     if (processingException.isPresent()) {
       pendingEvents.remove(event);
-      this.processingException = processingException.get();
-      throw this.processingException;
+      this.fatalException = processingException.get();
+      throw this.fatalException;
     }
     return streamThreadContext.prepareToFinalizeEvent(event);
   }

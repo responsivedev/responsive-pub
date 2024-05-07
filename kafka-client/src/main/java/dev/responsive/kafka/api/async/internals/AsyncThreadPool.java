@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -30,6 +31,9 @@ public class AsyncThreadPool {
 
   private final ThreadPoolExecutor executor;
   private final Map<InFlightWorkKey, ConcurrentMap<AsyncEvent, InFlightEvent>> inFlight
+      = new HashMap<>();
+
+  private final Map<InFlightWorkKey, Queue<AsyncEvent> inFlight
       = new HashMap<>();
   private final BlockingQueue<Runnable> processingQueue;
 
@@ -90,7 +94,11 @@ public class AsyncThreadPool {
     return inFlight.get(InFlightWorkKey.of(processorName, partition));
   }
 
-  public Optional<Throwable> checkUncaughtExceptions(
+  /**
+   * @return any uncaught exceptions encountered during processing of input records,
+   *         or {@link Optional#empty()} if there are none
+   */
+  public Optional<Throwable> checkProcessingExceptions(
       final String processorName,
       final int partition
   ) {
@@ -154,6 +162,17 @@ public class AsyncThreadPool {
     }
   }
 
+  /**
+   * Cancel all pending events and prevent further processing by this threadpool.
+   * Events that are actively being processed will not be interrupted, but no
+   * new in-flight events will be picked up to process after this is called.
+   * Used to mitigate ALOS overcounting in case of a fatal exception in the
+   * StreamThread
+   */
+  public void suspend() {
+    throw new UnsupportedOperationException("implement me");
+  }
+
   public void shutdown() {
     // todo: make me more orderly, but you get the basic idea
     executor.shutdownNow();
@@ -185,7 +204,6 @@ public class AsyncThreadPool {
     private final AsyncThreadProcessorContext<KOut, VOut> asyncThreadContext;
     private final AsyncUserProcessorContext<KOut, VOut> wrappingContext;
     private final FinalizingQueue finalizingQueue;
-    private final ConcurrentMap<AsyncEvent, InFlightEvent> inFlightForTask;
 
     private AsyncEventTask(
         final AsyncEvent event,
