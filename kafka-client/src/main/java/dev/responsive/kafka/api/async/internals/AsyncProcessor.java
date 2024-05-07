@@ -82,7 +82,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   // This is set at most once. When its set, the thread should immediately throw, and no longer
   // try to process further events for this processor. This minimizes the chance of producing
   // bad results, particularly with ALOS.
-  private RuntimeException fatalException = null;
+  private StreamsException fatalException = null;
 
   // Everything below this line is effectively final and just has to be initialized in #init //
 
