@@ -30,18 +30,26 @@ import static dev.responsive.kafka.testutils.IntegrationTestUtils.startAppAndAwa
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.producer.ProducerConfig.TRANSACTION_TIMEOUT_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.APPLICATION_ID_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.COMMIT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_V2;
 import static org.apache.kafka.streams.StreamsConfig.NUM_STREAM_THREADS_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.PROCESSING_GUARANTEE_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
+import static org.apache.kafka.streams.StreamsConfig.producerPrefix;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.hasItem;
+import static org.hamcrest.Matchers.is;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
@@ -49,11 +57,13 @@ import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
 import dev.responsive.kafka.testutils.SimpleStatefulProcessorSupplier;
 import dev.responsive.kafka.testutils.SimpleStatefulProcessorSupplier.SimpleProcessorOutput;
+import java.io.IOException;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -61,13 +71,19 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Named;
+import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessorContext;
 import org.apache.kafka.streams.processor.api.FixedKeyRecord;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.junit.jupiter.api.AfterEach;
@@ -77,6 +93,7 @@ import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 public class AsyncProcessorIntegrationTest {
+  private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
   @RegisterExtension
   static ResponsiveExtension EXTENSION = new ResponsiveExtension(StorageBackend.CASSANDRA);
@@ -173,10 +190,20 @@ public class AsyncProcessorIntegrationTest {
                                       "uu", "vv", "ww", "xx", "yy", "zz");
 
     // produce N records for each key, with same-key events interleaved between other keys
-    final List<KeyValue<String, String>> inputRecords = new LinkedList<>();
+    final List<KeyValue<String, InputRecord>> inputRecords = new LinkedList<>();
     for (int val = 1; val < 1 + INPUT_RECORDS_PER_KEY; ++val) {
       for (final String key : keys) {
-        inputRecords.add(new KeyValue<>(key, key + val));
+        final InputRecord inputRecord;
+        if (val == 2 && key.equals("b")) {
+          inputRecord = new InputRecord(key + val, new InjectedFault(
+              InjectedFault.Type.EXCEPTION,
+              new RuntimeException("oops"),
+              InjectedFault.Frequency.ONCE)
+          );
+        } else {
+          inputRecord = new InputRecord(key + val);
+        }
+        inputRecords.add(new KeyValue<>(key, inputRecord));
       }
     }
 
@@ -202,20 +229,25 @@ public class AsyncProcessorIntegrationTest {
     final CountDownLatch inputRecordsLatch = new CountDownLatch(numInputRecords);
 
     final Map<String, Object> properties = getMutableProperties();
-    final KafkaProducer<String, String> producer = new KafkaProducer<>(properties);
+    final KafkaProducer<String, InputRecord> producer = new KafkaProducer<>(properties);
 
     final StreamsBuilder builder = new StreamsBuilder();
-    final KStream<String, String> input = builder.stream(inputTopic());
+    final KStream<String, InputRecord> input = builder.stream(
+        inputTopic(),
+        Consumed.with(
+            Serdes.String(),
+            Serdes.serdeFrom(new InputRecordSerializer(), new InputRecordDeserializer())
+        ));
 
     input
         .processValues(
-            new SimpleStatefulProcessorSupplier(
+            new SimpleStatefulProcessorSupplier<>(
                 this::computeNewValueForSourceProcessor,
                 ResponsiveKeyValueParams.fact(IN_KV_STORE)),
             IN_KV_STORE)
         .processValues(
             createAsyncProcessorSupplier(
-                new SimpleStatefulProcessorSupplier(
+                new SimpleStatefulProcessorSupplier<>(
                     this::computeNewValueForAsyncProcessor,
                     ResponsiveKeyValueParams.fact(ASYNC_KV_STORE),
                     processed
@@ -223,16 +255,21 @@ public class AsyncProcessorIntegrationTest {
             Named.as("AsyncProcessor"),
             ASYNC_KV_STORE)
         .processValues(
-            new SimpleStatefulProcessorSupplier(
+            new SimpleStatefulProcessorSupplier<>(
                 this::computeNewValueForSinkProcessor,
                 ResponsiveKeyValueParams.fact(OUT_KV_STORE),
                 latestValues,
                 inputRecordsLatch),
             OUT_KV_STORE)
-        .to(outputTopic());
+        .to(outputTopic(), Produced.with(Serdes.String(), Serdes.String()));
 
+    List<Throwable> caughtExceptions = new LinkedList<>();
     try (final var streams = new ResponsiveKafkaStreams(builder.build(), properties)) {
-      startAppAndAwaitRunning(Duration.ofSeconds(10), streams);
+      streams.setUncaughtExceptionHandler(exception -> {
+        caughtExceptions.add(exception);
+        return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.REPLACE_THREAD;
+      });
+      startAppAndAwaitRunning(Duration.ofSeconds(30), streams);
 
       // When:
       pipeRecords(producer, inputTopic(), inputRecords);
@@ -246,31 +283,39 @@ public class AsyncProcessorIntegrationTest {
       }
 
       final var kvs = readOutput(
-          outputTopic(), 0, numInputRecords, numOutputPartitions, true, properties
+          outputTopic(), 0, numInputRecords, numOutputPartitions, false, properties
       );
 
+      final Map<String, String> latestByKey = new HashMap<>();
+      for (final var kv : kvs) {
+        latestByKey.put((String) kv.key, (String) kv.value);
+      }
       for (final String key : keys) {
         final String finalValue = finalOutputRecords.get(key);
-        assertThat(kvs, hasItem(new KeyValue<>(key, finalValue)));
+        assertThat(latestByKey.get(key), is(finalValue));
       }
     }
-    assertThat(processed.get(), equalTo(numInputRecords));
+    assertThat(caughtExceptions.size(), is(1));
     assertThat(latestValues, equalTo(finalOutputRecords));
   }
 
   // The "in"" processor is a simple counter that just forwards the new count appended to
   // the key and processor name ("IN")
   // The IN count should always match the END count computed downstream
-  private SimpleProcessorOutput computeNewValueForSourceProcessor(
+  private SimpleProcessorOutput<String, InputRecord> computeNewValueForSourceProcessor(
       final ValueAndTimestamp<String> oldValAndTimestamp,
-      final FixedKeyRecord<String, String> inputRecord
+      final FixedKeyRecord<String, InputRecord> inputRecord,
+      final FixedKeyProcessorContext<String, InputRecord> context
   ) {
     final int newCount = oldValAndTimestamp == null
         ? 1
         : 1 + Integer.parseInt(oldValAndTimestamp.value());
 
     final String forwardedVal = String.format("%s:%s:%d", inputRecord.key(), "IN", newCount);
-    return new SimpleProcessorOutput(forwardedVal, Integer.toString(newCount));
+    return new SimpleProcessorOutput<>(
+        inputRecord.value().withValue(forwardedVal),
+        Integer.toString(newCount)
+    );
   }
 
   // The async processor always forwards the same value that it computes, so over time
@@ -279,30 +324,44 @@ public class AsyncProcessorIntegrationTest {
   // as a prefix, but won't include the END processor suffix in the async processor results
   // since by definition, that won't be added until the downstream END processor appends
   // its own suffix
-  private SimpleProcessorOutput computeNewValueForAsyncProcessor(
+  private SimpleProcessorOutput<String, String> computeNewValueForAsyncProcessor(
       final ValueAndTimestamp<String> oldValAndTimestamp,
-      final FixedKeyRecord<String, String> inputRecord
+      final FixedKeyRecord<String, InputRecord> inputRecord,
+      final FixedKeyProcessorContext<String, String> context
   ) {
-    if (oldValAndTimestamp == null) {
-      return new SimpleProcessorOutput(inputRecord.value());
+    final InputRecord val = inputRecord.value();
+    final InjectedFault fault = val.getFault();
+    if (fault != null) {
+      fault.maybeInject(context.taskId().partition(), context.recordMetadata().get().offset());
     }
 
-    final String newVal = String.format("%s--%s", oldValAndTimestamp.value(), inputRecord.value());
+    if (oldValAndTimestamp == null) {
+      return new SimpleProcessorOutput<>(
+          inputRecord.value().getValue(),
+          inputRecord.value().getValue()
+      );
+    }
+
+    final String newVal = String.format("%s--%s",
+        oldValAndTimestamp.value(),
+        inputRecord.value().getValue()
+    );
 
     try {
       Thread.sleep(ASYNC_SLEEP_DURATION_MS);
     } catch (final InterruptedException e) {
       throw new RuntimeException("Interrupted during 'RPC' call in async processor", e);
     }
-    return new SimpleProcessorOutput(newVal);
+    return new SimpleProcessorOutput<>(newVal, newVal);
   }
 
   // The "end"" processor is a slightly-more-advanced counter that just forwards the new count
   // appended to the key and processor name ("END") as well as the input record value
   // The END count should always match the IN count computed upstream
-  private SimpleProcessorOutput computeNewValueForSinkProcessor(
+  private SimpleProcessorOutput<String, String> computeNewValueForSinkProcessor(
       final ValueAndTimestamp<String> oldValAndTimestamp,
-      final FixedKeyRecord<String, String> inputRecord
+      final FixedKeyRecord<String, String> inputRecord,
+      final FixedKeyProcessorContext<String, String> context
   ) {
     final int newCount = oldValAndTimestamp == null
         ? 1
@@ -311,7 +370,7 @@ public class AsyncProcessorIntegrationTest {
     final String forwardedVal = String.format(
         "%s--%s:%s:%d", inputRecord.value(), inputRecord.key(), "END", newCount
     );
-    return new SimpleProcessorOutput(forwardedVal, Integer.toString(newCount));
+    return new SimpleProcessorOutput<>(forwardedVal, Integer.toString(newCount));
   }
 
   @SuppressWarnings("checkstyle:linelength")
@@ -319,13 +378,15 @@ public class AsyncProcessorIntegrationTest {
     final Map<String, Object> properties = new HashMap<>(responsiveProps);
 
     properties.put(KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-    properties.put(VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+    properties.put(VALUE_SERIALIZER_CLASS_CONFIG, InputRecordSerializer.class);
     properties.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
     properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
 
     properties.put(APPLICATION_ID_CONFIG, name);
     properties.put(DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class.getName());
     properties.put(DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class.getName());
+    properties.put(PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_V2);
+    properties.put(producerPrefix(TRANSACTION_TIMEOUT_CONFIG), (int) COMMIT_INTERVAL_MS * 2);
 
     properties.put(ASYNC_THREAD_POOL_SIZE_CONFIG, ASYNC_THREADS_PER_STREAMTHREAD);
     properties.put(NUM_STREAM_THREADS_CONFIG, STREAMTHREADS_PER_APP);
@@ -346,4 +407,141 @@ public class AsyncProcessorIntegrationTest {
     return properties;
   }
 
+  private static class InputRecord {
+    private final String value;
+    private final InjectedFault fault;
+
+    public InputRecord(final String value) {
+      this(value, null);
+    }
+
+    @JsonCreator
+    public InputRecord(
+        @JsonProperty("value") final String value,
+        @JsonProperty("fault") final InjectedFault fault
+    ) {
+      this.value = value;
+      this.fault = fault;
+    }
+
+    public String getValue() {
+      return value;
+    }
+
+    public InjectedFault getFault() {
+      return fault;
+    }
+
+    public InputRecord withValue(final String value) {
+      return new InputRecord(value, fault);
+    }
+  }
+
+  public static class InjectedFault {
+    private static final Map<InjectKey, Boolean> HISTORY = new ConcurrentHashMap<>();
+
+    private enum Type {
+      EXCEPTION
+    }
+
+    private enum Frequency {
+      ONCE,
+      ALWAYS
+    }
+
+    private final Type type;
+    private final RuntimeException exception;
+    private final Frequency frequency;
+
+    @JsonCreator
+    public InjectedFault(
+        @JsonProperty("type") Type type,
+        @JsonProperty("exception") RuntimeException exception,
+        @JsonProperty("frequency") Frequency frequency) {
+      this.type = type;
+      this.exception = exception;
+      this.frequency = frequency;
+    }
+
+    public Type getType() {
+      return type;
+    }
+
+    public Exception getException() {
+      return exception;
+    }
+
+    public Frequency getFrequency() {
+      return frequency;
+    }
+
+    private boolean shouldInject(final int partition, final long offset) {
+      if (frequency.equals(Frequency.ALWAYS)) {
+        return true;
+      }
+      final InjectKey k = new InjectKey(partition, offset);
+      return HISTORY.put(k, true) == null;
+    }
+
+    public void maybeInject(final int partition, final long offset) {
+      if (!shouldInject(partition, offset)) {
+        return;
+      }
+      switch (type) {
+        case EXCEPTION:
+          throw exception;
+        default:
+          throw new IllegalStateException();
+      }
+    }
+
+    private static class InjectKey {
+      private final int partition;
+      private final long offset;
+
+      public InjectKey(final int partition, final long offset) {
+        this.partition = partition;
+        this.offset = offset;
+      }
+
+      @Override
+      public boolean equals(final Object o) {
+        if (this == o) {
+          return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+          return false;
+        }
+        InjectKey injectKey = (InjectKey) o;
+        return partition == injectKey.partition && offset == injectKey.offset;
+      }
+
+      @Override
+      public int hashCode() {
+        return Objects.hash(partition, offset);
+      }
+    }
+  }
+
+  public static class InputRecordSerializer implements Serializer<InputRecord> {
+    @Override
+    public byte[] serialize(String topic, InputRecord data) {
+      try {
+        return OBJECT_MAPPER.writeValueAsBytes(data);
+      } catch (final JsonProcessingException e) {
+        throw new RuntimeException(e);
+      }
+    }
+  }
+
+  public static class InputRecordDeserializer implements Deserializer<InputRecord> {
+    @Override
+    public InputRecord deserialize(String topic, byte[] data) {
+      try {
+        return OBJECT_MAPPER.readValue(data, InputRecord.class);
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    }
+  }
 }

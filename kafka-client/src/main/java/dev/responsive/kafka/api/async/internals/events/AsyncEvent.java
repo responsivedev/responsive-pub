@@ -22,6 +22,7 @@ import dev.responsive.kafka.api.async.internals.AsyncProcessor;
 import dev.responsive.kafka.api.async.internals.contexts.AsyncThreadProcessorContext;
 import java.util.LinkedList;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Queue;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
@@ -100,6 +101,7 @@ public class AsyncEvent {
     SCHEDULING,
     TO_PROCESS,
     PROCESSING,
+    FAILED_PROCESSING,
     TO_FINALIZE,
     FINALIZING,
     DONE
@@ -124,6 +126,7 @@ public class AsyncEvent {
 
   private final Queue<DelayedForward<?, ?>> outputForwards = new LinkedList<>();
   private final Queue<DelayedWrite<?, ?>> outputWrites = new LinkedList<>();
+  private RuntimeException processingException = null;
 
   public AsyncEvent(
       final String logPrefix,
@@ -211,6 +214,10 @@ public class AsyncEvent {
     outputWrites.add(delayedWrite);
   }
 
+  public Optional<RuntimeException> processingException() {
+    return Optional.ofNullable(processingException);
+  }
+
   @SuppressWarnings("unchecked")
   public <KOut, VOut> DelayedForward<KOut, VOut> nextForward() {
     return (DelayedForward<KOut, VOut>) outputForwards.poll();
@@ -223,6 +230,16 @@ public class AsyncEvent {
 
   public State currentState() {
     return currentState;
+  }
+
+  public void transitionToToFailed(RuntimeException exception) {
+    if (!currentState.equals(State.PROCESSING)) {
+      log.warn(
+          "[{}] attempted to mark async event as failed but the event was not in PROCESSING state",
+          currentState.name());
+    }
+    currentState = State.FAILED_PROCESSING;
+    processingException = exception;
   }
 
   public void transitionToToProcess() {

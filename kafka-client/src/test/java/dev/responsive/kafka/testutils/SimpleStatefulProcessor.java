@@ -20,7 +20,6 @@ import dev.responsive.kafka.testutils.SimpleStatefulProcessorSupplier.SimpleProc
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.BiFunction;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessorContext;
 import org.apache.kafka.streams.processor.api.FixedKeyRecord;
@@ -37,28 +36,37 @@ import org.slf4j.LoggerFactory;
  * See also: {@link SimpleStatefulProcessorSupplier}
  */
 @SuppressWarnings("checkstyle:linelength")
-public class SimpleStatefulProcessor implements FixedKeyProcessor<String, String, String> {
+public class SimpleStatefulProcessor<VIn, VStored, VOut> implements FixedKeyProcessor<String, VIn, VOut> {
 
   private final Logger log = LoggerFactory.getLogger(SimpleStatefulProcessor.class);
 
-  private final BiFunction<ValueAndTimestamp<String>, FixedKeyRecord<String, String>, SimpleProcessorOutput> computeOutput;
+  private final ComputeOutput<VIn, VStored, VOut> computeOutput;
 
   private final AtomicInteger processed;
-  private final Map<String, String> latestValues;
+  private final Map<String, VOut> latestValues;
   private final CountDownLatch processingLatch;
 
   private final String storeName;
   private final String streamThreadName;
   private int partition;
 
-  private FixedKeyProcessorContext<String, String> context;
-  private TimestampedKeyValueStore<String, String> kvStore;
+  private FixedKeyProcessorContext<String, VOut> context;
+  private TimestampedKeyValueStore<String, VStored> kvStore;
+
+  @FunctionalInterface
+  public interface ComputeOutput<VIn, VStored, VOut> {
+    SimpleProcessorOutput<VStored, VOut> computeOutput(
+        ValueAndTimestamp<VStored> storedValue,
+        FixedKeyRecord<String, VIn> inputRecord,
+        FixedKeyProcessorContext<String, VOut> context
+    );
+  }
 
   public SimpleStatefulProcessor(
-      final BiFunction<ValueAndTimestamp<String>, FixedKeyRecord<String, String>, SimpleProcessorOutput> computeOutput,
+      final ComputeOutput<VIn, VStored, VOut> computeOutput,
       final String storeName,
       final AtomicInteger processed,
-      final Map<String, String> latestValues,
+      final Map<String, VOut> latestValues,
       final CountDownLatch processingLatch
   ) {
     this.computeOutput = computeOutput;
@@ -70,7 +78,7 @@ public class SimpleStatefulProcessor implements FixedKeyProcessor<String, String
   }
 
   @Override
-  public void init(final FixedKeyProcessorContext<String, String> context) {
+  public void init(final FixedKeyProcessorContext<String, VOut> context) {
     this.context = context;
     this.kvStore = context.getStateStore(storeName);
     this.partition = context.taskId().partition();
@@ -80,13 +88,14 @@ public class SimpleStatefulProcessor implements FixedKeyProcessor<String, String
   }
 
   @Override
-  public void process(final FixedKeyRecord<String, String> record) {
+  public void process(final FixedKeyRecord<String, VIn> record) {
     log.debug("stream-thread [{}][{}] Processing input record: <{}, {}>",
               streamThreadName, partition, record.key(), record.value());
 
-    final ValueAndTimestamp<String> oldValAndTimestamp = kvStore.get(record.key());
+    final ValueAndTimestamp<VStored> oldValAndTimestamp = kvStore.get(record.key());
 
-    final SimpleProcessorOutput output = computeOutput.apply(oldValAndTimestamp, record);
+    final SimpleProcessorOutput<VStored, VOut> output = computeOutput.computeOutput(
+        oldValAndTimestamp, record, context);
 
     kvStore.put(record.key(), ValueAndTimestamp.make(output.storedValue, record.timestamp()));
     context.forward(record.withValue(output.forwardedValue));
