@@ -431,8 +431,8 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    * fatal exception, we don't limit the scope of this check to only errors
    * tied to events that belong to this specific AsyncProcessor or task.
    */
-  private void checkForAsyncThreadPoolExceptions() throws Throwable {
-    final Optional<Throwable> fatal = threadPool.checkProcessingExceptions(
+  private void checkUncaughtExceptionsInAsyncThreadPool() throws Throwable {
+    final Optional<Throwable> fatal = threadPool.checkUncaughtExceptions(
         asyncProcessorName, taskId.partition()
     );
     
@@ -452,6 +452,8 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    * @return the number of events that were finalized
    */
   private int finalizeAtLeastOneEvent() throws Throwable {
+    checkUncaughtExceptionsInAsyncThreadPool();
+
     final int numFinalized = drainFinalizingQueue();
     if (numFinalized > 0) {
       return numFinalized;
@@ -468,12 +470,12 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
           TimeUnit.MILLISECONDS
       );
 
-      checkForAsyncThreadPoolExceptions();
-
       if (finalizableEvent != null) {
         completePendingEvent(finalizableEvent);
         return 1;
       }
+
+      checkUncaughtExceptionsInAsyncThreadPool();
     }
   }
 
@@ -599,6 +601,8 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    * @return the number of events that were finalized
    */
   private int drainFinalizingQueue() throws Throwable {
+    checkUncaughtExceptionsInAsyncThreadPool();
+
     int count = 0;
     while (!finalizingQueue.isEmpty()) {
       final AsyncEvent event = finalizingQueue.nextFinalizableEvent();

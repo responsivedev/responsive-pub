@@ -98,7 +98,7 @@ public class AsyncThreadPool {
    * @return any uncaught exceptions encountered during processing of input records,
    *         or {@link Optional#empty()} if there are none
    */
-  public Optional<Throwable> checkProcessingExceptions(
+  public Optional<Throwable> checkUncaughtExceptions(
       final String processorName,
       final int partition
   ) {
