@@ -104,6 +104,7 @@ public class AsyncEvent {
     SCHEDULING,
     TO_PROCESS,
     PROCESSING,
+    FAILED_PROCESSING,
     TO_FINALIZE,
     FINALIZING,
     FAILED,

@@ -16,7 +16,6 @@
 
 package dev.responsive.kafka.api.async.internals.queues;
 
-
 import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
 
 /**

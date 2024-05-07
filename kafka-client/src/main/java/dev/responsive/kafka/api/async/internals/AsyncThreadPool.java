@@ -94,11 +94,6 @@ public class AsyncThreadPool {
     }
   }
 
-  @VisibleForTesting
-  Map<AsyncEvent, InFlightEvent> getInFlight(final String processorName, final int partition) {
-    return inFlight.get(InFlightWorkKey.of(processorName, partition));
-  }
-
   /**
    * @return any uncaught exceptions encountered during processing of input records,
    *         or {@link Optional#empty()} if there are none
@@ -108,6 +103,12 @@ public class AsyncThreadPool {
       final int partition
   ) {
     return Optional.ofNullable(fatalExceptions.get(new InFlightWorkKey(processorName, partition)));
+
+  }
+
+  @VisibleForTesting
+  Map<AsyncEvent, InFlightEvent> getInFlight(final String processorName, final int partition) {
+    return inFlight.get(InFlightWorkKey.of(processorName, partition));
   }
 
   /**
@@ -210,6 +211,7 @@ public class AsyncThreadPool {
         final AsyncEvent event,
         final ProcessingContext taskContext,
         final AsyncUserProcessorContext<KOut, VOut> userContext
+
     ) {
       this.event = event;
       this.wrappingContext = userContext;

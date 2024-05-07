@@ -78,6 +78,10 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   // to "DONE" state. Used to make sure all events are flushed during a commit
   private final Set<AsyncEvent> pendingEvents = new HashSet<>();
 
+
+  // This is set at most once. When its set, the thread should immediately throw, and no longer
+  // try to process further events for this processor. This minimizes the chance of producing
+  // bad results, particularly with ALOS.
   private RuntimeException fatalException = null;
 
   // Everything below this line is effectively final and just has to be initialized in #init //
@@ -233,12 +237,8 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
 
   void assertQueuesEmptyOnFirstProcess() {
     if (!hasProcessedSomething) {
-      try {
-        assertQueuesEmpty();
-        hasProcessedSomething = true;
-      } catch (final RuntimeException e) {
-        throw new StreamsException(e, taskId);
-      }
+      assertQueuesEmpty();
+      hasProcessedSomething = true;
     }
   }
 
@@ -295,6 +295,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
 
   private void processNewAsyncEvent(final AsyncEvent event) {
     if (fatalException != null) {
+      log.error("process called when processor already hit fatal exception", fatalException);
       throw new IllegalStateException(
           "process called when already hit exception: " + fatalException);
     }
@@ -383,9 +384,11 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    */
   public void flushAndAwaitPendingEvents() {
     if (fatalException != null) {
-      // if there was a processing exception, processing for the key that hit the processing
-      // exception is blocked, so we don't want to go into the loop below that tries to drain
-      // queues, as the queue for that key will never drain. Instead, just throw here.
+      // if there was a fatal exception, just throw right away so that we exit right
+      // away and minimize the risk of causing further problems. Additionally, processing for
+      // the key that hit the processing exception is blocked, so we don't want to go into the
+      // loop below that tries to drain queues, as the queue for that key will never drain.
+      log.error("exit flush early due to previous fatal exception", fatalException);
       throw fatalException;
     }
 
