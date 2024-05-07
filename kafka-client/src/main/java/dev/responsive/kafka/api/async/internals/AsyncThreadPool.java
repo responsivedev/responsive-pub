@@ -137,8 +137,7 @@ public class AsyncThreadPool {
         = inFlight.computeIfAbsent(inFlightKey, k -> new ConcurrentHashMap<>());
     for (final var e : events) {
       final var future = CompletableFuture.runAsync(
-          new AsyncEventTask<>(
-              e, taskContext, asyncProcessorContext, finalizingQueue, inFlightForTask),
+          new AsyncEventTask<>(e, taskContext, asyncProcessorContext, finalizingQueue),
           executor
       );
       final var inFlightEvent = new InFlightEvent(future);
@@ -185,20 +184,17 @@ public class AsyncThreadPool {
     private final ProcessingContext originalContext;
     private final AsyncUserProcessorContext<KOut, VOut> wrappingContext;
     private final FinalizingQueue finalizingQueue;
-    private final ConcurrentMap<AsyncEvent, InFlightEvent> inFlightForTask;
 
     private AsyncEventTask(
         final AsyncEvent event,
         final ProcessingContext originalContext,
         final AsyncUserProcessorContext<KOut, VOut> userContext,
-        final FinalizingQueue finalizingQueue,
-        final ConcurrentMap<AsyncEvent, InFlightEvent> inFlightForTask
+        final FinalizingQueue finalizingQueue
     ) {
       this.event = event;
       this.originalContext = originalContext;
       this.wrappingContext = userContext;
       this.finalizingQueue = finalizingQueue;
-      this.inFlightForTask = inFlightForTask;
     }
 
     @Override

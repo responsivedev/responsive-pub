@@ -78,7 +78,10 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   // to "DONE" state. Used to make sure all events are flushed during a commit
   private final Set<AsyncEvent> pendingEvents = new HashSet<>();
 
-  private RuntimeException processingException = null;
+  // This is set at most once. When its set, the thread should immediately throw, and no longer
+  // try to process further events for this processor. This minimizes the chance of producing
+  // bad results, particularly with ALOS.
+  private RuntimeException fatalException = null;
 
   // Everything below this line is effectively final and just has to be initialized in #init //
 
@@ -290,9 +293,10 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   }
 
   private void processNewAsyncEvent(final AsyncEvent event) {
-    if (processingException != null) {
+    if (fatalException != null) {
+      log.error("process called when processor already hit fatal exception", fatalException);
       throw new IllegalStateException(
-          "process called when already hit exception: " + processingException);
+          "process called when already hit exception: " + fatalException);
     }
 
     pendingEvents.add(event);
@@ -367,11 +371,13 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    * each commit, similar to #flushCache
    */
   public void flushAndAwaitPendingEvents() {
-    if (processingException != null) {
-      // if there was a processing exception, processing for the key that hit the processing
-      // exception is blocked, so we don't want to go into the loop below that tries to drain
-      // queues, as the queue for that key will never drain. Instead, just throw here.
-      throw processingException;
+    if (fatalException != null) {
+      // if there was a fatal exception, just throw right away so that we exit right
+      // away and minimize the risk of causing further problems. Additionally, processing for
+      // the key that hit the processing exception is blocked, so we don't want to go into the
+      // loop below that tries to drain queues, as the queue for that key will never drain.
+      log.error("exit flush early due to previous fatal exception", fatalException);
+      throw fatalException;
     }
 
     // Make a (non-blocking) pass through the finalizing queue up front, to
@@ -402,11 +408,11 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   private void checkUncaughtExceptionsOnAsyncThreads() {
     final var uncaught = threadPool.checkUncaughtExceptions(asyncProcessorName, taskId.partition());
     if (uncaught.isPresent()) {
-      if (processingException != null) {
-        processingException = uncaught.map(t ->
+      if (fatalException == null) {
+        fatalException = uncaught.map(t ->
           t instanceof RuntimeException ? (RuntimeException) t : new RuntimeException(t)).get();
       }
-      throw processingException;
+      throw fatalException;
     }
   }
 
@@ -591,8 +597,8 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     final Optional<RuntimeException> processingException = event.processingException();
     if (processingException.isPresent()) {
       pendingEvents.remove(event);
-      this.processingException = processingException.get();
-      throw this.processingException;
+      this.fatalException = processingException.get();
+      throw this.fatalException;
     }
     return streamThreadContext.prepareToFinalizeEvent(event);
   }
