@@ -16,11 +16,6 @@
 
 package dev.responsive.kafka.internal.stores;
 
-import static dev.responsive.kafka.internal.metrics.StoreMetrics.FAILED_TRUNCATIONS;
-import static dev.responsive.kafka.internal.metrics.StoreMetrics.FAILED_TRUNCATIONS_RATE;
-import static dev.responsive.kafka.internal.metrics.StoreMetrics.FAILED_TRUNCATIONS_RATE_DESCRIPTION;
-import static dev.responsive.kafka.internal.metrics.StoreMetrics.FAILED_TRUNCATIONS_TOTAL;
-import static dev.responsive.kafka.internal.metrics.StoreMetrics.FAILED_TRUNCATIONS_TOTAL_DESCRIPTION;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_ERRORS;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_ERRORS_RATE;
@@ -40,7 +35,6 @@ import static dev.responsive.kafka.internal.metrics.StoreMetrics.STORE_METRIC_GR
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.TIME_SINCE_LAST_FLUSH;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.TIME_SINCE_LAST_FLUSH_DESCRIPTION;
 import static dev.responsive.kafka.internal.utils.Utils.extractThreadId;
-import static org.apache.kafka.clients.admin.RecordsToDelete.beforeOffset;
 
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.db.BatchFlusher;
@@ -58,8 +52,6 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CancellationException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -69,7 +61,6 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -104,17 +95,12 @@ public class CommitBuffer<K extends Comparable<K>, P>
   private final String flushSensorName;
   private final String flushLatencySensorName;
   private final String flushErrorsSensorName;
-  private final String failedTruncationsSensorName;
 
   private final MetricName lastFlushMetric;
   private final Sensor flushSensor;
   private final Sensor flushLatencySensor;
   private final Sensor flushErrorsSensor;
-  private final Sensor failedTruncationsSensor;
 
-  // flag to skip further truncation attempts when the changelog is set to 'compact' only
-  private boolean isDeleteEnabled = true;
-  private final boolean truncateChangelog;
   private KafkaFuture<DeletedRecords> deleteRecordsFuture = KafkaFuture.completedFuture(null);
 
   private Instant lastFlush;
@@ -124,7 +110,6 @@ public class CommitBuffer<K extends Comparable<K>, P>
       final SessionClients clients,
       final TopicPartition changelog,
       final KeySpec<K> keySpec,
-      final boolean truncateChangelog,
       final TableName tableName,
       final ResponsiveConfig config
   ) {
@@ -136,7 +121,6 @@ public class CommitBuffer<K extends Comparable<K>, P>
         changelog,
         admin,
         keySpec,
-        truncateChangelog,
         tableName,
         FlushTriggers.fromConfig(config),
         ExceptionSupplier.fromConfig(config.originals())
@@ -149,7 +133,6 @@ public class CommitBuffer<K extends Comparable<K>, P>
       final TopicPartition changelog,
       final Admin admin,
       final KeySpec<K> keySpec,
-      final boolean truncateChangelog,
       final TableName tableName,
       final FlushTriggers flushTriggers,
       final ExceptionSupplier exceptionSupplier
@@ -160,7 +143,6 @@ public class CommitBuffer<K extends Comparable<K>, P>
         changelog,
         admin,
         keySpec,
-        truncateChangelog,
         tableName,
         flushTriggers,
         exceptionSupplier,
@@ -175,7 +157,6 @@ public class CommitBuffer<K extends Comparable<K>, P>
       final TopicPartition changelog,
       final Admin admin,
       final KeySpec<K> keySpec,
-      final boolean truncateChangelog,
       final TableName tableName,
       final FlushTriggers flushTriggers,
       final ExceptionSupplier exceptionSupplier,
@@ -204,8 +185,6 @@ public class CommitBuffer<K extends Comparable<K>, P>
     flushSensorName = getSensorName(FLUSH, changelog);
     flushLatencySensorName = getSensorName(FLUSH_LATENCY, changelog);
     flushErrorsSensorName = getSensorName(FLUSH_ERRORS, changelog);
-    failedTruncationsSensorName = getSensorName(FAILED_TRUNCATIONS, changelog);
-
 
     final String streamThreadId = extractThreadId(Thread.currentThread().getName());
 
@@ -266,35 +245,6 @@ public class CommitBuffer<K extends Comparable<K>, P>
             metrics.storeLevelMetric(STORE_METRIC_GROUP, streamThreadId, changelog, storeName)),
         new CumulativeCount()
     );
-
-    failedTruncationsSensor = metrics.addSensor(failedTruncationsSensorName);
-
-    if (hasSourceTopicChangelog(changelog.topic())) {
-      this.truncateChangelog = false;
-      if (truncateChangelog) {
-        log.warn("Changelog truncation is not compatible with the source-topic changelog "
-                     + "optimization, and will not be enabled for the topic {}", changelog.topic());
-      }
-    } else {
-      this.truncateChangelog = truncateChangelog;
-
-      if (truncateChangelog) {
-        failedTruncationsSensor.add(
-            metrics.metricName(
-                FAILED_TRUNCATIONS_RATE,
-                FAILED_TRUNCATIONS_RATE_DESCRIPTION,
-                metrics.storeLevelMetric(STORE_METRIC_GROUP, streamThreadId, changelog, storeName)),
-            new Rate()
-        );
-        failedTruncationsSensor.add(
-            metrics.metricName(
-                FAILED_TRUNCATIONS_TOTAL,
-                FAILED_TRUNCATIONS_TOTAL_DESCRIPTION,
-                metrics.storeLevelMetric(STORE_METRIC_GROUP, streamThreadId, changelog, storeName)),
-            new CumulativeCount()
-        );
-      }
-    }
   }
 
   // Attach the changelog topic name & partition to make sure we uniquely name each sensor
@@ -507,54 +457,6 @@ public class CommitBuffer<K extends Comparable<K>, P>
              flushLatencyMs
     );
     buffer.clear();
-
-    maybeTruncateChangelog(consumedOffset);
-  }
-
-  /**
-   * Performs async changelog truncation by allowing the delete requests to be completed
-   * in the background. After a flush, we will check on the completion of the previous
-   * delete request and if successful, send out a new request to truncate up to the
-   * last flushed offset
-   *
-   * @param offset the flushed offset up to which we can safely delete changelog records
-   */
-  private void maybeTruncateChangelog(final long offset) {
-    if (truncateChangelog && isDeleteEnabled) {
-      if (deleteRecordsFuture.isDone()) {
-        log.debug("Issuing new delete request to truncate {} up to offset {}", changelog, offset);
-
-        deleteRecordsFuture = admin.deleteRecords(Map.of(changelog, beforeOffset(offset)))
-            .lowWatermarks()
-            .get(changelog)
-            .whenComplete(this::onDeleteRecords);
-      } else {
-        log.debug("Still waiting on previous changelog truncation attempt to complete");
-      }
-    }
-  }
-
-  private void onDeleteRecords(final DeletedRecords deletedRecords, final Throwable throwable) {
-    if (throwable == null) {
-      log.info("Truncated changelog {} up to offset {}", changelog, deletedRecords.lowWatermark());
-    } else {
-      failedTruncationsSensor.record();
-
-      if (throwable instanceof PolicyViolationException) {
-        // Don't retry and cancel all further attempts since we know they will fail
-        log.warn("Disabling further changelog truncation attempts due to topic configuration "
-                     + "being incompatible with deleteRecords requests", throwable);
-        isDeleteEnabled = false;
-      } else if (throwable instanceof CancellationException) {
-        // Don't retry and just log at INFO since we cancel the future as part of shutdown
-        log.info("Delete records request for changelog {} was cancelled", changelog);
-      } else {
-        // Pretty much anything else can and should be retried, but we always wait for the
-        // next flush to retry to make sure the offset gets updated
-        log.warn("Truncation of changelog " + changelog + " failed and will be retried"
-                     + "after the next flush", throwable);
-      }
-    }
   }
 
   @Override
@@ -595,6 +497,5 @@ public class CommitBuffer<K extends Comparable<K>, P>
     metrics.removeSensor(flushSensorName);
     metrics.removeSensor(flushLatencySensorName);
     metrics.removeSensor(flushErrorsSensorName);
-    metrics.removeSensor(failedTruncationsSensorName);
   }
 }

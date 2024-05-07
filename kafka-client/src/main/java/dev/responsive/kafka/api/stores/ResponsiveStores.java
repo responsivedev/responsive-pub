@@ -125,8 +125,7 @@ public final class ResponsiveStores {
         storeSupplier,
         Stores.keyValueStoreBuilder(storeSupplier, keySerde, valueSerde),
         keySerde,
-        valueSerde,
-        false
+        valueSerde
     );
   }
 
@@ -169,8 +168,7 @@ public final class ResponsiveStores {
             keySerde,
             valueSerde),
         keySerde,
-        valueSerde,
-        false
+        valueSerde
     );
   }
 
@@ -187,8 +185,7 @@ public final class ResponsiveStores {
       final ResponsiveKeyValueParams params
   ) {
     return new ResponsiveMaterialized<>(
-        Materialized.as(keyValueStore(params)),
-        params.truncateChangelog()
+        Materialized.as(keyValueStore(params))
     );
   }
 
@@ -268,8 +265,7 @@ public final class ResponsiveStores {
         storeSupplier,
         Stores.windowStoreBuilder(storeSupplier, keySerde, valueSerde),
         keySerde,
-        valueSerde,
-        false
+        valueSerde
     );
   }
 
@@ -299,8 +295,7 @@ public final class ResponsiveStores {
             keySerde,
             valueSerde),
         keySerde,
-        valueSerde,
-        false
+        valueSerde
     );
   }
 
@@ -317,8 +312,7 @@ public final class ResponsiveStores {
       final ResponsiveWindowParams params
   ) {
     return new ResponsiveMaterialized<>(
-        Materialized.as(new ResponsiveWindowedStoreSupplier(params)),
-        params.truncateChangelog()
+        Materialized.as(new ResponsiveWindowedStoreSupplier(params))
     );
   }
 
@@ -344,8 +338,7 @@ public final class ResponsiveStores {
         storeSupplier,
         Stores.sessionStoreBuilder(storeSupplier, keySerde, valueSerde),
         keySerde,
-        valueSerde,
-        false
+        valueSerde
     );
   }
 
@@ -362,8 +355,7 @@ public final class ResponsiveStores {
       final ResponsiveSessionParams params
   ) {
     return new ResponsiveMaterialized<>(
-        Materialized.as(new ResponsiveSessionStoreSupplier(params)),
-        params.truncateChangelog()
+        Materialized.as(new ResponsiveSessionStoreSupplier(params))
     );
   }
 

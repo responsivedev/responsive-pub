@@ -114,7 +114,6 @@ public class SessionOperationsImpl implements SessionOperations {
         sessionClients,
         changelog,
         keySpec,
-        params.truncateChangelog(),
         params.name(),
         responsiveConfig
     );

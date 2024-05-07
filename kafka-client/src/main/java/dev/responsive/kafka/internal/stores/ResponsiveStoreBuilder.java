@@ -16,7 +16,6 @@
 
 package dev.responsive.kafka.internal.stores;
 
-import dev.responsive.kafka.internal.utils.StoreUtil;
 import java.util.Map;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Time;
@@ -33,7 +32,6 @@ public class ResponsiveStoreBuilder<K, V, T extends StateStore> implements Store
   // Note: the valueSerde is not necessary of type V, eg in case of timestamped stores
   private final Serde<?> valueSerde;
   private final Time time;
-  private final boolean truncateChangelog;
 
   public enum StoreType {
     KEY_VALUE,
@@ -48,8 +46,7 @@ public class ResponsiveStoreBuilder<K, V, T extends StateStore> implements Store
       final StoreSupplier<?> userStoreSupplier,
       final StoreBuilder<T> userStoreBuilder,
       final Serde<K> keySerde,
-      final Serde<?> valueSerde,
-      final boolean truncateChangelog
+      final Serde<?> valueSerde
   ) {
     // the time parameter only exists for Streams unit tests and in non-testing code
     // will always hard-code Time.SYSTEM
@@ -59,8 +56,7 @@ public class ResponsiveStoreBuilder<K, V, T extends StateStore> implements Store
         userStoreBuilder,
         keySerde,
         valueSerde,
-        Time.SYSTEM,
-        truncateChangelog
+        Time.SYSTEM
     );
   }
 
@@ -70,8 +66,7 @@ public class ResponsiveStoreBuilder<K, V, T extends StateStore> implements Store
       final StoreBuilder<T> userStoreBuilder,
       final Serde<K> keySerde,
       final Serde<?> valueSerde,
-      final Time time,
-      final boolean truncateChangelog
+      final Time time
   ) {
     this.storeType = storeType;
     this.userStoreSupplier = userStoreSupplier;
@@ -79,7 +74,6 @@ public class ResponsiveStoreBuilder<K, V, T extends StateStore> implements Store
     this.keySerde = keySerde;
     this.valueSerde = valueSerde;
     this.time = time;
-    this.truncateChangelog = truncateChangelog;
   }
 
   public StoreType storeType() {
@@ -120,8 +114,6 @@ public class ResponsiveStoreBuilder<K, V, T extends StateStore> implements Store
 
   @Override
   public StoreBuilder<T> withLoggingEnabled(final Map<String, String> config) {
-    StoreUtil.validateLogConfigs(config, truncateChangelog, name());
-
     userStoreBuilder.withLoggingEnabled(config);
     return this;
   }
