@@ -26,6 +26,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Named;
@@ -50,24 +51,31 @@ public class E2ETestApplication {
   private final String inputTopic;
   private final String outputTopic;
   private final int partitions;
+  private final int exceptionThreshold;
 
   public E2ETestApplication(
       final Map<String, Object> properties,
       final String name,
       final String inputTopic,
       final String outputTopic,
-      final int partitions
+      final int partitions,
+      final int exceptionThreshold
   ) {
     this.properties = Objects.requireNonNull(properties);
     this.inputTopic = Objects.requireNonNull(inputTopic);
     this.outputTopic = Objects.requireNonNull(outputTopic);
     this.name = Objects.requireNonNull(name);
     this.partitions = partitions;
+    this.exceptionThreshold = exceptionThreshold;
     LOG.info("build topology");
   }
 
   public synchronized void start() {
-    E2ETestUtils.maybeCreateTopics(properties, partitions, List.of(inputTopic, outputTopic));
+    E2ETestUtils.retryFor(
+        () -> E2ETestUtils.maybeCreateTopics(
+            properties, partitions, List.of(inputTopic, outputTopic)),
+        Duration.ofMinutes(5)
+    );
     E2ETestUtils.retryFor(this::maybeCreateKeyspace, Duration.ofMinutes(5));
     // build topology after creating keyspace because we use keyspace retry
     // to wait for scylla to resolve
@@ -104,7 +112,7 @@ public class E2ETestApplication {
         builder.stream(inputTopic, Consumed.with(Serdes.Long(), Schema.inputRecordSerde()));
     final KStream<Long, OutputRecord> result = stream
         .processValues(AsyncFixedKeyProcessorSupplier.createAsyncProcessorSupplier(
-            new E2ETestProcessorSupplier(name)),
+            new E2ETestProcessorSupplier(name, exceptionThreshold)),
             Named.as("AsyncProcessor"),
             name
         );
@@ -115,7 +123,13 @@ public class E2ETestApplication {
     builderProperties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG,
         StreamsConfig.EXACTLY_ONCE_V2);
     builderProperties.put(ResponsiveConfig.ASYNC_THREAD_POOL_SIZE_CONFIG, 4);
-    return new ResponsiveKafkaStreams(builder.build(builderProperties), builderProperties);
+    final var streams = new ResponsiveKafkaStreams(
+        builder.build(builderProperties),
+        builderProperties
+    );
+    streams.setUncaughtExceptionHandler(exception
+        -> StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.REPLACE_THREAD);
+    return streams;
   }
 
   private void maybeCreateKeyspace() {
@@ -135,7 +149,7 @@ public class E2ETestApplication {
         .addContactPoint(new InetSocketAddress(scyllaName, port))
         .withLocalDatacenter("datacenter1")
         .withConfigLoader(DriverConfigLoader.programmaticBuilder()
-            .withLong(REQUEST_TIMEOUT, 10000)
+            .withLong(REQUEST_TIMEOUT, 100000)
             .build())
         .build();
   }
@@ -145,9 +159,12 @@ public class E2ETestApplication {
     private FixedKeyProcessorContext<Long, OutputRecord> context;
     private TimestampedKeyValueStore<Long, OutputRecord> store;
     private int partition;
+    private final int exceptionThreshold;
+    private final UrandomGenerator randomGenerator = new UrandomGenerator();
 
-    E2ETestProcessor(final String storeName) {
+    E2ETestProcessor(final String storeName, final int exceptionThreshold) {
       this.storeName = Objects.requireNonNull(storeName);
+      this.exceptionThreshold = exceptionThreshold;
     }
 
     @Override
@@ -159,6 +176,10 @@ public class E2ETestApplication {
 
     @Override
     public void process(final FixedKeyRecord<Long, InputRecord> record) {
+      final var random = Math.abs(randomGenerator.nextLong() % 10000);
+      if (random < exceptionThreshold) {
+        throw new InjectedE2ETestException();
+      }
       final ValueAndTimestamp<OutputRecord> old = store.get(record.key());
       final var in = record.value();
       AccumulatingChecksum checksum;
@@ -189,14 +210,16 @@ public class E2ETestApplication {
   static class E2ETestProcessorSupplier
       implements FixedKeyProcessorSupplier<Long, InputRecord, OutputRecord> {
     private final String storeName;
+    private final int exceptionThreshold;
 
-    E2ETestProcessorSupplier(final String storeName) {
+    E2ETestProcessorSupplier(final String storeName, final int exceptionThreshold) {
       this.storeName = Objects.requireNonNull(storeName);
+      this.exceptionThreshold = exceptionThreshold;
     }
 
     @Override
     public FixedKeyProcessor<Long, InputRecord, OutputRecord> get() {
-      return new E2ETestProcessor(storeName);
+      return new E2ETestProcessor(storeName, exceptionThreshold);
     }
 
     @Override
@@ -208,6 +231,14 @@ public class E2ETestApplication {
               Schema.outputRecordSerde()
           )
       );
+    }
+  }
+
+  private static class InjectedE2ETestException extends RuntimeException {
+    private static final long serialVersionUID = 0L;
+
+    public InjectedE2ETestException() {
+      super("injected e2e test exception");
     }
   }
 }

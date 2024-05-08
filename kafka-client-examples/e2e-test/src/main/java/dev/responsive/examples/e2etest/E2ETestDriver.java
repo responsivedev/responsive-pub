@@ -10,6 +10,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ExecutionException;
@@ -26,6 +27,7 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
@@ -60,7 +62,8 @@ public class E2ETestDriver {
       final String outputTopic,
       final int partitions,
       final long recordsToProcess,
-      final int maxOutstanding
+      final int maxOutstanding,
+      final Duration receivedThreshold
   ) {
     this.properties = Objects.requireNonNull(properties);
     this.numKeys = numKeys;
@@ -77,7 +80,7 @@ public class E2ETestDriver {
     ));
     consumeState = keys.stream().collect(Collectors.toMap(
         k -> k,
-        ConsumeState::new
+        k -> new ConsumeState(k, receivedThreshold)
     ));
     this.recordsToProcess = recordsToProcess;
     this.maxOutstanding = maxOutstanding;
@@ -92,6 +95,9 @@ public class E2ETestDriver {
         .putAll(properties)
         .put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, LongDeserializer.class)
         .put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, Schema.OutputRecordDeserializer.class)
+        .put(
+            ConsumerConfig.ISOLATION_LEVEL_CONFIG,
+            IsolationLevel.READ_COMMITTED.toString().toLowerCase(Locale.ROOT))
         .build();
     consumer = new KafkaConsumer<>(consumerProperties);
   }
@@ -104,7 +110,11 @@ public class E2ETestDriver {
   }
 
   public void start() {
-    E2ETestUtils.maybeCreateTopics(properties, partitions, List.of(inputTopic, outputTopic));
+    E2ETestUtils.retryFor(
+        () -> E2ETestUtils.maybeCreateTopics(
+            properties, partitions, List.of(inputTopic, outputTopic)),
+        Duration.ofMinutes(5)
+    );
     final Thread t = new Thread(this::runProducer);
     t.start();
     runConsumer();
@@ -199,6 +209,12 @@ public class E2ETestDriver {
       maybeLogConsumed();
       cs.updateReceived(poppedOffsets, ps.partition(), cr.value().digest());
     }
+    for (final var k : consumeState.keySet()) {
+      final int outstanding = produceState.get(k).outstandingMessages();
+      if (outstanding > 0) {
+        consumeState.get(k).checkStalled();
+      }
+    }
   }
 
   private Instant lastLog = Instant.EPOCH;
@@ -256,6 +272,10 @@ public class E2ETestDriver {
       return partition;
     }
 
+    private synchronized int outstandingMessages() {
+      return offsets.size();
+    }
+
     private synchronized List<Long> popOffsets(final long upTo) {
       while (!offsets.contains(upTo)) {
         try {
@@ -274,11 +294,14 @@ public class E2ETestDriver {
 
   private static class ConsumeState {
     private final long key;
+    private final Duration receivedThreshold;
     private long recvdCount = 0;
+    private Instant lastReceived = Instant.now();
     private AccumulatingChecksum checksum = new AccumulatingChecksum();
 
-    private ConsumeState(final long key) {
+    private ConsumeState(final long key, final Duration receivedThreshold) {
       this.key = key;
+      this.receivedThreshold = receivedThreshold;
     }
 
     private void updateReceived(
@@ -286,6 +309,7 @@ public class E2ETestDriver {
         final int partition,
         final byte[] observedChecksum
     ) {
+      lastReceived = Instant.now();
       for (final var o : offsets) {
         checksum = checksum
             .updateWith(recvdCount)
@@ -302,6 +326,16 @@ public class E2ETestDriver {
             observedChecksum
         );
         throw new IllegalStateException("checksum mismatch");
+      }
+    }
+
+    private void checkStalled() {
+      if (Duration.between(lastReceived, Instant.now()).compareTo(receivedThreshold) > 0) {
+        throw new IllegalStateException(String.format(
+            "have not seen any results for %d in %s",
+            key,
+            receivedThreshold
+        ));
       }
     }
   }

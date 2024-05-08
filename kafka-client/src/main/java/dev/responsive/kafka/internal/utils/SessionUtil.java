@@ -74,7 +74,7 @@ public final class SessionUtil {
     return sessionBuilder
         .withConfigLoader(DriverConfigLoader
             .programmaticBuilder()
-            .withLong(REQUEST_TIMEOUT, 5000)
+            .withLong(REQUEST_TIMEOUT, 30000)
             .withClass(RETRY_POLICY_CLASS, ResponsiveRetryPolicy.class)
             .withClass(REQUEST_THROTTLER_CLASS, ConcurrencyLimitingRequestThrottler.class)
             // we just set this to MAX_VALUE as it will be implicitly limited by the
