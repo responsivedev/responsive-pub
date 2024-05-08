@@ -4,8 +4,10 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.common.errors.TopicExistsException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -21,7 +23,13 @@ class E2ETestUtils {
       for (final var topic : topics) {
         LOG.info("create topic {}", topic);
         try {
-          admin.createTopics(List.of(new NewTopic(topic, partitions, (short) 1)));
+          admin.createTopics(List.of(new NewTopic(topic, partitions, (short) 1)))
+              .all().get();
+        } catch (final ExecutionException | InterruptedException e) {
+          if (e.getCause() instanceof TopicExistsException) {
+            return;
+          }
+          throw new RuntimeException(e);
         } catch (final RuntimeException e) {
           LOG.info("Error creating topic: " + e);
         }

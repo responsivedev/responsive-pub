@@ -3,6 +3,7 @@ package dev.responsive.examples.e2etest;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.time.Duration;
 import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Collectors;
@@ -12,7 +13,7 @@ import org.slf4j.LoggerFactory;
 public class Main {
   private static final Logger LOG = LoggerFactory.getLogger(Main.class);
 
-  public static void main(String[] args) throws IOException, InterruptedException {
+  public static void main(String[] args) throws IOException {
     final Map<String, Object> rawCfg;
     try (InputStream input = new FileInputStream(args[0])) {
       final Properties properties = new Properties();
@@ -29,7 +30,8 @@ public class Main {
           Params.OUTPUT_TOPIC,
           Params.PARTITIONS,
           Long.MAX_VALUE,
-          Params.MAX_OUTSTANDING
+          Params.MAX_OUTSTANDING,
+          Duration.ofSeconds(Params.RECEIVE_THRESHOLD)
       );
       Runtime.getRuntime().addShutdownHook(new Thread(driver::notifyStop));
       driver.start();
@@ -40,7 +42,8 @@ public class Main {
           Params.NAME,
           Params.INPUT_TOPIC,
           Params.OUTPUT_TOPIC,
-          Params.PARTITIONS
+          Params.PARTITIONS,
+          Params.EXCEPTION_INJECT_THRESHOLD
       );
       Runtime.getRuntime().addShutdownHook(new Thread(application::stop));
       application.start();

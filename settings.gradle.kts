@@ -116,6 +116,7 @@ dependencyResolutionManagement {
 
         create("testlibs") {
             version("testcontainers", "1.17.6")
+            version("log4j2", "2.20.0")
 
             library("junit", "org.junit.jupiter:junit-jupiter:5.9.1")
             library("hamcrest", "org.hamcrest:hamcrest:2.2")
@@ -124,8 +125,8 @@ dependencyResolutionManagement {
 
             // include these as test dependencies so we don't force downstream
             // users to use our logging libraries
-            library("slf4j", "org.slf4j:slf4j-log4j12:1.7.5")
-            library("log4j-core", "org.apache.logging.log4j:log4j-core:2.17.1")
+            library("slf4j-log4j2", "org.apache.logging.log4j", "log4j-slf4j-impl").versionRef("log4j2")
+            library("log4j-core", "org.apache.logging.log4j", "log4j-core").versionRef("log4j2")
 
             library("testcontainers", "org.testcontainers", "testcontainers").versionRef("testcontainers")
             library("testcontainers-junit", "org.testcontainers", "junit-jupiter").versionRef("testcontainers")
@@ -141,7 +142,7 @@ dependencyResolutionManagement {
                             "testcontainers-mongodb"
                     ))
 
-            bundle("base", listOf("junit", "slf4j", "log4j-core", "hamcrest", "mockito", "mockito-jupiter"))
+            bundle("base", listOf("junit", "slf4j-log4j2", "log4j-core", "hamcrest", "mockito", "mockito-jupiter"))
         }
     }
 }

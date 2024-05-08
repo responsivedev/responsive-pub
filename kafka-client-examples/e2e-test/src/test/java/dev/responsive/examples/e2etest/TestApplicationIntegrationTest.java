@@ -1,6 +1,7 @@
 package dev.responsive.examples.e2etest;
 
 import dev.responsive.kafka.api.config.StorageBackend;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import org.apache.kafka.clients.admin.Admin;
@@ -34,7 +35,8 @@ public class TestApplicationIntegrationTest {
         "test",
         INPUT_TOPIC,
         OUTPUT_TOPIC,
-        4
+        4,
+        0
     );
     this.driver = new E2ETestDriver(
         properties,
@@ -43,7 +45,8 @@ public class TestApplicationIntegrationTest {
         OUTPUT_TOPIC,
         4,
         10000L,
-        100
+        100,
+        Duration.ofMinutes(5)
     );
   }
 

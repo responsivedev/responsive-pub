@@ -18,6 +18,13 @@ jobs:
           docker-images: true
           swap-storage: true
 
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          registry: https://us-central1-docker.pkg.dev
+          username: _json_key
+          password: ${{ secrets.ANTITHESIS_DOCKER_CREDENTIAL }}
+
       - name: "Checkout"
         uses: actions/checkout@v3
         with:
@@ -29,12 +36,6 @@ jobs:
         uses: gradle/gradle-build-action@v2.9.0
         with:
           arguments: kafka-client-examples:e2e-test:build kafka-client-examples:e2e-test:buildDocker
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: _json_key
-          password: ${{ secrets.ANTITHESIS_DOCKER_CREDENTIAL }}
 
       - name: "Tag Docker"
         run: |
@@ -52,3 +53,16 @@ jobs:
       - name: "Push Config"
         run: |
           docker push us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test-config:antithesis-latest
+
+      # Run Antithesis Tests
+      - name: Run Antithesis Tests
+        uses: antithesishq/antithesis-trigger-action@main
+        with:
+          notebook_name: responsive
+          tenant: responsive
+          username: ${{ secrets.ANTITHESIS_USERNAME }}
+          password: ${{ secrets.ANTITHESIS_PASSWORD }}
+          github_token: ${{ secrets.ANTITHESIS_GH_PAT }}
+          config_image: us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test-config:antithesis-latest
+          images: us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test:antithesis-latest
+          description: "responsive antithesis test run"
