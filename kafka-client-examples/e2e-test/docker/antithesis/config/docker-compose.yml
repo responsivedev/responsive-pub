@@ -43,6 +43,9 @@ services:
 
   application:
     image: us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test:antithesis-latest
+    deploy:
+      mode: replicated
+      replicas: 2
     container_name: application
     depends_on:
       - broker

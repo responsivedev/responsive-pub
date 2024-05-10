@@ -5,7 +5,7 @@ public class Params {
   public static final String INPUT_TOPIC = System.getenv().getOrDefault("INPUT_TOPIC", "input");
   public static final String OUTPUT_TOPIC = System.getenv().getOrDefault("OUTPUT_TOPIC", "output");
   public static final int PARTITIONS
-      = Integer.parseInt(System.getenv().getOrDefault("PARTITIONS", "4"));
+      = Integer.parseInt(System.getenv().getOrDefault("PARTITIONS", "8"));
   public static final int EXCEPTION_INJECT_THRESHOLD
       = Integer.parseInt(System.getenv().getOrDefault("EXCEPTION_INJECT_THRESHOLD", "1"));
   public static final int NUM_KEYS
