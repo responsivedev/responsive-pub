@@ -64,8 +64,9 @@ class AsyncThreadPoolTest {
     // then:
     final Map<AsyncEvent, AsyncThreadPool.InFlightEvent> inFlight
         = pool.getInFlight("processor", 0);
-    if (!inFlight.isEmpty()) {
-      final var future = inFlight.get(event).future();
+    final var inFlightEvent = inFlight.get(event);
+    if (inFlightEvent != null) {
+      final var future = inFlightEvent.future();
       future.get(10, TimeUnit.SECONDS);
     }
     assertThat(finalizingQueue0.waitForNextFinalizableEvent(1, TimeUnit.MINUTES), is(event));

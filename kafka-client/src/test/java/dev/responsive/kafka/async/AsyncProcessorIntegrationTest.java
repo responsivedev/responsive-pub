@@ -129,7 +129,7 @@ public class AsyncProcessorIntegrationTest {
   private static final int STREAMTHREADS_PER_APP = 5;
   private static final int ASYNC_THREADS_PER_STREAMTHREAD = 5;
   private static final int TASKS_PER_STREAMTHREAD = 2; // approximate/assumes balanced partitioning
-  private static final int KEYS_PAR_TASK = 5; // TODO: implement key list based on this config
+  private static final int KEYS_PER_TASK = 5; // TODO: implement key list based on this config
   private static final int INPUT_RECORDS_PER_KEY = 10;
 
   private static final String INPUT_TOPIC = "input";
