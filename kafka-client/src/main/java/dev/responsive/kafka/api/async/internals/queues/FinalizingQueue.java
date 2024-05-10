@@ -36,8 +36,8 @@ import org.slf4j.Logger;
  * Events in this queue are in the {@link AsyncEvent.State#TO_FINALIZE} state
  * <p>
  * Threading notes:
- * -Thread pool --> AsyncThread (see {@link WriteOnlyFinalizingQueue})
- * -Consumes from queue --> StreamThread (see {@link ReadOnlyFinalizingQueue})
+ * -Produces to queue -- async threadpool (see {@link WriteOnlyFinalizingQueue})
+ * -Consumes from queue -- StreamThread (see {@link ReadOnlyFinalizingQueue})
  * -One per physical AsyncProcessor instance
  *   (ie per logical processor per partition per StreamThread)
  */

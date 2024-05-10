@@ -127,7 +127,9 @@ public class AsyncUserProcessorContext<KOut, VOut>
 
   public void setDelegateForAsyncThread(final AsyncThreadProcessorContext<KOut, VOut> delegate) {
     final String threadName = Thread.currentThread().getName();
-    log.debug("Initializing thread-local context for AsyncThread {}", threadName);
+
+    // log this one at TRACE since it's per-record unlike the StreamThread context
+    log.trace("Initializing thread-local context for AsyncThread {}", threadName);
 
     if (!isAsyncThread(threadName, streamThreadName)) {
       log.error("Attempted to set AsyncThread context but thread name was {}", threadName);

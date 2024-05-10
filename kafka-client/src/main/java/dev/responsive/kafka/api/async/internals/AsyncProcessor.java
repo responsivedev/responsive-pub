@@ -406,7 +406,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
         // Need to finalize at least one event per iteration, otherwise there's no
         // point returning to the scheduling queue since nothing new was unblocked
         final int numFinalized = finalizeAtLeastOneEvent();
-        log.debug("Scheduled {} events and finalized {} events",
+        log.trace("Scheduled {} events and finalized {} events",
                   numScheduled, numFinalized
         );
       }
