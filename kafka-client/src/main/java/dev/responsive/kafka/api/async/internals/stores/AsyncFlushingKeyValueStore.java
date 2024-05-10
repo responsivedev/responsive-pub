@@ -49,6 +49,10 @@ public class AsyncFlushingKeyValueStore
 
   private final StreamThreadFlushListeners flushListeners;
 
+  // Effectively final but can't be initialized until the store's #init
+  private int partition;
+
+  // Effectively final but can't be initialized until the corresponding processor's #init
   private AsyncFlushListener flushAsyncProcessor;
 
   public AsyncFlushingKeyValueStore(
@@ -67,8 +71,10 @@ public class AsyncFlushingKeyValueStore
   @Override
   public void init(final StateStoreContext context,
                    final StateStore root) {
+    this.partition = context.taskId().partition();
+
     flushListeners.registerStoreConnectorForPartition(
-        context.taskId().partition(),
+        partition,
         flushListener -> flushAsyncProcessor = flushListener
     );
 
@@ -108,6 +114,12 @@ public class AsyncFlushingKeyValueStore
     throw new IllegalStateException(
         "Attempted to clear cache of async store, this implies the task is "
             + "transitioning to standby which should not happen");
+  }
+
+  @Override
+  public void close() {
+    flushListeners.unregisterListenerForPartition(partition);
+    super.close();
   }
 
   @Override
