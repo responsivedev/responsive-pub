@@ -120,6 +120,7 @@ public class E2ETestApplication {
     final var builderProperties = new Properties();
     builderProperties.putAll(properties);
     builderProperties.put(StreamsConfig.APPLICATION_ID_CONFIG, name);
+    builderProperties.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
     builderProperties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG,
         StreamsConfig.EXACTLY_ONCE_V2);
     builderProperties.put(ResponsiveConfig.ASYNC_THREAD_POOL_SIZE_CONFIG, 4);
