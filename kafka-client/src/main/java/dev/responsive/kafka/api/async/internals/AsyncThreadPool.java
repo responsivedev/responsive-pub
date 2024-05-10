@@ -15,6 +15,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -31,6 +32,7 @@ public class AsyncThreadPool {
   private final ThreadPoolExecutor executor;
   private final Map<InFlightWorkKey, ConcurrentMap<AsyncEvent, InFlightEvent>> inFlight
       = new HashMap<>();
+  private final Semaphore queueSemaphore;
   private final BlockingQueue<Runnable> processingQueue;
 
   private final AtomicInteger threadNameIndex = new AtomicInteger(0);
@@ -44,6 +46,7 @@ public class AsyncThreadPool {
         = new LogContext(String.format("stream-thread [%s] ", streamThreadName));
     this.log = logPrefix.logger(AsyncThreadPool.class);
     this.processingQueue = new LinkedBlockingQueue<>(maxQueuedEvents);
+    this.queueSemaphore = new Semaphore(maxQueuedEvents);
 
     executor = new ThreadPoolExecutor(
         threadPoolSize,
@@ -135,18 +138,29 @@ public class AsyncThreadPool {
     final var inFlightKey = InFlightWorkKey.of(processorName, partition);
     final var inFlightForTask
         = inFlight.computeIfAbsent(inFlightKey, k -> new ConcurrentHashMap<>());
-    for (final var e : events) {
+    for (final var event : events) {
+      try {
+        queueSemaphore.acquire();
+      } catch (final InterruptedException e) {
+        throw new RuntimeException(e);
+      }
       final var future = CompletableFuture.runAsync(
-          new AsyncEventTask<>(e, taskContext, asyncProcessorContext, finalizingQueue),
+          new AsyncEventTask<>(
+              event,
+              taskContext,
+              asyncProcessorContext,
+              finalizingQueue,
+              queueSemaphore
+          ),
           executor
       );
       final var inFlightEvent = new InFlightEvent(future);
-      inFlightForTask.put(e, inFlightEvent);
+      inFlightForTask.put(event, inFlightEvent);
       future.handle((r, t) -> {
         if (t != null) {
           inFlightEvent.setError(t);
         } else {
-          inFlightForTask.remove(e);
+          inFlightForTask.remove(event);
         }
         return null;
       });
@@ -184,22 +198,26 @@ public class AsyncThreadPool {
     private final ProcessingContext originalContext;
     private final AsyncUserProcessorContext<KOut, VOut> wrappingContext;
     private final FinalizingQueue finalizingQueue;
+    private final Semaphore queueSemaphore;
 
     private AsyncEventTask(
         final AsyncEvent event,
         final ProcessingContext originalContext,
         final AsyncUserProcessorContext<KOut, VOut> userContext,
-        final FinalizingQueue finalizingQueue
+        final FinalizingQueue finalizingQueue,
+        final Semaphore queueSemaphore
     ) {
       this.event = event;
       this.originalContext = originalContext;
       this.wrappingContext = userContext;
       this.finalizingQueue = finalizingQueue;
+      this.queueSemaphore = queueSemaphore;
     }
 
     @Override
     public void run() {
       try {
+        queueSemaphore.release();
         wrappingContext.setDelegateForAsyncThread(new AsyncThreadProcessorContext<>(
                 originalContext,
                 event
