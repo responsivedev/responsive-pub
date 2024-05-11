@@ -45,7 +45,7 @@ public class AsyncThreadPool {
     final LogContext logPrefix
         = new LogContext(String.format("stream-thread [%s] ", streamThreadName));
     this.log = logPrefix.logger(AsyncThreadPool.class);
-    this.processingQueue = new LinkedBlockingQueue<>(maxQueuedEvents);
+    this.processingQueue = new LinkedBlockingQueue<>();
     this.queueSemaphore = new Semaphore(maxQueuedEvents);
 
     executor = new ThreadPoolExecutor(
