@@ -78,10 +78,11 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   // to "DONE" state. Used to make sure all events are flushed during a commit
   private final Set<AsyncEvent> pendingEvents = new HashSet<>();
 
+
   // This is set at most once. When its set, the thread should immediately throw, and no longer
   // try to process further events for this processor. This minimizes the chance of producing
   // bad results, particularly with ALOS.
-  private RuntimeException fatalException = null;
+  private StreamsException fatalException = null;
 
   // Everything below this line is effectively final and just has to be initialized in #init //
 
@@ -211,7 +212,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     this.punctuator = taskContext.schedule(
         Duration.ofMillis(punctuationInterval),
         PunctuationType.WALL_CLOCK_TIME,
-        ts -> executeAvailableEvents()
+        this::punctuate
     );
   }
 
@@ -299,12 +300,23 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
           "process called when already hit exception: " + fatalException);
     }
 
-    pendingEvents.add(event);
+    try {
+      pendingEvents.add(event);
 
-    maybeBackOffEnqueuingNewEventWithKey(event.inputRecordKey());
-    schedulingQueue.offer(event);
+      maybeBackOffEnqueuingNewEventWithKey(event.inputRecordKey());
+      schedulingQueue.offer(event);
 
-    executeAvailableEvents();
+      executeAvailableEvents();
+
+    } catch (final StreamsException streamsException) {
+      fatalException = streamsException.taskId().isPresent()
+          ? streamsException
+          : new StreamsException(streamsException, taskId);
+      throw fatalException;
+    } catch (final Throwable t) {
+      fatalException = new StreamsException(t, taskId);
+      throw fatalException;
+    }
   }
 
   @SuppressWarnings("unchecked")
@@ -364,39 +376,52 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
       throw fatalException;
     }
 
-    // Make a (non-blocking) pass through the finalizing queue up front, to
-    // free up any recently-processed events before we attempt to drain the
-    // scheduling queue
-    drainFinalizingQueue();
+    try {
+      // Make a (non-blocking) pass through the finalizing queue up front, to
+      // free up any recently-processed events before we attempt to drain the
+      // scheduling queue
+      drainFinalizingQueue();
 
-    while (!isCleared()) {
-      // we need to check this here because the check in finalizeAtLeastOneEvent only
-      // runs if there are currently slow events being handled by the async threads.
-      checkUncaughtExceptionsOnAsyncThreads();
+      while (!isCleared()) {
+        // Start by scheduling all unblocked events to hand off any events that
+        // were just unblocked by whatever we just finalized
+        final int numScheduled = drainSchedulingQueue();
 
-      // Start by scheduling all unblocked events to hand off any events that
-      // were just unblocked by whatever we just finalized
-      final int numScheduled = drainSchedulingQueue();
+        // Need to finalize at least one event per iteration, otherwise there's no
+        // point returning to the scheduling queue since nothing new was unblocked
+        final int numFinalized = finalizeAtLeastOneEvent();
+        log.trace("Scheduled {} events and finalized {} events",
+                  numScheduled, numFinalized
+        );
+      }
 
-      // Need to finalize at least one event per iteration, otherwise there's no
-      // point returning to the scheduling queue since nothing new was unblocked
-      final int numFinalized = finalizeAtLeastOneEvent();
-      log.debug("Scheduled {} events and finalized {} events",
-                numScheduled, numFinalized
-      );
+      assertQueuesEmpty();
+
+    } catch (final StreamsException streamsException) {
+      fatalException = streamsException.taskId().isPresent()
+        ? streamsException
+        : new StreamsException(streamsException, taskId);
+      throw fatalException;
+    } catch (final Throwable t) {
+      fatalException = new StreamsException(t, taskId);
+      throw fatalException;
     }
-
-    assertQueuesEmpty();
   }
 
-  private void checkUncaughtExceptionsOnAsyncThreads() {
-    final var uncaught = threadPool.checkUncaughtExceptions(asyncProcessorName, taskId.partition());
-    if (uncaught.isPresent()) {
-      if (fatalException == null) {
-        fatalException = uncaught.map(t ->
-          t instanceof RuntimeException ? (RuntimeException) t : new RuntimeException(t)).get();
-      }
-      throw fatalException;
+  /**
+   * Check the AsyncThreadPool for any uncaught exceptions that arose while processing
+   * events or other fatal errors in the AsyncThreadPool itself.
+   * Note: since it's important to fail as quickly as possible in the event of a
+   * fatal exception, we don't limit the scope of this check to only errors
+   * tied to events that belong to this specific AsyncProcessor or task.
+   */
+  private void checkUncaughtExceptionsInAsyncThreadPool() throws Throwable {
+    final Optional<Throwable> fatal = threadPool.checkUncaughtExceptions(
+        asyncProcessorName, taskId.partition()
+    );
+    
+    if (fatal.isPresent()) {
+      throw fatal.get();
     }
   }
 
@@ -410,31 +435,31 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    *
    * @return the number of events that were finalized
    */
-  private int finalizeAtLeastOneEvent() {
+  private int finalizeAtLeastOneEvent() throws Throwable {
+    checkUncaughtExceptionsInAsyncThreadPool();
+
     final int numFinalized = drainFinalizingQueue();
     if (numFinalized > 0) {
       return numFinalized;
     }
 
     while (true) {
-      try {
-        // there is a low chance error here where all events fail, and those failures are the
-        // kind that miss the finalizing queue (which _should_ never happen which is why its
-        // low-chance. To mitigate this we do this in a loop and apply a timeout to the wait
-        // below. At each loop we also check the pending futures.
-        final AsyncEvent finalizableEvent = finalizingQueue.waitForNextFinalizableEvent(
-            100,
-            TimeUnit.MILLISECONDS
-        );
-        if (finalizableEvent != null) {
-          completePendingEvent(finalizableEvent);
-          return 1;
-        }
-        checkUncaughtExceptionsOnAsyncThreads();
-      } catch (final Exception e) {
-        log.error("Exception caught while waiting for an event to finalize", e);
-        throw new StreamsException("Failed to flush async processor", e, taskId);
+      // There is a low chance that an event fails in such a way that it's never placed on
+      // the finalizing queue (this _should_ never happen unless there is a bug, which is
+      // why it's "low-chance"). To account for this possibility we block on finalizable
+      // events in a loop and apply a timeout to the wait so we can check for fatal
+      // errors outside of the FinalizingQueue
+      final AsyncEvent finalizableEvent = finalizingQueue.waitForNextFinalizableEvent(
+          100,
+          TimeUnit.MILLISECONDS
+      );
+
+      if (finalizableEvent != null) {
+        completePendingEvent(finalizableEvent);
+        return 1;
       }
+
+      checkUncaughtExceptionsInAsyncThreadPool();
     }
   }
 
@@ -448,7 +473,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    * finalization, thus freeing up blocked record(s) that were waiting in the
    * SchedulingQueue and can be moved to the ProcessingQueue for processing.
    */
-  private void maybeBackOffEnqueuingNewEventWithKey(final KIn key) {
+  private void maybeBackOffEnqueuingNewEventWithKey(final KIn key) throws Throwable {
     while (schedulingQueue.keyQueueIsFull(key)) {
       drainSchedulingQueue();
 
@@ -458,6 +483,25 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
         // a newly-unblocked event of a different key
         finalizeAtLeastOneEvent();
       }
+    }
+  }
+
+  /**
+   * Invoked by the punctuator for this processor
+   */
+  private void punctuate(final long timestamp) {
+    try {
+      log.debug("Flushing async events during punctuation at {}", timestamp);
+
+      executeAvailableEvents();
+    } catch (final StreamsException streamsException) {
+      fatalException = streamsException.taskId().isPresent()
+          ? streamsException
+          : new StreamsException(streamsException, taskId);
+      throw fatalException;
+    } catch (final Throwable t) {
+      fatalException = new StreamsException(t, taskId);
+      throw fatalException;
     }
   }
 
@@ -481,7 +525,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    * <p>
    * Note: all per-event logging should be at TRACE to avoid spam
    */
-  private void executeAvailableEvents() {
+  private void executeAvailableEvents() throws Throwable {
     // Start by going through the events waiting to be finalized and finish executing their
     // outputs, if any, so we can mark them complete and potentially free up blocked events
     // waiting to be scheduled.
@@ -540,7 +584,9 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    *
    * @return the number of events that were finalized
    */
-  private int drainFinalizingQueue() {
+  private int drainFinalizingQueue() throws Throwable {
+    checkUncaughtExceptionsInAsyncThreadPool();
+
     int count = 0;
     while (!finalizingQueue.isEmpty()) {
       final AsyncEvent event = finalizingQueue.nextFinalizableEvent();
@@ -553,22 +599,25 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   /**
    * Complete processing one pending event.
    * Accepts an event pulled from the {@link FinalizingQueue} and finalizes
-   * it before marking the event as done.
+   * it before marking the event as done, or throws an exception if the
+   * event failed at any stage before or during finalization
+   *
+   * @throws Throwable if the event failed at any stage, eg during processing or finalization
    */
   @SuppressWarnings("try")
-  private void completePendingEvent(final AsyncEvent finalizableEvent) {
+  private void completePendingEvent(final AsyncEvent finalizableEvent) throws Throwable {
+
     try (final var ignored = preFinalize(finalizableEvent)) {
-      finalize(finalizableEvent);
+      doFinalize(finalizableEvent);
       postFinalize(finalizableEvent);
     }
   }
 
-  /**
-   * Prepare to finalize an event by
-   */
+
   private StreamThreadProcessorContext.PreviousRecordContextAndNode preFinalize(
       final AsyncEvent event
-  ) {
+  ) throws Throwable {
+
     if (!pendingEvents.contains(event)) {
       log.error("routed event from {} to the wrong processor for {}",
           event.partition(),
@@ -578,21 +627,26 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
           event.partition(),
           taskId.toString()));
     }
-    final Optional<RuntimeException> processingException = event.processingException();
-    if (processingException.isPresent()) {
+
+    final var toClose = streamThreadContext.prepareToFinalizeEvent(event);
+
+    final Optional<Throwable> processingException = event.processingException();
+    if (processingException.isEmpty()) {
+      event.transitionToFinalizing();
+    } else {
       pendingEvents.remove(event);
-      this.fatalException = processingException.get();
-      throw this.fatalException;
+      event.transitionToDone();
+      throw processingException.get();
     }
-    return streamThreadContext.prepareToFinalizeEvent(event);
+
+    return toClose;
   }
 
   /**
    * Perform finalization of this event by processing output records,
    * ie executing forwards and writes that were intercepted from #process
    */
-  private void finalize(final AsyncEvent event) {
-    event.transitionToFinalizing();
+  private void doFinalize(final AsyncEvent event) {
     DelayedWrite<?, ?> nextDelayedWrite = event.nextWrite();
     DelayedForward<KOut, VOut> nextDelayedForward = event.nextForward();
 

@@ -17,8 +17,8 @@
 package dev.responsive.kafka.api.async.internals.queues;
 
 import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.BlockingDeque;
+import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.TimeUnit;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
@@ -33,21 +33,18 @@ import org.slf4j.Logger;
  * the thread pool threads to the StreamThread, whereas the pool's queue does
  * the exact opposite.
  * <p>
- * Events in this queue are in the {@link AsyncEvent.State#FINALIZING} state
+ * Events in this queue are in the {@link AsyncEvent.State#TO_FINALIZE} state
  * <p>
  * Threading notes:
- * -Thread pool --> AsyncThread (see {@link WriteOnlyFinalizingQueue})
- * -Consumes from queue --> StreamThread (see {@link ReadOnlyFinalizingQueue})
+ * -Produces to queue -- async threadpool (see {@link WriteOnlyFinalizingQueue})
+ * -Consumes from queue -- StreamThread (see {@link ReadOnlyFinalizingQueue})
  * -One per physical AsyncProcessor instance
  *   (ie per logical processor per partition per StreamThread)
- *
- * <p> TODO: implement mechanism for AsyncThreads to forward processing errors
- *       to the StreamThread to rethrow
  */
 public class FinalizingQueue implements ReadOnlyFinalizingQueue, WriteOnlyFinalizingQueue {
 
   private final Logger log;
-  private final BlockingQueue<AsyncEvent> finalizableRecords = new LinkedBlockingQueue<>();
+  private final BlockingDeque<AsyncEvent> finalizableRecords = new LinkedBlockingDeque<>();
   private final int partition;
 
   public FinalizingQueue(final String logPrefix, final int partition) {
@@ -56,37 +53,35 @@ public class FinalizingQueue implements ReadOnlyFinalizingQueue, WriteOnlyFinali
   }
 
   /**
-   * See {@link WriteOnlyFinalizingQueue#scheduleForFinalization(AsyncEvent)}
+   * See {@link WriteOnlyFinalizingQueue#addFinalizableEvent}
    */
   @Override
-  public void scheduleForFinalization(
-      final AsyncEvent processedEvent
+  public void addFinalizableEvent(
+      final AsyncEvent event
   ) {
-    if (processedEvent.partition() != this.partition) {
-      log.error("attempted to finalize an event for partition {} on queue for partition {}",
-          processedEvent.partition(),
+    if (event.partition() != this.partition) {
+      final String errorMsg = String.format(
+          "Attempted to finalize an event for partition %d on queue for partition %d",
+          event.partition(),
           this.partition
       );
-      throw new IllegalStateException(String.format(
-          "attempted to finalize an event for partition %d on queue for partition %d",
-          processedEvent.partition(),
-          this.partition
-      ));
+      log.error(errorMsg);
+      throw new IllegalStateException(errorMsg);
     }
-    // Transition to OUTPUT_READY to signal that the event is done with processing
-    // and is currently awaiting finalization by the StreamThread
-    processedEvent.transitionToToFinalize();
 
-    finalizableRecords.add(processedEvent);
+    finalizableRecords.addLast(event);
   }
 
+  /**
+   * See {@link WriteOnlyFinalizingQueue#addFailedEvent}
+   */
   @Override
-  public void scheduleFailedForFinalization(
-      final AsyncEvent processedEvent,
-      final RuntimeException exception
+  public void addFailedEvent(
+      final AsyncEvent event,
+      final Throwable throwable
   ) {
-    processedEvent.transitionToToFailed(exception);
-    finalizableRecords.add(processedEvent);
+    // Failed events get to jump the line to make sure the StreamThread fails fast
+    finalizableRecords.addFirst(event);
   }
 
   /**
@@ -100,7 +95,7 @@ public class FinalizingQueue implements ReadOnlyFinalizingQueue, WriteOnlyFinali
   }
 
   /**
-   * See {@link ReadOnlyFinalizingQueue#waitForNextFinalizableEvent()}
+   * See {@link ReadOnlyFinalizingQueue#waitForNextFinalizableEvent}
    * <p>
    * Note: blocking API
    */
