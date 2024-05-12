@@ -343,26 +343,10 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     punctuator.cancel();
     threadPool.removeProcessor(asyncProcessorName, taskId.partition());
 
-    unregisterFlushListenerForStoreBuilders(
-        streamThreadName,
-        taskId.partition(),
-        connectedStoreBuilders.values()
-    );
-
     if (userProcessor != null) {
       userProcessor.close();
     } else {
       userFixedKeyProcessor.close();
-    }
-  }
-
-  private static void unregisterFlushListenerForStoreBuilders(
-      final String streamThreadName,
-      final int partition,
-      final Collection<AbstractAsyncStoreBuilder<?, ?, ?>> asyncStoreBuilders
-  ) {
-    for (final AbstractAsyncStoreBuilder<?, ?, ?> builder : asyncStoreBuilders) {
-      builder.unregisterFlushListenerForPartition(streamThreadName, partition);
     }
   }
 

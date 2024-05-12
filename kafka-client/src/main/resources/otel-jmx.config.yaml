@@ -145,6 +145,11 @@ rules:
        type: gauge
        desc: the number of assigned partitions
        unit: '{partitions}'
+     last-rebalance-seconds-ago:
+       metric: kafka.streams.rebalance.seconds.ago
+       type: gauge
+       desc: the time since last rebalance
+       unit: '{seconds}'
      rebalance-rate-per-hour:
        metric: kafka.streams.rebalance.rate
        type: gauge

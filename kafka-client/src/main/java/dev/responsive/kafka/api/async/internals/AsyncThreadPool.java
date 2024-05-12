@@ -15,6 +15,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -31,6 +32,7 @@ public class AsyncThreadPool {
   private final ThreadPoolExecutor executor;
   private final Map<InFlightWorkKey, ConcurrentMap<AsyncEvent, InFlightEvent>> inFlight
       = new HashMap<>();
+  private final Semaphore queueSemaphore;
   private final BlockingQueue<Runnable> processingQueue;
 
   // TODO: we don't really need to track this by processor/partition, technically an
@@ -48,7 +50,8 @@ public class AsyncThreadPool {
     final LogContext logPrefix
         = new LogContext(String.format("stream-thread [%s] ", streamThreadName));
     this.log = logPrefix.logger(AsyncThreadPool.class);
-    this.processingQueue = new LinkedBlockingQueue<>(maxQueuedEvents);
+    this.processingQueue = new LinkedBlockingQueue<>();
+    this.queueSemaphore = new Semaphore(maxQueuedEvents);
 
     this.executor = new ThreadPoolExecutor(
         threadPoolSize,
@@ -144,8 +147,18 @@ public class AsyncThreadPool {
         = inFlight.computeIfAbsent(inFlightKey, k -> new ConcurrentHashMap<>());
 
     for (final AsyncEvent event : events) {
+      try {
+        queueSemaphore.acquire();
+      } catch (final InterruptedException e) {
+        throw new RuntimeException(e);
+      }
       final var future = CompletableFuture.runAsync(
-          new AsyncEventTask<>(event, taskContext, asyncProcessorContext),
+          new AsyncEventTask<>(
+              event,
+              taskContext,
+              asyncProcessorContext,
+              queueSemaphore
+          ),
           executor
       );
       final var inFlightEvent = new InFlightEvent(future);
@@ -202,11 +215,13 @@ public class AsyncThreadPool {
     private final AsyncEvent event;
     private final AsyncThreadProcessorContext<KOut, VOut> asyncThreadContext;
     private final AsyncUserProcessorContext<KOut, VOut> wrappingContext;
+    private final Semaphore queueSemaphore;
 
     private AsyncEventTask(
         final AsyncEvent event,
         final ProcessingContext taskContext,
-        final AsyncUserProcessorContext<KOut, VOut> userContext
+        final AsyncUserProcessorContext<KOut, VOut> userContext,
+        final Semaphore queueSemaphore
     ) {
       this.event = event;
       this.wrappingContext = userContext;
@@ -214,10 +229,12 @@ public class AsyncThreadPool {
           taskContext,
           event
       );
+      this.queueSemaphore = queueSemaphore;
     }
 
     @Override
     public void run() {
+      queueSemaphore.release();
       wrappingContext.setDelegateForAsyncThread(asyncThreadContext);
       event.transitionToProcessing();
       event.inputRecordProcessor().run();

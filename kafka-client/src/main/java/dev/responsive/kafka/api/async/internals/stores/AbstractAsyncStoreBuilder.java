@@ -101,34 +101,6 @@ public abstract class AbstractAsyncStoreBuilder<K, V, T extends StateStore>
   }
 
   /**
-   * Unregister the flush listener for this partition from the given StreamThread,
-   * if one exists and has not yet been initialized and removed.
-   * This should always be called when a processor is closed to reset the flush
-   * listeners and free up this partition in case the StreamThread re-initializes
-   * or is re-assigned the same StreamTask/partition again later.
-   * This should be a no-op if the flush listener was not yet registered, or if
-   * it was registered and then removed already due to being initialized by the
-   * corresponding state store. In theory, this method only performs any action
-   * when a task happens to be closed while it's in the middle of initialization,
-   * which should be rare although possible.
-   */
-  public void unregisterFlushListenerForPartition(
-      final String streamThreadName,
-      final int partition
-  ) {
-    final StreamThreadFlushListeners threadListeners =
-        streamThreadToFlushListeners.get(streamThreadName);
-
-    if (threadListeners == null) {
-      throw new IllegalStateException("Unable to locate flush listener metadata "
-                                          + "for the current StreamThread");
-    }
-
-    threadListeners.unregisterListenerForPartition(partition);
-  }
-
-
-  /**
    * Return the {@link StreamThreadFlushListeners} for this StreamThread,
    * creating/registering a new one if this is the first time we're seeing
    * the current StreamThread.
