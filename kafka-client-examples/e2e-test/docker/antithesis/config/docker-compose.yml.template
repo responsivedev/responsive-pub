@@ -3,6 +3,7 @@ services:
   zookeeper:
     image: confluentinc/cp-zookeeper:7.3.0
     container_name: zookeeper
+    hostname: zookeeper
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
@@ -10,10 +11,14 @@ services:
       - ./volumes/zookeeper:/var/lib/zookeeper
       - ./volumes/zookeeper/log:/var/lib/zookeeper/log
       - ./volumes/zookeeper/data:/var/lib/zookeeper/data
+    networks:
+      backend:
+        ipv4_address: 10.0.0.12
 
   broker:
     image: confluentinc/cp-kafka:7.3.0
     container_name: broker
+    hostname: broker
     ports:
     # To learn about configuring Kafka for access across networks see
     # https://www.confluent.io/blog/kafka-client-cannot-connect-to-broker-on-aws-on-docker-etc/
@@ -32,17 +37,26 @@ services:
     volumes:
       - ./volumes/kafka:/var/lib/kafka
       - ./volumes/kafka/data:/var/lib/kafka/data
+    networks:
+      backend:
+        ipv4_address: 10.0.0.20
 
   scylla:
     image: scylladb/scylla:latest
     container_name: scylla
+    hostname: scylla
     ports:
       - "9042:9042"
     volumes:
       - ./volumes/scylla:/var/lib/scylla
+    networks:
+      backend:
+        ipv4_address: 10.0.0.30
 
   application1:
     image: us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test:${KAFKA_CLIENT_VERSION}
+    container_name: application1
+    hostname: application1
     depends_on:
       - broker
       - scylla
@@ -57,9 +71,14 @@ services:
       CONFIG_PATH: "/app.properties"
     volumes:
       - ./volumes/app.properties:/app.properties
+    networks:
+      backend:
+        ipv4_address: 10.0.0.40
 
   application2:
     image: us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test:${KAFKA_CLIENT_VERSION}
+    container_name: application2
+    hostname: application2
     depends_on:
       - broker
       - scylla
@@ -74,10 +93,14 @@ services:
       CONFIG_PATH: "/app.properties"
     volumes:
       - ./volumes/app.properties:/app.properties
+    networks:
+      backend:
+        ipv4_address: 10.0.0.41
 
   driver:
     image: us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test:${KAFKA_CLIENT_VERSION}
     container_name: driver
+    hostname: driver
     depends_on:
       - broker
       - scylla
@@ -92,3 +115,13 @@ services:
       CONFIG_PATH: "/app.properties"
     volumes:
       - ./volumes/app.properties:/app.properties
+    networks:
+      backend:
+        ipv4_address: 10.0.0.50
+
+networks:
+  backend:
+    driver: bridge
+    ipam:
+      config:
+      - subnet: 10.0.0.0/24
