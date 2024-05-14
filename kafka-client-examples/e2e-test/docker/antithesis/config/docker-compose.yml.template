@@ -8,9 +8,9 @@ services:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
     volumes:
-      - ./volumes/zookeeper:/var/lib/zookeeper:rw
-      - ./volumes/zookeeper/log:/var/lib/zookeeper/log:rw
-      - ./volumes/zookeeper/data:/var/lib/zookeeper/data:rw
+      - ./volumes/zookeeper:/volumes/zookeeper:rw
+      - ./volumes/zookeeper/log:/volumes/zookeeper/log:rw
+      - ./volumes/zookeeper/data:/volumes/zookeeper/data:rw
     networks:
       backend:
         ipv4_address: 10.0.0.12
@@ -35,8 +35,8 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: 1000
     volumes:
-      - ./volumes/kafka:/var/lib/kafka:rw
-      - ./volumes/kafka/data:/var/lib/kafka/data:rw
+      - ./volumes/kafka:/volumes/kafka:rw
+      - ./volumes/kafka/data:/volumes/kafka/data:rw
     networks:
       backend:
         ipv4_address: 10.0.0.20
