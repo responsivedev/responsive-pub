@@ -41,11 +41,25 @@ services:
     volumes:
       - ./volumes/scylla:/var/lib/scylla
 
-  application:
+  application1:
     image: us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test:${KAFKA_CLIENT_VERSION}
-    deploy:
-      mode: replicated
-      replicas: 2
+    depends_on:
+      - broker
+      - scylla
+    environment:
+      NAME: e2e
+      INPUT_TOPIC: input
+      OUTPUT_TOPIC: output
+      PARTITIONS: 8
+      NUM_KEYS: 100
+      MAX_OUTSTANDING: 10000
+      E2E_APP_MODE: APPLICATION
+      CONFIG_PATH: "/app.properties"
+    volumes:
+      - ./volumes/app.properties:/app.properties
+
+  application2:
+    image: us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test:${KAFKA_CLIENT_VERSION}
     depends_on:
       - broker
       - scylla
