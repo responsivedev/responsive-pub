@@ -35,7 +35,8 @@ public class AsyncThreadPool {
 
   private final Logger log;
 
-  private final AsyncThreadPoolMetricsRecorder metricsRecorder;
+  private final Supplier<AsyncThreadPoolMetricsRecorder> metricsRecorderSupplier;
+  private AsyncThreadPoolMetricsRecorder metricsRecorder;
   private final ThreadPoolExecutor executor;
   private final Map<InFlightWorkKey, ConcurrentMap<AsyncEvent, InFlightEvent>> inFlight
       = new HashMap<>();
@@ -75,7 +76,7 @@ public class AsyncThreadPool {
           return t;
         }
     );
-    this.metricsRecorder = new AsyncThreadPoolMetricsRecorder(
+    this.metricsRecorderSupplier = () -> new AsyncThreadPoolMetricsRecorder(
         responsiveMetrics,
         streamThreadName,
         processingQueue::size
@@ -160,6 +161,7 @@ public class AsyncThreadPool {
       final AsyncProcessorMetricsRecorder processorMetricsRecorder
   ) {
     final var inFlightKey = InFlightWorkKey.of(processorName, taskId.partition());
+    maybeInitThreadPoolMetrics();
     final var inFlightForTask
         = inFlight.computeIfAbsent(inFlightKey, k -> new ConcurrentHashMap<>());
 
@@ -213,8 +215,26 @@ public class AsyncThreadPool {
     }
   }
 
+  /**
+   * This is a complete hack to work around the fact that we cannot create the
+   * metrics recorder from the constructor of this class. This is because the recorder
+   * needs to know all the tags to register a metric. One of the tags is the client id
+   * however this is only computed in the KafkaStreams constructor, so ResponsiveKafkaStreams
+   * can only set it after the KafkaStreams constructor has returned. However thread pools
+   * are created from the KafkaStreams constructor, when it initializes StreamThread instances.
+   * Fixing this is a bit involved. For now, just initialize the recorder on the first call
+   * to scheduleForProcessing.
+   */
+  private void maybeInitThreadPoolMetrics() {
+    if (metricsRecorder == null) {
+      metricsRecorder = metricsRecorderSupplier.get();
+    }
+  }
+
   public void shutdown() {
-    metricsRecorder.close();
+    if (metricsRecorder != null) {
+      metricsRecorder.close();
+    }
     executor.shutdownNow();
   }
 
