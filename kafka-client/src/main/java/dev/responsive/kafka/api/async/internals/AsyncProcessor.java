@@ -505,7 +505,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    */
   private void maybeBackOffEnqueuingNewEventWithKey(final KIn key)  {
     while (schedulingQueue.keyQueueIsFull(key)) {
-      log.info("key queue is full. back off until there is room on key queue");
+      //log.info("key queue is full. back off until there is room on key queue");
       drainSchedulingQueue();
 
       if (schedulingQueue.keyQueueIsFull(key)) {
