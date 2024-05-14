@@ -25,8 +25,6 @@ import static dev.responsive.kafka.internal.metrics.ResponsiveMetrics.RATE_SUFFI
 import static dev.responsive.kafka.internal.metrics.ResponsiveMetrics.TOTAL_DESCRIPTION;
 import static dev.responsive.kafka.internal.metrics.ResponsiveMetrics.TOTAL_SUFFIX;
 
-import java.util.LinkedHashMap;
-
 @SuppressWarnings("checkstyle:linelength")
 public class StoreMetrics {
   // Responsive store metrics scoped to the individual state store level

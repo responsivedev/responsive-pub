@@ -16,6 +16,7 @@
 
 package dev.responsive.kafka.internal.metrics;
 
+import static dev.responsive.kafka.internal.metrics.ApplicationMetrics.APPLICATION_METRIC_GROUP;
 import static dev.responsive.kafka.internal.metrics.ApplicationMetrics.STREAMS_STATE;
 import static dev.responsive.kafka.internal.metrics.ApplicationMetrics.STREAMS_STATE_DESCRIPTION;
 
@@ -38,7 +39,7 @@ public class ResponsiveStateListener implements StateListener, Closeable {
     stateMetric = metrics.metricName(
         STREAMS_STATE,
         STREAMS_STATE_DESCRIPTION,
-        metrics.applicationLevelMetric()
+        metrics.applicationLevelMetric(APPLICATION_METRIC_GROUP)
     );
     metrics.addMetric(stateMetric, (Gauge<Integer>) (config, now) -> currentState.ordinal());
   }

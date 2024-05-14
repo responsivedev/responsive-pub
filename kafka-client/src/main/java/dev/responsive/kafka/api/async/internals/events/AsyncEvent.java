@@ -20,7 +20,6 @@ import static dev.responsive.kafka.api.async.internals.AsyncUtils.processorRecor
 
 import dev.responsive.kafka.api.async.internals.AsyncProcessor;
 import dev.responsive.kafka.api.async.internals.contexts.AsyncThreadProcessorContext;
-import java.time.Instant;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
@@ -116,7 +115,7 @@ public class AsyncEvent {
 
   private final Logger log;
 
-  private Instant transitionTime;
+  private long transitionTimeNanos;
   private State currentState;
 
   private final Object inputRecordKey;
@@ -200,7 +199,7 @@ public class AsyncEvent {
       final List<StateTransitionListener> stateTransitionListeners
   ) {
     this.currentState = State.SCHEDULING;
-    this.transitionTime = Instant.now();
+    this.transitionTimeNanos = System.nanoTime();
     this.inputRecordKey = inputRecordKey;
     this.inputRecordValue = inputRecordValue;
     this.asyncProcessorName = asyncProcessorName;
@@ -251,14 +250,14 @@ public class AsyncEvent {
   }
 
   private void transitionTo(final State newState) {
-    final Instant transitionTime = Instant.now();
+    final long newTransitionTimeNanos = System.nanoTime();
     stateTransitionListeners.forEach(l -> l.onStateTransition(
         currentState,
-        this.transitionTime,
+        transitionTimeNanos,
         newState,
-        transitionTime
+        newTransitionTimeNanos
     ));
-    this.transitionTime = transitionTime;
+    this.transitionTimeNanos = newTransitionTimeNanos;
     this.currentState = newState;
   }
 
@@ -418,6 +417,6 @@ public class AsyncEvent {
   }
 
   public interface StateTransitionListener {
-    void onStateTransition(State from, Instant fromTime, State to, Instant toTime);
+    void onStateTransition(State from, long fromNanos, State to, long toNanos);
   }
 }

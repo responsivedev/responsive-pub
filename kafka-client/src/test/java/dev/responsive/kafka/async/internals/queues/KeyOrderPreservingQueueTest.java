@@ -137,7 +137,8 @@ public class KeyOrderPreservingQueueTest {
   public void shouldReturnTrueForKeyAtMaxQueueSize() {
     // Given:
     final int maxEvents = 3;
-    final KeyOrderPreservingQueue<String> queue = new KeyOrderPreservingQueue<>(LOG_PREFIX, maxEvents);
+    final KeyOrderPreservingQueue<String> queue
+        = new KeyOrderPreservingQueue<>(LOG_PREFIX, maxEvents);
 
     // When:
     queue.offer(new AsyncTestEvent("A", "a1"));
@@ -152,7 +153,8 @@ public class KeyOrderPreservingQueueTest {
   public void shouldReturnFalseForKeyNotAtMaxQueueSize() {
     // Given:
     final int maxEvents = 3;
-    final KeyOrderPreservingQueue<String> queue = new KeyOrderPreservingQueue<>(LOG_PREFIX, maxEvents);
+    final KeyOrderPreservingQueue<String> queue
+        = new KeyOrderPreservingQueue<>(LOG_PREFIX, maxEvents);
 
     // When:
     queue.offer(new AsyncTestEvent("A", "a1"));
@@ -167,7 +169,8 @@ public class KeyOrderPreservingQueueTest {
   public void shouldReturnTrueForKeyAtMaxQueueSizeIncludingInFlightEvents() {
     // Given:
     final int maxEvents = 3;
-    final KeyOrderPreservingQueue<String> queue = new KeyOrderPreservingQueue<>(LOG_PREFIX, maxEvents);
+    final KeyOrderPreservingQueue<String> queue
+        = new KeyOrderPreservingQueue<>(LOG_PREFIX, maxEvents);
 
     queue.offer(new AsyncTestEvent("A", "a1"));
     queue.offer(new AsyncTestEvent("A", "a2"));
@@ -185,7 +188,8 @@ public class KeyOrderPreservingQueueTest {
   public void shouldReturnFalseForKeyPreviouslyAtMaxQueueSize() {
     // Given:
     final int maxEvents = 3;
-    final KeyOrderPreservingQueue<String> queue = new KeyOrderPreservingQueue<>(LOG_PREFIX, maxEvents);
+    final KeyOrderPreservingQueue<String> queue
+        = new KeyOrderPreservingQueue<>(LOG_PREFIX, maxEvents);
 
     queue.offer(new AsyncTestEvent("A", "a1"));
     queue.offer(new AsyncTestEvent("A", "a2"));
@@ -204,7 +208,8 @@ public class KeyOrderPreservingQueueTest {
   public void shouldReturnFalseFromIsFullWhenAtMaxSizeButWithDifferentKeys() {
     // Given:
     final int maxEvents = 3;
-    final KeyOrderPreservingQueue<String> queue = new KeyOrderPreservingQueue<>(LOG_PREFIX, maxEvents);
+    final KeyOrderPreservingQueue<String> queue
+        = new KeyOrderPreservingQueue<>(LOG_PREFIX, maxEvents);
 
     // When:
     queue.offer(new AsyncTestEvent("A", "a1"));
@@ -219,7 +224,8 @@ public class KeyOrderPreservingQueueTest {
   public void shouldThrowWhenAddingToFullQueue() {
     // Given
     final int maxEvents = 1;
-    final KeyOrderPreservingQueue<String> queue = new KeyOrderPreservingQueue<>(LOG_PREFIX, maxEvents);
+    final KeyOrderPreservingQueue<String> queue
+        = new KeyOrderPreservingQueue<>(LOG_PREFIX, maxEvents);
     queue.offer(new AsyncTestEvent("A", "a1"));
 
     assertThrows(IllegalStateException.class, () -> queue.offer(new AsyncTestEvent("A", "a2")));

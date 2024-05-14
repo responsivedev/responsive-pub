@@ -8,8 +8,6 @@ import dev.responsive.kafka.api.async.internals.metrics.AsyncProcessorMetricsRec
 import dev.responsive.kafka.api.async.internals.metrics.AsyncThreadPoolMetricsRecorder;
 import dev.responsive.kafka.api.async.internals.queues.FinalizingQueue;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -160,7 +158,7 @@ public class AsyncThreadPool {
       final ProcessingContext taskContext,
       final AsyncUserProcessorContext<KOut, VOut> asyncProcessorContext,
       final AsyncProcessorMetricsRecorder processorMetricsRecorder
-      ) {
+  ) {
     final var inFlightKey = InFlightWorkKey.of(processorName, taskId.partition());
     final var inFlightForTask
         = inFlight.computeIfAbsent(inFlightKey, k -> new ConcurrentHashMap<>());
@@ -244,7 +242,7 @@ public class AsyncThreadPool {
         final AsyncEvent event,
         final ProcessingContext taskContext,
         final AsyncUserProcessorContext<KOut, VOut> userContext,
-        final Semaphore queueSemaphore
+        final Semaphore queueSemaphore,
         final AsyncProcessorMetricsRecorder metricsRecorder
     ) {
       this.event = event;
@@ -259,7 +257,7 @@ public class AsyncThreadPool {
 
     @Override
     public StreamsException get() {
-      final Instant start = Instant.now();
+      final long start = System.nanoTime();
       queueSemaphore.release();
       wrappingContext.setDelegateForAsyncThread(asyncThreadContext);
       event.transitionToProcessing();
@@ -271,7 +269,7 @@ public class AsyncThreadPool {
       }
 
       event.transitionToToFinalize();
-      metricsRecorder.recordEventProcess(Duration.between(start, Instant.now()));
+      metricsRecorder.recordEventProcess(System.nanoTime() - start);
       return null;
     }
   }

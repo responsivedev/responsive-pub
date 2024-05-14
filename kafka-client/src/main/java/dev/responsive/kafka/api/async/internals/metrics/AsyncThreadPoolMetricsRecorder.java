@@ -7,10 +7,11 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Gauge;
 
 public class AsyncThreadPoolMetricsRecorder {
-  public static final String GROUP_NAME = "async-processor-pool-metrics";
+  public static final String GROUP_NAME = "async-processor-thread-pool-metrics";
 
   public static final String QUEUED_EVENTS = "queued-events";
-  public static final String QUEUED_EVENTS_DESC = "events pending in thread pool queues";
+  public static final String QUEUED_EVENTS_DESC
+      = "The total number of events pending in the async thread pool queue";
 
   private final ResponsiveMetrics metrics;
   private final MetricName poolQueueSizeGauge;

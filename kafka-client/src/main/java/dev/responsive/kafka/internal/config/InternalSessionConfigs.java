@@ -8,7 +8,6 @@ import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistry;
 import dev.responsive.kafka.internal.utils.SessionClients;
 import java.util.HashMap;
 import java.util.Map;
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.streams.TopologyDescription;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.slf4j.Logger;

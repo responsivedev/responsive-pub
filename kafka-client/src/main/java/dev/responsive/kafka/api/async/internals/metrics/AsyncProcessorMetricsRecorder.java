@@ -7,8 +7,6 @@ import static dev.responsive.kafka.internal.metrics.ResponsiveMetrics.MAX_SUFFIX
 
 import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.Supplier;
@@ -24,16 +22,17 @@ public class AsyncProcessorMetricsRecorder {
   public static final String GROUP_NAME = "async-processor-metrics";
 
   public static final String PENDING_EVENTS = "pending-events";
-  public static final String PENDING_EVENTS_DESC = "events pending in processor";
+  public static final String PENDING_EVENTS_DESC
+      = "The current number of events pending in processor";
 
-  public static final String PROCESS_TIME = "event-process-time-ns";
+  public static final String PROCESS_TIME = "event-process-duration-ns";
   public static final String PROCESS_TIME_MAX = PROCESS_TIME + MAX_SUFFIX;
   public static final String PROCESS_TIME_AVG = PROCESS_TIME + AVG_SUFFIX;
   public static final String PROCESS_TIME_DESC = "time to process a record";
   public static final String PROCESS_TIME_MAX_DESC = MAX_DESCRIPTION + PROCESS_TIME_DESC;
   public static final String PROCESS_TIME_AVG_DESC = AVG_DESCRIPTION + PROCESS_TIME_DESC;
 
-  public static final String TRANSITION_TIME = "event-transition-time-ns";
+  public static final String TRANSITION_TIME = "event-transition-duration-ns";
   public static final String TRANSITION_TIME_MAX = TRANSITION_TIME + MAX_SUFFIX;
   public static final String TRANSITION_TIME_AVG = TRANSITION_TIME + AVG_SUFFIX;
   public static final String TRANSITION_TIME_DESC = "time to transition between states";
@@ -99,8 +98,8 @@ public class AsyncProcessorMetricsRecorder {
     );
   }
 
-  public void recordEventProcess(final Duration duration) {
-    eventProcessSensor.record(duration.toNanos());
+  public void recordEventProcess(final long durationNanos) {
+    eventProcessSensor.record(durationNanos);
   }
 
   public void recordSchedulingQueueSize(final int size) {
@@ -113,14 +112,14 @@ public class AsyncProcessorMetricsRecorder {
 
   public void recordStateTransition(
       final AsyncEvent.State from,
-      final Instant fromTime,
+      final long fromNanos,
       final AsyncEvent.State to,
-      final Instant toTime
+      final long toNanos
   ) {
-    final var innerScope = scope
+    final ResponsiveMetrics.MetricScope innerScope = scope
         .withTags(FROM_STATE, from.name())
         .withTags(TO_STATE, to.name());
-    final var sensor = stateTransitionSensors.computeIfAbsent(
+    final Sensor sensor = stateTransitionSensors.computeIfAbsent(
         innerScope.sensorName(TRANSITION_TIME),
         sensorName -> {
           final var createdSensor = metrics.addSensor(sensorName);
@@ -135,7 +134,7 @@ public class AsyncProcessorMetricsRecorder {
           return createdSensor;
         }
     );
-    sensor.record(Duration.between(fromTime, toTime).toNanos());
+    sensor.record(toNanos - fromNanos);
   }
 
   public void close() {
