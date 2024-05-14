@@ -42,7 +42,7 @@ services:
       - ./volumes/scylla:/var/lib/scylla
 
   application:
-    image: us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test:antithesis-latest
+    image: us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test:${KAFKA_CLIENT_VERSION}
     deploy:
       mode: replicated
       replicas: 2
@@ -63,7 +63,7 @@ services:
       - ./volumes/app.properties:/app.properties
 
   driver:
-    image: us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test:antithesis-latest
+    image: us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test:${KAFKA_CLIENT_VERSION}
     container_name: driver
     depends_on:
       - broker
