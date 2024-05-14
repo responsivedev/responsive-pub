@@ -44,12 +44,14 @@ import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
 import static org.apache.kafka.streams.StreamsConfig.producerPrefix;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.base.Throwables;
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
@@ -197,7 +199,6 @@ public class AsyncProcessorIntegrationTest {
         if (val == 2 && key.equals("b")) {
           inputRecord = new InputRecord(key + val, new InjectedFault(
               InjectedFault.Type.EXCEPTION,
-              new RuntimeException("oops"),
               InjectedFault.Frequency.ONCE)
           );
         } else {
@@ -296,6 +297,8 @@ public class AsyncProcessorIntegrationTest {
       }
     }
     assertThat(caughtExceptions.size(), is(1));
+    assertThat(Throwables.getRootCause(caughtExceptions.get(0)),
+        instanceOf(InjectedException.class));
     assertThat(latestValues, equalTo(finalOutputRecords));
   }
 
@@ -450,25 +453,18 @@ public class AsyncProcessorIntegrationTest {
     }
 
     private final Type type;
-    private final RuntimeException exception;
     private final Frequency frequency;
 
     @JsonCreator
     public InjectedFault(
         @JsonProperty("type") Type type,
-        @JsonProperty("exception") RuntimeException exception,
         @JsonProperty("frequency") Frequency frequency) {
       this.type = type;
-      this.exception = exception;
       this.frequency = frequency;
     }
 
     public Type getType() {
       return type;
-    }
-
-    public Exception getException() {
-      return exception;
     }
 
     public Frequency getFrequency() {
@@ -489,7 +485,7 @@ public class AsyncProcessorIntegrationTest {
       }
       switch (type) {
         case EXCEPTION:
-          throw exception;
+          throw new InjectedException();
         default:
           throw new IllegalStateException();
       }
@@ -543,5 +539,9 @@ public class AsyncProcessorIntegrationTest {
         throw new RuntimeException(e);
       }
     }
+  }
+
+  public static class InjectedException extends RuntimeException {
+    private static final long serialVersionUID = 0L;
   }
 }

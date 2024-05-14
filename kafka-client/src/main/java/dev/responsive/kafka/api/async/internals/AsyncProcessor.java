@@ -628,17 +628,17 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
           taskId.toString()));
     }
 
-    final var toClose = streamThreadContext.prepareToFinalizeEvent(event);
-
+    // Make sure to check for a failed event before preparing finalization. prepareToFinalizeEvent
+    // is only able to handle successfully processed events.
     final Optional<Throwable> processingException = event.processingException();
-    if (processingException.isEmpty()) {
-      event.transitionToFinalizing();
-    } else {
+    if (!processingException.isEmpty()) {
       pendingEvents.remove(event);
       event.transitionToDone();
       throw processingException.get();
     }
 
+    final var toClose = streamThreadContext.prepareToFinalizeEvent(event);
+    event.transitionToFinalizing();
     return toClose;
   }
 
