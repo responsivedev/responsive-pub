@@ -45,6 +45,7 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.TaskId;
@@ -82,7 +83,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   // This is set at most once. When its set, the thread should immediately throw, and no longer
   // try to process further events for this processor. This minimizes the chance of producing
   // bad results, particularly with ALOS.
-  private StreamsException fatalException = null;
+  private FatalAsyncException fatalException = null;
 
   // Everything below this line is effectively final and just has to be initialized in #init //
 
@@ -265,7 +266,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
         logPrefix,
         record,
         asyncProcessorName,
-        taskId.partition(),
+        taskId,
         extractRecordContext(taskContext),
         taskContext.currentStreamTimeMs(),
         taskContext.currentSystemTimeMs(),
@@ -283,7 +284,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
         logPrefix,
         record,
         asyncProcessorName,
-        taskId.partition(),
+        taskId,
         extractRecordContext(taskContext),
         taskContext.currentStreamTimeMs(),
         taskContext.currentSystemTimeMs(),
@@ -309,12 +310,14 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
       executeAvailableEvents();
 
     } catch (final StreamsException streamsException) {
-      fatalException = streamsException.taskId().isPresent()
-          ? streamsException
-          : new StreamsException(streamsException, taskId);
-      throw fatalException;
-    } catch (final Throwable t) {
-      fatalException = new StreamsException(t, taskId);
+      if (streamsException instanceof TaskMigratedException) {
+        throw streamsException;
+      } else {
+        fatalException = new FatalAsyncException(streamsException);
+        throw fatalException;
+      }
+    } catch (final FatalAsyncException e) {
+      fatalException = e;
       throw fatalException;
     }
   }
@@ -398,30 +401,34 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
       assertQueuesEmpty();
 
     } catch (final StreamsException streamsException) {
-      fatalException = streamsException.taskId().isPresent()
-        ? streamsException
-        : new StreamsException(streamsException, taskId);
-      throw fatalException;
-    } catch (final Throwable t) {
-      fatalException = new StreamsException(t, taskId);
+      if (streamsException instanceof TaskMigratedException) {
+        throw streamsException;
+      } else {
+        fatalException = new FatalAsyncException(streamsException);
+        throw fatalException;
+      }
+    } catch (final FatalAsyncException e) {
+      fatalException = e;
       throw fatalException;
     }
   }
 
   /**
-   * Check the AsyncThreadPool for any uncaught exceptions that arose while processing
-   * events or other fatal errors in the AsyncThreadPool itself.
+   * Check the AsyncThreadPool for any uncaught exceptions that arose while
+   * trying to process events or handle processing exceptions, or other fatal
+   * errors in the AsyncThreadPool itself.
    * Note: since it's important to fail as quickly as possible in the event of a
    * fatal exception, we don't limit the scope of this check to only errors
    * tied to events that belong to this specific AsyncProcessor or task.
    */
-  private void checkUncaughtExceptionsInAsyncThreadPool() throws Throwable {
+  private void checkFatalExceptionsFromAsyncThreadPool() {
     final Optional<Throwable> fatal = threadPool.checkUncaughtExceptions(
         asyncProcessorName, taskId.partition()
     );
     
     if (fatal.isPresent()) {
-      throw fatal.get();
+      log.error("Detected uncaught fatal exception from the async thread pool", fatal.get());
+      throw new FatalAsyncException("Fatal exception in AsyncThreadPool", fatal.get());
     }
   }
 
@@ -435,8 +442,8 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    *
    * @return the number of events that were finalized
    */
-  private int finalizeAtLeastOneEvent() throws Throwable {
-    checkUncaughtExceptionsInAsyncThreadPool();
+  private int finalizeAtLeastOneEvent()  {
+    checkFatalExceptionsFromAsyncThreadPool();
 
     final int numFinalized = drainFinalizingQueue();
     if (numFinalized > 0) {
@@ -459,7 +466,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
         return 1;
       }
 
-      checkUncaughtExceptionsInAsyncThreadPool();
+      checkFatalExceptionsFromAsyncThreadPool();
     }
   }
 
@@ -473,7 +480,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    * finalization, thus freeing up blocked record(s) that were waiting in the
    * SchedulingQueue and can be moved to the ProcessingQueue for processing.
    */
-  private void maybeBackOffEnqueuingNewEventWithKey(final KIn key) throws Throwable {
+  private void maybeBackOffEnqueuingNewEventWithKey(final KIn key)  {
     while (schedulingQueue.keyQueueIsFull(key)) {
       drainSchedulingQueue();
 
@@ -495,12 +502,14 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
 
       executeAvailableEvents();
     } catch (final StreamsException streamsException) {
-      fatalException = streamsException.taskId().isPresent()
-          ? streamsException
-          : new StreamsException(streamsException, taskId);
-      throw fatalException;
-    } catch (final Throwable t) {
-      fatalException = new StreamsException(t, taskId);
+      if (streamsException instanceof TaskMigratedException) {
+        throw streamsException;
+      } else {
+        fatalException = new FatalAsyncException(streamsException);
+        throw fatalException;
+      }
+    } catch (final FatalAsyncException e) {
+      fatalException = e;
       throw fatalException;
     }
   }
@@ -525,7 +534,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    * <p>
    * Note: all per-event logging should be at TRACE to avoid spam
    */
-  private void executeAvailableEvents() throws Throwable {
+  private void executeAvailableEvents()  {
     // Start by going through the events waiting to be finalized and finish executing their
     // outputs, if any, so we can mark them complete and potentially free up blocked events
     // waiting to be scheduled.
@@ -564,7 +573,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     if (numScheduled > 0) {
       threadPool.scheduleForProcessing(
           asyncProcessorName,
-          taskId.partition(),
+          taskId,
           eventsToSchedule,
           finalizingQueue,
           taskContext,
@@ -584,8 +593,8 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    *
    * @return the number of events that were finalized
    */
-  private int drainFinalizingQueue() throws Throwable {
-    checkUncaughtExceptionsInAsyncThreadPool();
+  private int drainFinalizingQueue()  {
+    checkFatalExceptionsFromAsyncThreadPool();
 
     int count = 0;
     while (!finalizingQueue.isEmpty()) {
@@ -601,11 +610,9 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    * Accepts an event pulled from the {@link FinalizingQueue} and finalizes
    * it before marking the event as done, or throws an exception if the
    * event failed at any stage before or during finalization
-   *
-   * @throws Throwable if the event failed at any stage, eg during processing or finalization
    */
   @SuppressWarnings("try")
-  private void completePendingEvent(final AsyncEvent finalizableEvent) throws Throwable {
+  private void completePendingEvent(final AsyncEvent finalizableEvent)  {
 
     try (final var ignored = preFinalize(finalizableEvent)) {
       doFinalize(finalizableEvent);
@@ -616,7 +623,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
 
   private StreamThreadProcessorContext.PreviousRecordContextAndNode preFinalize(
       final AsyncEvent event
-  ) throws Throwable {
+  )  {
 
     if (!pendingEvents.contains(event)) {
       log.error("routed event from {} to the wrong processor for {}",
@@ -630,7 +637,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
 
     final var toClose = streamThreadContext.prepareToFinalizeEvent(event);
 
-    final Optional<Throwable> processingException = event.processingException();
+    final Optional<RuntimeException> processingException = event.processingException();
     if (processingException.isEmpty()) {
       event.transitionToFinalizing();
     } else {

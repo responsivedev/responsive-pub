@@ -13,6 +13,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.ProcessingContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
@@ -104,7 +105,7 @@ class AsyncThreadPoolTest {
     assertThat(other0InFlight.get(eventOtherProcessor).future().isCancelled(), is(false));
   }
 
-  private final class TestTask implements Runnable {
+  private static final class TestTask implements Runnable {
     private final CountDownLatch waitLatch = new CountDownLatch(1);
 
     @Override
@@ -119,13 +120,13 @@ class AsyncThreadPoolTest {
 
   private void schedule(
       final String processor,
-      final int task,
+      final int partition,
       final FinalizingQueue finalizingQueue,
       final AsyncEvent... events
   ) {
     pool.scheduleForProcessing(
         processor,
-        task,
+        new TaskId(0, partition),
         Arrays.asList(events),
         finalizingQueue,
         originalContext,
@@ -138,7 +139,7 @@ class AsyncThreadPoolTest {
         "event",
         new Record<>("k", "v", 0L),
         "async-processor",
-        partition,
+        new TaskId(0, partition),
         recordContext,
         0L,
         0L,
