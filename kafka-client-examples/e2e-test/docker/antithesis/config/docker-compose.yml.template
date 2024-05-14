@@ -8,9 +8,9 @@ services:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
     volumes:
-      - ./volumes/zookeeper:/var/lib/zookeeper
-      - ./volumes/zookeeper/log:/var/lib/zookeeper/log
-      - ./volumes/zookeeper/data:/var/lib/zookeeper/data
+      - ./volumes/zookeeper:/var/lib/zookeeper:rw
+      - ./volumes/zookeeper/log:/var/lib/zookeeper/log:rw
+      - ./volumes/zookeeper/data:/var/lib/zookeeper/data:rw
     networks:
       backend:
         ipv4_address: 10.0.0.12
@@ -35,8 +35,8 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: 1000
     volumes:
-      - ./volumes/kafka:/var/lib/kafka
-      - ./volumes/kafka/data:/var/lib/kafka/data
+      - ./volumes/kafka:/var/lib/kafka:rw
+      - ./volumes/kafka/data:/var/lib/kafka/data:rw
     networks:
       backend:
         ipv4_address: 10.0.0.20
@@ -45,10 +45,12 @@ services:
     image: scylladb/scylla:latest
     container_name: scylla
     hostname: scylla
+    command: --smp 1 --options-file /etc/scylla/scylla.yaml --memory 750M --overprovisioned 1 --api-address 0.0.0.0
     ports:
       - "9042:9042"
     volumes:
-      - ./volumes/scylla:/var/lib/scylla
+      - ./volumes/scylla/data:/var/lib/scylla/data:rw
+      - ./volumes/scylla.yaml:/etc/scylla/scylla.yaml
     networks:
       backend:
         ipv4_address: 10.0.0.30
