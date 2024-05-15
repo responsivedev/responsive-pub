@@ -16,7 +16,7 @@ import java.io.ByteArrayOutputStream
  * limitations under the License.
  */
 
-// counter to change sha: 6
+// counter to change sha: 7
 
 plugins {
     id("responsive.java-library-conventions")
