@@ -27,7 +27,6 @@ services:
       KAFKA_DATA_DIRS: /volumes/kafka/data
       CLUSTER_ID: '_MLP7I7sTJKTQC87-IK0LQ'
     volumes:
-      - ./volumes/kafka:/volumes/kafka:rw
       - ./volumes/kafka/data:/volumes/kafka/data:rw
     networks:
       backend:
