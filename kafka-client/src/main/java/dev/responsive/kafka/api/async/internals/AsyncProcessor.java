@@ -635,17 +635,16 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
           taskId.toString()));
     }
 
-    final var toClose = streamThreadContext.prepareToFinalizeEvent(event);
-
+    // Make sure to check for a failed event before preparing finalization. prepareToFinalizeEvent
+    // is only able to handle successfully processed events.
     final Optional<RuntimeException> processingException = event.processingException();
-    if (processingException.isEmpty()) {
-      event.transitionToFinalizing();
-    } else {
-      pendingEvents.remove(event);
-      event.transitionToDone();
+    if (processingException.isPresent()) {
+      completeAsyncEvent(event);
       throw processingException.get();
     }
 
+    final var toClose = streamThreadContext.prepareToFinalizeEvent(event);
+    event.transitionToFinalizing();
     return toClose;
   }
 
@@ -677,10 +676,20 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    * and cleared from the set of pending events, unblocking that key.
    */
   private void postFinalize(final AsyncEvent event) {
-    event.transitionToDone();
-
-    pendingEvents.remove(event);
+    completeAsyncEvent(event);
     schedulingQueue.unblockKey(event.inputRecordKey());
+  }
+
+  /**
+   * Mark a "completed" event as DONE and clean it up from the pending events.
+   * An event is considered "complete" only after one of these has occurred:
+   * 1. it has been successfully processed and finalized
+   * 2. the event failed at some point (ie during processing or finalization)
+   *    and the thrown exception was retrieved and handled by the StreamThread
+   */
+  private void completeAsyncEvent(final AsyncEvent event) {
+    pendingEvents.remove(event);
+    event.transitionToDone();
   }
 
   /**
