@@ -7,4 +7,4 @@ JMX_OPTS="-Dcom.sun.management.jmxremote=true
 -Djava.rmi.server.hostname=${POD_IP}
 "
 
-java -Dorg.apache.logging.log4j.level=INFO ${EXPORTER_OPTS} ${JMX_OPTS}  -cp "/usr/share/java/responsive-e2etest/*" dev.responsive.examples.e2etest.Main ${CONFIG_PATH}
+java ${JAVA_OPTS} ${EXPORTER_OPTS} ${JMX_OPTS}  -cp "/usr/share/java/responsive-e2etest/*" dev.responsive.examples.e2etest.Main ${CONFIG_PATH}
