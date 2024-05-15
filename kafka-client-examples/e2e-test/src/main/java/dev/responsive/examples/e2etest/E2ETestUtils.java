@@ -27,7 +27,7 @@ class E2ETestUtils {
               .all().get();
         } catch (final ExecutionException | InterruptedException e) {
           if (e.getCause() instanceof TopicExistsException) {
-            return;
+            continue;
           }
           throw new RuntimeException(e);
         } catch (final RuntimeException e) {
