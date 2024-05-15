@@ -26,8 +26,6 @@ services:
       KAFKA_LOG_DIRS: /volumes/kafka/data
       KAFKA_DATA_DIRS: /volumes/kafka/data
       CLUSTER_ID: '_MLP7I7sTJKTQC87-IK0LQ'
-    volumes:
-      - ./volumes/kafka/data:/volumes/kafka/data:rw
     networks:
       backend:
         ipv4_address: 10.0.0.20
