@@ -166,8 +166,10 @@ public class AsyncThreadPool {
 
       future
           .whenComplete((r, t) -> {
-            inFlightForTask.remove(event);
-            finalizingQueue.addFinalizableEvent(event);
+            if (t == null) {
+              inFlightForTask.remove(event);
+              finalizingQueue.addFinalizableEvent(event);
+            }
           })
           .exceptionally(processingException -> {
             inFlightEvent.setError(processingException);
