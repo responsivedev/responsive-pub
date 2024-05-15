@@ -83,5 +83,5 @@ jobs:
           password: ${{ secrets.ANTITHESIS_PASSWORD }}
           github_token: ${{ secrets.ANTITHESIS_GH_PAT }}
           config_image: us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test-config:${{ steps.kafka_client_version.outputs.KAFKA_CLIENT_VERSION }}
-          images: us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test:${{ steps.kafka_client_version.outputs.KAFKA_CLIENT_VERSION }}
+          images: us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test:${{ steps.kafka_client_version.outputs.KAFKA_CLIENT_VERSION }};confluentinc/cp-kafka:7.6.1
           description: "responsive antithesis test run"
