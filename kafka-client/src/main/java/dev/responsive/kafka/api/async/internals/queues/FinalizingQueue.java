@@ -16,6 +16,7 @@
 
 package dev.responsive.kafka.api.async.internals.queues;
 
+import dev.responsive.kafka.api.async.internals.FatalAsyncException;
 import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
 import java.util.concurrent.BlockingDeque;
 import java.util.concurrent.LinkedBlockingDeque;
@@ -100,9 +101,13 @@ public class FinalizingQueue implements ReadOnlyFinalizingQueue, WriteOnlyFinali
    * Note: blocking API
    */
   @Override
-  public AsyncEvent waitForNextFinalizableEvent(long timeout, TimeUnit unit)
-      throws InterruptedException {
-    return finalizableRecords.poll(timeout, unit);
+  public AsyncEvent waitForNextFinalizableEvent(long timeout, TimeUnit unit) {
+    try {
+      return finalizableRecords.poll(timeout, unit);
+    } catch (final InterruptedException e) {
+      log.error("Fatally interrupted while waiting for finalizable event", e);
+      throw new FatalAsyncException("Interrupted while waiting for finalizable event", e);
+    }
   }
 
   /**

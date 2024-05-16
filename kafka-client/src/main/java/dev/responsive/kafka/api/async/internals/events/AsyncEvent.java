@@ -26,6 +26,7 @@ import java.util.Optional;
 import java.util.Queue;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.FixedKeyRecord;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
@@ -119,7 +120,7 @@ public class AsyncEvent {
   private final Object inputRecordValue;
 
   private final String asyncProcessorName;
-  private final int partition;
+  private final TaskId taskId;
 
   private final long systemTime;
   private final long streamTime;
@@ -131,13 +132,13 @@ public class AsyncEvent {
   private final Queue<DelayedForward<?, ?>> outputForwards = new LinkedList<>();
   private final Queue<DelayedWrite<?, ?>> outputWrites = new LinkedList<>();
 
-  private Throwable processingException = null;
+  private RuntimeException processingException = null;
 
   public AsyncEvent(
       final String logPrefix,
       final Record<?, ?> inputRecord,
       final String asyncProcessorName,
-      final int partition,
+      final TaskId taskId,
       final ProcessorRecordContext recordContext,
       final long currentStreamTime,
       final long currentSystemTime,
@@ -147,7 +148,7 @@ public class AsyncEvent {
          inputRecord.key(),
          inputRecord.value(),
          asyncProcessorName,
-         partition,
+         taskId,
          recordContext,
          currentStreamTime,
          currentSystemTime,
@@ -159,7 +160,7 @@ public class AsyncEvent {
       final String logPrefix,
       final FixedKeyRecord<?, ?> fixedKeyInputRecord,
       final String asyncProcessorName,
-      final int partition,
+      final TaskId taskId,
       final ProcessorRecordContext recordContext,
       final long currentStreamTime,
       final long currentSystemTime,
@@ -169,7 +170,7 @@ public class AsyncEvent {
          fixedKeyInputRecord.key(),
          fixedKeyInputRecord.value(),
          asyncProcessorName,
-         partition,
+         taskId,
          recordContext,
          currentStreamTime,
          currentSystemTime,
@@ -182,7 +183,7 @@ public class AsyncEvent {
       final Object inputRecordKey,
       final Object inputRecordValue,
       final String asyncProcessorName,
-      final int partition,
+      final TaskId taskId,
       final ProcessorRecordContext recordContext,
       final long currentStreamTime,
       final long currentSystemTime,
@@ -192,7 +193,7 @@ public class AsyncEvent {
     this.inputRecordKey = inputRecordKey;
     this.inputRecordValue = inputRecordValue;
     this.asyncProcessorName = asyncProcessorName;
-    this.partition = partition;
+    this.taskId = taskId;
     this.streamTime = currentStreamTime;
     this.systemTime = currentSystemTime;
     this.recordContext = recordContext;
@@ -219,7 +220,7 @@ public class AsyncEvent {
     outputWrites.add(delayedWrite);
   }
 
-  public Optional<Throwable> processingException() {
+  public Optional<RuntimeException> processingException() {
     return Optional.ofNullable(processingException);
   }
 
@@ -237,7 +238,7 @@ public class AsyncEvent {
     return currentState;
   }
 
-  public void transitionToFailed(final Throwable throwable) {
+  public void transitionToFailed(final RuntimeException exception) {
     if (currentState.equals(State.DONE)) {
       log.error(
           "[{}] Attempted to mark async event as failed but it was already in the DONE state",
@@ -246,7 +247,7 @@ public class AsyncEvent {
                                           + currentState.name());
     }
     currentState = State.FAILED;
-    processingException = throwable;
+    processingException = exception;
   }
 
   public void transitionToToProcess() {
@@ -325,8 +326,13 @@ public class AsyncEvent {
     return asyncProcessorName;
   }
 
+  public TaskId taskId() {
+    return taskId;
+  }
+
+
   public int partition() {
-    return partition;
+    return taskId.partition();
   }
 
   @SuppressWarnings("unchecked")
@@ -351,7 +357,7 @@ public class AsyncEvent {
 
     final AsyncEvent that = (AsyncEvent) o;
 
-    if (partition != that.partition) {
+    if (taskId != that.taskId) {
       return false;
     }
     if (systemTime != that.systemTime) {
@@ -368,8 +374,7 @@ public class AsyncEvent {
 
   @Override
   public int hashCode() {
-    int result = inputRecordKey.hashCode();
-    result = 31 * result + partition;
+    int result = Objects.hash(taskId, inputRecordKey);
     result = 31 * result + (int) (systemTime ^ (systemTime >>> 32));
     result = 31 * result + (int) (streamTime ^ (streamTime >>> 32));
     result = 31 * result

@@ -19,8 +19,11 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.ProcessingContext;
 import org.slf4j.Logger;
 
@@ -38,7 +41,8 @@ public class AsyncThreadPool {
   // TODO: we don't really need to track this by processor/partition, technically an
   //  error anywhere is fatal for the StreamThread and all processors + all further
   //  processing should shut down ASAP to minimize ALOS overcounting
-  private final Map<InFlightWorkKey, Throwable> fatalExceptions = new ConcurrentHashMap<>();
+  private final Map<InFlightWorkKey, FatalAsyncException> fatalExceptions =
+      new ConcurrentHashMap<>();
 
   private final AtomicInteger threadNameIndex = new AtomicInteger(0);
 
@@ -98,6 +102,8 @@ public class AsyncThreadPool {
   }
 
   /**
+   * Returns uncaught exceptions from processing async events. Such errors are always fatal
+   *
    * @return any uncaught exceptions encountered during processing of input records,
    *         or {@link Optional#empty()} if there are none
    */
@@ -136,13 +142,13 @@ public class AsyncThreadPool {
    */
   public <KOut, VOut> void scheduleForProcessing(
       final String processorName,
-      final int partition,
+      final TaskId taskId,
       final List<AsyncEvent> events,
       final FinalizingQueue finalizingQueue,
       final ProcessingContext taskContext,
       final AsyncUserProcessorContext<KOut, VOut> asyncProcessorContext
   ) {
-    final var inFlightKey = InFlightWorkKey.of(processorName, partition);
+    final var inFlightKey = InFlightWorkKey.of(processorName, taskId.partition());
     final var inFlightForTask
         = inFlight.computeIfAbsent(inFlightKey, k -> new ConcurrentHashMap<>());
 
@@ -152,7 +158,7 @@ public class AsyncThreadPool {
       } catch (final InterruptedException e) {
         throw new RuntimeException(e);
       }
-      final var future = CompletableFuture.runAsync(
+      final CompletableFuture<StreamsException> future = CompletableFuture.supplyAsync(
           new AsyncEventTask<>(
               event,
               taskContext,
@@ -167,19 +173,30 @@ public class AsyncThreadPool {
       future
           .whenComplete((r, t) -> {
             inFlightForTask.remove(event);
-            finalizingQueue.addFinalizableEvent(event);
           })
-          .exceptionally(processingException -> {
-            inFlightEvent.setError(processingException);
-            event.transitionToFailed(processingException);
-            finalizingQueue.addFailedEvent(event, processingException);
+          .handle((processingException, fatalException) -> {
+
+            if (fatalException == null) {
+              if (processingException == null) {
+                finalizingQueue.addFinalizableEvent(event);
+              } else {
+                event.transitionToFailed(processingException);
+                finalizingQueue.addFailedEvent(event, processingException);
+              }
+            }
+
+            // Once we've successfully placed a failed event in the finalizing queue
+            // then there's nothing more to handle by the async thread pool since the
+            // StreamThread will process the exception from here
             return null;
           })
-          .exceptionally(processingException -> {
-            // do this in separate stage to ensure we always catch a fatal exception, even
-            // if we somehow hit another exception in the previous exception handling stage
-            fatalExceptions.computeIfAbsent(inFlightKey, k -> processingException);
-            return null;
+          .exceptionally(fatalException -> {
+            // do this alone & in separate stage to ensure we always catch a fatal exception, even
+            // if we somehow hit another exception while handling an exception in a previous stage
+            fatalExceptions.computeIfAbsent(
+                inFlightKey,
+                k -> new FatalAsyncException("Uncaught exception while handling", fatalException));
+            return fatalException;
           });
     }
   }
@@ -190,27 +207,18 @@ public class AsyncThreadPool {
   }
 
   static class InFlightEvent {
-    private final CompletableFuture<Void> future;
-    private Throwable error = null;
+    private final CompletableFuture<StreamsException> future;
 
-    private InFlightEvent(final CompletableFuture<Void> future) {
+    private InFlightEvent(final CompletableFuture<StreamsException> future) {
       this.future = future;
     }
 
-    CompletableFuture<Void> future() {
+    CompletableFuture<StreamsException> future() {
       return future;
-    }
-
-    public synchronized Optional<Throwable> error() {
-      return Optional.ofNullable(error);
-    }
-
-    public synchronized void setError(final Throwable error) {
-      this.error = error;
     }
   }
 
-  private static class AsyncEventTask<KOut, VOut> implements Runnable {
+  private static class AsyncEventTask<KOut, VOut> implements Supplier<StreamsException> {
 
     private final AsyncEvent event;
     private final AsyncThreadProcessorContext<KOut, VOut> asyncThreadContext;
@@ -233,12 +241,19 @@ public class AsyncThreadPool {
     }
 
     @Override
-    public void run() {
+    public StreamsException get() {
       queueSemaphore.release();
       wrappingContext.setDelegateForAsyncThread(asyncThreadContext);
       event.transitionToProcessing();
-      event.inputRecordProcessor().run();
+
+      try {
+        event.inputRecordProcessor().run();
+      } catch (final RuntimeException e) {
+        return new StreamsException("Exception caught during async processing", e, event.taskId());
+      }
+
       event.transitionToToFinalize();
+      return null;
     }
   }
 
