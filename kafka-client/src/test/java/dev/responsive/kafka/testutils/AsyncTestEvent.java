@@ -18,6 +18,7 @@ package dev.responsive.kafka.testutils;
 
 import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 
@@ -31,44 +32,44 @@ public class AsyncTestEvent extends AsyncEvent {
       final String key,
       final String value
   ) {
-    this(key, value, 0);
+    this(key, value, new TaskId(0, 0));
   }
 
   public AsyncTestEvent(
       final String key,
       final String value,
-      final int partition
+      final TaskId taskId
   ) {
-    this(key, value, partition, "topic");
+    this(key, value, taskId, "topic");
   }
 
   public AsyncTestEvent(
       final String key,
       final String value,
-      final int partition,
+      final TaskId taskId,
       final String topic
   ) {
-    this(key, value, "async-processor", partition, topic, 0L, 0L);
+    this(key, value, "async-processor", taskId, topic, 0L, 0L);
   }
 
   public AsyncTestEvent(
       final String key,
       final String value,
       final String asyncProcessorName,
-      final int partition,
+      final TaskId taskId,
       final String topic,
       final long timestamp,
       final long offset
   ) {
     super(
-        String.format("event <%s, %s>[%d]", key, value, partition),
+        String.format("event <%s, %s>[%d]", key, value, taskId.partition()),
         new Record<>(key, value, timestamp),
         asyncProcessorName,
-        partition,
+        taskId,
         new ProcessorRecordContext(
             timestamp,
             offset,
-            partition,
+            taskId.partition(),
             topic,
             new RecordHeaders()
         ),
