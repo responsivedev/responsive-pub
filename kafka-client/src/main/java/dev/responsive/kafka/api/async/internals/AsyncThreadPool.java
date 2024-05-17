@@ -160,8 +160,12 @@ public class AsyncThreadPool {
       final AsyncUserProcessorContext<KOut, VOut> asyncProcessorContext,
       final AsyncProcessorMetricsRecorder processorMetricsRecorder
   ) {
+    if (metricsRecorder == null) {
+      log.error("must call maybeInitThreadPoolMetrics before using pool");
+      throw new IllegalStateException("must call maybeInitThreadPoolMetrics before using pool");
+    }
+
     final var inFlightKey = InFlightWorkKey.of(processorName, taskId.partition());
-    maybeInitThreadPoolMetrics();
     final var inFlightForTask
         = inFlight.computeIfAbsent(inFlightKey, k -> new ConcurrentHashMap<>());
 
@@ -225,7 +229,7 @@ public class AsyncThreadPool {
    * Fixing this is a bit involved. For now, just initialize the recorder on the first call
    * to scheduleForProcessing.
    */
-  private void maybeInitThreadPoolMetrics() {
+  public void maybeInitThreadPoolMetrics() {
     if (metricsRecorder == null) {
       metricsRecorder = metricsRecorderSupplier.get();
     }

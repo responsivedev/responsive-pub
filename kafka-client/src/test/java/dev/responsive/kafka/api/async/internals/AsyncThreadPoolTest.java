@@ -52,6 +52,7 @@ class AsyncThreadPoolTest {
         POOL_EVENT_LIMIT,
         mock(ResponsiveMetrics.class)
     );
+    pool.maybeInitThreadPoolMetrics();
   }
 
   @AfterEach
