@@ -56,7 +56,7 @@ services:
         ipv4_address: 10.0.0.30
 
   application1:
-    image: us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test:${KAFKA_CLIENT_VERSION}
+    image: e2e-test:${KAFKA_CLIENT_VERSION}
     container_name: application1
     hostname: application1
     depends_on:
@@ -78,7 +78,7 @@ services:
         ipv4_address: 10.0.0.40
 
   application2:
-    image: us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test:${KAFKA_CLIENT_VERSION}
+    image: e2e-test:${KAFKA_CLIENT_VERSION}
     container_name: application2
     hostname: application2
     depends_on:
@@ -100,7 +100,7 @@ services:
         ipv4_address: 10.0.0.41
 
   driver:
-    image: us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test:${KAFKA_CLIENT_VERSION}
+    image: e2e-test:${KAFKA_CLIENT_VERSION}
     container_name: driver
     hostname: driver
     depends_on:
