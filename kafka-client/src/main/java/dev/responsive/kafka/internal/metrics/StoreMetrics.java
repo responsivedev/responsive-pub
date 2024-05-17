@@ -25,11 +25,8 @@ import static dev.responsive.kafka.internal.metrics.ResponsiveMetrics.RATE_SUFFI
 import static dev.responsive.kafka.internal.metrics.ResponsiveMetrics.TOTAL_DESCRIPTION;
 import static dev.responsive.kafka.internal.metrics.ResponsiveMetrics.TOTAL_SUFFIX;
 
-import dev.responsive.kafka.internal.metrics.ResponsiveMetrics.MetricGroup;
-import java.util.LinkedHashMap;
-
 @SuppressWarnings("checkstyle:linelength")
-public class StoreMetrics implements MetricGroup {
+public class StoreMetrics {
   // Responsive store metrics scoped to the individual state store level
   public static final String STORE_METRIC_GROUP = "store-metrics";
 
@@ -66,21 +63,4 @@ public class StoreMetrics implements MetricGroup {
   public static final String FAILED_TRUNCATIONS_RATE_DESCRIPTION = RATE_DESCRIPTION + FAILED_TRUNCATIONS_DESCRIPTION;
   public static final String FAILED_TRUNCATIONS_TOTAL = FAILED_TRUNCATIONS + TOTAL_SUFFIX;
   public static final String FAILED_TRUNCATIONS_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + FAILED_TRUNCATIONS_DESCRIPTION;
-
-  private final LinkedHashMap<String, String> tags;
-
-  StoreMetrics(final LinkedHashMap<String, String> tags) {
-    this.tags = tags;
-  }
-  
-  @Override
-  public String groupName() {
-    return STORE_METRIC_GROUP;
-  }
-
-  @Override
-  public LinkedHashMap<String, String> tags() {
-    return tags;
-  }
-  
 }

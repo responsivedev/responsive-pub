@@ -61,6 +61,7 @@ public class ResponsiveRestoreListener implements StateRestoreListener, Closeabl
         TIME_RESTORING,
         TIME_RESTORING_DESCRIPTION,
         metrics.storeLevelMetric(
+            StoreMetrics.STORE_METRIC_GROUP,
             extractThreadId(Thread.currentThread().getName()),
             topicPartition,
             storeName
@@ -74,7 +75,7 @@ public class ResponsiveRestoreListener implements StateRestoreListener, Closeabl
     numRestoringMetricName = metrics.metricName(
         NUM_RESTORING_CHANGELOGS,
         NUM_RESTORING_CHANGELOGS_DESCRIPTION,
-        metrics.applicationLevelMetric()
+        metrics.applicationLevelMetric(ApplicationMetrics.APPLICATION_METRIC_GROUP)
     );
 
     metrics.addMetric(
@@ -87,7 +88,7 @@ public class ResponsiveRestoreListener implements StateRestoreListener, Closeabl
         metrics.metricName(
             NUM_INTERRUPTED_CHANGELOGS,
             NUM_INTERRUPTED_CHANGELOGS_DESCRIPTION,
-            metrics.applicationLevelMetric()),
+            metrics.applicationLevelMetric(ApplicationMetrics.APPLICATION_METRIC_GROUP)),
         new CumulativeCount()
     );
   }

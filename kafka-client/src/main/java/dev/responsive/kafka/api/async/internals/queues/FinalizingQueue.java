@@ -117,6 +117,5 @@ public class FinalizingQueue implements ReadOnlyFinalizingQueue, WriteOnlyFinali
   public boolean isEmpty() {
     return finalizableRecords.isEmpty();
   }
-
 }
 

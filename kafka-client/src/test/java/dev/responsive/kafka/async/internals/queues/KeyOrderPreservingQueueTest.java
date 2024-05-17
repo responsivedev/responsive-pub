@@ -21,17 +21,17 @@ import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 
-import dev.responsive.kafka.api.async.internals.queues.SchedulingQueue;
+import dev.responsive.kafka.api.async.internals.queues.KeyOrderPreservingQueue;
 import dev.responsive.kafka.testutils.AsyncTestEvent;
 import org.apache.kafka.streams.KeyValue;
 import org.junit.Test;
 
-public class SchedulingQueueTest {
+public class KeyOrderPreservingQueueTest {
 
   private static final String LOG_PREFIX = "SchedulingQueueTest:  ";
   private static final int DEFAULT_QUEUE_SIZE = Integer.MAX_VALUE;
 
-  private final SchedulingQueue<String> queue = new SchedulingQueue<>(
+  private final KeyOrderPreservingQueue<String> queue = new KeyOrderPreservingQueue<>(
       LOG_PREFIX, DEFAULT_QUEUE_SIZE
   );
 
@@ -137,7 +137,8 @@ public class SchedulingQueueTest {
   public void shouldReturnTrueForKeyAtMaxQueueSize() {
     // Given:
     final int maxEvents = 3;
-    final SchedulingQueue<String> queue = new SchedulingQueue<>(LOG_PREFIX, maxEvents);
+    final KeyOrderPreservingQueue<String> queue
+        = new KeyOrderPreservingQueue<>(LOG_PREFIX, maxEvents);
 
     // When:
     queue.offer(new AsyncTestEvent("A", "a1"));
@@ -152,7 +153,8 @@ public class SchedulingQueueTest {
   public void shouldReturnFalseForKeyNotAtMaxQueueSize() {
     // Given:
     final int maxEvents = 3;
-    final SchedulingQueue<String> queue = new SchedulingQueue<>(LOG_PREFIX, maxEvents);
+    final KeyOrderPreservingQueue<String> queue
+        = new KeyOrderPreservingQueue<>(LOG_PREFIX, maxEvents);
 
     // When:
     queue.offer(new AsyncTestEvent("A", "a1"));
@@ -167,7 +169,8 @@ public class SchedulingQueueTest {
   public void shouldReturnTrueForKeyAtMaxQueueSizeIncludingInFlightEvents() {
     // Given:
     final int maxEvents = 3;
-    final SchedulingQueue<String> queue = new SchedulingQueue<>(LOG_PREFIX, maxEvents);
+    final KeyOrderPreservingQueue<String> queue
+        = new KeyOrderPreservingQueue<>(LOG_PREFIX, maxEvents);
 
     queue.offer(new AsyncTestEvent("A", "a1"));
     queue.offer(new AsyncTestEvent("A", "a2"));
@@ -185,7 +188,8 @@ public class SchedulingQueueTest {
   public void shouldReturnFalseForKeyPreviouslyAtMaxQueueSize() {
     // Given:
     final int maxEvents = 3;
-    final SchedulingQueue<String> queue = new SchedulingQueue<>(LOG_PREFIX, maxEvents);
+    final KeyOrderPreservingQueue<String> queue
+        = new KeyOrderPreservingQueue<>(LOG_PREFIX, maxEvents);
 
     queue.offer(new AsyncTestEvent("A", "a1"));
     queue.offer(new AsyncTestEvent("A", "a2"));
@@ -204,7 +208,8 @@ public class SchedulingQueueTest {
   public void shouldReturnFalseFromIsFullWhenAtMaxSizeButWithDifferentKeys() {
     // Given:
     final int maxEvents = 3;
-    final SchedulingQueue<String> queue = new SchedulingQueue<>(LOG_PREFIX, maxEvents);
+    final KeyOrderPreservingQueue<String> queue
+        = new KeyOrderPreservingQueue<>(LOG_PREFIX, maxEvents);
 
     // When:
     queue.offer(new AsyncTestEvent("A", "a1"));
@@ -219,7 +224,8 @@ public class SchedulingQueueTest {
   public void shouldThrowWhenAddingToFullQueue() {
     // Given
     final int maxEvents = 1;
-    final SchedulingQueue<String> queue = new SchedulingQueue<>(LOG_PREFIX, maxEvents);
+    final KeyOrderPreservingQueue<String> queue
+        = new KeyOrderPreservingQueue<>(LOG_PREFIX, maxEvents);
     queue.offer(new AsyncTestEvent("A", "a1"));
 
     assertThrows(IllegalStateException.class, () -> queue.offer(new AsyncTestEvent("A", "a2")));

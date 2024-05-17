@@ -4,7 +4,10 @@ import com.google.common.annotations.VisibleForTesting;
 import dev.responsive.kafka.api.async.internals.contexts.AsyncThreadProcessorContext;
 import dev.responsive.kafka.api.async.internals.contexts.AsyncUserProcessorContext;
 import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
+import dev.responsive.kafka.api.async.internals.metrics.AsyncProcessorMetricsRecorder;
+import dev.responsive.kafka.api.async.internals.metrics.AsyncThreadPoolMetricsRecorder;
 import dev.responsive.kafka.api.async.internals.queues.FinalizingQueue;
+import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,6 +35,8 @@ public class AsyncThreadPool {
 
   private final Logger log;
 
+  private final Supplier<AsyncThreadPoolMetricsRecorder> metricsRecorderSupplier;
+  private AsyncThreadPoolMetricsRecorder metricsRecorder;
   private final ThreadPoolExecutor executor;
   private final Map<InFlightWorkKey, ConcurrentMap<AsyncEvent, InFlightEvent>> inFlight
       = new HashMap<>();
@@ -49,7 +54,8 @@ public class AsyncThreadPool {
   public AsyncThreadPool(
       final String streamThreadName,
       final int threadPoolSize,
-      final int maxQueuedEvents
+      final int maxQueuedEvents,
+      final ResponsiveMetrics responsiveMetrics
   ) {
     final LogContext logPrefix
         = new LogContext(String.format("stream-thread [%s] ", streamThreadName));
@@ -69,6 +75,11 @@ public class AsyncThreadPool {
           t.setName(generateAsyncThreadName(streamThreadName, threadNameIndex.getAndIncrement()));
           return t;
         }
+    );
+    this.metricsRecorderSupplier = () -> new AsyncThreadPoolMetricsRecorder(
+        responsiveMetrics,
+        streamThreadName,
+        processingQueue::size
     );
   }
 
@@ -146,8 +157,14 @@ public class AsyncThreadPool {
       final List<AsyncEvent> events,
       final FinalizingQueue finalizingQueue,
       final ProcessingContext taskContext,
-      final AsyncUserProcessorContext<KOut, VOut> asyncProcessorContext
+      final AsyncUserProcessorContext<KOut, VOut> asyncProcessorContext,
+      final AsyncProcessorMetricsRecorder processorMetricsRecorder
   ) {
+    if (metricsRecorder == null) {
+      log.error("must call maybeInitThreadPoolMetrics before using pool");
+      throw new IllegalStateException("must call maybeInitThreadPoolMetrics before using pool");
+    }
+
     final var inFlightKey = InFlightWorkKey.of(processorName, taskId.partition());
     final var inFlightForTask
         = inFlight.computeIfAbsent(inFlightKey, k -> new ConcurrentHashMap<>());
@@ -163,7 +180,8 @@ public class AsyncThreadPool {
               event,
               taskContext,
               asyncProcessorContext,
-              queueSemaphore
+              queueSemaphore,
+              processorMetricsRecorder
           ),
           executor
       );
@@ -201,8 +219,26 @@ public class AsyncThreadPool {
     }
   }
 
+  /**
+   * This is a complete hack to work around the fact that we cannot create the
+   * metrics recorder from the constructor of this class. This is because the recorder
+   * needs to know all the tags to register a metric. One of the tags is the client id
+   * however this is only computed in the KafkaStreams constructor, so ResponsiveKafkaStreams
+   * can only set it after the KafkaStreams constructor has returned. However thread pools
+   * are created from the KafkaStreams constructor, when it initializes StreamThread instances.
+   * Fixing this is a bit involved. For now, just initialize the recorder on the first call
+   * to scheduleForProcessing.
+   */
+  public void maybeInitThreadPoolMetrics() {
+    if (metricsRecorder == null) {
+      metricsRecorder = metricsRecorderSupplier.get();
+    }
+  }
+
   public void shutdown() {
-    // todo: make me more orderly, but you get the basic idea
+    if (metricsRecorder != null) {
+      metricsRecorder.close();
+    }
     executor.shutdownNow();
   }
 
@@ -224,12 +260,14 @@ public class AsyncThreadPool {
     private final AsyncThreadProcessorContext<KOut, VOut> asyncThreadContext;
     private final AsyncUserProcessorContext<KOut, VOut> wrappingContext;
     private final Semaphore queueSemaphore;
+    private final AsyncProcessorMetricsRecorder metricsRecorder;
 
     private AsyncEventTask(
         final AsyncEvent event,
         final ProcessingContext taskContext,
         final AsyncUserProcessorContext<KOut, VOut> userContext,
-        final Semaphore queueSemaphore
+        final Semaphore queueSemaphore,
+        final AsyncProcessorMetricsRecorder metricsRecorder
     ) {
       this.event = event;
       this.wrappingContext = userContext;
@@ -238,10 +276,12 @@ public class AsyncThreadPool {
           event
       );
       this.queueSemaphore = queueSemaphore;
+      this.metricsRecorder = metricsRecorder;
     }
 
     @Override
     public StreamsException get() {
+      final long start = System.nanoTime();
       queueSemaphore.release();
       wrappingContext.setDelegateForAsyncThread(asyncThreadContext);
       event.transitionToProcessing();
@@ -253,6 +293,7 @@ public class AsyncThreadPool {
       }
 
       event.transitionToToFinalize();
+      metricsRecorder.recordEventProcess(System.nanoTime() - start);
       return null;
     }
   }

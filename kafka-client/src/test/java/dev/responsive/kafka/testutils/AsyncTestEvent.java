@@ -17,6 +17,7 @@
 package dev.responsive.kafka.testutils;
 
 import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
+import java.util.List;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.Record;
@@ -75,7 +76,8 @@ public class AsyncTestEvent extends AsyncEvent {
         ),
         0L,
         0L,
-        () -> {}
+        () -> {},
+        List.of()
     );
   }
 }

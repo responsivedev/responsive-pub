@@ -3,6 +3,7 @@ package dev.responsive.kafka.internal.config;
 import static org.apache.kafka.streams.StreamsConfig.mainConsumerPrefix;
 
 import dev.responsive.kafka.api.async.internals.AsyncThreadPoolRegistry;
+import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistry;
 import dev.responsive.kafka.internal.utils.SessionClients;
 import java.util.HashMap;
@@ -20,6 +21,7 @@ public final class InternalSessionConfigs {
   private static final String INTERNAL_SESSION_CLIENTS_CONFIG = "__internal.responsive.cassandra.client__";
   private static final String INTERNAL_STORE_REGISTRY_CONFIG = "__internal.responsive.store.registry__";
   private static final String INTERNAL_TOPOLOGY_DESCRIPTION_CONFIG = "__internal.responsive.topology.description__";
+  private static final String INTERNAL_METRICS_CONFIG = "__internal.responsive.metrics__";
 
   private static <T> T loadFromConfig(
       final Map<String, Object> configs,
@@ -76,6 +78,15 @@ public final class InternalSessionConfigs {
     );
   }
 
+  public static ResponsiveMetrics loadMetrics(final Map<String, Object> configs) {
+    return loadFromConfig(
+        configs,
+        InternalSessionConfigs.INTERNAL_METRICS_CONFIG,
+        ResponsiveMetrics.class,
+        "Responsive Metrics"
+    );
+  }
+
   public static SessionClients loadSessionClients(final Map<String, Object> configs) {
     return loadFromConfig(
         configs,
@@ -114,6 +125,11 @@ public final class InternalSessionConfigs {
      */
     public Builder withAsyncThreadPoolRegistry(final AsyncThreadPoolRegistry registry) {
       configs.put(mainConsumerPrefix(INTERNAL_ASYNC_THREAD_POOL_REGISTRY_CONFIG), registry);
+      return this;
+    }
+
+    public Builder withMetrics(final ResponsiveMetrics metrics) {
+      configs.put(INTERNAL_METRICS_CONFIG, metrics);
       return this;
     }
 

@@ -23,6 +23,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.stream.Collectors;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -48,6 +49,8 @@ public class OrderedTagsSupplier {
   public static final String TOPIC_TAG = "topic";
   public static final String PARTITION_TAG = "partition";
   public static final String STORE_TAG = "store";
+  public static final String TASK_ID_TAG = "task-id";
+  public static final String PROCESSOR_NAME_TAG = "processor-name";
 
   private final String responsiveClientVersion;
   private final String responsiveClientCommitId;
@@ -109,6 +112,17 @@ public class OrderedTagsSupplier {
     return topicGroupTags;
   }
 
+  public LinkedHashMap<String, String> threadGroupTags(final String threadId) {
+    final LinkedHashMap<String, String> threadGroupTags = new LinkedHashMap<>();
+
+    // IMPORTANT: DO NOT MODIFY THE ORDER OF INSERTION
+    fillInApplicationTags(threadGroupTags);
+    fillInThreadTags(threadGroupTags, threadId);
+    fillInCustomUserTags(threadGroupTags);
+
+    return threadGroupTags;
+  }
+
   public LinkedHashMap<String, String> storeGroupTags(
       final String threadId,
       final TopicPartition topicPartition,
@@ -125,6 +139,21 @@ public class OrderedTagsSupplier {
     return storeGroupTags;
   }
 
+  public LinkedHashMap<String, String> processorGroupTags(
+      final String threadId,
+      final TaskId taskId,
+      final String processorName
+  ) {
+    final LinkedHashMap<String, String> processorGroupTags = new LinkedHashMap<>();
+
+    // IMPORTANT: DO NOT MODIFY THE ORDER OF INSERTION
+    fillInApplicationTags(processorGroupTags);
+    fillInProcessorTags(processorGroupTags, threadId, taskId, processorName);
+    fillInCustomUserTags(processorGroupTags);
+
+    return processorGroupTags;
+  }
+
   private void fillInApplicationTags(final LinkedHashMap<String, String> tags) {
     tags.put(RESPONSIVE_VERSION_TAG, responsiveClientVersion);
     tags.put(RESPONSIVE_COMMIT_ID_TAG, responsiveClientCommitId);
@@ -136,6 +165,13 @@ public class OrderedTagsSupplier {
     tags.put(STREAMS_CLIENT_ID_TAG, streamsClientId);
   }
 
+  private void fillInThreadTags(
+      final LinkedHashMap<String, String> tags,
+      final String threadId
+  ) {
+    tags.put(THREAD_ID_TAG, threadId);
+  }
+
   private void fillInTopicTags(
       final LinkedHashMap<String, String> tags,
       final String threadId,
@@ -144,6 +180,17 @@ public class OrderedTagsSupplier {
     tags.put(THREAD_ID_TAG, threadId);
     tags.put(TOPIC_TAG, topicPartition.topic());
     tags.put(PARTITION_TAG, Integer.toString(topicPartition.partition()));
+  }
+
+  private void fillInProcessorTags(
+      final LinkedHashMap<String, String> tags,
+      final String threadId,
+      final TaskId taskId,
+      final String processorName
+  ) {
+    tags.put(THREAD_ID_TAG, threadId);
+    tags.put(TASK_ID_TAG, taskId.toString());
+    tags.put(PROCESSOR_NAME_TAG, processorName);
   }
 
   private void fillInStoreTags(
@@ -162,6 +209,5 @@ public class OrderedTagsSupplier {
       tags.put(tagKey, tagValue);
     }
   }
-
 }
 

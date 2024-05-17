@@ -16,6 +16,7 @@
 
 package dev.responsive.kafka.api.async.internals;
 
+import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.apache.kafka.streams.KafkaClientSupplier;
@@ -41,37 +42,33 @@ public class AsyncThreadPoolRegistry {
 
   private final int asyncThreadPoolSize;
   private final int maxQueuedEvents;
+  private final ResponsiveMetrics responsiveMetrics;
   private final Map<String, AsyncThreadPool> streamThreadToAsyncPool;
 
   public AsyncThreadPoolRegistry(
       final int numStreamThreads,
       final int asyncThreadPoolSize,
-      final int maxQueuedEventsPerAsyncThread
+      final int maxQueuedEventsPerAsyncThread,
+      final ResponsiveMetrics responsiveMetrics
   ) {
     this.asyncThreadPoolSize = asyncThreadPoolSize;
     this.maxQueuedEvents = maxQueuedEventsPerAsyncThread * asyncThreadPoolSize;
     this.streamThreadToAsyncPool = new ConcurrentHashMap<>(numStreamThreads);
+    this.responsiveMetrics = responsiveMetrics;
   }
 
   /**
    * Registers and starts up a new AsyncThreadPool for the given StreamThread
    */
   public void startNewAsyncThreadPool(final String streamThreadName) {
+    shutdownAsyncThreadPool(streamThreadName, true);
     final AsyncThreadPool newThreadPool = new AsyncThreadPool(
-        streamThreadName, asyncThreadPoolSize, maxQueuedEvents
-    );
-
-    final AsyncThreadPool oldThreadPool = streamThreadToAsyncPool.put(
         streamThreadName,
-        newThreadPool
+        asyncThreadPoolSize,
+        maxQueuedEvents,
+        responsiveMetrics
     );
-    if (oldThreadPool != null) {
-      LOG.warn(
-          "Shutting down old orphaned async thread pool for StreamThread {}",
-          streamThreadName
-      );
-      oldThreadPool.shutdown();
-    }
+    streamThreadToAsyncPool.put(streamThreadName, newThreadPool);
   }
 
   public AsyncThreadPool asyncThreadPoolForStreamThread(
@@ -88,11 +85,21 @@ public class AsyncThreadPoolRegistry {
    * This method is idempotent
    */
   public void shutdownAsyncThreadPool(final String streamThreadName) {
+    shutdownAsyncThreadPool(streamThreadName, false);
+  }
+
+  private void shutdownAsyncThreadPool(final String streamThreadName, final boolean fromStart) {
     final AsyncThreadPool threadPool = streamThreadToAsyncPool.remove(streamThreadName);
 
     // It's possible the consumer was closed twice for some reason, in which case
     // we have already unregistered and begun shutdown for this pool
     if (threadPool != null) {
+      if (fromStart) {
+        LOG.warn(
+            "Shutting down old orphaned async thread pool for StreamThread {}",
+            streamThreadName
+        );
+      }
       threadPool.shutdown();
     }
   }
