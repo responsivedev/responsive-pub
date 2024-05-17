@@ -106,7 +106,6 @@ public class AsyncEvent {
     SCHEDULING,
     TO_PROCESS,
     PROCESSING,
-    FAILED_PROCESSING,
     TO_FINALIZE,
     FINALIZING,
     FAILED,
@@ -269,7 +268,7 @@ public class AsyncEvent {
       throw new IllegalStateException("Cannot transition to FAILED from the state "
                                           + currentState.name());
     }
-    transitionTo(State.FAILED_PROCESSING);
+    transitionTo(State.FAILED);
     processingException = exception;
   }
 
