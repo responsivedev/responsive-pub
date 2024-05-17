@@ -42,7 +42,7 @@ services:
         ipv4_address: 10.0.0.20
 
   scylla:
-    image: us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/responsive-scylla:0.2
+    image: scylladb/scylla:5.4
     container_name: scylla
     hostname: scylla
     command: --smp 1 --options-file /etc/scylla/scylla.yaml --memory 750M --overprovisioned 1 --api-address 0.0.0.0
