@@ -127,7 +127,6 @@ public class SegmentedOperations implements WindowOperations {
         sessionClients,
         changelog,
         keySpec,
-        params.truncateChangelog(),
         params.name(),
         responsiveConfig
     );

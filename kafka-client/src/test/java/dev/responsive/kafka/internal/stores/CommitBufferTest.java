@@ -16,10 +16,6 @@
 
 package dev.responsive.kafka.internal.stores;
 
-import static dev.responsive.kafka.internal.metrics.StoreMetrics.FAILED_TRUNCATIONS_RATE;
-import static dev.responsive.kafka.internal.metrics.StoreMetrics.FAILED_TRUNCATIONS_RATE_DESCRIPTION;
-import static dev.responsive.kafka.internal.metrics.StoreMetrics.FAILED_TRUNCATIONS_TOTAL;
-import static dev.responsive.kafka.internal.metrics.StoreMetrics.FAILED_TRUNCATIONS_TOTAL_DESCRIPTION;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_ERRORS_RATE;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_ERRORS_RATE_DESCRIPTION;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_ERRORS_TOTAL;
@@ -45,9 +41,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.datastax.oss.driver.api.core.CqlSession;
@@ -90,10 +84,8 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
@@ -149,8 +141,6 @@ public class CommitBufferTest {
   private Sensor flushLatencySensor;
   @Mock
   private Sensor flushErrorSensor;
-  @Mock
-  private Sensor failedTruncationsSensor;
 
   private Map<String, String> storeTags;
   private CqlSession session;
@@ -209,11 +199,9 @@ public class CommitBufferTest {
     Mockito.when(metrics.sensor("flush-" + changelog)).thenReturn(flushSensor);
     Mockito.when(metrics.sensor("flush-latency-" + changelog)).thenReturn(flushLatencySensor);
     Mockito.when(metrics.sensor("flush-errors-" + changelog)).thenReturn(flushErrorSensor);
-    Mockito.when(metrics.sensor("failed-truncations-" + changelog))
-        .thenReturn(failedTruncationsSensor);
   }
 
-  private CommitBuffer<Bytes, Integer> createCommitBuffer(final boolean truncateChangelog) {
+  private CommitBuffer<Bytes, Integer> createCommitBuffer() {
     final var flushManager = table.init(changelog.partition());
     final BatchFlusher<Bytes, Integer> batchFlusher = new BatchFlusher<>(
         KEY_SPEC,
@@ -227,7 +215,6 @@ public class CommitBufferTest {
         changelog,
         admin,
         KEY_SPEC,
-        truncateChangelog,
         tableName,
         TRIGGERS,
         EXCEPTION_SUPPLIER
@@ -245,7 +232,6 @@ public class CommitBufferTest {
         changelog,
         admin,
         KEY_SPEC,
-        true,
         tableName,
         flushTriggers,
         EXCEPTION_SUPPLIER,
@@ -272,7 +258,7 @@ public class CommitBufferTest {
   @Test
   public void shouldAddAllBufferMetrics() {
     // When:
-    createCommitBuffer(true);
+    createCommitBuffer();
 
     // Then:
     Mockito.verify(metrics).addMetric(
@@ -299,19 +285,12 @@ public class CommitBufferTest {
     Mockito.verify(flushErrorSensor).add(
         eq(metricName(FLUSH_ERRORS_TOTAL, FLUSH_ERRORS_TOTAL_DESCRIPTION)),
         any(CumulativeCount.class));
-
-    Mockito.verify(failedTruncationsSensor).add(
-        eq(metricName(FAILED_TRUNCATIONS_RATE, FAILED_TRUNCATIONS_RATE_DESCRIPTION)),
-        any(Rate.class));
-    Mockito.verify(failedTruncationsSensor).add(
-        eq(metricName(FAILED_TRUNCATIONS_TOTAL, FAILED_TRUNCATIONS_TOTAL_DESCRIPTION)),
-        any(CumulativeCount.class));
   }
 
   @Test
   public void shouldRemoveAllBufferMetrics() {
     // Given:
-    final CommitBuffer<Bytes, Integer> buffer = createCommitBuffer(true);
+    final CommitBuffer<Bytes, Integer> buffer = createCommitBuffer();
 
     // When:
     buffer.close();
@@ -323,13 +302,12 @@ public class CommitBufferTest {
     Mockito.verify(metrics).removeSensor("flush-" + changelog);
     Mockito.verify(metrics).removeSensor("flush-latency-" + changelog);
     Mockito.verify(metrics).removeSensor("flush-errors-" + changelog);
-    Mockito.verify(metrics).removeSensor("failed-truncations-" + changelog);
   }
 
   @Test
   public void shouldFenceOffsetFlushBasedOnMetadataRowEpoch() {
     // Given:
-    try (final CommitBuffer<Bytes, Integer> buffer = createCommitBuffer(false)) {
+    try (final CommitBuffer<Bytes, Integer> buffer = createCommitBuffer()) {
 
       // reserve epoch 2 for partition 9 to ensure the flush attempt fails
       // to write for that partition
@@ -372,7 +350,6 @@ public class CommitBufferTest {
         changelog,
         admin,
         KEY_SPEC,
-        true,
         tableName,
         TRIGGERS,
         exceptionSupplier)) {
@@ -408,7 +385,7 @@ public class CommitBufferTest {
     new CommitBuffer<>(
         new BatchFlusher<>(KEY_SPEC, changelog.partition(), flushManager),
         sessionClients, changelog, admin,
-        KEY_SPEC, true, tableName, TRIGGERS, EXCEPTION_SUPPLIER);
+        KEY_SPEC, tableName, TRIGGERS, EXCEPTION_SUPPLIER);
 
     for (final int tp : partitioner.allTablePartitions(changelog.partition())) {
       assertThat(table.fetchEpoch(tp), is(1L));
@@ -424,24 +401,13 @@ public class CommitBufferTest {
   }
 
   @Test
-  public void shouldTruncateTopicAfterFlushIfTruncateEnabled() {
+  public void shouldNotTruncateTopicAfterFlush() {
+    // NOTE: this test is kept for historical purposes, we used to have a feature
+    // that supported truncating changelog on flush. we no longer support this features
+    // and this test ensures that
+
     // Given:
-    try (final CommitBuffer<Bytes, Integer> buffer = createCommitBuffer(true)) {
-
-      buffer.put(KEY, VALUE, CURRENT_TS);
-
-      // when:
-      buffer.flush(100L);
-
-      // Then:
-      verify(admin).deleteRecords(any());
-    }
-  }
-
-  @Test
-  public void shouldNotTruncateTopicAfterFlushIfTruncateDisabled() {
-    // Given:
-    try (final CommitBuffer<Bytes, Integer> buffer = createCommitBuffer(false)) {
+    try (final CommitBuffer<Bytes, Integer> buffer = createCommitBuffer()) {
 
       buffer.put(KEY, VALUE, CURRENT_TS);
 
@@ -450,63 +416,6 @@ public class CommitBufferTest {
 
       // Then:
       verifyNoInteractions(admin);
-    }
-  }
-
-  @Test
-  public void shouldNotTruncateTopicAfterFlushWithSourceTopicChangelog() {
-    // Given:
-    final var sourceChangelog = new TopicPartition("some-source-topic", KAFKA_PARTITION);
-    Mockito.when(metrics.sensor("flush-" + sourceChangelog))
-        .thenReturn(flushSensor);
-    Mockito.when(metrics.sensor("flush-latency-" + sourceChangelog))
-        .thenReturn(flushLatencySensor);
-    Mockito.when(metrics.sensor("flush-errors-" + sourceChangelog))
-        .thenReturn(flushErrorSensor);
-    Mockito.when(metrics.sensor("failed-truncations-" + sourceChangelog))
-        .thenReturn(failedTruncationsSensor);
-    final var flushManager = table.init(changelog.partition());
-    final CommitBuffer<Bytes, Integer> buffer = new CommitBuffer<>(
-        new BatchFlusher<>(KEY_SPEC, changelog.partition(), flushManager),
-        sessionClients,
-        sourceChangelog,
-        admin,
-        KEY_SPEC,
-        true,
-        tableName,
-        TRIGGERS,
-        EXCEPTION_SUPPLIER
-    );
-    buffer.put(KEY, VALUE, CURRENT_TS);
-
-    // when:
-    buffer.flush(100L);
-
-    // Then:
-    verifyNoInteractions(admin);
-  }
-
-  @Test
-  public void shouldNotTruncateTopicAfterPolicyViolationException() {
-    // Given:
-    try (final CommitBuffer<Bytes, Integer> buffer = createCommitBuffer(true)) {
-      buffer.put(KEY, VALUE, CURRENT_TS);
-
-      final KafkaFutureImpl<DeletedRecords> future = new KafkaFutureImpl<>();
-      future.completeExceptionally(new PolicyViolationException("oops"));
-      when(admin.deleteRecords(any())).thenReturn(new DeleteRecordsResult(Collections.singletonMap(
-          changelog,
-          future
-      )));
-
-      // When:
-      buffer.flush(100L);
-      verify(admin).deleteRecords(any());
-      buffer.put(KEY, VALUE, CURRENT_TS + 50_000);
-      buffer.flush(101L);
-
-      // Then:
-      verifyNoMoreInteractions(admin);
     }
   }
 
@@ -656,7 +565,7 @@ public class CommitBufferTest {
   public void shouldDeleteRowInCassandraWithTombstone() {
     // Given:
     client.execute(this.table.insert(KAFKA_PARTITION, KEY, VALUE, CURRENT_TS));
-    try (final CommitBuffer<Bytes, Integer> buffer = createCommitBuffer(false)) {
+    try (final CommitBuffer<Bytes, Integer> buffer = createCommitBuffer()) {
 
       // When:
       buffer.tombstone(KEY, CURRENT_TS);
@@ -671,7 +580,7 @@ public class CommitBufferTest {
   @Test
   public void shouldRestoreRecords() {
     // Given:
-    try (final CommitBuffer<Bytes, Integer> buffer = createCommitBuffer(true)) {
+    try (final CommitBuffer<Bytes, Integer> buffer = createCommitBuffer()) {
 
       final ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>(
           changelog.topic(),
@@ -705,7 +614,7 @@ public class CommitBufferTest {
     final CommitBuffer<Bytes, Integer> buffer = new CommitBuffer<>(
         new BatchFlusher<>(KEY_SPEC, changelog.partition(), flushManager),
         sessionClients, changelog, admin,
-        KEY_SPEC, true, tableName, TRIGGERS, exceptionSupplier);
+        KEY_SPEC, tableName, TRIGGERS, exceptionSupplier);
 
     // initialize a new writer to bump the epoch
     table.init(changelog.partition());
@@ -750,7 +659,6 @@ public class CommitBufferTest {
         changelog,
         admin,
         KEY_SPEC,
-        true,
         tableName,
         TRIGGERS,
         EXCEPTION_SUPPLIER,

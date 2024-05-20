@@ -75,7 +75,6 @@ import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -91,7 +90,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.LongStream;
-import java.util.stream.Stream;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.OffsetSpec;
@@ -123,9 +121,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
-import org.junit.jupiter.params.provider.MethodSource;
 
 public class ResponsiveKeyValueStoreRestoreIntegrationTest {
 
@@ -176,11 +172,8 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
   }
 
   @ParameterizedTest
-  @MethodSource("shouldFlushTestParams")
-  public void shouldFlushStoresBeforeClose(
-      final KVSchema type,
-      final boolean startWithTruncatedCL
-  ) throws Exception {
+  @EnumSource(KVSchema.class)
+  public void shouldFlushStoresBeforeClose(final KVSchema type) throws Exception {
     final Map<String, Object> properties = getMutableProperties();
     final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties);
     final KafkaClientSupplier defaultClientSupplier = new DefaultKafkaClientSupplier();
@@ -188,17 +181,8 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
     final TopicPartition input = new TopicPartition(inputTopic(), 0);
     final TopicPartition changelog = new TopicPartition(name + "-" + aggName() + "-changelog", 0);
 
-    if (startWithTruncatedCL) {
-      // send some data
-      for (int i = 0; i < 10; i++) {
-        producer.send(new ProducerRecord<>(changelog.topic(), changelog.partition(), 1L, 1L)).get();
-      }
-      // truncate the topic
-      admin.deleteRecords(Map.of(changelog, RecordsToDelete.beforeOffset(9L))).all().get();
-    }
-
     try (final ResponsiveKafkaStreams streams
-             = buildAggregatorApp(properties, defaultClientSupplier, defaultFactory, type, false)) {
+             = buildAggregatorApp(properties, defaultClientSupplier, defaultFactory, type)) {
       IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(30), streams);
       // Send some data through
       pipeInput(inputTopic(), 1, producer, System::currentTimeMillis, 0, 10, 0);
@@ -219,14 +203,6 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
     }
   }
 
-  private static Stream<Arguments> shouldFlushTestParams() {
-    return Arrays.stream(KVSchema.values())
-        .flatMap(schema -> Stream.of(
-            Arguments.of(schema, true),
-            Arguments.of(schema, false))
-        );
-  }
-
   @ParameterizedTest
   @EnumSource(KVSchema.class)
   public void shouldRepairOffsetsIfOutOfRangeAndConfigured(final KVSchema type) throws Exception {
@@ -242,7 +218,7 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
     // When:
     final long clOffset;
     try (final ResponsiveKafkaStreams streams
-             = buildAggregatorApp(properties, defaultClientSupplier, defaultFactory, type, false)) {
+             = buildAggregatorApp(properties, defaultClientSupplier, defaultFactory, type)) {
       IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(30), streams);
       // Send some data through
       pipeInput(
@@ -274,7 +250,7 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
 
     // run another application
     try (final ResponsiveKafkaStreams streams
-             = buildAggregatorApp(properties, defaultClientSupplier, defaultFactory, type, false)) {
+             = buildAggregatorApp(properties, defaultClientSupplier, defaultFactory, type)) {
       IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(30), streams);
       // Send some data through
       pipeInput(
@@ -308,7 +284,7 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
     final TopicPartition input = new TopicPartition(inputTopic(), 0);
 
     try (final ResponsiveKafkaStreams streams
-             = buildAggregatorApp(properties, defaultClientSupplier, defaultFactory, type, false)) {
+             = buildAggregatorApp(properties, defaultClientSupplier, defaultFactory, type)) {
       IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(10), streams);
       // Send some data through
       pipeInput(inputTblTopic(), 1, producer, System::currentTimeMillis, 0, 10, 0, 1, 2, 3);
@@ -323,7 +299,7 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
         = new FaultInjectingCassandraClientSupplier();
     try (final ResponsiveKafkaStreams streams
              = buildAggregatorApp(
-                 properties, defaultClientSupplier, cassandraFaultInjector, type, false)) {
+                 properties, defaultClientSupplier, cassandraFaultInjector, type)) {
       IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(10), streams);
 
       // Inject a fault into cassandra client so it fails the next flush
@@ -356,7 +332,7 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
     // Restart with restore recorder
     final TestKafkaClientSupplier recordingClientSupplier = new TestKafkaClientSupplier();
     try (final ResponsiveKafkaStreams streams
-             = buildAggregatorApp(properties, recordingClientSupplier, defaultFactory, type, true)
+             = buildAggregatorApp(properties, recordingClientSupplier, defaultFactory, type)
     ) {
       IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(30), streams);
       // Send some more data through and check output
@@ -376,9 +352,8 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
     for (final ConsumerRecord<?, ?> r :  recordingClientSupplier.restoreRecords.get(changelog)) {
       assertThat(r.offset(), greaterThanOrEqualTo(remoteOffset));
     }
-    // Assert that our source table is never truncated and the changelog table is
+    // Assert that our source table is never truncated
     assertThat(firstOffset(inputTbl), is(0L));
-    assertThat(firstOffset(changelog), greaterThan(0L));
   }
 
   private RemoteKVTable<?> remoteKVTable(
@@ -469,8 +444,7 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
       final Map<String, Object> originals,
       final KafkaClientSupplier clientSupplier,
       final CassandraClientFactory cassandraClientFactory,
-      final KVSchema type,
-      final boolean truncateChangelog
+      final KVSchema type
   ) {
     final Map<String, Object> properties = new HashMap<>(originals);
 
@@ -497,11 +471,7 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
         .aggregate(
             () -> 0L,
             (k, v, va) -> v + va,
-            ResponsiveStores.<Long, Long>materialized(
-                truncateChangelog
-                    ? baseParams.withTruncateChangelog()
-                    : baseParams
-            ).withLoggingEnabled(
+            ResponsiveStores.<Long, Long>materialized(baseParams).withLoggingEnabled(
                 Map.of(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE)))
         .toStream()
         .to(outputTopic());

@@ -44,7 +44,6 @@ public final class ResponsiveWindowParams {
   private final long retentionPeriodMs;
 
   private long numSegments;
-  private boolean truncateChangelog = false;
 
   private ResponsiveWindowParams(
       final String name,
@@ -104,11 +103,6 @@ public final class ResponsiveWindowParams {
     return this;
   }
 
-  public ResponsiveWindowParams withTruncateChangelog() {
-    this.truncateChangelog = true;
-    return this;
-  }
-
   public WindowSchema schemaType() {
     return schemaType;
   }
@@ -131,10 +125,6 @@ public final class ResponsiveWindowParams {
 
   public long numSegments() {
     return numSegments;
-  }
-
-  public boolean truncateChangelog() {
-    return truncateChangelog;
   }
 
   private static long maximumAllowedNumSegments(final long retentionPeriodMs) {

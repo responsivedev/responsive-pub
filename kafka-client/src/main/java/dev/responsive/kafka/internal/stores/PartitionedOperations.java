@@ -124,7 +124,6 @@ public class PartitionedOperations implements KeyValueOperations {
         sessionClients,
         changelog,
         keySpec,
-        params.truncateChangelog(),
         params.name(),
         config
     );

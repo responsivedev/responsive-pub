@@ -18,12 +18,10 @@ package dev.responsive.kafka.internal.utils;
 
 import java.time.Duration;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 import java.util.regex.Pattern;
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.common.config.TopicConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,29 +49,6 @@ public final class StoreUtil {
 
   public static long computeSegmentInterval(final long retentionPeriod, final long numSegments) {
     return Math.max(1, retentionPeriod / numSegments);
-  }
-
-  public static void validateLogConfigs(
-      final Map<String, String> config,
-      final boolean truncateChangelog,
-      final String storeName
-  ) {
-    if (truncateChangelog) {
-      final String cleanupPolicy = config.get(TopicConfig.CLEANUP_POLICY_CONFIG);
-      if (cleanupPolicy != null && !cleanupPolicy.contains(TopicConfig.CLEANUP_POLICY_DELETE)) {
-        LOG.error("Store {} is configured with changelog truncation enabled, which requires "
-                      + "the cleanup policy to include 'delete'. Please set {} to either "
-                      + "[{}] or [{}, {}]",
-                  storeName, TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE,
-                  TopicConfig.CLEANUP_POLICY_DELETE, TopicConfig.CLEANUP_POLICY_COMPACT);
-        throw new IllegalArgumentException(String.format(
-            "Truncated changelogs must set %s to either [%s] or [%s, %s]. Got [%s] for store %s.",
-            TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE,
-            TopicConfig.CLEANUP_POLICY_DELETE, TopicConfig.CLEANUP_POLICY_COMPACT,
-            cleanupPolicy, storeName)
-        );
-      }
-    }
   }
 
   /**

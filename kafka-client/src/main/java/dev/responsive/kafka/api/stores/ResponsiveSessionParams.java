@@ -33,7 +33,6 @@ public final class ResponsiveSessionParams {
   private final long retentionPeriodMs;
 
   private long numSegments;
-  private boolean truncateChangelog = false;
 
   private ResponsiveSessionParams(
       final String name,
@@ -60,11 +59,6 @@ public final class ResponsiveSessionParams {
     );
   }
 
-  public ResponsiveSessionParams withTruncateChangelog() {
-    this.truncateChangelog = true;
-    return this;
-  }
-
   public SessionSchema schemaType() {
     return this.schemaType;
   }
@@ -79,10 +73,6 @@ public final class ResponsiveSessionParams {
 
   public long numSegments() {
     return this.numSegments;
-  }
-
-  public boolean truncateChangelog() {
-    return this.truncateChangelog;
   }
 
   public long gracePeriodMs() {
