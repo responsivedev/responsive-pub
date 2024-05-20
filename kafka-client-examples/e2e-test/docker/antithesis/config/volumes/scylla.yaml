@@ -136,13 +136,13 @@ native_shard_aware_transport_port: 19042
 #native_shard_aware_transport_port_ssl: 19142
 
 # How long the coordinator should wait for read operations to complete
-read_request_timeout_in_ms: 30000
+read_request_timeout_in_ms: 60000
 
 # How long the coordinator should wait for writes to complete
-write_request_timeout_in_ms: 20000
+write_request_timeout_in_ms: 60000
 # how long a coordinator should continue to retry a CAS operation
 # that contends with other proposals for the same row
-cas_contention_timeout_in_ms: 10000
+cas_contention_timeout_in_ms: 60000
 
 # phi value that must be reached for a host to be marked down.
 # most users should never need to adjust this.
@@ -430,18 +430,18 @@ commitlog_total_space_in_mb: -1
 # compaction_collection_elements_count_warning_threshold: 10000
 
 # How long the coordinator should wait for seq or index scans to complete
-range_request_timeout_in_ms: 30000
+range_request_timeout_in_ms: 60000
 # How long the coordinator should wait for writes to complete
-counter_write_request_timeout_in_ms: 20000
+counter_write_request_timeout_in_ms: 60000
 # How long a coordinator should continue to retry a CAS operation
 # that contends with other proposals for the same row
-cas_contention_timeout_in_ms: 10000
+cas_contention_timeout_in_ms: 60000
 # How long the coordinator should wait for truncates to complete
 # (This can be much longer, because unless auto_snapshot is disabled
 # we need to flush first so we can snapshot before removing the data.)
 truncate_request_timeout_in_ms: 120000
 # The default timeout for other, miscellaneous operations
-request_timeout_in_ms: 30000
+request_timeout_in_ms: 60000
 
 # Enable or disable inter-node encryption. 
 # You must also generate keys and provide the appropriate key and trust store locations and passwords. 
