@@ -16,11 +16,6 @@
 
 package dev.responsive.kafka.internal.utils;
 
-import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.CONNECTION_CONNECT_TIMEOUT;
-import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.CONTROL_CONNECTION_TIMEOUT;
-import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.HEARTBEAT_TIMEOUT;
-import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.METADATA_SCHEMA_REQUEST_TIMEOUT;
-import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.REPREPARE_TIMEOUT;
 import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.REQUEST_CONSISTENCY;
 import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.REQUEST_THROTTLER_CLASS;
 import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.REQUEST_THROTTLER_MAX_CONCURRENT_REQUESTS;
