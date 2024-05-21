@@ -62,10 +62,11 @@ jobs:
       - name: "Build Config"
         working-directory: ./kafka-client-examples/e2e-test/docker/antithesis
         env:
-          KAFKA_CLIENT_VERSION: ${{ steps.kafka_client_version.outputs.KAFKA_CLIENT_VERSION }}
+          KAFKA_CLIENT_VERSION: latest
+          CONFIG_IMG_VERSION: ${{ steps.kafka_client_version.outputs.KAFKA_CLIENT_VERSION }}
         run: |
           cat config/docker-compose.yml.template | envsubst > config/docker-compose.yml
-          docker build . -t us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test-config:$KAFKA_CLIENT_VERSION
+          docker build . -t us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test-config:$CONFIG_IMG_VERSION
 
       - name: "Push Config"
         env:
