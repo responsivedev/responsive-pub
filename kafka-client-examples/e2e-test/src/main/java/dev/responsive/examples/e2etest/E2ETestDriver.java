@@ -115,6 +115,7 @@ public class E2ETestDriver {
             properties, partitions, List.of(inputTopic, outputTopic)),
         Duration.ofMinutes(5)
     );
+    LOG.info("created topics");
     final Thread t = new Thread(this::runProducer);
     t.start();
     runConsumer();
@@ -123,12 +124,12 @@ public class E2ETestDriver {
     } catch (InterruptedException e) {
       throw new RuntimeException(e);
     }
-    System.out.printf("processed %d records\n", recordsProcessed);
-    System.out.printf("produced by key: %s\n", produceState.values().stream()
+    LOG.info("processed {} records", recordsProcessed);
+    LOG.info("produced by key: {}", produceState.values().stream()
         .map(v -> String.format("key(%d) count(%d)\n", v.key, v.sendCount))
         .collect(Collectors.joining(","))
     );
-    System.out.printf("processed by key: %s\n", consumeState.values().stream()
+    LOG.info("processed by key: {}", consumeState.values().stream()
         .map(v -> String.format("key(%d) count(%d)", v.key, v.recvdCount))
         .collect(Collectors.joining(","))
     );
@@ -150,6 +151,7 @@ public class E2ETestDriver {
 
   private void runProducer() {
     int produced = 0;
+    int totalProduced = 0;
     while (true) {
       synchronized (produceWait) {
         outstanding += produced;
@@ -165,6 +167,10 @@ public class E2ETestDriver {
         break;
       }
       produced = produceNextBatch();
+      if (totalProduced == 0) {
+        LOG.info("produced first batch of {} records", produced);
+      }
+      totalProduced += produced;
     }
   }
 
