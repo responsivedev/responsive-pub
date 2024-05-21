@@ -80,11 +80,6 @@ public final class SessionUtil {
         .withConfigLoader(DriverConfigLoader
             .programmaticBuilder()
             .withLong(REQUEST_TIMEOUT, 60000)
-            .withLong(HEARTBEAT_TIMEOUT, 60000)
-            .withLong(METADATA_SCHEMA_REQUEST_TIMEOUT, 60000)
-            .withLong(CONTROL_CONNECTION_TIMEOUT, 60000)
-            .withLong(REPREPARE_TIMEOUT, 60000)
-            .withLong(CONNECTION_CONNECT_TIMEOUT, 60000)
             .withClass(RETRY_POLICY_CLASS, ResponsiveRetryPolicy.class)
             .withClass(REQUEST_THROTTLER_CLASS, ConcurrencyLimitingRequestThrottler.class)
             // we just set this to MAX_VALUE as it will be implicitly limited by the
