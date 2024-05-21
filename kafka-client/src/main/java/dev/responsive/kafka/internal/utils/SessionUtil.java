@@ -16,6 +16,11 @@
 
 package dev.responsive.kafka.internal.utils;
 
+import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.CONNECTION_CONNECT_TIMEOUT;
+import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.CONTROL_CONNECTION_TIMEOUT;
+import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.HEARTBEAT_TIMEOUT;
+import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.METADATA_SCHEMA_REQUEST_TIMEOUT;
+import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.REPREPARE_TIMEOUT;
 import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.REQUEST_CONSISTENCY;
 import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.REQUEST_THROTTLER_CLASS;
 import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.REQUEST_THROTTLER_MAX_CONCURRENT_REQUESTS;
@@ -74,7 +79,12 @@ public final class SessionUtil {
     return sessionBuilder
         .withConfigLoader(DriverConfigLoader
             .programmaticBuilder()
-            .withLong(REQUEST_TIMEOUT, 30000)
+            .withLong(REQUEST_TIMEOUT, 60000)
+            .withLong(HEARTBEAT_TIMEOUT, 60000)
+            .withLong(METADATA_SCHEMA_REQUEST_TIMEOUT, 60000)
+            .withLong(CONTROL_CONNECTION_TIMEOUT, 60000)
+            .withLong(REPREPARE_TIMEOUT, 60000)
+            .withLong(CONNECTION_CONNECT_TIMEOUT, 60000)
             .withClass(RETRY_POLICY_CLASS, ResponsiveRetryPolicy.class)
             .withClass(REQUEST_THROTTLER_CLASS, ConcurrencyLimitingRequestThrottler.class)
             // we just set this to MAX_VALUE as it will be implicitly limited by the

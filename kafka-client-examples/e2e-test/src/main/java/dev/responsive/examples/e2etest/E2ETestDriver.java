@@ -207,6 +207,7 @@ public class E2ETestDriver {
       }
       recordsProcessed += poppedOffsets.size();
       maybeLogConsumed();
+      maybeLogAllConsumed();
       cs.updateReceived(poppedOffsets, ps.partition(), cr.value().digest());
     }
     for (final var k : consumeState.keySet()) {
@@ -217,7 +218,18 @@ public class E2ETestDriver {
     }
   }
 
+  private Instant lastAllLog = Instant.EPOCH;
   private Instant lastLog = Instant.EPOCH;
+
+  private void maybeLogAllConsumed() {
+    if (Instant.now().isBefore(lastAllLog.plusSeconds(60))) {
+      return;
+    }
+    if (consumeState.values().stream().map(v -> v.recvdCount).allMatch(count -> count > 0)) {
+      lastAllLog = Instant.now();
+      LOG.info("received at least one of all records: {}", recordsProcessed);
+    }
+  }
 
   private void maybeLogConsumed() {
     if (Instant.now().isBefore(lastLog.plusSeconds(60))) {
