@@ -37,6 +37,7 @@ public class SessionClients {
 
   private final Optional<ResponsiveMongoClient> mongoClient;
   private final Optional<CassandraClient> cassandraClient;
+  private final boolean inMemory;
   private final Admin admin;
 
   // These are effectively final, but have to be inserted after the SessionClients is
@@ -47,10 +48,12 @@ public class SessionClients {
   public SessionClients(
       final Optional<ResponsiveMongoClient> mongoClient,
       final Optional<CassandraClient> cassandraClient,
+      final boolean inMemory,
       final Admin admin
   ) {
     this.mongoClient = mongoClient;
     this.cassandraClient = cassandraClient;
+    this.inMemory = inMemory;
     this.admin = admin;
   }
 
@@ -72,6 +75,8 @@ public class SessionClients {
       return StorageBackend.MONGO_DB;
     } else if (cassandraClient.isPresent()) {
       return StorageBackend.CASSANDRA;
+    } else if (inMemory) {
+      return StorageBackend.IN_MEMORY;
     } else {
       throw new IllegalArgumentException("Invalid Shared Clients Configuration. "
           + "If you have configured " + ResponsiveConfig.COMPATIBILITY_MODE_CONFIG
