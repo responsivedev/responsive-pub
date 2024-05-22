@@ -452,7 +452,8 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
 
       final var admin = responsiveKafkaClientSupplier.getAdmin(responsiveConfig.originals());
       if (compatibilityMode == CompatibilityMode.METRICS_ONLY) {
-        sessionClients = new SessionClients(Optional.empty(), Optional.empty(), admin);
+        sessionClients = new SessionClients(
+            Optional.empty(), Optional.empty(), false, admin);
         return this;
       }
 
@@ -463,6 +464,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
           sessionClients = new SessionClients(
               Optional.empty(),
               Optional.of(cassandraFactory.createClient(cqlSession, responsiveConfig)),
+              false,
               admin
           );
           break;
@@ -485,6 +487,16 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
                   CollectionCreationOptions.fromConfig(responsiveConfig)
               )),
               Optional.empty(),
+              false,
+              admin
+          );
+          break;
+        case IN_MEMORY:
+          LOG.info("using in-memory responsive store");
+          sessionClients = new SessionClients(
+              Optional.empty(),
+              Optional.empty(),
+              true,
               admin
           );
           break;

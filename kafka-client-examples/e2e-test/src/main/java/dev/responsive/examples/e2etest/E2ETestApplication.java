@@ -13,6 +13,7 @@ import dev.responsive.examples.e2etest.Schema.OutputRecord;
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.async.AsyncFixedKeyProcessorSupplier;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
+import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.api.stores.ResponsiveStores;
 import java.net.InetSocketAddress;
@@ -76,7 +77,10 @@ public class E2ETestApplication {
             properties, partitions, List.of(inputTopic, outputTopic)),
         Duration.ofMinutes(5)
     );
-    E2ETestUtils.retryFor(this::maybeCreateKeyspace, Duration.ofMinutes(5));
+    if (properties.get(ResponsiveConfig.STORAGE_BACKEND_TYPE_CONFIG)
+        .equals(StorageBackend.CASSANDRA.name())) {
+      E2ETestUtils.retryFor(this::maybeCreateKeyspace, Duration.ofMinutes(5));
+    }
     // build topology after creating keyspace because we use keyspace retry
     // to wait for scylla to resolve
     kafkaStreams = buildTopology(properties);

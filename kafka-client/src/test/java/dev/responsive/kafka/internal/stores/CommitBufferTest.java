@@ -169,6 +169,7 @@ public class CommitBufferTest {
     sessionClients = new SessionClients(
         Optional.empty(),
         Optional.of(client),
+        false,
         admin
     );
     final var responsiveMetrics = new ResponsiveMetrics(metrics);
