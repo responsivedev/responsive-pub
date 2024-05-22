@@ -60,6 +60,8 @@ public class ResponsiveE2EApplicationTestExtension implements BeforeAllCallback,
       case CASSANDRA:
         cassandra.start();
         break;
+      case IN_MEMORY:
+        break;
       case MONGO_DB:
       default:
         throw new IllegalStateException("Unexpected value: " + backend);
@@ -71,9 +73,11 @@ public class ResponsiveE2EApplicationTestExtension implements BeforeAllCallback,
 
   @Override
   public void afterAll(final ExtensionContext context) throws Exception {
-    cassandra.stop();
-    kafka.stop();
+    if (backend.equals(StorageBackend.CASSANDRA)) {
+      cassandra.stop();
+    }
     admin.close();
+    kafka.stop();
   }
 
   @Override
@@ -114,6 +118,12 @@ public class ResponsiveE2EApplicationTestExtension implements BeforeAllCallback,
           map.put(CASSANDRA_HOSTNAME_CONFIG, cassandra.getContactPoint().getHostName());
           map.put(CASSANDRA_PORT_CONFIG, cassandra.getContactPoint().getPort());
           map.put(CASSANDRA_DATACENTER_CONFIG, cassandra.getLocalDatacenter());
+          break;
+        case IN_MEMORY:
+          map.put(STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.IN_MEMORY.name());
+          map.put(ResponsiveConfig.STORE_FLUSH_BYTES_TRIGGER_CONFIG, 0);
+          map.put(ResponsiveConfig.STORE_FLUSH_RECORDS_TRIGGER_CONFIG, 0);
+          map.put(ResponsiveConfig.STORE_FLUSH_INTERVAL_TRIGGER_DOC, 0);
           break;
         default:
           throw new IllegalStateException("Unexpected value: " + backend);

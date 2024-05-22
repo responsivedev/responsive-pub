@@ -17,7 +17,7 @@ public class TestApplicationIntegrationTest {
 
   @RegisterExtension
   static ResponsiveE2EApplicationTestExtension
-      EXTENSION = new ResponsiveE2EApplicationTestExtension(StorageBackend.CASSANDRA);
+      EXTENSION = new ResponsiveE2EApplicationTestExtension(StorageBackend.IN_MEMORY);
 
   private Admin admin;
   private E2ETestApplication application;
