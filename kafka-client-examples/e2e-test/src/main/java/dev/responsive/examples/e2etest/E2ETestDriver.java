@@ -89,6 +89,8 @@ public class E2ETestDriver {
         .put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, LongSerializer.class)
         .put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, Schema.InputRecordSerializer.class)
         .put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
+        .put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 60000)
+        .put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, 240000)
         .build();
     producer = new KafkaProducer<>(producerProperties);
     final Map<String, Object> consumerProperties = ImmutableMap.<String, Object>builder()
