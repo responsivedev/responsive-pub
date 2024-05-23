@@ -1,5 +1,6 @@
 package dev.responsive.kafka.internal.clients;
 
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -17,8 +18,9 @@ import org.apache.kafka.common.TopicPartition;
  * thread. The lone exception is the Send callback, which happens on Producer I/O threads.
  */
 public class OffsetRecorder {
-  private final Map<RecordingKey, Long> uncommitted = new HashMap<>();
-  private final Map<TopicPartition, Long> written = new HashMap<>();
+
+  private final Map<RecordingKey, Long> offsetsToBeCommitted = new HashMap<>();
+  private final Map<TopicPartition, Long> offsetsWritten = new HashMap<>();
   private final ProducerListener producerListener = new ProducerListener();
   private final ConsumerListener consumerListener = new ConsumerListener();
   private final List<CommitCallback> commitCallback = new LinkedList<>();
@@ -42,18 +44,23 @@ public class OffsetRecorder {
     return consumerListener;
   }
 
+  private synchronized void clearAllOffsets() {
+    offsetsWritten.clear();
+    offsetsToBeCommitted.clear();
+  }
+
   private synchronized void onConsumedOffsets(
       final String consumerGroup,
       final TopicPartition partition,
       final long offset
   ) {
-    uncommitted.put(new RecordingKey(partition, consumerGroup), offset);
+    offsetsToBeCommitted.put(new RecordingKey(partition, consumerGroup), offset);
   }
 
   private synchronized void onProduce(final RecordMetadata recordMetadata) {
     final TopicPartition partition
         = new TopicPartition(recordMetadata.topic(), recordMetadata.partition());
-    written.compute(
+    offsetsWritten.compute(
         partition,
         (k, v) -> v == null ? recordMetadata.offset() : Math.max(recordMetadata.offset(), v)
     );
@@ -63,17 +70,17 @@ public class OffsetRecorder {
     final Map<RecordingKey, Long> committedOffsets;
     final Map<TopicPartition, Long> writtenOffsets;
     synchronized (this) {
-      committedOffsets = Map.copyOf(uncommitted);
-      writtenOffsets = Map.copyOf(written);
-      uncommitted.clear();
-      written.clear();
+      committedOffsets = Map.copyOf(offsetsToBeCommitted);
+      writtenOffsets = Map.copyOf(offsetsWritten);
+      offsetsToBeCommitted.clear();
+      offsetsWritten.clear();
     }
     commitCallback.forEach(c -> c.onCommit(threadId, committedOffsets, writtenOffsets));
   }
 
   private synchronized void onAbort() {
-    uncommitted.clear();
-    written.clear();
+    offsetsToBeCommitted.clear();
+    offsetsWritten.clear();
   }
 
   @FunctionalInterface
@@ -93,6 +100,16 @@ public class OffsetRecorder {
       }
       offsets.forEach((p, o) -> onConsumedOffsets("", p, o.offset()));
       OffsetRecorder.this.onCommit();
+    }
+
+    @Override
+    public void onPartitionsLost(Collection<TopicPartition> partitions) {
+      clearAllOffsets();
+    }
+
+    @Override
+    public void onUnsubscribe() {
+      clearAllOffsets();
     }
   }
 
