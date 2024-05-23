@@ -28,25 +28,25 @@ public final class ResponsiveSessionParams {
 
   private final TableName name;
   private final SessionSchema schemaType;
-  private final long inactivityGapMs;
-  private final long gracePeriodMs;
   private final long retentionPeriodMs;
-
-  private long numSegments;
+  private final long numSegments;
 
   private ResponsiveSessionParams(
       final String name,
       final SessionSchema schemaType,
-      final Duration inactivityGap,
-      final Duration gracePeriod
+      final long retentionPeriodMs
   ) {
     this.name = new TableName(name);
     this.schemaType = schemaType;
-    this.inactivityGapMs = durationToMillis(inactivityGap, "inactivityGap");
-    this.gracePeriodMs = durationToMillis(gracePeriod, "gracePeriod");
-
-    this.retentionPeriodMs = this.inactivityGapMs + this.gracePeriodMs;
+    this.retentionPeriodMs = retentionPeriodMs;
     this.numSegments = computeDefaultNumSegments(retentionPeriodMs);
+  }
+
+  public static ResponsiveSessionParams session(
+      final String name,
+      final long retentionPeriodMs
+  ) {
+    return new ResponsiveSessionParams(name, SessionSchema.SESSION, retentionPeriodMs);
   }
 
   public static ResponsiveSessionParams session(
@@ -54,9 +54,10 @@ public final class ResponsiveSessionParams {
       final Duration inactivityGap,
       final Duration gracePeriod
   ) {
-    return new ResponsiveSessionParams(
-        name, SessionSchema.SESSION, inactivityGap, gracePeriod
-    );
+    final long inactivityGapMs = durationToMillis(inactivityGap, "inactivityGap");
+    final long gracePeriodMs = durationToMillis(gracePeriod, "gracePeriod");
+    final long retentionPeriodMs = inactivityGapMs + gracePeriodMs;
+    return new ResponsiveSessionParams(name, SessionSchema.SESSION, retentionPeriodMs);
   }
 
   public SessionSchema schemaType() {
@@ -73,10 +74,6 @@ public final class ResponsiveSessionParams {
 
   public long numSegments() {
     return this.numSegments;
-  }
-
-  public long gracePeriodMs() {
-    return this.gracePeriodMs;
   }
 
   private static long computeDefaultNumSegments(final long retentionPeriodMs) {

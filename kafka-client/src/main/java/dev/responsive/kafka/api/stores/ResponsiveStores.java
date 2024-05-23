@@ -317,6 +317,19 @@ public final class ResponsiveStores {
   }
 
   /**
+   * See for example {@link Stores#inMemorySessionStore(String, Duration)}
+   *
+   * @param params the {@link ResponsiveSessionParams} for this store
+   * @return a supplier for a session store with the given options
+   *         that uses Responsive's storage for its backend
+   */
+  public static SessionBytesStoreSupplier sessionStoreSupplier(
+      final ResponsiveSessionParams params
+  ) {
+    return new ResponsiveSessionStoreSupplier(params);
+  }
+
+  /**
    * Create a {@link StoreBuilder} that can be used to build a Responsive
    * {@link SessionStore} and connect it via the Processor API. If using the DSL, use
    * {@link #sessionMaterialized} instead.

@@ -56,6 +56,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.Named;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
@@ -138,7 +139,7 @@ public class MinimalIntegrationTest {
     final KStream<Long, Long> input = builder.stream(inputTopic());
     input
         .groupByKey()
-        .count(ResponsiveStores.materialized(ResponsiveKeyValueParams.keyValue("countStore")))
+        .count(Named.as("count"))
         .toStream()
         .to(outputTopic());
 

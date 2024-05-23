@@ -34,6 +34,7 @@ import static org.apache.kafka.streams.StreamsConfig.NUM_STREAM_THREADS_CONFIG;
 import dev.responsive.kafka.api.async.internals.AsyncThreadPoolRegistry;
 import dev.responsive.kafka.api.config.CompatibilityMode;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
+import dev.responsive.kafka.api.stores.ResponsiveDslStoreSuppliers;
 import dev.responsive.kafka.internal.clients.ResponsiveKafkaClientSupplier;
 import dev.responsive.kafka.internal.config.ConfigUtils;
 import dev.responsive.kafka.internal.config.InternalSessionConfigs;
@@ -271,7 +272,6 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
   ) {
     final Properties propsWithOverrides = new Properties();
 
-
     final InternalSessionConfigs.Builder internalConfBuilder = new InternalSessionConfigs.Builder()
         .withSessionClients(sessionClients)
         .withStoreRegistry(storeRegistry)
@@ -312,6 +312,11 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       LOG.error(errorMsg);
       throw new ConfigException(errorMsg);
     }
+
+    propsWithOverrides.putIfAbsent(
+        StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG,
+        ResponsiveDslStoreSuppliers.class.getCanonicalName()
+    );
 
     return propsWithOverrides;
   }

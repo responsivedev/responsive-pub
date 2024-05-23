@@ -270,12 +270,13 @@ public class GlobalStreamThreadIntegrationTest {
     final Time time = new SystemTime();
     final InternalTopologyBuilder builder = new InternalTopologyBuilder();
     builder.addGlobalStore(
-        new KeyValueStoreBuilder<>(
-            storeSupplier,
-            new ByteArraySerde(),
-            new ByteArraySerde(),
-            time
-        ).withLoggingDisabled(),
+        new StoreBuilderWrapper(
+          new KeyValueStoreBuilder<>(
+              storeSupplier,
+              new ByteArraySerde(),
+              new ByteArraySerde(),
+              time).withLoggingDisabled()
+        ),
         "global",
         null,
         null,

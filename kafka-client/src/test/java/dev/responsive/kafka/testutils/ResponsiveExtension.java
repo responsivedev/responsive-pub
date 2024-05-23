@@ -89,6 +89,7 @@ public class ResponsiveExtension implements BeforeAllCallback, AfterAllCallback,
   @Override
   public void afterAll(final ExtensionContext context) throws Exception {
     cassandra.stop();
+    mongo.stop();
     kafka.stop();
     admin.close();
   }
@@ -100,6 +101,7 @@ public class ResponsiveExtension implements BeforeAllCallback, AfterAllCallback,
   ) throws ParameterResolutionException {
     return parameterContext.getParameter().getType().equals(CassandraContainer.class)
         || parameterContext.getParameter().getType().equals(KafkaContainer.class)
+        || parameterContext.getParameter().getType().equals(MongoDBContainer.class)
         || parameterContext.getParameter().getType().equals(Admin.class)
         || isContainerConfig(parameterContext);
   }
@@ -111,6 +113,8 @@ public class ResponsiveExtension implements BeforeAllCallback, AfterAllCallback,
   ) throws ParameterResolutionException {
     if (parameterContext.getParameter().getType() == CassandraContainer.class) {
       return cassandra;
+    } else if (parameterContext.getParameter().getType() == MongoDBContainer.class) {
+      return mongo;
     } else if (parameterContext.getParameter().getType() == KafkaContainer.class) {
       return kafka;
     } else if (parameterContext.getParameter().getType() == Admin.class) {
