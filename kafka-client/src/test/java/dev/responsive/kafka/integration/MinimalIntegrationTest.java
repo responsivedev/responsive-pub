@@ -37,8 +37,6 @@ import static org.hamcrest.Matchers.hasItems;
 
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.config.StorageBackend;
-import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
-import dev.responsive.kafka.api.stores.ResponsiveStores;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
 import java.time.Duration;

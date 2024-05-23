@@ -80,7 +80,7 @@ public class ResponsiveKafkaStreamsIntegrationTest {
   ) throws InterruptedException, ExecutionException {
     // add displayName to name to account for parameterized tests
     name = info.getTestMethod().orElseThrow().getName() + "-" + new Random().nextInt();
-    this.mongo= mongo;
+    this.mongo = mongo;
 
     this.responsiveProps.putAll(responsiveProps);
 
