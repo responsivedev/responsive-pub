@@ -115,6 +115,7 @@ public class ResponsiveConsumer<K, V> extends DelegatingConsumer<K, V> {
 
   @Override
   public void unsubscribe() {
+    listeners.forEach(Listener::onUnsubscribe);
     super.unsubscribe();
   }
 
@@ -194,6 +195,9 @@ public class ResponsiveConsumer<K, V> extends DelegatingConsumer<K, V> {
     }
 
     default void onCommit(final Map<TopicPartition, OffsetAndMetadata> offsets) {
+    }
+
+    default void onUnsubscribe() {
     }
 
     default void onClose() {
