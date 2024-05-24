@@ -5,6 +5,7 @@ import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertThrows;
 
+import dev.responsive.kafka.internal.clients.OffsetRecorder;
 import dev.responsive.kafka.internal.clients.OffsetRecorder.RecordingKey;
 import java.util.Map;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -19,21 +20,18 @@ class OffsetRecorderTest {
 
   private Map<RecordingKey, Long> committedOffsets;
   private Map<TopicPartition, Long> writtenOffsets;
-  private String threadId;
-  private final OffsetRecorder eosRecorder = new OffsetRecorder(true, "thread");
-  private final OffsetRecorder alosRecorder = new OffsetRecorder(false, "thread");
+  private final OffsetRecorder eosRecorder = new OffsetRecorder(true);
+  private final OffsetRecorder alosRecorder = new OffsetRecorder(false);
 
   @BeforeEach
   public void setup() {
-    eosRecorder.addCommitCallback((t, c, w) -> {
+    eosRecorder.addCommitCallback((c, w) -> {
       committedOffsets = c;
       writtenOffsets = w;
-      threadId = t;
     });
-    alosRecorder.addCommitCallback((t, c, w) -> {
+    alosRecorder.addCommitCallback((c, w) -> {
       committedOffsets = c;
       writtenOffsets = w;
-      threadId = t;
     });
   }
 
@@ -56,7 +54,6 @@ class OffsetRecorderTest {
         new RecordingKey(TOPIC_PARTITION1, "group"), 123L,
         new RecordingKey(TOPIC_PARTITION2, "group"), 456L
     )));
-    assertThat(getThreadSentToCallback(), is("thread"));
   }
 
   @Test
@@ -77,7 +74,6 @@ class OffsetRecorderTest {
         TOPIC_PARTITION1, 123L,
         TOPIC_PARTITION2, 456L
     )));
-    assertThat(getThreadSentToCallback(), is("thread"));
   }
 
   @Test
@@ -121,7 +117,6 @@ class OffsetRecorderTest {
         new RecordingKey(TOPIC_PARTITION1, ""), 123L,
         new RecordingKey(TOPIC_PARTITION2, ""), 456L
     )));
-    assertThat(getThreadSentToCallback(), is("thread"));
   }
 
   @Test
@@ -146,9 +141,5 @@ class OffsetRecorderTest {
 
   private Map<TopicPartition, Long> getWrittenOffsetsSentToCallback() {
     return writtenOffsets;
-  }
-
-  private String getThreadSentToCallback() {
-    return threadId;
   }
 }

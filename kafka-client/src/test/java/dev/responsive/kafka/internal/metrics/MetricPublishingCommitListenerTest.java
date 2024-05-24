@@ -58,7 +58,7 @@ class MetricPublishingCommitListenerTest {
   @Captor
   private ArgumentCaptor<Gauge<Long>> metricCaptor;
 
-  private final OffsetRecorder offsetRecorder = new OffsetRecorder(true, "thread");
+  private final OffsetRecorder offsetRecorder = new OffsetRecorder(true);
 
   private MetricPublishingCommitListener listener;
 

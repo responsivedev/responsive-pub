@@ -18,8 +18,7 @@ class ResponsiveStoreRegistryTest {
       "store",
       TOPIC_PARTITION,
       OptionalLong.of(123L),
-      o -> {},
-      "thread"
+      o -> {}
   );
 
   private static final ResponsiveStoreRegistration UNINIT_REGISTRATION =
@@ -27,8 +26,7 @@ class ResponsiveStoreRegistryTest {
           "store",
           UNINIT_TOPIC_PARTITION,
           OptionalLong.empty(),
-          o -> { },
-          "thread"
+          o -> { }
       );
 
   private final ResponsiveStoreRegistry registry = new ResponsiveStoreRegistry();
@@ -41,14 +39,13 @@ class ResponsiveStoreRegistryTest {
 
   @Test
   public void shouldGetCommittedOffsetFromRegisteredStore() {
-    assertThat(registry.getCommittedOffset(TOPIC_PARTITION, "thread"),
-        is(OptionalLong.of(123L)));
+    assertThat(registry.getCommittedOffset(TOPIC_PARTITION), is(OptionalLong.of(123L)));
   }
 
   @Test
   public void shouldReturnEmptyCommittedOffsetFromNotRegisteredStore() {
     assertThat(
-        registry.getCommittedOffset(new TopicPartition("foo", 1), "thread"),
+        registry.getCommittedOffset(new TopicPartition("foo", 1)),
         is(OptionalLong.empty())
     );
   }
@@ -56,7 +53,7 @@ class ResponsiveStoreRegistryTest {
   @Test
   public void shouldReturnEmptyCommittedOffsetFromChangelogWithNoOffset() {
     assertThat(
-        registry.getCommittedOffset(UNINIT_TOPIC_PARTITION, "thread"),
+        registry.getCommittedOffset(UNINIT_TOPIC_PARTITION),
         is(OptionalLong.empty())
     );
   }
@@ -67,7 +64,7 @@ class ResponsiveStoreRegistryTest {
     registry.deregisterStore(REGISTRATION);
 
     // when:
-    final OptionalLong offset = registry.getCommittedOffset(TOPIC_PARTITION, "thread");
+    final OptionalLong offset = registry.getCommittedOffset(TOPIC_PARTITION);
 
     // then:
     assertThat(offset, is(OptionalLong.empty()));
