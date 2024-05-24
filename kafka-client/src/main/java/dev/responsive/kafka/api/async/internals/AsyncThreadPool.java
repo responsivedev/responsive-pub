@@ -253,6 +253,10 @@ public class AsyncThreadPool {
     executor.shutdownNow();
   }
 
+  public boolean isShutdown() {
+    return executor.isShutdown();
+  }
+
   static class InFlightEvent {
     private final CompletableFuture<StreamsException> future;
 
