@@ -505,11 +505,12 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   }
 
   private void logInternalSummary() {
+    final var inFlight = threadPool.getInFlight(asyncProcessorName, taskId.partition());
     log.info(
         "pending({}), finalizable({}), in-flight({}), shutdown({}), scheduled({}), waiting({})",
         pendingEvents.size(),
         finalizingQueue.size(),
-        threadPool.getInFlight(asyncProcessorName, taskId.partition()).size(),
+        inFlight == null ? "null" : inFlight.size(),
         threadPool.isShutdown(),
         schedulingQueue.size(),
         schedulingQueue.blockedEntries()
