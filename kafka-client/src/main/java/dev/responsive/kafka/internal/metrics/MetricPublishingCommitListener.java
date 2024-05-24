@@ -86,7 +86,6 @@ public class MetricPublishingCommitListener implements Listener, Closeable {
   }
 
   private void commitCallback(
-      final String threadId,
       final Map<RecordingKey, Long> committedOffsets,
       final Map<TopicPartition, Long> unused
   ) {

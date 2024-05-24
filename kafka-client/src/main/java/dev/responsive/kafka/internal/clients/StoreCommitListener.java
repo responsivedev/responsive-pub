@@ -19,7 +19,6 @@ public class StoreCommitListener {
   }
 
   private void onCommit(
-      final String threadId,
       final Map<RecordingKey, Long> committedOffsets,
       final Map<TopicPartition, Long> writtenOffsets
   ) {
@@ -28,14 +27,14 @@ public class StoreCommitListener {
     for (final var e : committedOffsets.entrySet()) {
       final TopicPartition p = e.getKey().getPartition();
       for (final ResponsiveStoreRegistration storeRegistration
-          : storeRegistry.getRegisteredStoresForChangelog(p, threadId)) {
+          : storeRegistry.getRegisteredStoresForChangelog(p)) {
         storeRegistration.onCommit().accept(e.getValue());
       }
     }
     for (final var e : writtenOffsets.entrySet()) {
       final TopicPartition p = e.getKey();
       for (final ResponsiveStoreRegistration storeRegistration
-          : storeRegistry.getRegisteredStoresForChangelog(p, threadId)) {
+          : storeRegistry.getRegisteredStoresForChangelog(p)) {
         storeRegistration.onCommit().accept(e.getValue());
       }
     }
