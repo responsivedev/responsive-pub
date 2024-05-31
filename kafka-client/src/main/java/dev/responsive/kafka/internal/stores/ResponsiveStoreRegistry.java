@@ -43,9 +43,16 @@ public class ResponsiveStoreRegistry {
   public synchronized List<ResponsiveStoreRegistration> getRegisteredStoresForChangelog(
       final TopicPartition topicPartition
   ) {
-    return stores.stream()
+    final var found = stores.stream()
         .filter(s -> s.changelogTopicPartition().equals(topicPartition))
         .collect(Collectors.toList());
+    if (found.size() > 1) {
+      LOGGER.error("found more than 1 registration: {}",
+          found.stream().map(ResponsiveStoreRegistration::toString)
+              .collect(Collectors.joining(","))
+      );
+    }
+    return found;
   }
 
   public synchronized void registerStore(final ResponsiveStoreRegistration registration) {
