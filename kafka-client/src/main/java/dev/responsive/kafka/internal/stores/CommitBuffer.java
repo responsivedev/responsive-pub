@@ -104,6 +104,7 @@ public class CommitBuffer<K extends Comparable<K>, P>
   private KafkaFuture<DeletedRecords> deleteRecordsFuture = KafkaFuture.completedFuture(null);
 
   private Instant lastFlush;
+  private long lastFlushedOffset = -1;
 
   static <K extends Comparable<K>, P> CommitBuffer<K, P> from(
       final BatchFlusher<K, P> batchFlusher,
@@ -404,6 +405,14 @@ public class CommitBuffer<K extends Comparable<K>, P>
   }
 
   public void flush(final long consumedOffset) {
+    if (consumedOffset < lastFlushedOffset) {
+      throw new IllegalStateException(String.format(
+          "trying to commit an offset(%d) older than last flushed(%d)",
+          consumedOffset,
+          lastFlushedOffset
+      ));
+    }
+
     if (!triggerFlush()) {
       return;
     }
@@ -412,6 +421,7 @@ public class CommitBuffer<K extends Comparable<K>, P>
 
     doFlush(consumedOffset, maxBatchSize);
 
+    lastFlushedOffset = consumedOffset;
     lastFlush = clock.get();
   }
 
