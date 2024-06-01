@@ -406,11 +406,15 @@ public class CommitBuffer<K extends Comparable<K>, P>
 
   public void flush(final long consumedOffset) {
     if (consumedOffset < lastFlushedOffset) {
-      throw new IllegalStateException(String.format(
+      /*throw new IllegalStateException(String.format(
           "trying to commit an offset(%d) older than last flushed(%d)",
           consumedOffset,
           lastFlushedOffset
-      ));
+      ));*/
+      log.error("trying to commit an offset {} older than last flushed {}",
+          consumedOffset,
+          lastFlushedOffset
+      );
     }
 
     if (!triggerFlush()) {
