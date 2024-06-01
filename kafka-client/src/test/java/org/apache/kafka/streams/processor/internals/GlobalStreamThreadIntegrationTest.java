@@ -271,11 +271,11 @@ public class GlobalStreamThreadIntegrationTest {
     final InternalTopologyBuilder builder = new InternalTopologyBuilder();
     builder.addGlobalStore(
         new StoreBuilderWrapper(
-          new KeyValueStoreBuilder<>(
-              storeSupplier,
-              new ByteArraySerde(),
-              new ByteArraySerde(),
-              time).withLoggingDisabled()
+            new KeyValueStoreBuilder<>(
+                storeSupplier,
+                new ByteArraySerde(),
+                new ByteArraySerde(),
+                time).withLoggingDisabled()
         ),
         "global",
         null,
@@ -365,12 +365,12 @@ public class GlobalStreamThreadIntegrationTest {
 
     @Override
     public void onRestoreStart(final TopicPartition topicPartition, final String storeName,
-        final long startingOffset, final long endingOffset) {
+                               final long startingOffset, final long endingOffset) {
     }
 
     @Override
     public void onBatchRestored(final TopicPartition topicPartition, final String storeName,
-        final long batchEndOffset, final long numRestored) {
+                                final long batchEndOffset, final long numRestored) {
       restoredBatch.countDown();
       try {
         restoredBatch.await();
@@ -381,7 +381,7 @@ public class GlobalStreamThreadIntegrationTest {
 
     @Override
     public void onRestoreEnd(final TopicPartition topicPartition, final String storeName,
-        final long totalRestored) {
+                             final long totalRestored) {
       finishedRestore.countDown();
     }
   }
