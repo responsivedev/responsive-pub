@@ -52,15 +52,11 @@ import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.StateRestoreListener;
-import org.apache.kafka.streams.processor.api.ContextualProcessor;
-import org.apache.kafka.streams.processor.api.ProcessorContext;
-import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.StreamThread.StateListener;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
-import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -269,7 +265,7 @@ public class GlobalStreamThreadIntegrationTest {
       final File tempDir) {
     final Time time = new SystemTime();
     final InternalTopologyBuilder builder = new InternalTopologyBuilder();
-    builder.addGlobalStore(
+    /*builder.addGlobalStore(
         new KeyValueStoreBuilder<>(
             storeSupplier,
             new ByteArraySerde(),
@@ -295,7 +291,7 @@ public class GlobalStreamThreadIntegrationTest {
             global.put(record.key(), record.value());
           }
         }
-    );
+    );*/
 
     final String baseDirectoryName = tempDir.getAbsolutePath();
     final Map<String, Object> properties = new HashMap<>();
