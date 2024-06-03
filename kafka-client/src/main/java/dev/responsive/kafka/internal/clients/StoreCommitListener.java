@@ -34,8 +34,8 @@ public class StoreCommitListener {
       final TopicPartition p = e.getKey().getPartition();
       for (final ResponsiveStoreRegistration storeRegistration
           : storeRegistry.getRegisteredStoresForChangelog(p)) {
-        if (generator.nextLong() % 200 == 0) {
-          LOG.info("inject sleep in store commit");
+        if (generator.nextLong() % 200 > 200) {
+          LOG.info("inject sleep in store commit (off)");
           try {
             Thread.sleep(35000);
           } catch (final InterruptedException ex) {
@@ -49,7 +49,7 @@ public class StoreCommitListener {
       final TopicPartition p = e.getKey();
       for (final ResponsiveStoreRegistration storeRegistration
           : storeRegistry.getRegisteredStoresForChangelog(p)) {
-        if (generator.nextLong() % 200 == 0) {
+        if (generator.nextLong() % 200 > 200) {
           LOG.info("inject sleep in store commit");
           try {
             Thread.sleep(35000);
