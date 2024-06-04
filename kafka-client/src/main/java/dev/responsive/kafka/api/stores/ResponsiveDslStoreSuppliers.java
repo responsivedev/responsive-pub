@@ -49,7 +49,7 @@ public class ResponsiveDslStoreSuppliers implements DslStoreSuppliers {
     return ResponsiveStores.sessionStoreSupplier(
         ResponsiveSessionParams.session(
             dslSessionParams.name(),
-            dslSessionParams.retentionPeriod().toMillis()
+            dslSessionParams.retentionPeriod()
         )
     );
   }

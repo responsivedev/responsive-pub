@@ -44,9 +44,9 @@ public final class ResponsiveSessionParams {
 
   public static ResponsiveSessionParams session(
       final String name,
-      final long retentionPeriodMs
+      final Duration retention
   ) {
-    return new ResponsiveSessionParams(name, SessionSchema.SESSION, retentionPeriodMs);
+    return new ResponsiveSessionParams(name, SessionSchema.SESSION, retention.toMillis());
   }
 
   public static ResponsiveSessionParams session(

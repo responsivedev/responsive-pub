@@ -315,7 +315,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
 
     propsWithOverrides.putIfAbsent(
         StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG,
-        ResponsiveDslStoreSuppliers.class.getCanonicalName()
+        ResponsiveDslStoreSuppliers.class.getName()
     );
 
     return propsWithOverrides;
