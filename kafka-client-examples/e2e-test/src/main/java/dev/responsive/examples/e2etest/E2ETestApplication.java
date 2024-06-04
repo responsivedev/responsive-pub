@@ -130,7 +130,7 @@ public class E2ETestApplication {
     builderProperties.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 30000);
     builderProperties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG,
         StreamsConfig.EXACTLY_ONCE_V2);
-    builderProperties.put(ResponsiveConfig.ASYNC_THREAD_POOL_SIZE_CONFIG, 4);
+    builderProperties.put(ResponsiveConfig.ASYNC_THREAD_POOL_SIZE_CONFIG, 2);
     final var streams = new ResponsiveKafkaStreams(
         builder.build(builderProperties),
         builderProperties
