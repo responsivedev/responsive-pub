@@ -434,14 +434,21 @@ public class CommitBuffer<K extends Comparable<K>, P>
     lastFlush = clock.get();
   }
 
+  private Instant lastFlushLog = Instant.EPOCH;
+
   private void doFlush(final long consumedOffset, final int batchSize) {
     final long startNs = System.nanoTime();
-    log.info("Flushing {} records with batchSize={} to remote (offset={}, writer={})",
-        buffer.getReader().size(),
-        batchSize,
-        consumedOffset,
-             batchFlusher
-    );
+    boolean logAtInfo = Duration.between(lastFlushLog, Instant.now()).getSeconds() > 5;
+
+    if (logAtInfo) {
+      lastFlushLog = Instant.now();
+      log.info("Flushing {} records with batchSize={} to remote (offset={}, writer={})",
+          buffer.getReader().size(),
+          batchSize,
+          consumedOffset,
+          batchFlusher
+      );
+    }
 
     final FlushResult<K, P> flushResult = batchFlusher.flushWriteBatch(
         buffer.getReader(), consumedOffset
@@ -469,12 +476,14 @@ public class CommitBuffer<K extends Comparable<K>, P>
     flushSensor.record(1, endMs);
     flushLatencySensor.record(flushLatencyMs, endMs);
 
-    log.info("Flushed {} records to {} table partitions with offset {} in {}ms",
-             buffer.getReader().size(),
-             flushResult.numTablePartitionsFlushed(),
-             consumedOffset,
-             flushLatencyMs
-    );
+    if (logAtInfo) {
+      log.info("Flushed {} records to {} table partitions with offset {} in {}ms",
+          buffer.getReader().size(),
+          flushResult.numTablePartitionsFlushed(),
+          consumedOffset,
+          flushLatencyMs
+      );
+    }
     buffer.clear();
   }
 

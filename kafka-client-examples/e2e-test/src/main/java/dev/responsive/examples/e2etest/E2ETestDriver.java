@@ -297,11 +297,17 @@ public class E2ETestDriver {
     }
 
     private synchronized List<Long> popOffsets(final long upTo) {
+      final Instant start = Instant.now();
       while (!offsets.contains(upTo)) {
         try {
-          wait();
+          wait(30000);
         } catch (final InterruptedException e) {
           throw new RuntimeException(e);
+        }
+        if (Duration.between(start, Instant.now()).getSeconds() > 30) {
+          throw new IllegalStateException(String.format(
+              "waited longer than 30 seconds for offset %d %d", upTo, partition
+          ));
         }
       }
       final List<Long> popped = new ArrayList<>();
