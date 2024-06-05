@@ -194,7 +194,7 @@ public class E2ETestDriver {
         } catch (final InterruptedException | ExecutionException e) {
           throw new RuntimeException(e);
         }
-        produceState.get(k).recordSend(rm.partition(), rm.offset());
+        produceState.get(k).recordSend(rm);
       }
     }
     return batchSz;
@@ -206,7 +206,7 @@ public class E2ETestDriver {
     for (final var cr : consumed.records(outputTopic)) {
       final ProduceState ps = produceState.get(cr.key());
       final ConsumeState cs = consumeState.get(cr.key());
-      final List<Long> poppedOffsets = ps.popOffsets(cr.value().offset());
+      final List<RecordMetadata> poppedOffsets = ps.popOffsets(cr.value().offset());
       synchronized (produceWait) {
         outstanding -= poppedOffsets.size();
         if (outstanding < maxOutstanding) {
@@ -219,9 +219,10 @@ public class E2ETestDriver {
       cs.updateReceived(poppedOffsets, ps.partition(), cr.value().digest());
     }
     for (final var k : consumeState.keySet()) {
-      final int outstanding = produceState.get(k).outstandingMessages();
-      if (outstanding > 0) {
-        consumeState.get(k).checkStalled();
+      final var ps = produceState.get(k);
+      final var earliestSent = ps.earliestSent();
+      if (earliestSent != null) {
+        consumeState.get(k).checkStalled(earliestSent, ps.partition());
       }
     }
   }
@@ -267,7 +268,8 @@ public class E2ETestDriver {
     private final long key;
     private long sendCount = 0;
     private int partition;
-    private final List<Long> offsets = new LinkedList<>();
+    private Instant lastSent = Instant.now();
+    private final List<RecordMetadata> sent = new LinkedList<>();
 
     private ProduceState(final long key) {
       this.key = key;
@@ -282,9 +284,10 @@ public class E2ETestDriver {
       return sendCount - 1;
     }
 
-    private synchronized void recordSend(final int partition, final long offset) {
-      this.partition = partition;
-      offsets.add(offset);
+    private synchronized void recordSend(final RecordMetadata rm) {
+      this.lastSent = Instant.now();
+      this.partition = rm.partition();
+      sent.add(rm);
       notify();
     }
 
@@ -293,12 +296,16 @@ public class E2ETestDriver {
     }
 
     private synchronized int outstandingMessages() {
-      return offsets.size();
+      return sent.size();
     }
 
-    private synchronized List<Long> popOffsets(final long upTo) {
+    private synchronized RecordMetadata earliestSent() {
+      return sent.isEmpty() ? null: sent.get(0);
+    }
+
+    private synchronized List<RecordMetadata> popOffsets(final long upTo) {
       final Instant start = Instant.now();
-      while (!offsets.contains(upTo)) {
+      while (sent.stream().noneMatch(rm -> rm.offset() == upTo)) {
         try {
           wait(30000);
         } catch (final InterruptedException e) {
@@ -310,9 +317,9 @@ public class E2ETestDriver {
           ));
         }
       }
-      final List<Long> popped = new ArrayList<>();
-      while (!offsets.isEmpty() && offsets.get(0) <= upTo) {
-        popped.add(offsets.remove(0));
+      final List<RecordMetadata> popped = new ArrayList<>();
+      while (!sent.isEmpty() && sent.get(0).offset() <= upTo) {
+        popped.add(sent.remove(0));
       }
       return popped;
     }
@@ -331,15 +338,15 @@ public class E2ETestDriver {
     }
 
     private void updateReceived(
-        final List<Long> offsets,
+        final List<RecordMetadata> offsets,
         final int partition,
         final byte[] observedChecksum
     ) {
       lastReceived = Instant.now();
-      for (final var o : offsets) {
+      for (final var rm : offsets) {
         checksum = checksum
             .updateWith(recvdCount)
-            .updateWith(o)
+            .updateWith(rm.offset())
             .updateWith(partition);
         recvdCount += 1;
       }
@@ -355,12 +362,16 @@ public class E2ETestDriver {
       }
     }
 
-    private void checkStalled() {
-      if (Duration.between(lastReceived, Instant.now()).compareTo(receivedThreshold) > 0) {
+    private void checkStalled(final RecordMetadata earliestSent, final int partition) {
+      final Instant earliestSentTime = Instant.ofEpochMilli(earliestSent.timestamp());
+      if (Duration.between(earliestSentTime, Instant.now()).compareTo(receivedThreshold) > 0) {
         throw new IllegalStateException(String.format(
-            "have not seen any results for %d in %s",
+            "have not seen any results for %d on %d in %s. earliest sent %s. last recvd %s",
             key,
-            receivedThreshold
+            partition,
+            receivedThreshold,
+            earliestSentTime,
+            lastReceived
         ));
       }
     }
