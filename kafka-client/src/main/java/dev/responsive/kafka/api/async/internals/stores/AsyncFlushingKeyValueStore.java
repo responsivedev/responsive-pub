@@ -78,7 +78,15 @@ public class AsyncFlushingKeyValueStore
         flushListener -> flushAsyncProcessor = flushListener
     );
 
-    super.init(context, root);
+    try {
+      super.init(context, root);
+    } catch (final RuntimeException e) {
+      log.error("failed to initialize the wrapped store. Deregistering the store connector as " +
+          "its likely that this store was not registered with streams and close will not be" +
+          " called");
+      flushListeners.unregisterListenerForPartition(partition);
+      throw e;
+    }
   }
 
   @Override
