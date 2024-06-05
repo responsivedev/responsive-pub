@@ -36,7 +36,7 @@ public class TestApplicationIntegrationTest {
         INPUT_TOPIC,
         OUTPUT_TOPIC,
         4,
-        0
+        10
     );
     this.driver = new E2ETestDriver(
         properties,
