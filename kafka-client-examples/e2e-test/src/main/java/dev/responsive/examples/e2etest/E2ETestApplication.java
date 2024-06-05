@@ -24,6 +24,7 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -128,6 +129,7 @@ public class E2ETestApplication {
     builderProperties.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
     builderProperties.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 10);
     builderProperties.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 30000);
+    builderProperties.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, 60000);
     builderProperties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG,
         StreamsConfig.EXACTLY_ONCE_V2);
     builderProperties.put(ResponsiveConfig.ASYNC_THREAD_POOL_SIZE_CONFIG, 2);
