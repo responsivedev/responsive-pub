@@ -18,7 +18,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class AsyncFlushingKeyValueStoreTest {
-  private final TaskId TASK_ID = new TaskId(0, 3);
+  private static final TaskId TASK_ID = new TaskId(0, 3);
 
   @Mock
   private KeyValueStore<Bytes, byte[]> wrapped;
