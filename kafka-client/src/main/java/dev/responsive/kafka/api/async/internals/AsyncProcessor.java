@@ -665,6 +665,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
 
     try (final var ignored = preFinalize(finalizableEvent)) {
       doFinalize(finalizableEvent);
+    } finally {
       postFinalize(finalizableEvent);
     }
   }
