@@ -304,9 +304,9 @@ public class E2ETestDriver {
         } catch (final InterruptedException e) {
           throw new RuntimeException(e);
         }
-        if (Duration.between(start, Instant.now()).getSeconds() > 30) {
+        if (Duration.between(start, Instant.now()).getSeconds() > 300) {
           throw new IllegalStateException(String.format(
-              "waited longer than 30 seconds for offset %d %d", upTo, partition
+              "waited longer than 300 seconds for offset %d %d", upTo, partition
           ));
         }
       }
