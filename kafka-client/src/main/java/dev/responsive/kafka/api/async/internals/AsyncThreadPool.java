@@ -192,7 +192,7 @@ public class AsyncThreadPool {
           .whenComplete((r, t) -> {
             inFlightForTask.remove(event);
           })
-          .handle((processingException, fatalException) -> {
+          .whenComplete((processingException, fatalException) -> {
 
             if (fatalException == null) {
               if (processingException == null) {
@@ -206,7 +206,6 @@ public class AsyncThreadPool {
             // Once we've successfully placed a failed event in the finalizing queue
             // then there's nothing more to handle by the async thread pool since the
             // StreamThread will process the exception from here
-            return null;
           })
           .exceptionally(fatalException -> {
             // do this alone & in separate stage to ensure we always catch a fatal exception, even
@@ -214,7 +213,10 @@ public class AsyncThreadPool {
             fatalExceptions.computeIfAbsent(
                 inFlightKey,
                 k -> new FatalAsyncException("Uncaught exception while handling", fatalException));
-            return fatalException;
+            if (fatalException instanceof RuntimeException) {
+              throw (RuntimeException) fatalException;
+            }
+            throw new RuntimeException(fatalException);
           });
     }
   }

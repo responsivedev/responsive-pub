@@ -1,17 +1,24 @@
 package dev.responsive.kafka.api.async.internals;
 
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 
+import com.google.common.base.Throwables;
 import dev.responsive.kafka.api.async.internals.contexts.AsyncUserProcessorContext;
 import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
 import dev.responsive.kafka.api.async.internals.metrics.AsyncProcessorMetricsRecorder;
 import dev.responsive.kafka.api.async.internals.queues.FinalizingQueue;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -80,6 +87,32 @@ class AsyncThreadPoolTest {
       future.get(10, TimeUnit.SECONDS);
     }
     assertThat(finalizingQueue0.waitForNextFinalizableEvent(1, TimeUnit.MINUTES), is(event));
+  }
+
+  @Test
+  public void shouldSetFatalExceptionWhenUnexpectedExceptionThrown() throws InterruptedException {
+    // given:
+    final var exception = new RuntimeException("oops");
+    doThrow(exception).when(userContext).setDelegateForAsyncThread(any());
+    final var task1 = new TestTask();
+    final var event = newEvent(task1, 0);
+
+    // when:
+    schedule("processor", 0, finalizingQueue0, event);
+
+    // then:
+    final Instant start = Instant.now();
+    Optional<Throwable> caught;
+    do {
+      caught = pool.checkUncaughtExceptions("processor", 0);
+      if (caught.isPresent()) {
+        break;
+      }
+      Thread.sleep(100);
+    } while (Duration.between(start, Instant.now()).compareTo(Duration.ofMinutes(1)) < 0);
+    assertThat(caught.isPresent(), is(true));
+    assertThat(caught.get(), instanceOf(FatalAsyncException.class));
+    assertThat(Throwables.getRootCause(caught.get()), is(exception));
   }
 
   @Test
