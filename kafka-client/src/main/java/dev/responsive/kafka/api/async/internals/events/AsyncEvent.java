@@ -313,6 +313,11 @@ public class AsyncEvent {
   }
 
   public void transitionToDone() {
+    if (currentState.equals(State.DONE)) {
+      log.warn("we are transitioning to DONE from DONE. This should only happen if"
+          + "we hit a failure during finalization");
+      return;
+    }
     if (!(currentState.equals(State.FINALIZING) || currentState.equals(State.FAILED))) {
       log.error(
           "[{}] Attempted to mark an async event as DONE but the event was not "

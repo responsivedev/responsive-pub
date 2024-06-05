@@ -640,6 +640,10 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
 
     try (final var ignored = preFinalize(finalizableEvent)) {
       doFinalize(finalizableEvent);
+    } finally {
+      // We always need to make sure that we call `postFinalize` to ensure that the event
+      // is cleared from the set of pending events. If we don't do this, then the next call
+      // to flushAndAwaitPendingEvents can hang.
       postFinalize(finalizableEvent);
     }
   }
