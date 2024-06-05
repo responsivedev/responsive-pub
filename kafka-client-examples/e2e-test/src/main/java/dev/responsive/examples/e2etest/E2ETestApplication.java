@@ -5,7 +5,9 @@ import static dev.responsive.kafka.api.config.ResponsiveConfig.CASSANDRA_HOSTNAM
 import static dev.responsive.kafka.api.config.ResponsiveConfig.CASSANDRA_PORT_CONFIG;
 
 import com.datastax.oss.driver.api.core.CqlSession;
+import com.datastax.oss.driver.api.core.DriverTimeoutException;
 import com.datastax.oss.driver.api.core.config.DriverConfigLoader;
+import com.datastax.oss.driver.api.core.connection.ConnectionInitException;
 import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
 import com.datastax.oss.driver.api.querybuilder.schema.CreateKeyspace;
 import dev.responsive.examples.e2etest.Schema.InputRecord;
@@ -16,8 +18,10 @@ import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.api.stores.ResponsiveStores;
+import java.net.ConnectException;
 import java.net.InetSocketAddress;
 import java.time.Duration;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -25,11 +29,20 @@ import java.util.Properties;
 import java.util.Set;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.errors.DisconnectException;
+import org.apache.kafka.common.errors.InvalidProducerEpochException;
+import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.errors.RebalanceInProgressException;
+import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.TransactionAbortedException;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
+import org.apache.kafka.streams.errors.TaskCorruptedException;
+import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Named;
@@ -128,8 +141,9 @@ public class E2ETestApplication {
     builderProperties.put(StreamsConfig.APPLICATION_ID_CONFIG, name);
     builderProperties.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
     builderProperties.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 10);
-    builderProperties.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 30000);
-    builderProperties.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, 40000);
+    builderProperties.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 60000);
+    builderProperties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10);
+    builderProperties.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, 90000);
     builderProperties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG,
         StreamsConfig.EXACTLY_ONCE_V2);
     builderProperties.put(ResponsiveConfig.ASYNC_THREAD_POOL_SIZE_CONFIG, 2);
@@ -137,9 +151,40 @@ public class E2ETestApplication {
         builder.build(builderProperties),
         builderProperties
     );
-    streams.setUncaughtExceptionHandler(exception
-        -> StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.REPLACE_THREAD);
+    streams.setUncaughtExceptionHandler(exception -> {
+      if (shouldLogError(exception, new LinkedList<>())) {
+        LOG.error("uncaught exception on test app stream thread", exception);
+      }
+      return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.REPLACE_THREAD;
+    });
     return streams;
+  }
+
+  private boolean shouldLogError(final Throwable throwable, List<Throwable> seen) {
+    final List<Class<? extends Throwable>> dontcare = List.of(
+        TaskMigratedException.class,
+        ConnectException.class,
+        ConnectionInitException.class,
+        DisconnectException.class,
+        DriverTimeoutException.class,
+        InjectedE2ETestException.class,
+        InvalidProducerEpochException.class,
+        ProducerFencedException.class,
+        RebalanceInProgressException.class,
+        TaskCorruptedException.class,
+        TimeoutException.class,
+        TransactionAbortedException.class
+    );
+    for (final var c : dontcare) {
+      if (c.isInstance(throwable)) {
+        return false;
+      }
+    }
+    seen.add(throwable);
+    if (throwable.getCause() != null && !seen.contains(throwable.getCause())) {
+      return shouldLogError(throwable.getCause(), seen);
+    }
+    return true;
   }
 
   private void maybeCreateKeyspace() {
