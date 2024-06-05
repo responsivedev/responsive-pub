@@ -21,7 +21,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 
-import dev.responsive.kafka.internal.clients.ResponsiveConsumer;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
