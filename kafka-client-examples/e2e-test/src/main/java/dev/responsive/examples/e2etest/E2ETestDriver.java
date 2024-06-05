@@ -300,7 +300,7 @@ public class E2ETestDriver {
     }
 
     private synchronized RecordMetadata earliestSent() {
-      return sent.isEmpty() ? null: sent.get(0);
+      return sent.isEmpty() ? null : sent.get(0);
     }
 
     private synchronized List<RecordMetadata> popOffsets(final long upTo) {
