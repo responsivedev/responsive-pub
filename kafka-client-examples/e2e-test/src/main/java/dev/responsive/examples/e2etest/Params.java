@@ -13,6 +13,8 @@ public class Params {
   public static final int MAX_OUTSTANDING
       = Integer.parseInt(System.getenv().getOrDefault("MAX_OUTSTANDING", "10000"));
   public static final int RECEIVE_THRESHOLD
-      = Integer.parseInt(System.getenv().getOrDefault("RECEIVE_THRESHOLD", "600"));
+      = Integer.parseInt(System.getenv().getOrDefault("RECEIVE_THRESHOLD", "180"));
+  public static final int FAULT_STOP_THRESHOLD
+      = Integer.parseInt(System.getenv().getOrDefault("FAULT_STOP_THRESHOLD", "300"));
   public static final String MODE = System.getenv().getOrDefault("E2E_APP_MODE", "APPLICATION");
 }
