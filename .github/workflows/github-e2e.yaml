@@ -28,7 +28,7 @@ jobs:
       - name: "Checkout"
         uses: actions/checkout@v3
         with:
-          ref: refs/heads/e2e-test
+          ref: refs/heads/e2e-test-replicated-scylla
           submodules: recursive
           fetch-depth: 0
 
