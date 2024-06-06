@@ -54,7 +54,7 @@ public class E2ETestDriver {
   private final Long recordsToProcess;
   private int recordsProcessed = 0;
   private volatile boolean keepRunning = true;
-  private FaultStopper faultStopper;
+  private final FaultStopper faultStopper = new FaultStopper();
 
   public E2ETestDriver(
       final Map<String, Object> properties,

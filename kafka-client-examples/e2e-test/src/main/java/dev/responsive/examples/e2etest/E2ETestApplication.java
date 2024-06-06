@@ -97,7 +97,10 @@ public class E2ETestApplication {
     }
     // build topology after creating keyspace because we use keyspace retry
     // to wait for scylla to resolve
-    kafkaStreams = buildTopology(properties);
+    E2ETestUtils.retryFor(
+        () -> kafkaStreams = buildTopology(properties),
+        Duration.ofMinutes(5)
+    );
     if (!stopped) {
       LOG.info("start kafka streams");
       kafkaStreams.start();
