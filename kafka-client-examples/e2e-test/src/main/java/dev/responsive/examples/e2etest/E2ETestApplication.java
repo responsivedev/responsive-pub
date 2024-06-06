@@ -207,7 +207,7 @@ public class E2ETestApplication {
     try (final CqlSession session = cqlSession()) {
       final CreateKeyspace createKeyspace = SchemaBuilder.createKeyspace("responsive_test")
           .ifNotExists()
-          .withSimpleStrategy(2);
+          .withSimpleStrategy(3);
       session.execute(createKeyspace.build());
     }
   }
