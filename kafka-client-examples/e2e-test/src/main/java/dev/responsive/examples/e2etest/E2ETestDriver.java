@@ -54,6 +54,7 @@ public class E2ETestDriver {
   private final Long recordsToProcess;
   private int recordsProcessed = 0;
   private volatile boolean keepRunning = true;
+  private FaultStopper faultStopper;
 
   public E2ETestDriver(
       final Map<String, Object> properties,
@@ -63,7 +64,8 @@ public class E2ETestDriver {
       final int partitions,
       final long recordsToProcess,
       final int maxOutstanding,
-      final Duration receivedThreshold
+      final Duration receivedThreshold,
+      final Duration faultStopThreshold
   ) {
     this.properties = Objects.requireNonNull(properties);
     this.numKeys = numKeys;
@@ -80,7 +82,7 @@ public class E2ETestDriver {
     ));
     consumeState = keys.stream().collect(Collectors.toMap(
         k -> k,
-        k -> new ConsumeState(k, receivedThreshold)
+        k -> new ConsumeState(k, receivedThreshold, faultStopThreshold, faultStopper)
     ));
     this.recordsToProcess = recordsToProcess;
     this.maxOutstanding = maxOutstanding;
@@ -328,13 +330,24 @@ public class E2ETestDriver {
   private static class ConsumeState {
     private final long key;
     private final Duration receivedThreshold;
+    private final Duration faultStopThreshold;
+    private final FaultStopper faultStopper;
     private long recvdCount = 0;
     private Instant lastReceived = Instant.now();
     private AccumulatingChecksum checksum = new AccumulatingChecksum();
+    private RecordMetadata stalled = null;
+    private Instant faultsStoppedAt = null;
 
-    private ConsumeState(final long key, final Duration receivedThreshold) {
+    private ConsumeState(
+        final long key,
+        final Duration receivedThreshold,
+        final Duration faultStopThreshold,
+        final FaultStopper faultStopper
+    ) {
       this.key = key;
       this.receivedThreshold = receivedThreshold;
+      this.faultStopThreshold = faultStopThreshold;
+      this.faultStopper = faultStopper;
     }
 
     private void updateReceived(
@@ -362,17 +375,54 @@ public class E2ETestDriver {
       }
     }
 
-    private void checkStalled(final RecordMetadata earliestSent, final int partition) {
-      final Instant earliestSentTime = Instant.ofEpochMilli(earliestSent.timestamp());
-      if (Duration.between(earliestSentTime, Instant.now()).compareTo(receivedThreshold) > 0) {
-        throw new IllegalStateException(String.format(
-            "have not seen any results for %d on %d in %s. earliest sent %s. last recvd %s",
-            key,
-            partition,
-            receivedThreshold,
-            earliestSentTime,
-            lastReceived
-        ));
+    private void checkStalled(final RecordMetadata earliestUnconsumed, final int partition) {
+      if (stalled != null) {
+        if (earliestUnconsumed == stalled) {
+          // the earliest unconsumed record has not advanced
+          if (Duration.between(faultsStoppedAt, Instant.now()).compareTo(receivedThreshold) > 0) {
+            throw new IllegalStateException(String.format(
+                "have not seen any results for %d on %d in %s. earliest sent %s. last recvd %s",
+                key,
+                partition,
+                receivedThreshold.plus(faultStopThreshold),
+                Instant.ofEpochMilli(stalled.timestamp()),
+                lastReceived
+            ));
+          }
+        } else {
+          // earliest unconsumed has advanced. not a true stall
+          faultStopper.startFaults();
+          stalled = null;
+          faultsStoppedAt = null;
+        }
+      } else {
+        final Instant earliestSentTime = Instant.ofEpochMilli(earliestUnconsumed.timestamp());
+        if (Duration.between(earliestSentTime, Instant.now()).compareTo(faultStopThreshold) > 0) {
+          LOG.info("stopping faults to check for stall for {} on {}", key, partition);
+          stalled = earliestUnconsumed;
+          faultsStoppedAt = faultStopper.stopFaults();
+        }
+      }
+    }
+  }
+
+  private static class FaultStopper {
+    int refs = 0;
+    private Instant stoppedAt = null;
+
+    private Instant stopFaults() {
+      if (refs == 0) {
+        LOG.info("ANTITHESIS: Stop faults");
+        stoppedAt = Instant.now();
+      }
+      refs += 1;
+      return stoppedAt;
+    }
+
+    private void startFaults() {
+      refs -= 1;
+      if (refs == 0) {
+        LOG.info("ANTITHESIS: Start faults");
       }
     }
   }
