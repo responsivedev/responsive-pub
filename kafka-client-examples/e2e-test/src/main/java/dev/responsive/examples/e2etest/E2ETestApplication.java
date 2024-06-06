@@ -152,11 +152,23 @@ public class E2ETestApplication {
     );
     streams.setUncaughtExceptionHandler(exception -> {
       if (shouldLogError(exception, new LinkedList<>())) {
-        LOG.error("uncaught exception on test app stream thread", exception);
+        LOG.error("uncaught exception on test app stream thread {}",
+            causalSummary(exception, new LinkedList<>()),
+            exception
+        );
       }
       return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.REPLACE_THREAD;
     });
     return streams;
+  }
+
+  private String causalSummary(final Throwable t, final List<Throwable> seen) {
+    final String summary = t.getClass().getName() + "->";
+    seen.add(t);
+    if (t.getCause() == null || seen.contains(t.getCause())) {
+      return summary + causalSummary(t.getCause(), seen);
+    }
+    return summary;
   }
 
   private boolean shouldLogError(final Throwable throwable, List<Throwable> seen) {
@@ -172,6 +184,7 @@ public class E2ETestApplication {
         RebalanceInProgressException.class,
         TaskCorruptedException.class,
         TimeoutException.class,
+        java.util.concurrent.TimeoutException.class,
         TransactionAbortedException.class
     );
     for (final var c : dontcare) {
