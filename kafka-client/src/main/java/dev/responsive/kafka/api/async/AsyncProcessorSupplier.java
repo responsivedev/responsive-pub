@@ -16,10 +16,9 @@
 
 package dev.responsive.kafka.api.async;
 
-import static dev.responsive.kafka.api.async.internals.AsyncProcessor.createAsyncProcessor;
 import static dev.responsive.kafka.api.async.internals.AsyncUtils.initializeAsyncBuilders;
 
-import dev.responsive.kafka.api.async.internals.AsyncProcessor;
+import dev.responsive.kafka.api.async.internals.MaybeAsyncProcessor;
 import dev.responsive.kafka.api.async.internals.stores.AbstractAsyncStoreBuilder;
 import java.util.HashSet;
 import java.util.Map;
@@ -155,8 +154,8 @@ public final class AsyncProcessorSupplier<KIn, VIn, KOut, VOut>
   }
 
   @Override
-  public AsyncProcessor<KIn, VIn, KOut, VOut> get() {
-    return createAsyncProcessor(userProcessorSupplier.get(), asyncStoreBuilders);
+  public MaybeAsyncProcessor<KIn, VIn, KOut, VOut> get() {
+    return MaybeAsyncProcessor.createProcessor(userProcessorSupplier.get(), asyncStoreBuilders);
   }
 
   @Override
