@@ -69,12 +69,7 @@ import org.slf4j.Logger;
  * -Coordinates the handoff of records between the StreamThread and AyncThreads
  * -The starting and ending point of all async events -- see {@link AsyncEvent}
  */
-public class AsyncProcessor<KIn, VIn, KOut, VOut>
-    implements Processor<KIn, VIn, KOut, VOut>, FixedKeyProcessor<KIn, VIn, VOut> {
-
-  // Exactly one of these is non-null and the other is null
-  private final Processor<KIn, VIn, KOut, VOut> userProcessor;
-  private final FixedKeyProcessor<KIn, VIn, VOut> userFixedKeyProcessor;
+public class AsyncProcessor<KIn, VIn, KOut, VOut> {
 
   private final Map<String, AbstractAsyncStoreBuilder<?, ?, ?>> connectedStoreBuilders;
 
@@ -84,12 +79,36 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   // the stream thread should access this.
   private final Map<AsyncEvent, Object> pendingEvents = new ConcurrentHashMap<>();
 
+  private final String logPrefix;
+  private final Logger log;
+
+  private final String streamThreadName;
+  private final String asyncProcessorName;
+  private final TaskId taskId;
+
+  private final AsyncThreadPool threadPool;
+  private final SchedulingQueue<KIn> schedulingQueue;
+  private final FinalizingQueue finalizingQueue;
+
+  private final Cancellable punctuator;
+
+  // the context passed to us in init, ie the one created for this task and owned by Kafka Streams
+  private final ProcessingContext taskContext;
+
+  // the async context owned by the StreamThread that is running this processor/task
+  private final StreamThreadProcessorContext<KOut, VOut> streamThreadContext;
+
+  // the context we pass in to the user so it routes to the actual context based on calling thread
+  private final AsyncUserProcessorContext<KOut, VOut> userContext;
+
+  private boolean hasProcessedSomething = false;
 
   // This is set at most once. When its set, the thread should immediately throw, and no longer
   // try to process further events for this processor. This minimizes the chance of producing
   // bad results, particularly with ALOS.
   private FatalAsyncException fatalException = null;
 
+<<<<<<< Updated upstream
   // Everything below this line is effectively final and just has to be initialized in #init //
 
   private String logPrefix;
@@ -120,70 +139,15 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   public static <KIn, VIn, KOut, VOut> AsyncProcessor<KIn, VIn, KOut, VOut> createAsyncProcessor(
       final Processor<KIn, VIn, KOut, VOut> userProcessor,
       final Map<String, AbstractAsyncStoreBuilder<?, ?, ?>> connectedStoreBuilders
+=======
+  public AsyncProcessor(
+      final Map<String, AbstractAsyncStoreBuilder<?, ?, ?>> connectedStoreBuilders,
+      final InternalProcessorContext<KOut, VOut> internalContext,
+      final Runnable userInit
+>>>>>>> Stashed changes
   ) {
-    return new AsyncProcessor<>(userProcessor, null, connectedStoreBuilders);
-  }
-
-  public static <KIn, VIn, VOut> AsyncProcessor<KIn, VIn, KIn, VOut> createAsyncFixedKeyProcessor(
-      final FixedKeyProcessor<KIn, VIn, VOut> userProcessor,
-      final Map<String, AbstractAsyncStoreBuilder<?, ?, ?>> connectedStoreBuilders
-  ) {
-    return new AsyncProcessor<>(null, userProcessor, connectedStoreBuilders);
-  }
-
-  // Note: the constructor will be called from the main application thread (ie the
-  // one that creates/starts the KafkaStreams object) so we have to delay the creation
-  // of most objects until #init since (a) that will be invoked by the actual
-  // StreamThread processing this, and (b) we need the context supplied to init for
-  // some of the setup
-  private AsyncProcessor(
-      final Processor<KIn, VIn, KOut, VOut> userProcessor,
-      final FixedKeyProcessor<KIn, VIn, VOut> userFixedKeyProcessor,
-      final Map<String, AbstractAsyncStoreBuilder<?, ?, ?>> connectedStoreBuilders
-  ) {
-    this.userProcessor = userProcessor;
-    this.userFixedKeyProcessor = userFixedKeyProcessor;
     this.connectedStoreBuilders = connectedStoreBuilders;
 
-    if (userProcessor == null && userFixedKeyProcessor == null) {
-      throw new IllegalStateException("Both the Processor and FixedKeyProcessor were null");
-    } else if (userProcessor != null && userFixedKeyProcessor != null) {
-      throw new IllegalStateException("Both the Processor and FixedKeyProcessor were non-null");
-    }
-  }
-
-  @Override
-  public void init(final ProcessorContext<KOut, VOut> context) {
-
-    initFields((InternalProcessorContext<KOut, VOut>) context);
-
-    userProcessor.init(userContext);
-
-    completeInitialization();
-  }
-
-  // Note: we have to cast and suppress warnings in this version of #init but
-  // not the other due to the KOut parameter being squashed into KIn in the
-  // fixed-key version of the processor. However, we know this cast is safe,
-  // since by definition KIn and KOut are the same type
-  @SuppressWarnings("unchecked")
-  @Override
-  public void init(final FixedKeyProcessorContext<KIn, VOut> context) {
-
-    initFields((InternalProcessorContext<KOut, VOut>) context);
-
-    userFixedKeyProcessor.init((FixedKeyProcessorContext<KIn, VOut>) userContext);
-
-    completeInitialization();
-  }
-
-  /**
-   * Performs the first half of initialization by setting all the class fields
-   * that have to wait for the context to be passed in to #init to be initialized.
-   */
-  private void initFields(
-      final InternalProcessorContext<KOut, VOut> internalContext
-  ) {
     this.taskContext = internalContext;
 
     this.streamThreadName = Thread.currentThread().getName();
@@ -235,6 +199,11 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
         PunctuationType.WALL_CLOCK_TIME,
         this::punctuate
     );
+
+    // calls #init on the user's processor
+    userInit.run();
+
+    completeInitialization();
   }
 
   /**
@@ -278,8 +247,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     }
   }
 
-  @Override
-  public void process(final Record<KIn, VIn> record) {
+  public void process(final Record<KIn, VIn> record, final Runnable userProcess) {
     assertQueuesEmptyOnFirstProcess();
 
     final AsyncEvent newEvent = new AsyncEvent(
@@ -290,15 +258,18 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
         extractRecordContext(taskContext),
         taskContext.currentStreamTimeMs(),
         taskContext.currentSystemTimeMs(),
+<<<<<<< Updated upstream
         () -> userProcessor.process(record),
         List.of(metricsRecorder::recordStateTransition)
+=======
+        userProcess
+>>>>>>> Stashed changes
     );
 
     processNewAsyncEvent(newEvent);
   }
 
-  @Override
-  public void process(final FixedKeyRecord<KIn, VIn> record) {
+  public void process(final FixedKeyRecord<KIn, VIn> record, final Runnable userProcess) {
     assertQueuesEmptyOnFirstProcess();
 
     final AsyncEvent newEvent = new AsyncEvent(
@@ -309,8 +280,12 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
         extractRecordContext(taskContext),
         taskContext.currentStreamTimeMs(),
         taskContext.currentSystemTimeMs(),
+<<<<<<< Updated upstream
         () -> userFixedKeyProcessor.process(record),
         List.of(metricsRecorder::recordStateTransition)
+=======
+        userProcess
+>>>>>>> Stashed changes
     );
 
     processNewAsyncEvent(newEvent);
@@ -351,8 +326,13 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     return ((InternalProcessorContext<KOut, VOut>) context).recordContext();
   }
 
+<<<<<<< Updated upstream
   @Override
   public void close() {
+=======
+  public void close(final Runnable userClose) {
+
+>>>>>>> Stashed changes
     if (!isCleared()) {
       // This doesn't necessarily indicate an issue; it just should only ever
       // happen if the task is closed dirty, but unfortunately we can't tell
@@ -369,11 +349,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     punctuator.cancel();
     threadPool.removeProcessor(asyncProcessorName, taskId.partition());
 
-    if (userProcessor != null) {
-      userProcessor.close();
-    } else {
-      userFixedKeyProcessor.close();
-    }
+    userClose.run();
   }
 
   private static void registerFlushListenerForStoreBuilders(
