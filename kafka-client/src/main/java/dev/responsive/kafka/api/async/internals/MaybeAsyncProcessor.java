@@ -20,7 +20,6 @@ import static dev.responsive.kafka.api.config.ResponsiveConfig.ASYNC_THREAD_POOL
 import static dev.responsive.kafka.api.config.ResponsiveConfig.responsiveConfig;
 
 import dev.responsive.kafka.api.async.internals.stores.AbstractAsyncStoreBuilder;
-import dev.responsive.kafka.api.config.ResponsiveConfig;
 import java.util.Map;
 import java.util.Optional;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
@@ -111,7 +110,7 @@ public class MaybeAsyncProcessor<KIn, VIn, KOut, VOut>
     final Runnable userProcess = () -> userProcessor.process(record);
 
     if (asyncProcessor.isPresent()) {
-      asyncProcessor.get().process(record, userProcess);
+      asyncProcessor.get().processRegular(record, userProcess);
     } else {
       userProcess.run();
     }
@@ -122,7 +121,7 @@ public class MaybeAsyncProcessor<KIn, VIn, KOut, VOut>
     final Runnable userProcess = () -> userFixedKeyProcessor.process(record);
 
     if (asyncProcessor.isPresent()) {
-      asyncProcessor.get().process(record, userProcess);
+      asyncProcessor.get().processFixedKey(record, userProcess);
     } else {
       userProcess.run();
     }

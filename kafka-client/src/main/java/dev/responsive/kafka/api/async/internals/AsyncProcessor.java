@@ -52,11 +52,8 @@ import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
-import org.apache.kafka.streams.processor.api.FixedKeyProcessorContext;
 import org.apache.kafka.streams.processor.api.FixedKeyRecord;
 import org.apache.kafka.streams.processor.api.ProcessingContext;
-import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
@@ -71,14 +68,6 @@ import org.slf4j.Logger;
  */
 public class AsyncProcessor<KIn, VIn, KOut, VOut> {
 
-  private final Map<String, AbstractAsyncStoreBuilder<?, ?, ?>> connectedStoreBuilders;
-
-  // Tracks all pending events, ie from moment of creation to end of finalization/transition
-  // to "DONE" state. Used to make sure all events are flushed during a commit.
-  // We use a concurrent map here so metrics readers can query its size. Otherwise, only
-  // the stream thread should access this.
-  private final Map<AsyncEvent, Object> pendingEvents = new ConcurrentHashMap<>();
-
   private final String logPrefix;
   private final Logger log;
 
@@ -89,6 +78,14 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> {
   private final AsyncThreadPool threadPool;
   private final SchedulingQueue<KIn> schedulingQueue;
   private final FinalizingQueue finalizingQueue;
+
+  private final Map<String, AbstractAsyncStoreBuilder<?, ?, ?>> connectedStoreBuilders;
+
+  // Tracks all pending events, ie from moment of creation to end of finalization/transition
+  // to "DONE" state. Used to make sure all events are flushed during a commit.
+  // We use a concurrent map here so metrics readers can query its size. Otherwise, only
+  // the stream thread should access this.
+  private final Map<AsyncEvent, Object> pendingEvents = new ConcurrentHashMap<>();
 
   private final Cancellable punctuator;
 
@@ -101,6 +98,8 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> {
   // the context we pass in to the user so it routes to the actual context based on calling thread
   private final AsyncUserProcessorContext<KOut, VOut> userContext;
 
+  private final AsyncProcessorMetricsRecorder metricsRecorder;
+
   private boolean hasProcessedSomething = false;
 
   // This is set at most once. When its set, the thread should immediately throw, and no longer
@@ -108,46 +107,12 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> {
   // bad results, particularly with ALOS.
   private FatalAsyncException fatalException = null;
 
-<<<<<<< Updated upstream
-  // Everything below this line is effectively final and just has to be initialized in #init //
-
-  private String logPrefix;
-  private Logger log;
-
-  private String streamThreadName;
-  private String asyncProcessorName;
-  private TaskId taskId;
-
-  private AsyncThreadPool threadPool;
-  private SchedulingQueue<KIn> schedulingQueue;
-  private FinalizingQueue finalizingQueue;
-
-  private Cancellable punctuator;
-
-  // the context passed to us in init, ie the one created for this task and owned by Kafka Streams
-  private ProcessingContext taskContext;
-
-  // the async context owned by the StreamThread that is running this processor/task
-  private StreamThreadProcessorContext<KOut, VOut> streamThreadContext;
-
-  // the context we pass in to the user so it routes to the actual context based on calling thread
-  private AsyncUserProcessorContext<KOut, VOut> userContext;
-  private boolean hasProcessedSomething = false;
-
-  private AsyncProcessorMetricsRecorder metricsRecorder;
-
-  public static <KIn, VIn, KOut, VOut> AsyncProcessor<KIn, VIn, KOut, VOut> createAsyncProcessor(
-      final Processor<KIn, VIn, KOut, VOut> userProcessor,
-      final Map<String, AbstractAsyncStoreBuilder<?, ?, ?>> connectedStoreBuilders
-=======
   public AsyncProcessor(
       final Map<String, AbstractAsyncStoreBuilder<?, ?, ?>> connectedStoreBuilders,
       final InternalProcessorContext<KOut, VOut> internalContext,
       final Runnable userInit
->>>>>>> Stashed changes
   ) {
     this.connectedStoreBuilders = connectedStoreBuilders;
-
     this.taskContext = internalContext;
 
     this.streamThreadName = Thread.currentThread().getName();
@@ -200,7 +165,6 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> {
         this::punctuate
     );
 
-    // calls #init on the user's processor
     userInit.run();
 
     completeInitialization();
@@ -247,7 +211,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> {
     }
   }
 
-  public void process(final Record<KIn, VIn> record, final Runnable userProcess) {
+  public void processRegular(final Record<KIn, VIn> record, final Runnable userProcess) {
     assertQueuesEmptyOnFirstProcess();
 
     final AsyncEvent newEvent = new AsyncEvent(
@@ -258,18 +222,14 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> {
         extractRecordContext(taskContext),
         taskContext.currentStreamTimeMs(),
         taskContext.currentSystemTimeMs(),
-<<<<<<< Updated upstream
-        () -> userProcessor.process(record),
+        userProcess,
         List.of(metricsRecorder::recordStateTransition)
-=======
-        userProcess
->>>>>>> Stashed changes
     );
 
-    processNewAsyncEvent(newEvent);
+    process(newEvent);
   }
 
-  public void process(final FixedKeyRecord<KIn, VIn> record, final Runnable userProcess) {
+  public void processFixedKey(final FixedKeyRecord<KIn, VIn> record, final Runnable userProcess) {
     assertQueuesEmptyOnFirstProcess();
 
     final AsyncEvent newEvent = new AsyncEvent(
@@ -280,18 +240,14 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> {
         extractRecordContext(taskContext),
         taskContext.currentStreamTimeMs(),
         taskContext.currentSystemTimeMs(),
-<<<<<<< Updated upstream
-        () -> userFixedKeyProcessor.process(record),
+        userProcess,
         List.of(metricsRecorder::recordStateTransition)
-=======
-        userProcess
->>>>>>> Stashed changes
     );
 
-    processNewAsyncEvent(newEvent);
+    process(newEvent);
   }
 
-  private void processNewAsyncEvent(final AsyncEvent event) {
+  private void process(final AsyncEvent event) {
     if (fatalException != null) {
       log.error("process called when processor already hit fatal exception", fatalException);
       throw new IllegalStateException(
@@ -326,13 +282,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> {
     return ((InternalProcessorContext<KOut, VOut>) context).recordContext();
   }
 
-<<<<<<< Updated upstream
-  @Override
-  public void close() {
-=======
   public void close(final Runnable userClose) {
-
->>>>>>> Stashed changes
     if (!isCleared()) {
       // This doesn't necessarily indicate an issue; it just should only ever
       // happen if the task is closed dirty, but unfortunately we can't tell
@@ -636,7 +586,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut> {
       throw new IllegalStateException(String.format(
           "routed event from %d to the wrong processor for %s",
           event.partition(),
-          taskId.toString()));
+          taskId));
     }
 
     // Make sure to check for a failed event before preparing finalization. prepareToFinalizeEvent
