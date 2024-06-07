@@ -44,6 +44,7 @@ checkstyle {
 
 repositories {
     mavenCentral()
+    mavenLocal()
 }
 
 tasks.test {
