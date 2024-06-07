@@ -45,7 +45,7 @@ dependencyResolutionManagement {
     versionCatalogs {
         create("libs") {
             version("jackson", "2.14.2")
-            version("kafka", "3.7.0")
+            version("kafka", "3.9.0-SNAPSHOT")
             version("scylla", "4.15.0.0")
             version("javaoperatorsdk", "4.3.0")
             version("grpc", "1.52.1")
