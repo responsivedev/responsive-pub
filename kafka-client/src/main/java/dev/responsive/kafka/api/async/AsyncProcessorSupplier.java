@@ -19,6 +19,7 @@ package dev.responsive.kafka.api.async;
 import static dev.responsive.kafka.api.async.internals.AsyncProcessor.createAsyncProcessor;
 import static dev.responsive.kafka.api.async.internals.AsyncUtils.initializeAsyncBuilders;
 
+import dev.responsive.kafka.api.async.internals.AsyncProcessingGate;
 import dev.responsive.kafka.api.async.internals.AsyncProcessor;
 import dev.responsive.kafka.api.async.internals.stores.AbstractAsyncStoreBuilder;
 import java.util.HashSet;
@@ -155,13 +156,21 @@ public final class AsyncProcessorSupplier<KIn, VIn, KOut, VOut>
   }
 
   @Override
-  public AsyncProcessor<KIn, VIn, KOut, VOut> get() {
-    return createAsyncProcessor(userProcessorSupplier.get(), asyncStoreBuilders);
+  public Processor<KIn, VIn, KOut, VOut> get() {
+    if (AsyncProcessingGate.asyncEnabled()) {
+      return createAsyncProcessor(userProcessorSupplier.get(), asyncStoreBuilders);
+    } else {
+      return userProcessorSupplier.get();
+    }
   }
 
   @Override
   public Set<StoreBuilder<?>> stores() {
-    return new HashSet<>(asyncStoreBuilders.values());
+    if (AsyncProcessingGate.asyncEnabled()) {
+      return new HashSet<>(asyncStoreBuilders.values());
+    } else {
+      return userProcessorSupplier.stores();
+    }
   }
 
 }

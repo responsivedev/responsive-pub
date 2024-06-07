@@ -31,6 +31,7 @@ import static org.apache.kafka.streams.StreamsConfig.METRICS_RECORDING_LEVEL_CON
 import static org.apache.kafka.streams.StreamsConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.NUM_STREAM_THREADS_CONFIG;
 
+import dev.responsive.kafka.api.async.internals.AsyncProcessingGate;
 import dev.responsive.kafka.api.async.internals.AsyncThreadPoolRegistry;
 import dev.responsive.kafka.api.config.CompatibilityMode;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
@@ -213,8 +214,13 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     LOG.info("Responsive Client version: {}", versionMetadata.responsiveClientVersion);
     LOG.info("Responsive Client commit ID: {}", versionMetadata.responsiveClientCommitId);
 
+    final String applicationId = applicationConfigs.getString(APPLICATION_ID_CONFIG);
+    final int asyncThreadPoolSize = params.responsiveConfig.getInt(ASYNC_THREAD_POOL_SIZE_CONFIG);
+
+    AsyncProcessingGate.maybeEnableAsyncProcessing(asyncThreadPoolSize);
+
     responsiveMetrics.initializeTags(
-        applicationConfigs.getString(APPLICATION_ID_CONFIG),
+        applicationId,
         clientId,
         versionMetadata,
         applicationConfigs.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX)
@@ -368,27 +374,39 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
   }
 
   private void closeInternal() {
+    AsyncProcessingGate.closeAsyncProcessing();
     responsiveStateListener.close();
     sessionClients.closeAll();
   }
 
   @Override
   public void close() {
-    super.close();
-    closeInternal();
+    try {
+      super.close();
+    } finally {
+      closeInternal();
+    }
   }
 
   @Override
   public boolean close(final Duration timeout) {
-    final boolean closed = super.close(timeout);
-    closeInternal();
+    final boolean closed;
+    try {
+      closed = super.close(timeout);
+    } finally {
+      closeInternal();
+    }
     return closed;
   }
 
   @Override
   public boolean close(final CloseOptions options) {
-    final boolean closed = super.close(options);
-    closeInternal();
+    final boolean closed;
+    try {
+      closed = super.close(options);
+    } finally {
+      closeInternal();
+    }
     return closed;
   }
 
