@@ -14,7 +14,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -210,6 +212,13 @@ public class AsyncThreadPool {
           .exceptionally(fatalException -> {
             // do this alone & in separate stage to ensure we always catch a fatal exception, even
             // if we somehow hit another exception while handling an exception in a previous stage
+            if (fatalException instanceof CompletionException
+                && fatalException.getCause() instanceof CancellationException) {
+              // when the task is cancelled (e.g. by removeProcessor) this method is called
+              // with a CompletionException caused by a CancellationException. This is not
+              // a failure, so don't store it in fatalExceptions
+              throw (CompletionException) fatalException;
+            }
             fatalExceptions.computeIfAbsent(
                 inFlightKey,
                 k -> new FatalAsyncException("Uncaught exception while handling", fatalException));

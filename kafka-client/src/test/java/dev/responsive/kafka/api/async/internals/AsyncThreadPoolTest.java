@@ -147,6 +147,26 @@ class AsyncThreadPoolTest {
     assertThat(other0InFlight.get(eventOtherProcessor).future().isCancelled(), is(false));
   }
 
+  @Test
+  public void shouldNotRaiseFatalExceptionOnCancellation() {
+    // given:
+    final var task1 = new TestTask();
+    final var event1 = newEvent(task1, 0);
+    schedule("processor", 0, finalizingQueue0, event1);
+
+    // when:
+    pool.removeProcessor("processor", 0);
+
+    // then:
+    for (final var t : List.of(task1)) {
+      t.waitLatch.countDown();
+    }
+    assertThat(
+        pool.checkUncaughtExceptions("processor", 0),
+        is(Optional.empty())
+    );
+  }
+
   private static final class TestTask implements Runnable {
     private final CountDownLatch waitLatch = new CountDownLatch(1);
 
