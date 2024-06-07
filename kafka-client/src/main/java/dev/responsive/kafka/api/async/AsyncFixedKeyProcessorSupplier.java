@@ -75,7 +75,10 @@ public class AsyncFixedKeyProcessorSupplier<KIn, VIn, VOut>
 
   @Override
   public MaybeAsyncProcessor<KIn, VIn, KIn, VOut> get() {
-    return MaybeAsyncProcessor.createFixedKeyProcessor(userProcessorSupplier.get(), asyncStoreBuilders);
+    return MaybeAsyncProcessor.createFixedKeyProcessor(
+        userProcessorSupplier.get(),
+        asyncStoreBuilders
+    );
   }
 
   @Override

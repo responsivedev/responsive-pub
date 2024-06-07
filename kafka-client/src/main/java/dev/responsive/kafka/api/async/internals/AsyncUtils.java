@@ -91,6 +91,7 @@ public class AsyncUtils {
         );
 
       } else {
+        // TODO: lift this restriction by finding another way to get the storeType from the builder
         throw new IllegalStateException(String.format(
             "Detected the StoreBuilder for %s was not created via the ResponsiveStores factory, "
                 + "please ensure that all store builders and suppliers are provided through the "

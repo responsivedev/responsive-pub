@@ -93,12 +93,17 @@ public class MaybeAsyncProcessor<KIn, VIn, KOut, VOut>
     );
   }
 
-  private void sharedInit(final InternalProcessorContext<KOut, VOut> context, final Runnable userInit) {
+  private void sharedInit(
+      final InternalProcessorContext<KOut, VOut> context,
+      final Runnable userInit
+  ) {
     final int asyncThreadPoolSize =
         responsiveConfig(context.appConfigs()).getInt(ASYNC_THREAD_POOL_SIZE_CONFIG);
 
     if (asyncThreadPoolSize > 0) {
-      this.asyncProcessor = Optional.of(new AsyncProcessor<>(connectedStoreBuilders, context, userInit));
+      this.asyncProcessor = Optional.of(
+          new AsyncProcessor<>(connectedStoreBuilders, context, userInit)
+      );
     } else {
       this.asyncProcessor = Optional.empty();
       userInit.run();
