@@ -131,6 +131,11 @@ public class E2ETestApplication {
     final StreamsBuilder builder = new StreamsBuilder();
     final KStream<Long, InputRecord> stream =
         builder.stream(inputTopic, Consumed.with(Serdes.Long(), Schema.inputRecordSerde()));
+    final UrandomGenerator randomGenerator = new UrandomGenerator();
+    int exceptionThreshold = this.exceptionThreshold;
+    if (Math.abs(randomGenerator.nextLong()) % 2 == 0) {
+      exceptionThreshold = 0;
+    }
     final KStream<Long, OutputRecord> result = stream
         .processValues(AsyncFixedKeyProcessorSupplier.createAsyncProcessorSupplier(
             new E2ETestProcessorSupplier(name, exceptionThreshold)),
