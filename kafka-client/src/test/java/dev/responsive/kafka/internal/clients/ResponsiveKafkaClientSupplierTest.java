@@ -30,6 +30,7 @@ import static org.mockito.Mockito.when;
 import dev.responsive.kafka.api.async.internals.AsyncThreadPoolRegistry;
 import dev.responsive.kafka.api.config.CompatibilityMode;
 import dev.responsive.kafka.internal.clients.ResponsiveKafkaClientSupplier.Factories;
+import dev.responsive.kafka.internal.config.ControllerSignals;
 import dev.responsive.kafka.internal.metrics.EndOffsetsPoller;
 import dev.responsive.kafka.internal.metrics.MetricPublishingCommitListener;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
@@ -126,7 +127,7 @@ class ResponsiveKafkaClientSupplierTest {
         factories.createResponsiveProducer(any(), (ResponsiveProducer<byte[], byte[]>) any(), any())
     ).thenReturn(responsiveProducer);
     lenient().when(factories.createResponsiveConsumer(
-        any(), (ResponsiveConsumer<byte[], byte[]>) any(), any(), any())
+        any(), (ResponsiveConsumer<byte[], byte[]>) any(), any(), any(), any())
     ).thenReturn(responsiveConsumer);
     lenient().when(factories.createMetricsPublishingCommitListener(any(), any(), any()))
         .thenReturn(commitMetricListener);
@@ -196,7 +197,7 @@ class ResponsiveKafkaClientSupplierTest {
 
     // then:
     verify(factories).createResponsiveConsumer(
-        any(), any(), consumerListenerCaptor.capture(), any());
+        any(), any(), any(), consumerListenerCaptor.capture(), any());
     assertThat(consumerListenerCaptor.getValue(), Matchers.hasItem(commitMetricListener));
     verify(factories).createMetricsPublishingCommitListener(
         metrics, "StreamThread-0", offsetRecorder);
@@ -229,7 +230,7 @@ class ResponsiveKafkaClientSupplierTest {
 
     // then:
     verify(factories).createResponsiveConsumer(
-        any(), any(), consumerListenerCaptor.capture(), any());
+        any(), any(), any(), consumerListenerCaptor.capture(), any());
     assertThat(consumerListenerCaptor.getValue(), Matchers.hasItem(consumerEndOffsetsPollListener));
   }
 
@@ -241,7 +242,7 @@ class ResponsiveKafkaClientSupplierTest {
 
     // then:
     verify(factories).createResponsiveConsumer(
-        any(), any(), consumerListenerCaptor.capture(), any());
+        any(), any(), any(), consumerListenerCaptor.capture(), any());
     consumerListenerCaptor.getValue().forEach(ResponsiveConsumer.Listener::onClose);
     verify(commitMetricListener, times(0)).close();
     verify(factories).createResponsiveProducer(any(), any(), producerListenerCaptor.capture());
@@ -309,6 +310,7 @@ class ResponsiveKafkaClientSupplierTest {
     final var intermediate = new HashMap<String, Object>();
     intermediate.putAll(configs);
     intermediate.putAll(overrides);
+    intermediate.put("__internal.responsive.controller.signals__", new ControllerSignals());
     intermediate.put(
         "__internal.responsive.async.thread.pool.registry__", new AsyncThreadPoolRegistry(
             2,
