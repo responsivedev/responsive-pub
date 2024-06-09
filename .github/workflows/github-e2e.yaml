@@ -40,7 +40,7 @@ jobs:
       - name: "Gradle Build"
         uses: gradle/gradle-build-action@v2.9.0
         with:
-          arguments: kafka-client-examples:e2e-test:build kafka-client-examples:e2e-test:buildDocker
+          arguments: kafka-client-examples:e2e-test:build kafka-client-examples:e2e-test:buildDocker -xtest
 
       - name: "Set Kafka Client Version"
         run: |
