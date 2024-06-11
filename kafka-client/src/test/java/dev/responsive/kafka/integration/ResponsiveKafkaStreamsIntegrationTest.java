@@ -20,17 +20,19 @@ import static dev.responsive.kafka.testutils.IntegrationTestUtils.pipeTimestampe
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.startAppAndAwaitRunning;
 import static org.apache.kafka.streams.StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.hasItem;
+import static org.hamcrest.Matchers.hasItems;
+import static org.hamcrest.Matchers.is;
 
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.config.StorageBackend;
-import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
-import dev.responsive.kafka.api.stores.ResponsiveStores;
+import dev.responsive.kafka.internal.utils.SessionUtil;
 import dev.responsive.kafka.testutils.IntegrationTestUtils;
 import dev.responsive.kafka.testutils.KeyValueTimestamp;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
-import dev.responsive.kafka.testutils.StoreComparatorSuppliers;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -43,21 +45,21 @@ import java.util.concurrent.TimeUnit;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
-import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.internals.RocksDBKeyValueBytesStoreSupplier;
+import org.apache.kafka.streams.kstream.Named;
+import org.bson.types.Binary;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.RegisterExtension;
+import org.testcontainers.containers.MongoDBContainer;
 
-public class ResponsiveKeyValueStoreIntegrationTest {
+public class ResponsiveKafkaStreamsIntegrationTest {
 
+  public static final String COUNT_TABLE_NAME = "count";
   @RegisterExtension
   static ResponsiveExtension EXTENSION = new ResponsiveExtension(StorageBackend.MONGO_DB);
 
@@ -67,15 +69,18 @@ public class ResponsiveKeyValueStoreIntegrationTest {
   private final Map<String, Object> responsiveProps = new HashMap<>();
 
   private String name;
+  private MongoDBContainer mongo;
 
   @BeforeEach
   public void before(
       final TestInfo info,
       final Admin admin,
+      final MongoDBContainer mongo,
       @ResponsiveConfigParam final Map<String, Object> responsiveProps
   ) throws InterruptedException, ExecutionException {
     // add displayName to name to account for parameterized tests
     name = info.getTestMethod().orElseThrow().getName() + "-" + new Random().nextInt();
+    this.mongo = mongo;
 
     this.responsiveProps.putAll(responsiveProps);
 
@@ -96,42 +101,14 @@ public class ResponsiveKeyValueStoreIntegrationTest {
     return name + "." + OUTPUT_TOPIC;
   }
 
-  /*
-   * This test makes sure that the default RocksDB state store and the responsive state
-   * store consistently show identical internal behavior.
-   * We do not check the output topic but rather use the StoreComparator to ensure that
-   * they return identical results from each method invoked on them.
-   */
   @Test
-  public void shouldMatchRocksDB() throws Exception {
-    final KeyValueBytesStoreSupplier rocksDbStore =
-        new RocksDBKeyValueBytesStoreSupplier(name, false);
-
-    final KeyValueBytesStoreSupplier responsiveStore =
-        ResponsiveStores.keyValueStore(ResponsiveKeyValueParams.keyValue(name));
-
-    final StoreComparatorSuppliers.CompareFunction compare =
-        (String method, Object[] args, Object actual, Object truth) -> {
-          final String reason = method + " should yield identical results.";
-          assertThat(reason, actual, Matchers.equalTo(truth));
-        };
-
-    final Materialized<String, String, KeyValueStore<Bytes, byte[]>> combinedStore =
-        Materialized.as(new StoreComparatorSuppliers.MultiKeyValueStoreSupplier(
-            rocksDbStore, responsiveStore, compare
-        ));
-
-    // Start from timestamp of 0L to get predictable results
+  public void shouldDefaultToResponsiveStoresWhenUsingDsl() throws Exception {
+    // Given:
     final List<KeyValueTimestamp<String, String>> inputEvents = Arrays.asList(
         new KeyValueTimestamp<>("key", "a", 0L),
-        new KeyValueTimestamp<>("key", "c", 1_000L),
         new KeyValueTimestamp<>("key", "b", 2_000L),
-        new KeyValueTimestamp<>("key", "d", 3_000L),
-        new KeyValueTimestamp<>("key", "b", 3_000L),
-        new KeyValueTimestamp<>("key", null, 4_000L),
-        new KeyValueTimestamp<>("key2", "e", 4_000L),
-        new KeyValueTimestamp<>("key2", "b", 5_000L),
-        new KeyValueTimestamp<>("STOP", "b", 18_000L)
+        new KeyValueTimestamp<>("key", "c", 3_000L),
+        new KeyValueTimestamp<>("STOP", "ignored", 18_000L)
     );
     final CountDownLatch outputLatch = new CountDownLatch(1);
 
@@ -139,7 +116,7 @@ public class ResponsiveKeyValueStoreIntegrationTest {
     final KStream<String, String> input = builder.stream(inputTopic());
     input
         .groupByKey()
-        .aggregate(() -> "", (k, v1, agg) -> agg + v1, combinedStore)
+        .count(Named.as(COUNT_TABLE_NAME))
         .toStream()
         .peek((k, v) -> {
           if (k.equals("STOP")) {
@@ -166,6 +143,28 @@ public class ResponsiveKeyValueStoreIntegrationTest {
           outputLatch.await(maxWait, TimeUnit.MILLISECONDS),
           Matchers.equalTo(true)
       );
+    }
+
+    // Then:
+    try (
+        final var mongoClient = SessionUtil.connect(mongo.getConnectionString(), null, null);
+        final var deserializer = new StringDeserializer();
+    ) {
+      final List<String> dbs = new ArrayList<>();
+      mongoClient.listDatabaseNames().into(dbs);
+      assertThat(dbs, hasItem("kstream_aggregate_state_store_0000000001"));
+
+      final var db = mongoClient.getDatabase("kstream_aggregate_state_store_0000000001");
+      final var collection = db.getCollection("kv_data");
+      final long numDocs = collection.countDocuments();
+      assertThat(numDocs, is(2L));
+
+      final List<String> keys = new ArrayList<>();
+      collection.find()
+          .map(doc -> doc.get("_id", Binary.class).getData())
+          .map(doc -> deserializer.deserialize("", doc))
+          .into(keys);
+      assertThat(keys, hasItems("key", "STOP"));
     }
   }
 

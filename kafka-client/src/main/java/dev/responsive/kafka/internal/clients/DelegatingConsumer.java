@@ -34,6 +34,7 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 
 public abstract class DelegatingConsumer<K, V> implements Consumer<K, V> {
 
@@ -291,5 +292,10 @@ public abstract class DelegatingConsumer<K, V> implements Consumer<K, V> {
   @Override
   public void wakeup() {
     delegate.wakeup();
+  }
+
+  @Override
+  public Uuid clientInstanceId(final Duration duration) {
+    return delegate.clientInstanceId(duration);
   }
 }
