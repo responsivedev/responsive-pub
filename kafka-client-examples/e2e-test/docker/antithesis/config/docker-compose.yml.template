@@ -95,7 +95,7 @@ services:
       INPUT_TOPIC: input
       OUTPUT_TOPIC: output
       PARTITIONS: 8
-      NUM_KEYS: 100
+      NUM_KEYS: 16
       MAX_OUTSTANDING: 10000
       E2E_APP_MODE: APPLICATION
       CONFIG_PATH: "/app.properties"
@@ -119,7 +119,7 @@ services:
       INPUT_TOPIC: input
       OUTPUT_TOPIC: output
       PARTITIONS: 8
-      NUM_KEYS: 100
+      NUM_KEYS: 16
       MAX_OUTSTANDING: 10000
       E2E_APP_MODE: APPLICATION
       CONFIG_PATH: "/app.properties"
@@ -143,7 +143,7 @@ services:
       INPUT_TOPIC: input
       OUTPUT_TOPIC: output
       PARTITIONS: 8
-      NUM_KEYS: 100
+      NUM_KEYS: 16
       MAX_OUTSTANDING: 10000
       E2E_APP_MODE: DRIVER
       CONFIG_PATH: "/app.properties"

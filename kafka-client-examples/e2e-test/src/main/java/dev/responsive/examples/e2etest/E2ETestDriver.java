@@ -377,7 +377,7 @@ public class E2ETestDriver {
 
     private void checkStalled(final RecordMetadata earliestUnconsumed, final int partition) {
       if (stalled != null) {
-        if (earliestUnconsumed == stalled) {
+        if (earliestUnconsumed.offset() == stalled.offset()) {
           // the earliest unconsumed record has not advanced
           if (Duration.between(faultsStoppedAt, Instant.now()).compareTo(receivedThreshold) > 0) {
             throw new IllegalStateException(String.format(
@@ -391,6 +391,7 @@ public class E2ETestDriver {
           }
         } else {
           // earliest unconsumed has advanced. not a true stall
+          LOG.info("stall for {} is cleared", key);
           faultStopper.startFaults();
           stalled = null;
           faultsStoppedAt = null;
