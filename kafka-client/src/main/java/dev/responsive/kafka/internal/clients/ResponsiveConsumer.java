@@ -22,9 +22,11 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.common.TopicPartition;
@@ -33,6 +35,8 @@ import org.slf4j.Logger;
 
 public class ResponsiveConsumer<K, V> extends DelegatingConsumer<K, V> {
   private final Logger log;
+
+  private final AtomicBoolean rebalanceRequested;
 
   private final List<Listener> listeners;
   private final Runnable shutdownAsyncThreadPool;
@@ -80,6 +84,7 @@ public class ResponsiveConsumer<K, V> extends DelegatingConsumer<K, V> {
   public ResponsiveConsumer(
       final String clientId,
       final Consumer<K, V> delegate,
+      final AtomicBoolean rebalanceRequested,
       final List<Listener> listeners,
       final Runnable shutdownAsyncThreadPool
   ) {
@@ -87,8 +92,18 @@ public class ResponsiveConsumer<K, V> extends DelegatingConsumer<K, V> {
     this.log = new LogContext(
         String.format("responsive-consumer [%s]", Objects.requireNonNull(clientId))
     ).logger(ResponsiveConsumer.class);
+    this.rebalanceRequested = rebalanceRequested;
     this.listeners = Objects.requireNonNull(listeners);
     this.shutdownAsyncThreadPool = shutdownAsyncThreadPool;
+  }
+
+  @Override
+  public ConsumerRecords<K, V> poll(final Duration timeout) {
+    if (rebalanceRequested.getAndSet(false)) {
+      enforceRebalance("Triggering manual rebalance to reassign tasks");
+    }
+
+    return super.poll(timeout);
   }
 
   @Override

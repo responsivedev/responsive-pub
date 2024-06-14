@@ -18,6 +18,7 @@ package dev.responsive.kafka.internal.clients;
 
 import static dev.responsive.kafka.internal.config.InternalSessionConfigs.isAsyncThreadPoolRegistryEnabled;
 import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadAsyncThreadPoolRegistry;
+import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadControllerSignals;
 import static dev.responsive.kafka.internal.utils.Utils.extractThreadId;
 import static dev.responsive.kafka.internal.utils.Utils.extractThreadNameFromConsumerClientId;
 import static org.apache.kafka.streams.StreamsConfig.AT_LEAST_ONCE;
@@ -25,6 +26,7 @@ import static org.apache.kafka.streams.StreamsConfig.AT_LEAST_ONCE;
 import dev.responsive.kafka.api.async.internals.AsyncThreadPoolRegistry;
 import dev.responsive.kafka.api.config.CompatibilityMode;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
+import dev.responsive.kafka.internal.config.ControllerSignals;
 import dev.responsive.kafka.internal.metrics.EndOffsetsPoller;
 import dev.responsive.kafka.internal.metrics.MetricPublishingCommitListener;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
@@ -37,6 +39,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalLong;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 import org.apache.kafka.clients.CommonClientConfigs;
@@ -169,6 +172,9 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
       asyncThreadPoolRegistry = null;
     }
 
+    final ControllerSignals controllerSignals = loadControllerSignals(config);
+    final AtomicBoolean rebalanceRequested = controllerSignals.rebalanceRequested();
+
     final ListenersForThread tc = sharedListeners.getAndMaybeInitListenersForThread(
         eos,
         threadId,
@@ -183,6 +189,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
     return factories.createResponsiveConsumer(
         clientId,
         wrapped.getConsumer(config),
+        rebalanceRequested,
         List.of(
             tc.committedOffsetMetricListener,
             tc.offsetRecorder.getConsumerListener(),
@@ -404,10 +411,13 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
     default <K, V> ResponsiveConsumer<K, V> createResponsiveConsumer(
         final String clientId,
         final Consumer<K, V> wrapped,
+        final AtomicBoolean rebalanceRequested,
         final List<ResponsiveConsumer.Listener> listeners,
         final Runnable shutdownAsyncThreadPool
     ) {
-      return new ResponsiveConsumer<>(clientId, wrapped, listeners, shutdownAsyncThreadPool);
+      return new ResponsiveConsumer<>(
+          clientId, wrapped, rebalanceRequested, listeners, shutdownAsyncThreadPool
+      );
     }
 
     default <K, V> ResponsiveGlobalConsumer createGlobalConsumer(

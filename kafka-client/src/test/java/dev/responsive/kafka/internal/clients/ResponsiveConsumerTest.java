@@ -25,6 +25,7 @@ import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
@@ -57,7 +58,7 @@ class ResponsiveConsumerTest {
   @BeforeEach
   public void setup() {
     consumer = new ResponsiveConsumer<>(
-        "clientid", wrapped, List.of(listener1, listener2), () -> {});
+        "clientid", wrapped, new AtomicBoolean(), List.of(listener1, listener2), () -> {});
   }
 
   @Test

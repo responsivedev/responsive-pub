@@ -37,6 +37,7 @@ import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.stores.ResponsiveDslStoreSuppliers;
 import dev.responsive.kafka.internal.clients.ResponsiveKafkaClientSupplier;
 import dev.responsive.kafka.internal.config.ConfigUtils;
+import dev.responsive.kafka.internal.config.ControllerSignals;
 import dev.responsive.kafka.internal.config.InternalSessionConfigs;
 import dev.responsive.kafka.internal.config.ResponsiveStreamsConfig;
 import dev.responsive.kafka.internal.db.CassandraClientFactory;
@@ -70,6 +71,7 @@ import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.KafkaStreams;
@@ -86,11 +88,12 @@ import org.slf4j.LoggerFactory;
 
 public class ResponsiveKafkaStreams extends KafkaStreams {
 
-  private static final Logger LOG = LoggerFactory.getLogger(ResponsiveKafkaStreams.class);
+  private final Logger log;
 
   private final ResponsiveMetrics responsiveMetrics;
   private final ResponsiveStateListener responsiveStateListener;
   private final ResponsiveRestoreListener responsiveRestoreListener;
+  private final ControllerSignals controllerSignals;
   private final SessionClients sessionClients;
 
   /**
@@ -190,6 +193,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
         propsWithOverrides(
             params.streamsConfig.getInt(NUM_STREAM_THREADS_CONFIG),
             params.responsiveConfig,
+            params.controllerSignals,
             params.sessionClients,
             params.storeRegistry,
             params.topology.describe(),
@@ -197,6 +201,9 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
         params.responsiveKafkaClientSupplier,
         params.time
     );
+
+    this.log = new LogContext(String.format("stream-client [%s] ", clientId))
+        .logger(ResponsiveKafkaStreams.class);
 
     if (params.compatibilityMode == CompatibilityMode.FULL) {
       try {
@@ -206,13 +213,14 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       }
     }
 
+    this.controllerSignals = params.controllerSignals;;
     this.responsiveMetrics = params.metrics;
     this.sessionClients = params.sessionClients;
 
     final ClientVersionMetadata versionMetadata = ClientVersionMetadata.loadVersionMetadata();
     // Only log the version metadata for Responsive since Kafka Streams will log its own
-    LOG.info("Responsive Client version: {}", versionMetadata.responsiveClientVersion);
-    LOG.info("Responsive Client commit ID: {}", versionMetadata.responsiveClientCommitId);
+    log.info("Responsive Client version: {}", versionMetadata.responsiveClientVersion);
+    log.info("Responsive Client commit ID: {}", versionMetadata.responsiveClientCommitId);
 
     responsiveMetrics.initializeTags(
         applicationConfigs.getString(APPLICATION_ID_CONFIG),
@@ -265,6 +273,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
   private static Properties propsWithOverrides(
       final int numStreamThreads,
       final ResponsiveConfig configs,
+      final ControllerSignals controllerSignals,
       final SessionClients sessionClients,
       final ResponsiveStoreRegistry storeRegistry,
       final TopologyDescription topologyDescription,
@@ -273,6 +282,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     final Properties propsWithOverrides = new Properties();
 
     final InternalSessionConfigs.Builder internalConfBuilder = new InternalSessionConfigs.Builder()
+        .withControllerSignals(controllerSignals)
         .withSessionClients(sessionClients)
         .withStoreRegistry(storeRegistry)
         .withTopologyDescription(topologyDescription)
@@ -309,7 +319,10 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
           o,
           TASK_ASSIGNOR_CLASS_OVERRIDE
       );
-      LOG.error(errorMsg);
+
+      // create a temporary logger for use in static methods since the constructor hasn't even
+      // been called yet -- it's ok since we just shut down right after this anyways
+      LoggerFactory.getLogger(ResponsiveKafkaStreams.class).error(errorMsg);
       throw new ConfigException(errorMsg);
     }
 
@@ -319,6 +332,15 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     );
 
     return propsWithOverrides;
+  }
+
+  /**
+   * Request Kafka Streams to rebalance the consumer group. The rebalance will be triggered
+   * immediately on the next invocation of #poll by one of the StreamThreads.
+   */
+  public void requestRebalance() {
+    log.info("Rebalance requested");
+    controllerSignals.rebalanceRequested().set(true);
   }
 
   @Override
@@ -405,6 +427,8 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     final ResponsiveMetrics metrics;
     final ResponsiveStoreRegistry storeRegistry;
     final CompatibilityMode compatibilityMode;
+
+    final ControllerSignals controllerSignals = new ControllerSignals();
 
     // can be set during construction
     private Time time = Time.SYSTEM;
