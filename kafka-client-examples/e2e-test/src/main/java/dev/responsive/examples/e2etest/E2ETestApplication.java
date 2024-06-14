@@ -4,10 +4,13 @@ import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.REQUES
 import static dev.responsive.kafka.api.config.ResponsiveConfig.CASSANDRA_HOSTNAME_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.CASSANDRA_PORT_CONFIG;
 
+import com.datastax.oss.driver.api.core.AllNodesFailedException;
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.DriverTimeoutException;
 import com.datastax.oss.driver.api.core.config.DriverConfigLoader;
 import com.datastax.oss.driver.api.core.connection.ConnectionInitException;
+import com.datastax.oss.driver.api.core.servererrors.ReadFailureException;
+import com.datastax.oss.driver.api.core.servererrors.WriteFailureException;
 import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
 import com.datastax.oss.driver.api.querybuilder.schema.CreateKeyspace;
 import dev.responsive.examples.e2etest.Schema.InputRecord;
@@ -160,7 +163,9 @@ public class E2ETestApplication {
     );
     streams.setUncaughtExceptionHandler(exception -> {
       if (shouldLogError(exception, new LinkedList<>())) {
-        LOG.error("uncaught exception on test app stream thread {}",
+        LOG.error("uncaught exception {}({}) on test app stream thread {}",
+            exception.getClass().getName(),
+            exception.getMessage(),
             causalSummary(exception, new LinkedList<>()),
             exception
         );
@@ -193,7 +198,10 @@ public class E2ETestApplication {
         TaskCorruptedException.class,
         TimeoutException.class,
         java.util.concurrent.TimeoutException.class,
-        TransactionAbortedException.class
+        TransactionAbortedException.class,
+        WriteFailureException.class,
+        AllNodesFailedException.class,
+        ReadFailureException.class
     );
     for (final var c : dontcare) {
       if (c.isInstance(throwable)) {

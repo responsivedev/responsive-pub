@@ -314,6 +314,10 @@ public class E2ETestDriver {
           throw new RuntimeException(e);
         }
         if (Duration.between(start, Instant.now()).getSeconds() > 300) {
+          LOG.error("ANTITHESIS NEVER: waited longer than 300 seconds for offset {} {}",
+              upTo,
+              partition
+          );
           throw new IllegalStateException(String.format(
               "waited longer than 300 seconds for offset %d %d", upTo, partition
           ));
@@ -365,7 +369,7 @@ public class E2ETestDriver {
       }
       final var expectedChecksum = checksum.current();
       if (!Arrays.equals(expectedChecksum, observedChecksum)) {
-        LOG.error("checksum mismatch - key({}), recvdCount({}), {} {}",
+        LOG.error("ANTITHESIS NEVER: checksum mismatch - key({}), recvdCount({}), {} {}",
             key,
             recvdCount,
             Arrays.toString(checksum.current()),
@@ -380,6 +384,14 @@ public class E2ETestDriver {
         if (earliestUnconsumed.offset() == stalled.offset()) {
           // the earliest unconsumed record has not advanced
           if (Duration.between(faultsStoppedAt, Instant.now()).compareTo(receivedThreshold) > 0) {
+            LOG.error(
+                "ANTITHESIS NEVER: have not seen results for {} on {} in {}. last sent/rcvd {}/{}",
+                key,
+                partition,
+                receivedThreshold.plus(faultStopThreshold),
+                Instant.ofEpochMilli(stalled.timestamp()),
+                lastReceived
+            );
             throw new IllegalStateException(String.format(
                 "have not seen any results for %d on %d in %s. earliest sent %s. last recvd %s",
                 key,
