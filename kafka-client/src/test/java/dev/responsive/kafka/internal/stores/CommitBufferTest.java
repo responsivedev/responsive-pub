@@ -151,6 +151,7 @@ public class CommitBufferTest {
   private SubPartitioner partitioner;
   private CassandraKeyValueTable table;
   private CassandraClient client;
+  private String threadName;
 
   @BeforeEach
   public void before(
@@ -190,15 +191,20 @@ public class CommitBufferTest {
     when(admin.deleteRecords(Mockito.any())).thenReturn(new DeleteRecordsResult(Map.of(
         changelog, KafkaFuture.completedFuture(new DeletedRecords(100)))));
 
+    threadName = Thread.currentThread().getName();
+
     storeTags = new HashMap<>(APPLICATION_TAGS);
-    storeTags.put("thread-id", Thread.currentThread().getName());
+    storeTags.put("thread-id", threadName);
     storeTags.put("topic", changelog.topic());
     storeTags.put("partition", Integer.toString(changelog.partition()));
     storeTags.put("store", name);
 
-    Mockito.when(metrics.sensor("flush-" + changelog)).thenReturn(flushSensor);
-    Mockito.when(metrics.sensor("flush-latency-" + changelog)).thenReturn(flushLatencySensor);
-    Mockito.when(metrics.sensor("flush-errors-" + changelog)).thenReturn(flushErrorSensor);
+    Mockito.when(metrics.sensor("flush-" + threadName + "-" + changelog))
+        .thenReturn(flushSensor);
+    Mockito.when(metrics.sensor("flush-latency-" + threadName + "-" + changelog))
+        .thenReturn(flushLatencySensor);
+    Mockito.when(metrics.sensor("flush-errors-" + threadName + "-" + changelog))
+        .thenReturn(flushErrorSensor);
   }
 
   private CommitBuffer<Bytes, Integer> createCommitBuffer() {
@@ -299,9 +305,9 @@ public class CommitBufferTest {
     Mockito.verify(metrics).removeMetric(
         eq(metricName(TIME_SINCE_LAST_FLUSH, TIME_SINCE_LAST_FLUSH_DESCRIPTION)));
 
-    Mockito.verify(metrics).removeSensor("flush-" + changelog);
-    Mockito.verify(metrics).removeSensor("flush-latency-" + changelog);
-    Mockito.verify(metrics).removeSensor("flush-errors-" + changelog);
+    Mockito.verify(metrics).removeSensor("flush-" + threadName + "-" + changelog);
+    Mockito.verify(metrics).removeSensor("flush-latency-" + threadName + "-" + changelog);
+    Mockito.verify(metrics).removeSensor("flush-errors-" + threadName + "-" + changelog);
   }
 
   @Test

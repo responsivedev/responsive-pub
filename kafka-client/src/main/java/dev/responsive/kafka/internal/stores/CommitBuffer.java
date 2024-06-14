@@ -182,11 +182,11 @@ public class CommitBuffer<K extends Comparable<K>, P>
 
     final String storeName = tableName.kafkaName();
 
-    flushSensorName = getSensorName(FLUSH, changelog);
-    flushLatencySensorName = getSensorName(FLUSH_LATENCY, changelog);
-    flushErrorsSensorName = getSensorName(FLUSH_ERRORS, changelog);
-
     final String streamThreadId = extractThreadId(Thread.currentThread().getName());
+
+    flushSensorName = getSensorName(FLUSH, streamThreadId, changelog);
+    flushLatencySensorName = getSensorName(FLUSH_LATENCY, streamThreadId, changelog);
+    flushErrorsSensorName = getSensorName(FLUSH_ERRORS, streamThreadId, changelog);
 
     lastFlushMetric = metrics.metricName(
         TIME_SINCE_LAST_FLUSH,
@@ -247,9 +247,14 @@ public class CommitBuffer<K extends Comparable<K>, P>
     );
   }
 
-  // Attach the changelog topic name & partition to make sure we uniquely name each sensor
-  private static String getSensorName(final String sensorPrefix, final TopicPartition changelog) {
-    return sensorPrefix + "-" + changelog;
+  // Attach the thread name, changelog topic name & partition to make sure we
+  // uniquely name each sensor
+  private static String getSensorName(
+      final String sensorPrefix,
+      final String streamThreadId,
+      final TopicPartition changelog
+  ) {
+    return String.join("-", sensorPrefix, streamThreadId, changelog.toString());
   }
 
   private static boolean hasSourceTopicChangelog(final String changelogTopicName) {
