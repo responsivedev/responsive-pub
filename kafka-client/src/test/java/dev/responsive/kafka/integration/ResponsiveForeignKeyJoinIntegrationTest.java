@@ -155,8 +155,8 @@ public class ResponsiveForeignKeyJoinIntegrationTest {
     consumerProperties.put(VALUE_DESERIALIZER_CLASS_CONFIG, EnrichedDeserializer.class);
     final Map<String, Object> properties = new HashMap<>(baseProperties);
     properties.putAll(getMutableProperties());
-    properties.put(StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG,
-        ResponsiveDslStoreSuppliers.class);
+    properties.put(
+        StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG, ResponsiveDslStoreSuppliers.class);
 
     final Topology topology = builder.build();
     final List<String> sources = sourcesAndInternalTopics(topology);

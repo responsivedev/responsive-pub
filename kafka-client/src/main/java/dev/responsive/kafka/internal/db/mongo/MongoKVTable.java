@@ -21,6 +21,7 @@ import static dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration.N
 import static org.bson.codecs.configuration.CodecRegistries.fromProviders;
 import static org.bson.codecs.configuration.CodecRegistries.fromRegistries;
 
+import com.mongodb.client.FindIterable;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
@@ -36,12 +37,14 @@ import com.mongodb.client.model.WriteModel;
 import com.mongodb.client.result.UpdateResult;
 import dev.responsive.kafka.internal.db.MongoKVFlushManager;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
+import dev.responsive.kafka.internal.utils.Iterators;
 import java.time.Instant;
 import java.util.Date;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.bson.codecs.configuration.CodecProvider;
 import org.bson.codecs.configuration.CodecRegistry;
@@ -56,7 +59,7 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
   private static final String METADATA_COLLECTION_NAME = "kv_metadata";
 
   private final String name;
-
+  private final KeyCodec keyCodec;
   private final MongoCollection<KVDoc> docs;
   private final MongoCollection<KVMetadataDoc> metadata;
 
@@ -68,6 +71,7 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
       final CollectionCreationOptions collectionCreationOptions
   ) {
     this.name = name;
+    this.keyCodec = new StringKeyCodec();
     final CodecProvider pojoCodecProvider = PojoCodecProvider.builder().automatic(true).build();
     final CodecRegistry pojoCodecRegistry = fromRegistries(
         getDefaultCodecRegistry(),
@@ -129,7 +133,7 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
 
   @Override
   public byte[] get(final int kafkaPartition, final Bytes key, final long minValidTs) {
-    final KVDoc v = docs.find(Filters.eq(KVDoc.ID, key.get())).first();
+    final KVDoc v = docs.find(Filters.eq(KVDoc.ID, keyCodec.encode(key))).first();
     return v == null ? null : v.getValue();
   }
 
@@ -140,8 +144,19 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
       final Bytes to,
       final long minValidTs
   ) {
-    // NOTE: Make sure to handle filtering of tombstones in the remote range scan.
-    throw new UnsupportedOperationException();
+    final FindIterable<KVDoc> result = docs.find(
+        Filters.and(
+            Filters.gte(KVDoc.ID, keyCodec.encode(from)),
+            Filters.lte(KVDoc.ID, keyCodec.encode(to)),
+            Filters.not(Filters.exists(KVDoc.TOMBSTONE_TS))
+        )
+    );
+    return Iterators.kv(
+        result.iterator(),
+        doc -> new KeyValue<>(
+            keyCodec.decode(doc.getKey()),
+            doc.getTombstoneTs() == null ? doc.getValue() : null
+        ));
   }
 
   @Override
@@ -160,7 +175,7 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
     final long epoch = kafkaPartitionToEpoch.get(kafkaPartition);
     return new UpdateOneModel<>(
         Filters.and(
-            Filters.eq(KVDoc.ID, key.get()),
+            Filters.eq(KVDoc.ID, keyCodec.encode(key)),
             Filters.lte(KVDoc.EPOCH, epoch)
         ),
         Updates.combine(
@@ -177,7 +192,7 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
     final long epoch = kafkaPartitionToEpoch.get(kafkaPartition);
     return new UpdateOneModel<>(
         Filters.and(
-            Filters.eq(KVDoc.ID, key.get()),
+            Filters.eq(KVDoc.ID, keyCodec.encode(key)),
             Filters.lte(KVDoc.EPOCH, epoch)
         ),
         Updates.combine(
@@ -235,4 +250,23 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
     return 0;
   }
 
+  interface KeyCodec {
+    Bytes decode(String key);
+
+    String encode(Bytes key);
+  }
+
+  public static class StringKeyCodec implements KeyCodec {
+    private final OrderPreservingBase64Encoder encoder = new OrderPreservingBase64Encoder();
+
+    @Override
+    public Bytes decode(final String key) {
+      return Bytes.wrap(encoder.decode(key));
+    }
+
+    @Override
+    public String encode(Bytes key) {
+      return encoder.encode(key.get());
+    }
+  }
 }
