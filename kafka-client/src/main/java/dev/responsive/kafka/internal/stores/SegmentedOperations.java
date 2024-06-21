@@ -86,7 +86,6 @@ public class SegmentedOperations implements WindowOperations {
     ).logger(SegmentedOperations.class);
     final var context = asInternalProcessorContext(storeContext);
 
-
     final SessionClients sessionClients = loadSessionClients(appConfigs);
     final ResponsiveStoreRegistry storeRegistry = loadStoreRegistry(appConfigs);
 
@@ -97,7 +96,8 @@ public class SegmentedOperations implements WindowOperations {
 
     final WindowSegmentPartitioner partitioner = new WindowSegmentPartitioner(
         params.retentionPeriod(),
-        StoreUtil.computeSegmentInterval(params.retentionPeriod(), params.numSegments())
+        StoreUtil.computeSegmentInterval(params.retentionPeriod(), params.numSegments()),
+        params.retainDuplicates()
     );
 
     final RemoteWindowedTable<?> table;
@@ -128,6 +128,7 @@ public class SegmentedOperations implements WindowOperations {
         changelog,
         keySpec,
         params.name(),
+        params.retainDuplicates(),
         responsiveConfig
     );
     final long restoreStartOffset = table.fetchOffset(changelog.partition());

@@ -31,6 +31,7 @@ import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
 import com.mongodb.client.model.Filters;
 import com.mongodb.client.model.FindOneAndUpdateOptions;
+import com.mongodb.client.model.InsertOneModel;
 import com.mongodb.client.model.ReturnDocument;
 import com.mongodb.client.model.UpdateOneModel;
 import com.mongodb.client.model.UpdateOptions;
@@ -72,6 +73,8 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
 
   // whether to put windowStartMs first in the composite windowed key format in WindowDoc
   private final boolean timestampFirstOrder;
+  // whether to save multiple records for each key or overwrite the existing value on insert
+  private final boolean retainDuplicates;
 
   private final MongoDatabase database;
   private final MongoDatabase adminDatabase;
@@ -198,6 +201,7 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
     this.name = name;
     this.partitioner = partitioner;
     this.timestampFirstOrder = timestampFirstOrder;
+    this.retainDuplicates = partitioner.retainDuplicates();
     this.collectionCreationOptions = collectionCreationOptions;
 
     final CodecProvider pojoCodecProvider = PojoCodecProvider.builder().automatic(true).build();
@@ -375,17 +379,20 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
     final var partitionSegments = kafkaPartitionToSegments.get(kafkaPartition);
 
     final long epoch = partitionSegments.epoch;
-    return new UpdateOneModel<>(
-        Filters.and(
-            Filters.eq(WindowDoc.ID, compositeKey(windowedKey)),
-            Filters.lte(WindowDoc.EPOCH, epoch)
-        ),
-        Updates.combine(
-            Updates.set(WindowDoc.VALUE, value),
-            Updates.set(WindowDoc.EPOCH, epoch)
-        ),
-        UPSERT_OPTIONS
-    );
+   // if (retainDuplicates) {
+//    } else {
+      return new UpdateOneModel<>(
+          Filters.and(
+              Filters.eq(WindowDoc.ID, compositeKey(windowedKey)),
+              Filters.lte(WindowDoc.EPOCH, epoch)
+          ),
+          Updates.combine(
+              Updates.set(WindowDoc.VALUE, value),
+              Updates.set(WindowDoc.EPOCH, epoch)
+          ),
+          UPSERT_OPTIONS
+      );
+    //}
   }
 
   /**

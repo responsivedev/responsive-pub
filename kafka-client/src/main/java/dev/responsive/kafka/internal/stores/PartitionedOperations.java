@@ -125,6 +125,7 @@ public class PartitionedOperations implements KeyValueOperations {
         changelog,
         keySpec,
         params.name(),
+        false,
         config
     );
 

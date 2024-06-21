@@ -17,43 +17,29 @@
 
 package dev.responsive.kafka.internal.stores;
 
-import dev.responsive.kafka.internal.db.KeySpec;
 import dev.responsive.kafka.internal.utils.Result;
-import java.util.Collections;
-import java.util.NavigableMap;
-import java.util.Objects;
-import java.util.concurrent.ConcurrentSkipListMap;
+import java.util.Collection;
+import org.apache.kafka.streams.state.KeyValueIterator;
 
-public class SizeTrackingBuffer<K extends Comparable<K>> {
-  private final NavigableMap<K, Result<K>> buffer;
-  private final NavigableMap<K, Result<K>> reader;
-  private final KeySpec<K> extractor;
-  private long bytes = 0;
+public interface SizeTrackingBuffer<K extends Comparable<K>> {
 
-  public SizeTrackingBuffer(final KeySpec<K> extractor) {
-    this.extractor = Objects.requireNonNull(extractor);
-    buffer = new ConcurrentSkipListMap<>();
-    reader = Collections.unmodifiableNavigableMap(buffer);
-  }
+  long sizeInBytes();
 
-  public long getBytes() {
-    return bytes;
-  }
+  int sizeInRecords();
 
-  public void put(final K key, final Result<K> value) {
-    bytes += value.size(extractor);
-    final Result<K> old = buffer.put(key, value);
-    if (old != null) {
-      bytes -= old.size(extractor);
-    }
-  }
+  void put(final K key, final Result<K> value);
 
-  public void clear() {
-    bytes = 0;
-    buffer.clear();
-  }
+  void clear();
 
-  public NavigableMap<K, Result<K>> getReader() {
-    return reader;
-  }
+  Result<K> get(K key);
+
+  KeyValueIterator<K, Result<K>> range(K from, K to);
+
+  KeyValueIterator<K, Result<K>> reverseRange(K from, K to);
+
+  KeyValueIterator<K, Result<K>> all();
+
+  KeyValueIterator<K, Result<K>> reverseAll();
+
+  Collection<Result<K>> values();
 }

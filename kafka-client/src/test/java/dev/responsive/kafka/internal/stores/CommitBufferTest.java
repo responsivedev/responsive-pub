@@ -222,6 +222,7 @@ public class CommitBufferTest {
         admin,
         KEY_SPEC,
         tableName,
+        false,
         TRIGGERS,
         EXCEPTION_SUPPLIER
     );
@@ -239,6 +240,7 @@ public class CommitBufferTest {
         admin,
         KEY_SPEC,
         tableName,
+        false,
         flushTriggers,
         EXCEPTION_SUPPLIER,
         maxBatchSize,
@@ -357,6 +359,7 @@ public class CommitBufferTest {
         admin,
         KEY_SPEC,
         tableName,
+        false,
         TRIGGERS,
         exceptionSupplier)) {
 
@@ -391,7 +394,7 @@ public class CommitBufferTest {
     new CommitBuffer<>(
         new BatchFlusher<>(KEY_SPEC, changelog.partition(), flushManager),
         sessionClients, changelog, admin,
-        KEY_SPEC, tableName, TRIGGERS, EXCEPTION_SUPPLIER);
+        KEY_SPEC, tableName, false, TRIGGERS, EXCEPTION_SUPPLIER);
 
     for (final int tp : partitioner.allTablePartitions(changelog.partition())) {
       assertThat(table.fetchEpoch(tp), is(1L));
@@ -620,7 +623,7 @@ public class CommitBufferTest {
     final CommitBuffer<Bytes, Integer> buffer = new CommitBuffer<>(
         new BatchFlusher<>(KEY_SPEC, changelog.partition(), flushManager),
         sessionClients, changelog, admin,
-        KEY_SPEC, tableName, TRIGGERS, exceptionSupplier);
+        KEY_SPEC, tableName, false, TRIGGERS, exceptionSupplier);
 
     // initialize a new writer to bump the epoch
     table.init(changelog.partition());
@@ -666,6 +669,7 @@ public class CommitBufferTest {
         admin,
         KEY_SPEC,
         tableName,
+        false,
         TRIGGERS,
         EXCEPTION_SUPPLIER,
         3,

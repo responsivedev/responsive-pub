@@ -21,6 +21,7 @@ package dev.responsive.kafka.internal.db;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
 import dev.responsive.kafka.internal.utils.Constants;
 import dev.responsive.kafka.internal.utils.Result;
+import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -48,7 +49,7 @@ public class BatchFlusher<K extends Comparable<K>, P> {
   }
 
   public FlushResult<K, P> flushWriteBatch(
-      final Map<K, Result<K>> bufferedWrites,
+      final Collection<Result<K>> bufferedWrites,
       final long consumedOffset
   ) {
     final var batchWriters = new BatchWriters<>(flushManager, kafkaPartition);
@@ -94,10 +95,10 @@ public class BatchFlusher<K extends Comparable<K>, P> {
 
   private static <K extends Comparable<K>, P> void prepareBatch(
       final BatchWriters<K, P> batchWriters,
-      final Map<K, Result<K>> bufferedWrites,
+      final Collection<Result<K>> bufferedWrites,
       final KeySpec<K> keySpec
   ) {
-    for (final Result<K> result : bufferedWrites.values()) {
+    for (final Result<K> result : bufferedWrites) {
       final RemoteWriter<K, P> writer = batchWriters.findOrAddWriter(result.key);
       if (result.isTombstone) {
         writer.delete(result.key);
