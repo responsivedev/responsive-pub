@@ -73,12 +73,12 @@ class MongoKVTableTest {
 
     var writerFactory = table.init(0);
     var writer = writerFactory.createWriter(0);
-    writer.insert(Bytes.wrap(new byte[]{1}), new byte[]{1}, 100);
+    writer.insert(bytes(1), byteArray(1), 100);
     writer.flush();
 
     // When:
     // use the same writer, which should have the same epoch
-    writer.insert(Bytes.wrap(new byte[]{1}), new byte[]{1}, 101);
+    writer.insert(bytes(1), byteArray(1), 101);
     final CompletionStage<RemoteWriteResult<Integer>> flush = writer.flush();
 
     // Then:
@@ -91,7 +91,7 @@ class MongoKVTableTest {
     var table = new MongoKVTable(client, name, UNSHARDED);
     var writerFactory = table.init(0);
     var writer = writerFactory.createWriter(0);
-    writer.insert(Bytes.wrap(new byte[]{1}), new byte[]{1}, 100);
+    writer.insert(bytes(1), byteArray(1), 100);
     writer.flush();
 
     // When:
@@ -99,7 +99,7 @@ class MongoKVTableTest {
     table = new MongoKVTable(client, name, UNSHARDED);
     writerFactory = table.init(0);
     writer = writerFactory.createWriter(0);
-    writer.insert(Bytes.wrap(new byte[]{1}), new byte[]{1}, 101);
+    writer.insert(bytes(1), byteArray(1), 101);
     final CompletionStage<RemoteWriteResult<Integer>> flush = writer.flush();
 
     // Then:
@@ -117,12 +117,12 @@ class MongoKVTableTest {
     var writerFactory1 = table1.init(0);
     var writer1 = writerFactory1.createWriter(0);
 
-    writer1.insert(Bytes.wrap(new byte[]{1}), new byte[]{1}, 100);
+    writer1.insert(bytes(1), byteArray(1), 100);
     writer1.flush();
 
     // When:
     // initialize new writer with higher epoch
-    writer0.insert(Bytes.wrap(new byte[]{1}), new byte[]{1}, 101);
+    writer0.insert(bytes(1), byteArray(1), 101);
     final CompletionStage<RemoteWriteResult<Integer>> flush = writer0.flush();
 
     // Then:
