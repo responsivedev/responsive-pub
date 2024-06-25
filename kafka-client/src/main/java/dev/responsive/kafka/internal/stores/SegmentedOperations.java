@@ -257,7 +257,8 @@ public class SegmentedOperations implements WindowOperations {
     return Iterators.windowed(
         new LocalRemoteKvIterator<>(
             buffer.range(from, to),
-            table.fetch(changelog.partition(), key, timeFrom, timeTo)
+            table.fetch(changelog.partition(), key, timeFrom, timeTo),
+            params.retainDuplicates()
         )
     );
   }
@@ -297,7 +298,8 @@ public class SegmentedOperations implements WindowOperations {
     return Iterators.windowed(
         new LocalRemoteKvIterator<>(
             buffer.backRange(from, to),
-            table.backFetch(changelog.partition(), key, timeFrom, timeTo)
+            table.backFetch(changelog.partition(), key, timeFrom, timeTo),
+            params.retainDuplicates()
         )
     );
   }

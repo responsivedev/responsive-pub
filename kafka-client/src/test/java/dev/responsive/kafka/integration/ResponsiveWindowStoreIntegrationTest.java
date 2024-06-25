@@ -466,6 +466,7 @@ public class ResponsiveWindowStoreIntegrationTest {
       final List<KeyValueTimestamp<String, String>> leftStreamInput = Arrays.asList(
           new KeyValueTimestamp<>("A", "L:a", 0L),
           new KeyValueTimestamp<>("A", "L:a2", 0L),
+          new KeyValueTimestamp<>("A", "L:a3", 0L),
           new KeyValueTimestamp<>("B", "L:b", 300L), // should join with R:b
           new KeyValueTimestamp<>("A", "L:a3", 2_000L), // should not join, outside window of R:a
           new KeyValueTimestamp<>("STOP", "ignored", 10_000L)
@@ -492,12 +493,13 @@ public class ResponsiveWindowStoreIntegrationTest {
       latch1.await(30, TimeUnit.SECONDS);
 
       final List<KeyValue<String, String>> output =
-          readOutput(outputTopic(), 0L, 4L, true, properties);
+          readOutput(outputTopic(), 0L, 5L, true, properties);
 
       assertThat(output.get(0), equalTo(new KeyValue<>("A", "L:a-R:a")));
       assertThat(output.get(1), equalTo(new KeyValue<>("A", "L:a2-R:a")));
-      assertThat(output.get(2), equalTo(new KeyValue<>("B", "L:b-R:b")));
-      assertThat(output.get(3), equalTo(new KeyValue<>("B", "L:b-R:b2")));
+      assertThat(output.get(2), equalTo(new KeyValue<>("A", "L:a3-R:a")));
+      assertThat(output.get(3), equalTo(new KeyValue<>("B", "L:b-R:b")));
+      assertThat(output.get(4), equalTo(new KeyValue<>("B", "L:b-R:b2")));
     }
   }
 
