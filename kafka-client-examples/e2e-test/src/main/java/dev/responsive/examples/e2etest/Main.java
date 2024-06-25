@@ -32,7 +32,8 @@ public class Main {
           Long.MAX_VALUE,
           Params.MAX_OUTSTANDING,
           Duration.ofSeconds(Params.RECEIVE_THRESHOLD),
-          Duration.ofSeconds(Params.FAULT_STOP_THRESHOLD)
+          Duration.ofSeconds(Params.FAULT_STOP_THRESHOLD),
+          Params.NAME
       );
       Runtime.getRuntime().addShutdownHook(new Thread(driver::notifyStop));
       driver.start();

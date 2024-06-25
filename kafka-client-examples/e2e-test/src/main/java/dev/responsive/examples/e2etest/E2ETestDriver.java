@@ -18,10 +18,13 @@ import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.LongStream;
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsSpec;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -46,6 +49,7 @@ public class E2ETestDriver {
   private final Consumer<Long, OutputRecord> consumer;
   private final String outputTopic;
   private final List<Long> keys;
+  private final Admin admin;
   private final Map<Long, ProduceState> produceState;
   private final Map<Long, ConsumeState> consumeState;
   private int outstanding = 0;
@@ -53,6 +57,7 @@ public class E2ETestDriver {
   private final int maxOutstanding;
   private final Long recordsToProcess;
   private int recordsProcessed = 0;
+  private final String groupId;
   private volatile boolean keepRunning = true;
   private final FaultStopper faultStopper = new FaultStopper();
 
@@ -65,13 +70,15 @@ public class E2ETestDriver {
       final long recordsToProcess,
       final int maxOutstanding,
       final Duration receivedThreshold,
-      final Duration faultStopThreshold
+      final Duration faultStopThreshold,
+      final String groupId
   ) {
     this.properties = Objects.requireNonNull(properties);
     this.numKeys = numKeys;
     this.inputTopic = Objects.requireNonNull(inputTopic);
     this.partitions = partitions;
     this.outputTopic = Objects.requireNonNull(outputTopic);
+    this.groupId = Objects.requireNonNull(groupId);
     this.keys = LongStream.range(0, numKeys)
         .map(v -> randomGenerator.nextLong())
         .boxed()
@@ -86,6 +93,7 @@ public class E2ETestDriver {
     ));
     this.recordsToProcess = recordsToProcess;
     this.maxOutstanding = maxOutstanding;
+    admin = Admin.create(properties);
     final Map<String, Object> producerProperties = ImmutableMap.<String, Object>builder()
         .putAll(properties)
         .put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, LongSerializer.class)
@@ -128,6 +136,7 @@ public class E2ETestDriver {
     } catch (InterruptedException e) {
       throw new RuntimeException(e);
     }
+    logCommittedAndEndOffsets();
     LOG.info("processed {} records", recordsProcessed);
     LOG.info("produced by key: {}", produceState.values().stream()
         .map(v -> String.format("key(%d) count(%d)\n", v.key, v.sendCount))
@@ -150,6 +159,7 @@ public class E2ETestDriver {
       if (recordsProcessed >= recordsToProcess) {
         notifyStop();
       }
+      maybeLogCommittedAndEndOffsets();
     }
   }
 
@@ -224,7 +234,11 @@ public class E2ETestDriver {
       final var ps = produceState.get(k);
       final var earliestSent = ps.earliestSent();
       if (earliestSent != null) {
-        consumeState.get(k).checkStalled(earliestSent, ps.partition());
+        consumeState.get(k).checkStalled(
+            earliestSent,
+            ps.partition(),
+            this::logCommittedAndEndOffsets
+        );
       }
     }
   }
@@ -331,6 +345,44 @@ public class E2ETestDriver {
     }
   }
 
+  private Instant lastCommittedOffsetLog = Instant.EPOCH;
+
+  private void maybeLogCommittedAndEndOffsets() {
+    final var now = Instant.now();
+    if (now.isAfter(lastCommittedOffsetLog.plus(Duration.ofMinutes(1)))) {
+      logCommittedAndEndOffsets();
+      lastCommittedOffsetLog = now;
+    }
+  }
+
+  private void logCommittedAndEndOffsets() {
+    final List<TopicPartition> topicPartitions = IntStream.range(0, partitions)
+        .mapToObj(p -> new TopicPartition(inputTopic, p))
+        .toList();
+    final var end = consumer.endOffsets(topicPartitions);
+    final var futures = admin.listConsumerGroupOffsets(
+        Map.of(
+            groupId, new ListConsumerGroupOffsetsSpec().topicPartitions(topicPartitions)
+        )
+    );
+    final Map<TopicPartition, OffsetAndMetadata> committed;
+    try {
+      committed = futures.all().get().getOrDefault(groupId, Map.of());
+    } catch (final Exception e) {
+      throw new RuntimeException(e);
+    }
+    final List<String> descriptions = new LinkedList<>();
+    for (final var tp : topicPartitions) {
+      descriptions.add(String.format("%s: end(%d) committed(%d)",
+          tp,
+          end.getOrDefault(tp, -1L),
+          (committed.containsKey(tp) && committed.get(tp) != null)
+              ? committed.get(tp).offset() : -1)
+      );
+    }
+    LOG.info("committed/end offsets: {}", String.join(" | ", descriptions));
+  }
+
   private static class ConsumeState {
     private final long key;
     private final Duration receivedThreshold;
@@ -379,11 +431,16 @@ public class E2ETestDriver {
       }
     }
 
-    private void checkStalled(final RecordMetadata earliestUnconsumed, final int partition) {
+    private void checkStalled(
+        final RecordMetadata earliestUnconsumed,
+        final int partition,
+        final Runnable onStall
+    ) {
       if (stalled != null) {
         if (earliestUnconsumed.offset() == stalled.offset()) {
           // the earliest unconsumed record has not advanced
           if (Duration.between(faultsStoppedAt, Instant.now()).compareTo(receivedThreshold) > 0) {
+            onStall.run();
             LOG.error(
                 "ANTITHESIS NEVER: have not seen results for {} on {} in {}. last sent/rcvd {}/{}",
                 key,

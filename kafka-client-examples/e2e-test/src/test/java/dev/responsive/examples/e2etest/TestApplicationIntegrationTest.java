@@ -47,7 +47,8 @@ public class TestApplicationIntegrationTest {
         10000L,
         100,
         Duration.ofMinutes(5),
-        Duration.ofMinutes(5)
+        Duration.ofMinutes(5),
+        "test"
     );
   }
 
