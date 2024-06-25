@@ -151,6 +151,11 @@ public class ResponsiveWindowStore
 
   @Override
   public void put(final Bytes key, final byte[] value, final long windowStartTime) {
+    if (value == null && params.retainDuplicates()) {
+      // return early as tombstones are not allowed/meaningless with duplicates
+      return;
+    }
+
     if (value == null) {
       windowOperations.delete(key, windowStartTime);
     } else {
