@@ -161,8 +161,14 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
 
   @Override
   public KeyValueIterator<Bytes, byte[]> all(final int kafkaPartition, final long minValidTs) {
-    // NOTE: Make sure to handle filtering of tombstones in the remote range scan.
-    throw new UnsupportedOperationException();
+    final FindIterable<KVDoc> result = docs.find(Filters.not(Filters.exists(KVDoc.TOMBSTONE_TS)));
+    return Iterators.kv(
+        result.iterator(),
+        doc -> new KeyValue<>(
+            keyCodec.decode(doc.getKey()),
+            doc.getTombstoneTs() == null ? doc.getValue() : null
+        )
+    );
   }
 
   @Override

@@ -30,6 +30,9 @@ public class KVDoc {
   public static final String EPOCH = "epoch";
   public static final String TOMBSTONE_TS = "tombstoneTs";
 
+  // We use a string key for ID because mongo range scans don't work as expected for binary
+  // fields. In particular, mongo orders binary fields by length first, and then by the contained
+  // data. Therefore, we encode the id as a string so that we get the desired range behaviour.
   String id;
   byte[] value;
   long epoch;
