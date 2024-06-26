@@ -133,7 +133,10 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
 
   @Override
   public byte[] get(final int kafkaPartition, final Bytes key, final long minValidTs) {
-    final KVDoc v = docs.find(Filters.eq(KVDoc.ID, keyCodec.encode(key))).first();
+    final KVDoc v = docs.find(Filters.and(
+        Filters.eq(KVDoc.ID, keyCodec.encode(key)),
+        Filters.gte(KVDoc.TIMESTAMP, minValidTs)
+    )).first();
     return v == null ? null : v.getValue();
   }
 
@@ -148,7 +151,8 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
         Filters.and(
             Filters.gte(KVDoc.ID, keyCodec.encode(from)),
             Filters.lte(KVDoc.ID, keyCodec.encode(to)),
-            Filters.not(Filters.exists(KVDoc.TOMBSTONE_TS))
+            Filters.not(Filters.exists(KVDoc.TOMBSTONE_TS)),
+            Filters.gte(KVDoc.TIMESTAMP, minValidTs)
         )
     );
     return Iterators.kv(
@@ -161,7 +165,10 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
 
   @Override
   public KeyValueIterator<Bytes, byte[]> all(final int kafkaPartition, final long minValidTs) {
-    final FindIterable<KVDoc> result = docs.find(Filters.not(Filters.exists(KVDoc.TOMBSTONE_TS)));
+    final FindIterable<KVDoc> result = docs.find(Filters.and(
+        Filters.not(Filters.exists(KVDoc.TOMBSTONE_TS)),
+        Filters.gte(KVDoc.TIMESTAMP, minValidTs)
+    ));
     return Iterators.kv(
         result.iterator(),
         doc -> new KeyValue<>(
@@ -187,6 +194,7 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
         Updates.combine(
             Updates.set(KVDoc.VALUE, value),
             Updates.set(KVDoc.EPOCH, epoch),
+            Updates.set(KVDoc.TIMESTAMP, epochMillis),
             Updates.unset(KVDoc.TOMBSTONE_TS)
         ),
         new UpdateOptions().upsert(true)
@@ -203,6 +211,7 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
         ),
         Updates.combine(
             Updates.unset(KVDoc.VALUE),
+            Updates.unset(KVDoc.TIMESTAMP),
             Updates.set(KVDoc.TOMBSTONE_TS, Date.from(Instant.now())),
             Updates.set(KVDoc.EPOCH, epoch)
         ),
