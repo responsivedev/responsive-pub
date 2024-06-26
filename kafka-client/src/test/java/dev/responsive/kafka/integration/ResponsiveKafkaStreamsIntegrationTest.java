@@ -26,6 +26,7 @@ import static org.hamcrest.Matchers.is;
 
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.config.StorageBackend;
+import dev.responsive.kafka.internal.db.mongo.OrderPreservingBase64Encoder;
 import dev.responsive.kafka.internal.utils.SessionUtil;
 import dev.responsive.kafka.testutils.IntegrationTestUtils;
 import dev.responsive.kafka.testutils.KeyValueTimestamp;
@@ -49,7 +50,6 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Named;
-import org.bson.types.Binary;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -161,8 +161,9 @@ public class ResponsiveKafkaStreamsIntegrationTest {
 
       final List<String> keys = new ArrayList<>();
       collection.find()
-          .map(doc -> doc.get("_id", Binary.class).getData())
-          .map(doc -> deserializer.deserialize("", doc))
+          .map(doc -> doc.get("_id", String.class))
+          .map(idStr -> new OrderPreservingBase64Encoder().decode(idStr))
+          .map(id -> deserializer.deserialize("", id))
           .into(keys);
       assertThat(keys, hasItems("key", "STOP"));
     }

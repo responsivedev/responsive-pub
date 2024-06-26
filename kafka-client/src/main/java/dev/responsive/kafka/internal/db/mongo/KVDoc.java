@@ -30,7 +30,10 @@ public class KVDoc {
   public static final String EPOCH = "epoch";
   public static final String TOMBSTONE_TS = "tombstoneTs";
 
-  byte[] id;
+  // We use a string key for ID because mongo range scans don't work as expected for binary
+  // fields. In particular, mongo orders binary fields by length first, and then by the contained
+  // data. Therefore, we encode the id as a string so that we get the desired range behaviour.
+  String id;
   byte[] value;
   long epoch;
   Date tombstoneTs;
@@ -40,7 +43,7 @@ public class KVDoc {
 
   @BsonCreator
   public KVDoc(
-      @BsonProperty(ID) byte[] id,
+      @BsonProperty(ID) String id,
       @BsonProperty(VALUE) byte[] value,
       @BsonProperty(EPOCH) long epoch
   ) {
@@ -49,11 +52,11 @@ public class KVDoc {
     this.epoch = epoch;
   }
 
-  public byte[] getKey() {
+  public String getKey() {
     return id;
   }
 
-  public void setKey(final byte[] id) {
+  public void setKey(final String id) {
     this.id = id;
   }
 
@@ -91,7 +94,7 @@ public class KVDoc {
     }
     final KVDoc kvDoc = (KVDoc) o;
     return epoch == kvDoc.epoch
-        && Arrays.equals(id, kvDoc.id)
+        && Objects.equals(id, kvDoc.id)
         && Arrays.equals(value, kvDoc.value)
         && Objects.equals(tombstoneTs, kvDoc.tombstoneTs);
   }
@@ -106,7 +109,7 @@ public class KVDoc {
   @Override
   public String toString() {
     return "KVDoc{"
-        + "id=" + Arrays.toString(id)
+        + "id=" + id
         + ", value=" + Arrays.toString(value)
         + ", epoch=" + epoch
         + ", tombstoneTs=" + tombstoneTs
