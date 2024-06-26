@@ -21,7 +21,8 @@ import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_PASSWORD_CO
 import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_USERNAME_CONFIG;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.getCassandraValidName;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.pipeInput;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_CONFIG;
+import static dev.responsive.kafka.testutils.IntegrationTestUtils.slurpPartition;
+import static dev.responsive.kafka.testutils.IntegrationTestUtils.waitTillFullyConsumed;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
@@ -74,12 +75,9 @@ import dev.responsive.kafka.testutils.IntegrationTestUtils.MockResponsiveKafkaSt
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
@@ -99,11 +97,9 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.config.types.Password;
@@ -187,7 +183,7 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
       // Send some data through
       pipeInput(inputTopic(), 1, producer, System::currentTimeMillis, 0, 10, 0);
       // Wait for it to be processed
-      waitTillFullyConsumed(input, Duration.ofSeconds(120));
+      waitTillFullyConsumed(admin, input, name, Duration.ofSeconds(120));
 
       // Make sure changelog is even w/ cassandra
       final ResponsiveConfig config = ResponsiveConfig.responsiveConfig(properties);
@@ -231,7 +227,7 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
           LongStream.range(0, 100).toArray()
       );
       // Wait for it to be processed
-      waitTillFullyConsumed(input, Duration.ofSeconds(120));
+      waitTillFullyConsumed(admin, input, name, Duration.ofSeconds(120));
 
       final List<ConsumerRecord<Long, Long>> changelogRecords
           = slurpPartition(changelog, properties);
@@ -263,7 +259,7 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
           LongStream.range(0, 100).toArray()
       );
       // Wait for it to be processed
-      waitTillFullyConsumed(input, Duration.ofSeconds(120));
+      waitTillFullyConsumed(admin, input, name, Duration.ofSeconds(120));
 
       // Verify it made progress
       final List<ConsumerRecord<Long, Long>> changelogRecords
@@ -288,10 +284,10 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
       IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(10), streams);
       // Send some data through
       pipeInput(inputTblTopic(), 1, producer, System::currentTimeMillis, 0, 10, 0, 1, 2, 3);
-      waitTillFullyConsumed(inputTbl, Duration.ofSeconds(120));
+      waitTillFullyConsumed(admin, inputTbl, name, Duration.ofSeconds(120));
       pipeInput(inputTopic(), 1, producer, System::currentTimeMillis, 0, 10, 0);
       // Wait for it to be processed
-      waitTillFullyConsumed(input, Duration.ofSeconds(120));
+      waitTillFullyConsumed(admin, input, name, Duration.ofSeconds(120));
     }
 
     // restart with fault injecting cassandra client
@@ -307,10 +303,11 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
       cassandraFaultInjector.fault.set(fault);
 
       // Send some more data through and wait for it to be committed
-      final long endInput = endOffset(input);
+      final long endInput = IntegrationTestUtils.endOffset(admin, input);
       pipeInput(inputTopic(), 1, producer, System::currentTimeMillis, 10, 20, 0);
       producer.flush();
-      waitTillConsumedPast(input, endInput + 1, Duration.ofSeconds(30));
+      IntegrationTestUtils
+          .waitTillConsumedPast(admin, input, name, endInput + 1, Duration.ofSeconds(30));
     }
     final TopicPartition changelog = new TopicPartition(name + "-" + aggName() + "-changelog", 0);
 
@@ -338,7 +335,7 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
       // Send some more data through and check output
       pipeInput(inputTopic(), 1, producer, System::currentTimeMillis, 20, 30, 0);
       producer.flush();
-      waitTillFullyConsumed(input, Duration.ofSeconds(120));
+      waitTillFullyConsumed(admin, input, name, Duration.ofSeconds(120));
     }
 
     // Assert that the final aggregation result is correct
@@ -414,29 +411,6 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
     final List<ConsumerRecord<Long, Long>> all
         = slurpPartition(new TopicPartition(outputTopic(), 0), properties);
     return all.size() == 0 ? Optional.empty() : Optional.of(all.get(all.size() - 1));
-  }
-
-  private List<ConsumerRecord<Long, Long>> slurpPartition(
-      final TopicPartition partition,
-      final Map<String, Object> originals
-  ) {
-    final Map<String, Object> properties = new HashMap<>(originals);
-    properties.put(
-        ISOLATION_LEVEL_CONFIG,
-        IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT)
-    );
-    final List<ConsumerRecord<Long, Long>> allRecords = new LinkedList<>();
-    try (final KafkaConsumer<Long, Long> consumer = new KafkaConsumer<>(properties)) {
-      final long end = consumer.endOffsets(List.of(partition)).get(partition);
-      consumer.assign(List.of(partition));
-      consumer.seekToBeginning(List.of(partition));
-
-      while (consumer.position(partition) < end) {
-        final ConsumerRecords<Long, Long> records = consumer.poll(Duration.ofSeconds(30));
-        allRecords.addAll(records.records(partition));
-      }
-      return allRecords;
-    }
   }
 
   @SuppressWarnings("unchecked")
@@ -625,44 +599,10 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
     }
   }
 
-  private long endOffset(final TopicPartition topic)
-      throws ExecutionException, InterruptedException {
-    return admin.listOffsets(Map.of(topic, OffsetSpec.latest())).all().get()
-        .get(topic)
-        .offset();
-  }
-
   private long firstOffset(final TopicPartition topic)
       throws ExecutionException, InterruptedException {
     return admin.listOffsets(Map.of(topic, OffsetSpec.earliest())).all().get()
         .get(topic)
         .offset();
-  }
-
-  private void waitTillFullyConsumed(
-      final TopicPartition partition,
-      final Duration timeout
-  ) throws ExecutionException, InterruptedException, TimeoutException {
-    waitTillConsumedPast(partition, endOffset(partition), timeout);
-  }
-
-  private void waitTillConsumedPast(
-      final TopicPartition partition,
-      final long offset,
-      final Duration timeout
-  ) throws ExecutionException, InterruptedException, TimeoutException {
-    final Instant start = Instant.now();
-    while (Instant.now().isBefore(start.plus(timeout))) {
-      final Map<String, Map<TopicPartition, OffsetAndMetadata>> listing
-          = admin.listConsumerGroupOffsets(name).all().get();
-      if (listing.get(name).containsKey(partition)) {
-        final long committed = listing.get(name).get(partition).offset();
-        if (committed >= offset) {
-          return;
-        }
-      }
-      Thread.sleep(1000);
-    }
-    throw new TimeoutException("timed out waiting for app to fully consume input");
   }
 }
