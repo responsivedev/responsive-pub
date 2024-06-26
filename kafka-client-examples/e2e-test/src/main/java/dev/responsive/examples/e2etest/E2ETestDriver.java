@@ -169,11 +169,14 @@ public class E2ETestDriver {
     while (true) {
       synchronized (produceWait) {
         outstanding += produced;
-        while (outstanding >= maxOutstanding && keepRunning) {
-          try {
-            produceWait.wait();
-          } catch (final InterruptedException e) {
-            throw new RuntimeException(e);
+        if (outstanding > maxOutstanding) {
+          // wait for the produced records to drain
+          while (outstanding > 0 && keepRunning) {
+            try {
+              produceWait.wait();
+            } catch (final InterruptedException e) {
+              throw new RuntimeException(e);
+            }
           }
         }
       }

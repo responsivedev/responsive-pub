@@ -11,7 +11,7 @@ public class Params {
   public static final int NUM_KEYS
       = Integer.parseInt(System.getenv().getOrDefault("NUM_KEYS", "16"));
   public static final int MAX_OUTSTANDING
-      = Integer.parseInt(System.getenv().getOrDefault("MAX_OUTSTANDING", "10000"));
+      = Integer.parseInt(System.getenv().getOrDefault("MAX_OUTSTANDING", "500"));
   public static final int RECEIVE_THRESHOLD
       = Integer.parseInt(System.getenv().getOrDefault("RECEIVE_THRESHOLD", "360"));
   public static final int FAULT_STOP_THRESHOLD
