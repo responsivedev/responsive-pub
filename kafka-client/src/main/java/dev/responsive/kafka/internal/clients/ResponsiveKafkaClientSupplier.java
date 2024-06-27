@@ -205,10 +205,11 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
 
     final String clientId = (String) config.get(ConsumerConfig.CLIENT_ID_CONFIG);
     LOG.info("Creating responsive restore consumer: {}", clientId);
+    final String tid = threadIdFromRestoreConsumerConfig(clientId);
     return factories.createRestoreConsumer(
         clientId,
         wrapped.getRestoreConsumer(config),
-        storeRegistry::getCommittedOffset,
+        p -> storeRegistry.getCommittedOffset(p, tid),
         repairRestoreOffsetOutOfRange
     );
 
@@ -261,20 +262,6 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
     return match.group(1);
   }
 
-  /*
-   * @param clientId the consumer client id
-   * @return the extracted StreamThread id, of the form "StreamThread-n"
-   */
-  private String threadIdFromConsumerConfig(final String clientId) {
-    final var regex = Pattern.compile(".*-(StreamThread-\\d+)-consumer$");
-    final var match = regex.matcher(clientId);
-    if (!match.find()) {
-      LOG.error("Unable to parse thread id from consumer client id = {}", clientId);
-      throw new RuntimeException("Unexpected client id " + clientId);
-    }
-    return match.group(1);
-  }
-
   class CloseListener implements ResponsiveConsumer.Listener, ResponsiveProducer.Listener {
     private final String threadId;
 
@@ -307,7 +294,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
         tl.ref();
         return tl.getVal();
       }
-      final var offsetRecorder = factories.createOffsetRecorder(eos);
+      final var offsetRecorder = factories.createOffsetRecorder(eos, threadId);
       final var tl = new ReferenceCounted<>(
           String.format("ListenersForThread(%s)", threadId),
           new ListenersForThread(
@@ -435,8 +422,8 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
       );
     }
 
-    default OffsetRecorder createOffsetRecorder(boolean eos) {
-      return new OffsetRecorder(eos);
+    default OffsetRecorder createOffsetRecorder(boolean eos, final String threadId) {
+      return new OffsetRecorder(eos, threadId);
     }
 
     default MetricPublishingCommitListener createMetricsPublishingCommitListener(

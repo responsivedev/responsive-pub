@@ -31,6 +31,7 @@ public final class ResponsiveStoreRegistration {
   private final String storeName;
   private final TopicPartition changelogTopicPartition;
   private final Consumer<Long> onCommit;
+  private final String threadId;
   private final InjectedStoreArgs injectedStoreArgs = new InjectedStoreArgs();
 
   private final OptionalLong startOffset; // stored offset during init, (where restore should start)
@@ -40,12 +41,14 @@ public final class ResponsiveStoreRegistration {
       final String storeName,
       final TopicPartition changelogTopicPartition,
       final OptionalLong startOffset,
-      final Consumer<Long> onCommit
+      final Consumer<Long> onCommit,
+      final String threadId
   ) {
     this.storeName = Objects.requireNonNull(storeName);
     this.changelogTopicPartition = Objects.requireNonNull(changelogTopicPartition);
     this.startOffset = startOffset;
     this.onCommit = Objects.requireNonNull(onCommit);
+    this.threadId = Objects.requireNonNull(threadId);
     this.log = new LogContext(
         String.format("changelog [%s]", changelogTopicPartition)
     ).logger(ResponsiveStoreRegistration.class);
@@ -70,5 +73,9 @@ public final class ResponsiveStoreRegistration {
 
   public InjectedStoreArgs injectedStoreArgs() {
     return injectedStoreArgs;
+  }
+
+  public String threadId() {
+    return threadId;
   }
 }

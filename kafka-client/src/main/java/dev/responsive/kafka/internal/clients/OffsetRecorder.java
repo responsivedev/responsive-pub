@@ -28,9 +28,11 @@ public class OffsetRecorder {
   private final ConsumerListener consumerListener = new ConsumerListener();
   private final List<CommitCallback> commitCallback = new LinkedList<>();
   private final boolean eos;
+  private final String threadId;
 
-  public OffsetRecorder(final boolean eos) {
+  public OffsetRecorder(final boolean eos, final String threadId) {
     this.eos = eos;
+    this.threadId = threadId;
   }
 
   public synchronized void addCommitCallback(final CommitCallback callback) {
@@ -88,7 +90,7 @@ public class OffsetRecorder {
       offsetsToBeCommitted.clear();
       offsetsWritten.clear();
     }
-    commitCallback.forEach(c -> c.onCommit(committedOffsets, writtenOffsets));
+    commitCallback.forEach(c -> c.onCommit(threadId, committedOffsets, writtenOffsets));
   }
 
   private synchronized void onAbort() {
@@ -99,6 +101,7 @@ public class OffsetRecorder {
   @FunctionalInterface
   public interface CommitCallback {
     void onCommit(
+        final String threadId,
         final Map<RecordingKey, Long> committedOffsets,
         final Map<TopicPartition, Long> lastWrittenOffsets
     );

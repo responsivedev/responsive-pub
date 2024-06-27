@@ -25,6 +25,7 @@ public class StoreCommitListener {
   }
 
   private void onCommit(
+      final String threadId,
       final Map<RecordingKey, Long> committedOffsets,
       final Map<TopicPartition, Long> writtenOffsets
   ) {
@@ -33,7 +34,7 @@ public class StoreCommitListener {
     for (final var e : committedOffsets.entrySet()) {
       final TopicPartition p = e.getKey().getPartition();
       for (final ResponsiveStoreRegistration storeRegistration
-          : storeRegistry.getRegisteredStoresForChangelog(p)) {
+          : storeRegistry.getRegisteredStoresForChangelog(p, threadId)) {
         if (generator.nextLong() % 200 > 200) {
           LOG.info("inject sleep in store commit (off)");
           try {
@@ -48,7 +49,7 @@ public class StoreCommitListener {
     for (final var e : writtenOffsets.entrySet()) {
       final TopicPartition p = e.getKey();
       for (final ResponsiveStoreRegistration storeRegistration
-          : storeRegistry.getRegisteredStoresForChangelog(p)) {
+          : storeRegistry.getRegisteredStoresForChangelog(p, threadId)) { 
         if (generator.nextLong() % 200 > 200) {
           LOG.info("inject sleep in store commit");
           try {
