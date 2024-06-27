@@ -163,12 +163,13 @@ public class E2ETestApplication {
     );
     streams.setUncaughtExceptionHandler(exception -> {
       if (shouldLogError(exception, new LinkedList<>())) {
-        LOG.error("uncaught exception {}({}) on test app stream thread {}",
+        LOG.error("uncaught exception on test app stream thread {}({}) {}",
             exception.getClass().getName(),
             exception.getMessage(),
             causalSummary(exception, new LinkedList<>()),
             exception
         );
+        LOG.error("ANTITHESIS NEVER: uncaught exception on test app stream thread");
       }
       return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.REPLACE_THREAD;
     });
