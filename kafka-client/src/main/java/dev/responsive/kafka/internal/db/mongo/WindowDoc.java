@@ -19,10 +19,8 @@
 package dev.responsive.kafka.internal.db.mongo;
 
 import com.mongodb.BasicDBObject;
-import dev.responsive.kafka.internal.utils.WindowedKey;
 import java.util.Arrays;
 import java.util.Objects;
-import org.apache.kafka.common.utils.Bytes;
 import org.bson.codecs.pojo.annotations.BsonCreator;
 import org.bson.codecs.pojo.annotations.BsonProperty;
 
@@ -78,15 +76,16 @@ public class WindowDoc {
     return epoch;
   }
 
-  public static WindowedKey windowedKey(final BasicDBObject compositeKey) {
-    final byte[] key = (byte[]) compositeKey.get(ID_RECORD_KEY);
-    final long windowStartTimestamp = (long) compositeKey.get(ID_WINDOW_START_TS);
+  public String unwrapRecordKey() {
+    return (String) id.get(ID_RECORD_KEY);
+  }
 
-    return new WindowedKey(Bytes.wrap(key), windowStartTimestamp);
+  public long unwrapWindowStartTs() {
+    return (long) id.get(ID_WINDOW_START_TS);
   }
 
   public static BasicDBObject compositeKey(
-      final byte[] key,
+      final String key,
       final long windowStartTs,
       final boolean timestampFirstOrder
   ) {
@@ -122,10 +121,9 @@ public class WindowDoc {
 
   @Override
   public String toString() {
-    final WindowedKey windowedKey = windowedKey(id);
     return "WindowDoc{"
-        + "id=" + Arrays.toString(windowedKey.key.get())
-        + ", windowStartTs=" + windowedKey.windowStartMs
+        + "id=" + unwrapRecordKey()
+        + ", windowStartTs=" + unwrapWindowStartTs()
         + ", value=" + Arrays.toString(value)
         + ", epoch=" + epoch
         + '}';

@@ -23,6 +23,7 @@ import static dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration.N
 import static org.bson.codecs.configuration.CodecRegistries.fromProviders;
 import static org.bson.codecs.configuration.CodecRegistries.fromRegistries;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.mongodb.BasicDBObject;
 import com.mongodb.client.FindIterable;
 import com.mongodb.client.MongoClient;
@@ -77,6 +78,7 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
   private final MongoDatabase adminDatabase;
   private final MongoCollection<SessionMetadataDoc> metadata;
   private final CollectionCreationOptions collectionCreationOptions;
+  private final KeyCodec keyCodec = new StringKeyCodec();
 
   private final ConcurrentMap<Integer, PartitionSegments> kafkaPartitionToSegments =
       new ConcurrentHashMap<>();
@@ -403,14 +405,15 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
       );
 
       final KeyValueIterator<SessionKey, byte[]> iterator =
-          Iterators.kv(fetchResults.iterator(), MongoSessionTable::sessionFromDoc);
+          Iterators.kv(fetchResults.iterator(), this::sessionFromDoc);
       segmentIterators.add(iterator);
     }
 
     return Iterators.wrapped(segmentIterators);
   }
 
-  private MongoCollection<SessionDoc> collectionForSegmentPartition(
+  @VisibleForTesting
+  MongoCollection<SessionDoc> collectionForSegmentPartition(
       final int kafkaPartition,
       final Segmenter.SegmentPartition segment
   ) {
@@ -498,13 +501,20 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
   }
 
   public BasicDBObject compositeKey(final SessionKey sessionKey) {
-    return SessionDoc.compositeKey(sessionKey.key.get(), sessionKey.sessionStartMs,
+    return SessionDoc.compositeKey(keyCodec.encode(sessionKey.key), sessionKey.sessionStartMs,
         sessionKey.sessionEndMs
     );
   }
 
-  private static KeyValue<SessionKey, byte[]> sessionFromDoc(final SessionDoc sessionDoc) {
-    return new KeyValue<>(sessionDoc.toSessionKey(), sessionDoc.value());
+  private KeyValue<SessionKey, byte[]> sessionFromDoc(final SessionDoc sessionDoc) {
+    return new KeyValue<>(
+        new SessionKey(
+            keyCodec.decode(sessionDoc.unwrapRecordKey()),
+            sessionDoc.unwrapSessionStartMs(),
+            sessionDoc.unwrapSessionEndMs()
+        ),
+        sessionDoc.value()
+    );
   }
 }
 

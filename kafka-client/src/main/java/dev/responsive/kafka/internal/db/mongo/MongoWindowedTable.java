@@ -24,6 +24,7 @@ import static dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration.N
 import static org.bson.codecs.configuration.CodecRegistries.fromProviders;
 import static org.bson.codecs.configuration.CodecRegistries.fromRegistries;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.mongodb.BasicDBObject;
 import com.mongodb.client.FindIterable;
 import com.mongodb.client.MongoClient;
@@ -45,6 +46,7 @@ import dev.responsive.kafka.internal.db.partitioning.WindowSegmentPartitioner;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
 import dev.responsive.kafka.internal.utils.Iterators;
 import dev.responsive.kafka.internal.utils.WindowedKey;
+import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -57,6 +59,7 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.bson.codecs.configuration.CodecProvider;
 import org.bson.codecs.configuration.CodecRegistry;
 import org.bson.codecs.pojo.PojoCodecProvider;
+import org.bson.conversions.Bson;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -79,6 +82,7 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
   private final ConcurrentMap<Integer, PartitionSegments> kafkaPartitionToSegments =
       new ConcurrentHashMap<>();
   private final CollectionCreationOptions collectionCreationOptions;
+  private final KeyCodec keyCodec = new StringKeyCodec();
 
   private static class PartitionSegments {
     private final MongoDatabase database;
@@ -214,6 +218,11 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
     );
   }
 
+  @VisibleForTesting
+  boolean isTimestampFirstOrder() {
+    return timestampFirstOrder;
+  }
+
   @Override
   public String name() {
     return name;
@@ -264,7 +273,8 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
     );
   }
 
-  private MongoCollection<WindowDoc> windowsForSegmentPartition(
+  @VisibleForTesting
+  MongoCollection<WindowDoc> windowsForSegmentPartition(
       final int kafkaPartition,
       final SegmentPartition segment
   ) {
@@ -445,13 +455,29 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
       if (segmentWindows == null) {
         continue;
       }
-      final FindIterable<WindowDoc> fetchResults = segmentWindows.find(
-          Filters.and(
-              Filters.gte(WindowDoc.ID, compositeKey(key, timeFrom)),
-              Filters.lte(WindowDoc.ID, compositeKey(key, timeTo))));
+      final ArrayList<Bson> filters = new ArrayList<>(timestampFirstOrder ? 3 : 2);
+      // express this filter using the whole key rather than using separate expressions
+      // for the record key and timestamp. This is because the _id index is not a composite
+      // index, so if we don't use the whole key in the filter mongo will use a full table
+      // scan. We can optimize this later by adding a composite index on timestamp, key
+      // if using timestamp first order to hopefully avoid scanning all keys in the timestamp
+      // range.
+      filters.add(Filters.gte(WindowDoc.ID, compositeKey(key, timeFrom)));
+      filters.add(Filters.lte(WindowDoc.ID, compositeKey(key, timeTo)));
+      if (timestampFirstOrder) {
+        // if we use timestamp-first order, then we need to check equality on the key,
+        // because other keys will be interleaved in the mongodb range scan
+        filters.add(
+            Filters.eq(
+                String.join(".", WindowDoc.ID, WindowDoc.ID_RECORD_KEY),
+                keyCodec.encode(key)
+            )
+        );
+      }
+      final FindIterable<WindowDoc> fetchResults = segmentWindows.find(Filters.and(filters));
 
       segmentIterators.add(
-          Iterators.kv(fetchResults.iterator(), MongoWindowedTable::windowFromDoc)
+          Iterators.kv(fetchResults.iterator(), this::windowFromDoc)
       );
     }
     return Iterators.wrapped(segmentIterators);
@@ -517,14 +543,20 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
 
   public BasicDBObject compositeKey(final Bytes key, final long windowStartMs) {
     return WindowDoc.compositeKey(
-        key.get(),
+        keyCodec.encode(key),
         windowStartMs,
         timestampFirstOrder
     );
   }
 
-  private static KeyValue<WindowedKey, byte[]> windowFromDoc(final WindowDoc windowDoc) {
-    return new KeyValue<>(WindowDoc.windowedKey(windowDoc.id), windowDoc.value);
+  private KeyValue<WindowedKey, byte[]> windowFromDoc(final WindowDoc windowDoc) {
+    return new KeyValue<>(
+        new WindowedKey(
+            keyCodec.decode(windowDoc.unwrapRecordKey()),
+            windowDoc.unwrapWindowStartTs()
+        ),
+        windowDoc.value
+    );
   }
 
 }
