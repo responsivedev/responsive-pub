@@ -17,7 +17,6 @@
 package dev.responsive.kafka.internal.db.mongo;
 
 import com.mongodb.BasicDBObject;
-import dev.responsive.kafka.internal.utils.SessionKey;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.Objects;
@@ -81,15 +80,20 @@ public class SessionDoc {
     this.epoch = epoch;
   }
 
-  public SessionKey toSessionKey() {
-    final byte[] key = (byte[]) id.get(ID_RECORD_KEY);
-    final long sessionEndTimestamp = (long) id.get(ID_SESSION_END_MS);
-    final long sessionStartTimestamp = (long) id.get(ID_SESSION_START_MS);
-    return new SessionKey(key, sessionStartTimestamp, sessionEndTimestamp);
+  public String unwrapRecordKey() {
+    return (String) id.get(ID_RECORD_KEY);
+  }
+
+  public long unwrapSessionEndMs() {
+    return (long) id.get(ID_SESSION_END_MS);
+  }
+
+  public long unwrapSessionStartMs() {
+    return (long) id.get(ID_SESSION_START_MS);
   }
 
   public static BasicDBObject compositeKey(
-      final byte[] key,
+      final String key,
       final long sessionStartTs,
       final long sessionEndTs
   ) {
@@ -124,11 +128,10 @@ public class SessionDoc {
 
   @Override
   public String toString() {
-    final SessionKey sessionKey = this.toSessionKey();
     return "SessionDoc{"
-        + "id=" + Arrays.toString(sessionKey.key.get())
-        + ", sessionStartTs=" + sessionKey.sessionStartMs
-        + ", sessionEndTs=" + sessionKey.sessionEndMs
+        + "id=" + unwrapRecordKey()
+        + ", sessionStartTs=" + unwrapSessionStartMs()
+        + ", sessionEndTs=" + unwrapSessionEndMs()
         + ", value=" + Arrays.toString(value)
         + ", epoch=" + epoch
         + ", tombstoneTs=" + tombstoneTs

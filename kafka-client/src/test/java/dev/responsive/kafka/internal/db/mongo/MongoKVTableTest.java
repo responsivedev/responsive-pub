@@ -17,6 +17,7 @@
 package dev.responsive.kafka.internal.db.mongo;
 
 import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_ENDPOINT_CONFIG;
+import static dev.responsive.kafka.internal.db.testutils.Matchers.sameKeyValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.is;
@@ -27,7 +28,6 @@ import dev.responsive.kafka.internal.stores.RemoteWriteResult;
 import dev.responsive.kafka.internal.utils.SessionUtil;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
-import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -35,9 +35,6 @@ import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
-import org.hamcrest.BaseMatcher;
-import org.hamcrest.Description;
-import org.hamcrest.Matcher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
@@ -250,33 +247,5 @@ class MongoKVTableTest {
 
   private Bytes bytes(int... bytes) {
     return Bytes.wrap(byteArray(bytes));
-  }
-
-  private Matcher<KeyValue<Bytes, byte[]>> sameKeyValue(final KeyValue<Bytes, byte[]> expected) {
-    return new SameKeyValue(expected);
-  }
-
-  private static class SameKeyValue extends BaseMatcher<KeyValue<Bytes, byte[]>> {
-    private final KeyValue<Bytes, byte[]> expected;
-
-    public SameKeyValue(KeyValue<Bytes, byte[]> expected) {
-      this.expected = expected;
-    }
-
-    @Override
-    public boolean matches(Object o) {
-      if (!(o instanceof KeyValue)) {
-        return false;
-      }
-      final KeyValue<?, ?> otherKeyValue = (KeyValue<?, ?>) o;
-      return expected.key.equals(otherKeyValue.key)
-          && otherKeyValue.value instanceof byte[]
-          && Arrays.equals(expected.value, (byte[]) otherKeyValue.value);
-    }
-
-    @Override
-    public void describeTo(Description description) {
-      description.appendValue(expected);
-    }
   }
 }
