@@ -456,6 +456,12 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
         continue;
       }
       final ArrayList<Bson> filters = new ArrayList<>(timestampFirstOrder ? 3 : 2);
+      // express this filter using the whole key rather than using separate expressions
+      // for the record key and timestamp. This is because the _id index is not a composite
+      // index, so if we don't use the whole key in the filter mongo will use a full table
+      // scan. We can optimize this later by adding a composite index on timestamp, key
+      // if using timestamp first order to hopefully avoid scanning all keys in the timestamp
+      // range.
       filters.add(Filters.gte(WindowDoc.ID, compositeKey(key, timeFrom)));
       filters.add(Filters.lte(WindowDoc.ID, compositeKey(key, timeTo)));
       if (timestampFirstOrder) {
