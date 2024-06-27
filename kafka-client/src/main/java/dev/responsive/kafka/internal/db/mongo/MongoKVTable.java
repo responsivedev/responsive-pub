@@ -255,24 +255,4 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
     LOG.warn("approximateNumEntries is not yet implemented for Mongo");
     return 0;
   }
-
-  interface KeyCodec {
-    Bytes decode(String key);
-
-    String encode(Bytes key);
-  }
-
-  public static class StringKeyCodec implements KeyCodec {
-    private final OrderPreservingBase64Encoder encoder = new OrderPreservingBase64Encoder();
-
-    @Override
-    public Bytes decode(final String key) {
-      return Bytes.wrap(encoder.decode(key));
-    }
-
-    @Override
-    public String encode(Bytes key) {
-      return encoder.encode(key.get());
-    }
-  }
 }

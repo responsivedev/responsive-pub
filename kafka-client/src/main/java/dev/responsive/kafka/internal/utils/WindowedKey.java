@@ -16,6 +16,7 @@
 
 package dev.responsive.kafka.internal.utils;
 
+import java.util.Objects;
 import org.apache.kafka.common.utils.Bytes;
 
 public class WindowedKey implements Comparable<WindowedKey> {
@@ -31,6 +32,24 @@ public class WindowedKey implements Comparable<WindowedKey> {
   public WindowedKey(final byte[] key, final long windowStartMs) {
     this.key = Bytes.wrap(key);
     this.windowStartMs = windowStartMs;
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    final WindowedKey that = (WindowedKey) o;
+    return windowStartMs == that.windowStartMs
+        && Objects.equals(key, that.key);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(key, windowStartMs);
   }
 
   @Override
