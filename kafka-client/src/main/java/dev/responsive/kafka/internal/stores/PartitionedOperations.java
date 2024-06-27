@@ -33,6 +33,7 @@ import dev.responsive.kafka.internal.db.BytesKeySpec;
 import dev.responsive.kafka.internal.db.FlushManager;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.RemoteTableSpecFactory;
+import dev.responsive.kafka.internal.db.inmemory.InMemoryKVTable;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
@@ -104,6 +105,9 @@ public class PartitionedOperations implements KeyValueOperations {
       case MONGO_DB:
         table = createMongo(params, sessionClients);
         break;
+      case IN_MEMORY:
+        table = createInMemory(params);
+        break;
       default:
         throw new IllegalStateException("Unexpected value: " + sessionClients.storageBackend());
     }
@@ -160,6 +164,10 @@ public class PartitionedOperations implements KeyValueOperations {
         migrationMode,
         startingTimestamp
     );
+  }
+
+  private static RemoteKVTable<?> createInMemory(final ResponsiveKeyValueParams params) {
+    return new InMemoryKVTable(params.name().tableName());
   }
 
   private static RemoteKVTable<?> createCassandra(
