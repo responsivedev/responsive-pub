@@ -152,7 +152,7 @@ public class E2ETestApplication {
     builderProperties.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
     builderProperties.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 10);
     builderProperties.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 60000);
-    builderProperties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
+    builderProperties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10);
     builderProperties.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, 90000);
     builderProperties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG,
         StreamsConfig.EXACTLY_ONCE_V2);
