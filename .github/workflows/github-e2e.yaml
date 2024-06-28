@@ -93,7 +93,7 @@ jobs:
           description: "responsive antithesis test run"
           email_recipients: "antithesis-responsive-aaaamurlsqy6e3hxnx6ksnec5y@antithesisgroup.slack.com"
           additional_parameters: |-
-            custom.duration: ${{ inputs.test-duration }}
+            custom.duration=${{ inputs.test-duration }}
 
       #  env:
       #    KAFKA_CLIENT_VERSION: ${{ steps.kafka_client_version.outputs.KAFKA_CLIENT_VERSION }}

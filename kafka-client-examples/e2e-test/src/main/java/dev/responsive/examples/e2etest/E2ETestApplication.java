@@ -10,8 +10,10 @@ import com.datastax.oss.driver.api.core.DriverTimeoutException;
 import com.datastax.oss.driver.api.core.config.DriverConfigLoader;
 import com.datastax.oss.driver.api.core.connection.ConnectionInitException;
 import com.datastax.oss.driver.api.core.servererrors.ReadFailureException;
+import com.datastax.oss.driver.api.core.servererrors.ReadTimeoutException;
 import com.datastax.oss.driver.api.core.servererrors.UnavailableException;
 import com.datastax.oss.driver.api.core.servererrors.WriteFailureException;
+import com.datastax.oss.driver.api.core.servererrors.WriteTimeoutException;
 import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
 import com.datastax.oss.driver.api.querybuilder.schema.CreateKeyspace;
 import dev.responsive.examples.e2etest.Schema.InputRecord;
@@ -197,6 +199,7 @@ public class E2ETestApplication {
         InvalidProducerEpochException.class,
         ProducerFencedException.class,
         ReadFailureException.class,
+        ReadTimeoutException.class,
         RebalanceInProgressException.class,
         TaskCorruptedException.class,
         TaskMigratedException.class,
@@ -204,7 +207,8 @@ public class E2ETestApplication {
         java.util.concurrent.TimeoutException.class,
         TransactionAbortedException.class,
         UnavailableException.class,
-        WriteFailureException.class
+        WriteFailureException.class,
+        WriteTimeoutException.class
     );
     for (final var c : dontcare) {
       if (c.isInstance(throwable)) {
