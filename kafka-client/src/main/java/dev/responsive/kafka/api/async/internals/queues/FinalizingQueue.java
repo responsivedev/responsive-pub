@@ -73,6 +73,10 @@ public class FinalizingQueue implements ReadOnlyFinalizingQueue, WriteOnlyFinali
     finalizableRecords.addLast(event);
   }
 
+  public int size() {
+    return finalizableRecords.size();
+  }
+
   /**
    * See {@link WriteOnlyFinalizingQueue#addFailedEvent}
    */

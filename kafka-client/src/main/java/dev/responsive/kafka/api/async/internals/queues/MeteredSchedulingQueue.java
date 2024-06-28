@@ -39,6 +39,16 @@ public class MeteredSchedulingQueue<KIn> implements SchedulingQueue<KIn> {
   }
 
   @Override
+  public int size() {
+    return wrapped.size();
+  }
+
+  @Override
+  public int blockedEntries() {
+    return wrapped.blockedEntries();
+  }
+
+  @Override
   public int totalEnqueuedEvents() {
     return wrapped.totalEnqueuedEvents();
   }
