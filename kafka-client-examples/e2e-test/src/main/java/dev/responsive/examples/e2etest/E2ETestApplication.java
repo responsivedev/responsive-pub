@@ -10,6 +10,7 @@ import com.datastax.oss.driver.api.core.DriverTimeoutException;
 import com.datastax.oss.driver.api.core.config.DriverConfigLoader;
 import com.datastax.oss.driver.api.core.connection.ConnectionInitException;
 import com.datastax.oss.driver.api.core.servererrors.ReadFailureException;
+import com.datastax.oss.driver.api.core.servererrors.UnavailableException;
 import com.datastax.oss.driver.api.core.servererrors.WriteFailureException;
 import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
 import com.datastax.oss.driver.api.querybuilder.schema.CreateKeyspace;
@@ -187,7 +188,7 @@ public class E2ETestApplication {
 
   private boolean shouldLogError(final Throwable throwable, List<Throwable> seen) {
     final List<Class<? extends Throwable>> dontcare = List.of(
-        TaskMigratedException.class,
+        AllNodesFailedException.class,
         ConnectException.class,
         ConnectionInitException.class,
         DisconnectException.class,
@@ -195,14 +196,15 @@ public class E2ETestApplication {
         InjectedE2ETestException.class,
         InvalidProducerEpochException.class,
         ProducerFencedException.class,
+        ReadFailureException.class,
         RebalanceInProgressException.class,
         TaskCorruptedException.class,
+        TaskMigratedException.class,
         TimeoutException.class,
         java.util.concurrent.TimeoutException.class,
         TransactionAbortedException.class,
-        WriteFailureException.class,
-        AllNodesFailedException.class,
-        ReadFailureException.class
+        UnavailableException.class,
+        WriteFailureException.class
     );
     for (final var c : dontcare) {
       if (c.isInstance(throwable)) {
