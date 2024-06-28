@@ -44,7 +44,7 @@ jobs:
 
       - name: "Set Kafka Client Version"
         run: |
-          echo "KAFKA_CLIENT_VERSION=$(./gradlew kafka-client:cV  | grep "Project version" | sed 's/Project version: //')" >> $GITHUB_OUTPUT
+          echo "KAFKA_CLIENT_VERSION=$(./gradlew kafka-client:cV  | grep "Project version" | sed 's/Project version: //')-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
         id: kafka_client_version
 
       - name: "Tag Docker"
@@ -73,19 +73,6 @@ jobs:
           KAFKA_CLIENT_VERSION: ${{ steps.kafka_client_version.outputs.KAFKA_CLIENT_VERSION }}
         run: |
           docker push us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test-config:$KAFKA_CLIENT_VERSION
-
-      - name: "Build Scylla"
-        working-directory: ./kafka-client-examples/e2e-test/docker/scylla
-        env:
-          KAFKA_CLIENT_VERSION: ${{ steps.kafka_client_version.outputs.KAFKA_CLIENT_VERSION }}
-        run: |
-          docker build . -t us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/responsive-scylla:$KAFKA_CLIENT_VERSION
-
-      - name: "Push Scylla"
-        env:
-          KAFKA_CLIENT_VERSION: ${{ steps.kafka_client_version.outputs.KAFKA_CLIENT_VERSION }}
-        run: |
-          docker push us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/responsive-scylla:$KAFKA_CLIENT_VERSION
 
       # Run Antithesis Tests
       #- name: Run Antithesis Tests
