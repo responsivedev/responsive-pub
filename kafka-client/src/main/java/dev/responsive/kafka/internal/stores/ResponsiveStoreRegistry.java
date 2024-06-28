@@ -45,16 +45,9 @@ public class ResponsiveStoreRegistry {
   public synchronized List<ResponsiveStoreRegistration> getRegisteredStoresForChangelog(
       final TopicPartition topicPartition
   ) {
-    final var found = stores.stream()
+    return stores.stream()
         .filter(s -> s.changelogTopicPartition().equals(topicPartition))
         .collect(Collectors.toList());
-    if (found.size() > 1) {
-      LOGGER.error("found more than 1 registration: {}",
-          found.stream().map(ResponsiveStoreRegistration::toString)
-              .collect(Collectors.joining(","))
-      );
-    }
-    return found;
   }
 
   public synchronized List<ResponsiveStoreRegistration> getRegisteredStoresForChangelog(
@@ -74,6 +67,12 @@ public class ResponsiveStoreRegistry {
       throw new IllegalStateException(String.format(
           "there should always be a store for the thread (%s) if there are stores registered "
               + "for this topic partition (%s)", threadId, topicPartition));
+    }
+    if (storesForThread.size() > 1) {
+      LOGGER.warn("found more than 1 registration: {}",
+          storesForThread.stream().map(ResponsiveStoreRegistration::toString)
+              .collect(Collectors.joining(","))
+      );
     }
     return storesForThread;
   }
