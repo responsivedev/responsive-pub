@@ -1,0 +1,18 @@
+name: Antithesis Manual Run
+on:
+  workflow_dispatch:
+    inputs:
+      test-duration:
+        description: 'The duration that the antithesis test runs'
+        type: string
+        required: false
+        default: '0.5'
+jobs:
+  build:
+    permissions:
+      id-token: write # This is required for requesting the JWT
+      contents: write # This is required for actions/checkout (read) and publishing tags (write)
+    uses: responsivedev/responsive-pub/.github/workflows/github-e2e.yaml@main
+    with:
+      test-duration: ${{ inputs.test-duration }}
+    secrets: inherit

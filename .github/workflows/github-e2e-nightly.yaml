@@ -1,0 +1,13 @@
+name: Antithesis Nightly Run
+on:
+  schedule:
+    - cron: '30 4 * * *'
+jobs:
+  build:
+    permissions:
+      id-token: write # This is required for requesting the JWT
+      contents: write # This is required for actions/checkout (read) and publishing tags (write)
+    uses: responsivedev/responsive-pub/.github/workflows/github-e2e.yaml@main
+    with:
+      test-duration: "6.0"
+    secrets: inherit
