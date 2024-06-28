@@ -1,5 +1,12 @@
 name: Antithesis Test Run 
-on: workflow_dispatch
+on:
+  workflow_call:
+    inputs:
+      test-duration:
+        description: 'The duration that the antithesis test runs'
+        type: string
+        required: false
+        default: '0.5'
 jobs:
   build:
     permissions:
@@ -28,7 +35,6 @@ jobs:
       - name: "Checkout"
         uses: actions/checkout@v3
         with:
-          ref: refs/heads/e2e-test-replicated-scylla
           submodules: recursive
           fetch-depth: 0
 
@@ -87,7 +93,7 @@ jobs:
           description: "responsive antithesis test run"
           email_recipients: "antithesis-responsive-aaaamurlsqy6e3hxnx6ksnec5y@antithesisgroup.slack.com"
           additional_parameters: |-
-            custom.duration: 0.5
+            custom.duration: ${{ inputs.test-duration }}
 
       #  env:
       #    KAFKA_CLIENT_VERSION: ${{ steps.kafka_client_version.outputs.KAFKA_CLIENT_VERSION }}
