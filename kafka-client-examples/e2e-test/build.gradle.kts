@@ -39,6 +39,6 @@ fun String.runCommand(wd: File = file("./")): String {
 }
 
 val kc_version = project(":kafka-client").version
-version = "$kc_version" + "-" + "git rev-parse --short=8 HEAD".runCommand(wd = rootDir)
+version = "$kc_version" + "-" + "git rev-parse --short HEAD".runCommand(wd = rootDir)
 
 responsive_docker.dockerImage.set("e2e-test:$version")
