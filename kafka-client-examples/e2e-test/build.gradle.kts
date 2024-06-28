@@ -28,6 +28,17 @@ java {
     }
 }
 
-version = project(":kafka-client").version
+fun String.runCommand(wd: File = file("./")): String {
+    val byteOut = `java.io`.ByteArrayOutputStream()
+    project.exec {
+        workingDir = wd
+        commandLine = this@runCommand.split("\\s".toRegex())
+        standardOutput = byteOut
+    }
+    return String(byteOut.toByteArray()).trim()
+}
+
+val kc_version = project(":kafka-client").version
+version = "$kc_version" + "-" + "git rev-parse --short=8 HEAD".runCommand(wd = rootDir)
 
 responsive_docker.dockerImage.set("e2e-test:$version")

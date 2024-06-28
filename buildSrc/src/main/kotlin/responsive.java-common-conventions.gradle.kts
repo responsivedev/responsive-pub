@@ -71,7 +71,7 @@ allprojects {
             "patch/.*" to "incrementPatch"
         ))
 
-        snapshotCreator({ _, p -> "-" + p.shortRevision })
+        snapshotCreator({ _, _ -> "-SNAPSHOT" })
         ignoreUncommittedChanges.set(false)
     }
 
