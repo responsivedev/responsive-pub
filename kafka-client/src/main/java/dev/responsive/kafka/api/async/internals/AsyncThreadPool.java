@@ -110,10 +110,6 @@ public class AsyncThreadPool {
     if (inFlightForTask != null) {
       log.info("Cancelling {} pending records for {}[{}]",
                inFlightForTask.size(), processorName, partition);
-      if (!inFlightForTask.isEmpty()) {
-        log.info("ANTITHESIS SOMETIMES: cancelling {} pending records for {}[{}]",
-            inFlightForTask.size(), processorName, partition);
-      }
       inFlightForTask.values().forEach(f -> f.future().cancel(true));
     }
   }
@@ -255,10 +251,6 @@ public class AsyncThreadPool {
       metricsRecorder.close();
     }
     executor.shutdownNow();
-  }
-
-  public boolean isShutdown() {
-    return executor.isShutdown();
   }
 
   static class InFlightEvent {

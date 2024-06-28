@@ -56,14 +56,6 @@ public class KeyOrderPreservingQueue<KIn> implements SchedulingQueue<KIn> {
     return processableEvents.isEmpty() && blockedEvents.isEmpty();
   }
 
-  public int size() {
-    return blockedEvents.values().stream().mapToInt(KeyEventQueue::size).sum();
-  }
-
-  public int blockedEntries() {
-    return blockedEvents.values().stream().mapToInt(q -> q.blockedEvents.size()).sum();
-  }
-
   public int totalEnqueuedEvents() {
     return processableEvents.size() + blockedEvents.values().stream()
         .mapToInt(keyEventQueue -> keyEventQueue.blockedEvents.size())
@@ -211,9 +203,6 @@ public class KeyOrderPreservingQueue<KIn> implements SchedulingQueue<KIn> {
                   size(), maxQueueSizePerKey);
         throw new IllegalStateException("Attempted to add event while key queue was full");
       }
-
-      // todo: use a periodic logger
-      log.debug("enqueuing key onto blocked async processor scheduler queue");
 
       blockedEvents.add(event);
     }

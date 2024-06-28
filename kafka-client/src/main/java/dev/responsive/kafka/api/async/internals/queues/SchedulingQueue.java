@@ -18,8 +18,4 @@ public interface SchedulingQueue<KIn> {
   void offer(AsyncEvent event);
 
   boolean keyQueueIsFull(KIn key);
-
-  int size();
-
-  int blockedEntries();
 }
