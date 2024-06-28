@@ -295,7 +295,7 @@ public abstract class DelegatingConsumer<K, V> implements Consumer<K, V> {
   }
 
   @Override
-  public Uuid clientInstanceId(Duration duration) {
+  public Uuid clientInstanceId(final Duration duration) {
     return delegate.clientInstanceId(duration);
   }
 }

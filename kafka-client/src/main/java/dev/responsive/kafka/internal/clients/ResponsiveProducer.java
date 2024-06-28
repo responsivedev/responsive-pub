@@ -148,7 +148,7 @@ public class ResponsiveProducer<K, V> implements Producer<K, V> {
   }
 
   @Override
-  public Uuid clientInstanceId(Duration duration) {
+  public Uuid clientInstanceId(final Duration duration) {
     return wrapped.clientInstanceId(duration);
   }
 

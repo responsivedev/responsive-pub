@@ -17,8 +17,6 @@
 package dev.responsive.kafka.api.async.internals.queues;
 
 import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
@@ -203,8 +201,6 @@ public class KeyOrderPreservingQueue<KIn> implements SchedulingQueue<KIn> {
       return next;
     }
 
-    private Instant lastLog = Instant.now();
-
     public void addBlockedEvent(final AsyncEvent event) {
       if (!isBlocked()) {
         throw new IllegalStateException("Attempted to add event to blocked queue, but "
@@ -216,11 +212,9 @@ public class KeyOrderPreservingQueue<KIn> implements SchedulingQueue<KIn> {
         throw new IllegalStateException("Attempted to add event while key queue was full");
       }
 
-      final Instant now = Instant.now();
-      if (Duration.between(lastLog, now).compareTo(Duration.ofSeconds(10)) > 0) {
-        log.info("enqueuing key onto blocked async processor scheduler queue");
-        lastLog = now;
-      }
+      // todo: use a periodic logger
+      log.debug("enqueuing key onto blocked async processor scheduler queue");
+
       blockedEvents.add(event);
     }
 
