@@ -1,0 +1,161 @@
+version: '3'
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.3.0
+    container_name: zookeeper
+    hostname: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - ./volumes/zookeeper:/volumes/zookeeper:rw
+      - ./volumes/zookeeper/log:/volumes/zookeeper/log:rw
+      - ./volumes/zookeeper/data:/volumes/zookeeper/data:rw
+    networks:
+      backend:
+        ipv4_address: 10.0.0.12
+
+  broker:
+    image: confluentinc/cp-kafka:7.3.0
+    container_name: broker
+    hostname: broker
+    ports:
+    # To learn about configuring Kafka for access across networks see
+    # https://www.confluent.io/blog/kafka-client-cannot-connect-to-broker-on-aws-on-docker-etc/
+      - "9092:9092"
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker:9092,PLAINTEXT_INTERNAL://broker:29092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: 1000
+    volumes:
+      - ./volumes/kafka:/volumes/kafka:rw
+      - ./volumes/kafka/data:/volumes/kafka/data:rw
+    networks:
+      backend:
+        ipv4_address: 10.0.0.20
+
+  scylla:
+    image: scylladb/scylla:5.4
+    container_name: scylla
+    hostname: scylla
+    command: --smp 1 --options-file /etc/scylla/scylla.yaml --memory 750M --overprovisioned 1 --api-address 0.0.0.0 --seeds 10.0.0.30 --broadcast-address 10.0.0.30
+    ports:
+      - "9042:9042"
+    volumes:
+      - ./volumes/scylla/data:/var/lib/scylla/data:rw
+      - ./volumes/scylla.yaml:/etc/scylla/scylla.yaml
+    networks:
+      backend:
+        ipv4_address: 10.0.0.30
+
+  scylla2:
+    image: scylladb/scylla:5.4
+    container_name: scylla2
+    hostname: scylla2
+    command: --smp 1 --options-file /etc/scylla/scylla.yaml --memory 750M --overprovisioned 1 --api-address 0.0.0.0 --seeds 10.0.0.30 --broadcast-address 10.0.0.31
+    ports:
+      - "9043:9042"
+    volumes:
+      - ./volumes/scylla2/data:/var/lib/scylla/data:rw
+      - ./volumes/scylla.yaml:/etc/scylla/scylla.yaml
+    networks:
+      backend:
+        ipv4_address: 10.0.0.31
+
+  scylla3:
+    image: scylladb/scylla:5.4
+    container_name: scylla3
+    hostname: scylla3
+    command: --smp 1 --options-file /etc/scylla/scylla.yaml --memory 750M --overprovisioned 1 --api-address 0.0.0.0 --seeds 10.0.0.30 --broadcast-address 10.0.0.32
+    ports:
+      - "9044:9042"
+    volumes:
+      - ./volumes/scylla3/data:/var/lib/scylla/data:rw
+      - ./volumes/scylla.yaml:/etc/scylla/scylla.yaml
+    networks:
+      backend:
+        ipv4_address: 10.0.0.32
+
+  application1:
+    image: us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test:${KAFKA_CLIENT_VERSION}
+    container_name: application1
+    hostname: application1
+    depends_on:
+      - broker
+      - scylla
+    environment:
+      NAME: e2e
+      INPUT_TOPIC: input
+      OUTPUT_TOPIC: output
+      PARTITIONS: 8
+      NUM_KEYS: 16
+      MAX_OUTSTANDING: 10000
+      E2E_APP_MODE: APPLICATION
+      CONFIG_PATH: "/app.properties"
+      JAVA_OPTS: "-Dlog4j2.configurationFile=/log4j2.properties"
+    volumes:
+      - ./volumes/app.properties:/app.properties
+      - ./volumes/log4j2.properties:/log4j2.properties
+    networks:
+      backend:
+        ipv4_address: 10.0.0.40
+
+  application2:
+    image: us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test:${KAFKA_CLIENT_VERSION}
+    container_name: application2
+    hostname: application2
+    depends_on:
+      - broker
+      - scylla
+    environment:
+      NAME: e2e
+      INPUT_TOPIC: input
+      OUTPUT_TOPIC: output
+      PARTITIONS: 8
+      NUM_KEYS: 16
+      MAX_OUTSTANDING: 10000
+      E2E_APP_MODE: APPLICATION
+      CONFIG_PATH: "/app.properties"
+      JAVA_OPTS: "-Dlog4j2.configurationFile=/log4j2.properties"
+    volumes:
+      - ./volumes/app.properties:/app.properties
+      - ./volumes/log4j2.properties:/log4j2.properties
+    networks:
+      backend:
+        ipv4_address: 10.0.0.41
+
+  driver:
+    image: us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test:${KAFKA_CLIENT_VERSION}
+    container_name: driver
+    hostname: driver
+    depends_on:
+      - broker
+      - scylla
+    environment:
+      NAME: e2e
+      INPUT_TOPIC: input
+      OUTPUT_TOPIC: output
+      PARTITIONS: 8
+      NUM_KEYS: 16
+      MAX_OUTSTANDING: 10000
+      E2E_APP_MODE: DRIVER
+      CONFIG_PATH: "/app.properties"
+    volumes:
+      - ./volumes/app.properties:/app.properties
+    networks:
+      backend:
+        ipv4_address: 10.0.0.50
+
+networks:
+  backend:
+    driver: bridge
+    ipam:
+      config:
+      - subnet: 10.0.0.0/24

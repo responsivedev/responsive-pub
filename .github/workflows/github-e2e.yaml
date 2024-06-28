@@ -18,37 +18,81 @@ jobs:
           docker-images: true
           swap-storage: true
 
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          registry: https://us-central1-docker.pkg.dev
+          username: _json_key
+          password: ${{ secrets.ANTITHESIS_DOCKER_CREDENTIAL }}
+
       - name: "Checkout"
         uses: actions/checkout@v3
         with:
-          ref: refs/heads/e2e-test
+          ref: refs/heads/e2e-test-replicated-scylla
           submodules: recursive
           fetch-depth: 0
+
+      - name: "Gradle Build kafka-client"
+        uses: gradle/gradle-build-action@v2.9.0
+        with:
+          arguments: kafka-client:build -xtest
 
       - name: "Gradle Build"
         uses: gradle/gradle-build-action@v2.9.0
         with:
           arguments: kafka-client-examples:e2e-test:build kafka-client-examples:e2e-test:buildDocker
 
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: _json_key
-          password: ${{ secrets.ANTITHESIS_DOCKER_CREDENTIAL }}
+      - name: "Set Kafka Client Version"
+        run: |
+          echo "KAFKA_CLIENT_VERSION=$(./gradlew kafka-client:cV  | grep "Project version" | sed 's/Project version: //')-$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+        id: kafka_client_version
 
       - name: "Tag Docker"
+        env:
+          KAFKA_CLIENT_VERSION: ${{ steps.kafka_client_version.outputs.KAFKA_CLIENT_VERSION }}
         run: |
-          docker tag e2e-test:`./gradlew kafka-client:cV  | grep "Project version" | sed 's/Project version: //'` us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test:antithesis-latest
+          docker tag e2e-test:$KAFKA_CLIENT_VERSION us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test:$KAFKA_CLIENT_VERSION
 
       - name: "Push Docker"
+        env:
+          KAFKA_CLIENT_VERSION: ${{ steps.kafka_client_version.outputs.KAFKA_CLIENT_VERSION }}
         run: |
-          docker push us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test:antithesis-latest
+          docker push us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test:$KAFKA_CLIENT_VERSION
 
       - name: "Build Config"
         working-directory: ./kafka-client-examples/e2e-test/docker/antithesis
+        env:
+          KAFKA_CLIENT_VERSION: latest
+          CONFIG_IMG_VERSION: ${{ steps.kafka_client_version.outputs.KAFKA_CLIENT_VERSION }}
         run: |
-          docker build . -t us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test-config:antithesis-latest
+          cat config/docker-compose.yml.template | envsubst > config/docker-compose.yml
+          docker build . -t us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test-config:$CONFIG_IMG_VERSION
 
       - name: "Push Config"
+        env:
+          KAFKA_CLIENT_VERSION: ${{ steps.kafka_client_version.outputs.KAFKA_CLIENT_VERSION }}
         run: |
-          docker push us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test-config:antithesis-latest
+          docker push us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test-config:$KAFKA_CLIENT_VERSION
+
+      - name: "Run Antithesis Tests"
+        uses: antithesishq/antithesis-trigger-action@main
+        with:
+          notebook_name: responsive
+          tenant: responsive
+          username: ${{ secrets.ANTITHESIS_USERNAME }}
+          password: ${{ secrets.ANTITHESIS_PASSWORD }}
+          github_token: ${{ secrets.ANTITHESIS_GH_PAT }}
+          config_image: us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test-config:${{ steps.kafka_client_version.outputs.KAFKA_CLIENT_VERSION }}
+          images: us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test:${{ steps.kafka_client_version.outputs.KAFKA_CLIENT_VERSION }}
+          description: "responsive antithesis test run"
+          email_recipients: "antithesis-responsive-aaaamurlsqy6e3hxnx6ksnec5y@antithesisgroup.slack.com"
+          additional_parameters: |-
+            custom.duration: 0.5
+
+      #  env:
+      #    KAFKA_CLIENT_VERSION: ${{ steps.kafka_client_version.outputs.KAFKA_CLIENT_VERSION }}
+      #    ANTITHESIS_USERNAME: ${{ secrets.ANTITHESIS_USERNAME }}
+      #    ANTITHESIS_PASSWORD: ${{ secrets.ANTITHESIS_PASSWORD }}
+      #    DURATION: 0.5
+      #  run: |
+      #    curl -u "$ANTITHESIS_USERNAME:$ANTITHESIS_PASSWORD" -XPOST https://responsive.antithesis.com/api/v1/launch_experiment/responsive -d '{"params": {"antithesis.images":"us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test:'$KAFKA_CLIENT_VERSION'", "antithesis.config_image": "us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test-config:'$KAFKA_CLIENT_VERSION'", "custom.duration": '$DURATION', "antithesis.report.recipients": "antithesis-responsive-aaaamurlsqy6e3hxnx6ksnec5y@antithesisgroup.slack.com", "
