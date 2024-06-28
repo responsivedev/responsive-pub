@@ -68,12 +68,6 @@ public class ResponsiveStoreRegistry {
           "there should always be a store for the thread (%s) if there are stores registered "
               + "for this topic partition (%s)", threadId, topicPartition));
     }
-    if (storesForThread.size() > 1) {
-      LOGGER.warn("found more than 1 registration: {}",
-          storesForThread.stream().map(ResponsiveStoreRegistration::toString)
-              .collect(Collectors.joining(","))
-      );
-    }
     return storesForThread;
   }
 

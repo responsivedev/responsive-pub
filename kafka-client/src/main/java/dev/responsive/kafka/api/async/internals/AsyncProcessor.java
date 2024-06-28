@@ -37,7 +37,6 @@ import dev.responsive.kafka.api.async.internals.stores.StreamThreadFlushListener
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.config.InternalSessionConfigs;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
@@ -403,8 +402,6 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
       throw fatalException;
     }
 
-    logInternalSummary(false);
-
     try {
       // Make a (non-blocking) pass through the finalizing queue up front, to
       // free up any recently-processed events before we attempt to drain the
@@ -476,7 +473,6 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
       return numFinalized;
     }
 
-    Instant blockedCheckStart = Instant.now();
     while (true) {
       // There is a low chance that an event fails in such a way that it's never placed on
       // the finalizing queue (this _should_ never happen unless there is a bug, which is
@@ -494,41 +490,6 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
       }
 
       checkFatalExceptionsFromAsyncThreadPool();
-      if (Duration.between(blockedCheckStart, Instant.now()).compareTo(Duration.ofMinutes(1)) > 0) {
-        log.info("blocked on finalize for at least a minute");
-        logInternalSummary(true);
-        blockedCheckStart = Instant.now();
-      }
-    }
-  }
-
-  private void logInternalSummary(boolean info) {
-    final var inFlight
-        = Optional.ofNullable(threadPool.getInFlight(asyncProcessorName, taskId.partition()))
-        .map(Map::size)
-        .map(Object::toString)
-        .orElse("null");
-    final String msg =
-        "pending({}), finalizable({}), in-flight({}), shutdown({}), scheduled({}), waiting({})";
-    if (info) {
-      log.info(msg,
-          pendingEvents.size(),
-          finalizingQueue.size(),
-          inFlight,
-          threadPool.isShutdown(),
-          schedulingQueue.size(),
-          schedulingQueue.blockedEntries()
-      );
-    } else {
-      // TODO: switch to a periodic log
-      log.debug(msg,
-          pendingEvents.size(),
-          finalizingQueue.size(),
-          inFlight,
-          threadPool.isShutdown(),
-          schedulingQueue.size(),
-          schedulingQueue.blockedEntries()
-      );
     }
   }
 
@@ -544,8 +505,6 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    */
   private void maybeBackOffEnqueuingNewEventWithKey(final KIn key)  {
     while (schedulingQueue.keyQueueIsFull(key)) {
-      // TODO: switch to a periodic log
-      log.debug("key queue is full. back off until there is room on key queue");
       drainSchedulingQueue();
 
       if (schedulingQueue.keyQueueIsFull(key)) {
