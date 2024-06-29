@@ -9,12 +9,12 @@ public class Params {
   public static final int EXCEPTION_INJECT_THRESHOLD
       = Integer.parseInt(System.getenv().getOrDefault("EXCEPTION_INJECT_THRESHOLD", "1"));
   public static final int NUM_KEYS
-      = Integer.parseInt(System.getenv().getOrDefault("NUM_KEYS", "16"));
+      = Integer.parseInt(System.getenv().getOrDefault("NUM_KEYS", "32"));
   public static final int MAX_OUTSTANDING
       = Integer.parseInt(System.getenv().getOrDefault("MAX_OUTSTANDING", "500"));
   public static final int RECEIVE_THRESHOLD
-      = Integer.parseInt(System.getenv().getOrDefault("RECEIVE_THRESHOLD", "360"));
+      = Integer.parseInt(System.getenv().getOrDefault("RECEIVE_THRESHOLD", "480"));
   public static final int FAULT_STOP_THRESHOLD
-      = Integer.parseInt(System.getenv().getOrDefault("FAULT_STOP_THRESHOLD", "300"));
+      = Integer.parseInt(System.getenv().getOrDefault("FAULT_STOP_THRESHOLD", "480"));
   public static final String MODE = System.getenv().getOrDefault("E2E_APP_MODE", "APPLICATION");
 }
