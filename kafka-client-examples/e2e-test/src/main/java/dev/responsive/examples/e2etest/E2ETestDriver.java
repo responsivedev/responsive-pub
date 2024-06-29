@@ -324,17 +324,21 @@ public class E2ETestDriver {
       final Instant start = Instant.now();
       while (sent.stream().noneMatch(rm -> rm.offset() == upTo)) {
         try {
-          wait(30000);
+          wait(30_000);
         } catch (final InterruptedException e) {
           throw new RuntimeException(e);
         }
         if (Duration.between(start, Instant.now()).getSeconds() > 300) {
-          LOG.error("ANTITHESIS NEVER: waited longer than 300 seconds for offset {} {}",
+          LOG.error("ANTITHESIS NEVER: waited longer than 300 seconds for offset {} {} {}",
               upTo,
-              partition
+              partition,
+              sent.isEmpty() ? "null" : sent.get(0).toString()
           );
           throw new IllegalStateException(String.format(
-              "waited longer than 300 seconds for offset %d %d", upTo, partition
+              "waited longer than 300 seconds for offset %d %d %s",
+              upTo,
+              partition,
+              sent.isEmpty() ? "null" : sent.get(0).toString()
           ));
         }
       }
@@ -342,6 +346,8 @@ public class E2ETestDriver {
       while (!sent.isEmpty() && sent.get(0).offset() <= upTo) {
         popped.add(sent.remove(0));
       }
+      LOG.warn("removing multiple offsets: {}",
+          String.join(", ", popped.stream().map(Object::toString).toList()));
       return popped;
     }
   }
