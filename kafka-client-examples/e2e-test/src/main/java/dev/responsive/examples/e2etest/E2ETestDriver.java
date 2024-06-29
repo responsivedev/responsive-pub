@@ -50,6 +50,9 @@ public class E2ETestDriver {
   private final String outputTopic;
   private final List<Long> keys;
   private final Admin admin;
+  private final List<CommittedAndEndOffsets> committedAndEndOffsets = new LinkedList<>();
+  private final List<CommittedAndEndOffsets> drainedCommittedAndEndOffsets = new LinkedList<>();
+  private final Map<Integer, Long> consumedOutputOffsets = new HashMap<>();
   private final Map<Long, ProduceState> produceState;
   private final Map<Long, ConsumeState> consumeState;
   private int outstanding = 0;
@@ -59,6 +62,9 @@ public class E2ETestDriver {
   private int recordsProcessed = 0;
   private final String groupId;
   private volatile boolean keepRunning = true;
+  private final Map<Integer, StalledPartition> stalledPartitions = new HashMap<>();
+  private final Duration faultStopThreshold;
+  private final Duration stalledPartitionThreshold;
   private final FaultStopper faultStopper = new FaultStopper();
 
   public E2ETestDriver(
@@ -69,7 +75,7 @@ public class E2ETestDriver {
       final int partitions,
       final long recordsToProcess,
       final int maxOutstanding,
-      final Duration receivedThreshold,
+      final Duration stalledPartitionThreshold,
       final Duration faultStopThreshold,
       final String groupId
   ) {
@@ -89,7 +95,7 @@ public class E2ETestDriver {
     ));
     consumeState = keys.stream().collect(Collectors.toMap(
         k -> k,
-        k -> new ConsumeState(k, receivedThreshold, faultStopThreshold, faultStopper)
+        ConsumeState::new
     ));
     this.recordsToProcess = recordsToProcess;
     this.maxOutstanding = maxOutstanding;
@@ -112,6 +118,8 @@ public class E2ETestDriver {
             IsolationLevel.READ_COMMITTED.toString().toLowerCase(Locale.ROOT))
         .build();
     consumer = new KafkaConsumer<>(consumerProperties);
+    this.faultStopThreshold = Objects.requireNonNull(faultStopThreshold);
+    this.stalledPartitionThreshold = Objects.requireNonNull(stalledPartitionThreshold);
   }
 
   public void notifyStop() {
@@ -136,7 +144,7 @@ public class E2ETestDriver {
     } catch (InterruptedException e) {
       throw new RuntimeException(e);
     }
-    logCommittedAndEndOffsets();
+    checkCommittedAndEndOffsets();
     LOG.info("processed {} records", recordsProcessed);
     LOG.info("produced by key: {}", produceState.values().stream()
         .map(v -> String.format("key(%d) count(%d)\n", v.key, v.sendCount))
@@ -159,7 +167,7 @@ public class E2ETestDriver {
       if (recordsProcessed >= recordsToProcess) {
         notifyStop();
       }
-      maybeLogCommittedAndEndOffsets();
+      maybeCheckCommittedAndEndOffsets();
     }
   }
 
@@ -228,21 +236,11 @@ public class E2ETestDriver {
           produceWait.notify();
         }
       }
+      consumedOutputOffsets.put(cr.partition(), cr.offset());
       recordsProcessed += poppedOffsets.size();
       maybeLogConsumed();
       maybeLogAllConsumed();
       cs.updateReceived(poppedOffsets, ps.partition(), cr.value().digest());
-    }
-    for (final var k : consumeState.keySet()) {
-      final var ps = produceState.get(k);
-      final var earliestSent = ps.earliestSent();
-      if (earliestSent != null) {
-        consumeState.get(k).checkStalled(
-            earliestSent,
-            ps.partition(),
-            this::logCommittedAndEndOffsets
-        );
-      }
     }
   }
 
@@ -350,63 +348,181 @@ public class E2ETestDriver {
 
   private Instant lastCommittedOffsetLog = Instant.EPOCH;
 
-  private void maybeLogCommittedAndEndOffsets() {
+  private void maybeCheckCommittedAndEndOffsets() {
     final var now = Instant.now();
-    if (now.isAfter(lastCommittedOffsetLog.plus(Duration.ofMinutes(1)))) {
-      logCommittedAndEndOffsets();
-      lastCommittedOffsetLog = now;
+    if (now.isBefore(lastCommittedOffsetLog.plus(Duration.ofSeconds(10)))) {
+      return;
+    }
+    lastCommittedOffsetLog = Instant.now();
+    checkCommittedAndEndOffsets();
+  }
+
+  private void checkCommittedAndEndOffsets() {
+    final var offsets = committedAndEndOffsets();
+    committedAndEndOffsets.add(offsets);
+    checkNoOrphanedKeys();
+    checkNoStalledPartitions(offsets);
+  }
+
+  private void checkNoStalledPartitions(final CommittedAndEndOffsets offsets) {
+    for (int p = 0; p < partitions; p++) {
+      final var tp = new TopicPartition(inputTopic, p);
+      if (stalledPartitions.containsKey(p)) {
+        final var stalledPartition = stalledPartitions.get(p);
+        if (offsets.inputCommitted().get(tp) > stalledPartition.offset()) {
+          LOG.info("resume faults");
+          faultStopper.startFaults();
+          stalledPartitions.remove(p);
+        } else if (offsets.timestamp()
+            .isAfter(stalledPartition.detected().plus(stalledPartitionThreshold))) {
+          LOG.error("ANTITHESIS NEVER: Partition {} stalled at {} ({}) since {}",
+              p,
+              stalledPartition.offset(),
+              offsets.inputCommitted.get(tp),
+              Duration.between(stalledPartition.detected(), offsets.timestamp())
+          );
+          throw new IllegalStateException(String.format(
+              "Partition %d has not made progress from offset %d (current %d) for %s",
+              p,
+              stalledPartition.offset(),
+              offsets.inputCommitted.get(tp),
+              Duration.between(stalledPartition.detected(), offsets.timestamp())
+          ));
+        }
+      } else {
+        final List<CommittedAndEndOffsets> allCommittedAndEndOffsets = new LinkedList<>();
+        allCommittedAndEndOffsets.addAll(drainedCommittedAndEndOffsets);
+        allCommittedAndEndOffsets.addAll(committedAndEndOffsets);
+        for (final var os : allCommittedAndEndOffsets) {
+          final long currentCommitted = offsets.inputCommitted().get(tp);
+          final long committed = os.inputCommitted().get(tp);
+          final long end = os.inputEnd().get(tp);
+          if (end <= committed) {
+            break;
+          }
+          if (committed < currentCommitted) {
+            break;
+          }
+          if (Duration.between(os.timestamp(), offsets.timestamp())
+              .compareTo(faultStopThreshold) > 0) {
+            LOG.info("pausing faults due stall on partition {} at {} {}",
+                p,
+                currentCommitted,
+                offsets.timestamp
+            );
+            faultStopper.stopFaults();
+            stalledPartitions.put(p, new StalledPartition(offsets.timestamp(), currentCommitted));
+            break;
+          }
+        }
+      }
     }
   }
 
-  private void logCommittedAndEndOffsets() {
-    final List<TopicPartition> topicPartitions = IntStream.range(0, partitions)
+  private void checkNoOrphanedKeys() {
+    // go through the committed+end samples and pull ones for which we've
+    // consumed past those outputs
+    while (!committedAndEndOffsets.isEmpty()) {
+      final var offsets = committedAndEndOffsets.get(0);
+      boolean popEntry = true;
+      for (final var e : offsets.outputEnd.entrySet()) {
+        if (!consumedOutputOffsets.containsKey(e.getKey().partition())) {
+          // we haven't consumed any outputs for this partition
+          popEntry = false;
+          break;
+        }
+        if (consumedOutputOffsets.get(e.getKey().partition()) < e.getValue()) {
+          // we haven't consumed up to the output end offset yet
+          popEntry = false;
+          break;
+        }
+      }
+      if (!popEntry) {
+        break;
+      }
+      // We have consumed past all the end output offsets for this sample. Check
+      // that we didn't skip any key.
+      drainedCommittedAndEndOffsets.add(committedAndEndOffsets.remove(0));
+      for (final var pse : produceState.entrySet()) {
+        final long k = pse.getKey();
+        final var ps = pse.getValue();
+        final var rm = ps.earliestSent();
+        if (rm == null) {
+          continue;
+        }
+        if (offsets.inputCommitted.get(new TopicPartition(inputTopic, rm.partition()))
+            > rm.offset()) {
+          // we skipped past some key
+          throw new IllegalStateException(String.format(
+              "Left behind key %d on partition %d offset %d",
+              k,
+              rm.partition(),
+              rm.offset()
+          ));
+        }
+      }
+    }
+  }
+
+  private CommittedAndEndOffsets committedAndEndOffsets() {
+    final List<TopicPartition> inputTopicPartitions = IntStream.range(0, partitions)
         .mapToObj(p -> new TopicPartition(inputTopic, p))
         .toList();
-    final var end = consumer.endOffsets(topicPartitions);
     final var futures = admin.listConsumerGroupOffsets(
         Map.of(
-            groupId, new ListConsumerGroupOffsetsSpec().topicPartitions(topicPartitions)
+            groupId, new ListConsumerGroupOffsetsSpec().topicPartitions(inputTopicPartitions)
         )
     );
-    final Map<TopicPartition, OffsetAndMetadata> committed;
+    final Map<TopicPartition, OffsetAndMetadata> committedOffsetAndMet;
     try {
-      committed = futures.all().get().getOrDefault(groupId, Map.of());
+      committedOffsetAndMet = futures.all().get().getOrDefault(groupId, Map.of());
     } catch (final Exception e) {
       throw new RuntimeException(e);
     }
+
+    final var end = consumer.endOffsets(inputTopicPartitions);
+
+    final List<TopicPartition> outputTopicPartitions = IntStream.range(0, partitions)
+        .mapToObj(p -> new TopicPartition(outputTopic, p))
+        .toList();
+    final var outputEnd = consumer.endOffsets(outputTopicPartitions);
+
+    final Map<TopicPartition, Long> committed = new HashMap<>();
     final List<String> descriptions = new LinkedList<>();
-    for (final var tp : topicPartitions) {
+    for (final var tp : inputTopicPartitions) {
+      final long co
+          = (committedOffsetAndMet.containsKey(tp) && committedOffsetAndMet.get(tp) != null)
+              ? committedOffsetAndMet.get(tp).offset() : -1;
+      committed.put(tp, co);
       descriptions.add(String.format("%s: end(%d) committed(%d)",
           tp,
           end.getOrDefault(tp, -1L),
-          (committed.containsKey(tp) && committed.get(tp) != null)
-              ? committed.get(tp).offset() : -1)
-      );
+          co
+      ));
     }
     LOG.info("committed/end offsets: {}", String.join(" | ", descriptions));
+    return new CommittedAndEndOffsets(Instant.now(), committed, end, outputEnd);
+  }
+
+  private record StalledPartition(Instant detected, long offset) {
+  }
+
+  private record CommittedAndEndOffsets(
+      Instant timestamp,
+      Map<TopicPartition, Long> inputCommitted,
+      Map<TopicPartition, Long> inputEnd,
+      Map<TopicPartition, Long> outputEnd
+  ) {
   }
 
   private static class ConsumeState {
     private final long key;
-    private final Duration receivedThreshold;
-    private final Duration faultStopThreshold;
-    private final FaultStopper faultStopper;
     private long recvdCount = 0;
     private Instant lastReceived = Instant.now();
     private AccumulatingChecksum checksum = new AccumulatingChecksum();
-    private RecordMetadata stalled = null;
-    private Instant faultsStoppedAt = null;
 
-    private ConsumeState(
-        final long key,
-        final Duration receivedThreshold,
-        final Duration faultStopThreshold,
-        final FaultStopper faultStopper
-    ) {
+    private ConsumeState(final long key) {
       this.key = key;
-      this.receivedThreshold = receivedThreshold;
-      this.faultStopThreshold = faultStopThreshold;
-      this.faultStopper = faultStopper;
     }
 
     private void updateReceived(
@@ -431,50 +547,6 @@ public class E2ETestDriver {
             observedChecksum
         );
         throw new IllegalStateException("checksum mismatch");
-      }
-    }
-
-    private void checkStalled(
-        final RecordMetadata earliestUnconsumed,
-        final int partition,
-        final Runnable onStall
-    ) {
-      if (stalled != null) {
-        if (earliestUnconsumed.offset() == stalled.offset()) {
-          // the earliest unconsumed record has not advanced
-          if (Duration.between(faultsStoppedAt, Instant.now()).compareTo(receivedThreshold) > 0) {
-            onStall.run();
-            LOG.error(
-                "ANTITHESIS NEVER: have not seen results for {} on {} in {}. last sent/rcvd {}/{}",
-                key,
-                partition,
-                receivedThreshold.plus(faultStopThreshold),
-                Instant.ofEpochMilli(stalled.timestamp()),
-                lastReceived
-            );
-            throw new IllegalStateException(String.format(
-                "have not seen any results for %d on %d in %s. earliest sent %s. last recvd %s",
-                key,
-                partition,
-                receivedThreshold.plus(faultStopThreshold),
-                Instant.ofEpochMilli(stalled.timestamp()),
-                lastReceived
-            ));
-          }
-        } else {
-          // earliest unconsumed has advanced. not a true stall
-          LOG.info("stall for {} is cleared", key);
-          faultStopper.startFaults();
-          stalled = null;
-          faultsStoppedAt = null;
-        }
-      } else {
-        final Instant earliestSentTime = Instant.ofEpochMilli(earliestUnconsumed.timestamp());
-        if (Duration.between(earliestSentTime, Instant.now()).compareTo(faultStopThreshold) > 0) {
-          LOG.info("stopping faults to check for stall for {} on {}", key, partition);
-          stalled = earliestUnconsumed;
-          faultsStoppedAt = faultStopper.stopFaults();
-        }
       }
     }
   }
