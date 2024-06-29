@@ -496,7 +496,7 @@ public class E2ETestDriver {
       committed.put(tp, co);
       descriptions.add(String.format("%s: end(%d) committed(%d)",
           tp,
-          end.getOrDefault(tp, -1L),
+          end.getOrDefault(tp, 0L),
           co
       ));
     }
