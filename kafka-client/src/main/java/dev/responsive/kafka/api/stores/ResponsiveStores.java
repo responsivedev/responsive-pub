@@ -237,7 +237,9 @@ public final class ResponsiveStores {
       );
     } else {
       if (!windowSize.equals(retentionPeriod)) {
-        throw new IllegalArgumentException("Retention period must be equal to window size for stream-stream join stores");
+        throw new IllegalArgumentException(
+            "Retention period must be equal to window size for stream-stream join stores"
+        );
       }
 
       return new ResponsiveWindowedStoreSupplier(
