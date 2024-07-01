@@ -21,6 +21,7 @@ package dev.responsive.kafka.internal.db.mongo;
 import com.mongodb.BasicDBObject;
 import dev.responsive.kafka.internal.utils.WindowedKey;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Objects;
 import org.apache.kafka.common.utils.Bytes;
 import org.bson.codecs.pojo.annotations.BsonCreator;
@@ -30,6 +31,7 @@ public class WindowDoc {
 
   public static final String ID = "_id";
   public static final String VALUE = "value";
+  public static final String VALUES = "values";
   public static final String EPOCH = "epoch";
 
   // Subfields of the composite key _id
@@ -38,6 +40,7 @@ public class WindowDoc {
 
   BasicDBObject id;
   byte[] value;
+  List<byte[]> values;
   long epoch;
 
   public WindowDoc() {
@@ -47,10 +50,12 @@ public class WindowDoc {
   public WindowDoc(
       @BsonProperty(ID) BasicDBObject id,
       @BsonProperty(VALUE) byte[] value,
+      @BsonProperty(VALUES) List<byte[]> values,
       @BsonProperty(EPOCH) long epoch
   ) {
     this.id = id;
     this.value = value;
+    this.values = values;
     this.epoch = epoch;
   }
 
@@ -62,20 +67,28 @@ public class WindowDoc {
     this.id = id;
   }
 
-  public void setValue(final byte[] value) {
-    this.value = value;
-  }
-
-  public void setEpoch(final long epoch) {
-    this.epoch = epoch;
-  }
-
   public byte[] getValue() {
     return value;
   }
 
+  public void setValue(final byte[] value) {
+    this.value = value;
+  }
+
+  public List<byte[]> getValues() {
+    return values;
+  }
+
+  public void setValues(final List<byte[]> values) {
+    this.values = values;
+  }
+
   public long getEpoch() {
     return epoch;
+  }
+
+  public void setEpoch(final long epoch) {
+    this.epoch = epoch;
   }
 
   public static WindowedKey windowedKey(final BasicDBObject compositeKey) {

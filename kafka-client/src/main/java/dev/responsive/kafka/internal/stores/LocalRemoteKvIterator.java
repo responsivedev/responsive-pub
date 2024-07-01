@@ -41,14 +41,26 @@ class LocalRemoteKvIterator<K extends Comparable<K>> implements KeyValueIterator
   private final KeyValueIterator<K, Result<K>> buffered;
   private final KeyValueIterator<K, byte[]> remote;
 
+  // whether the underlying state store can have multiple values for the same key
+  private final boolean retainDuplicates;
+
   private KeyValue<K, byte[]> next;
 
   public LocalRemoteKvIterator(
       final KeyValueIterator<K, Result<K>> buffered,
       final KeyValueIterator<K, byte[]> remote
   ) {
+    this(buffered, remote, false);
+  }
+
+  public LocalRemoteKvIterator(
+      final KeyValueIterator<K, Result<K>> buffered,
+      final KeyValueIterator<K, byte[]> remote,
+      final boolean retainDuplicates
+  ) {
     this.remote = remote;
     this.buffered = buffered;
+    this.retainDuplicates = retainDuplicates;
     next = null;
   }
 
@@ -121,13 +133,21 @@ class LocalRemoteKvIterator<K extends Comparable<K>> implements KeyValueIterator
       // return that
       return remote.next();
     } else if (remoteKey.compareTo(cachedKey) == 0) {
-      // if they're the same, then there are two options:
-      // (1) the value is a tombstone, in which case we
-      // discard both keys and move on or (2) the cached
-      // value is more recent, so we return that and advance
-      // both - either way, the value from remote.next()
-      // should not be returned
-      remote.next();
+
+      if (retainDuplicates) {
+        // if keys are the same and duplicates are allowed, then we arbitrarily
+        // pick one of them to return (in this case the remote) but it doesn't
+        // really matter which
+        return remote.next();
+      } else {
+        // otherwise if they're the same, then there are two options:
+        // (1) the value is a tombstone, in which case we
+        // discard both keys and move on or (2) the cached
+        // value is more recent, so we return that and advance
+        // both - either way, the value from remote.next()
+        // should not be returned
+        remote.next();
+      }
     }
 
     // return the buffered value, unless it is a tombstone

@@ -27,9 +27,15 @@ public class WindowSegmentPartitioner implements
   private static final long METADATA_SEGMENT_ID = -1L;
 
   private final Segmenter segmenter;
+  private final boolean retainDuplicates;
 
-  public WindowSegmentPartitioner(final long retentionPeriodMs, final long segmentIntervalMs) {
+  public WindowSegmentPartitioner(
+      final long retentionPeriodMs,
+      final long segmentIntervalMs,
+      final boolean retainDuplicates
+  ) {
     this.segmenter = new Segmenter(retentionPeriodMs, segmentIntervalMs);
+    this.retainDuplicates = retainDuplicates;
   }
 
   @Override
@@ -50,5 +56,9 @@ public class WindowSegmentPartitioner implements
 
   public Segmenter segmenter() {
     return this.segmenter;
+  }
+
+  public boolean retainDuplicates() {
+    return retainDuplicates;
   }
 }

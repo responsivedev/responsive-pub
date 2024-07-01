@@ -115,6 +115,7 @@ public class SessionOperationsImpl implements SessionOperations {
         changelog,
         keySpec,
         params.name(),
+        false,
         responsiveConfig
     );
     final long restoreStartOffset = table.fetchOffset(changelog.partition());
@@ -245,8 +246,8 @@ public class SessionOperationsImpl implements SessionOperations {
       final long latestSessionEnd
   ) {
     final var localResults = this.buffer.all(kv -> {
-      return kv.key.key.equals(key) && kv.key.sessionEndMs >= earliestSessionEnd
-          && kv.key.sessionEndMs <= latestSessionEnd;
+      return kv.key.equals(key) && kv.sessionEndMs >= earliestSessionEnd
+          && kv.sessionEndMs <= latestSessionEnd;
     });
     final var remoteResults = this.table.fetchAll(
         this.changelog.partition(),

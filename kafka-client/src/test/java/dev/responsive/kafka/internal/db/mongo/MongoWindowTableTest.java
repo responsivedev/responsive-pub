@@ -63,12 +63,13 @@ class MongoWindowTableTest {
   @Test
   public void shouldSucceedSimpleSetGet() {
     // Given:
-    final WindowSegmentPartitioner partitioner = new WindowSegmentPartitioner(10_000L, 1_000L);
+    final WindowSegmentPartitioner partitioner =
+        new WindowSegmentPartitioner(10_000L, 1_000L, false);
     final var segment = partitioner.segmenter().activeSegments(0, 100).get(0);
 
-    final MongoWindowedTable table = new MongoWindowedTable(client, name, partitioner,
-        false, UNSHARDED
-    );
+    final MongoWindowedTable table =
+        new MongoWindowedTable(client, name, partitioner, false, UNSHARDED);
+
     final var flushManager = table.init(0);
     flushManager.updateOffsetAndStreamTime(0, 100);
     flushManager.createSegment(segment);
@@ -95,12 +96,12 @@ class MongoWindowTableTest {
   @Test
   public void shouldSucceedRangeSetGet() {
     // Given:
-    final WindowSegmentPartitioner partitioner = new WindowSegmentPartitioner(10_000L, 1_000L);
+    final WindowSegmentPartitioner partitioner =
+        new WindowSegmentPartitioner(10_000L, 1_000L, false);
     final var segment = partitioner.segmenter().activeSegments(0, 100).get(0);
 
-    final MongoWindowedTable table = new MongoWindowedTable(client, name, partitioner,
-        false, UNSHARDED
-    );
+    final MongoWindowedTable table =
+        new MongoWindowedTable(client, name, partitioner, false, UNSHARDED);
     final var flushManager = table.init(0);
     flushManager.updateOffsetAndStreamTime(0, 6_000);
     flushManager.createSegment(segment);

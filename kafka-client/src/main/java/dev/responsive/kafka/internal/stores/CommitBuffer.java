@@ -68,7 +68,6 @@ import org.apache.kafka.common.metrics.stats.CumulativeCount;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.slf4j.Logger;
@@ -111,6 +110,7 @@ public class CommitBuffer<K extends Comparable<K>, P>
       final TopicPartition changelog,
       final KeySpec<K> keySpec,
       final TableName tableName,
+      final boolean allowDuplicates,
       final ResponsiveConfig config
   ) {
     final var admin = clients.admin();
@@ -122,6 +122,7 @@ public class CommitBuffer<K extends Comparable<K>, P>
         admin,
         keySpec,
         tableName,
+        allowDuplicates,
         FlushTriggers.fromConfig(config),
         ExceptionSupplier.fromConfig(config.originals())
     );
@@ -134,6 +135,7 @@ public class CommitBuffer<K extends Comparable<K>, P>
       final Admin admin,
       final KeySpec<K> keySpec,
       final TableName tableName,
+      final boolean allowDuplicates,
       final FlushTriggers flushTriggers,
       final ExceptionSupplier exceptionSupplier
   ) {
@@ -144,6 +146,7 @@ public class CommitBuffer<K extends Comparable<K>, P>
         admin,
         keySpec,
         tableName,
+        allowDuplicates,
         flushTriggers,
         exceptionSupplier,
         MAX_BATCH_SIZE,
@@ -158,6 +161,7 @@ public class CommitBuffer<K extends Comparable<K>, P>
       final Admin admin,
       final KeySpec<K> keySpec,
       final TableName tableName,
+      final boolean allowDuplicates,
       final FlushTriggers flushTriggers,
       final ExceptionSupplier exceptionSupplier,
       final int maxBatchSize,
@@ -168,7 +172,8 @@ public class CommitBuffer<K extends Comparable<K>, P>
     this.metrics = sessionClients.metrics();
     this.admin = admin;
 
-    this.buffer = new SizeTrackingBuffer<>(keySpec);
+    this.buffer =
+        allowDuplicates ? new DuplicateKeyBuffer<>(keySpec) : new UniqueKeyBuffer<>(keySpec);
     this.keySpec = keySpec;
     this.flushTriggers = flushTriggers;
     this.exceptionSupplier = exceptionSupplier;
@@ -270,7 +275,7 @@ public class CommitBuffer<K extends Comparable<K>, P>
   }
 
   public Result<K> get(final K key) {
-    final Result<K> result = buffer.getReader().get(key);
+    final Result<K> result = buffer.get(key);
     if (result != null && keySpec.retain(result.key)) {
       return result;
     }
@@ -286,7 +291,7 @@ public class CommitBuffer<K extends Comparable<K>, P>
   //  easy to accidentally invoke one of the identical overloads that don't
   //  accept a filter parameter by mistake
   public Result<K> get(final K key, final Predicate<Result<K>> filter) {
-    final Result<K> result = buffer.getReader().get(key);
+    final Result<K> result = buffer.get(key);
     if (result != null && keySpec.retain(result.key) && filter.test(result)) {
       return result;
     }
@@ -294,88 +299,63 @@ public class CommitBuffer<K extends Comparable<K>, P>
   }
 
   public KeyValueIterator<K, Result<K>> range(final K from, final K to) {
-    return Iterators.kv(
-        Iterators.filter(
-            buffer.getReader().subMap(from, true, to, true).entrySet().iterator(),
-            e -> keySpec.retain(e.getKey())),
-        result -> new KeyValue<>(result.getKey(), result.getValue())
-    );
+    return buffer.range(from, to);
   }
 
   public KeyValueIterator<K, Result<K>> range(
       final K from,
       final K to,
-      final Predicate<Result<K>> filter
+      final Predicate<K> filter
   ) {
-    return Iterators.kv(
-        Iterators.filter(
-            buffer.getReader().subMap(from, true, to, true).entrySet().iterator(),
-            e -> keySpec.retain(e.getKey()) && filter.test(e.getValue())
-        ),
-        result -> new KeyValue<>(result.getKey(), result.getValue())
+    return Iterators.filterKv(
+        buffer.range(from, to),
+        k -> keySpec.retain(k) && filter.test(k)
     );
   }
 
   public KeyValueIterator<K, Result<K>> backRange(final K from, final K to) {
-    return Iterators.kv(
-        Iterators.filter(
-            buffer.getReader().descendingMap().subMap(to, from).entrySet().iterator(),
-            e -> keySpec.retain(e.getKey())
-        ),
-        result -> new KeyValue<>(result.getKey(), result.getValue())
-    );
+    return buffer.reverseRange(from, to);
+  }
+
+  public KeyValueIterator<K, Result<K>> all() {
+    return buffer.all();
   }
 
   public KeyValueIterator<K, Result<K>> all(
+      final Predicate<K> filter
   ) {
-    return Iterators.kv(
-        Iterators.filter(
-            buffer.getReader().entrySet().iterator(),
-            e -> keySpec.retain(e.getKey())
-        ),
-        result -> new KeyValue<>(result.getKey(), result.getValue())
-    );
-  }
-
-  public KeyValueIterator<K, Result<K>> all(
-      final Predicate<Result<K>> filter
-  ) {
-    return Iterators.kv(
-        Iterators.filter(
-            buffer.getReader().entrySet().iterator(),
-            kv -> keySpec.retain(kv.getKey()) && filter.test(kv.getValue())),
-        result -> new KeyValue<>(result.getKey(), result.getValue())
+    return Iterators.filterKv(
+        buffer.all(),
+        k -> keySpec.retain(k) && filter.test(k)
     );
   }
 
   public KeyValueIterator<K, Result<K>> backAll(
       final Predicate<K> filter
   ) {
-    return Iterators.kv(
-        Iterators.filter(
-            buffer.getReader().descendingMap().entrySet().iterator(),
-            kv -> keySpec.retain(kv.getKey()) && filter.test(kv.getKey())),
-        result -> new KeyValue<>(result.getKey(), result.getValue())
+    return Iterators.filterKv(
+        buffer.reverseAll(),
+        k -> keySpec.retain(k) && filter.test(k)
     );
   }
 
   private long totalBytesBuffered() {
-    return buffer.getBytes();
+    return buffer.sizeInBytes();
   }
 
   private boolean triggerFlush() {
     boolean recordsTrigger = false;
     boolean bytesTrigger = false;
     boolean timeTrigger = false;
-    if (buffer.getReader().size() >= flushTriggers.getRecords()) {
+    if (buffer.sizeInRecords() >= flushTriggers.getRecords()) {
       log.debug("Will flush due to records buffered {} over trigger {}",
-          buffer.getReader().size(),
+          buffer.sizeInRecords(),
           flushTriggers.getRecords()
       );
       recordsTrigger = true;
     } else {
       log.debug("Records buffered since last flush {} not over trigger {}",
-          buffer.getReader().size(),
+          buffer.sizeInRecords(),
           flushTriggers.getRecords()
       );
     }
@@ -423,14 +403,14 @@ public class CommitBuffer<K extends Comparable<K>, P>
   private void doFlush(final long consumedOffset, final int batchSize) {
     final long startNs = System.nanoTime();
     log.info("Flushing {} records with batchSize={} to remote (offset={}, writer={})",
-        buffer.getReader().size(),
+        buffer.sizeInRecords(),
         batchSize,
         consumedOffset,
              batchFlusher
     );
 
     final FlushResult<K, P> flushResult = batchFlusher.flushWriteBatch(
-        buffer.getReader(), consumedOffset
+        buffer.values(), consumedOffset
     );
 
     if (!flushResult.result().wasApplied()) {
@@ -456,7 +436,7 @@ public class CommitBuffer<K extends Comparable<K>, P>
     flushLatencySensor.record(flushLatencyMs, endMs);
 
     log.info("Flushed {} records to {} table partitions with offset {} in {}ms",
-             buffer.getReader().size(),
+             buffer.sizeInRecords(),
              flushResult.numTablePartitionsFlushed(),
              consumedOffset,
              flushLatencyMs

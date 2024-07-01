@@ -18,6 +18,7 @@ package dev.responsive.kafka.integration;
 
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.minutesToMillis;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.pipeTimestampedRecords;
+import static dev.responsive.kafka.testutils.IntegrationTestUtils.readOutput;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.startAppAndAwaitRunning;
 import static java.util.Arrays.asList;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
@@ -46,6 +47,7 @@ import dev.responsive.kafka.testutils.KeyValueTimestamp;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -70,7 +72,9 @@ import org.apache.kafka.common.serialization.Serdes.LongSerde;
 import org.apache.kafka.common.serialization.Serdes.StringSerde;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.StreamJoined;
@@ -420,103 +424,81 @@ public class ResponsiveWindowStoreIntegrationTest {
     }
   }
   
-  //@Test
-  public void shouldComputeWindowedJoinUsingRanges() throws InterruptedException {
+  @Test
+  public void shouldDoStreamStreamJoin() throws Exception {
     // Given:
-    final Map<String, Object> properties = getMutableProperties();
+    final Map<String, Object> properties = getMutablePropertiesWithStringSerdes();
+    properties.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
     final StreamsBuilder builder = new StreamsBuilder();
 
-    final KStream<Long, Long> input = builder.stream(inputTopic());
-    final KStream<Long, Long> other = builder.stream(otherTopic());
-    final Map<Long, Queue<Long>> collect = new ConcurrentHashMap<>();
+    final KStream<String, String> input = builder.stream(inputTopic());
+    final KStream<String, String> other = builder.stream(otherTopic());
+    final Map<String, Queue<String>> collect = new ConcurrentHashMap<>();
 
-    final CountDownLatch latch1 = new CountDownLatch(2);
-    final CountDownLatch latch2 = new CountDownLatch(2);
+    final CountDownLatch latch1 = new CountDownLatch(1);
+
     final Duration windowSize = Duration.ofMillis(1000);
-    input.join(other,
+    input
+        .peek((k, v) -> {
+          if (k.equals("STOP")) {
+            latch1.countDown();
+          }
+        })
+        .join(other,
             (v1, v2) -> {
               System.out.println("Joining: " + v1 + ", " + v2);
-              return (v1 << Integer.SIZE) | v2;
+              return v1 + "-" + v2;
             },
             JoinWindows.ofTimeDifferenceWithNoGrace(windowSize.dividedBy(2)),
             StreamJoined.with(
                 ResponsiveStores.windowStoreSupplier(
-                    "input" + name, windowSize, windowSize, true),
+                    "l" + name, windowSize, windowSize, true),
                 ResponsiveStores.windowStoreSupplier(
-                    "other" + name, windowSize, windowSize, true)
+                    "r" + name, windowSize, windowSize, true)
             ))
-        .peek((k, v) -> {
-          collect.computeIfAbsent(k, old -> new ArrayBlockingQueue<>(10)).add(v);
-          if (v.intValue() == 1) {
-            latch1.countDown();
-          }
-          if (v.intValue() == 100) {
-            latch2.countDown();
-          }
-        })
+        .peek((k, v) -> collect.computeIfAbsent(k, old -> new ArrayBlockingQueue<>(10)).add(v))
         .to(outputTopic());
 
-    // When:
-    // use a base timestamp that is aligned with a minute boundary to
-    // ensure predictable test results
-    final long baseTs = System.currentTimeMillis() / 60000 * 60000;
-    final AtomicLong timestamp = new AtomicLong(baseTs);
-    properties.put(APPLICATION_SERVER_CONFIG, "host1:1024");
-    try (
-        final ResponsiveKafkaStreams kafkaStreams = new ResponsiveKafkaStreams(
-            builder.build(), properties
-        );
-        final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties)
-    ) {
-      kafkaStreams.start();
+    //When:
+    try (final KafkaProducer<String, String> producer = new KafkaProducer<>(properties)) {
+      final List<KeyValueTimestamp<String, String>> leftStreamInput = Arrays.asList(
+          new KeyValueTimestamp<>("A", "L:a", 0L),
+          new KeyValueTimestamp<>("A", "L:a2", 0L),
+          new KeyValueTimestamp<>("A", "L:a3", 0L),
+          new KeyValueTimestamp<>("B", "L:b", 300L), // should join with R:b
+          new KeyValueTimestamp<>("A", "L:a3", 2_000L), // should not join, outside window of R:a
+          new KeyValueTimestamp<>("STOP", "ignored", 10_000L)
+      );
 
-      // interleave events in the first window
-      pipeInput(producer, inputTopic(), () -> timestamp.getAndAdd(100), 0, 2, 0, 1);
-      timestamp.set(baseTs + 50);
-      pipeInput(producer, otherTopic(), () -> timestamp.getAndAdd(50), 0, 2, 0, 1);
+      final List<KeyValueTimestamp<String, String>> rightStreamInput = Arrays.asList(
+          new KeyValueTimestamp<>("A", "R:a", 30L), // should join with L:a and L:a2
+          new KeyValueTimestamp<>("B", "R:b", 200L),
+          new KeyValueTimestamp<>("B", "R:b2", 500L) // should join with L:b
+      );
 
-      latch1.await();
-    }
-
-    // force a commit/flush so that we can test Cassandra by closing
-    // the old Kafka Streams and creating a new one
-    properties.put(APPLICATION_SERVER_CONFIG, "host2:1024");
-    try (
-        final ResponsiveKafkaStreams kafkaStreams =
-            new ResponsiveKafkaStreams(builder.build(), properties);
-        final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties)
-    ) {
-      kafkaStreams.start();
-
-      // add one more event to each window
-      pipeInput(producer, inputTopic(), () -> timestamp.getAndAdd(100), 2, 3, 0, 1);
-      timestamp.set(baseTs + 250);
-      pipeInput(producer, otherTopic(), () -> timestamp.getAndAdd(50), 2, 3, 0, 1);
-
-      // add two events in a different window
-      timestamp.set(baseTs + 10000);
-      pipeInput(producer, inputTopic(), () -> timestamp.getAndAdd(10), 100, 101, 0, 1);
-      pipeInput(producer, otherTopic(), () -> timestamp.getAndAdd(10), 100, 101, 0, 1);
-
-      latch2.await();
+      pipeTimestampedRecords(producer, inputTopic(), leftStreamInput);
+      pipeTimestampedRecords(producer, otherTopic(), rightStreamInput);
     }
 
     // Then:
-    assertThat(collect.size(), Matchers.is(2));
+    try (
+        final ResponsiveKafkaStreams kafkaStreams = new ResponsiveKafkaStreams(
+            builder.build(), properties
+        )
+    ) {
+      startAppAndAwaitRunning(Duration.ofSeconds(15), kafkaStreams);
 
-    final Queue<Long> k0 = collect.get(0L);
-    assertThat(k0, Matchers.containsInAnyOrder(
-        0L,
-        1L,
-        2L,
-        1L << Integer.SIZE,
-        1L << Integer.SIZE | 1L,
-        1L << Integer.SIZE | 2L,
-        2L << Integer.SIZE,
-        2L << Integer.SIZE | 1L,
-        2L << Integer.SIZE | 2L,
-        100L << Integer.SIZE | 100L
-    ));
+      latch1.await(30, TimeUnit.SECONDS);
+
+      final List<KeyValue<String, String>> output =
+          readOutput(outputTopic(), 0L, 5L, true, properties);
+
+      assertThat(output.get(0), equalTo(new KeyValue<>("A", "L:a-R:a")));
+      assertThat(output.get(1), equalTo(new KeyValue<>("A", "L:a2-R:a")));
+      assertThat(output.get(2), equalTo(new KeyValue<>("A", "L:a3-R:a")));
+      assertThat(output.get(3), equalTo(new KeyValue<>("B", "L:b-R:b")));
+      assertThat(output.get(4), equalTo(new KeyValue<>("B", "L:b-R:b2")));
+    }
   }
 
   private Windowed<Long> windowed(final long k, final long startMs, final long size) {
