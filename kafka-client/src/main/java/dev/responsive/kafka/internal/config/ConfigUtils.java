@@ -19,6 +19,7 @@ package dev.responsive.kafka.internal.config;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_APPLICATION_ID_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_ENV_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_ORG_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.AT_LEAST_ONCE;
 
 import dev.responsive.kafka.api.config.CompatibilityMode;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
@@ -76,6 +77,10 @@ public class ConfigUtils {
     }
 
     return streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG);
+  }
+
+  public static boolean eosEnabled(final StreamsConfig configs) {
+    return !AT_LEAST_ONCE.equals(configs.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
   }
 
 }
