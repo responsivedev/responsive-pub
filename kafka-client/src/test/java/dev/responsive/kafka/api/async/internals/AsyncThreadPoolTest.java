@@ -136,7 +136,7 @@ class AsyncThreadPoolTest {
     final var other0InFlight = Map.copyOf(pool.getInFlight("other", 0));
 
     // when:
-    pool.removeProcessor("processor", 0);
+    pool.removeProcessor(AsyncProcessorId.of("processor", 0));
 
     // then:
     for (final var t : List.of(task1, task2, task3, taskOtherPartition, taskOtherProcessor)) {
@@ -155,7 +155,7 @@ class AsyncThreadPoolTest {
     schedule("processor", 0, finalizingQueue0, event1);
 
     // when:
-    pool.removeProcessor("processor", 0);
+    pool.removeProcessor(AsyncProcessorId.of("processor", 0));
 
     // then:
     for (final var t : List.of(task1)) {

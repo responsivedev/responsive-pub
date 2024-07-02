@@ -35,6 +35,7 @@ import dev.responsive.kafka.api.async.internals.AsyncThreadPoolRegistry;
 import dev.responsive.kafka.api.config.CompatibilityMode;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.stores.ResponsiveDslStoreSuppliers;
+import dev.responsive.kafka.internal.clients.AsyncStreamsKafkaClientSupplier;
 import dev.responsive.kafka.internal.clients.ResponsiveKafkaClientSupplier;
 import dev.responsive.kafka.internal.config.ConfigUtils;
 import dev.responsive.kafka.internal.config.InternalSessionConfigs;
@@ -408,7 +409,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
 
     // can be set during construction
     private Time time = Time.SYSTEM;
-    private KafkaClientSupplier clientSupplier = new DefaultKafkaClientSupplier();
+    private KafkaClientSupplier innerClientSupplier = new DefaultKafkaClientSupplier();
     private CassandraClientFactory cassandraFactory = new DefaultCassandraClientFactory();
 
     // initialized on init()
@@ -428,7 +429,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     }
 
     public Params withClientSupplier(final KafkaClientSupplier clientSupplier) {
-      this.clientSupplier = clientSupplier;
+      this.innerClientSupplier = clientSupplier;
       return this;
     }
 
@@ -446,8 +447,18 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     // that it's impossible to use a Params instance that hasn't called build(),
     // but that felt a little extra
     public Params build() {
+      final int asyncThreadPoolSize = responsiveConfig.getInt(ASYNC_THREAD_POOL_SIZE_CONFIG);
+
+      final KafkaClientSupplier delegateKafkaClientSupplier =
+          asyncThreadPoolSize > 0
+              ? new AsyncStreamsKafkaClientSupplier(
+                  innerClientSupplier,
+                  responsiveConfig,
+                  streamsConfig)
+              : innerClientSupplier;
+
       this.responsiveKafkaClientSupplier = new ResponsiveKafkaClientSupplier(
-          clientSupplier,
+          delegateKafkaClientSupplier,
           responsiveConfig,
           streamsConfig,
           storeRegistry,

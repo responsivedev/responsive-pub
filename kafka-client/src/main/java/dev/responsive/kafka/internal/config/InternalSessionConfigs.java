@@ -61,14 +61,6 @@ public final class InternalSessionConfigs {
     );
   }
 
-  public static boolean isAsyncThreadPoolRegistryEnabled(final Map<String, Object> configs) {
-    return configs.containsKey(INTERNAL_ASYNC_THREAD_POOL_REGISTRY_CONFIG);
-  }
-
-  // CAUTION: this method assumes the provided config map has stripped away the
-  // main.consumer prefix that was added to this config in the original Streams
-  // properties. See the javadocs below for the Builder#withAsyncThreadPoolRegistry
-  // method for more details on when it is safe to use this
   public static AsyncThreadPoolRegistry loadAsyncThreadPoolRegistry(final Map<String, Object> configs) {
     return loadFromConfig(
         configs,
@@ -108,23 +100,8 @@ public final class InternalSessionConfigs {
   public static class Builder {
     private final Map<String, Object> configs = new HashMap<>();
 
-    /**
-     * Note: we must add the main consumer prefix when first building the config
-     * map with this registry, as it is needed in the #getMainConsumer method of the
-     * KafkaClientSupplier, and only main-consumer configs are included in the copy
-     * of the config map it receives.
-     * Importantly, we should NOT include this prefix when attempting to retrieve this
-     * registry on the other end, unless you are extracting it from the original, app-wide
-     * config map. This prefix will be stripped away when the config is copied into a
-     * prefix-based submap, such as the one passed in to the KafkaClientSupplier for
-     * the main consumer or the one returned from the
-     * {@link ProcessorContext#appConfigsWithPrefix(String)} API.
-     * The {@link #loadAsyncThreadPoolRegistry(Map)} method assumes the prefix has been
-     * stripped and therefore only works on filtered submaps like in the two
-     * examples above
-     */
     public Builder withAsyncThreadPoolRegistry(final AsyncThreadPoolRegistry registry) {
-      configs.put(mainConsumerPrefix(INTERNAL_ASYNC_THREAD_POOL_REGISTRY_CONFIG), registry);
+      configs.put(INTERNAL_ASYNC_THREAD_POOL_REGISTRY_CONFIG, registry);
       return this;
     }
 

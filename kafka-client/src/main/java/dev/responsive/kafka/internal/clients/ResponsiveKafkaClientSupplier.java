@@ -16,13 +16,11 @@
 
 package dev.responsive.kafka.internal.clients;
 
-import static dev.responsive.kafka.internal.config.InternalSessionConfigs.isAsyncThreadPoolRegistryEnabled;
-import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadAsyncThreadPoolRegistry;
+import static dev.responsive.kafka.internal.config.ConfigUtils.eosEnabled;
 import static dev.responsive.kafka.internal.utils.Utils.extractThreadId;
 import static dev.responsive.kafka.internal.utils.Utils.extractThreadNameFromConsumerClientId;
 import static org.apache.kafka.streams.StreamsConfig.AT_LEAST_ONCE;
 
-import dev.responsive.kafka.api.async.internals.AsyncThreadPoolRegistry;
 import dev.responsive.kafka.api.config.CompatibilityMode;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.metrics.EndOffsetsPoller;
@@ -110,8 +108,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
     this.compatibilityMode = compatibilityMode;
     this.repairRestoreOffsetOutOfRange = repairRestoreOffsetOutOfRange;
 
-    eos = !(AT_LEAST_ONCE.equals(
-        configs.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)));
+    eos = eosEnabled(configs);
 
     endOffsetsPoller = factories.createEndOffsetPoller(
         configs.originals(),
@@ -161,14 +158,6 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
     final String streamThreadName = extractThreadNameFromConsumerClientId(clientId);
     final String threadId = extractThreadId(streamThreadName);
 
-    final AsyncThreadPoolRegistry asyncThreadPoolRegistry;
-    if (isAsyncThreadPoolRegistryEnabled(config)) {
-      asyncThreadPoolRegistry = loadAsyncThreadPoolRegistry(config);
-      asyncThreadPoolRegistry.startNewAsyncThreadPool(streamThreadName);
-    } else {
-      asyncThreadPoolRegistry = null;
-    }
-
     final ListenersForThread tc = sharedListeners.getAndMaybeInitListenersForThread(
         eos,
         threadId,
@@ -188,12 +177,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
             tc.offsetRecorder.getConsumerListener(),
             tc.endOffsetsPollerListener,
             new CloseListener(threadId)
-        ),
-        () -> {
-          if (asyncThreadPoolRegistry != null) {
-            asyncThreadPoolRegistry.shutdownAsyncThreadPool(Thread.currentThread().getName());
-          }
-        }
+        )
     );
   }
 
@@ -404,10 +388,9 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
     default <K, V> ResponsiveConsumer<K, V> createResponsiveConsumer(
         final String clientId,
         final Consumer<K, V> wrapped,
-        final List<ResponsiveConsumer.Listener> listeners,
-        final Runnable shutdownAsyncThreadPool
+        final List<ResponsiveConsumer.Listener> listeners
     ) {
-      return new ResponsiveConsumer<>(clientId, wrapped, listeners, shutdownAsyncThreadPool);
+      return new ResponsiveConsumer<>(clientId, wrapped, listeners);
     }
 
     default <K, V> ResponsiveGlobalConsumer createGlobalConsumer(

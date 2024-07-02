@@ -98,8 +98,9 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   private String streamThreadName;
   private String asyncProcessorName;
   private TaskId taskId;
+  private AsyncProcessorId asyncId;
 
-  private AsyncThreadPool threadPool;
+  private AsyncThreadPoolRegistration asyncThreadPoolRegistration;
   private SchedulingQueue<KIn> schedulingQueue;
   private FinalizingQueue finalizingQueue;
 
@@ -189,6 +190,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     this.streamThreadName = Thread.currentThread().getName();
     this.taskId = internalContext.taskId();
     this.asyncProcessorName = internalContext.currentNode().name();
+    this.asyncId = AsyncProcessorId.of(asyncProcessorName, taskId.partition());
 
     this.logPrefix = String.format(
         "stream-thread [%s] %s[%d] ",
@@ -221,8 +223,9 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     final long punctuationInterval = configs.getLong(ASYNC_FLUSH_INTERVAL_MS_CONFIG);
     final int maxEventsPerKey = configs.getInt(ASYNC_MAX_EVENTS_QUEUED_PER_KEY_CONFIG);
 
-    this.threadPool = getAsyncThreadPool(taskContext, streamThreadName);
-    this.threadPool.maybeInitThreadPoolMetrics();
+    this.asyncThreadPoolRegistration = getAsyncThreadPool(taskContext, streamThreadName);
+    asyncThreadPoolRegistration.registerAsyncProcessor(asyncId, this::flushPendingEventsForCommit);
+    asyncThreadPoolRegistration.threadPool().maybeInitThreadPoolMetrics();
 
     this.schedulingQueue = new MeteredSchedulingQueue<>(
         metricsRecorder,
@@ -252,7 +255,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
         streamThreadName,
         taskId.partition(),
         connectedStoreBuilders.values(),
-        this::flushAndAwaitPendingEvents
+        this::flushPendingEventsForCommit
     );
   }
 
@@ -268,7 +271,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
       log.error("the scheduling queue for {} was expected to be empty", taskId);
       throw new IllegalStateException("scheduling queue expected to be empty");
     }
-    if (!threadPool.isEmpty(asyncProcessorName, taskId.partition())) {
+    if (!asyncThreadPoolRegistration.threadPool().isEmpty(asyncProcessorName, taskId.partition())) {
       log.error("the thread pool for {} was expected to be empty", taskId);
       throw new IllegalStateException("thread pool expected to be empty");
     }
@@ -367,7 +370,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     metricsRecorder.close();
 
     punctuator.cancel();
-    threadPool.removeProcessor(asyncProcessorName, taskId.partition());
+    asyncThreadPoolRegistration.unregisterAsyncProcessor(asyncId);
 
     if (userProcessor != null) {
       userProcessor.close();
@@ -390,9 +393,10 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   /**
    * Block on all pending records to be scheduled, executed, and fully complete processing through
    * the topology, as well as all state store operations to be applied. Called at the beginning of
-   * each commit, similar to #flushCache
+   * each commit to make sure we've finished up any records we're committing offsets for
+   * TODO: add a timeout in case we get stuck somewhere
    */
-  public void flushAndAwaitPendingEvents() {
+  public void flushPendingEventsForCommit() {
     if (fatalException != null) {
       // if there was a fatal exception, just throw right away so that we exit right
       // away and minimize the risk of causing further problems. Additionally, processing for
@@ -445,9 +449,8 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    * tied to events that belong to this specific AsyncProcessor or task.
    */
   private void checkFatalExceptionsFromAsyncThreadPool() {
-    final Optional<Throwable> fatal = threadPool.checkUncaughtExceptions(
-        asyncProcessorName, taskId.partition()
-    );
+    final Optional<Throwable> fatal = asyncThreadPoolRegistration.threadPool()
+        .checkUncaughtExceptions(asyncProcessorName, taskId.partition());
     
     if (fatal.isPresent()) {
       log.error("Detected uncaught fatal exception from the async thread pool", fatal.get());
@@ -594,7 +597,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     }
     final int numScheduled = eventsToSchedule.size();
     if (numScheduled > 0) {
-      threadPool.scheduleForProcessing(
+      asyncThreadPoolRegistration.threadPool().scheduleForProcessing(
           asyncProcessorName,
           taskId,
           eventsToSchedule,
@@ -754,14 +757,12 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     }
   }
 
-  private static AsyncThreadPool getAsyncThreadPool(
+  private static AsyncThreadPoolRegistration getAsyncThreadPool(
       final ProcessingContext context,
       final String streamThreadName
   ) {
     try {
-      final AsyncThreadPoolRegistry registry = loadAsyncThreadPoolRegistry(
-          context.appConfigsWithPrefix(StreamsConfig.MAIN_CONSUMER_PREFIX)
-      );
+      final AsyncThreadPoolRegistry registry = loadAsyncThreadPoolRegistry(context.appConfigs());
       return registry.asyncThreadPoolForStreamThread(streamThreadName);
     } catch (final Exception e) {
       throw new ConfigException(
