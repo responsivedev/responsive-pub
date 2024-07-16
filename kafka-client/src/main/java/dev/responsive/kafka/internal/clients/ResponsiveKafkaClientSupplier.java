@@ -19,7 +19,6 @@ package dev.responsive.kafka.internal.clients;
 import static dev.responsive.kafka.internal.config.ConfigUtils.eosEnabled;
 import static dev.responsive.kafka.internal.utils.Utils.extractThreadId;
 import static dev.responsive.kafka.internal.utils.Utils.extractThreadNameFromConsumerClientId;
-import static org.apache.kafka.streams.StreamsConfig.AT_LEAST_ONCE;
 
 import dev.responsive.kafka.api.config.CompatibilityMode;
 import dev.responsive.kafka.api.config.ResponsiveConfig;

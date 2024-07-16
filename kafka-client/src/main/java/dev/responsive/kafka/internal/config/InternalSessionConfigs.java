@@ -1,7 +1,5 @@
 package dev.responsive.kafka.internal.config;
 
-import static org.apache.kafka.streams.StreamsConfig.mainConsumerPrefix;
-
 import dev.responsive.kafka.api.async.internals.AsyncThreadPoolRegistry;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistry;
@@ -9,7 +7,6 @@ import dev.responsive.kafka.internal.utils.SessionClients;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.streams.TopologyDescription;
-import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
