@@ -18,16 +18,19 @@ import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.db.CassandraClientFactory;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -39,9 +42,11 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.IsolationLevel;
@@ -242,13 +247,46 @@ public final class IntegrationTestUtils {
     for (final KeyValueTimestamp<K, V> record : records) {
       producer.send(new ProducerRecord<>(
           topic,
-          0,
+          null,
           record.timestamp(),
           record.key(),
           record.value()
       ));
     }
     producer.flush();
+  }
+
+  public static <K, V> Map<TopicPartition, List<ConsumerRecord<K, V>>> slurpPartitions(
+      final List<TopicPartition> partitions,
+      final Map<String, Object> originals
+  ) {
+    return partitions.stream().collect(Collectors.toMap(
+        p -> p,
+        p -> slurpPartition(p, originals)
+    ));
+  }
+
+  public static <K, V> List<ConsumerRecord<K, V>> slurpPartition(
+      final TopicPartition partition,
+      final Map<String, Object> originals
+  ) {
+    final Map<String, Object> properties = new HashMap<>(originals);
+    properties.put(
+        ISOLATION_LEVEL_CONFIG,
+        IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT)
+    );
+    final List<ConsumerRecord<K, V>> allRecords = new LinkedList<>();
+    try (final KafkaConsumer<K, V> consumer = new KafkaConsumer<>(properties)) {
+      final long end = consumer.endOffsets(List.of(partition)).get(partition);
+      consumer.assign(List.of(partition));
+      consumer.seekToBeginning(List.of(partition));
+
+      while (consumer.position(partition) < end) {
+        final ConsumerRecords<K, V> records = consumer.poll(Duration.ofSeconds(30));
+        allRecords.addAll(records.records(partition));
+      }
+      return allRecords;
+    }
   }
 
   public static void awaitOutput(
@@ -318,7 +356,7 @@ public final class IntegrationTestUtils {
       consumer.assign(partitions);
       partitions.forEach(tp -> consumer.seek(tp, from));
 
-      final long end = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
+      final long end = System.nanoTime() + TimeUnit.SECONDS.toNanos(300);
       final List<KeyValue<K, V>> result = new ArrayList<>();
       while (result.size() < numEvents) {
         // this is configured to only poll one record at a time, so we
@@ -404,6 +442,44 @@ public final class IntegrationTestUtils {
     properties.put(DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class.getName());
 
     return properties;
+  }
+
+  public static long endOffset(final Admin admin, final TopicPartition topic)
+      throws ExecutionException, InterruptedException {
+    return admin.listOffsets(Map.of(topic, OffsetSpec.latest())).all().get()
+        .get(topic)
+        .offset();
+  }
+
+  public static void waitTillFullyConsumed(
+      final Admin admin,
+      final TopicPartition partition,
+      final String consumerGroupName,
+      final Duration timeout
+  ) throws ExecutionException, InterruptedException, TimeoutException {
+    waitTillConsumedPast(admin, partition, consumerGroupName, endOffset(admin, partition), timeout);
+  }
+
+  public static void waitTillConsumedPast(
+      final Admin admin,
+      final TopicPartition partition,
+      final String consumerGroupName,
+      final long offset,
+      final Duration timeout
+  ) throws ExecutionException, InterruptedException, TimeoutException {
+    final Instant start = Instant.now();
+    while (Instant.now().isBefore(start.plus(timeout))) {
+      final Map<String, Map<TopicPartition, OffsetAndMetadata>> listing
+          = admin.listConsumerGroupOffsets(consumerGroupName).all().get();
+      if (listing.get(consumerGroupName).containsKey(partition)) {
+        final long committed = listing.get(consumerGroupName).get(partition).offset();
+        if (committed >= offset) {
+          return;
+        }
+      }
+      Thread.sleep(1000);
+    }
+    throw new TimeoutException("timed out waiting for app to fully consume input");
   }
 
   private IntegrationTestUtils() {

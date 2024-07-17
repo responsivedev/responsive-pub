@@ -138,7 +138,7 @@ public class ResponsiveTopologyTestDriver extends TopologyTestDriver {
     final Properties props = baseProps(userProps);
 
     final SessionClients sessionClients = new SessionClients(
-        Optional.empty(), Optional.of(client), client.mockAdmin()
+        Optional.empty(), Optional.of(client), false, client.mockAdmin()
     );
     final var restoreListener = mockRestoreListener(props);
     sessionClients.initialize(restoreListener.metrics(), restoreListener);

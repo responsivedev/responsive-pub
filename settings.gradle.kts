@@ -23,6 +23,7 @@ plugins {
 
 include("kafka-client")
 include("kafka-client-examples:simple-example")
+include("kafka-client-examples:e2e-test")
 include("kafka-client-bootstrap")
 include("responsive-test-utils")
 
@@ -84,7 +85,8 @@ dependencyResolutionManagement {
 
             library("commons-cli", "commons-cli:commons-cli:1.5.0")
             library("commons-beanutils", "commons-beanutils:commons-beanutils:1.9.4")
-            bundle("commons", listOf("commons-cli", "commons-beanutils"))
+            library("commons-codec", "commons-codec:commons-codec:1.17.0")
+            bundle("commons", listOf("commons-cli", "commons-beanutils", "commons-codec"))
 
             library("slf4j-api", "org.slf4j", "slf4j-api").versionRef("slf4j")
 
