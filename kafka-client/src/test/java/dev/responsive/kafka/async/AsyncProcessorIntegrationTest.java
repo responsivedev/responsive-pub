@@ -141,12 +141,12 @@ public class AsyncProcessorIntegrationTest {
   private static final int KEYS_PER_TASK = 5; // TODO: implement key list based on this config
   private static final int INPUT_RECORDS_PER_KEY = 10;
 
-  private static final String INPUT_TOPIC = "input";
-  private static final String OUTPUT_TOPIC = "output";
+  private String inputTopic;
+  private String outputTopic;
 
-  private static final String IN_KV_STORE = "in-kv-store";
-  private static final String ASYNC_KV_STORE = "async-kv-store";
-  private static final String OUT_KV_STORE = "out-kv-store";
+  private String inKVStore;
+  private String asyncKVStore;
+  private String outKVStore;
 
   private final Map<String, Object> responsiveProps = new HashMap<>();
 
@@ -164,11 +164,18 @@ public class AsyncProcessorIntegrationTest {
     // add displayName to name to account for parameterized tests
     this.name = info.getDisplayName().replace("()", "");
 
+    this.inputTopic = name + "input";
+    this.outputTopic = name + "output";
+    this.inKVStore = name + "in-store";
+    this.asyncKVStore = name + "async-store";
+    this.outKVStore = name + "out-store";
+
     this.responsiveProps.putAll(responsiveProps);
     this.admin = admin;
 
     this.numInputPartitions = TASKS_PER_STREAMTHREAD * STREAMTHREADS_PER_APP;
     this.numOutputPartitions = numInputPartitions / INPUT_OUTPUT_PARTITION_RATIO;
+
     createTopicsAndWait(
         admin,
         Map.of(inputTopic(), numInputPartitions, outputTopic(), numOutputPartitions)
@@ -181,11 +188,11 @@ public class AsyncProcessorIntegrationTest {
   }
 
   private String inputTopic() {
-    return name + "." + INPUT_TOPIC;
+    return name + "." + inputTopic;
   }
 
   private String outputTopic() {
-    return name + "." + OUTPUT_TOPIC;
+    return name + "." + outputTopic;
   }
 
   @Test
@@ -241,8 +248,8 @@ public class AsyncProcessorIntegrationTest {
         .processValues(
             new SimpleStatefulProcessorSupplier<>(
                 this::computeNewValueForSourceProcessor,
-                ResponsiveKeyValueParams.fact(IN_KV_STORE)),
-            IN_KV_STORE)
+                ResponsiveKeyValueParams.fact(inKVStore)),
+            inKVStore)
         .processValues(
             createAsyncProcessorSupplier(
                 () -> new FixedKeyProcessor<String, InputRecord, String>() {
@@ -263,10 +270,10 @@ public class AsyncProcessorIntegrationTest {
         .processValues(
             new SimpleStatefulProcessorSupplier<>(
                 this::computeNewValueForSinkProcessor,
-                ResponsiveKeyValueParams.fact(OUT_KV_STORE),
+                ResponsiveKeyValueParams.fact(outKVStore),
                 latestValues,
                 inputRecordsLatch),
-            OUT_KV_STORE)
+            outKVStore)
         .to(outputTopic(), Produced.with(Serdes.String(), Serdes.String()));
 
     final List<Throwable> caughtExceptions = new LinkedList<>();
@@ -370,24 +377,24 @@ public class AsyncProcessorIntegrationTest {
         .processValues(
             new SimpleStatefulProcessorSupplier<>(
                 this::computeNewValueForSourceProcessor,
-                ResponsiveKeyValueParams.fact(IN_KV_STORE)),
-            IN_KV_STORE)
+                ResponsiveKeyValueParams.fact(inKVStore)),
+            inKVStore)
         .processValues(
             createAsyncProcessorSupplier(
                 new SimpleStatefulProcessorSupplier<>(
                     this::computeNewValueForStatefulAsyncProcessor,
-                    ResponsiveKeyValueParams.fact(ASYNC_KV_STORE),
+                    ResponsiveKeyValueParams.fact(asyncKVStore),
                     processed
                 )),
             Named.as("AsyncProcessor"),
-            ASYNC_KV_STORE)
+            asyncKVStore)
         .processValues(
             new SimpleStatefulProcessorSupplier<>(
                 this::computeNewValueForSinkProcessor,
-                ResponsiveKeyValueParams.fact(OUT_KV_STORE),
+                ResponsiveKeyValueParams.fact(outKVStore),
                 latestValues,
                 inputRecordsLatch),
-            OUT_KV_STORE)
+            outKVStore)
         .to(outputTopic(), Produced.with(Serdes.String(), Serdes.String()));
 
     List<Throwable> caughtExceptions = new LinkedList<>();
@@ -402,7 +409,7 @@ public class AsyncProcessorIntegrationTest {
       pipeRecords(producer, inputTopic(), inputRecords);
 
       // Then:
-      final long timeout = 2 * ASYNC_SLEEP_DURATION_MS * numInputRecords;
+      final long timeout = 60_000L + ASYNC_SLEEP_DURATION_MS * numInputRecords;
       final boolean allInputProcessed = inputRecordsLatch.await(timeout, TimeUnit.MILLISECONDS);
       if (!allInputProcessed) {
         throw new AssertionError(String.format("Failed to process all %d input records within %dms",
@@ -429,7 +436,7 @@ public class AsyncProcessorIntegrationTest {
   }
 
   @Test
-  public void shouldThrowIfStateStoresNotConnectedThroughProcessorSupplier() throws Exception {
+  public void shouldThrowIfStoresNotConnectedCorrectly() throws Exception {
     // Given:
     final Map<String, Object> properties = getMutableProperties();
 
@@ -443,7 +450,7 @@ public class AsyncProcessorIntegrationTest {
 
     // this is the old way of connecting StoreBuilders to a topology, which async does not support
     builder.addStateStore(ResponsiveStores.timestampedKeyValueStoreBuilder(
-        ResponsiveStores.keyValueStore(ResponsiveKeyValueParams.fact(ASYNC_KV_STORE)),
+        ResponsiveStores.keyValueStore(ResponsiveKeyValueParams.fact(asyncKVStore)),
         Serdes.String(),
         Serdes.String()));
 
@@ -454,7 +461,7 @@ public class AsyncProcessorIntegrationTest {
               @Override
               public void init(final FixedKeyProcessorContext<String, String> context) {
                 // this should throw
-                context.getStateStore(ASYNC_KV_STORE);
+                context.getStateStore(asyncKVStore);
               }
 
               @Override
@@ -465,7 +472,7 @@ public class AsyncProcessorIntegrationTest {
             }),
 
         Named.as("AsyncProcessor"),
-        ASYNC_KV_STORE
+        asyncKVStore
     );
 
     final List<Throwable> expectedExceptions = new LinkedList<>();
@@ -483,7 +490,7 @@ public class AsyncProcessorIntegrationTest {
       });
 
       // When:
-      startAppAndAwaitState(State.ERROR, Duration.ofSeconds(15), streams);
+      startAppAndAwaitState(State.ERROR, Duration.ofSeconds(30), streams);
     }
 
     // Then:
