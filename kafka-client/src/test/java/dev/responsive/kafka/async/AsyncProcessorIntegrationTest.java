@@ -70,7 +70,10 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -475,7 +478,9 @@ public class AsyncProcessorIntegrationTest {
         asyncKVStore
     );
 
-    final List<Throwable> expectedExceptions = new LinkedList<>();
+    // needs to be concurrent since slow StreamThreads can hit the exception handler
+    // and add new elements to this while we're iterating through it during the assertions
+    final Set<Throwable> expectedExceptions = new ConcurrentSkipListSet<>();
     final List<Throwable> unexpectedExceptions = new LinkedList<>();
 
     try (final var streams = new ResponsiveKafkaStreams(builder.build(), properties)) {
