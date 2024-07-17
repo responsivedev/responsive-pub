@@ -70,10 +70,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -478,9 +475,7 @@ public class AsyncProcessorIntegrationTest {
         asyncKVStore
     );
 
-    // needs to be concurrent since slow StreamThreads can hit the exception handler
-    // and add new elements to this while we're iterating through it during the assertions
-    final Set<Throwable> expectedExceptions = new ConcurrentSkipListSet<>();
+    final List<Throwable> expectedExceptions = new LinkedList<>();
     final List<Throwable> unexpectedExceptions = new LinkedList<>();
 
     try (final var streams = new ResponsiveKafkaStreams(builder.build(), properties)) {
@@ -496,25 +491,26 @@ public class AsyncProcessorIntegrationTest {
 
       // When:
       startAppAndAwaitState(State.ERROR, Duration.ofSeconds(30), streams);
-    }
 
-    // Then:
-    assertThat(unexpectedExceptions.size(), is(0));
+      // Then:
+      assertThat(unexpectedExceptions.size(), is(0));
 
-    // it's possible for multiple StreamThreads to hit and register the exception before
-    // shutdown so just make sure we get at least 1 and no more than the num stream threads
-    assertThat(expectedExceptions.size(), greaterThanOrEqualTo(1));
-    assertThat(expectedExceptions.size(), lessThanOrEqualTo(STREAMTHREADS_PER_APP));
+      // it's possible for multiple StreamThreads to hit and register the exception before
+      // shutdown so just make sure we get at least 1 and no more than the num stream threads
+      final int numIllegalStateExceptions = expectedExceptions.size();
+      assertThat(numIllegalStateExceptions, greaterThanOrEqualTo(1));
+      assertThat(numIllegalStateExceptions, lessThanOrEqualTo(STREAMTHREADS_PER_APP));
 
-    for (final var throwable : expectedExceptions) {
-      final Throwable rootCause = Throwables.getRootCause(throwable);
-      assertThat(
-          rootCause.getMessage(),
-          equalTo(
-              "Processor initialized some stores that were not connected via the "
-                  + "ProcessorSupplier, please connect stores for async processors by "
-                  + "implementing the ProcessorSupplier#storesNames method"
-          ));
+      for (int i = 0; i < numIllegalStateExceptions; ++i) {
+        final Throwable rootCause = Throwables.getRootCause(expectedExceptions.get(i));
+        assertThat(
+            rootCause.getMessage(),
+            equalTo(
+                "Processor initialized some stores that were not connected via the "
+                    + "ProcessorSupplier, please connect stores for async processors by "
+                    + "implementing the ProcessorSupplier#storesNames method"
+            ));
+      }
     }
   }
 
