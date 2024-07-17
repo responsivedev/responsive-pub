@@ -81,7 +81,6 @@ public class DuplicateKeyListValueIterator implements KeyValueIterator<WindowedK
     public WindowResult(final WindowDoc windowDoc) {
       this.key = windowedKey(windowDoc.getKey());
       this.values = windowDoc.getValues();
-      System.out.printf("SOPHIE: WindowDoc result for key=%s has %d values\n", key, values.size());
     }
 
     boolean hasNext() {

@@ -135,9 +135,11 @@ class LocalRemoteKvIterator<K extends Comparable<K>> implements KeyValueIterator
     } else if (remoteKey.compareTo(cachedKey) == 0) {
 
       if (retainDuplicates) {
-        // if keys are the same and duplicates are allowed, then we arbitrarily
-        // pick one of them to return (in this case the remote) but it doesn't
-        // really matter which
+        // if keys are the same and duplicates are allowed, then we'll need to
+        // return both of them eventually. We choose to return the remote one
+        // here but it's arbitrary since the order isn't defined, and we'll
+        // return the cached one in the next iteration (or once we run out of
+        // remote ones since there can be multiple of them)
         return remote.next();
       } else {
         // otherwise if they're the same, then there are two options:

@@ -19,8 +19,9 @@ package dev.responsive.kafka.internal.stores;
 import dev.responsive.kafka.internal.db.KeySpec;
 import dev.responsive.kafka.internal.utils.Iterators;
 import dev.responsive.kafka.internal.utils.Result;
+import java.util.ArrayList;
 import java.util.Collection;
-import java.util.LinkedList;
+import java.util.List;
 import java.util.NavigableMap;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentSkipListMap;
@@ -30,7 +31,7 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 
 public class DuplicateKeyBuffer<K extends Comparable<K>> implements SizeTrackingBuffer<K> {
 
-  private final NavigableMap<K, LinkedList<Result<K>>> buffer;
+  private final NavigableMap<K, List<Result<K>>> buffer;
   private final KeySpec<K> extractor;
   private long bytes = 0L;
   private int size = 0;
@@ -57,7 +58,7 @@ public class DuplicateKeyBuffer<K extends Comparable<K>> implements SizeTracking
       bytes += value.size(extractor);
       ++size;
 
-      buffer.computeIfAbsent(key, k -> new LinkedList<>()).add(value);
+      buffer.computeIfAbsent(key, k -> new ArrayList<>()).add(value);
     }
   }
 
@@ -73,8 +74,8 @@ public class DuplicateKeyBuffer<K extends Comparable<K>> implements SizeTracking
     if (!buffer.containsKey(key)) {
       return null;
     } else {
-      // point lookups are defined for stores with duplicates, so just return the first element
-      return buffer.get(key).getFirst();
+      // point lookups are not defined for stores with duplicates, so just return the first element
+      return buffer.get(key).get(0);
     }
   }
 

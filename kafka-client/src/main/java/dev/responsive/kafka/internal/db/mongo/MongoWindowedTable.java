@@ -441,7 +441,14 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
         Filters.and(
             Filters.eq(WindowDoc.ID, compositeKey(windowedKey))))
         .first();
-    return windowDoc == null ? null : windowDoc.getValue();
+
+    if (windowDoc == null) {
+      return null;
+    } else if (retainDuplicates) {
+      return windowDoc.getValues().get(0);
+    } else {
+      return windowDoc.getValue();
+    }
   }
 
   @Override
