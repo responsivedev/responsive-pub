@@ -21,6 +21,7 @@ import static dev.responsive.kafka.api.async.internals.AsyncThreadPool.ASYNC_THR
 import dev.responsive.kafka.api.async.internals.stores.AbstractAsyncStoreBuilder;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreBuilder;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreBuilder.StoreType;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -66,6 +67,10 @@ public class AsyncUtils {
   public static Map<String, AbstractAsyncStoreBuilder<?, ?, ?>> initializeAsyncBuilders(
       final Set<StoreBuilder<?>> userConnectedStores
   ) {
+    if (userConnectedStores == null || userConnectedStores.isEmpty()) {
+      return Collections.emptyMap();
+    }
+
     final Map<String, AbstractAsyncStoreBuilder<?, ?, ?>> asyncStoreBuilders = new HashMap<>();
     for (final StoreBuilder<?> builder : userConnectedStores) {
       final String storeName = builder.name();
