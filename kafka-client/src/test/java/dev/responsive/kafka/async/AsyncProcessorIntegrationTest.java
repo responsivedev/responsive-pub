@@ -27,6 +27,7 @@ import static dev.responsive.kafka.testutils.IntegrationTestUtils.createTopicsAn
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.pipeRecords;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.readOutput;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.startAppAndAwaitRunning;
+import static dev.responsive.kafka.testutils.IntegrationTestUtils.startAppAndAwaitState;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
@@ -44,8 +45,10 @@ import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
 import static org.apache.kafka.streams.StreamsConfig.producerPrefix;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.lessThanOrEqualTo;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -55,6 +58,7 @@ import com.google.common.base.Throwables;
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
+import dev.responsive.kafka.api.stores.ResponsiveStores;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
 import dev.responsive.kafka.testutils.SimpleStatefulProcessorSupplier;
@@ -78,9 +82,11 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
+import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Named;
@@ -263,7 +269,7 @@ public class AsyncProcessorIntegrationTest {
             OUT_KV_STORE)
         .to(outputTopic(), Produced.with(Serdes.String(), Serdes.String()));
 
-    List<Throwable> caughtExceptions = new LinkedList<>();
+    final List<Throwable> caughtExceptions = new LinkedList<>();
     try (final var streams = new ResponsiveKafkaStreams(builder.build(), properties)) {
       streams.setUncaughtExceptionHandler(exception -> {
         caughtExceptions.add(exception);
@@ -420,6 +426,84 @@ public class AsyncProcessorIntegrationTest {
     assertThat(Throwables.getRootCause(caughtExceptions.get(0)),
         instanceOf(InjectedException.class));
     assertThat(latestValues, equalTo(finalOutputRecords));
+  }
+
+  @Test
+  public void shouldThrowIfStateStoresNotConnectedThroughProcessorSupplier() throws Exception {
+    // Given:
+    final Map<String, Object> properties = getMutableProperties();
+
+    final StreamsBuilder builder = new StreamsBuilder();
+    final KStream<String, InputRecord> input = builder.stream(
+        inputTopic(),
+        Consumed.with(
+            Serdes.String(),
+            Serdes.serdeFrom(new InputRecordSerializer(), new InputRecordDeserializer())
+        ));
+
+    // this is the old way of connecting StoreBuilders to a topology, which async does not support
+    builder.addStateStore(ResponsiveStores.timestampedKeyValueStoreBuilder(
+        ResponsiveStores.keyValueStore(ResponsiveKeyValueParams.fact(ASYNC_KV_STORE)),
+        Serdes.String(),
+        Serdes.String()));
+
+    input.processValues(
+        createAsyncProcessorSupplier(
+            () -> new FixedKeyProcessor<String, InputRecord, String>() {
+
+              @Override
+              public void init(final FixedKeyProcessorContext<String, String> context) {
+                // this should throw
+                context.getStateStore(ASYNC_KV_STORE);
+              }
+
+              @Override
+              public void process(final FixedKeyRecord<String, InputRecord> record) {
+                // should not get here
+                throw new AssertionError("attempted to process something");
+              }
+            }),
+
+        Named.as("AsyncProcessor"),
+        ASYNC_KV_STORE
+    );
+
+    final List<Throwable> expectedExceptions = new LinkedList<>();
+    final List<Throwable> unexpectedExceptions = new LinkedList<>();
+
+    try (final var streams = new ResponsiveKafkaStreams(builder.build(), properties)) {
+
+      streams.setUncaughtExceptionHandler(exception -> {
+        if (Throwables.getRootCause(exception) instanceof IllegalStateException) {
+          expectedExceptions.add(exception);
+        } else {
+          unexpectedExceptions.add(exception);
+        }
+        return StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
+      });
+
+      // When:
+      startAppAndAwaitState(State.ERROR, Duration.ofSeconds(15), streams);
+    }
+
+    // Then:
+    assertThat(unexpectedExceptions.size(), is(0));
+
+    // it's possible for multiple StreamThreads to hit and register the exception before
+    // shutdown so just make sure we get at least 1 and no more than the num stream threads
+    assertThat(expectedExceptions.size(), greaterThanOrEqualTo(1));
+    assertThat(expectedExceptions.size(), lessThanOrEqualTo(STREAMTHREADS_PER_APP));
+
+    for (final var throwable : expectedExceptions) {
+      final Throwable rootCause = Throwables.getRootCause(throwable);
+      assertThat(
+          rootCause.getMessage(),
+          equalTo(
+              "Processor initialized some stores that were not connected via the "
+                  + "ProcessorSupplier, please connect stores for async processors by "
+                  + "implementing the ProcessorSupplier#storesNames method"
+          ));
+    }
   }
 
   // The "in" processor is a simple counter that just forwards the new count appended to

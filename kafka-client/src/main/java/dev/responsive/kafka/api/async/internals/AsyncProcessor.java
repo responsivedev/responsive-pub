@@ -750,9 +750,9 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
           String.join(",", connectedStores.keySet()),
           String.join(", ", accessedStores.keySet()));
       throw new IllegalStateException(
-          "Names of actual stores initialized by this processor does not "
-              + "match the connected store names that were provided "
-              + "to the AsyncProcessorSupplier");
+          "Processor initialized some stores that were not connected via the ProcessorSupplier, "
+              + "please connect stores for async processors by implementing the "
+              + "ProcessorSupplier#storesNames method");
     }
   }
 
