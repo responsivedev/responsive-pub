@@ -16,6 +16,8 @@
 
 package dev.responsive.kafka.internal.clients;
 
+import static dev.responsive.kafka.internal.utils.Utils.extractThreadNameFromConsumerClientId;
+
 import dev.responsive.kafka.api.async.internals.AsyncThreadPoolRegistry;
 import java.time.Duration;
 import java.util.Map;
@@ -42,10 +44,12 @@ public class AsyncStreamsConsumer<K, V> extends DelegatingConsumer<K, V> {
 
   public AsyncStreamsConsumer(
       final Consumer<K, V> delegate,
+      final String clientId,
       final AsyncThreadPoolRegistry asyncThreadPoolRegistry
   ) {
     super(delegate);
-    this.streamThreadName = Thread.currentThread().getName();
+    this.streamThreadName = extractThreadNameFromConsumerClientId(clientId);
+
     this.asyncThreadPoolRegistry = asyncThreadPoolRegistry;
     final var asyncThreadPoolRegistration = asyncThreadPoolRegistry
         .startNewAsyncThreadPool(streamThreadName);

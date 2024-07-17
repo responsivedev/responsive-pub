@@ -17,8 +17,9 @@
 package dev.responsive.kafka.internal.clients;
 
 import static dev.responsive.kafka.internal.config.ConfigUtils.eosEnabled;
-import static dev.responsive.kafka.internal.utils.Utils.extractThreadId;
-import static dev.responsive.kafka.internal.utils.Utils.extractThreadNameFromConsumerClientId;
+import static dev.responsive.kafka.internal.utils.Utils.extractThreadIdFromConsumerClientId;
+import static dev.responsive.kafka.internal.utils.Utils.extractThreadIdFromProducerClientId;
+import static dev.responsive.kafka.internal.utils.Utils.extractThreadIdFromRestoreConsumerClientId;
 
 import dev.responsive.kafka.api.config.CompatibilityMode;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
@@ -35,7 +36,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.OptionalLong;
 import java.util.function.Function;
-import java.util.regex.Pattern;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -126,10 +126,10 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
   public Producer<byte[], byte[]> getProducer(final Map<String, Object> config) {
     final String clientId = (String) config.get(ProducerConfig.CLIENT_ID_CONFIG);
     LOG.info("Creating responsive producer: {}", clientId);
-    final String tid = threadIdFromProducerConfig(clientId);
+    final String threadId = extractThreadIdFromProducerClientId(clientId);
     final ListenersForThread tc = sharedListeners.getAndMaybeInitListenersForThread(
         eos,
-        tid,
+        threadId,
         metrics,
         applicationId,
         config,
@@ -143,7 +143,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
         Collections.unmodifiableList(
             Arrays.asList(
                 tc.offsetRecorder.getProducerListener(),
-                new CloseListener(tid)
+                new CloseListener(threadId)
             )
         )
     );
@@ -154,8 +154,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
     final String clientId = (String) config.get(ConsumerConfig.CLIENT_ID_CONFIG);
     LOG.info("Creating responsive main consumer: {}", clientId);
 
-    final String streamThreadName = extractThreadNameFromConsumerClientId(clientId);
-    final String threadId = extractThreadId(streamThreadName);
+    final String threadId = extractThreadIdFromConsumerClientId(clientId);
 
     final ListenersForThread tc = sharedListeners.getAndMaybeInitListenersForThread(
         eos,
@@ -188,11 +187,11 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
 
     final String clientId = (String) config.get(ConsumerConfig.CLIENT_ID_CONFIG);
     LOG.info("Creating responsive restore consumer: {}", clientId);
-    final String tid = threadIdFromRestoreConsumerConfig(clientId);
+    final String threadId = extractThreadIdFromRestoreConsumerClientId(clientId);
     return factories.createRestoreConsumer(
         clientId,
         wrapped.getRestoreConsumer(config),
-        p -> storeRegistry.getCommittedOffset(p, tid),
+        p -> storeRegistry.getCommittedOffset(p, threadId),
         repairRestoreOffsetOutOfRange
     );
 
@@ -215,34 +214,6 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
         wrapped,
         getAdmin(config)
     );
-  }
-
-  /**
-   * @param clientId the producer client id
-   * @return the extracted StreamThread id, of the form "StreamThread-n"
-   */
-  private String threadIdFromProducerConfig(final String clientId) {
-    final var regex = Pattern.compile(".*-(StreamThread-\\d+)-producer");
-    final var match = regex.matcher(clientId);
-    if (!match.find()) {
-      LOG.error("Unable to parse thread id from producer client id = {}", clientId);
-      throw new RuntimeException("unexpected client id " + clientId);
-    }
-    return match.group(1);
-  }
-
-  /**
-   * @param clientId the restore consumer client id
-   * @return the extracted StreamThread id, of the form "StreamThread-n"
-   */
-  private String threadIdFromRestoreConsumerConfig(final String clientId) {
-    final var regex = Pattern.compile(".*-(StreamThread-\\d+)-restore-consumer");
-    final var match = regex.matcher(clientId);
-    if (!match.find()) {
-      LOG.error("Unable to parse thread id from producer client id = {}", clientId);
-      throw new RuntimeException("unexpected client id " + clientId);
-    }
-    return match.group(1);
   }
 
   class CloseListener implements ResponsiveConsumer.Listener, ResponsiveProducer.Listener {

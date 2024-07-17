@@ -17,14 +17,14 @@
 package dev.responsive.kafka.internal.clients;
 
 import static dev.responsive.kafka.internal.config.ConfigUtils.eosEnabled;
-import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadAsyncThreadPoolRegistry;
 
 import dev.responsive.kafka.api.async.internals.AsyncThreadPoolRegistry;
-import dev.responsive.kafka.api.config.ResponsiveConfig;
 import java.util.Map;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
 
@@ -36,11 +36,11 @@ public class AsyncStreamsKafkaClientSupplier implements KafkaClientSupplier {
 
   public AsyncStreamsKafkaClientSupplier(
       final KafkaClientSupplier delegateKafkaClientSupplier,
-      final ResponsiveConfig responsiveConfig,
+      final AsyncThreadPoolRegistry asyncThreadPoolRegistry,
       final StreamsConfig streamsConfig
   ) {
     this.delegateKafkaClientSupplier = delegateKafkaClientSupplier;
-    this.asyncThreadPoolRegistry = loadAsyncThreadPoolRegistry(responsiveConfig.originals());
+    this.asyncThreadPoolRegistry = asyncThreadPoolRegistry;
     this.eosEnabled = eosEnabled(streamsConfig);
   }
 
@@ -54,7 +54,10 @@ public class AsyncStreamsKafkaClientSupplier implements KafkaClientSupplier {
     final var innerProducer = delegateKafkaClientSupplier.getProducer(config);
 
     if (eosEnabled) {
-      return new AsyncStreamsProducer<>(innerProducer, asyncThreadPoolRegistry);
+      return new AsyncStreamsProducer<>(
+          innerProducer,
+          (String) config.get(ProducerConfig.CLIENT_ID_CONFIG),
+          asyncThreadPoolRegistry);
     } else {
       return innerProducer;
     }
@@ -65,7 +68,11 @@ public class AsyncStreamsKafkaClientSupplier implements KafkaClientSupplier {
     final var innerConsumer = delegateKafkaClientSupplier.getConsumer(config);
 
     if (!eosEnabled) {
-      return new AsyncStreamsConsumer<>(innerConsumer, asyncThreadPoolRegistry);
+      return new AsyncStreamsConsumer<>(
+          innerConsumer,
+          (String) config.get(ConsumerConfig.CLIENT_ID_CONFIG),
+          asyncThreadPoolRegistry
+      );
     } else {
       return innerConsumer;
     }

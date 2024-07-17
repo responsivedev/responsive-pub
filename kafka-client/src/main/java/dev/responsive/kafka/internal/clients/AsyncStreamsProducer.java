@@ -16,6 +16,8 @@
 
 package dev.responsive.kafka.internal.clients;
 
+import static dev.responsive.kafka.internal.utils.Utils.extractThreadNameFromProducerClientId;
+
 import dev.responsive.kafka.api.async.internals.AsyncThreadPoolRegistry;
 import java.time.Duration;
 import org.apache.kafka.clients.producer.Producer;
@@ -40,10 +42,12 @@ public class AsyncStreamsProducer<K, V> extends DelegatingProducer<K, V> {
 
   public AsyncStreamsProducer(
       final Producer<K, V> delegate,
+      final String clientId,
       final AsyncThreadPoolRegistry asyncThreadPoolRegistry
   ) {
     super(delegate);
-    this.streamThreadName = Thread.currentThread().getName();
+    this.streamThreadName = extractThreadNameFromProducerClientId(clientId);
+
     this.asyncThreadPoolRegistry = asyncThreadPoolRegistry;
     final var asyncThreadPoolRegistration = asyncThreadPoolRegistry
         .startNewAsyncThreadPool(streamThreadName);
@@ -58,14 +62,12 @@ public class AsyncStreamsProducer<K, V> extends DelegatingProducer<K, V> {
 
   @Override
   public void close() {
-    // TODO: Producer is closed on reset under EOSv2 :/
     shutdownAsyncThreadPool();
     super.close();
   }
 
   @Override
   public void close(final Duration timeout) {
-    // TODO: Producer is closed on reset under EOSv2 :/
     shutdownAsyncThreadPool();
     super.close();
   }
