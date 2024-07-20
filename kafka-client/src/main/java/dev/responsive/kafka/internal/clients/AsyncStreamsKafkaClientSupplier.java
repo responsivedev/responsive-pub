@@ -16,8 +16,6 @@
 
 package dev.responsive.kafka.internal.clients;
 
-import static dev.responsive.kafka.internal.config.ConfigUtils.eosEnabled;
-
 import dev.responsive.kafka.api.async.internals.AsyncThreadPoolRegistry;
 import java.util.Map;
 import org.apache.kafka.clients.admin.Admin;
@@ -26,7 +24,6 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.streams.KafkaClientSupplier;
-import org.apache.kafka.streams.StreamsConfig;
 
 public class AsyncStreamsKafkaClientSupplier implements KafkaClientSupplier {
 

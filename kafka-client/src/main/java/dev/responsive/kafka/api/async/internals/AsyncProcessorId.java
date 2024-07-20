@@ -16,8 +16,6 @@
 
 package dev.responsive.kafka.api.async.internals;
 
-import java.util.Comparator;
-
 /**
  * Simple container class for info that uniquely identifies a {@link AsyncProcessor} instance
  */
