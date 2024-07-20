@@ -46,7 +46,7 @@ jobs:
         uses: gradle/gradle-build-action@v2.9.0
 
       - name: "Merge with Upstream"
-        run: git merge main
+        run: git merge upstream/main
 
       - name: "Build & Test"
         run: ./gradlew build buildDocker
