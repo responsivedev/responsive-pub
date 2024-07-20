@@ -451,8 +451,8 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
         );
         delegateKafkaClientSupplier = new AsyncStreamsKafkaClientSupplier(
                 innerClientSupplier,
-                asyncRegistry,
-                streamsConfig);
+                asyncRegistry
+        );
         this.asyncThreadPoolRegistry = Optional.of(asyncRegistry);
       } else {
         delegateKafkaClientSupplier = innerClientSupplier;

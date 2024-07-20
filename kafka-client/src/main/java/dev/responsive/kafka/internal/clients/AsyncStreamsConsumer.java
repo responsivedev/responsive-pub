@@ -18,12 +18,10 @@ package dev.responsive.kafka.internal.clients;
 
 import static dev.responsive.kafka.internal.utils.Utils.extractThreadNameFromConsumerClientId;
 
+import dev.responsive.kafka.api.async.internals.AsyncThreadPoolRegistration;
 import dev.responsive.kafka.api.async.internals.AsyncThreadPoolRegistry;
 import java.time.Duration;
-import java.util.Map;
 import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.common.TopicPartition;
 
 /**
  * Simple wrapper around the underlying ResponsiveConsumer that handles async stuff under ALOS.
@@ -40,7 +38,7 @@ public class AsyncStreamsConsumer<K, V> extends DelegatingConsumer<K, V> {
 
   private final String streamThreadName;
   private final AsyncThreadPoolRegistry asyncThreadPoolRegistry;
-  private final Runnable flushAsyncProcessors;
+  private final AsyncThreadPoolRegistration registration;
 
   public AsyncStreamsConsumer(
       final Consumer<K, V> delegate,
@@ -51,25 +49,8 @@ public class AsyncStreamsConsumer<K, V> extends DelegatingConsumer<K, V> {
     this.streamThreadName = extractThreadNameFromConsumerClientId(clientId);
 
     this.asyncThreadPoolRegistry = asyncThreadPoolRegistry;
-    final var asyncThreadPoolRegistration = asyncThreadPoolRegistry
-        .startNewAsyncThreadPool(streamThreadName);
-    this.flushAsyncProcessors = asyncThreadPoolRegistration::flush;
-
+    this.registration = asyncThreadPoolRegistry.startNewAsyncThreadPool(streamThreadName);
   }
-
-  @Override
-  public void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets) {
-    flushAsyncProcessors.run();
-    super.commitSync(offsets);
-  }
-
-  @Override
-  public void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets,
-                         final Duration timeout) {
-    flushAsyncProcessors.run();
-    super.commitSync(offsets, timeout);
-  }
-
 
   @Override
   public void close() {

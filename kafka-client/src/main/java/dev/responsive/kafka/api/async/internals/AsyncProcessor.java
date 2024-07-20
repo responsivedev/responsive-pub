@@ -223,7 +223,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     final int maxEventsPerKey = configs.getInt(ASYNC_MAX_EVENTS_QUEUED_PER_KEY_CONFIG);
 
     this.asyncThreadPoolRegistration = getAsyncThreadPool(taskContext, streamThreadName);
-    asyncThreadPoolRegistration.registerAsyncProcessor(asyncId, this::flushPendingEventsForCommit);
+    asyncThreadPoolRegistration.registerAsyncProcessor(taskId, this::flushPendingEventsForCommit);
     asyncThreadPoolRegistration.threadPool().maybeInitThreadPoolMetrics();
 
     this.schedulingQueue = new MeteredSchedulingQueue<>(

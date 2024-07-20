@@ -19,7 +19,6 @@ package dev.responsive.kafka.internal.clients;
 import static dev.responsive.kafka.internal.utils.Utils.extractThreadNameFromProducerClientId;
 
 import dev.responsive.kafka.api.async.internals.AsyncThreadPoolRegistry;
-import java.time.Duration;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.errors.ProducerFencedException;
 
@@ -56,29 +55,16 @@ public class AsyncStreamsProducer<K, V> extends DelegatingProducer<K, V> {
 
   @Override
   public void commitTransaction() throws ProducerFencedException {
-    flushAsyncProcessors.run();
+    // TODO: we should check for unflushed records here and throw an exception
+    //  once EOSv1 is officially deprecated, before that it's possible that some
+    //  tasks are not part of this commit and in theory could still be processing
     super.commitTransaction();
   }
 
-  @Override
-  public void close() {
-    shutdownAsyncThreadPool();
-    super.close();
-  }
 
   @Override
-  public void close(final Duration timeout) {
-    shutdownAsyncThreadPool();
-    super.close();
-  }
-
-  private void shutdownAsyncThreadPool() {
-    if (!streamThreadName.equals(Thread.currentThread().getName())) {
-      throw new IllegalStateException(String.format(
-          "Attempted to close producer for StreamThread %s from thread %s",
-          streamThreadName, Thread.currentThread().getName())
-      );
-    }
-    asyncThreadPoolRegistry.shutdownAsyncThreadPool(streamThreadName);
+  public void flush() {
+    flushAsyncProcessors.run();
+    super.flush();
   }
 }

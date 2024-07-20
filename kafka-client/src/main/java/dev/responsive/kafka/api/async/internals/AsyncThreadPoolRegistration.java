@@ -16,14 +16,18 @@
 
 package dev.responsive.kafka.api.async.internals;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import org.apache.kafka.streams.processor.TaskId;
 
 public class AsyncThreadPoolRegistration {
 
   private final AsyncThreadPool threadPool;
 
-  private final Map<AsyncProcessorId, Runnable> asyncProcessorsToFlush = new HashMap<>();
+  // Processors are maintained in topological order for each partition/task
+  private final Map<TaskId, List<Runnable>> taskToAsyncProcessorFlushers = new HashMap<>();
 
   public AsyncThreadPoolRegistration(
       final AsyncThreadPool threadPool
@@ -35,23 +39,29 @@ public class AsyncThreadPoolRegistration {
     return threadPool;
   }
 
-  public void registerAsyncProcessor(final AsyncProcessorId id, final Runnable flushProcessor) {
-    asyncProcessorsToFlush.put(id, flushProcessor);
+  // Called during processor initialization, which is done in topological order by Streams
+  public void registerAsyncProcessor(final TaskId id, final Runnable flushProcessor) {
+    taskToAsyncProcessorFlushers
+        .computeIfAbsent(id, (n) -> new ArrayList<>())
+        .add(flushProcessor);
   }
 
   public void unregisterAsyncProcessor(final AsyncProcessorId id) {
-    asyncProcessorsToFlush.remove(id);
+    taskToAsyncProcessorFlushers.remove(id);
     threadPool.removeProcessor(id);
   }
 
   public void flush() {
-    // TODO: this is non-ideal for stateless apps since we're flush each processor instance
-    //  sequentially and might end up waiting for async results from one processor while there
-    //  are others ready and waiting on other processors/partitions.
-    //  We should loop over all processors and only wait/block when we really have nothing to do
-    //  (doesn't matter for stateful apps since this method is a no-op due to flushing
-    //  everything during #flushCache which comes earlier in the commit process)
-    asyncProcessorsToFlush.values().forEach(Runnable::run);
+    // TODO: this can be optimized by executing the tasks in parallel (while respecting
+    //  the iteration order of flushes within a task which are otpologically sorted)
+    //  This doesn't apply to stateful apps since they get flushed earlier during the #flushCache
+    //  call and are essentially a no-op here
+    taskToAsyncProcessorFlushers.values().forEach(flushers -> {
+      // These must be executed in order
+      for (final var flush : flushers) {
+        flush.run();
+      }
+    });
   }
 
   public void close() {

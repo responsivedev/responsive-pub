@@ -16,10 +16,12 @@
 
 package dev.responsive.kafka.api.async.internals;
 
+import java.util.Comparator;
+
 /**
  * Simple container class for info that uniquely identifies a {@link AsyncProcessor} instance
  */
-public class AsyncProcessorId {
+public class AsyncProcessorId implements Comparable<AsyncProcessorId> {
 
   public final String processorName;
   public final int partition;
@@ -60,5 +62,11 @@ public class AsyncProcessorId {
   @Override
   public String toString() {
     return "AsyncProcessorId<" + processorName + "_" + partition + '>';
+  }
+
+  @Override
+  public int compareTo(final AsyncProcessorId o) {
+    final int comparingName = this.processorName.compareTo(o.processorName);
+    return comparingName != 0 ? comparingName : this.partition - o.partition;
   }
 }

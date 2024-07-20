@@ -96,18 +96,18 @@ public class AsyncThreadPoolRegistry {
   }
 
   private void shutdownAsyncThreadPool(final String streamThreadName, final boolean fromStart) {
-    final AsyncThreadPoolRegistration threadPool = streamThreadToAsyncPool.remove(streamThreadName);
+    final AsyncThreadPoolRegistration registration = streamThreadToAsyncPool.remove(streamThreadName);
 
     // It's possible the consumer was closed twice for some reason, in which case
     // we have already unregistered and begun shutdown for this pool
-    if (threadPool != null) {
+    if (registration != null) {
       if (fromStart) {
         LOG.warn(
             "Shutting down old orphaned async thread pool for StreamThread {}",
             streamThreadName
         );
       }
-      threadPool.close();
+      registration.close();
     }
   }
 

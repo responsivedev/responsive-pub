@@ -31,17 +31,14 @@ import org.apache.kafka.streams.StreamsConfig;
 public class AsyncStreamsKafkaClientSupplier implements KafkaClientSupplier {
 
   private final KafkaClientSupplier delegateKafkaClientSupplier;
-  private final boolean eosEnabled;
   private final AsyncThreadPoolRegistry asyncThreadPoolRegistry;
 
   public AsyncStreamsKafkaClientSupplier(
       final KafkaClientSupplier delegateKafkaClientSupplier,
-      final AsyncThreadPoolRegistry asyncThreadPoolRegistry,
-      final StreamsConfig streamsConfig
+      final AsyncThreadPoolRegistry asyncThreadPoolRegistry
   ) {
     this.delegateKafkaClientSupplier = delegateKafkaClientSupplier;
     this.asyncThreadPoolRegistry = asyncThreadPoolRegistry;
-    this.eosEnabled = eosEnabled(streamsConfig);
   }
 
   @Override
@@ -51,31 +48,24 @@ public class AsyncStreamsKafkaClientSupplier implements KafkaClientSupplier {
 
   @Override
   public Producer<byte[], byte[]> getProducer(final Map<String, Object> config) {
-    final var innerProducer = delegateKafkaClientSupplier.getProducer(config);
+    final var delegateProducer = delegateKafkaClientSupplier.getProducer(config);
 
-    if (eosEnabled) {
-      return new AsyncStreamsProducer<>(
-          innerProducer,
-          (String) config.get(ProducerConfig.CLIENT_ID_CONFIG),
-          asyncThreadPoolRegistry);
-    } else {
-      return innerProducer;
-    }
+    return new AsyncStreamsProducer<>(
+        delegateProducer,
+        (String) config.get(ProducerConfig.CLIENT_ID_CONFIG),
+        asyncThreadPoolRegistry
+    );
   }
 
   @Override
   public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
-    final var innerConsumer = delegateKafkaClientSupplier.getConsumer(config);
+    final var delegateConsumer = delegateKafkaClientSupplier.getConsumer(config);
 
-    if (!eosEnabled) {
-      return new AsyncStreamsConsumer<>(
-          innerConsumer,
-          (String) config.get(ConsumerConfig.CLIENT_ID_CONFIG),
-          asyncThreadPoolRegistry
-      );
-    } else {
-      return innerConsumer;
-    }
+    return new AsyncStreamsConsumer<>(
+        delegateConsumer,
+        (String) config.get(ConsumerConfig.CLIENT_ID_CONFIG),
+        asyncThreadPoolRegistry
+    );
   }
 
   @Override
