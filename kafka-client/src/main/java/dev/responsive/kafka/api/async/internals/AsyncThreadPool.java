@@ -11,7 +11,6 @@ import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CancellationException;
@@ -40,7 +39,7 @@ public class AsyncThreadPool {
   private final Supplier<AsyncThreadPoolMetricsRecorder> metricsRecorderSupplier;
   private AsyncThreadPoolMetricsRecorder metricsRecorder;
   private final ThreadPoolExecutor executor;
-  private final Map<InFlightWorkKey, ConcurrentMap<AsyncEvent, InFlightEvent>> inFlight
+  private final Map<AsyncProcessorId, ConcurrentMap<AsyncEvent, InFlightEvent>> inFlight
       = new HashMap<>();
   private final Semaphore queueSemaphore;
   private final BlockingQueue<Runnable> processingQueue;
@@ -48,7 +47,7 @@ public class AsyncThreadPool {
   // TODO: we don't really need to track this by processor/partition, technically an
   //  error anywhere is fatal for the StreamThread and all processors + all further
   //  processing should shut down ASAP to minimize ALOS overcounting
-  private final Map<InFlightWorkKey, FatalAsyncException> fatalExceptions =
+  private final Map<AsyncProcessorId, FatalAsyncException> fatalExceptions =
       new ConcurrentHashMap<>();
 
   private final AtomicInteger threadNameIndex = new AtomicInteger(0);
@@ -86,7 +85,7 @@ public class AsyncThreadPool {
   }
 
   public boolean isEmpty(final String processorName, final int partition) {
-    final var forTask = inFlight.get(InFlightWorkKey.of(processorName, partition));
+    final var forTask = inFlight.get(AsyncProcessorId.of(processorName, partition));
     if (forTask == null) {
       log.debug("No in-flight map found for {}[{}]", processorName, partition);
       return true;
@@ -101,15 +100,14 @@ public class AsyncThreadPool {
     return forTask.isEmpty();
   }
 
-  public void removeProcessor(final String processorName, final int partition) {
-    log.debug("Removing {}[{}] from async thread pool", processorName, partition);
-    final var key = InFlightWorkKey.of(processorName, partition);
-    final Map<AsyncEvent, InFlightEvent> inFlightForTask = inFlight.remove(key);
+  public void removeProcessor(final AsyncProcessorId asyncId) {
+    log.debug("Removing {}[{}] from async thread pool", asyncId.processorName, asyncId.partition);
+    final Map<AsyncEvent, InFlightEvent> inFlightForTask = inFlight.remove(asyncId);
 
 
     if (inFlightForTask != null) {
       log.info("Cancelling {} pending records for {}[{}]",
-               inFlightForTask.size(), processorName, partition);
+               inFlightForTask.size(), asyncId.processorName, asyncId.partition);
       inFlightForTask.values().forEach(f -> f.future().cancel(true));
     }
   }
@@ -124,13 +122,13 @@ public class AsyncThreadPool {
       final String processorName,
       final int partition
   ) {
-    return Optional.ofNullable(fatalExceptions.get(new InFlightWorkKey(processorName, partition)));
+    return Optional.ofNullable(fatalExceptions.get(AsyncProcessorId.of(processorName, partition)));
 
   }
 
   @VisibleForTesting
   Map<AsyncEvent, InFlightEvent> getInFlight(final String processorName, final int partition) {
-    return inFlight.get(InFlightWorkKey.of(processorName, partition));
+    return inFlight.get(AsyncProcessorId.of(processorName, partition));
   }
 
   /**
@@ -167,9 +165,9 @@ public class AsyncThreadPool {
       throw new IllegalStateException("must call maybeInitThreadPoolMetrics before using pool");
     }
 
-    final var inFlightKey = InFlightWorkKey.of(processorName, taskId.partition());
+    final var asyncProcessorId = AsyncProcessorId.of(processorName, taskId.partition());
     final var inFlightForTask
-        = inFlight.computeIfAbsent(inFlightKey, k -> new ConcurrentHashMap<>());
+        = inFlight.computeIfAbsent(asyncProcessorId, k -> new ConcurrentHashMap<>());
 
     for (final AsyncEvent event : events) {
       try {
@@ -220,7 +218,7 @@ public class AsyncThreadPool {
               throw (CompletionException) fatalException;
             }
             fatalExceptions.computeIfAbsent(
-                inFlightKey,
+                asyncProcessorId,
                 k -> new FatalAsyncException("Uncaught exception while handling", fatalException));
             if (fatalException instanceof RuntimeException) {
               throw (RuntimeException) fatalException;
@@ -306,39 +304,6 @@ public class AsyncThreadPool {
       event.transitionToToFinalize();
       metricsRecorder.recordEventProcess(System.nanoTime() - start);
       return null;
-    }
-  }
-
-  // TODO: think of a better name for this class
-  private static class InFlightWorkKey {
-    private final String processorName;
-    private final int partition;
-
-    private InFlightWorkKey(final String processorName, final int partition) {
-      this.processorName = processorName;
-      this.partition = partition;
-    }
-
-    private static InFlightWorkKey of(final String processorName, final int partition) {
-      return new InFlightWorkKey(processorName, partition);
-    }
-
-    @Override
-    public boolean equals(final Object o) {
-      if (this == o) {
-        return true;
-      }
-      if (o == null || getClass() != o.getClass()) {
-        return false;
-      }
-      final InFlightWorkKey that = (InFlightWorkKey) o;
-      return Objects.equals(processorName, that.processorName)
-          && Objects.equals(partition, that.partition);
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(processorName, partition);
     }
   }
 }

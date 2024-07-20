@@ -43,7 +43,7 @@ public class AsyncThreadPoolRegistry {
   private final int asyncThreadPoolSize;
   private final int maxQueuedEvents;
   private final ResponsiveMetrics responsiveMetrics;
-  private final Map<String, AsyncThreadPool> streamThreadToAsyncPool;
+  private final Map<String, AsyncThreadPoolRegistration> streamThreadToAsyncPool;
 
   public AsyncThreadPoolRegistry(
       final int numStreamThreads,
@@ -60,7 +60,7 @@ public class AsyncThreadPoolRegistry {
   /**
    * Registers and starts up a new AsyncThreadPool for the given StreamThread
    */
-  public void startNewAsyncThreadPool(final String streamThreadName) {
+  public AsyncThreadPoolRegistration startNewAsyncThreadPool(final String streamThreadName) {
     shutdownAsyncThreadPool(streamThreadName, true);
     final AsyncThreadPool newThreadPool = new AsyncThreadPool(
         streamThreadName,
@@ -68,10 +68,17 @@ public class AsyncThreadPoolRegistry {
         maxQueuedEvents,
         responsiveMetrics
     );
-    streamThreadToAsyncPool.put(streamThreadName, newThreadPool);
+
+    final var asyncThreadPoolRegistration = new AsyncThreadPoolRegistration(newThreadPool);
+    streamThreadToAsyncPool.put(
+        streamThreadName,
+        asyncThreadPoolRegistration
+    );
+
+    return asyncThreadPoolRegistration;
   }
 
-  public AsyncThreadPool asyncThreadPoolForStreamThread(
+  public AsyncThreadPoolRegistration asyncThreadPoolForStreamThread(
       final String streamThreadName
   ) {
     return streamThreadToAsyncPool.get(streamThreadName);
@@ -89,18 +96,19 @@ public class AsyncThreadPoolRegistry {
   }
 
   private void shutdownAsyncThreadPool(final String streamThreadName, final boolean fromStart) {
-    final AsyncThreadPool threadPool = streamThreadToAsyncPool.remove(streamThreadName);
+    final AsyncThreadPoolRegistration registration =
+        streamThreadToAsyncPool.remove(streamThreadName);
 
     // It's possible the consumer was closed twice for some reason, in which case
     // we have already unregistered and begun shutdown for this pool
-    if (threadPool != null) {
+    if (registration != null) {
       if (fromStart) {
         LOG.warn(
             "Shutting down old orphaned async thread pool for StreamThread {}",
             streamThreadName
         );
       }
-      threadPool.shutdown();
+      registration.close();
     }
   }
 

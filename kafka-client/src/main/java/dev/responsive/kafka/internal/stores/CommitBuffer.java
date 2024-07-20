@@ -34,7 +34,7 @@ import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_TOTAL_DES
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.STORE_METRIC_GROUP;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.TIME_SINCE_LAST_FLUSH;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.TIME_SINCE_LAST_FLUSH_DESCRIPTION;
-import static dev.responsive.kafka.internal.utils.Utils.extractThreadId;
+import static dev.responsive.kafka.internal.utils.Utils.extractThreadIdFromThreadName;
 
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.db.BatchFlusher;
@@ -187,7 +187,7 @@ public class CommitBuffer<K extends Comparable<K>, P>
 
     final String storeName = tableName.kafkaName();
 
-    final String streamThreadId = extractThreadId(Thread.currentThread().getName());
+    final String streamThreadId = extractThreadIdFromThreadName(Thread.currentThread().getName());
 
     flushSensorName = getSensorName(FLUSH, streamThreadId, changelog);
     flushLatencySensorName = getSensorName(FLUSH_LATENCY, streamThreadId, changelog);

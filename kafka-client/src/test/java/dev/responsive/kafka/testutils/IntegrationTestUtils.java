@@ -421,6 +421,54 @@ public final class IntegrationTestUtils {
     }
   }
 
+  public static void startAppAndAwaitState(
+      final KafkaStreams.State state,
+      final Duration timeout,
+      final ResponsiveKafkaStreams... streams
+  ) throws Exception {
+    final ReentrantLock lock = new ReentrantLock();
+    final Condition onState = lock.newCondition();
+    final AtomicBoolean[] inState = new AtomicBoolean[streams.length];
+
+    for (int i = 0; i < streams.length; i++) {
+      inState[i] = new AtomicBoolean(false);
+      final int idx = i;
+      final StateListener oldListener = streams[i].stateListener();
+      final StateListener listener = (newState, oldState) -> {
+        if (oldListener != null) {
+          oldListener.onChange(newState, oldState);
+        }
+
+        lock.lock();
+        try {
+          inState[idx].set(newState == state);
+          onState.signalAll();
+        } finally {
+          lock.unlock();
+        }
+      };
+      streams[i].setStateListener(listener);
+    }
+
+    for (final KafkaStreams stream : streams) {
+      stream.start();
+    }
+
+    final long end = System.nanoTime() + timeout.toNanos();
+    lock.lock();
+    try {
+      while (Arrays.stream(inState).anyMatch(b -> !b.get())) {
+        if (System.nanoTime() > end
+            || !onState.await(end - System.nanoTime(), TimeUnit.NANOSECONDS)) {
+          throw new TimeoutException("Not all streams were in " + state + " after " + timeout);
+        }
+      }
+    } finally {
+      lock.unlock();
+    }
+  }
+
+
   public static Map<String, Object> getDefaultMutablePropertiesWithStringSerdes(
       final Map<String, Object> responsiveProps,
       final String name

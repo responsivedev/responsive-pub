@@ -35,6 +35,7 @@ import dev.responsive.kafka.api.async.internals.AsyncThreadPoolRegistry;
 import dev.responsive.kafka.api.config.CompatibilityMode;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.stores.ResponsiveDslStoreSuppliers;
+import dev.responsive.kafka.internal.clients.AsyncStreamsKafkaClientSupplier;
 import dev.responsive.kafka.internal.clients.ResponsiveKafkaClientSupplier;
 import dev.responsive.kafka.internal.config.ConfigUtils;
 import dev.responsive.kafka.internal.config.InternalSessionConfigs;
@@ -188,12 +189,12 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     super(
         params.topology,
         propsWithOverrides(
-            params.streamsConfig.getInt(NUM_STREAM_THREADS_CONFIG),
             params.responsiveConfig,
             params.sessionClients,
             params.storeRegistry,
             params.topology.describe(),
-            params.metrics),
+            params.metrics,
+            params.asyncThreadPoolRegistry),
         params.responsiveKafkaClientSupplier,
         params.time
     );
@@ -263,12 +264,12 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
    * before these get finalized as a {@link StreamsConfig} object
    */
   private static Properties propsWithOverrides(
-      final int numStreamThreads,
       final ResponsiveConfig configs,
       final SessionClients sessionClients,
       final ResponsiveStoreRegistry storeRegistry,
       final TopologyDescription topologyDescription,
-      final ResponsiveMetrics responsiveMetrics
+      final ResponsiveMetrics responsiveMetrics,
+      final Optional<AsyncThreadPoolRegistry> asyncThreadPoolRegistry
   ) {
     final Properties propsWithOverrides = new Properties();
 
@@ -277,17 +278,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
         .withStoreRegistry(storeRegistry)
         .withTopologyDescription(topologyDescription)
         .withMetrics(responsiveMetrics);
-
-    final int asyncPoolSize = configs.getInt(ASYNC_THREAD_POOL_SIZE_CONFIG);
-    if (asyncPoolSize > 0) {
-      final AsyncThreadPoolRegistry asyncRegistry = new AsyncThreadPoolRegistry(
-          numStreamThreads,
-          asyncPoolSize,
-          configs.getInt(ASYNC_MAX_EVENTS_QUEUED_PER_ASYNC_THREAD_CONFIG),
-          responsiveMetrics
-      );
-      internalConfBuilder.withAsyncThreadPoolRegistry(asyncRegistry);
-    }
+    asyncThreadPoolRegistry.ifPresent(internalConfBuilder::withAsyncThreadPoolRegistry);
 
     propsWithOverrides.putAll(configs.originals());
     propsWithOverrides.putAll(internalConfBuilder.build());
@@ -408,11 +399,12 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
 
     // can be set during construction
     private Time time = Time.SYSTEM;
-    private KafkaClientSupplier clientSupplier = new DefaultKafkaClientSupplier();
+    private KafkaClientSupplier innerClientSupplier = new DefaultKafkaClientSupplier();
     private CassandraClientFactory cassandraFactory = new DefaultCassandraClientFactory();
 
     // initialized on init()
     private SessionClients sessionClients;
+    private Optional<AsyncThreadPoolRegistry> asyncThreadPoolRegistry;
     private ResponsiveKafkaClientSupplier responsiveKafkaClientSupplier;
 
     public Params(final Topology topology, final Map<?, ?> configs) {
@@ -428,7 +420,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     }
 
     public Params withClientSupplier(final KafkaClientSupplier clientSupplier) {
-      this.clientSupplier = clientSupplier;
+      this.innerClientSupplier = clientSupplier;
       return this;
     }
 
@@ -446,8 +438,29 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     // that it's impossible to use a Params instance that hasn't called build(),
     // but that felt a little extra
     public Params build() {
+      final int asyncThreadPoolSize = responsiveConfig.getInt(ASYNC_THREAD_POOL_SIZE_CONFIG);
+
+      final KafkaClientSupplier delegateKafkaClientSupplier;
+      if (asyncThreadPoolSize > 0) {
+
+        final AsyncThreadPoolRegistry asyncRegistry = new AsyncThreadPoolRegistry(
+            streamsConfig.getInt(NUM_STREAM_THREADS_CONFIG),
+            asyncThreadPoolSize,
+            responsiveConfig.getInt(ASYNC_MAX_EVENTS_QUEUED_PER_ASYNC_THREAD_CONFIG),
+            metrics
+        );
+        delegateKafkaClientSupplier = new AsyncStreamsKafkaClientSupplier(
+                innerClientSupplier,
+                asyncRegistry
+        );
+        this.asyncThreadPoolRegistry = Optional.of(asyncRegistry);
+      } else {
+        delegateKafkaClientSupplier = innerClientSupplier;
+        this.asyncThreadPoolRegistry = Optional.empty();
+      }
+
       this.responsiveKafkaClientSupplier = new ResponsiveKafkaClientSupplier(
-          clientSupplier,
+          delegateKafkaClientSupplier,
           responsiveConfig,
           streamsConfig,
           storeRegistry,
