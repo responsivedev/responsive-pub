@@ -110,7 +110,9 @@ public class ResponsiveWindowStore
           window -> window.windowStartMs >= minValidTimestamp()
       );
 
-      numBloomFilterWindows = config.getInt(WINDOW_BLOOM_FILTER_COUNT_CONFIG);
+      numBloomFilterWindows = params.retainDuplicates()
+          ? 0 // disable bloom filters for stream-stream join/duplicate stores
+          : config.getInt(WINDOW_BLOOM_FILTER_COUNT_CONFIG);
       expectedKeysPerWindow = config.getLong(WINDOW_BLOOM_FILTER_EXPECTED_KEYS_CONFIG);
       fpp = config.getDouble(WINDOW_BLOOM_FILTER_FPP_CONFIG);
       initialStreamTime = windowOperations.initialStreamTime();
@@ -149,6 +151,11 @@ public class ResponsiveWindowStore
 
   @Override
   public void put(final Bytes key, final byte[] value, final long windowStartTime) {
+    if (value == null && params.retainDuplicates()) {
+      // return early as tombstones are not allowed/meaningless with duplicates
+      return;
+    }
+
     if (value == null) {
       windowOperations.delete(key, windowStartTime);
     } else {

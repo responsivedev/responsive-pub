@@ -47,12 +47,13 @@ public class ResponsiveTopologyTestDriverWindowStoreTest {
 
   private static final Duration windowSize = Duration.ofMillis(10);
   private static final Duration gracePeriod = Duration.ofMillis(5);
+  private static final Duration retentionPeriod = windowSize.plus(gracePeriod);
 
   @Test
   public void shouldRunWindowStoreWithoutResponsiveConnection() {
     // Given:
     final ResponsiveWindowParams params =
-        ResponsiveWindowParams.window("ttd-window-store", windowSize, gracePeriod);
+        ResponsiveWindowParams.window("ttd-window-store", windowSize, retentionPeriod);
     final TopologyTestDriver driver = setupDriver(params);
 
     final TestInputTopic<String, Long> bids = driver.createInputTopic(

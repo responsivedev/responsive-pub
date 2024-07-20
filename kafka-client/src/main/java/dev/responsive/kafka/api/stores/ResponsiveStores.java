@@ -223,22 +223,28 @@ public final class ResponsiveStores {
       final Duration windowSize,
       final boolean retainDuplicates
   ) {
-    final Duration gracePeriod = retentionPeriod.minus(windowSize);
     if (windowSize.isNegative() || windowSize.isZero()) {
       throw new IllegalArgumentException("Window size cannot be negative or zero");
-    } else if (gracePeriod.isNegative()) {
-      throw new IllegalArgumentException("Retention period cannot be less than window size");
     }
 
     if (!retainDuplicates) {
+      if (retentionPeriod.compareTo(windowSize) < 0) {
+        throw new IllegalArgumentException("Retention period cannot be less than window size");
+      }
+
       return new ResponsiveWindowedStoreSupplier(
-          ResponsiveWindowParams.window(name, windowSize, gracePeriod)
+          ResponsiveWindowParams.window(name, windowSize, retentionPeriod)
       );
     } else {
-      final ResponsiveWindowedStoreSupplier ret = new ResponsiveWindowedStoreSupplier(
-          ResponsiveWindowParams.streamStreamJoin(name, windowSize, gracePeriod)
+      if (!windowSize.equals(retentionPeriod)) {
+        throw new IllegalArgumentException(
+            "Retention period must be equal to window size for stream-stream join stores"
+        );
+      }
+
+      return new ResponsiveWindowedStoreSupplier(
+          ResponsiveWindowParams.streamStreamJoin(name, windowSize)
       );
-      throw new UnsupportedOperationException("Stream-stream join stores not yet implemented");
     }
   }
 

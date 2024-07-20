@@ -43,6 +43,7 @@ import dev.responsive.kafka.internal.db.partitioning.Segmenter;
 import dev.responsive.kafka.internal.db.partitioning.Segmenter.SegmentPartition;
 import dev.responsive.kafka.internal.db.partitioning.WindowSegmentPartitioner;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
+import dev.responsive.kafka.internal.utils.DuplicateKeyListValueIterator;
 import dev.responsive.kafka.internal.utils.Iterators;
 import dev.responsive.kafka.internal.utils.WindowedKey;
 import java.util.LinkedList;
@@ -72,6 +73,8 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
 
   // whether to put windowStartMs first in the composite windowed key format in WindowDoc
   private final boolean timestampFirstOrder;
+  // whether to save multiple records for each key or overwrite the existing value on insert
+  private final boolean retainDuplicates;
 
   private final MongoDatabase database;
   private final MongoDatabase adminDatabase;
@@ -198,6 +201,7 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
     this.name = name;
     this.partitioner = partitioner;
     this.timestampFirstOrder = timestampFirstOrder;
+    this.retainDuplicates = partitioner.retainDuplicates();
     this.collectionCreationOptions = collectionCreationOptions;
 
     final CodecProvider pojoCodecProvider = PojoCodecProvider.builder().automatic(true).build();
@@ -373,15 +377,19 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
       final long epochMillis
   ) {
     final var partitionSegments = kafkaPartitionToSegments.get(kafkaPartition);
-
     final long epoch = partitionSegments.epoch;
+
+    final var valueOperation = retainDuplicates
+        ? Updates.push(WindowDoc.VALUES, value)
+        : Updates.set(WindowDoc.VALUE, value);
+
     return new UpdateOneModel<>(
         Filters.and(
             Filters.eq(WindowDoc.ID, compositeKey(windowedKey)),
             Filters.lte(WindowDoc.EPOCH, epoch)
         ),
         Updates.combine(
-            Updates.set(WindowDoc.VALUE, value),
+            valueOperation,
             Updates.set(WindowDoc.EPOCH, epoch)
         ),
         UPSERT_OPTIONS
@@ -403,7 +411,13 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
       final int kafkaPartition,
       final WindowedKey windowedKey
   ) {
+    if (retainDuplicates) {
+      throw new IllegalStateException("Should never attempt to issue a delete with duplicates");
+    }
+
     final var partitionSegments = kafkaPartitionToSegments.get(kafkaPartition);
+
+    // TODO: implement me!!
     throw new UnsupportedOperationException("Deletes not yet supported for MongoDB window stores");
   }
 
@@ -427,7 +441,14 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
         Filters.and(
             Filters.eq(WindowDoc.ID, compositeKey(windowedKey))))
         .first();
-    return windowDoc == null ? null : windowDoc.getValue();
+
+    if (windowDoc == null) {
+      return null;
+    } else if (retainDuplicates) {
+      return windowDoc.getValues().get(0);
+    } else {
+      return windowDoc.getValue();
+    }
   }
 
   @Override
@@ -450,9 +471,13 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
               Filters.gte(WindowDoc.ID, compositeKey(key, timeFrom)),
               Filters.lte(WindowDoc.ID, compositeKey(key, timeTo))));
 
-      segmentIterators.add(
-          Iterators.kv(fetchResults.iterator(), MongoWindowedTable::windowFromDoc)
-      );
+      if (retainDuplicates) {
+        segmentIterators.add(new DuplicateKeyListValueIterator(fetchResults.iterator()));
+      } else {
+        segmentIterators.add(
+            Iterators.kv(fetchResults.iterator(), MongoWindowedTable::windowFromDoc)
+        );
+      }
     }
     return Iterators.wrapped(segmentIterators);
   }

@@ -39,7 +39,6 @@ public final class ResponsiveWindowParams {
   private final TableName name;
   private final WindowSchema schemaType;
   private final long windowSizeMs;
-  private final long gracePeriodMs;
   private final boolean retainDuplicates;
   private final long retentionPeriodMs;
 
@@ -49,40 +48,35 @@ public final class ResponsiveWindowParams {
       final String name,
       final WindowSchema schemaType,
       final Duration windowSize,
-      final Duration gracePeriod,
+      final Duration retentionPeriod,
       final boolean retainDuplicates
   ) {
     this.name = new TableName(name);
     this.schemaType = schemaType;
     this.windowSizeMs = durationToMillis(windowSize, "windowSize");
-    this.gracePeriodMs = durationToMillis(gracePeriod, "gracePeriod");
+    this.retentionPeriodMs = durationToMillis(retentionPeriod, "retentionPeriod");
     this.retainDuplicates = retainDuplicates;
 
-    this.retentionPeriodMs = windowSizeMs + gracePeriodMs;
     this.numSegments = computeDefaultNumSegments(windowSizeMs, retentionPeriodMs);
   }
 
   public static ResponsiveWindowParams window(
       final String name,
       final Duration windowSize,
-      final Duration gracePeriod
+      final Duration retentionPeriod
   ) {
     return new ResponsiveWindowParams(
-        name, WindowSchema.WINDOW, windowSize, gracePeriod, false
+        name, WindowSchema.WINDOW, windowSize, retentionPeriod, false
     );
   }
 
   public static ResponsiveWindowParams streamStreamJoin(
       final String name,
-      final Duration windowSize,
-      final Duration gracePeriod
+      final Duration windowSize
   ) {
-    final ResponsiveWindowParams ret = new ResponsiveWindowParams(
-            name, WindowSchema.STREAM, windowSize, gracePeriod, true
+    return new ResponsiveWindowParams(
+            name, WindowSchema.WINDOW, windowSize, windowSize, true
     );
-
-    throw new UnsupportedOperationException("Window stores for stream-stream joins have not yet "
-                                                + "been implemented, please contact us if needed");
   }
 
   public ResponsiveWindowParams withNumSegments(final long numSegments) {
