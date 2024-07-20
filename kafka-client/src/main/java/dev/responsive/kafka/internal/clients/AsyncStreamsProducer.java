@@ -36,7 +36,6 @@ import org.apache.kafka.common.errors.ProducerFencedException;
 public class AsyncStreamsProducer<K, V> extends DelegatingProducer<K, V> {
 
   private final String streamThreadName;
-  private final AsyncThreadPoolRegistry asyncThreadPoolRegistry;
   private final Runnable flushAsyncProcessors;
 
   public AsyncStreamsProducer(
@@ -47,7 +46,6 @@ public class AsyncStreamsProducer<K, V> extends DelegatingProducer<K, V> {
     super(delegate);
     this.streamThreadName = extractThreadNameFromProducerClientId(clientId);
 
-    this.asyncThreadPoolRegistry = asyncThreadPoolRegistry;
     final var asyncThreadPoolRegistration = asyncThreadPoolRegistry
         .startNewAsyncThreadPool(streamThreadName);
     this.flushAsyncProcessors = asyncThreadPoolRegistration::flush;
@@ -60,8 +58,7 @@ public class AsyncStreamsProducer<K, V> extends DelegatingProducer<K, V> {
     //  tasks are not part of this commit and in theory could still be processing
     super.commitTransaction();
   }
-
-
+  
   @Override
   public void flush() {
     flushAsyncProcessors.run();
