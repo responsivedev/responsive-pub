@@ -47,15 +47,13 @@ public class AsyncThreadPoolRegistration {
   }
 
   public void unregisterAsyncProcessor(final AsyncProcessorId id) {
-    taskToAsyncProcessorFlushers.remove(id);
+    taskToAsyncProcessorFlushers.remove(id.taskId);
     threadPool.removeProcessor(id);
   }
 
-  public void flush() {
+  public void flushAllAsyncEvents() {
     // TODO: this can be optimized by executing the tasks in parallel (while respecting
-    //  the iteration order of flushes within a task which are otpologically sorted)
-    //  This doesn't apply to stateful apps since they get flushed earlier during the #flushCache
-    //  call and are essentially a no-op here
+    //  the iteration order of flushes within a task which are topologically sorted)
     taskToAsyncProcessorFlushers.values().forEach(flushers -> {
       // These must be executed in order
       for (final var flush : flushers) {

@@ -61,10 +61,14 @@ import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.api.stores.ResponsiveStores;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
+import dev.responsive.kafka.testutils.SimpleStatefulProcessor.ComputeStatefulOutput;
 import dev.responsive.kafka.testutils.SimpleStatefulProcessorSupplier;
 import dev.responsive.kafka.testutils.SimpleStatefulProcessorSupplier.SimpleProcessorOutput;
+import dev.responsive.kafka.testutils.SimpleStatelessProcessorSupplier;
+import dev.responsive.kafka.testutils.SimpleStatelessProcessorSupplier.ComputeStatelessOutput;
 import java.io.IOException;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -111,11 +115,9 @@ public class AsyncProcessorIntegrationTest {
 
   // Test parameters:
   // How long to sleep to mock a long/blocking call
-  private static final long ASYNC_SLEEP_DURATION_MS = 10L;
+  private static final long DEFAULT_ASYNC_SLEEP_DURATION_MS = 10L;
   // Ratio of input topic partition count to output topic
   private static final int INPUT_OUTPUT_PARTITION_RATIO = 3;
-  // How many stores in the async processor
-  private static final int NUM_ASYNC_STORES = 1; // TODO: not implemented, changing it has no effect
 
   /// StreamsConfigs:
   // commit.interval.ms (default 30s)
@@ -135,17 +137,17 @@ public class AsyncProcessorIntegrationTest {
 
   ///////////// CONSTANTS /////////////
 
-  private static final int STREAMTHREADS_PER_APP = 5;
+  private static final int STREAMTHREADS_PER_APP = 4;
   private static final int ASYNC_THREADS_PER_STREAMTHREAD = 5;
-  private static final int TASKS_PER_STREAMTHREAD = 2; // approximate/assumes balanced partitioning
-  private static final int KEYS_PER_TASK = 5; // TODO: implement key list based on this config
+  private static final int TASKS_PER_STREAMTHREAD = 3; // approximate/assumes balanced partitioning
   private static final int INPUT_RECORDS_PER_KEY = 10;
 
   private String inputTopic;
   private String outputTopic;
 
   private String inKVStore;
-  private String asyncKVStore;
+  private String asyncStore1;
+  private String asyncStore2;
   private String outKVStore;
 
   private final Map<String, Object> responsiveProps = new HashMap<>();
@@ -166,9 +168,10 @@ public class AsyncProcessorIntegrationTest {
 
     this.inputTopic = name + "input";
     this.outputTopic = name + "output";
-    this.inKVStore = name + "in-store";
-    this.asyncKVStore = name + "async-store";
-    this.outKVStore = name + "out-store";
+    this.inKVStore = name + "in";
+    this.asyncStore1 = name + "a1";
+    this.asyncStore2 = name + "a2";
+    this.outKVStore = name + "out";
 
     this.responsiveProps.putAll(responsiveProps);
     this.admin = admin;
@@ -193,6 +196,139 @@ public class AsyncProcessorIntegrationTest {
 
   private String outputTopic() {
     return name + "." + outputTopic;
+  }
+
+  @Test
+  public void shouldExecuteMultipleMixedAsyncProcessorsNoCaching() throws Exception {
+    final List<String> keys = List.of("a", "b", "c", "d", "e", "f", "g", "h", "i", "j",
+                                      "k", "l", "m", "n", "o", "p", "q", "r", "s", "t",
+                                      "u", "v", "w", "x", "y", "z",
+                                      "aa", "bb", "cc", "dd", "ee", "ff", "gg", "hh", "ii", "jj",
+                                      "kk", "ll", "mm", "nn", "oo", "pp", "qq", "rr", "ss", "tt",
+                                      "uu", "vv", "ww", "xx", "yy", "zz");
+    // produce N records for each key, with same-key events interleaved between other keys
+    final List<KeyValue<String, InputRecord>> inputRecords = new LinkedList<>();
+    final Map<String, List<String>> expectedOutputValuesByKey = new HashMap<>(keys.size());
+
+    for (int val = 1; val < 1 + INPUT_RECORDS_PER_KEY; ++val) {
+      for (final String key : keys) {
+        expectedOutputValuesByKey.computeIfAbsent(key, k -> new ArrayList<>(INPUT_RECORDS_PER_KEY));
+
+        final InputRecord inputRecord;
+        final String recordValue = key + val;
+        if (val == 2 && key.equals("b")) {
+          inputRecord = new InputRecord(recordValue, new InjectedFault(
+              InjectedFault.Type.EXCEPTION,
+              InjectedFault.Frequency.ONCE)
+          );
+        } else {
+          inputRecord = new InputRecord(recordValue);
+        }
+        inputRecords.add(new KeyValue<>(key, inputRecord));
+        expectedOutputValuesByKey.get(key)
+            .add(String.format("%s-S1:%d-L1-L2-S2:%d", recordValue, val, val));
+      }
+    }
+
+    final int numInputRecords = keys.size() * INPUT_RECORDS_PER_KEY;
+
+    final Map<String, Object> properties = getMutableProperties();
+    final KafkaProducer<String, InputRecord> producer = new KafkaProducer<>(properties);
+
+    final StreamsBuilder builder = new StreamsBuilder();
+    final KStream<String, InputRecord> input = builder.stream(
+        inputTopic(),
+        Consumed.with(
+            Serdes.String(),
+            Serdes.serdeFrom(new InputRecordSerializer(), new InputRecordDeserializer())
+        ));
+
+    input
+        .processValues(
+            createAsyncProcessorSupplier(
+                new SimpleStatefulProcessorSupplier<>(
+                    (ComputeStatefulOutput<InputRecord, Integer, String>) (s, r, c) -> {
+                      final InputRecord val = r.value();
+
+                      final InjectedFault fault = val.getFault();
+                      if (fault != null) {
+                        fault.maybeInject(
+                            c.taskId().partition(),
+                            c.recordMetadata().get().offset()
+                        );
+                      }
+
+                      final int newSum = s == null ? 1 : s.value() + 1;
+                      sleepForMs(1L);
+                      return new SimpleProcessorOutput<>(val.getValue() + "-S1:" + newSum, newSum);
+                    },
+                    ResponsiveKeyValueParams.fact(asyncStore1),
+                    Serdes.Integer()
+                )),
+            Named.as("S1"),
+            asyncStore1)
+        .processValues(
+            createAsyncProcessorSupplier(
+                new SimpleStatelessProcessorSupplier<>(
+                    (ComputeStatelessOutput<String, String, InputRecord>) (r, c) -> {
+                      sleepForMs(5L);
+                      return new InputRecord(r.value() + "-L1");
+
+                    }
+                )),
+            Named.as("L1"))
+        .processValues(
+            createAsyncProcessorSupplier(
+                new SimpleStatelessProcessorSupplier<>(
+                    (ComputeStatelessOutput<String, InputRecord, String>) (r, c) -> {
+                      sleepForMs(2L);
+                      return r.value().getValue() + "-L2";
+                    }
+                )),
+            Named.as("L2"))
+        .processValues(
+            createAsyncProcessorSupplier(
+                new SimpleStatefulProcessorSupplier<>(
+                    (ComputeStatefulOutput<String, Integer, String>) (s, r, c) -> {
+                      final int newSum = s == null ? 1 : s.value() + 1;
+                      sleepForMs(1L);
+                      return new SimpleProcessorOutput<>(r.value() + "-S2:" + newSum, newSum);
+                    },
+                    ResponsiveKeyValueParams.fact(asyncStore2),
+                    Serdes.Integer()
+                )),
+            Named.as("S2"),
+            asyncStore2)
+        .to(outputTopic(), Produced.with(Serdes.String(), Serdes.String()));
+
+    final List<Throwable> caughtExceptions = new LinkedList<>();
+    try (final var streams = new ResponsiveKafkaStreams(builder.build(), properties)) {
+      streams.setUncaughtExceptionHandler(exception -> {
+        caughtExceptions.add(exception);
+        return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.REPLACE_THREAD;
+      });
+      startAppAndAwaitRunning(Duration.ofSeconds(30), streams);
+
+      // When:
+      pipeRecords(producer, inputTopic(), inputRecords);
+
+      // Then:
+      final List<KeyValue<String, String>> kvs = readOutput(
+          outputTopic(), 0, numInputRecords, numOutputPartitions, false, properties
+      );
+
+      final Map<String, List<String>> observedOutputValuesByKey = new HashMap<>(keys.size());
+      for (final var kv : kvs) {
+        observedOutputValuesByKey.computeIfAbsent(kv.key, k -> new ArrayList<>()).add(kv.value);
+      }
+      for (final String key : keys) {
+        assertThat(observedOutputValuesByKey.get(key), equalTo(expectedOutputValuesByKey.get(key)));
+      }
+    }
+
+    assertThat(caughtExceptions.size(), is(1));
+    assertThat(Throwables.getRootCause(caughtExceptions.get(0)),
+               instanceOf(InjectedException.class));
   }
 
   @Test
@@ -248,29 +384,19 @@ public class AsyncProcessorIntegrationTest {
         .processValues(
             new SimpleStatefulProcessorSupplier<>(
                 this::computeNewValueForSourceProcessor,
-                ResponsiveKeyValueParams.fact(inKVStore)),
+                ResponsiveKeyValueParams.fact(inKVStore),
+                Serdes.String()),
             inKVStore)
         .processValues(
             createAsyncProcessorSupplier(
-                () -> new FixedKeyProcessor<String, InputRecord, String>() {
-                  private FixedKeyProcessorContext<String, String> context;
-
-                  @Override
-                  public void init(final FixedKeyProcessorContext<String, String> context) {
-                    this.context = context;
-                  }
-
-                  @Override
-                  public void process(final FixedKeyRecord<String, InputRecord> record) {
-                    final String value = computeNewValueForStatelessAsyncProcessor(record, context);
-                    context.forward(record.withValue(value));
-                  }
-                }),
+                new SimpleStatelessProcessorSupplier<>(
+                    this::computeNewValueForSingleStatelessAsyncProcessor)),
             Named.as("AsyncProcessor"))
         .processValues(
             new SimpleStatefulProcessorSupplier<>(
                 this::computeNewValueForSinkProcessor,
                 ResponsiveKeyValueParams.fact(outKVStore),
+                Serdes.String(),
                 latestValues,
                 inputRecordsLatch),
             outKVStore)
@@ -288,7 +414,7 @@ public class AsyncProcessorIntegrationTest {
       pipeRecords(producer, inputTopic(), inputRecords);
 
       // Then:
-      final long timeoutMs = 60_000L + ASYNC_SLEEP_DURATION_MS * numInputRecords;
+      final long timeoutMs = 60_000L + DEFAULT_ASYNC_SLEEP_DURATION_MS * numInputRecords;
       final boolean allInputProcessed = inputRecordsLatch.await(timeoutMs, TimeUnit.MILLISECONDS);
       if (!allInputProcessed) {
         throw new AssertionError(String.format("Failed to process all %d input records within %dms",
@@ -377,27 +503,30 @@ public class AsyncProcessorIntegrationTest {
         .processValues(
             new SimpleStatefulProcessorSupplier<>(
                 this::computeNewValueForSourceProcessor,
-                ResponsiveKeyValueParams.fact(inKVStore)),
+                ResponsiveKeyValueParams.fact(inKVStore),
+                Serdes.String()),
             inKVStore)
         .processValues(
             createAsyncProcessorSupplier(
                 new SimpleStatefulProcessorSupplier<>(
-                    this::computeNewValueForStatefulAsyncProcessor,
-                    ResponsiveKeyValueParams.fact(asyncKVStore),
+                    this::computeNewValueForSingleStatefulAsyncProcessor,
+                    ResponsiveKeyValueParams.fact(asyncStore1),
+                    Serdes.String(),
                     processed
                 )),
             Named.as("AsyncProcessor"),
-            asyncKVStore)
+            asyncStore1)
         .processValues(
             new SimpleStatefulProcessorSupplier<>(
                 this::computeNewValueForSinkProcessor,
                 ResponsiveKeyValueParams.fact(outKVStore),
+                Serdes.String(),
                 latestValues,
                 inputRecordsLatch),
             outKVStore)
         .to(outputTopic(), Produced.with(Serdes.String(), Serdes.String()));
 
-    List<Throwable> caughtExceptions = new LinkedList<>();
+    final List<Throwable> caughtExceptions = new LinkedList<>();
     try (final var streams = new ResponsiveKafkaStreams(builder.build(), properties)) {
       streams.setUncaughtExceptionHandler(exception -> {
         caughtExceptions.add(exception);
@@ -409,7 +538,7 @@ public class AsyncProcessorIntegrationTest {
       pipeRecords(producer, inputTopic(), inputRecords);
 
       // Then:
-      final long timeout = 60_000L + ASYNC_SLEEP_DURATION_MS * numInputRecords;
+      final long timeout = 60_000L + DEFAULT_ASYNC_SLEEP_DURATION_MS * numInputRecords;
       final boolean allInputProcessed = inputRecordsLatch.await(timeout, TimeUnit.MILLISECONDS);
       if (!allInputProcessed) {
         throw new AssertionError(String.format("Failed to process all %d input records within %dms",
@@ -450,7 +579,7 @@ public class AsyncProcessorIntegrationTest {
 
     // this is the old way of connecting StoreBuilders to a topology, which async does not support
     builder.addStateStore(ResponsiveStores.timestampedKeyValueStoreBuilder(
-        ResponsiveStores.keyValueStore(ResponsiveKeyValueParams.fact(asyncKVStore)),
+        ResponsiveStores.keyValueStore(ResponsiveKeyValueParams.fact(asyncStore1)),
         Serdes.String(),
         Serdes.String()));
 
@@ -461,7 +590,7 @@ public class AsyncProcessorIntegrationTest {
               @Override
               public void init(final FixedKeyProcessorContext<String, String> context) {
                 // this should throw
-                context.getStateStore(asyncKVStore);
+                context.getStateStore(asyncStore1);
               }
 
               @Override
@@ -472,7 +601,7 @@ public class AsyncProcessorIntegrationTest {
             }),
 
         Named.as("AsyncProcessor"),
-        asyncKVStore
+        asyncStore1
     );
 
     final List<Throwable> expectedExceptions = new LinkedList<>();
@@ -533,7 +662,7 @@ public class AsyncProcessorIntegrationTest {
     );
   }
 
-  private String computeNewValueForStatelessAsyncProcessor(
+  private String computeNewValueForSingleStatelessAsyncProcessor(
       final FixedKeyRecord<String, InputRecord> inputRecord,
       final FixedKeyProcessorContext<String, String> context
   ) {
@@ -543,11 +672,8 @@ public class AsyncProcessorIntegrationTest {
       fault.maybeInject(context.taskId().partition(), context.recordMetadata().get().offset());
     }
 
-    try {
-      Thread.sleep(ASYNC_SLEEP_DURATION_MS);
-    } catch (final InterruptedException e) {
-      throw new RuntimeException("Interrupted during 'RPC' call in async processor", e);
-    }
+    sleepForMs(DEFAULT_ASYNC_SLEEP_DURATION_MS);
+
     return inputRecord.value().getValue() + "--PROCESSED";
   }
 
@@ -557,7 +683,7 @@ public class AsyncProcessorIntegrationTest {
   // as a prefix, but won't include the END processor suffix in the async processor results
   // since by definition, that won't be added until the downstream END processor appends
   // its own suffix
-  private SimpleProcessorOutput<String, String> computeNewValueForStatefulAsyncProcessor(
+  private SimpleProcessorOutput<String, String> computeNewValueForSingleStatefulAsyncProcessor(
       final ValueAndTimestamp<String> oldValAndTimestamp,
       final FixedKeyRecord<String, InputRecord> inputRecord,
       final FixedKeyProcessorContext<String, String> context
@@ -580,15 +706,12 @@ public class AsyncProcessorIntegrationTest {
         inputRecord.value().getValue()
     );
 
-    try {
-      Thread.sleep(ASYNC_SLEEP_DURATION_MS);
-    } catch (final InterruptedException e) {
-      throw new RuntimeException("Interrupted during 'RPC' call in async processor", e);
-    }
+    sleepForMs(DEFAULT_ASYNC_SLEEP_DURATION_MS);
+
     return new SimpleProcessorOutput<>(newVal, newVal);
   }
 
-  // The "end"" processor is a slightly-more-advanced counter that just forwards the new count
+  // The "end" processor is a slightly-more-advanced counter that just forwards the new count
   // appended to the key and processor name ("END") as well as the input record value
   // The END count should always match the IN count computed upstream
   private SimpleProcessorOutput<String, String> computeNewValueForSinkProcessor(
@@ -604,6 +727,14 @@ public class AsyncProcessorIntegrationTest {
         "%s--%s:%s:%d", inputRecord.value(), inputRecord.key(), "END", newCount
     );
     return new SimpleProcessorOutput<>(forwardedVal, Integer.toString(newCount));
+  }
+
+  private static void sleepForMs(final long sleepMs) {
+    try {
+      Thread.sleep(sleepMs);
+    } catch (final InterruptedException e) {
+      throw new RuntimeException("Interrupted during 'RPC' call in async processor", e);
+    }
   }
 
   @SuppressWarnings("checkstyle:linelength")
