@@ -38,8 +38,10 @@ import com.mongodb.client.result.UpdateResult;
 import dev.responsive.kafka.internal.db.MongoKVFlushManager;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.utils.Iterators;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
@@ -70,6 +72,15 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
       final String name,
       final CollectionCreationOptions collectionCreationOptions
   ) {
+    this(client, name, collectionCreationOptions, null);
+  }
+
+  public MongoKVTable(
+      final MongoClient client,
+      final String name,
+      final CollectionCreationOptions collectionCreationOptions,
+      final Duration ttl
+  ) {
     this.name = name;
     this.keyCodec = new StringKeyCodec();
     final CodecProvider pojoCodecProvider = PojoCodecProvider.builder().automatic(true).build();
@@ -99,6 +110,12 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
         Indexes.descending(KVDoc.TOMBSTONE_TS),
         new IndexOptions().expireAfter(12L, TimeUnit.HOURS)
     );
+    if (ttl != null) {
+      docs.createIndex(
+          Indexes.descending(KVDoc.TIMESTAMP),
+          new IndexOptions().expireAfter(12L, TimeUnit.HOURS)
+      );
+    }
   }
 
   @Override

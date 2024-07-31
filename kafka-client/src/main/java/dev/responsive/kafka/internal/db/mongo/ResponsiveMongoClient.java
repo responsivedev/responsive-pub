@@ -28,6 +28,7 @@ import dev.responsive.kafka.internal.db.partitioning.SessionSegmentPartitioner;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.db.partitioning.WindowSegmentPartitioner;
 import dev.responsive.kafka.internal.db.spec.BaseTableSpec;
+import dev.responsive.kafka.internal.db.spec.TtlTableSpec;
 import java.util.concurrent.TimeoutException;
 
 public class ResponsiveMongoClient {
@@ -47,7 +48,8 @@ public class ResponsiveMongoClient {
         spec -> new MongoKVTable(
             client,
             spec.tableName(),
-            collectionCreationOptions
+            collectionCreationOptions,
+            spec instanceof TtlTableSpec ? ((TtlTableSpec) spec).ttl() : null
         ));
     windowTableCache = new WindowedTableCache<>(
         (spec, partitioner) -> new MongoWindowedTable(
