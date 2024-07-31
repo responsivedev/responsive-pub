@@ -18,8 +18,11 @@ package dev.responsive.kafka.internal.db.mongo;
 
 import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_ENDPOINT_CONFIG;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.nullValue;
 
 import com.mongodb.client.MongoClient;
+import com.mongodb.client.model.Filters;
 import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.internal.db.partitioning.SessionSegmentPartitioner;
 import dev.responsive.kafka.internal.utils.SessionKey;
@@ -65,7 +68,7 @@ class MongoSessionTableTest {
    * - Insert a session key with start/end [0, 100]
    * - Successfully retrieve the session when querying the remote table with start/end [0, 100]
    * - Correctly fail to retrieve the session when querying the remote table with
-   *    start/end [0, 200]
+   *   start/end [0, 200]
    * - Correctly fail to retrieve the session when querying the remote table with the wrong key
    * */
   @Test
@@ -213,5 +216,38 @@ class MongoSessionTableTest {
     assertThat("value matches", Arrays.equals(kvs.get(0).value, DEFAULT_VALUE));
     assertThat("key matches", kvs.get(1).key.equals(sessionKey3));
     assertThat("value matches", Arrays.equals(kvs.get(1).value, DEFAULT_VALUE));
+  }
+
+  @Test
+  public void shouldEncodeKeysUsingBase64() {
+    final SessionSegmentPartitioner partitioner = new SessionSegmentPartitioner(10_000L, 1_000L);
+    final var segment = partitioner.segmenter().activeSegments(0, 100).get(0);
+    final MongoSessionTable table = new MongoSessionTable(client, name, partitioner, UNSHARDED);
+    final var flushManager = table.init(0);
+    flushManager.updateOffsetAndStreamTime(0, 100);
+    flushManager.createSegment(segment);
+    final var byteKey = Bytes.wrap("key".getBytes());
+    final var sessionKey = new SessionKey(byteKey, 0, 100);
+    var writer = flushManager.createWriter(segment);
+    writer.insert(
+        sessionKey,
+        DEFAULT_VALUE,
+        table.localEpoch(0)
+    );
+    writer.flush();
+
+    // when:
+    final var collection = table.collectionForSegmentPartition(0, segment);
+    final var result = collection.find(
+        Filters.eq(
+            SessionDoc.ID,
+            SessionDoc.compositeKey(
+                new StringKeyCodec().encode(byteKey),
+                0,
+                100
+            ))
+    ).first();
+
+    assertThat(result, not(nullValue()));
   }
 }

@@ -16,25 +16,29 @@
 
 package dev.responsive.kafka.internal.utils;
 
-import static dev.responsive.kafka.internal.db.mongo.WindowDoc.windowedKey;
-
 import dev.responsive.kafka.internal.db.mongo.WindowDoc;
 import java.util.Iterator;
 import java.util.List;
+import java.util.function.Function;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
 public class DuplicateKeyListValueIterator implements KeyValueIterator<WindowedKey, byte[]> {
 
   private final Iterator<WindowDoc> remoteResults;
+  private final Function<WindowDoc, WindowedKey> keyExtractor;
   private WindowResult currentWindow;
 
-  public DuplicateKeyListValueIterator(final Iterator<WindowDoc> remoteResults) {
+  public DuplicateKeyListValueIterator(
+      final Iterator<WindowDoc> remoteResults,
+      final Function<WindowDoc, WindowedKey> keyExtractor
+  ) {
     this.remoteResults = remoteResults;
+    this.keyExtractor = keyExtractor;
 
     if (remoteResults.hasNext()) {
       final WindowDoc firstDoc = remoteResults.next();
-      currentWindow = new WindowResult(firstDoc);
+      currentWindow = new WindowResult(firstDoc, keyExtractor);
     }
   }
 
@@ -64,7 +68,7 @@ public class DuplicateKeyListValueIterator implements KeyValueIterator<WindowedK
     if (!currentWindow.hasNext()) {
       if (remoteResults.hasNext()) {
         final WindowDoc nextDoc = remoteResults.next();
-        currentWindow = new WindowResult(nextDoc);
+        currentWindow = new WindowResult(nextDoc, keyExtractor);
       } else {
         currentWindow = null;
       }
@@ -78,8 +82,11 @@ public class DuplicateKeyListValueIterator implements KeyValueIterator<WindowedK
     private final List<byte[]> values;
     private int valueIndex = 0;
 
-    public WindowResult(final WindowDoc windowDoc) {
-      this.key = windowedKey(windowDoc.getKey());
+    public WindowResult(
+        final WindowDoc windowDoc,
+        final Function<WindowDoc, WindowedKey> keyExtractor
+    ) {
+      this.key = keyExtractor.apply(windowDoc);
       this.values = windowDoc.getValues();
     }
 
