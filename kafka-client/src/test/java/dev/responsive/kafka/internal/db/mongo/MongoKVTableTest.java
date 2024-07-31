@@ -21,6 +21,7 @@ import static dev.responsive.kafka.internal.db.testutils.Matchers.sameKeyValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.nullValue;
 
 import com.mongodb.client.MongoClient;
 import dev.responsive.kafka.api.config.StorageBackend;
@@ -127,6 +128,88 @@ class MongoKVTableTest {
   }
 
   @Test
+  public void shouldReturnNullForNotInserted() {
+    // given:
+    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED);
+    table.init(0);
+
+    // when:
+    final var result = table.get(0, bytes(1), -1);
+
+    // then:
+    assertThat(result, is(nullValue()));
+  }
+
+  @Test
+  public void shouldReturnNullForDeletedRecord() {
+    // given:
+    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED);
+    var writerFactory = table.init(0);
+    var writer = writerFactory.createWriter(0);
+    writer.insert(bytes(1), byteArray(1), 100);
+    writer.flush();
+    writer = writerFactory.createWriter(0);
+    writer.delete(bytes(1));
+    writer.flush();
+
+    // when:
+    final var result = table.get(0, bytes(1), -1);
+
+    // then:
+    assertThat(result, is(nullValue()));
+  }
+
+  @Test
+  public void shouldGetInsertedRecord() {
+    // given:
+    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED);
+    var writerFactory = table.init(0);
+    var writer = writerFactory.createWriter(0);
+    writer.insert(bytes(1), byteArray(1), 100);
+    writer.flush();
+
+    // when:
+    final var result = table.get(0, bytes(1), -1);
+
+    // then:
+    assertThat(result.length, is(1));
+    assertThat(result[0], is((byte) 1));
+  }
+
+  @Test
+  public void shouldFilterResultsWithOldTimestamp() {
+    // given:
+    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED);
+    var writerFactory = table.init(0);
+    var writer = writerFactory.createWriter(0);
+    writer.insert(bytes(1), byteArray(1), 100);
+    writer.flush();
+
+    // when:
+    final var result = table.get(0, bytes(1), 101);
+
+    // then:
+    assertThat(result, is(nullValue()));
+  }
+
+  @Test
+  public void shouldIncludeResultsWithNewerTimestamp() {
+    // given:
+    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED);
+    var writerFactory = table.init(0);
+    var writer = writerFactory.createWriter(0);
+    writer.insert(bytes(1), byteArray(1), 100);
+    writer.flush();
+
+    // when:
+    final var result = table.get(0, bytes(1), 100);
+
+    // then:
+    assertThat(result.length, is(1));
+    assertThat(result[0], is((byte) 1));
+  }
+
+  @Test
   public void shouldHandleRangeScansCorrectly() {
     // Given:
     final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED);
@@ -140,7 +223,7 @@ class MongoKVTableTest {
     writer.flush();
 
     // When:
-    final var iter = table.range(0, bytes(10, 11, 12, 13), bytes(10, 11, 13, 14), 0);
+    final var iter = table.range(0, bytes(10, 11, 12, 13), bytes(10, 11, 13, 14), -1);
 
     // Then:
     final List<KeyValue<Bytes, byte[]>> returned = new LinkedList<>();
@@ -169,7 +252,32 @@ class MongoKVTableTest {
     writer.flush();
 
     // When:
-    final var iter = table.range(0, bytes(10, 11, 12, 13), bytes(10, 11, 13, 14), 0);
+    final var iter = table.range(0, bytes(10, 11, 12, 13), bytes(10, 11, 13, 14), -1);
+
+    // Then:
+    final List<KeyValue<Bytes, byte[]>> returned = new LinkedList<>();
+    while (iter.hasNext()) {
+      returned.add(iter.next());
+    }
+    assertThat(returned, contains(
+        sameKeyValue(new KeyValue<>(bytes(10, 11, 12, 13), byteArray(2))),
+        sameKeyValue(new KeyValue<>(bytes(10, 11, 13, 14), byteArray(4)))
+    ));
+    iter.close();
+  }
+
+  @Test
+  public void shouldFilterExpiredItemsFromRangeScans() {
+    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED);
+    var writerFactory = table.init(0);
+    var writer = writerFactory.createWriter(0);
+    writer.insert(bytes(10, 11, 12, 13), byteArray(2), 100);
+    writer.insert(bytes(10, 11, 13), byteArray(3), 90);
+    writer.insert(bytes(10, 11, 13, 14), byteArray(4), 100);
+    writer.flush();
+
+    // When:
+    final var iter = table.range(0, bytes(10, 11, 12, 13), bytes(10, 11, 13, 14), 100);
 
     // Then:
     final List<KeyValue<Bytes, byte[]>> returned = new LinkedList<>();
@@ -194,7 +302,7 @@ class MongoKVTableTest {
     writer.flush();
 
     // When:
-    final var iter = table.all(0, 0);
+    final var iter = table.all(0, -1);
 
     // Then:
     final List<KeyValue<Bytes, byte[]>> returned = new LinkedList<>();
@@ -223,7 +331,32 @@ class MongoKVTableTest {
     writer.flush();
 
     // When:
-    final var iter = table.all(0, 0);
+    final var iter = table.all(0, -1);
+
+    // Then:
+    final List<KeyValue<Bytes, byte[]>> returned = new LinkedList<>();
+    while (iter.hasNext()) {
+      returned.add(iter.next());
+    }
+    assertThat(returned, contains(
+        sameKeyValue(new KeyValue<>(bytes(10, 11, 12, 13), byteArray(2))),
+        sameKeyValue(new KeyValue<>(bytes(10, 11, 13, 14), byteArray(4)))
+    ));
+    iter.close();
+  }
+
+  @Test
+  public void shouldFilterExpiredFromFullScans() {
+    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED);
+    var writerFactory = table.init(0);
+    var writer = writerFactory.createWriter(0);
+    writer.insert(bytes(10, 11, 12, 13), byteArray(2), 100);
+    writer.insert(bytes(10, 11, 13), byteArray(3), 90);
+    writer.insert(bytes(10, 11, 13, 14), byteArray(4), 100);
+    writer.flush();
+
+    // When:
+    final var iter = table.all(0, 100);
 
     // Then:
     final List<KeyValue<Bytes, byte[]>> returned = new LinkedList<>();

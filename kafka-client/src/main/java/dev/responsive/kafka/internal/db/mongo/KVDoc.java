@@ -28,6 +28,7 @@ public class KVDoc {
   public static final String ID = "_id";
   public static final String VALUE = "value";
   public static final String EPOCH = "epoch";
+  public static final String TIMESTAMP = "ts";
   public static final String TOMBSTONE_TS = "tombstoneTs";
 
   // We use a string key for ID because mongo range scans don't work as expected for binary
@@ -36,6 +37,7 @@ public class KVDoc {
   String id;
   byte[] value;
   long epoch;
+  long timestamp;
   Date tombstoneTs;
 
   public KVDoc() {
@@ -45,11 +47,13 @@ public class KVDoc {
   public KVDoc(
       @BsonProperty(ID) String id,
       @BsonProperty(VALUE) byte[] value,
-      @BsonProperty(EPOCH) long epoch
+      @BsonProperty(EPOCH) long epoch,
+      @BsonProperty(TIMESTAMP) long timestamp
   ) {
     this.id = id;
     this.value = value;
     this.epoch = epoch;
+    this.timestamp = timestamp;
   }
 
   public String getKey() {
@@ -68,12 +72,20 @@ public class KVDoc {
     this.epoch = epoch;
   }
 
+  public void setTimestamp(final long timestamp) {
+    this.timestamp = timestamp;
+  }
+
   public byte[] getValue() {
     return value;
   }
 
   public long getEpoch() {
     return epoch;
+  }
+
+  public long getTimestamp() {
+    return timestamp;
   }
 
   public Date getTombstoneTs() {
