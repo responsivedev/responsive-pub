@@ -111,9 +111,11 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
         new IndexOptions().expireAfter(12L, TimeUnit.HOURS)
     );
     if (ttl != null) {
+      final Duration expireAfter = ttl.plus(Duration.ofHours(12));
+      final long expireAfterSeconds = expireAfter.getSeconds();
       docs.createIndex(
           Indexes.descending(KVDoc.TIMESTAMP),
-          new IndexOptions().expireAfter(12L, TimeUnit.HOURS)
+          new IndexOptions().expireAfter(expireAfterSeconds, TimeUnit.SECONDS)
       );
     }
   }
