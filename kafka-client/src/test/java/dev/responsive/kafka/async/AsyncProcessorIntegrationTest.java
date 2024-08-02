@@ -104,6 +104,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.RegisterExtension;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class AsyncProcessorIntegrationTest {
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
@@ -802,6 +804,7 @@ public class AsyncProcessorIntegrationTest {
   }
 
   public static class InjectedFault {
+    private static final Logger LOG = LoggerFactory.getLogger(InjectedFault.class);
     private static final Map<InjectKey, Boolean> HISTORY = new ConcurrentHashMap<>();
 
     private enum Type {
@@ -846,8 +849,10 @@ public class AsyncProcessorIntegrationTest {
       }
       switch (type) {
         case EXCEPTION:
+          LOG.info("Throwing injected fault");
           throw new InjectedException();
         default:
+          LOG.error("Unrecognized type: {}", type);
           throw new IllegalStateException();
       }
     }
