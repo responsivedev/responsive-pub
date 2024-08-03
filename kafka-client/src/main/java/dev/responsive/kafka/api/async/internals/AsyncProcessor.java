@@ -641,7 +641,13 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   private void completePendingEvent(final AsyncEvent finalizableEvent)  {
 
     try (final var ignored = preFinalize(finalizableEvent)) {
-      doFinalize(finalizableEvent);
+      try {
+        doFinalize(finalizableEvent);
+      } catch (final RuntimeException e) {
+        log.error("Exception thrown during finalization", e);
+        finalizableEvent.transitionToFailed(e);
+        throw e;
+      }
     } finally {
       // We always need to make sure that we call `postFinalize` to ensure that the event
       // is cleared from the set of pending events. If we don't do this, then the next call
@@ -654,7 +660,6 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   private StreamThreadProcessorContext.PreviousRecordContextAndNode preFinalize(
       final AsyncEvent event
   )  {
-
     if (!pendingEvents.containsKey(event)) {
       log.error("routed event from {} to the wrong processor for {}",
           event.partition(),
@@ -687,7 +692,6 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     DelayedForward<KOut, VOut> nextDelayedForward = event.nextForward();
 
     while (nextDelayedWrite != null || nextDelayedForward != null) {
-
       if (nextDelayedWrite != null) {
         streamThreadContext.executeDelayedWrite(nextDelayedWrite);
       }
