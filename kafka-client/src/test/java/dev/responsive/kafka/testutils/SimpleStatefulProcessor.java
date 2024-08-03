@@ -40,7 +40,7 @@ public class SimpleStatefulProcessor<VIn, VStored, VOut> implements FixedKeyProc
 
   private final Logger log = LoggerFactory.getLogger(SimpleStatefulProcessor.class);
 
-  private final ComputeOutput<VIn, VStored, VOut> computeOutput;
+  private final ComputeStatefulOutput<VIn, VStored, VOut> computeStatefulOutput;
 
   private final AtomicInteger processed;
   private final Map<String, VOut> latestValues;
@@ -54,7 +54,7 @@ public class SimpleStatefulProcessor<VIn, VStored, VOut> implements FixedKeyProc
   private TimestampedKeyValueStore<String, VStored> kvStore;
 
   @FunctionalInterface
-  public interface ComputeOutput<VIn, VStored, VOut> {
+  public interface ComputeStatefulOutput<VIn, VStored, VOut> {
     SimpleProcessorOutput<VStored, VOut> computeOutput(
         ValueAndTimestamp<VStored> storedValue,
         FixedKeyRecord<String, VIn> inputRecord,
@@ -63,13 +63,13 @@ public class SimpleStatefulProcessor<VIn, VStored, VOut> implements FixedKeyProc
   }
 
   public SimpleStatefulProcessor(
-      final ComputeOutput<VIn, VStored, VOut> computeOutput,
+      final ComputeStatefulOutput<VIn, VStored, VOut> computeStatefulOutput,
       final String storeName,
       final AtomicInteger processed,
       final Map<String, VOut> latestValues,
       final CountDownLatch processingLatch
   ) {
-    this.computeOutput = computeOutput;
+    this.computeStatefulOutput = computeStatefulOutput;
     this.storeName = storeName;
     this.processed = processed;
     this.latestValues = latestValues;
@@ -94,7 +94,7 @@ public class SimpleStatefulProcessor<VIn, VStored, VOut> implements FixedKeyProc
 
     final ValueAndTimestamp<VStored> oldValAndTimestamp = kvStore.get(record.key());
 
-    final SimpleProcessorOutput<VStored, VOut> output = computeOutput.computeOutput(
+    final SimpleProcessorOutput<VStored, VOut> output = computeStatefulOutput.computeOutput(
         oldValAndTimestamp, record, context);
 
     kvStore.put(record.key(), ValueAndTimestamp.make(output.storedValue, record.timestamp()));

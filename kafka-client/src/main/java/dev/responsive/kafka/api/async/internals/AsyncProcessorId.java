@@ -16,21 +16,23 @@
 
 package dev.responsive.kafka.api.async.internals;
 
+import org.apache.kafka.streams.processor.TaskId;
+
 /**
  * Simple container class for info that uniquely identifies a {@link AsyncProcessor} instance
  */
 public class AsyncProcessorId implements Comparable<AsyncProcessorId> {
 
   public final String processorName;
-  public final int partition;
+  public final TaskId taskId;
 
-  public static AsyncProcessorId of(final String processorName, final int partition) {
-    return new AsyncProcessorId(processorName, partition);
+  public static AsyncProcessorId of(final String processorName, final TaskId taskId) {
+    return new AsyncProcessorId(processorName, taskId);
   }
 
-  private AsyncProcessorId(final String processorName, final int partition) {
+  private AsyncProcessorId(final String processorName, final TaskId taskId) {
     this.processorName = processorName;
-    this.partition = partition;
+    this.taskId = taskId;
   }
 
   @Override
@@ -44,7 +46,7 @@ public class AsyncProcessorId implements Comparable<AsyncProcessorId> {
 
     final AsyncProcessorId that = (AsyncProcessorId) o;
 
-    if (partition != that.partition) {
+    if (!taskId.equals(that.taskId)) {
       return false;
     }
     return processorName.equals(that.processorName);
@@ -53,18 +55,18 @@ public class AsyncProcessorId implements Comparable<AsyncProcessorId> {
   @Override
   public int hashCode() {
     int result = processorName.hashCode();
-    result = 31 * result + partition;
+    result = 31 * result + taskId.hashCode();
     return result;
   }
 
   @Override
   public String toString() {
-    return "AsyncProcessorId<" + processorName + "_" + partition + '>';
+    return "AsyncProcessorId<" + processorName + "_" + taskId + '>';
   }
 
   @Override
   public int compareTo(final AsyncProcessorId o) {
     final int comparingName = this.processorName.compareTo(o.processorName);
-    return comparingName != 0 ? comparingName : this.partition - o.partition;
+    return comparingName != 0 ? comparingName : this.taskId.compareTo(o.taskId);
   }
 }

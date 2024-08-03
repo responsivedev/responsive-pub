@@ -18,6 +18,7 @@ package dev.responsive.kafka.testutils;
 
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.api.stores.ResponsiveStores;
+import dev.responsive.kafka.testutils.SimpleStatefulProcessor.ComputeStatefulOutput;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -25,6 +26,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
@@ -60,7 +62,7 @@ public class SimpleStatefulProcessorSupplier<VIn, VStored, VOut>
     }
   }
   
-  private final SimpleStatefulProcessor.ComputeOutput<VIn, VStored, VOut> computeOutput;
+  private final ComputeStatefulOutput<VIn, VStored, VOut> computeStatefulOutput;
 
   private final AtomicInteger processed;
   private final Map<String, VOut> latestValues;
@@ -70,58 +72,62 @@ public class SimpleStatefulProcessorSupplier<VIn, VStored, VOut>
   private final Set<StoreBuilder<?>> storeBuilders;
 
   /**
-   * @param computeOutput a simple function that computes the output from the input record and old value
+   * @param computeStatefulOutput a simple function that computes the output from the input record and old value
    * @param params        the params to use to build a Responsive timestamped key-value store
    */
   public SimpleStatefulProcessorSupplier(
-      final SimpleStatefulProcessor.ComputeOutput<VIn, VStored, VOut> computeOutput,
-      final ResponsiveKeyValueParams params
+      final ComputeStatefulOutput<VIn, VStored, VOut> computeStatefulOutput,
+      final ResponsiveKeyValueParams params,
+      final Serde<VStored> storedValueSerde
   ) {
-    this(computeOutput, params, new AtomicInteger(), new HashMap<>(), null);
+    this(computeStatefulOutput, params, storedValueSerde, new AtomicInteger(), new HashMap<>(), null);
   }
 
   /**
-   * @param computeOutput a simple function that computes the output from the input record and old value
+   * @param computeStatefulOutput a simple function that computes the output from the input record and old value
    * @param params        the params to use to build a Responsive timestamped key-value store
    * @param processed     optional counter that can be used to monitor number of input records
    */
   public SimpleStatefulProcessorSupplier(
-      final SimpleStatefulProcessor.ComputeOutput<VIn, VStored, VOut> computeOutput,
+      final ComputeStatefulOutput<VIn, VStored, VOut> computeStatefulOutput,
       final ResponsiveKeyValueParams params,
+      final Serde<VStored> storedValueSerde,
       final AtomicInteger processed
   ) {
-    this(computeOutput, params, processed, new ConcurrentHashMap<>(), null);
+    this(computeStatefulOutput, params, storedValueSerde, processed, new ConcurrentHashMap<>(), null);
   }
 
   /**
-   * @param computeOutput   a simple function that computes the output from the input record and old value
+   * @param computeStatefulOutput   a simple function that computes the output from the input record and old value
    * @param params          the params to use to build a Responsive timestamped key-value store
    * @param latestValues    optional map to track latest value computed for each key
    * @param processingLatch optional latch that counts down on each invocation of process
    */
   public SimpleStatefulProcessorSupplier(
-      final SimpleStatefulProcessor.ComputeOutput<VIn, VStored, VOut> computeOutput,
+      final ComputeStatefulOutput<VIn, VStored, VOut> computeStatefulOutput,
       final ResponsiveKeyValueParams params,
+      final Serde<VStored> storedValueSerde,
       final Map<String, VOut> latestValues,
       final CountDownLatch processingLatch
   ) {
-    this(computeOutput, params, new AtomicInteger(), latestValues, processingLatch);
+    this(computeStatefulOutput, params, storedValueSerde, new AtomicInteger(), latestValues, processingLatch);
   }
 
   /**
-   * @param computeOutput a simple function that computes the output from the input record and old value
+   * @param computeStatefulOutput a simple function that computes the output from the input record and old value
    * @param params        the params to use to build a Responsive timestamped key-value store
    * @param processed     optional counter that can be used to monitor number of input records
    * @param latestValues  optional map to track latest value computed for each key
    */
   public SimpleStatefulProcessorSupplier(
-      final SimpleStatefulProcessor.ComputeOutput<VIn, VStored, VOut> computeOutput,
+      final ComputeStatefulOutput<VIn, VStored, VOut> computeStatefulOutput,
       final ResponsiveKeyValueParams params,
+      final Serde<VStored> storedValueSerde,
       final AtomicInteger processed,
       final Map<String, VOut> latestValues,
       final CountDownLatch processingLatch
   ) {
-    this.computeOutput = computeOutput;
+    this.computeStatefulOutput = computeStatefulOutput;
     this.storeName = params.name().kafkaName();
     this.processed = processed;
     this.latestValues = latestValues;
@@ -129,13 +135,13 @@ public class SimpleStatefulProcessorSupplier<VIn, VStored, VOut>
     this.storeBuilders = Collections.singleton(ResponsiveStores.timestampedKeyValueStoreBuilder(
         ResponsiveStores.keyValueStore(params),
         Serdes.String(),
-        Serdes.String()));
+        storedValueSerde));
   }
   
   @Override
   public FixedKeyProcessor<String, VIn, VOut> get() {
     return new SimpleStatefulProcessor<>(
-        computeOutput,
+        computeStatefulOutput,
         storeName, 
         processed, 
         latestValues,

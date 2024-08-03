@@ -80,7 +80,7 @@ class AsyncThreadPoolTest {
 
     // then:
     final Map<AsyncEvent, AsyncThreadPool.InFlightEvent> inFlight
-        = pool.getInFlight("processor", 0);
+        = pool.getInFlight("processor", new TaskId(0, 0));
     final var inFlightEvent = inFlight.get(event);
     if (inFlightEvent != null) {
       final var future = inFlightEvent.future();
@@ -104,7 +104,7 @@ class AsyncThreadPoolTest {
     final Instant start = Instant.now();
     Optional<Throwable> caught;
     do {
-      caught = pool.checkUncaughtExceptions("processor", 0);
+      caught = pool.checkUncaughtExceptions("processor", new TaskId(0, 0));
       if (caught.isPresent()) {
         break;
       }
@@ -131,12 +131,12 @@ class AsyncThreadPoolTest {
     final var taskOtherPartition = new TestTask();
     final var eventOtherPartition = newEvent(taskOtherPartition, 1);
     schedule("processor", 1, finalizingQueue1, eventOtherPartition);
-    final var processor0InFlight = Map.copyOf(pool.getInFlight("processor", 0));
-    final var processor1InFlight = Map.copyOf(pool.getInFlight("processor", 1));
-    final var other0InFlight = Map.copyOf(pool.getInFlight("other", 0));
+    final var processor0InFlight = Map.copyOf(pool.getInFlight("processor", new TaskId(0, 0)));
+    final var processor1InFlight = Map.copyOf(pool.getInFlight("processor", new TaskId(0, 1)));
+    final var other0InFlight = Map.copyOf(pool.getInFlight("other", new TaskId(0, 0)));
 
     // when:
-    pool.removeProcessor(AsyncProcessorId.of("processor", 0));
+    pool.removeProcessor(AsyncProcessorId.of("processor", new TaskId(0, 0)));
 
     // then:
     for (final var t : List.of(task1, task2, task3, taskOtherPartition, taskOtherProcessor)) {
@@ -155,14 +155,14 @@ class AsyncThreadPoolTest {
     schedule("processor", 0, finalizingQueue0, event1);
 
     // when:
-    pool.removeProcessor(AsyncProcessorId.of("processor", 0));
+    pool.removeProcessor(AsyncProcessorId.of("processor", new TaskId(0, 0)));
 
     // then:
     for (final var t : List.of(task1)) {
       t.waitLatch.countDown();
     }
     assertThat(
-        pool.checkUncaughtExceptions("processor", 0),
+        pool.checkUncaughtExceptions("processor", new TaskId(0, 0)),
         is(Optional.empty())
     );
   }

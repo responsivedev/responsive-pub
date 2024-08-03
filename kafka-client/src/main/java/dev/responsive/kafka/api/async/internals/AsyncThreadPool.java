@@ -84,16 +84,16 @@ public class AsyncThreadPool {
     );
   }
 
-  public boolean isEmpty(final String processorName, final int partition) {
-    final var forTask = inFlight.get(AsyncProcessorId.of(processorName, partition));
+  public boolean isEmpty(final String processorName, final TaskId taskId) {
+    final var forTask = inFlight.get(AsyncProcessorId.of(processorName, taskId));
     if (forTask == null) {
-      log.debug("No in-flight map found for {}[{}]", processorName, partition);
+      log.debug("No in-flight map found for {}[{}]", processorName, taskId);
       return true;
     }
     if (log.isTraceEnabled()) {
       log.trace("Found in-flight map for {}[{}]: {}",
           processorName,
-          partition,
+          taskId,
           forTask.keySet().stream().map(AsyncEvent::toString).collect(Collectors.joining(", "))
       );
     }
@@ -101,13 +101,13 @@ public class AsyncThreadPool {
   }
 
   public void removeProcessor(final AsyncProcessorId asyncId) {
-    log.debug("Removing {}[{}] from async thread pool", asyncId.processorName, asyncId.partition);
+    log.debug("Removing {}[{}] from async thread pool", asyncId.processorName, asyncId.taskId);
     final Map<AsyncEvent, InFlightEvent> inFlightForTask = inFlight.remove(asyncId);
 
 
     if (inFlightForTask != null) {
       log.info("Cancelling {} pending records for {}[{}]",
-               inFlightForTask.size(), asyncId.processorName, asyncId.partition);
+               inFlightForTask.size(), asyncId.processorName, asyncId.taskId);
       inFlightForTask.values().forEach(f -> f.future().cancel(true));
     }
   }
@@ -120,15 +120,15 @@ public class AsyncThreadPool {
    */
   public Optional<Throwable> checkUncaughtExceptions(
       final String processorName,
-      final int partition
+      final TaskId taskId
   ) {
-    return Optional.ofNullable(fatalExceptions.get(AsyncProcessorId.of(processorName, partition)));
+    return Optional.ofNullable(fatalExceptions.get(AsyncProcessorId.of(processorName, taskId)));
 
   }
 
   @VisibleForTesting
-  Map<AsyncEvent, InFlightEvent> getInFlight(final String processorName, final int partition) {
-    return inFlight.get(AsyncProcessorId.of(processorName, partition));
+  Map<AsyncEvent, InFlightEvent> getInFlight(final String processorName, final TaskId taskId) {
+    return inFlight.get(AsyncProcessorId.of(processorName, taskId));
   }
 
   /**
@@ -165,7 +165,7 @@ public class AsyncThreadPool {
       throw new IllegalStateException("must call maybeInitThreadPoolMetrics before using pool");
     }
 
-    final var asyncProcessorId = AsyncProcessorId.of(processorName, taskId.partition());
+    final var asyncProcessorId = AsyncProcessorId.of(processorName, taskId);
     final var inFlightForTask
         = inFlight.computeIfAbsent(asyncProcessorId, k -> new ConcurrentHashMap<>());
 
