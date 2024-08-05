@@ -17,6 +17,7 @@
 package dev.responsive.k8s.crd;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import dev.responsive.k8s.crd.kafkastreams.DemoPolicySpec;
 import dev.responsive.k8s.crd.kafkastreams.KafkaStreamsPolicySpec;

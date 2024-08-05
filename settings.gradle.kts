@@ -133,13 +133,15 @@ dependencyResolutionManagement {
             library("testcontainers-cassandra", "org.testcontainers", "cassandra").versionRef("testcontainers")
             library("testcontainers-kafka", "org.testcontainers", "kafka").versionRef("testcontainers")
             library("testcontainers-mongodb", "org.testcontainers", "mongodb").versionRef("testcontainers")
+            library("testcontainers-k3", "org.testcontainers", "k3s").versionRef("testcontainers")
             bundle("testcontainers",
                     listOf(
                             "testcontainers",
                             "testcontainers-junit",
                             "testcontainers-cassandra",
                             "testcontainers-kafka",
-                            "testcontainers-mongodb"
+                            "testcontainers-mongodb",
+                            "testcontainers-k3",
                     ))
 
             bundle("base", listOf("junit", "slf4j", "log4j-core", "hamcrest", "mockito", "mockito-jupiter"))
