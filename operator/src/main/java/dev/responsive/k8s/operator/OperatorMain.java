@@ -21,6 +21,7 @@ import dev.responsive.controller.client.grpc.ControllerGrpcClient;
 import dev.responsive.k8s.operator.reconciler.ResponsivePolicyReconciler;
 import io.fabric8.kubernetes.client.utils.Serialization;
 import io.javaoperatorsdk.operator.Operator;
+import io.javaoperatorsdk.operator.api.config.ControllerConfiguration;
 import java.io.FileReader;
 import java.io.Reader;
 import java.util.Properties;
@@ -61,6 +62,8 @@ public class OperatorMain {
         ? cmd.getOptionValue(OperatorOptions.ENVIRONMENT) : "";
     final String secretFilePath = cmd.getOptionValue(OperatorOptions.SECRETS_FILE);
     final boolean tlsOff = cmd.hasOption(OperatorOptions.TLS_OFF);
+    final String selector = cmd.getOptionValue(OperatorOptions.LABEL_SELECTOR);
+
     final Properties config = load(secretFilePath);
 
     if (!(config.containsKey(API_KEY_CONFIG) && config.containsKey(SECRET_CONFIG))) {
@@ -75,12 +78,26 @@ public class OperatorMain {
 
     final Operator operator = new Operator();
     Serialization.jsonMapper().registerModule(new Jdk8Module());
-    operator.register(new ResponsivePolicyReconciler(environment, new ControllerGrpcClient(
-        target,
-        apiKey,
-        secret,
-        tlsOff
-    )));
+    final ResponsivePolicyReconciler reconciler =
+        new ResponsivePolicyReconciler(environment, new ControllerGrpcClient(
+            target,
+            apiKey,
+            secret,
+            tlsOff
+        ));
+
+    operator.register(reconciler, new ControllerConfiguration<>() {
+      @Override
+      public String getAssociatedReconcilerClassName() {
+        return ResponsivePolicyReconciler.class.getName();
+      }
+
+      @Override
+      public String getLabelSelector() {
+        return selector;
+      }
+    });
+
     operator.start();
   }
 
