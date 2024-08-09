@@ -22,6 +22,7 @@ plugins {
 }
 
 include("kafka-client")
+include("kafka-client-examples:async-processor")
 include("kafka-client-examples:simple-example")
 include("kafka-client-examples:e2e-test")
 include("kafka-client-bootstrap")
