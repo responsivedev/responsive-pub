@@ -18,6 +18,7 @@ import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.kstream.Branched;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessorContext;
@@ -51,12 +52,14 @@ public class ExampleApplication {
 
     // enrich the incoming messages with data from DynamoDB
     final KStream<String, EnrichedChatRequest> withUserMeta = stream.processValues(
-        new EnrichProcessorSupplier()
+        new EnrichProcessorSupplier(),
+        Named.as("ENRICH")
     );
 
     // scan each msg against OpenAI's moderation model
     final KStream<String, ScannedChatRequest> scanned = withUserMeta.processValues(
-        new ScanProcessorSupplier(OPENAI_TOKEN)
+        new ScanProcessorSupplier(OPENAI_TOKEN),
+        Named.as("MODERATE")
     );
     final var branched = scanned.split();
     // send messages that were not flagged to the output topic
@@ -73,7 +76,7 @@ public class ExampleApplication {
     // send flagged messages to a slack channel
     branched.branch(
         (k, v) -> v.flagged,
-        Branched.withConsumer(ks -> ks.processValues(new ReportProcessorSupplier(WEBHOOK)))
+        Branched.withConsumer(ks -> ks.processValues(new ReportProcessorSupplier(WEBHOOK), Named.as("NOTIFY")))
     );
 
     LOG.info("built topology");

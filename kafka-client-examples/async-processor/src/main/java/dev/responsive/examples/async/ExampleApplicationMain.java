@@ -15,6 +15,7 @@ public class ExampleApplicationMain {
       props.load(in);
     }
     final Topology topology = ExampleApplication.buildTopology();
+    System.out.println(topology.describe().toString());
     try (final KafkaStreams streams = new KafkaStreams(topology, props)) {
       streams.start();
       final CountDownLatch latch = new CountDownLatch(1);
