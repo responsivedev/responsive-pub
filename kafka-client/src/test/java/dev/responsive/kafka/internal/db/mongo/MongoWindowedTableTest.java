@@ -66,7 +66,7 @@ class MongoWindowedTableTest {
   @Test
   public void shouldFetchInserts() {
     // given:
-    final var writer = flushManager.createWriter(segment);
+    final var writer = flushManager.createWriter(segment, 0);
     final Bytes key = Bytes.wrap("key".getBytes());
     writer.insert(new WindowedKey(key, 100), "val".getBytes(), 110);
     writer.flush();
@@ -80,7 +80,7 @@ class MongoWindowedTableTest {
 
   private void shouldFetchWindowsInRange() {
     // given:
-    final var writer = flushManager.createWriter(segment);
+    final var writer = flushManager.createWriter(segment, 0);
     final Bytes key = Bytes.wrap("key".getBytes());
     final Bytes keyOther = Bytes.wrap("keyOther".getBytes());
     writer.insert(new WindowedKey(key, 99), "valEarly".getBytes(), 110);
@@ -127,7 +127,7 @@ class MongoWindowedTableTest {
   @Test
   public void shouldEncodeKeyAsBase64String() {
     // given:
-    final var writer = flushManager.createWriter(segment);
+    final var writer = flushManager.createWriter(segment, 0);
     final Bytes key = Bytes.wrap("key".getBytes());
     writer.insert(new WindowedKey(key, 100), "val".getBytes(), 110);
     writer.flush();

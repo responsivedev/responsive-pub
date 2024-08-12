@@ -2,3 +2,6 @@
 	path = controller-api/src/main/external-protos/opentelemetry-proto
 	url = https://github.com/open-telemetry/opentelemetry-proto.git
         branch = main
+[submodule "kafka-client/src/main/external-protos/rs3"]
+	path = kafka-client/src/main/external-protos/rs3
+	url = https://github.com/responsivedev/rs3.git

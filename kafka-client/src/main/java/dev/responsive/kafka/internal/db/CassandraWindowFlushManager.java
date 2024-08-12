@@ -71,7 +71,8 @@ public class CassandraWindowFlushManager extends WindowFlushManager {
 
   @Override
   public RemoteWriter<WindowedKey, SegmentPartition> createWriter(
-      final SegmentPartition tablePartition
+      final SegmentPartition tablePartition,
+      final long consumedOffset
   ) {
     return new LwtWriter<>(
         client,

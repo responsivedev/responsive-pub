@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 class InMemoryKVTableTest {
   private final InMemoryKVTable table = new InMemoryKVTable("name");
   private final KVFlushManager flushManager =  table.init(0);
-  private final RemoteWriter<Bytes, Integer> writer = flushManager.createWriter(0);
+  private final RemoteWriter<Bytes, Integer> writer = flushManager.createWriter(0, 0);
 
   @Test
   public void shouldGetPuts() {

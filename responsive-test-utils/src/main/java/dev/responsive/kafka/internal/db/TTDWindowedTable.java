@@ -187,7 +187,8 @@ public class TTDWindowedTable extends TTDTable<WindowedKey>
 
     @Override
     public RemoteWriter<WindowedKey, SegmentPartition> createWriter(
-        final SegmentPartition tablePartition
+        final SegmentPartition tablePartition,
+        final long consumedOffset
     ) {
       return new TTDWriter<>(table, tablePartition);
     }
