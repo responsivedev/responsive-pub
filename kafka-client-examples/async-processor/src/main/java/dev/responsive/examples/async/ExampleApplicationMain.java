@@ -1,5 +1,6 @@
 package dev.responsive.examples.async;
 
+import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.Properties;
@@ -16,7 +17,7 @@ public class ExampleApplicationMain {
     }
     final Topology topology = ExampleApplication.buildTopology();
     System.out.println(topology.describe().toString());
-    try (final KafkaStreams streams = new KafkaStreams(topology, props)) {
+    try (final ResponsiveKafkaStreams streams = new ResponsiveKafkaStreams(topology, props)) {
       streams.start();
       final CountDownLatch latch = new CountDownLatch(1);
       Runtime.getRuntime().addShutdownHook(new Thread(latch::countDown));

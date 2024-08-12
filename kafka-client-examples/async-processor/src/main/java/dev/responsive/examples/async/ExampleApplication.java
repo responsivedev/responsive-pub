@@ -1,6 +1,7 @@
 package dev.responsive.examples.async;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.responsive.kafka.api.async.AsyncFixedKeyProcessorSupplier;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -52,13 +53,17 @@ public class ExampleApplication {
 
     // enrich the incoming messages with data from DynamoDB
     final KStream<String, EnrichedChatRequest> withUserMeta = stream.processValues(
-        new EnrichProcessorSupplier(),
+        AsyncFixedKeyProcessorSupplier.createAsyncProcessorSupplier(
+            new EnrichProcessorSupplier()
+        ),
         Named.as("ENRICH")
     );
 
     // scan each msg against OpenAI's moderation model
     final KStream<String, ScannedChatRequest> scanned = withUserMeta.processValues(
-        new ScanProcessorSupplier(OPENAI_TOKEN),
+        AsyncFixedKeyProcessorSupplier.createAsyncProcessorSupplier(
+            new ScanProcessorSupplier(OPENAI_TOKEN)
+        ),
         Named.as("MODERATE")
     );
     final var branched = scanned.split();
@@ -76,7 +81,11 @@ public class ExampleApplication {
     // send flagged messages to a slack channel
     branched.branch(
         (k, v) -> v.flagged,
-        Branched.withConsumer(ks -> ks.processValues(new ReportProcessorSupplier(WEBHOOK), Named.as("NOTIFY")))
+        Branched.withConsumer(ks -> ks.processValues(
+            AsyncFixedKeyProcessorSupplier.createAsyncProcessorSupplier(
+                new ReportProcessorSupplier(WEBHOOK)
+            ),
+            Named.as("NOTIFY")))
     );
 
     LOG.info("built topology");
