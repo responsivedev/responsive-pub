@@ -65,4 +65,55 @@ public class TTDKeyValueTable extends InMemoryKVTable {
     return super.all(kafkaPartition, currentTimeMs);
   }
 
+  @Override
+  public long approximateNumEntries(final int kafkaPartition) {
+    return client.count(name(), kafkaPartition);
+  }
+
+  private static class TTDKeyValueFlushManager extends KVFlushManager {
+
+    private final String logPrefix;
+    private final TTDKeyValueTable table;
+
+    public TTDKeyValueFlushManager(
+        final TTDKeyValueTable table
+    ) {
+      this.table = table;
+      this.logPrefix = String.format("%s TTDKeyValueFlushManager ", table.name());
+    }
+
+    @Override
+    public String tableName() {
+      return table.name();
+    }
+
+    @Override
+    public TablePartitioner<Bytes, Integer> partitioner() {
+      return TablePartitioner.defaultPartitioner();
+    }
+
+    @Override
+    public RemoteWriter<Bytes, Integer> createWriter(
+        final Integer tablePartition,
+        final long consumedOffset
+    ) {
+      return new TTDWriter<>(table, tablePartition);
+    }
+
+    @Override
+    public String failedFlushInfo(final long batchOffset, final Integer failedTablePartition) {
+      return "";
+    }
+
+    @Override
+    public String logPrefix() {
+      return logPrefix;
+    }
+
+    @Override
+    public RemoteWriteResult<Integer> updateOffset(final long consumedOffset) {
+      return RemoteWriteResult.success(null);
+    }
+  }
+
 }

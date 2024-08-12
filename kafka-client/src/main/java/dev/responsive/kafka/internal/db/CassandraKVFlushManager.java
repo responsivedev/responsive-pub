@@ -55,7 +55,10 @@ public class CassandraKVFlushManager extends KVFlushManager {
   }
 
   @Override
-  public RemoteWriter<Bytes, Integer> createWriter(final Integer tablePartition) {
+  public RemoteWriter<Bytes, Integer> createWriter(
+      final Integer tablePartition,
+      final long consumedOffset
+  ) {
     return new LwtWriter<>(
         client,
         () -> table.ensureEpoch(tablePartition, epoch),

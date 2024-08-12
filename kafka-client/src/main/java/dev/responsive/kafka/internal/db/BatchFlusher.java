@@ -47,7 +47,7 @@ public class BatchFlusher<K extends Comparable<K>, P> {
   ) {
     final var batchWriters = new BatchWriters<>(flushManager, kafkaPartition);
 
-    prepareBatch(batchWriters, bufferedWrites, keySpec);
+    prepareBatch(batchWriters, bufferedWrites, keySpec, consumedOffset);
 
     final var preFlushResult = flushManager.preFlush();
     if (!preFlushResult.wasApplied()) {
@@ -89,10 +89,11 @@ public class BatchFlusher<K extends Comparable<K>, P> {
   private static <K extends Comparable<K>, P> void prepareBatch(
       final BatchWriters<K, P> batchWriters,
       final Collection<Result<K>> bufferedWrites,
-      final KeySpec<K> keySpec
+      final KeySpec<K> keySpec,
+      final long consumedOffset
   ) {
     for (final Result<K> result : bufferedWrites) {
-      final RemoteWriter<K, P> writer = batchWriters.findOrAddWriter(result.key);
+      final RemoteWriter<K, P> writer = batchWriters.findOrAddWriter(result.key, consumedOffset);
       if (result.isTombstone) {
         writer.delete(result.key);
       } else if (keySpec.retain(result.key)) {

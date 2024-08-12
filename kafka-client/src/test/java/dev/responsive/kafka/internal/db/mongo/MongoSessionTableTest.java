@@ -80,7 +80,7 @@ class MongoSessionTableTest {
 
     // When:
     final var byteKey = Bytes.wrap("key".getBytes());
-    var writer = flushManager.createWriter(segment);
+    var writer = flushManager.createWriter(segment, 0);
     writer.insert(
         new SessionKey(byteKey, 0, 100),
         DEFAULT_VALUE,
@@ -119,7 +119,7 @@ class MongoSessionTableTest {
     // When:
     final var byteKey = Bytes.wrap("key".getBytes());
     final var sessionKey = new SessionKey(byteKey, 0, 100);
-    var writer = flushManager.createWriter(segment);
+    var writer = flushManager.createWriter(segment, 0);
     writer.insert(
         sessionKey,
         DEFAULT_VALUE,
@@ -166,7 +166,7 @@ class MongoSessionTableTest {
     final var sessionKey1 = new SessionKey(byteKey, 0, 100);
     final var sessionKey2 = new SessionKey("other".getBytes(), 0, 150);
     final var sessionKey3 = new SessionKey(byteKey, 200, 300);
-    var writer = flushManager.createWriter(segment);
+    var writer = flushManager.createWriter(segment, 0);
     writer.insert(
         sessionKey1,
         DEFAULT_VALUE,
@@ -224,7 +224,7 @@ class MongoSessionTableTest {
     flushManager.createSegment(segment);
     final var byteKey = Bytes.wrap("key".getBytes());
     final var sessionKey = new SessionKey(byteKey, 0, 100);
-    var writer = flushManager.createWriter(segment);
+    var writer = flushManager.createWriter(segment, 0);
     writer.insert(
         sessionKey,
         DEFAULT_VALUE,
