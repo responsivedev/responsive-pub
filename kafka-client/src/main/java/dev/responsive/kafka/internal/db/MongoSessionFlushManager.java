@@ -74,7 +74,10 @@ public class MongoSessionFlushManager extends SessionFlushManager {
   }
 
   @Override
-  public RemoteWriter<SessionKey, SegmentPartition> createWriter(final SegmentPartition segment) {
+  public RemoteWriter<SessionKey, SegmentPartition> createWriter(
+      final SegmentPartition segment,
+      final long consumedOffset
+  ) {
     log.debug("Creating writer for segment {}", segment);
 
     return new MongoWriter<>(

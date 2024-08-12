@@ -21,6 +21,7 @@ import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.mongo.ResponsiveMongoClient;
+import dev.responsive.kafka.internal.db.pocket.PocketTableFactory;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
 import java.util.Optional;
@@ -37,6 +38,7 @@ public class SessionClients {
 
   private final Optional<ResponsiveMongoClient> mongoClient;
   private final Optional<CassandraClient> cassandraClient;
+  private final Optional<PocketTableFactory> pocketTableFactory;
   private final boolean inMemory;
   private final Admin admin;
 
@@ -48,11 +50,13 @@ public class SessionClients {
   public SessionClients(
       final Optional<ResponsiveMongoClient> mongoClient,
       final Optional<CassandraClient> cassandraClient,
+      final Optional<PocketTableFactory> pocketTableFactory,
       final boolean inMemory,
       final Admin admin
   ) {
     this.mongoClient = mongoClient;
     this.cassandraClient = cassandraClient;
+    this.pocketTableFactory = pocketTableFactory;
     this.inMemory = inMemory;
     this.admin = admin;
   }
@@ -75,6 +79,8 @@ public class SessionClients {
       return StorageBackend.MONGO_DB;
     } else if (cassandraClient.isPresent()) {
       return StorageBackend.CASSANDRA;
+    } else if (pocketTableFactory.isPresent()) {
+      return StorageBackend.POCKET;
     } else if (inMemory) {
       return StorageBackend.IN_MEMORY;
     } else {
@@ -84,6 +90,16 @@ public class SessionClients {
           + "See https://docs.responsive.dev/getting-started/quickstart for a how-to guide for "
           + "getting started with Responsive stores.");
     }
+  }
+
+  public PocketTableFactory pocketTableFactory() {
+    if (pocketTableFactory.isEmpty()) {
+      final IllegalStateException fatalException =
+          new IllegalStateException("pocket table factory was missing");
+      LOG.error(fatalException.getMessage(), fatalException);
+      throw fatalException;
+    }
+    return pocketTableFactory.get();
   }
 
   public ResponsiveMongoClient mongoClient() {

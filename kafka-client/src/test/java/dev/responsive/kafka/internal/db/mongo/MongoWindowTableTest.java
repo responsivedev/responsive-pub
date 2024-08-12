@@ -76,7 +76,7 @@ class MongoWindowTableTest {
 
     // When:
     final var byteKey = Bytes.wrap("key".getBytes());
-    var writer = flushManager.createWriter(segment);
+    var writer = flushManager.createWriter(segment, 0);
     writer.insert(
         new WindowedKey(byteKey, 0),
         DEFAULT_VALUE,
@@ -110,7 +110,7 @@ class MongoWindowTableTest {
     final var byteKey = Bytes.wrap("key".getBytes());
     final var windowedKey1 = new WindowedKey(byteKey, 500);
     final var windowedKey2 = new WindowedKey(byteKey, 5_000);
-    var writer = flushManager.createWriter(segment);
+    var writer = flushManager.createWriter(segment, 0);
     writer.insert(
         windowedKey1,
         DEFAULT_VALUE,

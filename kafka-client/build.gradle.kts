@@ -16,9 +16,51 @@ import java.io.ByteArrayOutputStream
  * limitations under the License.
  */
 
+import com.google.protobuf.gradle.id
+
+buildscript {
+    dependencies {
+        classpath("com.google.protobuf:protobuf-gradle-plugin:0.8.8")
+    }
+}
+
 plugins {
     id("responsive.java-library-conventions")
     id("java")
+    id("com.google.protobuf").version("0.9.2")
+}
+
+sourceSets {
+    main {
+        proto {
+            srcDir("src/main/external-protos/otter-pocket/proto")
+        }
+    }
+}
+
+protobuf {
+    protoc {
+        artifact = "com.google.protobuf:protoc:3.22.3"
+    }
+
+    plugins {
+        id("grpc") {
+            artifact = "io.grpc:protoc-gen-grpc-java:${libs.versions.grpc.orNull}"
+        }
+    }
+
+    generateProtoTasks {
+        all().forEach {
+            it.plugins {
+                // Apply the "grpc" plugin whose spec is defined above, without
+                // options. Note the braces cannot be omitted, otherwise the
+                // plugin will not be added. This is because of the implicit way
+                // NamedDomainObjectContainer binds the methods.
+                id("grpc") {
+                }
+            }
+        }
+    }
 }
 
 /*********** Generated Resources ***********/
@@ -72,6 +114,8 @@ dependencies {
     implementation(libs.bundles.commons)
     implementation(libs.mongodb.driver.sync)
     implementation(libs.bundles.otel)
+    implementation(libs.bundles.grpc)
+    implementation(libs.protobuf.java.util)
     implementation(libs.guava)
 
     testImplementation(libs.kafka.clients) {

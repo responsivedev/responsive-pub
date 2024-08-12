@@ -75,7 +75,10 @@ public class MongoWindowFlushManager extends WindowFlushManager {
   }
 
   @Override
-  public RemoteWriter<WindowedKey, SegmentPartition> createWriter(final SegmentPartition segment) {
+  public RemoteWriter<WindowedKey, SegmentPartition> createWriter(
+      final SegmentPartition segment,
+      final long consumedOffset
+  ) {
     log.debug("Creating writer for segment {}", segment);
 
     return new MongoWriter<>(

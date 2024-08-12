@@ -55,7 +55,10 @@ public class CassandraFactFlushManager extends KVFlushManager {
   }
 
   @Override
-  public RemoteWriter<Bytes, Integer> createWriter(final Integer tablePartition) {
+  public RemoteWriter<Bytes, Integer> createWriter(
+      final Integer tablePartition,
+      final long consumedOffset
+  ) {
     return new FactSchemaWriter<>(
         client,
         table,

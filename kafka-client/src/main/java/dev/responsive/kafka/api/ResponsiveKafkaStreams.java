@@ -44,6 +44,7 @@ import dev.responsive.kafka.internal.db.CassandraClientFactory;
 import dev.responsive.kafka.internal.db.DefaultCassandraClientFactory;
 import dev.responsive.kafka.internal.db.mongo.CollectionCreationOptions;
 import dev.responsive.kafka.internal.db.mongo.ResponsiveMongoClient;
+import dev.responsive.kafka.internal.db.pocket.PocketTableFactory;
 import dev.responsive.kafka.internal.metrics.ClientVersionMetadata;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
@@ -471,7 +472,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       final var admin = responsiveKafkaClientSupplier.getAdmin(responsiveConfig.originals());
       if (compatibilityMode == CompatibilityMode.METRICS_ONLY) {
         sessionClients = new SessionClients(
-            Optional.empty(), Optional.empty(), false, admin);
+            Optional.empty(), Optional.empty(), Optional.empty(), false, admin);
         return this;
       }
 
@@ -482,6 +483,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
           sessionClients = new SessionClients(
               Optional.empty(),
               Optional.of(cassandraFactory.createClient(cqlSession, responsiveConfig)),
+              Optional.empty(),
               false,
               admin
           );
@@ -505,6 +507,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
                   CollectionCreationOptions.fromConfig(responsiveConfig)
               )),
               Optional.empty(),
+              Optional.empty(),
               false,
               admin
           );
@@ -514,7 +517,18 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
           sessionClients = new SessionClients(
               Optional.empty(),
               Optional.empty(),
+              Optional.empty(),
               true,
+              admin
+          );
+          break;
+        case POCKET:
+          LOG.info("using pocket responsive store");
+          sessionClients = new SessionClients(
+              Optional.empty(),
+              Optional.empty(),
+              Optional.of(new PocketTableFactory()),
+              false,
               admin
           );
           break;

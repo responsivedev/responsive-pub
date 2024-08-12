@@ -2,3 +2,6 @@
 	path = controller-api/src/main/external-protos/opentelemetry-proto
 	url = https://github.com/open-telemetry/opentelemetry-proto.git
         branch = main
+[submodule "kafka-client/src/main/external-protos/otter-pocket"]
+	path = kafka-client/src/main/external-protos/otter-pocket
+	url = https://github.com/responsivedev/otter-pocket.git

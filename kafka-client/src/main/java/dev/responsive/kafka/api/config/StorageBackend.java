@@ -21,7 +21,8 @@ import java.util.Arrays;
 public enum StorageBackend {
   CASSANDRA,
   MONGO_DB,
-  IN_MEMORY;
+  IN_MEMORY,
+  POCKET;
 
   public static String[] names() {
     return Arrays.stream(values()).map(Enum::name).toArray(String[]::new);

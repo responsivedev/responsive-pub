@@ -144,7 +144,10 @@ public class TTDKeyValueTable extends TTDTable<Bytes> implements RemoteKVTable<B
     }
 
     @Override
-    public RemoteWriter<Bytes, Integer> createWriter(final Integer tablePartition) {
+    public RemoteWriter<Bytes, Integer> createWriter(
+        final Integer tablePartition,
+        final long consumedOffset
+    ) {
       return new TTDWriter<>(table, tablePartition);
     }
 

@@ -108,6 +108,9 @@ public class PartitionedOperations implements KeyValueOperations {
       case IN_MEMORY:
         table = createInMemory(params);
         break;
+      case POCKET:
+        table = createPocket(params, sessionClients);
+        break;
       default:
         throw new IllegalStateException("Unexpected value: " + sessionClients.storageBackend());
     }
@@ -211,6 +214,13 @@ public class PartitionedOperations implements KeyValueOperations {
       final SessionClients sessionClients
   ) throws InterruptedException, TimeoutException {
     return sessionClients.mongoClient().kvTable(params.name().tableName());
+  }
+
+  private static RemoteKVTable<?> createPocket(
+      final ResponsiveKeyValueParams params,
+      final SessionClients sessionClients
+  ) {
+    return sessionClients.pocketTableFactory().kvTable(params.name().tableName());
   }
 
   @SuppressWarnings("rawtypes")

@@ -67,7 +67,10 @@ public class MongoKVFlushManager extends KVFlushManager {
   }
 
   @Override
-  public RemoteWriter<Bytes, Integer> createWriter(final Integer tablePartition) {
+  public RemoteWriter<Bytes, Integer> createWriter(
+      final Integer tablePartition,
+      final long consumedOffset
+  ) {
     return new MongoWriter<>(table, kafkaPartition, tablePartition, () -> kvDocs);
   }
 
