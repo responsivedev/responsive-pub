@@ -260,6 +260,7 @@ public class AsyncProcessorIntegrationTest {
                         System.out.printf("SOPHIE -- partition %d at offset %d -- found non-null fault while processing: %s \n",
                                           c.taskId().partition(), c.recordMetadata().get().offset(), fault);
                         fault.maybeInject(
+                            name,
                             c.taskId().partition(),
                             c.recordMetadata().get().offset()
                         );
@@ -677,7 +678,7 @@ public class AsyncProcessorIntegrationTest {
     final InputRecord val = inputRecord.value();
     final InjectedFault fault = val.getFault();
     if (fault != null) {
-      fault.maybeInject(context.taskId().partition(), context.recordMetadata().get().offset());
+      fault.maybeInject(name, context.taskId().partition(), context.recordMetadata().get().offset());
     }
 
     sleepForMs(DEFAULT_ASYNC_SLEEP_DURATION_MS);
@@ -699,7 +700,7 @@ public class AsyncProcessorIntegrationTest {
     final InputRecord val = inputRecord.value();
     final InjectedFault fault = val.getFault();
     if (fault != null) {
-      fault.maybeInject(context.taskId().partition(), context.recordMetadata().get().offset());
+      fault.maybeInject(name, context.taskId().partition(), context.recordMetadata().get().offset());
     }
 
     if (oldValAndTimestamp == null) {
@@ -849,16 +850,16 @@ public class AsyncProcessorIntegrationTest {
       return frequency;
     }
 
-    private boolean shouldInject(final int partition, final long offset) {
+    private boolean shouldInject(final String testName, final int partition, final long offset) {
       if (frequency.equals(Frequency.ALWAYS)) {
         return true;
       }
-      final InjectKey k = new InjectKey(partition, offset);
+      final InjectKey k = new InjectKey(testName, partition, offset);
       return HISTORY.put(k, true) == null;
     }
 
-    public void maybeInject(final int partition, final long offset) {
-      if (!shouldInject(partition, offset)) {
+    public void maybeInject(final String testName, final int partition, final long offset) {
+      if (!shouldInject(testName, partition, offset)) {
         return;
       }
       switch (type) {
@@ -872,10 +873,12 @@ public class AsyncProcessorIntegrationTest {
     }
 
     private static class InjectKey {
+      private final String testName;
       private final int partition;
       private final long offset;
 
-      public InjectKey(final int partition, final long offset) {
+      public InjectKey(final String testName, final int partition, final long offset) {
+        this.testName = testName;
         this.partition = partition;
         this.offset = offset;
       }
@@ -889,12 +892,14 @@ public class AsyncProcessorIntegrationTest {
           return false;
         }
         InjectKey injectKey = (InjectKey) o;
-        return partition == injectKey.partition && offset == injectKey.offset;
+        return testName.equals(injectKey.testName)
+            && partition == injectKey.partition
+            && offset == injectKey.offset;
       }
 
       @Override
       public int hashCode() {
-        return Objects.hash(partition, offset);
+        return Objects.hash(testName, partition, offset);
       }
     }
   }
