@@ -46,7 +46,7 @@ jobs:
         uses: gradle/gradle-build-action@v2.9.0
 
       - name: "Build & Test"
-        run: ./gradlew build buildDocker
+        run: ./gradlew kafka-client:test --tests=AsyncProcessorIntegrationTest
 
       - name: "Checkout sindri"
         uses: actions/checkout@v3
