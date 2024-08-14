@@ -311,6 +311,7 @@ public class AsyncProcessorIntegrationTest {
     final List<Throwable> caughtExceptions = new LinkedList<>();
     try (final var streams = new ResponsiveKafkaStreams(builder.build(), properties)) {
       streams.setUncaughtExceptionHandler(exception -> {
+        System.out.printf("SOPHIE -- caught exception: %s \n", exception);
         caughtExceptions.add(exception);
         return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.REPLACE_THREAD;
       });
