@@ -327,7 +327,7 @@ public class AsyncEvent {
           "Cannot transition to DONE from the state " + currentState.name());
     } else if (!(outputForwards.isEmpty() && outputWrites.isEmpty())) {
       log.error(
-          "[{}] Attempted to mark an async event as complete without draining all output queues"
+          "[{}] Attempted to mark an async event as complete without draining all output queues "
               + "first. Remaining forwards={} and remaining writes={}",
           currentState.name(), outputForwards.size(), outputWrites.size());
       throw new IllegalStateException(
