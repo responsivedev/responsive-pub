@@ -252,13 +252,8 @@ public class AsyncProcessorIntegrationTest {
                     (ComputeStatefulOutput<InputRecord, Integer, String>) (s, r, c) -> {
                       final InputRecord val = r.value();
 
-                      System.out.printf("SOPHIE -- partition %d, offset %d -- processing value %s \n",
-                                        c.taskId().partition(), c.recordMetadata().get().offset(), val);
-
                       final InjectedFault fault = val.getFault();
                       if (fault != null) {
-                        System.out.printf("SOPHIE -- partition %d at offset %d -- found non-null fault while processing: %s \n",
-                                          c.taskId().partition(), c.recordMetadata().get().offset(), fault);
                         fault.maybeInject(
                             name,
                             c.taskId().partition(),
@@ -312,7 +307,6 @@ public class AsyncProcessorIntegrationTest {
     final List<Throwable> caughtExceptions = new LinkedList<>();
     try (final var streams = new ResponsiveKafkaStreams(builder.build(), properties)) {
       streams.setUncaughtExceptionHandler(exception -> {
-        System.out.printf("SOPHIE -- caught exception: %s \n", exception);
         caughtExceptions.add(exception);
         return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.REPLACE_THREAD;
       });
