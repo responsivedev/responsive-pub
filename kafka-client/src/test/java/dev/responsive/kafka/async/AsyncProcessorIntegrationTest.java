@@ -252,8 +252,13 @@ public class AsyncProcessorIntegrationTest {
                     (ComputeStatefulOutput<InputRecord, Integer, String>) (s, r, c) -> {
                       final InputRecord val = r.value();
 
+                      System.out.printf("SOPHIE -- partition %d, offset %d -- processing value %s \n",
+                                        c.taskId().partition(), c.recordMetadata().get().offset(), val);
+
                       final InjectedFault fault = val.getFault();
                       if (fault != null) {
+                        System.out.printf("SOPHIE -- partition %d at offset %d -- found non-null fault while processing: %s \n",
+                                          c.taskId().partition(), c.recordMetadata().get().offset(), fault);
                         fault.maybeInject(
                             c.taskId().partition(),
                             c.recordMetadata().get().offset()
@@ -800,6 +805,14 @@ public class AsyncProcessorIntegrationTest {
 
     public InputRecord withValue(final String value) {
       return new InputRecord(value, fault);
+    }
+
+    @Override
+    public String toString() {
+      return "InputRecord{" +
+          "value='" + value + '\'' +
+          ", fault=" + fault +
+          '}';
     }
   }
 
