@@ -189,7 +189,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     this.streamThreadName = Thread.currentThread().getName();
     this.taskId = internalContext.taskId();
     this.asyncProcessorName = internalContext.currentNode().name();
-    this.asyncId = AsyncProcessorId.of(asyncProcessorName, taskId.partition());
+    this.asyncId = AsyncProcessorId.of(asyncProcessorName, taskId);
 
     this.logPrefix = String.format(
         "stream-thread [%s] %s[%d] ",
@@ -254,7 +254,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
         streamThreadName,
         taskId.partition(),
         connectedStoreBuilders.values(),
-        this::flushPendingEventsForCommit
+        asyncThreadPoolRegistration::flushAllAsyncEvents
     );
   }
 
@@ -270,7 +270,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
       log.error("the scheduling queue for {} was expected to be empty", taskId);
       throw new IllegalStateException("scheduling queue expected to be empty");
     }
-    if (!asyncThreadPoolRegistration.threadPool().isEmpty(asyncProcessorName, taskId.partition())) {
+    if (!asyncThreadPoolRegistration.threadPool().isEmpty(asyncProcessorName, taskId)) {
       log.error("the thread pool for {} was expected to be empty", taskId);
       throw new IllegalStateException("thread pool expected to be empty");
     }
@@ -449,7 +449,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    */
   private void checkFatalExceptionsFromAsyncThreadPool() {
     final Optional<Throwable> fatal = asyncThreadPoolRegistration.threadPool()
-        .checkUncaughtExceptions(asyncProcessorName, taskId.partition());
+        .checkUncaughtExceptions(asyncProcessorName, taskId);
     
     if (fatal.isPresent()) {
       log.error("Detected uncaught fatal exception from the async thread pool", fatal.get());
@@ -641,7 +641,13 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   private void completePendingEvent(final AsyncEvent finalizableEvent)  {
 
     try (final var ignored = preFinalize(finalizableEvent)) {
-      doFinalize(finalizableEvent);
+      try {
+        doFinalize(finalizableEvent);
+      } catch (final RuntimeException e) {
+        log.error("Exception thrown during finalization", e);
+        finalizableEvent.transitionToFailed(e);
+        throw e;
+      }
     } finally {
       // We always need to make sure that we call `postFinalize` to ensure that the event
       // is cleared from the set of pending events. If we don't do this, then the next call
@@ -654,7 +660,6 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   private StreamThreadProcessorContext.PreviousRecordContextAndNode preFinalize(
       final AsyncEvent event
   )  {
-
     if (!pendingEvents.containsKey(event)) {
       log.error("routed event from {} to the wrong processor for {}",
           event.partition(),
@@ -687,7 +692,6 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     DelayedForward<KOut, VOut> nextDelayedForward = event.nextForward();
 
     while (nextDelayedWrite != null || nextDelayedForward != null) {
-
       if (nextDelayedWrite != null) {
         streamThreadContext.executeDelayedWrite(nextDelayedWrite);
       }

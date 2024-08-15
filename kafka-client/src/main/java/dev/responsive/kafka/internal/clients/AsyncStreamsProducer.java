@@ -48,7 +48,7 @@ public class AsyncStreamsProducer<K, V> extends DelegatingProducer<K, V> {
 
     final var asyncThreadPoolRegistration = asyncThreadPoolRegistry
         .startNewAsyncThreadPool(streamThreadName);
-    this.flushAsyncProcessors = asyncThreadPoolRegistration::flush;
+    this.flushAsyncProcessors = asyncThreadPoolRegistration::flushAllAsyncEvents;
   }
 
   @Override
