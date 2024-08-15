@@ -672,7 +672,11 @@ public class AsyncProcessorIntegrationTest {
     final InputRecord val = inputRecord.value();
     final InjectedFault fault = val.getFault();
     if (fault != null) {
-      fault.maybeInject(name, context.taskId().partition(), context.recordMetadata().get().offset());
+      fault.maybeInject(
+          name,
+          context.taskId().partition(),
+          context.recordMetadata().get().offset()
+      );
     }
 
     sleepForMs(DEFAULT_ASYNC_SLEEP_DURATION_MS);
@@ -694,7 +698,11 @@ public class AsyncProcessorIntegrationTest {
     final InputRecord val = inputRecord.value();
     final InjectedFault fault = val.getFault();
     if (fault != null) {
-      fault.maybeInject(name, context.taskId().partition(), context.recordMetadata().get().offset());
+      fault.maybeInject(
+          name,
+          context.taskId().partition(),
+          context.recordMetadata().get().offset()
+      );
     }
 
     if (oldValAndTimestamp == null) {
@@ -805,10 +813,10 @@ public class AsyncProcessorIntegrationTest {
 
     @Override
     public String toString() {
-      return "InputRecord{" +
-          "value='" + value + '\'' +
-          ", fault=" + fault +
-          '}';
+      return "InputRecord{"
+          + "value='" + value + '\''
+          + ", fault=" + fault
+          + '}';
     }
   }
 
