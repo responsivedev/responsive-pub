@@ -22,6 +22,8 @@ import static dev.responsive.kafka.api.config.ResponsiveConfig.CASSANDRA_DESIRED
 import static dev.responsive.kafka.api.config.ResponsiveConfig.CASSANDRA_HOSTNAME_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.CASSANDRA_PORT_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_ENDPOINT_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.POCKET_HOSTNAME_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.POCKET_PORT_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_ENV_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_ORG_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_BACKEND_TYPE_CONFIG;
@@ -43,6 +45,7 @@ import org.junit.jupiter.api.extension.ParameterContext;
 import org.junit.jupiter.api.extension.ParameterResolutionException;
 import org.junit.jupiter.api.extension.ParameterResolver;
 import org.testcontainers.containers.CassandraContainer;
+import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.KafkaContainer;
 import org.testcontainers.containers.MongoDBContainer;
 
@@ -52,6 +55,8 @@ public class ResponsiveExtension implements BeforeAllCallback, AfterAllCallback,
   public static CassandraContainer<?> cassandra = new CassandraContainer<>(TestConstants.CASSANDRA)
       .withInitScript("CassandraDockerInit.cql")
       .withReuse(true);
+  public static PocketContainer pocket = new PocketContainer("otter-pocket:0.1.0")
+      .withExposedPorts(50051);
   public static KafkaContainer kafka = new KafkaContainer(TestConstants.KAFKA)
       .withEnv("KAFKA_GROUP_MIN_SESSION_TIMEOUT_MS", "1000")
       .withEnv("KAFKA_GROUP_MAX_SESSION_TIMEOUT_MS", "60000")
@@ -78,6 +83,9 @@ public class ResponsiveExtension implements BeforeAllCallback, AfterAllCallback,
       case MONGO_DB:
         mongo.start();
         break;
+      case POCKET:
+        pocket.start();
+        break;
       default:
         throw new IllegalStateException("Unexpected value: " + backend);
     }
@@ -90,6 +98,7 @@ public class ResponsiveExtension implements BeforeAllCallback, AfterAllCallback,
   public void afterAll(final ExtensionContext context) throws Exception {
     cassandra.stop();
     mongo.stop();
+    pocket.stop();
     kafka.stop();
     admin.close();
   }
@@ -102,6 +111,7 @@ public class ResponsiveExtension implements BeforeAllCallback, AfterAllCallback,
     return parameterContext.getParameter().getType().equals(CassandraContainer.class)
         || parameterContext.getParameter().getType().equals(KafkaContainer.class)
         || parameterContext.getParameter().getType().equals(MongoDBContainer.class)
+        || parameterContext.getParameter().getType().equals(PocketContainer.class)
         || parameterContext.getParameter().getType().equals(Admin.class)
         || isContainerConfig(parameterContext);
   }
@@ -117,6 +127,8 @@ public class ResponsiveExtension implements BeforeAllCallback, AfterAllCallback,
       return mongo;
     } else if (parameterContext.getParameter().getType() == KafkaContainer.class) {
       return kafka;
+    } else if (parameterContext.getParameter().getType() == PocketContainer.class) {
+      return pocket;
     } else if (parameterContext.getParameter().getType() == Admin.class) {
       return admin;
     } else if (isContainerConfig(parameterContext)) {
@@ -140,6 +152,11 @@ public class ResponsiveExtension implements BeforeAllCallback, AfterAllCallback,
           map.put(STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.MONGO_DB.name());
           map.put(MONGO_ENDPOINT_CONFIG, mongo.getConnectionString());
           break;
+        case POCKET:
+          map.put(STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.POCKET.name());
+          map.put(POCKET_HOSTNAME_CONFIG, "localhost");
+          map.put(POCKET_PORT_CONFIG, pocket.getMappedPort(50051));
+          break;
         default:
           throw new IllegalStateException("Unexpected value: " + backend);
       }
@@ -158,5 +175,11 @@ public class ResponsiveExtension implements BeforeAllCallback, AfterAllCallback,
     final Parameter param = context.getParameter();
     return (param.getType().equals(Map.class) || param.getType().equals(ResponsiveConfig.class))
         && param.getAnnotation(ResponsiveConfigParam.class) != null;
+  }
+
+  public static class PocketContainer extends GenericContainer<PocketContainer> {
+    public PocketContainer(final String image) {
+      super(image);
+    }
   }
 }

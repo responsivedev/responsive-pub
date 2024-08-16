@@ -6,8 +6,10 @@ import dev.responsive.kafka.internal.db.pocket.client.LssId;
 import dev.responsive.kafka.internal.db.pocket.client.PocketClient;
 import dev.responsive.kafka.internal.db.pocket.client.Put;
 import dev.responsive.kafka.internal.db.pocket.client.WalEntry;
+import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration;
 import java.util.HashMap;
 import java.util.Objects;
+import java.util.Optional;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.slf4j.Logger;
@@ -20,7 +22,7 @@ public class PocketKVTable implements RemoteKVTable<WalEntry> {
   private final PocketClient pocketClient;
   private final PssPartitioner pssPartitioner;
   private LssId lssId;
-  private long flushedOffset;
+  private Long flushedOffset = null;
   private PocketKVFlushManager flushManager;
 
   public PocketKVTable(
@@ -39,23 +41,23 @@ public class PocketKVTable implements RemoteKVTable<WalEntry> {
       throw new IllegalStateException("already initialized");
     }
     this.lssId = new LssId(kafkaPartition);
-    long flushedOffset = Long.MAX_VALUE;
     final HashMap<Integer, Long> lastWrittenOffset = new HashMap<>();
     for (final int pss: pssPartitioner.allPss()) {
       final var offsets = pocketClient.getCurrentOffsets(lssId, pss);
-      flushedOffset = Math.min(flushedOffset, offsets.flushedOffset());
-      lastWrittenOffset.put(pss, offsets.writtenOffset());
+      if (offsets.flushedOffset().isPresent()) {
+        final var pssFlushedOffset = offsets.flushedOffset().get();
+        flushedOffset = flushedOffset == null
+            ? pssFlushedOffset : Math.min(pssFlushedOffset, flushedOffset);
+      }
+      lastWrittenOffset.put(pss, offsets.writtenOffset().orElse(null));
     }
-    if (flushedOffset == this.flushedOffset) {
-      throw new IllegalStateException("unable to set flushed offset from remote PSS");
-    }
-    this.flushedOffset = flushedOffset;
     flushManager = new PocketKVFlushManager(
         pocketClient,
         lssId,
         this,
         lastWrittenOffset,
-        kafkaPartition
+        kafkaPartition,
+        pssPartitioner
     );
     return flushManager;
   }
@@ -63,7 +65,7 @@ public class PocketKVTable implements RemoteKVTable<WalEntry> {
   @Override
   public byte[] get(int kafkaPartition, Bytes key, long minValidTs) {
     final int pssId = pssPartitioner.pss(key.get(), kafkaPartition);
-    return pocketClient.get(lssId, pssId, flushManager.writtenOffset(pssId), key.get())
+    return pocketClient.get(lssId, pssId, flushManager.writtenOffset(pssId).orElse(null), key.get())
         .orElse(null);
   }
 
@@ -107,6 +109,6 @@ public class PocketKVTable implements RemoteKVTable<WalEntry> {
 
   @Override
   public long fetchOffset(int kafkaPartition) {
-    return flushedOffset;
+    return flushedOffset == null ? ResponsiveStoreRegistration.NO_COMMITTED_OFFSET : flushedOffset;
   }
 }

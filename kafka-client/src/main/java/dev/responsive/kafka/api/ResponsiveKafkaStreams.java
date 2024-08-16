@@ -23,6 +23,8 @@ import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_ENDPOINT_CO
 import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_PASSWORD_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_USERNAME_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.POCKET_HOSTNAME_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.POCKET_PORT_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.TASK_ASSIGNOR_CLASS_OVERRIDE;
 import static dev.responsive.kafka.internal.metrics.ResponsiveMetrics.RESPONSIVE_METRICS_NAMESPACE;
 import static org.apache.kafka.streams.StreamsConfig.APPLICATION_ID_CONFIG;
@@ -524,10 +526,12 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
           break;
         case POCKET:
           LOG.info("using pocket responsive store");
+          final var pocketHost = responsiveConfig.getString(POCKET_HOSTNAME_CONFIG);
+          final var pocketPort = responsiveConfig.getInt(POCKET_PORT_CONFIG);
           sessionClients = new SessionClients(
               Optional.empty(),
               Optional.empty(),
-              Optional.of(new PocketTableFactory()),
+              Optional.of(new PocketTableFactory(pocketHost, pocketPort)),
               false,
               admin
           );

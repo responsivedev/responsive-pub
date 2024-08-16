@@ -24,6 +24,7 @@ class PocketKVFlushManager extends KVFlushManager {
   private final PocketKVTable table;
   private final HashMap<Integer, Long> writtenOffsets;
   private final int kafkaPartition;
+  private final PssPartitioner pssPartitioner;
   private final HashMap<Integer, PocketKVWriter> writers = new HashMap<>();
 
   public PocketKVFlushManager(
@@ -31,13 +32,15 @@ class PocketKVFlushManager extends KVFlushManager {
       final LssId lssId,
       final PocketKVTable table,
       final HashMap<Integer, Long> writtenOffsets,
-      final int kafkaPartition
+      final int kafkaPartition,
+      final PssPartitioner pssPartitioner
   ) {
     this.pocketClient = Objects.requireNonNull(pocketClient);
     this.lssId = Objects.requireNonNull(lssId);
     this.table = Objects.requireNonNull(table);
     this.writtenOffsets = Objects.requireNonNull(writtenOffsets);
     this.kafkaPartition = kafkaPartition;
+    this.pssPartitioner = Objects.requireNonNull(pssPartitioner);
   }
 
   @Override
@@ -47,7 +50,17 @@ class PocketKVFlushManager extends KVFlushManager {
 
   @Override
   public TablePartitioner<Bytes, Integer> partitioner() {
-    return new TablePartitioner.DefaultPartitioner<>();
+    return new TablePartitioner<Bytes, Integer>() {
+      @Override
+      public Integer tablePartition(int kafkaPartition, Bytes key) {
+        return pssPartitioner.pss(key.get(), kafkaPartition);
+      }
+
+      @Override
+      public Integer metadataTablePartition(int kafkaPartition) {
+        throw new UnsupportedOperationException();
+      }
+    };
   }
 
   @Override
@@ -64,7 +77,7 @@ class PocketKVFlushManager extends KVFlushManager {
         pssId,
         lssId,
         consumedOffset,
-        writtenOffsets.getOrDefault(pssId, 0L),
+        writtenOffsets.get(pssId),
         kafkaPartition
     );
     writers.put(pssId, writer);
@@ -101,19 +114,6 @@ class PocketKVFlushManager extends KVFlushManager {
     return tableName() + ".pocket.flushmanager";
   }
 
-  private void updateWrittenOffset(final int pssId, final long writtenOffset) {
-    long previousLastWrittenOffset = writtenOffsets.getOrDefault(pssId, 0L);
-    if (previousLastWrittenOffset > writtenOffset) {
-      throw new IllegalStateException(String.format(
-          "written offset (%d) lower than last written (%d) for pss (%d)",
-          writtenOffset,
-          previousLastWrittenOffset,
-          pssId
-      ));
-    }
-    writtenOffsets.put(pssId, writtenOffset);
-  }
-
   private static class PocketKVWriter implements RemoteWriter<Bytes, Integer> {
     private final StreamSender<WalEntry> streamSender;
     private final CompletionStage<Long> resultFuture;
@@ -129,7 +129,7 @@ class PocketKVFlushManager extends KVFlushManager {
         final int pssId,
         final LssId lssId,
         final long endOffset,
-        final long expectedWrittenOffset,
+        final Long expectedWrittenOffset,
         final int kafkaPartition
     ) {
       this.table = Objects.requireNonNull(table);

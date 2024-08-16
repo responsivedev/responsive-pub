@@ -7,10 +7,21 @@ import dev.responsive.kafka.internal.db.pocket.client.grpc.GrpcPocketClient;
 import java.util.List;
 
 public class PocketTableFactory {
+  private final String pocketHost;
+  private final int pocketPort;
+
+  public PocketTableFactory(
+      final String pocketHost,
+      final int pocketPort
+  ) {
+    this.pocketHost = pocketHost;
+    this.pocketPort = pocketPort;
+  }
 
   public RemoteKVTable<WalEntry> kvTable(final String name) {
-    // todo: make me a config somehow
-    final PocketClient pocketClient = GrpcPocketClient.connect("0.0.0.0:5050");
+    final PocketClient pocketClient = GrpcPocketClient.connect(
+        String.format("%s:%d", pocketHost, pocketPort)
+    );
     final PssPartitioner pssPartitioner = PssRangePartitioner.create(
         List.of("000", "001", "010", "011", "100", "101", "110", "111")
     );

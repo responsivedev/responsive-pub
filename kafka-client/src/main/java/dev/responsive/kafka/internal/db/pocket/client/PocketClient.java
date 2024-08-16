@@ -9,17 +9,17 @@ public interface PocketClient {
   StreamSenderMessageReceiver<WalEntry, Long> writeWalSegmentAsync(
       LssId lssId,
       int pssId,
-      long expectedWrittenOffset,
+      Long expectedWrittenOffset,
       long endOffset
   );
 
   long writeWalSegment(
       LssId lssId,
       int pssId,
-      long expectedWrittenOffset,
+      Long expectedWrittenOffset,
       long endOffset,
       List<WalEntry> entries
   );
 
-  Optional<byte[]> get(LssId lssId, int pssId, Optional<Long> expectedWrittenOffset, byte[] key);
+  Optional<byte[]> get(LssId lssId, int pssId, Long expectedWrittenOffset, byte[] key);
 }

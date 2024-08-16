@@ -1,19 +1,21 @@
 package dev.responsive.kafka.internal.db.pocket.client;
 
-public class CurrentOffsets {
-  private final long writtenOffset;
-  private final long flushedOffset;
+import java.util.Optional;
 
-  public CurrentOffsets(final long writtenOffset, final long flushedOffset) {
+public class CurrentOffsets {
+  private final Long writtenOffset;
+  private final Long flushedOffset;
+
+  public CurrentOffsets(final Long writtenOffset, final Long flushedOffset) {
     this.writtenOffset = writtenOffset;
     this.flushedOffset = flushedOffset;
   }
 
-  public long writtenOffset() {
-    return writtenOffset;
+  public Optional<Long> writtenOffset() {
+    return Optional.ofNullable(writtenOffset);
   }
 
-  public long flushedOffset() {
-    return flushedOffset;
+  public Optional<Long> flushedOffset() {
+    return Optional.ofNullable(flushedOffset);
   }
 }

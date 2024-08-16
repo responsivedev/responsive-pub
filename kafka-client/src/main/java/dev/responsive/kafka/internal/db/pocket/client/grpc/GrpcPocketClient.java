@@ -12,6 +12,7 @@ import dev.responsive.otterpocket.OtterPocketGrpc;
 import dev.responsive.otterpocket.Otterpocket;
 import io.grpc.ChannelCredentials;
 import io.grpc.Grpc;
+import io.grpc.InsecureChannelCredentials;
 import io.grpc.ManagedChannel;
 import io.grpc.StatusRuntimeException;
 import io.grpc.TlsChannelCredentials;
@@ -39,7 +40,7 @@ public class GrpcPocketClient implements PocketClient {
   public static GrpcPocketClient connect(
       final String target
   ) {
-    final ChannelCredentials channelCredentials = TlsChannelCredentials.create();
+    final ChannelCredentials channelCredentials = InsecureChannelCredentials.create();
     final ManagedChannel channel = Grpc.newChannelBuilder(target, channelCredentials).build();
     final OtterPocketGrpc.OtterPocketBlockingStub stub = OtterPocketGrpc.newBlockingStub(channel);
     final OtterPocketGrpc.OtterPocketStub asyncStub = OtterPocketGrpc.newStub(channel);
@@ -57,11 +58,9 @@ public class GrpcPocketClient implements PocketClient {
     } catch (final StatusRuntimeException e) {
       throw new PocketException(e);
     }
-    checkField(result::hasFlushedOffset, "flushedOffset");
-    checkField(result::hasWrittenOffset, "writtenOffset");
     return new CurrentOffsets(
-        result.getWrittenOffset(),
-        result.getFlushedOffset()
+        result.hasWrittenOffset() ? result.getWrittenOffset() : null,
+        result.hasFlushedOffset() ? result.getFlushedOffset() : null
     );
   }
 
@@ -69,7 +68,7 @@ public class GrpcPocketClient implements PocketClient {
   public StreamSenderMessageReceiver<WalEntry, Long> writeWalSegmentAsync(
       final LssId lssId,
       final int pssId,
-      final long expectedWrittenOffset,
+      final Long expectedWrittenOffset,
       final long endOffset
   ) {
     final GrpcMessageReceiver<Otterpocket.WriteWALSegmentResult> resultObserver = new GrpcMessageReceiver<>();
@@ -79,8 +78,10 @@ public class GrpcPocketClient implements PocketClient {
           final var entryBuilder = Otterpocket.WriteWALSegmentRequest.newBuilder()
               .setLssId(lssIdProto(lssId))
               .setPssId(pssId)
-              .setExpectedWrittenOffset(expectedWrittenOffset)
               .setEndOffset(endOffset);
+          if (expectedWrittenOffset != null) {
+            entryBuilder.setExpectedWrittenOffset(expectedWrittenOffset);
+          }
           if (entry instanceof Put) {
             final var put = (Put) entry;
             final var putBuilder = Otterpocket.WriteWALSegmentRequest.Put.newBuilder()
@@ -105,7 +106,7 @@ public class GrpcPocketClient implements PocketClient {
   public long writeWalSegment(
       final LssId lssId,
       final int pssId,
-      final long expectedWrittenOffset,
+      final Long expectedWrittenOffset,
       final long endOffset,
       final List<WalEntry> entries) {
     final var senderReceiver = writeWalSegmentAsync(lssId, pssId, expectedWrittenOffset, endOffset);
@@ -128,14 +129,18 @@ public class GrpcPocketClient implements PocketClient {
   }
 
   @Override
-  public Optional<byte[]> get(LssId lssId, int pssId, Optional<Long> expectedWrittenOffset, byte[] key) {
+  public Optional<byte[]> get(LssId lssId, int pssId, Long expectedWrittenOffset, byte[] key) {
+    final var requestBuilder = Otterpocket.GetRequest.newBuilder()
+        .setLssId(lssIdProto(lssId))
+        .setPssId(pssId)
+        .setKey(ByteString.copyFrom(key));
+    if (expectedWrittenOffset != null) {
+      requestBuilder.setExpectedWrittenOffset(expectedWrittenOffset);
+    }
+    final var request = requestBuilder.build();
     final Otterpocket.GetResult result;
     try {
-      result = stub.get(Otterpocket.GetRequest.newBuilder()
-          .setLssId(lssIdProto(lssId))
-          .setPssId(pssId)
-          .setKey(ByteString.copyFrom(key))
-          .build());
+      result = stub.get(request);
     } catch (final StatusRuntimeException e) {
       throw new PocketException(e);
     }
@@ -154,7 +159,7 @@ public class GrpcPocketClient implements PocketClient {
   }
 
   private void checkField(final Supplier<Boolean> check , final String field) {
-    if (check.get()) {
+    if (!check.get()) {
       throw new RuntimeException("otterpocket resp proto missing field " + field);
     }
   }

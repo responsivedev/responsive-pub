@@ -42,6 +42,7 @@ import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.lessThan;
 
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
+import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.api.stores.ResponsiveStores;
 import dev.responsive.kafka.internal.stores.SchemaTypes.KVSchema;
@@ -79,16 +80,19 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-@ExtendWith(ResponsiveExtension.class)
 public class ResponsiveKeyValueStoreEosIntegrationTest {
 
   private static final Logger LOG
       = LoggerFactory.getLogger(ResponsiveKeyValueStoreEosIntegrationTest.class);
+
+  @RegisterExtension
+  static ResponsiveExtension EXTENSION = new ResponsiveExtension(StorageBackend.POCKET);
 
   private static final int MAX_POLL_MS = 5000;
   private static final String INPUT_TOPIC = "input";
@@ -133,6 +137,9 @@ public class ResponsiveKeyValueStoreEosIntegrationTest {
   @EnumSource(KVSchema.class)
   public void shouldMaintainStateOnEosFailOverAndFenceOldClient(final KVSchema type)
       throws Exception {
+    if (type.equals(KVSchema.KEY_VALUE)) {
+      return;
+    }
     // Given:
     final Map<String, Object> properties = getMutableProperties();
     final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties);

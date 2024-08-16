@@ -104,6 +104,14 @@ public class ResponsiveConfig extends AbstractConfig {
       + "with for best results. However it is important to note that this cannot be changed for "
       + "an active application. Messing with this can corrupt existing state!";
 
+  // ------------------ Pocket specific configurations ----------------------
+
+  public static final String POCKET_HOSTNAME_CONFIG = "responsive.pocket.hostname";
+  private static final String POCKET_HOSTNAME_DOC = "The hostname to use when connecting to Pocket.";
+
+  public static final String POCKET_PORT_CONFIG = "responsive.pocket.port";
+  private static final String POCKET_PORT_DOC = "The port to use when connecting to Pocket.";
+
   // ------------------ ScyllaDB specific configurations ----------------------
 
   public static final String CASSANDRA_USERNAME_CONFIG = "responsive.cassandra.username";
@@ -559,6 +567,18 @@ public class ResponsiveConfig extends AbstractConfig {
           RESTORE_OFFSET_REPAIR_ENABLED_DEFAULT,
           Importance.LOW,
           RESTORE_OFFSET_REPAIR_ENABLED_DOC
+      ).define(
+          POCKET_HOSTNAME_CONFIG,
+          Type.STRING,
+          "",
+          Importance.MEDIUM,
+          POCKET_HOSTNAME_DOC
+      ).define(
+          POCKET_PORT_CONFIG,
+          Type.INT,
+          50051,
+          Importance.MEDIUM,
+          POCKET_PORT_DOC
       );
 
   /**
