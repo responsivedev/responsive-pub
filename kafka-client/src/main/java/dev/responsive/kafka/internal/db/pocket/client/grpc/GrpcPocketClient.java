@@ -19,6 +19,7 @@ import io.grpc.TlsChannelCredentials;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Supplier;
 
@@ -50,10 +51,11 @@ public class GrpcPocketClient implements PocketClient {
   }
 
   @Override
-  public CurrentOffsets getCurrentOffsets(final LssId lssId, final int pssId) {
+  public CurrentOffsets getCurrentOffsets(final UUID storeId, final LssId lssId, final int pssId) {
     final Otterpocket.GetOffsetsResult result;
     try {
       result = stub.getOffsets(Otterpocket.GetOffsetsRequest.newBuilder()
+          .setStoreId(uuidProto(storeId))
           .setLssId(lssIdProto(lssId))
           .setPssId(pssId)
           .build());
@@ -72,6 +74,7 @@ public class GrpcPocketClient implements PocketClient {
 
   @Override
   public StreamSenderMessageReceiver<WalEntry, Optional<Long>> writeWalSegmentAsync(
+      final UUID storeId,
       final LssId lssId,
       final int pssId,
       final Optional<Long> expectedWrittenOffset,
@@ -82,6 +85,7 @@ public class GrpcPocketClient implements PocketClient {
     final var streamSender = new GrpcStreamSender<WalEntry, Otterpocket.WriteWALSegmentRequest>(
         entry -> {
           final var entryBuilder = Otterpocket.WriteWALSegmentRequest.newBuilder()
+              .setStoreId(uuidProto(storeId))
               .setLssId(lssIdProto(lssId))
               .setPssId(pssId)
               .setEndOffset(endOffset)
@@ -112,12 +116,19 @@ public class GrpcPocketClient implements PocketClient {
 
   @Override
   public Optional<Long> writeWalSegment(
+      final UUID storeId,
       final LssId lssId,
       final int pssId,
       final Optional<Long> expectedWrittenOffset,
       final long endOffset,
       final List<WalEntry> entries) {
-    final var senderReceiver = writeWalSegmentAsync(lssId, pssId, expectedWrittenOffset, endOffset);
+    final var senderReceiver = writeWalSegmentAsync(
+        storeId,
+        lssId,
+        pssId,
+        expectedWrittenOffset,
+        endOffset
+    );
     for (final WalEntry entry : entries) {
       senderReceiver.sender().sendNext(entry);
     }
@@ -137,8 +148,9 @@ public class GrpcPocketClient implements PocketClient {
   }
 
   @Override
-  public Optional<byte[]> get(LssId lssId, int pssId, Optional<Long> expectedWrittenOffset, byte[] key) {
+  public Optional<byte[]> get(final UUID storeId, LssId lssId, int pssId, Optional<Long> expectedWrittenOffset, byte[] key) {
     final var requestBuilder = Otterpocket.GetRequest.newBuilder()
+        .setStoreId(uuidProto(storeId))
         .setLssId(lssIdProto(lssId))
         .setPssId(pssId)
         .setKey(ByteString.copyFrom(key));
@@ -156,6 +168,13 @@ public class GrpcPocketClient implements PocketClient {
     final Otterpocket.KeyValue keyValue = result.getResult();
     checkField(keyValue::hasValue, "value");
     return Optional.of(keyValue.getValue().toByteArray());
+  }
+
+  private Otterpocket.UUID uuidProto(final UUID uuid) {
+    return Otterpocket.UUID.newBuilder()
+        .setHigh(uuid.getMostSignificantBits())
+        .setLow(uuid.getLeastSignificantBits())
+        .build();
   }
 
   private Otterpocket.LSSId lssIdProto(final LssId lssId) {

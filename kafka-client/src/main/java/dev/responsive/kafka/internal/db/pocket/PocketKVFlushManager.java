@@ -11,6 +11,7 @@ import dev.responsive.kafka.internal.stores.RemoteWriteResult;
 import java.util.HashMap;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.CompletionStage;
 import org.apache.kafka.common.utils.Bytes;
 import org.slf4j.Logger;
@@ -19,6 +20,7 @@ import org.slf4j.LoggerFactory;
 class PocketKVFlushManager extends KVFlushManager {
   private static final Logger LOG = LoggerFactory.getLogger(PocketKVFlushManager.class);
 
+  private final UUID storeId;
   private final PocketClient pocketClient;
   private final LssId lssId;
   private final PocketKVTable table;
@@ -28,6 +30,7 @@ class PocketKVFlushManager extends KVFlushManager {
   private final HashMap<Integer, PocketKVWriter> writers = new HashMap<>();
 
   public PocketKVFlushManager(
+      final UUID storeId,
       final PocketClient pocketClient,
       final LssId lssId,
       final PocketKVTable table,
@@ -35,6 +38,7 @@ class PocketKVFlushManager extends KVFlushManager {
       final int kafkaPartition,
       final PssPartitioner pssPartitioner
   ) {
+    this.storeId = Objects.requireNonNull(storeId);
     this.pocketClient = Objects.requireNonNull(pocketClient);
     this.lssId = Objects.requireNonNull(lssId);
     this.table = Objects.requireNonNull(table);
@@ -72,6 +76,7 @@ class PocketKVFlushManager extends KVFlushManager {
       throw new IllegalStateException("already created writer for pss " + pssId);
     }
     final var writer = new PocketKVWriter(
+        storeId,
         pocketClient,
         table,
         pssId,
@@ -124,6 +129,7 @@ class PocketKVFlushManager extends KVFlushManager {
     private final int kafkaPartition;
 
     private PocketKVWriter(
+        final UUID storeId,
         final PocketClient pocketClient,
         final PocketKVTable table,
         final int pssId,
@@ -138,6 +144,7 @@ class PocketKVFlushManager extends KVFlushManager {
       this.endOffset = endOffset;
       this.kafkaPartition = kafkaPartition;
       final var sendRecv = pocketClient.writeWalSegmentAsync(
+          storeId,
           lssId,
           pssId,
           expectedWrittenOffset,
