@@ -22,7 +22,7 @@ class PocketKVFlushManager extends KVFlushManager {
   private final PocketClient pocketClient;
   private final LssId lssId;
   private final PocketKVTable table;
-  private final HashMap<Integer, Long> writtenOffsets;
+  private final HashMap<Integer, Optional<Long>> writtenOffsets;
   private final int kafkaPartition;
   private final PssPartitioner pssPartitioner;
   private final HashMap<Integer, PocketKVWriter> writers = new HashMap<>();
@@ -31,7 +31,7 @@ class PocketKVFlushManager extends KVFlushManager {
       final PocketClient pocketClient,
       final LssId lssId,
       final PocketKVTable table,
-      final HashMap<Integer, Long> writtenOffsets,
+      final HashMap<Integer, Optional<Long>> writtenOffsets,
       final int kafkaPartition,
       final PssPartitioner pssPartitioner
   ) {
@@ -87,14 +87,14 @@ class PocketKVFlushManager extends KVFlushManager {
   @Override
   public RemoteWriteResult<Integer> postFlush(long consumedOffset) {
     for (final var entry : writers.entrySet()) {
-      writtenOffsets.put(entry.getKey(), entry.getValue().endOffset());
+      writtenOffsets.put(entry.getKey(), Optional.of(entry.getValue().endOffset()));
     }
     writers.clear();
     return super.postFlush(consumedOffset);
   }
 
   Optional<Long> writtenOffset(final int pssId) {
-    return Optional.ofNullable(writtenOffsets.get(pssId));
+    return writtenOffsets.get(pssId);
   }
 
   @Override
@@ -116,7 +116,7 @@ class PocketKVFlushManager extends KVFlushManager {
 
   private static class PocketKVWriter implements RemoteWriter<Bytes, Integer> {
     private final StreamSender<WalEntry> streamSender;
-    private final CompletionStage<Long> resultFuture;
+    private final CompletionStage<Optional<Long>> resultFuture;
     private PocketKVTable table;
     private final int pssId;
     private final LssId lssId;
@@ -129,7 +129,7 @@ class PocketKVFlushManager extends KVFlushManager {
         final int pssId,
         final LssId lssId,
         final long endOffset,
-        final Long expectedWrittenOffset,
+        final Optional<Long> expectedWrittenOffset,
         final int kafkaPartition
     ) {
       this.table = Objects.requireNonNull(table);

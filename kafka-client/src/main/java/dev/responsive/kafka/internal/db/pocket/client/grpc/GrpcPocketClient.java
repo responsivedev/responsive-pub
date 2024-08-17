@@ -23,6 +23,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.function.Supplier;
 
 public class GrpcPocketClient implements PocketClient {
+  private static final long WAL_OFFSET_NONE = Long.MAX_VALUE;
+
   private final ManagedChannel channel;
   private final OtterPocketGrpc.OtterPocketBlockingStub stub;
   private final OtterPocketGrpc.OtterPocketStub asyncStub;
@@ -58,17 +60,21 @@ public class GrpcPocketClient implements PocketClient {
     } catch (final StatusRuntimeException e) {
       throw new PocketException(e);
     }
+    checkField(result::hasWrittenOffset, "writtenOffset");
+    checkField(result::hasFlushedOffset, "flushedOffset");
     return new CurrentOffsets(
-        result.hasWrittenOffset() ? result.getWrittenOffset() : null,
-        result.hasFlushedOffset() ? result.getFlushedOffset() : null
+        result.getWrittenOffset() == WAL_OFFSET_NONE ?
+            Optional.empty() : Optional.of(result.getWrittenOffset()),
+        result.getFlushedOffset() == WAL_OFFSET_NONE ?
+            Optional.empty() : Optional.of(result.getFlushedOffset())
     );
   }
 
   @Override
-  public StreamSenderMessageReceiver<WalEntry, Long> writeWalSegmentAsync(
+  public StreamSenderMessageReceiver<WalEntry, Optional<Long>> writeWalSegmentAsync(
       final LssId lssId,
       final int pssId,
-      final Long expectedWrittenOffset,
+      final Optional<Long> expectedWrittenOffset,
       final long endOffset
   ) {
     final GrpcMessageReceiver<Otterpocket.WriteWALSegmentResult> resultObserver = new GrpcMessageReceiver<>();
@@ -78,10 +84,8 @@ public class GrpcPocketClient implements PocketClient {
           final var entryBuilder = Otterpocket.WriteWALSegmentRequest.newBuilder()
               .setLssId(lssIdProto(lssId))
               .setPssId(pssId)
-              .setEndOffset(endOffset);
-          if (expectedWrittenOffset != null) {
-            entryBuilder.setExpectedWrittenOffset(expectedWrittenOffset);
-          }
+              .setEndOffset(endOffset)
+              .setExpectedWrittenOffset(expectedWrittenOffset.orElse(WAL_OFFSET_NONE));
           if (entry instanceof Put) {
             final var put = (Put) entry;
             final var putBuilder = Otterpocket.WriteWALSegmentRequest.Put.newBuilder()
@@ -98,15 +102,19 @@ public class GrpcPocketClient implements PocketClient {
     return new StreamSenderMessageReceiver<>(
         streamSender,
         resultObserver.message()
-            .thenApply(Otterpocket.WriteWALSegmentResult::getFlushedOffset)
+            .thenApply(r -> {
+              checkField(r::hasFlushedOffset, "flushedOffset");
+              return r.getFlushedOffset() == WAL_OFFSET_NONE
+                  ? Optional.empty() : Optional.of(r.getFlushedOffset());
+            })
     );
   }
 
   @Override
-  public long writeWalSegment(
+  public Optional<Long> writeWalSegment(
       final LssId lssId,
       final int pssId,
-      final Long expectedWrittenOffset,
+      final Optional<Long> expectedWrittenOffset,
       final long endOffset,
       final List<WalEntry> entries) {
     final var senderReceiver = writeWalSegmentAsync(lssId, pssId, expectedWrittenOffset, endOffset);
@@ -114,7 +122,7 @@ public class GrpcPocketClient implements PocketClient {
       senderReceiver.sender().sendNext(entry);
     }
     senderReceiver.sender().finish();
-    final long result;
+    final Optional<Long> result;
     try {
       result = senderReceiver.receiver().toCompletableFuture().get();
     } catch (final ExecutionException e) {
@@ -129,14 +137,12 @@ public class GrpcPocketClient implements PocketClient {
   }
 
   @Override
-  public Optional<byte[]> get(LssId lssId, int pssId, Long expectedWrittenOffset, byte[] key) {
+  public Optional<byte[]> get(LssId lssId, int pssId, Optional<Long> expectedWrittenOffset, byte[] key) {
     final var requestBuilder = Otterpocket.GetRequest.newBuilder()
         .setLssId(lssIdProto(lssId))
         .setPssId(pssId)
         .setKey(ByteString.copyFrom(key));
-    if (expectedWrittenOffset != null) {
-      requestBuilder.setExpectedWrittenOffset(expectedWrittenOffset);
-    }
+    expectedWrittenOffset.ifPresent(requestBuilder::setExpectedWrittenOffset);
     final var request = requestBuilder.build();
     final Otterpocket.GetResult result;
     try {

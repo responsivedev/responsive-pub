@@ -40,6 +40,7 @@ import java.util.Map;
 import org.apache.kafka.clients.admin.Admin;
 import org.junit.jupiter.api.extension.AfterAllCallback;
 import org.junit.jupiter.api.extension.BeforeAllCallback;
+import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.ParameterContext;
 import org.junit.jupiter.api.extension.ParameterResolutionException;
@@ -49,7 +50,7 @@ import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.KafkaContainer;
 import org.testcontainers.containers.MongoDBContainer;
 
-public class ResponsiveExtension implements BeforeAllCallback, AfterAllCallback,
+public class ResponsiveExtension implements BeforeAllCallback, BeforeEachCallback, AfterAllCallback,
     ParameterResolver {
 
   public static CassandraContainer<?> cassandra = new CassandraContainer<>(TestConstants.CASSANDRA)
@@ -92,6 +93,12 @@ public class ResponsiveExtension implements BeforeAllCallback, AfterAllCallback,
 
     kafka.start();
     admin = Admin.create(Map.of(BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers()));
+  }
+
+  @Override
+  public void beforeEach(ExtensionContext extensionContext) throws Exception {
+    pocket.stop();
+    pocket.start();
   }
 
   @Override

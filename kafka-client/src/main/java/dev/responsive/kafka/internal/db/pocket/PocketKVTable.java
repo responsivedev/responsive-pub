@@ -22,7 +22,7 @@ public class PocketKVTable implements RemoteKVTable<WalEntry> {
   private final PocketClient pocketClient;
   private final PssPartitioner pssPartitioner;
   private LssId lssId;
-  private Long flushedOffset = null;
+  private Optional<Long> flushedOffset = Optional.empty();
   private PocketKVFlushManager flushManager;
 
   public PocketKVTable(
@@ -41,15 +41,15 @@ public class PocketKVTable implements RemoteKVTable<WalEntry> {
       throw new IllegalStateException("already initialized");
     }
     this.lssId = new LssId(kafkaPartition);
-    final HashMap<Integer, Long> lastWrittenOffset = new HashMap<>();
+    final HashMap<Integer, Optional<Long>> lastWrittenOffset = new HashMap<>();
     for (final int pss: pssPartitioner.allPss()) {
       final var offsets = pocketClient.getCurrentOffsets(lssId, pss);
       if (offsets.flushedOffset().isPresent()) {
         final var pssFlushedOffset = offsets.flushedOffset().get();
-        flushedOffset = flushedOffset == null
-            ? pssFlushedOffset : Math.min(pssFlushedOffset, flushedOffset);
+        flushedOffset = flushedOffset.or(offsets::flushedOffset)
+            .map(fo -> Math.min(fo, pssFlushedOffset));
       }
-      lastWrittenOffset.put(pss, offsets.writtenOffset().orElse(null));
+      lastWrittenOffset.put(pss, offsets.writtenOffset());
     }
     flushManager = new PocketKVFlushManager(
         pocketClient,
@@ -65,7 +65,7 @@ public class PocketKVTable implements RemoteKVTable<WalEntry> {
   @Override
   public byte[] get(int kafkaPartition, Bytes key, long minValidTs) {
     final int pssId = pssPartitioner.pss(key.get(), kafkaPartition);
-    return pocketClient.get(lssId, pssId, flushManager.writtenOffset(pssId).orElse(null), key.get())
+    return pocketClient.get(lssId, pssId, flushManager.writtenOffset(pssId), key.get())
         .orElse(null);
   }
 
@@ -109,6 +109,6 @@ public class PocketKVTable implements RemoteKVTable<WalEntry> {
 
   @Override
   public long fetchOffset(int kafkaPartition) {
-    return flushedOffset == null ? ResponsiveStoreRegistration.NO_COMMITTED_OFFSET : flushedOffset;
+    return flushedOffset.orElse(ResponsiveStoreRegistration.NO_COMMITTED_OFFSET);
   }
 }

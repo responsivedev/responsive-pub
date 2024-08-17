@@ -6,20 +6,20 @@ import java.util.Optional;
 public interface PocketClient {
   CurrentOffsets getCurrentOffsets(LssId lssId, int pssId);
 
-  StreamSenderMessageReceiver<WalEntry, Long> writeWalSegmentAsync(
+  StreamSenderMessageReceiver<WalEntry, Optional<Long>> writeWalSegmentAsync(
       LssId lssId,
       int pssId,
-      Long expectedWrittenOffset,
+      Optional<Long> expectedWrittenOffset,
       long endOffset
   );
 
-  long writeWalSegment(
+  Optional<Long> writeWalSegment(
       LssId lssId,
       int pssId,
-      Long expectedWrittenOffset,
+      Optional<Long> expectedWrittenOffset,
       long endOffset,
       List<WalEntry> entries
   );
 
-  Optional<byte[]> get(LssId lssId, int pssId, Long expectedWrittenOffset, byte[] key);
+  Optional<byte[]> get(LssId lssId, int pssId, Optional<Long> expectedWrittenOffset, byte[] key);
 }

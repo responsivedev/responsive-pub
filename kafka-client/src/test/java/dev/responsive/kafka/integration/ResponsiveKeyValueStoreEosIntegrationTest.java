@@ -137,9 +137,6 @@ public class ResponsiveKeyValueStoreEosIntegrationTest {
   @EnumSource(KVSchema.class)
   public void shouldMaintainStateOnEosFailOverAndFenceOldClient(final KVSchema type)
       throws Exception {
-    if (type.equals(KVSchema.KEY_VALUE)) {
-      return;
-    }
     // Given:
     final Map<String, Object> properties = getMutableProperties();
     final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties);
