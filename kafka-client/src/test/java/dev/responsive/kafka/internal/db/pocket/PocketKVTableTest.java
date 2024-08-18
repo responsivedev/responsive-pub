@@ -1,7 +1,6 @@
 package dev.responsive.kafka.internal.db.pocket;
 
 import static dev.responsive.kafka.testutils.ResponsiveExtension.PocketContainer;
-import static dev.responsive.kafka.testutils.ResponsiveExtension.pocket;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 
@@ -21,6 +20,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Queue;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
 import junit.framework.AssertionFailedError;
 import org.apache.kafka.common.utils.Bytes;
 import org.junit.jupiter.api.AfterEach;
@@ -43,6 +43,7 @@ public class PocketKVTableTest {
   public static final ResponsiveExtension EXT = new ResponsiveExtension(StorageBackend.MONGO_DB);
 
   private PocketKVTable table;
+  private PocketContainer pocketContainer;
 
   @BeforeEach
   public void setup(
@@ -52,6 +53,7 @@ public class PocketKVTableTest {
   ) {
     testName = info.getTestMethod().orElseThrow().getName();
     final int port = pocketContainer.getMappedPort(50051);
+    this.pocketContainer = pocketContainer;
     pocketClient = GrpcPocketClient.connect(String.format("localhost:%d", port));
     this.table = new PocketKVTable(
         testName,
@@ -63,11 +65,12 @@ public class PocketKVTableTest {
 
   @AfterEach
   public void teardown() {
+    System.out.println(pocketContainer.getLogs());
     pocketClient.close();
   }
 
   @Test
-  public void shouldReadWriteFromKVStore() {
+  public void shouldReadWriteFromKVStore() throws InterruptedException, ExecutionException {
     // given:
     final var flushManager = table.init(PARTITION_ID);
     final var tablePartitioner = flushManager.partitioner();
@@ -78,7 +81,7 @@ public class PocketKVTableTest {
     flushManager.preFlush();
     final var writer = flushManager.createWriter(pss, 10);
     writer.insert(key, "bar".getBytes(), 100);
-    writer.flush();
+    writer.flush().toCompletableFuture().get();
     flushManager.postFlush(10);
     final var result = table.get(PARTITION_ID, key, 0);
 
@@ -87,7 +90,7 @@ public class PocketKVTableTest {
   }
 
   @Test
-  public void shouldWriteToPocketStore() {
+  public void shouldWriteToPocketStore() throws InterruptedException, ExecutionException {
     // given:
     final var flushManager = table.init(PARTITION_ID);
     final var tablePartitioner = flushManager.partitioner();
@@ -98,7 +101,7 @@ public class PocketKVTableTest {
     flushManager.preFlush();
     final var writer = flushManager.createWriter(pss, 10);
     writer.insert(key, "bar".getBytes(), 100);
-    writer.flush();
+    writer.flush().toCompletableFuture().get();
     flushManager.postFlush(10);
 
     // then:
