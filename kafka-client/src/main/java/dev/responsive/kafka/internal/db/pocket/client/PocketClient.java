@@ -31,4 +31,6 @@ public interface PocketClient {
       Optional<Long> expectedWrittenOffset,
       byte[] key
   );
+
+  void close();
 }

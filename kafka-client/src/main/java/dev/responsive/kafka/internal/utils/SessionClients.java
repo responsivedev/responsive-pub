@@ -139,6 +139,7 @@ public class SessionClients {
   public void closeAll() {
     cassandraClient.ifPresent(CassandraClient::shutdown);
     mongoClient.ifPresent(ResponsiveMongoClient::close);
+    pocketTableFactory.ifPresent(PocketTableFactory::close);
     admin.close();
 
     if (restoreListener != null) {

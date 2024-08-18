@@ -1,5 +1,6 @@
 package dev.responsive.kafka.internal.db.pocket.client.grpc;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.protobuf.ByteString;
 import dev.responsive.kafka.internal.db.pocket.client.CurrentOffsets;
 import dev.responsive.kafka.internal.db.pocket.client.LssId;
@@ -15,7 +16,6 @@ import io.grpc.Grpc;
 import io.grpc.InsecureChannelCredentials;
 import io.grpc.ManagedChannel;
 import io.grpc.StatusRuntimeException;
-import io.grpc.TlsChannelCredentials;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -24,12 +24,13 @@ import java.util.concurrent.ExecutionException;
 import java.util.function.Supplier;
 
 public class GrpcPocketClient implements PocketClient {
-  private static final long WAL_OFFSET_NONE = Long.MAX_VALUE;
+  static final long WAL_OFFSET_NONE = Long.MAX_VALUE;
 
   private final ManagedChannel channel;
   private final OtterPocketGrpc.OtterPocketBlockingStub stub;
   private final OtterPocketGrpc.OtterPocketStub asyncStub;
 
+  @VisibleForTesting
   GrpcPocketClient(
       final ManagedChannel channel,
       final OtterPocketGrpc.OtterPocketBlockingStub stub,
@@ -38,6 +39,10 @@ public class GrpcPocketClient implements PocketClient {
     this.channel = Objects.requireNonNull(channel);
     this.stub = Objects.requireNonNull(stub);
     this.asyncStub = Objects.requireNonNull(asyncStub);
+  }
+
+  public void close() {
+    channel.shutdownNow();
   }
 
   public static GrpcPocketClient connect(
