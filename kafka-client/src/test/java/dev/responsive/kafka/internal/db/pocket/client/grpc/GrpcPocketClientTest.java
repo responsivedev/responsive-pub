@@ -10,7 +10,6 @@ import static org.mockito.Mockito.when;
 
 import com.google.protobuf.ByteString;
 import dev.responsive.kafka.internal.db.pocket.client.LssId;
-import dev.responsive.kafka.internal.db.pocket.client.PocketException;
 import dev.responsive.kafka.internal.db.pocket.client.Put;
 import dev.responsive.otterpocket.OtterPocketGrpc;
 import dev.responsive.otterpocket.Otterpocket;

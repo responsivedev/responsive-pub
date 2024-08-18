@@ -8,6 +8,8 @@ import dev.responsive.kafka.internal.db.pocket.client.Put;
 import dev.responsive.kafka.internal.db.pocket.client.WalEntry;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration;
 import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -24,7 +26,7 @@ public class PocketKVTable implements RemoteKVTable<WalEntry> {
   private final PocketClient pocketClient;
   private final PssPartitioner pssPartitioner;
   private LssId lssId;
-  private Optional<Long> flushedOffset = Optional.empty();
+  private Long fetchOffset = ResponsiveStoreRegistration.NO_COMMITTED_OFFSET;
   private PocketKVFlushManager flushManager;
 
   public PocketKVTable(
@@ -44,17 +46,29 @@ public class PocketKVTable implements RemoteKVTable<WalEntry> {
     if (flushManager != null) {
       throw new IllegalStateException("already initialized");
     }
+
     this.lssId = new LssId(kafkaPartition);
+
     final HashMap<Integer, Optional<Long>> lastWrittenOffset = new HashMap<>();
+    boolean unflushedLogs = false;
+    final List<Long> flushedLogOffsets = new LinkedList<>();
     for (final int pss: pssPartitioner.allPss()) {
       final var offsets = pocketClient.getCurrentOffsets(storeId, lssId, pss);
       if (offsets.flushedOffset().isPresent()) {
-        final var pssFlushedOffset = offsets.flushedOffset().get();
-        flushedOffset = flushedOffset.or(offsets::flushedOffset)
-            .map(fo -> Math.min(fo, pssFlushedOffset));
+        flushedLogOffsets.add(offsets.flushedOffset().get());
+      } else {
+        unflushedLogs = true;
       }
       lastWrittenOffset.put(pss, offsets.writtenOffset());
     }
+    if (unflushedLogs) {
+      this.fetchOffset = ResponsiveStoreRegistration.NO_COMMITTED_OFFSET;
+    } else if (!flushedLogOffsets.isEmpty()) {
+      this.fetchOffset = flushedLogOffsets.stream().min(Long::compareTo).get();
+    } else {
+      throw new IllegalStateException("could not find earliest flushed offset");
+    }
+
     flushManager = new PocketKVFlushManager(
         storeId,
         pocketClient,
@@ -114,6 +128,6 @@ public class PocketKVTable implements RemoteKVTable<WalEntry> {
 
   @Override
   public long fetchOffset(int kafkaPartition) {
-    return flushedOffset.orElse(ResponsiveStoreRegistration.NO_COMMITTED_OFFSET);
+    return fetchOffset;
   }
 }
