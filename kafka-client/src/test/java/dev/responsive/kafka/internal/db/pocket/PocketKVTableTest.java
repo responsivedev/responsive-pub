@@ -40,7 +40,7 @@ public class PocketKVTableTest {
   );
 
   @RegisterExtension
-  public static final ResponsiveExtension EXT = new ResponsiveExtension(StorageBackend.MONGO_DB);
+  public static final ResponsiveExtension EXT = new ResponsiveExtension(StorageBackend.POCKET);
 
   private PocketKVTable table;
   private PocketContainer pocketContainer;
