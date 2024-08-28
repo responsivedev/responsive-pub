@@ -1,0 +1,43 @@
+version: '3'
+services:
+  scylla:
+    image: scylladb/scylla:5.4
+    container_name: scylla
+    hostname: scylla
+    command: --smp 1 --options-file /etc/scylla/scylla.yaml --memory 750M --overprovisioned 1 --api-address 0.0.0.0 --seeds 10.0.0.30 --broadcast-address 10.0.0.30
+    ports:
+      - "9042:9042"
+    volumes:
+      - ./volumes/scylla/data:/var/lib/scylla/data:rw
+      - ./volumes/scylla.yaml:/etc/scylla/scylla.yaml
+    networks:
+      backend:
+        ipv4_address: 10.0.0.30
+
+  scylla2:
+    image: scylladb/scylla:5.4
+    container_name: scylla2
+    hostname: scylla2
+    command: --smp 1 --options-file /etc/scylla/scylla.yaml --memory 750M --overprovisioned 1 --api-address 0.0.0.0 --seeds 10.0.0.30 --broadcast-address 10.0.0.31
+    ports:
+      - "9043:9042"
+    volumes:
+      - ./volumes/scylla2/data:/var/lib/scylla/data:rw
+      - ./volumes/scylla.yaml:/etc/scylla/scylla.yaml
+    networks:
+      backend:
+        ipv4_address: 10.0.0.31
+
+  scylla3:
+    image: scylladb/scylla:5.4
+    container_name: scylla3
+    hostname: scylla3
+    command: --smp 1 --options-file /etc/scylla/scylla.yaml --memory 750M --overprovisioned 1 --api-address 0.0.0.0 --seeds 10.0.0.30 --broadcast-address 10.0.0.32
+    ports:
+      - "9044:9042"
+    volumes:
+      - ./volumes/scylla3/data:/var/lib/scylla/data:rw
+      - ./volumes/scylla.yaml:/etc/scylla/scylla.yaml
+    networks:
+      backend:
+        ipv4_address: 10.0.0.32
