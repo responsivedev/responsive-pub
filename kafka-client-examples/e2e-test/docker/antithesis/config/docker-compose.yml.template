@@ -21,7 +21,7 @@ services:
       CONFIG_PATH: "/app.properties"
       JAVA_OPTS: "-Dlog4j2.configurationFile=/log4j2.properties"
     volumes:
-      - ./volumes/${BACKEND}-app.properties:/app.properties
+      - ./volumes/app.properties:/app.properties
       - ./volumes/log4j2.properties:/log4j2.properties
     networks:
       backend:
@@ -45,7 +45,7 @@ services:
       CONFIG_PATH: "/app.properties"
       JAVA_OPTS: "-Dlog4j2.configurationFile=/log4j2.properties"
     volumes:
-      - ./volumes/${BACKEND}-app.properties:/app.properties
+      - ./volumes/app.properties:/app.properties
       - ./volumes/log4j2.properties:/log4j2.properties
     networks:
       backend:
@@ -68,7 +68,7 @@ services:
       E2E_APP_MODE: DRIVER
       CONFIG_PATH: "/app.properties"
     volumes:
-      - ./volumes/${BACKEND}-app.properties:/app.properties
+      - ./volumes/app.properties:/app.properties
     networks:
       backend:
         ipv4_address: 10.0.0.50

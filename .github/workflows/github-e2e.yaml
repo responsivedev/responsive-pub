@@ -73,6 +73,7 @@ jobs:
           CONFIG_IMG_VERSION: ${{ steps.kafka_client_version.outputs.KAFKA_CLIENT_VERSION }}
         run: |
           cat config/docker-compose.yml.template | envsubst > config/docker-compose.yml
+          cp config/app-$BACKEND.properties config/app.properties
           docker build . -t us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test-config:$CONFIG_IMG_VERSION
 
       - name: "Push Config"
