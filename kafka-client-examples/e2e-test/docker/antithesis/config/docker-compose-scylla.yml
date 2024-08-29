@@ -1,4 +1,6 @@
 version: '3'
+include:
+  - docker-compose-base.yml
 services:
   scylla:
     image: scylladb/scylla:5.4
