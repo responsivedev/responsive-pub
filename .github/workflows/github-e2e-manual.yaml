@@ -12,7 +12,7 @@ jobs:
     permissions:
       id-token: write # This is required for requesting the JWT
       contents: write # This is required for actions/checkout (read) and publishing tags (write)
-    uses: ./.github/workflows/github-e2e.yaml
+    uses: responsivedev/responsive-pub/.github/workflows/github-e2e.yaml@main
     with:
       test-duration: ${{ inputs.test-duration }}
     secrets: inherit
