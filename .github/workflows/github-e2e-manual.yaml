@@ -2,6 +2,14 @@ name: Antithesis Manual Run
 on:
   workflow_dispatch:
     inputs:
+      backend:
+        description: 'The backend storage type to use'
+        type: choice
+        required: true
+        default: 'scylla'
+        options:
+          - scylla
+          - mongo
       test-duration:
         description: 'The duration that the antithesis test runs'
         type: string
@@ -14,5 +22,6 @@ jobs:
       contents: write # This is required for actions/checkout (read) and publishing tags (write)
     uses: ./.github/workflows/github-e2e.yaml
     with:
+      backend: ${{ inputs.backend }}
       test-duration: ${{ inputs.test-duration }}
     secrets: inherit

@@ -2,6 +2,11 @@ name: Antithesis Test Run
 on:
   workflow_call:
     inputs:
+      backend:
+        description: 'The backend storage type to use'
+        type: string
+        required: true
+        default: 'scylla'
       test-duration:
         description: 'The duration that the antithesis test runs'
         type: string
@@ -69,7 +74,7 @@ jobs:
         working-directory: ./kafka-client-examples/e2e-test/docker/antithesis
         env:
           KAFKA_CLIENT_VERSION: latest
-          BACKEND: scylla
+          BACKEND: ${{ inputs.backend }}
           CONFIG_IMG_VERSION: ${{ steps.kafka_client_version.outputs.KAFKA_CLIENT_VERSION }}
         run: |
           cat config/docker-compose.yml.template | envsubst > config/docker-compose.yml
@@ -91,7 +96,7 @@ jobs:
           password: ${{ secrets.ANTITHESIS_PASSWORD }}
           github_token: ${{ secrets.ANTITHESIS_GH_PAT }}
           config_image: us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test-config:${{ steps.kafka_client_version.outputs.KAFKA_CLIENT_VERSION }}
-          images: us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test:${{ steps.kafka_client_version.outputs.KAFKA_CLIENT_VERSION }}
+          images: us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test:${{ steps.kafka_client_version.outputs.KAFKA_CLIENT_VERSION }};docker.io/mongo:5.0
           description: "responsive antithesis test run"
           email_recipients: "antithesis-responsive-aaaamurlsqy6e3hxnx6ksnec5y@antithesisgroup.slack.com"
           additional_parameters: |-
