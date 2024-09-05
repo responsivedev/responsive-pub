@@ -1,5 +1,7 @@
 from scratch
 COPY config/docker-compose.yml /docker-compose.yml
+COPY config/docker-compose-base.yml /docker-compose-base.yml
+COPY config/docker-compose-scylla.yml /docker-compose-scylla.yml
 COPY config/volumes/scylla.yaml volumes/scylla.yaml
 COPY config/volumes/app.properties /volumes/app.properties
 COPY config/volumes/log4j2.properties /volumes/log4j2.properties
