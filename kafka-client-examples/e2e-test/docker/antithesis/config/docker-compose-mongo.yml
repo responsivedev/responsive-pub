@@ -1,0 +1,47 @@
+version: '3'
+include:
+  - ./docker-compose-base.yml
+services:
+  mongo:
+    image: docker.io/mongo:5.0
+    container_name: mongo
+    hostname: mongo
+    command: mongod --replSet rs0
+    ports:
+      - "27017:27017"
+    volumes:
+      - ./volumes/mongo/data:/data/db
+    healthcheck:
+      test: echo "try { rs.status() } catch (err) { rs.initiate({_id:'rs0',members:[{_id:0,host:'mongo:27017',priority:1},{_id:1,host:'mongo2:27017',priority:0.5},{_id:2,host:'mongo3:27017',priority:0.5}]}) }" | mongosh --port 27017 --quiet
+      interval: 5s
+      timeout: 30s
+      retries: 30
+    networks:
+      backend:
+        ipv4_address: 10.0.0.30
+
+  mongo2:
+    image: docker.io/mongo:5.0
+    container_name: mongo2
+    hostname: mongo2
+    command: mongod --replSet rs0
+    ports:
+      - "27018:27017"
+    volumes:
+      - ./volumes/mongo2/data:/data/db
+    networks:
+      backend:
+        ipv4_address: 10.0.0.31
+
+  mongo3:
+    image: docker.io/mongo:5.0
+    container_name: mongo3
+    hostname: mongo3
+    command: mongod --replSet rs0
+    ports:
+      - "27019:27017"
+    volumes:
+      - ./volumes/mongo3/data:/data/db
+    networks:
+      backend:
+        ipv4_address: 10.0.0.32
