@@ -210,17 +210,24 @@ class MongoKVTableTest {
   }
 
   @Test
-  public void shouldHandleRangeScansCorrectly() {
+  public void shouldHandlePartitionedRangeScansCorrectly() {
     // Given:
     final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED);
-    var writerFactory = table.init(0);
-    var writer = writerFactory.createWriter(0);
-    writer.insert(bytes(10, 11, 12, 12, 13), byteArray(1), 100);
-    writer.insert(bytes(10, 11, 12, 13), byteArray(2), 100);
-    writer.insert(bytes(10, 11, 13), byteArray(3), 100);
-    writer.insert(bytes(10, 11, 13, 14), byteArray(4), 100);
-    writer.insert(bytes(11, 12), byteArray(5), 100);
-    writer.flush();
+
+    var writerFactory0 = table.init(0);
+    var writer0 = writerFactory0.createWriter(0);
+    var writerFactory1 = table.init(1);
+    var writer1 = writerFactory1.createWriter(1);
+
+    writer0.insert(bytes(10, 11, 12, 12, 13), byteArray(1), 100);
+    writer0.insert(bytes(10, 11, 12, 13), byteArray(2), 100);
+    writer0.insert(bytes(10, 11, 13), byteArray(3), 100);
+    writer1.insert(bytes(10, 11, 13, 13), byteArray(3), 100); // in range, excluded by partition
+    writer0.insert(bytes(10, 11, 13, 14), byteArray(4), 100);
+    writer0.insert(bytes(11, 12), byteArray(5), 100);
+
+    writer0.flush();
+    writer1.flush();
 
     // When:
     final var iter = table.range(0, bytes(10, 11, 12, 13), bytes(10, 11, 13, 14), -1);
@@ -294,12 +301,19 @@ class MongoKVTableTest {
   @Test
   public void shouldHandleFullScansCorrectly() {
     final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED);
-    var writerFactory = table.init(0);
-    var writer = writerFactory.createWriter(0);
-    writer.insert(bytes(10, 11, 12, 13), byteArray(2), 100);
-    writer.insert(bytes(10, 11, 13), byteArray(3), 100);
-    writer.insert(bytes(10, 11, 13, 14), byteArray(4), 100);
-    writer.flush();
+
+    var writerFactory0 = table.init(0);
+    var writer0 = writerFactory0.createWriter(0);
+    var writerFactory1 = table.init(1);
+    var writer1 = writerFactory1.createWriter(1);
+
+    writer0.insert(bytes(10, 11, 12, 13), byteArray(2), 100);
+    writer0.insert(bytes(10, 11, 13), byteArray(3), 100);
+    writer0.insert(bytes(10, 11, 13, 14), byteArray(4), 100);
+    writer1.insert(bytes(11, 13, 14), byteArray(5), 100); // excluded by partition
+
+    writer0.flush();
+    writer1.flush();
 
     // When:
     final var iter = table.all(0, -1);

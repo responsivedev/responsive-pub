@@ -170,7 +170,8 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
             Filters.gte(KVDoc.ID, keyCodec.encode(from)),
             Filters.lte(KVDoc.ID, keyCodec.encode(to)),
             Filters.not(Filters.exists(KVDoc.TOMBSTONE_TS)),
-            Filters.gte(KVDoc.TIMESTAMP, minValidTs)
+            Filters.gte(KVDoc.TIMESTAMP, minValidTs),
+            Filters.eq(KVDoc.KAFKA_PARTITION, kafkaPartition)
         )
     );
     return Iterators.kv(
@@ -185,7 +186,8 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
   public KeyValueIterator<Bytes, byte[]> all(final int kafkaPartition, final long minValidTs) {
     final FindIterable<KVDoc> result = docs.find(Filters.and(
         Filters.not(Filters.exists(KVDoc.TOMBSTONE_TS)),
-        Filters.gte(KVDoc.TIMESTAMP, minValidTs)
+        Filters.gte(KVDoc.TIMESTAMP, minValidTs),
+        Filters.eq(KVDoc.KAFKA_PARTITION, kafkaPartition)
     ));
     return Iterators.kv(
         result.iterator(),
@@ -213,6 +215,7 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
             Updates.set(KVDoc.VALUE, value),
             Updates.set(KVDoc.EPOCH, epoch),
             Updates.set(KVDoc.TIMESTAMP, epochMillis),
+            Updates.set(KVDoc.KAFKA_PARTITION, kafkaPartition),
             Updates.unset(KVDoc.TOMBSTONE_TS)
         ),
         new UpdateOptions().upsert(true)
