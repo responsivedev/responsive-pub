@@ -214,10 +214,10 @@ class MongoKVTableTest {
     // Given:
     final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED);
 
-    var writerFactory0 = table.init(0);
-    var writer0 = writerFactory0.createWriter(0);
-    var writerFactory1 = table.init(1);
-    var writer1 = writerFactory1.createWriter(1);
+    final var writerFactory0 = table.init(0);
+    final var writer0 = writerFactory0.createWriter(0);
+    final var writerFactory1 = table.init(1);
+    final var writer1 = writerFactory1.createWriter(1);
 
     writer0.insert(bytes(10, 11, 12, 12, 13), byteArray(1), 100);
     writer0.insert(bytes(10, 11, 12, 13), byteArray(2), 100);
@@ -302,10 +302,10 @@ class MongoKVTableTest {
   public void shouldHandleFullScansCorrectly() {
     final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED);
 
-    var writerFactory0 = table.init(0);
-    var writer0 = writerFactory0.createWriter(0);
-    var writerFactory1 = table.init(1);
-    var writer1 = writerFactory1.createWriter(1);
+    final var writerFactory0 = table.init(0);
+    final var writer0 = writerFactory0.createWriter(0);
+    final var writerFactory1 = table.init(1);
+    final var writer1 = writerFactory1.createWriter(1);
 
     writer0.insert(bytes(10, 11, 12, 13), byteArray(2), 100);
     writer0.insert(bytes(10, 11, 13), byteArray(3), 100);
