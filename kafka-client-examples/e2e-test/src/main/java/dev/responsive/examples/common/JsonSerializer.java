@@ -14,14 +14,21 @@
  * limitations under the License.
  */
 
-// this should only explicitly run when we use IntelliJ source downloading
-configurations {
-    all {
-        attributes {
-            // don't choose the android runtime version of packages like Guava
-            attribute(
-                    TargetJvmEnvironment.TARGET_JVM_ENVIRONMENT_ATTRIBUTE,
-                    objects.named(TargetJvmEnvironment.STANDARD_JVM))
-        }
-    }
+package dev.responsive.examples.common;
+
+import org.apache.kafka.common.serialization.Serializer;
+
+public class JsonSerializer<T> implements Serializer<T> {
+
+  private final Serializer<T> delegate;
+
+  @SuppressWarnings("resource")
+  public JsonSerializer(Class<T> clazz) {
+    this.delegate = new JsonSerde<>(clazz).serializer();
+  }
+
+  @Override
+  public byte[] serialize(final String topic, final T data) {
+    return delegate.serialize(topic, data);
+  }
 }

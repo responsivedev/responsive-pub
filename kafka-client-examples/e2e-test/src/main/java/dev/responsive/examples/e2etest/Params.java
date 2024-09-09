@@ -1,5 +1,7 @@
 package dev.responsive.examples.e2etest;
 
+import dev.responsive.examples.common.Mode;
+
 public class Params {
   public static final String NAME = System.getenv().getOrDefault("TEST_NAME", "e2e");
   public static final String INPUT_TOPIC = System.getenv().getOrDefault("INPUT_TOPIC", "input");
@@ -16,5 +18,7 @@ public class Params {
       = Integer.parseInt(System.getenv().getOrDefault("RECEIVE_THRESHOLD", "480"));
   public static final int FAULT_STOP_THRESHOLD
       = Integer.parseInt(System.getenv().getOrDefault("FAULT_STOP_THRESHOLD", "480"));
-  public static final String MODE = System.getenv().getOrDefault("E2E_APP_MODE", "APPLICATION");
+  public static final String MODE =
+      System.getenv().getOrDefault("E2E_APP_MODE", Mode.APPLICATION.name());
+
 }

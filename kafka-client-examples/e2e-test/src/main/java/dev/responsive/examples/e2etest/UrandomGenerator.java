@@ -17,6 +17,28 @@ public class UrandomGenerator {
     reloadBuffer();
   }
 
+  public synchronized byte nextByte() {
+    try {
+      return buffer.get();
+    } catch (final BufferUnderflowException e) {
+      reloadBuffer();
+      return buffer.get();
+    }
+  }
+
+  public int nextInt() {
+    try {
+      return buffer.getInt();
+    } catch (final BufferUnderflowException e) {
+      reloadBuffer();
+      return buffer.getInt();
+    }
+  }
+
+  public int nextInt(final int max) {
+    return (int) (nextLong() % max);
+  }
+
   public synchronized Long nextLong() {
     try {
       return buffer.getLong();
