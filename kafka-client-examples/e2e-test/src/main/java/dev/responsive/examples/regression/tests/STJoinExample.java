@@ -33,7 +33,7 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Produced;
 
-public class STJoinExample extends AbstractKSExampleService{
+public class STJoinExample extends AbstractKSExampleService {
 
   public STJoinExample(final Map<String, Object> props, final boolean responsive) {
     super(

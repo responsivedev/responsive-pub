@@ -28,6 +28,6 @@ public record StoredOrder(
       @JsonProperty("timestamp") long timestamp,
       @JsonProperty("count") long count,
       @JsonProperty("size") long size
-  ){};
-
+  ) {
+  }
 }

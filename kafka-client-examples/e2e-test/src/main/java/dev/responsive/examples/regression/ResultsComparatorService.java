@@ -39,7 +39,8 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class ResultsComparatorService<T extends Comparable<T>> extends AbstractExecutionThreadService {
+public class ResultsComparatorService<T extends Comparable<T>>
+    extends AbstractExecutionThreadService {
 
   private static final Logger LOG = LoggerFactory.getLogger(ResultsComparatorService.class);
   private static final int MAX_BUFFER = 100;
