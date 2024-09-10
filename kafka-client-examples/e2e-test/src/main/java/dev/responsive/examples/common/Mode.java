@@ -14,14 +14,17 @@
  * limitations under the License.
  */
 
-// this should only explicitly run when we use IntelliJ source downloading
-configurations {
-    all {
-        attributes {
-            // don't choose the android runtime version of packages like Guava
-            attribute(
-                    TargetJvmEnvironment.TARGET_JVM_ENVIRONMENT_ATTRIBUTE,
-                    objects.named(TargetJvmEnvironment.STANDARD_JVM))
-        }
-    }
+package dev.responsive.examples.common;
+
+public enum Mode {
+  DRIVER,
+  APPLICATION,
+
+  REGRESSION_ST_DRIVER,
+  REGRESSION_ST_JOIN,
+  REGRESSION_ST_BASELINE,
+
+  REGRESSION_BATCH_DRIVER,
+  REGRESSION_BATCH,
+  REGRESSION_BATCH_BASELINE,
 }

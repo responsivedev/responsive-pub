@@ -1,33 +1,16 @@
 package dev.responsive.examples.e2etest;
 
-import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.REQUEST_TIMEOUT;
-import static dev.responsive.kafka.api.config.ResponsiveConfig.CASSANDRA_HOSTNAME_CONFIG;
-import static dev.responsive.kafka.api.config.ResponsiveConfig.CASSANDRA_PORT_CONFIG;
-
-import com.datastax.oss.driver.api.core.AllNodesFailedException;
-import com.datastax.oss.driver.api.core.CqlSession;
-import com.datastax.oss.driver.api.core.DriverTimeoutException;
-import com.datastax.oss.driver.api.core.config.DriverConfigLoader;
-import com.datastax.oss.driver.api.core.connection.ConnectionInitException;
-import com.datastax.oss.driver.api.core.servererrors.ReadFailureException;
-import com.datastax.oss.driver.api.core.servererrors.ReadTimeoutException;
-import com.datastax.oss.driver.api.core.servererrors.UnavailableException;
-import com.datastax.oss.driver.api.core.servererrors.WriteFailureException;
-import com.datastax.oss.driver.api.core.servererrors.WriteTimeoutException;
-import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
-import com.datastax.oss.driver.api.querybuilder.schema.CreateKeyspace;
-import dev.responsive.examples.e2etest.Schema.InputRecord;
-import dev.responsive.examples.e2etest.Schema.OutputRecord;
+import dev.responsive.examples.common.E2ETestUtils;
+import dev.responsive.examples.common.InjectedE2ETestException;
+import dev.responsive.examples.common.UncaughtStreamsAntithesisHandler;
+import dev.responsive.examples.e2etest.E2ESchema.InputRecord;
+import dev.responsive.examples.e2etest.E2ESchema.OutputRecord;
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.async.AsyncFixedKeyProcessorSupplier;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
-import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.api.stores.ResponsiveStores;
-import java.net.ConnectException;
-import java.net.InetSocketAddress;
 import java.time.Duration;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -35,19 +18,10 @@ import java.util.Properties;
 import java.util.Set;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.common.errors.DisconnectException;
-import org.apache.kafka.common.errors.InvalidProducerEpochException;
-import org.apache.kafka.common.errors.ProducerFencedException;
-import org.apache.kafka.common.errors.RebalanceInProgressException;
-import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.errors.TransactionAbortedException;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
-import org.apache.kafka.streams.errors.TaskCorruptedException;
-import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Named;
@@ -92,15 +66,8 @@ public class E2ETestApplication {
   }
 
   public synchronized void start() {
-    E2ETestUtils.retryFor(
-        () -> E2ETestUtils.maybeCreateTopics(
-            properties, partitions, List.of(inputTopic, outputTopic)),
-        Duration.ofMinutes(5)
-    );
-    if (properties.get(ResponsiveConfig.STORAGE_BACKEND_TYPE_CONFIG)
-        .equals(StorageBackend.CASSANDRA.name())) {
-      E2ETestUtils.retryFor(this::maybeCreateKeyspace, Duration.ofMinutes(5));
-    }
+    E2ETestUtils.maybeCreateTopics(properties, partitions, List.of(inputTopic, outputTopic));
+    E2ETestUtils.maybeCreateKeyspace(properties);
     // build topology after creating keyspace because we use keyspace retry
     // to wait for scylla to resolve
     E2ETestUtils.retryFor(
@@ -136,7 +103,7 @@ public class E2ETestApplication {
   private KafkaStreams buildTopology(final Map<String, Object> properties) {
     final StreamsBuilder builder = new StreamsBuilder();
     final KStream<Long, InputRecord> stream =
-        builder.stream(inputTopic, Consumed.with(Serdes.Long(), Schema.inputRecordSerde()));
+        builder.stream(inputTopic, Consumed.with(Serdes.Long(), E2ESchema.inputRecordSerde()));
     final UrandomGenerator randomGenerator = new UrandomGenerator();
     int exceptionThreshold = this.exceptionThreshold;
     if (Math.abs(randomGenerator.nextLong()) % 2 == 0) {
@@ -148,7 +115,7 @@ public class E2ETestApplication {
             Named.as("AsyncProcessor"),
             name
         );
-    result.to(outputTopic, Produced.with(Serdes.Long(), Schema.outputRecordSerde()));
+    result.to(outputTopic, Produced.with(Serdes.Long(), E2ESchema.outputRecordSerde()));
     final var builderProperties = new Properties();
     builderProperties.putAll(properties);
     builderProperties.put(StreamsConfig.APPLICATION_ID_CONFIG, name);
@@ -164,84 +131,8 @@ public class E2ETestApplication {
         builder.build(builderProperties),
         builderProperties
     );
-    streams.setUncaughtExceptionHandler(exception -> {
-      if (shouldLogError(exception, new LinkedList<>())) {
-        LOG.error("uncaught exception on test app stream thread {}({}) {}",
-            exception.getClass().getName(),
-            exception.getMessage(),
-            causalSummary(exception, new LinkedList<>()),
-            exception
-        );
-        LOG.error("ANTITHESIS NEVER: uncaught exception on test app stream thread");
-      }
-      return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.REPLACE_THREAD;
-    });
+    streams.setUncaughtExceptionHandler(new UncaughtStreamsAntithesisHandler());
     return streams;
-  }
-
-  private String causalSummary(final Throwable t, final List<Throwable> seen) {
-    final String summary = t.getClass().getName() + "->";
-    seen.add(t);
-    if (t.getCause() == null || seen.contains(t.getCause())) {
-      return summary + causalSummary(t.getCause(), seen);
-    }
-    return summary;
-  }
-
-  private boolean shouldLogError(final Throwable throwable, List<Throwable> seen) {
-    final List<Class<? extends Throwable>> dontcare = List.of(
-        AllNodesFailedException.class,
-        ConnectException.class,
-        ConnectionInitException.class,
-        DisconnectException.class,
-        DriverTimeoutException.class,
-        InjectedE2ETestException.class,
-        InvalidProducerEpochException.class,
-        ProducerFencedException.class,
-        ReadFailureException.class,
-        ReadTimeoutException.class,
-        RebalanceInProgressException.class,
-        TaskCorruptedException.class,
-        TaskMigratedException.class,
-        TimeoutException.class,
-        java.util.concurrent.TimeoutException.class,
-        TransactionAbortedException.class,
-        UnavailableException.class,
-        WriteFailureException.class,
-        WriteTimeoutException.class
-    );
-    for (final var c : dontcare) {
-      if (c.isInstance(throwable)) {
-        return false;
-      }
-    }
-    seen.add(throwable);
-    if (throwable.getCause() != null && !seen.contains(throwable.getCause())) {
-      return shouldLogError(throwable.getCause(), seen);
-    }
-    return true;
-  }
-
-  private void maybeCreateKeyspace() {
-    LOG.info("create keyspace responsive_test");
-    try (final CqlSession session = cqlSession()) {
-      final CreateKeyspace createKeyspace = SchemaBuilder.createKeyspace("responsive_test")
-          .ifNotExists()
-          .withSimpleStrategy(3);
-      session.execute(createKeyspace.build());
-    }
-  }
-
-  private CqlSession cqlSession() {
-    final String scyllaName = properties.get(CASSANDRA_HOSTNAME_CONFIG).toString();
-    final Integer port = Integer.parseInt(properties.get(CASSANDRA_PORT_CONFIG).toString());
-    return CqlSession.builder()
-        .addContactPoint(new InetSocketAddress(scyllaName, port))
-        .withLocalDatacenter("datacenter1")
-        .withConfigLoader(DriverConfigLoader.programmaticBuilder()
-            .withLong(REQUEST_TIMEOUT, 100000)
-            .build())
-        .build();
   }
 
   static class E2ETestProcessor implements FixedKeyProcessor<Long, InputRecord, OutputRecord> {
@@ -318,17 +209,10 @@ public class E2ETestApplication {
           ResponsiveStores.timestampedKeyValueStoreBuilder(
               ResponsiveStores.keyValueStore(ResponsiveKeyValueParams.keyValue(storeName)),
               Serdes.Long(),
-              Schema.outputRecordSerde()
+              E2ESchema.outputRecordSerde()
           )
       );
     }
   }
 
-  private static class InjectedE2ETestException extends RuntimeException {
-    private static final long serialVersionUID = 0L;
-
-    public InjectedE2ETestException() {
-      super("injected e2e test exception");
-    }
-  }
 }

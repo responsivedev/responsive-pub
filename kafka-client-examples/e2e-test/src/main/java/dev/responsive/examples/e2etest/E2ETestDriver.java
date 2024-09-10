@@ -1,8 +1,9 @@
 package dev.responsive.examples.e2etest;
 
 import com.google.common.collect.ImmutableMap;
-import dev.responsive.examples.e2etest.Schema.InputRecord;
-import dev.responsive.examples.e2etest.Schema.OutputRecord;
+import dev.responsive.examples.common.E2ETestUtils;
+import dev.responsive.examples.e2etest.E2ESchema.InputRecord;
+import dev.responsive.examples.e2etest.E2ESchema.OutputRecord;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -103,7 +104,7 @@ public class E2ETestDriver {
     final Map<String, Object> producerProperties = ImmutableMap.<String, Object>builder()
         .putAll(properties)
         .put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, LongSerializer.class)
-        .put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, Schema.InputRecordSerializer.class)
+        .put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, E2ESchema.InputRecordSerializer.class)
         .put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
         .put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 60000)
         .put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, 240000)
@@ -112,7 +113,10 @@ public class E2ETestDriver {
     final Map<String, Object> consumerProperties = ImmutableMap.<String, Object>builder()
         .putAll(properties)
         .put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, LongDeserializer.class)
-        .put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, Schema.OutputRecordDeserializer.class)
+        .put(
+            ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
+            E2ESchema.OutputRecordDeserializer.class
+        )
         .put(
             ConsumerConfig.ISOLATION_LEVEL_CONFIG,
             IsolationLevel.READ_COMMITTED.toString().toLowerCase(Locale.ROOT))

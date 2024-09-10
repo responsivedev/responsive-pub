@@ -14,14 +14,12 @@
  * limitations under the License.
  */
 
-// this should only explicitly run when we use IntelliJ source downloading
-configurations {
-    all {
-        attributes {
-            // don't choose the android runtime version of packages like Guava
-            attribute(
-                    TargetJvmEnvironment.TARGET_JVM_ENVIRONMENT_ATTRIBUTE,
-                    objects.named(TargetJvmEnvironment.STANDARD_JVM))
-        }
-    }
-}
+package dev.responsive.examples.regression.model;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+public record Customer(
+    @JsonProperty("customerId") String customerId,
+    @JsonProperty("customerName") String customerName,
+    @JsonProperty("location") String location
+) {}

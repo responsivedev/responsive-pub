@@ -14,14 +14,18 @@
  * limitations under the License.
  */
 
-// this should only explicitly run when we use IntelliJ source downloading
-configurations {
-    all {
-        attributes {
-            // don't choose the android runtime version of packages like Guava
-            attribute(
-                    TargetJvmEnvironment.TARGET_JVM_ENVIRONMENT_ATTRIBUTE,
-                    objects.named(TargetJvmEnvironment.STANDARD_JVM))
-        }
-    }
+package dev.responsive.examples.regression;
+
+public class RegConstants {
+  public static final String ORDERS = "orders";
+  public static final String CUSTOMERS = "customers";
+  public static final int NUM_PARTITIONS = 8;
+  private static final String RESULTS = "enriched-orders";
+
+  private RegConstants() { }
+
+  public static String resultsTopic(final boolean responsive) {
+    return RESULTS + (responsive ? "-responsive" : "-baseline");
+  }
+
 }
