@@ -1,9 +1,13 @@
 package dev.responsive.examples.e2etest;
 
+import dev.responsive.examples.common.JsonDeserializer;
 import dev.responsive.examples.common.Mode;
 import dev.responsive.examples.regression.OrderAndCustomerDriver;
-import dev.responsive.examples.regression.OrderProcessingExample;
+import dev.responsive.examples.regression.RegressionSchema;
 import dev.responsive.examples.regression.ResultsComparatorService;
+import dev.responsive.examples.regression.tests.AbstractKSExampleService;
+import dev.responsive.examples.regression.tests.KeyBatchExample;
+import dev.responsive.examples.regression.tests.STJoinExample;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -33,21 +37,36 @@ public class Main {
       case APPLICATION:
         startApplication(rawCfg);
         break;
-      case REGRESSION_DRIVER:
-        startRegressionDriver(rawCfg);
+
+      // TODO(agavra): put this information into the enum so we don't need a big switch
+      case REGRESSION_ST_DRIVER:
+        startRegressionDriver(rawCfg, RegressionSchema.EnrichedOrderDeserializer.class);
         break;
       case REGRESSION_ST_JOIN:
-        startRegressionStJoin(rawCfg, true);
+        startRegressionTest(new STJoinExample(rawCfg, true));
         break;
-      case REGRESSION_BASELINE:
-        startRegressionStJoin(rawCfg, false);
+      case REGRESSION_ST_BASELINE:
+        startRegressionTest(new STJoinExample(rawCfg, false));
+        break;
+
+      case REGRESSION_BATCH_DRIVER:
+        startRegressionDriver(rawCfg, RegressionSchema.GroupedOrderDeserializer.class);
+        break;
+      case REGRESSION_BATCH:
+        startRegressionTest(new KeyBatchExample(rawCfg, true));
+        break;
+      case REGRESSION_BATCH_BASELINE:
+        startRegressionTest(new KeyBatchExample(rawCfg, false));
         break;
       default:
         throw new IllegalArgumentException("Unexpected mode: " + mode);
     }
   }
 
-  private static void startRegressionDriver(final Map<String, Object> rawCfg) {
+  private static <T extends Comparable<T>> void startRegressionDriver(
+      final Map<String, Object> rawCfg,
+      final Class<? extends JsonDeserializer<T>> deserializer
+  ) {
     LOG.info("starting regression driver");
     final OrderAndCustomerDriver driver = new OrderAndCustomerDriver(rawCfg);
     Runtime.getRuntime().addShutdownHook(new Thread(() -> {
@@ -63,7 +82,8 @@ public class Main {
     LOG.info("started regression driver");
 
     LOG.info("starting regression comparator");
-    final ResultsComparatorService comparator = new ResultsComparatorService(rawCfg);
+    final ResultsComparatorService<?> comparator =
+        new ResultsComparatorService<>(rawCfg, deserializer);
     Runtime.getRuntime().addShutdownHook(new Thread(() -> {
       LOG.info("stopping regression comparator...");
       comparator.stopAsync().awaitTerminated();
@@ -74,19 +94,15 @@ public class Main {
     LOG.info("started regression comparator");
   }
 
-  private static void startRegressionStJoin(
-      final Map<String, Object> rawCfg,
-      final boolean responsive
-  ) {
-    LOG.info("starting regression ST-JOIN test");
-    final OrderProcessingExample regression = new OrderProcessingExample(rawCfg, responsive);
+  private static void startRegressionTest(final AbstractKSExampleService service) {
+    LOG.info("starting regression {}", service.name());
     Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-      LOG.info("stopping regression ST-JOIN test...");
-      regression.stopAsync().awaitTerminated();
-      LOG.info("stopped regression ST-JOIN test");
+      LOG.info("stopping regression {}...", service.name());
+      service.stopAsync().awaitTerminated();
+      LOG.info("stopped regression {}", service.name());
     }));
-    regression.startAsync().awaitRunning();
-    LOG.info("started regression ST-JOIN test.");
+    service.startAsync().awaitRunning();
+    LOG.info("started regression {}.", service.name());
   }
 
   private static void startApplication(final Map<String, Object> rawCfg) {

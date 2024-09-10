@@ -24,8 +24,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZE
 
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.util.concurrent.AbstractExecutionThreadService;
-import dev.responsive.examples.regression.RegressionSchema.EnrichedOrderDeserializer;
-import dev.responsive.examples.regression.model.EnrichedOrder;
+import dev.responsive.examples.common.JsonDeserializer;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -40,18 +39,21 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class ResultsComparatorService extends AbstractExecutionThreadService {
+public class ResultsComparatorService<T extends Comparable<T>> extends AbstractExecutionThreadService {
 
   private static final Logger LOG = LoggerFactory.getLogger(ResultsComparatorService.class);
   private static final int MAX_BUFFER = 100;
 
   private final Map<String, Object> properties;
-  private KafkaConsumer<String, EnrichedOrder> consumer;
+  private KafkaConsumer<String, T> consumer;
 
-  public ResultsComparatorService(final Map<String, Object> properties) {
+  public ResultsComparatorService(
+      final Map<String, Object> properties,
+      final Class<? extends JsonDeserializer<T>> deserializerClass
+  ) {
     this.properties = new HashMap<>(properties);
     this.properties.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-    this.properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, EnrichedOrderDeserializer.class);
+    this.properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, deserializerClass);
     this.properties.put(ISOLATION_LEVEL_CONFIG, "read_committed");
   }
 
@@ -75,8 +77,8 @@ public class ResultsComparatorService extends AbstractExecutionThreadService {
     final int[] responsiveConsumed = new int[NUM_PARTITIONS];
     final int[] baselineConsumed = new int[NUM_PARTITIONS];
 
-    final var baselineBuffered = ArrayListMultimap.<Integer, Record>create();
-    final var responsiveBuffered = ArrayListMultimap.<Integer, Record>create();
+    final var baselineBuffered = ArrayListMultimap.<Integer, Record<T>>create();
+    final var responsiveBuffered = ArrayListMultimap.<Integer, Record<T>>create();
 
     int matches = 0;
     while (isRunning()) {
@@ -87,11 +89,11 @@ public class ResultsComparatorService extends AbstractExecutionThreadService {
       final var records = consumer.poll(Duration.ofSeconds(10));
       records.records(resultsTopic(true)).forEach(r -> {
         responsiveConsumed[r.partition()]++;
-        responsiveBuffered.put(r.partition(), new Record(r));
+        responsiveBuffered.put(r.partition(), new Record<>(r));
       });
       records.records(resultsTopic(false)).forEach(r -> {
         baselineConsumed[r.partition()]++;
-        baselineBuffered.put(r.partition(), new Record(r));
+        baselineBuffered.put(r.partition(), new Record<>(r));
       });
 
       for (int p = 0; p < NUM_PARTITIONS; p++) {
@@ -139,7 +141,7 @@ public class ResultsComparatorService extends AbstractExecutionThreadService {
       final int compare = consumedResponsive[p] - consumedBaseline[p];
       if (compare > MAX_BUFFER) {
         LOG.warn(
-            "partition {} on responsive is ahead of baseline by {} records... Pausing baseline.",
+            "partition {} on responsive is ahead of baseline by {} records... Pausing responsive.",
             p,
             compare
         );
@@ -147,7 +149,7 @@ public class ResultsComparatorService extends AbstractExecutionThreadService {
         toResume.add(new TopicPartition(resultsTopic(false), p));
       } else if (compare < -MAX_BUFFER) {
         LOG.warn(
-            "partition {} on responsive is behind of baseline by {} records... Pausing responsive.",
+            "partition {} on responsive is behind of baseline by {} records... Pausing baseline.",
             p,
             -compare
         );
@@ -173,11 +175,11 @@ public class ResultsComparatorService extends AbstractExecutionThreadService {
         )).toList();
   }
 
-  private record Record(ConsumerRecord<String, EnrichedOrder> record)
-      implements Comparable<Record> {
+  private record Record<T extends Comparable<T>>(ConsumerRecord<String, T> record)
+      implements Comparable<Record<T>> {
 
     @Override
-    public int compareTo(final Record o) {
+    public int compareTo(final Record<T> o) {
       return record.value().compareTo(o.record().value());
     }
   }

@@ -17,6 +17,7 @@
 package dev.responsive.examples.common;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
@@ -27,6 +28,7 @@ public class JsonSerde<T> implements Serde<T> {
 
   public JsonSerde(Class<T> clazz) {
     this.clazz = clazz;
+    objectMapper.registerModule(new Jdk8Module());
   }
 
   @Override

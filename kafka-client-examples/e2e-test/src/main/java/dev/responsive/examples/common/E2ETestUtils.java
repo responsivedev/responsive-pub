@@ -31,13 +31,18 @@ import dev.responsive.kafka.api.config.StorageBackend;
 import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.concurrent.ExecutionException;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.errors.TopicExistsException;
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.StreamsConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -162,6 +167,20 @@ public class E2ETestUtils {
     if (resultSet.one() == null) {
       throw new NoSuchElementException("keyspace responsive_test does not exist");
     }
+  }
+
+  public static Map<String, Object> defaultStreamProps(final Map<String, Object> originals) {
+    final Map<String, Object> props = new HashMap<>(originals);
+    props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);
+    props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
+    props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
+    props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+
+    props.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 10);
+    props.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 60000);
+
+    props.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, 90000);
+    return props;
   }
 
   private E2ETestUtils() {

@@ -14,17 +14,20 @@
  * limitations under the License.
  */
 
-package dev.responsive.examples.common;
+package dev.responsive.examples.regression.model;
 
-public enum Mode {
-  DRIVER,
-  APPLICATION,
+import com.fasterxml.jackson.annotation.JsonProperty;
+import java.util.Optional;
 
-  REGRESSION_ST_DRIVER,
-  REGRESSION_ST_JOIN,
-  REGRESSION_ST_BASELINE,
+public record StoredOrder(
+    @JsonProperty("order") Optional<Order> order,
+    @JsonProperty("meta") Optional<Meta> meta
+) {
 
-  REGRESSION_BATCH_DRIVER,
-  REGRESSION_BATCH,
-  REGRESSION_BATCH_BASELINE,
+  public record Meta(
+      @JsonProperty("timestamp") long timestamp,
+      @JsonProperty("count") long count,
+      @JsonProperty("size") long size
+  ){};
+
 }

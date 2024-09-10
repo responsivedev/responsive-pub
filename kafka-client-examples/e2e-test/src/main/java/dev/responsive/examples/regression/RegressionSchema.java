@@ -21,7 +21,9 @@ import dev.responsive.examples.common.JsonSerde;
 import dev.responsive.examples.common.JsonSerializer;
 import dev.responsive.examples.regression.model.Customer;
 import dev.responsive.examples.regression.model.EnrichedOrder;
+import dev.responsive.examples.regression.model.GroupedOrder;
 import dev.responsive.examples.regression.model.Order;
+import dev.responsive.examples.regression.model.StoredOrder;
 import org.apache.kafka.common.serialization.Serde;
 
 public class RegressionSchema {
@@ -36,6 +38,14 @@ public class RegressionSchema {
 
   public static Serde<EnrichedOrder> enrichedOrderSerde() {
     return new JsonSerde<>(EnrichedOrder.class);
+  }
+
+  public static Serde<GroupedOrder> groupedOrderSerde() {
+    return new JsonSerde<>(GroupedOrder.class);
+  }
+
+  public static Serde<StoredOrder> storedOrderSerde() {
+    return new JsonSerde<>(StoredOrder.class);
   }
 
   public static class CustomerSerializer extends JsonSerializer<Customer> {
@@ -53,6 +63,12 @@ public class RegressionSchema {
   public static class EnrichedOrderDeserializer extends JsonDeserializer<EnrichedOrder> {
     public EnrichedOrderDeserializer() {
       super(EnrichedOrder.class);
+    }
+  }
+
+  public static class GroupedOrderDeserializer extends JsonDeserializer<GroupedOrder> {
+    public GroupedOrderDeserializer() {
+      super(GroupedOrder.class);
     }
   }
 
