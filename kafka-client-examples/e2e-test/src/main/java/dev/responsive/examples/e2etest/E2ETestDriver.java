@@ -113,7 +113,10 @@ public class E2ETestDriver {
     final Map<String, Object> consumerProperties = ImmutableMap.<String, Object>builder()
         .putAll(properties)
         .put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, LongDeserializer.class)
-        .put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, E2ESchema.OutputRecordDeserializer.class)
+        .put(
+            ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
+            E2ESchema.OutputRecordDeserializer.class
+        )
         .put(
             ConsumerConfig.ISOLATION_LEVEL_CONFIG,
             IsolationLevel.READ_COMMITTED.toString().toLowerCase(Locale.ROOT))

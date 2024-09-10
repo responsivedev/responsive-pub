@@ -34,8 +34,9 @@ public class CustomerGen {
       "Jason", "Sharon", "Jeffrey", "Laura", "Ryan", "Cynthia", "Jacob", "Kathleen", "Gary",
       "Angela", "Nicholas", "Shirley"
   };
-  private static final String[] LOCATIONS =
-      {"NY", "CA", "TX", "FL", "IL", "PA", "OH", "MI", "GA", "NJ"};
+  private static final String[] LOCATIONS = {
+      "NY", "CA", "TX", "FL", "IL", "PA", "OH", "MI", "GA", "NJ"
+  };
 
   private final UrandomGenerator random;
   private final List<String> customerIds = new ArrayList<>();
