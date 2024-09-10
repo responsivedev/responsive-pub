@@ -10,4 +10,5 @@ jobs:
     uses: responsivedev/responsive-pub/.github/workflows/github-e2e.yaml@main
     with:
       test-duration: "6.0"
+      backend: "scylla"
     secrets: inherit
