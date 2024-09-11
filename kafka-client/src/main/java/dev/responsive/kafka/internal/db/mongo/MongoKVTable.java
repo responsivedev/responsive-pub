@@ -37,6 +37,7 @@ import com.mongodb.client.model.WriteModel;
 import com.mongodb.client.result.UpdateResult;
 import dev.responsive.kafka.internal.db.MongoKVFlushManager;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
+import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.utils.Iterators;
 import java.time.Duration;
 import java.time.Instant;
@@ -65,22 +66,26 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
   private final MongoCollection<KVMetadataDoc> metadata;
 
   private final ConcurrentMap<Integer, Long> kafkaPartitionToEpoch = new ConcurrentHashMap<>();
+  private final TablePartitioner<Bytes, Integer> partitioner;
 
   public MongoKVTable(
       final MongoClient client,
       final String name,
-      final CollectionCreationOptions collectionCreationOptions
+      final CollectionCreationOptions collectionCreationOptions,
+      final TablePartitioner<Bytes, Integer> partitioner
   ) {
-    this(client, name, collectionCreationOptions, null);
+    this(client, name, collectionCreationOptions, null, partitioner);
   }
 
   public MongoKVTable(
       final MongoClient client,
       final String name,
       final CollectionCreationOptions collectionCreationOptions,
-      final Duration ttl
+      final Duration ttl,
+      final TablePartitioner<Bytes, Integer> partitioner
   ) {
     this.name = name;
+    this.partitioner = partitioner;
     this.keyCodec = new StringKeyCodec();
     final CodecProvider pojoCodecProvider = PojoCodecProvider.builder().automatic(true).build();
     final CodecRegistry pojoCodecRegistry = fromRegistries(
@@ -146,7 +151,7 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
     LOG.info("Retrieved initial metadata {}", metaDoc);
 
     kafkaPartitionToEpoch.put(kafkaPartition, metaDoc.epoch);
-    return new MongoKVFlushManager(this, docs, kafkaPartition);
+    return new MongoKVFlushManager(this, docs, kafkaPartition, partitioner);
   }
 
   @Override
@@ -170,31 +175,36 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
             Filters.gte(KVDoc.ID, keyCodec.encode(from)),
             Filters.lte(KVDoc.ID, keyCodec.encode(to)),
             Filters.not(Filters.exists(KVDoc.TOMBSTONE_TS)),
-            Filters.gte(KVDoc.TIMESTAMP, minValidTs),
-            Filters.eq(KVDoc.KAFKA_PARTITION, kafkaPartition)
+            Filters.gte(KVDoc.TIMESTAMP, minValidTs)
         )
     );
-    return Iterators.kv(
-        result.iterator(),
-        doc -> new KeyValue<>(
-            keyCodec.decode(doc.getKey()),
-            doc.getTombstoneTs() == null ? doc.getValue() : null
-        ));
+    return filterScanResult(kafkaPartition, result);
   }
 
   @Override
   public KeyValueIterator<Bytes, byte[]> all(final int kafkaPartition, final long minValidTs) {
     final FindIterable<KVDoc> result = docs.find(Filters.and(
         Filters.not(Filters.exists(KVDoc.TOMBSTONE_TS)),
-        Filters.gte(KVDoc.TIMESTAMP, minValidTs),
-        Filters.eq(KVDoc.KAFKA_PARTITION, kafkaPartition)
+        Filters.gte(KVDoc.TIMESTAMP, minValidTs)
     ));
-    return Iterators.kv(
+    return filterScanResult(kafkaPartition, result);
+  }
+
+  private KeyValueIterator<Bytes, byte[]> filterScanResult(
+      final int kafkaPartition,
+      final FindIterable<KVDoc> result
+  ) {
+    final KeyValueIterator<Bytes, byte[]> decoded = Iterators.kv(
         result.iterator(),
         doc -> new KeyValue<>(
             keyCodec.decode(doc.getKey()),
             doc.getTombstoneTs() == null ? doc.getValue() : null
         )
+    );
+
+    return Iterators.filterKv(
+        decoded,
+        kv -> partitioner.belongs(Bytes.wrap(kv.get()), kafkaPartition)
     );
   }
 
@@ -215,7 +225,6 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
             Updates.set(KVDoc.VALUE, value),
             Updates.set(KVDoc.EPOCH, epoch),
             Updates.set(KVDoc.TIMESTAMP, epochMillis),
-            Updates.set(KVDoc.KAFKA_PARTITION, kafkaPartition),
             Updates.unset(KVDoc.TOMBSTONE_TS)
         ),
         new UpdateOptions().upsert(true)

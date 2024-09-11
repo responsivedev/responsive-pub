@@ -16,8 +16,10 @@
 
 package dev.responsive.kafka.internal.db;
 
+import dev.responsive.kafka.internal.db.partitioning.Segmenter;
 import dev.responsive.kafka.internal.db.partitioning.SessionSegmentPartitioner;
 import dev.responsive.kafka.internal.db.spec.RemoteTableSpec;
+import dev.responsive.kafka.internal.utils.SessionKey;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeoutException;
@@ -28,8 +30,10 @@ public class SessionTableCache<T extends RemoteTable<?, ?>> {
 
   @FunctionalInterface
   public interface Factory<T> {
-    T create(final RemoteTableSpec spec, SessionSegmentPartitioner partitioner)
-        throws InterruptedException, TimeoutException;
+    T create(
+        final RemoteTableSpec<SessionKey, Segmenter.SegmentPartition> spec,
+        SessionSegmentPartitioner partitioner
+    ) throws InterruptedException, TimeoutException;
   }
 
   private final Map<String, T> tables = new HashMap<>();
@@ -43,7 +47,10 @@ public class SessionTableCache<T extends RemoteTable<?, ?>> {
    * Creates a table with the supplied {@code tableName} with the
    * desired schema.
    */
-  public synchronized T create(RemoteTableSpec spec, SessionSegmentPartitioner partitioner)
+  public synchronized T create(
+      RemoteTableSpec<SessionKey, Segmenter.SegmentPartition> spec,
+      SessionSegmentPartitioner partitioner
+  )
       throws InterruptedException, TimeoutException {
     final T existing = tables.get(spec.tableName());
     if (existing != null) {

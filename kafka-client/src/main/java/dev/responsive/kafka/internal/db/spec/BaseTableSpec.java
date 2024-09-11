@@ -21,12 +21,12 @@ import dev.responsive.kafka.internal.db.TableOperations;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import java.util.EnumSet;
 
-public class BaseTableSpec implements RemoteTableSpec {
+public class BaseTableSpec<K, V> implements RemoteTableSpec<K, V> {
 
   private final String name;
-  final TablePartitioner<?, ?> partitioner;
+  final TablePartitioner<K, V> partitioner;
 
-  public BaseTableSpec(final String name, final TablePartitioner<?, ?> partitioner) {
+  public BaseTableSpec(final String name, final TablePartitioner<K, V> partitioner) {
     this.name = name;
     this.partitioner = partitioner;
   }
@@ -37,7 +37,7 @@ public class BaseTableSpec implements RemoteTableSpec {
   }
 
   @Override
-  public TablePartitioner<?, ?> partitioner() {
+  public TablePartitioner<K, V> partitioner() {
     return partitioner;
   }
 

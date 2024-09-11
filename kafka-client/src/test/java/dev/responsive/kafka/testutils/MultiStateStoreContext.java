@@ -106,6 +106,7 @@ public class MultiStateStoreContext implements InvocationHandler, StateRestoreCa
 
   @Override
   public void restore(final byte[] bytes, final byte[] bytes1) {
+    // TODO: this fails restoration for RecordBatchingStateRestoreCallback (used in RocksDB)
     this.restoreCallbacks.forEach(callback -> callback.restore(bytes, bytes1));
   }
 
