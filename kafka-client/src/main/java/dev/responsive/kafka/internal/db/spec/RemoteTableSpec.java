@@ -26,11 +26,11 @@ import java.util.EnumSet;
  * Defines the table specifications for a {@link RemoteTable} that are
  * independent of the schema of the table.
  */
-public interface RemoteTableSpec {
+public interface RemoteTableSpec<K, V> {
 
   String tableName();
 
-  TablePartitioner<?, ?> partitioner();
+  TablePartitioner<K, V> partitioner();
 
   /**
    * @return the set of operations that are not supported by this table

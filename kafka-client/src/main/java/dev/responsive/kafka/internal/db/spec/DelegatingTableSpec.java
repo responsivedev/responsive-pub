@@ -21,11 +21,11 @@ import dev.responsive.kafka.internal.db.TableOperations;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import java.util.EnumSet;
 
-public abstract class DelegatingTableSpec implements RemoteTableSpec {
+public abstract class DelegatingTableSpec<K, V> implements RemoteTableSpec<K, V> {
 
-  private final RemoteTableSpec delegate;
+  private final RemoteTableSpec<K, V> delegate;
 
-  protected DelegatingTableSpec(final RemoteTableSpec delegate) {
+  protected DelegatingTableSpec(final RemoteTableSpec<K, V> delegate) {
     this.delegate = delegate;
   }
 
@@ -35,7 +35,7 @@ public abstract class DelegatingTableSpec implements RemoteTableSpec {
   }
 
   @Override
-  public TablePartitioner<?, ?> partitioner() {
+  public TablePartitioner<K, V> partitioner() {
     return delegate.partitioner();
   }
 
@@ -49,7 +49,7 @@ public abstract class DelegatingTableSpec implements RemoteTableSpec {
     return delegate.applyOptions(base);
   }
 
-  public RemoteTableSpec delegate() {
+  public RemoteTableSpec<K, V> delegate() {
     return delegate;
   }
 }

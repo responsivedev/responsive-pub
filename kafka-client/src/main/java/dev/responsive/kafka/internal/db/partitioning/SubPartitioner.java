@@ -105,6 +105,15 @@ public class SubPartitioner implements TablePartitioner<Bytes, Integer> {
     return first(kafkaPartition);
   }
 
+  @Override
+  public boolean belongs(final Bytes key, final int kafkaPartition) {
+    throw new UnsupportedOperationException(
+        "SubPartitioner relies on specific mapping of kafka partition to key. This "
+            + "method should not be called as the assumption is that only keys "
+            + "stored for the given partition will be returned. If this exception "
+            + "is seen in production please file a ticket with the Responsive team.");
+  }
+
   /**
    * @param kafkaPartition the original kafka partition
    *

@@ -32,6 +32,7 @@ import com.datastax.oss.driver.api.core.type.DataTypes;
 import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
 import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
 import com.datastax.oss.driver.api.querybuilder.schema.CreateTableWithOptions;
+import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.db.spec.RemoteTableSpec;
 import java.nio.ByteBuffer;
 import java.time.Instant;
@@ -56,6 +57,7 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
   private final PreparedStatement delete;
   private final PreparedStatement fetchOffset;
   private final PreparedStatement setOffset;
+  private final TablePartitioner<Bytes, Integer> partitioner;
 
   public CassandraFactTable(
       final String name,
@@ -64,7 +66,8 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
       final PreparedStatement insert,
       final PreparedStatement delete,
       final PreparedStatement fetchOffset,
-      final PreparedStatement setOffset
+      final PreparedStatement setOffset,
+      final TablePartitioner<Bytes, Integer> partitioner
   ) {
     this.name = name;
     this.client = client;
@@ -73,10 +76,11 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
     this.delete = delete;
     this.fetchOffset = fetchOffset;
     this.setOffset = setOffset;
+    this.partitioner = partitioner;
   }
 
   public static CassandraFactTable create(
-      final RemoteTableSpec spec,
+      final RemoteTableSpec<Bytes, Integer> spec,
       final CassandraClient client
   ) {
     final String name = spec.tableName();
@@ -161,7 +165,8 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
         insert,
         delete,
         fetchOffset,
-        setOffset
+        setOffset,
+        spec.partitioner()
     );
   }
 
@@ -193,7 +198,7 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
             .build()
     );
 
-    return new CassandraFactFlushManager(this, client, kafkaPartition);
+    return new CassandraFactFlushManager(this, client, kafkaPartition, partitioner);
   }
 
   @Override

@@ -14,21 +14,23 @@
  * limitations under the License.
  */
 
-package dev.responsive.kafka.internal.db.spec;
+package dev.responsive.kafka.internal.db.partitioning;
 
-import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
-import com.datastax.oss.driver.api.querybuilder.schema.CreateTableWithOptions;
+import org.apache.kafka.common.utils.Bytes;
 
-public class GlobalTableSpec<K, V> extends DelegatingTableSpec<K, V> {
+/**
+ * Partitioner that is used only for global tables
+ */
+public class GlobalPartitioner<K> extends DefaultPartitioner<K> {
 
-  public GlobalTableSpec(final RemoteTableSpec<K, V> delegate) {
-    super(delegate);
+  public GlobalPartitioner() {
+    super(0);
   }
 
   @Override
-  public CreateTableWithOptions applyOptions(final CreateTableWithOptions base) {
-    return delegate()
-        .applyOptions(base)
-        .withCompaction(SchemaBuilder.leveledCompactionStrategy());
+  public boolean belongs(final Bytes key, final int kafkaPartition) {
+    // never filter out anything with global tables
+    return true;
   }
+
 }

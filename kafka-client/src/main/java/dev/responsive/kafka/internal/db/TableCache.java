@@ -28,18 +28,18 @@ import javax.annotation.concurrent.ThreadSafe;
  * table are only prepared once during the lifetime of the application.
  */
 @ThreadSafe
-public class TableCache<T extends RemoteTable<?, ?>> {
+public class TableCache<K, V, T extends RemoteTable<?, ?>> {
 
   @FunctionalInterface
-  public interface Factory<T> {
-    T create(final RemoteTableSpec spec)
+  public interface Factory<K, V, T> {
+    T create(final RemoteTableSpec<K, V> spec)
         throws InterruptedException, TimeoutException;
   }
 
   private final Map<String, T> tables = new HashMap<>();
-  private final Factory<T> factory;
+  private final Factory<K, V, T> factory;
 
-  public TableCache(final Factory<T> factory) {
+  public TableCache(final Factory<K, V, T> factory) {
     this.factory = factory;
   }
 
@@ -47,7 +47,7 @@ public class TableCache<T extends RemoteTable<?, ?>> {
    * Creates a table with the supplied {@code tableName} with the
    * desired schema.
    */
-  public synchronized T create(RemoteTableSpec spec)
+  public synchronized T create(RemoteTableSpec<K, V> spec)
       throws InterruptedException, TimeoutException {
     final T existing = tables.get(spec.tableName());
     if (existing != null) {

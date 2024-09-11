@@ -34,6 +34,7 @@ import dev.responsive.kafka.internal.db.FlushManager;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.RemoteTableSpecFactory;
 import dev.responsive.kafka.internal.db.inmemory.InMemoryKVTable;
+import dev.responsive.kafka.internal.db.partitioning.DefaultPartitioner;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
@@ -97,13 +98,15 @@ public class PartitionedOperations implements KeyValueOperations {
         context.taskId().partition()
     );
 
+    final int numPartitions = numPartitionsForKafkaTopic(sessionClients.admin(), changelog.topic());
+
     final RemoteKVTable<?> table;
     switch (sessionClients.storageBackend()) {
       case CASSANDRA:
-        table = createCassandra(params, config, sessionClients, changelog.topic());
+        table = createCassandra(params, config, sessionClients, changelog.topic(), numPartitions);
         break;
       case MONGO_DB:
-        table = createMongo(params, sessionClients);
+        table = createMongo(params, sessionClients, new DefaultPartitioner<>(numPartitions));
         break;
       case IN_MEMORY:
         table = createInMemory(params);
@@ -175,18 +178,15 @@ public class PartitionedOperations implements KeyValueOperations {
       final ResponsiveKeyValueParams params,
       final ResponsiveConfig config,
       final SessionClients sessionClients,
-      final String changelogTopicName
+      final String changelogTopicName,
+      final int numChangelogPartitions
   ) throws InterruptedException, TimeoutException {
-
-    final int numChangelogPartitions =
-        numPartitionsForKafkaTopic(sessionClients.admin(), changelogTopicName);
-
     // TODO(agavra): write the actual remote partition count into cassandra
     final OptionalInt actualRemoteCount = OptionalInt.empty();
 
     final TablePartitioner<Bytes, Integer> partitioner =
         params.schemaType() == SchemaTypes.KVSchema.FACT
-        ? TablePartitioner.defaultPartitioner()
+        ? TablePartitioner.defaultPartitioner(numChangelogPartitions)
         : SubPartitioner.create(
             actualRemoteCount,
             numChangelogPartitions,
@@ -208,9 +208,10 @@ public class PartitionedOperations implements KeyValueOperations {
 
   private static RemoteKVTable<?> createMongo(
       final ResponsiveKeyValueParams params,
-      final SessionClients sessionClients
+      final SessionClients sessionClients,
+      final TablePartitioner<Bytes, Integer> partitioner
   ) throws InterruptedException, TimeoutException {
-    return sessionClients.mongoClient().kvTable(params.name().tableName());
+    return sessionClients.mongoClient().kvTable(params.name().tableName(), partitioner);
   }
 
   @SuppressWarnings("rawtypes")

@@ -40,35 +40,36 @@ import org.apache.kafka.common.utils.Bytes;
  */
 public class RemoteTableSpecFactory {
 
-  public static RemoteTableSpec globalSpec(
+  public static RemoteTableSpec<Bytes, Integer> globalSpec(
       final ResponsiveKeyValueParams params,
       final TablePartitioner<Bytes, Integer> partitioner
   ) {
-    return new GlobalTableSpec(new BaseTableSpec(params.name().tableName(), partitioner));
+    return new GlobalTableSpec<>(new BaseTableSpec<>(params.name().tableName(), partitioner));
   }
 
-  public static RemoteTableSpec fromKVParams(
+  public static RemoteTableSpec<Bytes, Integer> fromKVParams(
       final ResponsiveKeyValueParams params,
       final TablePartitioner<Bytes, Integer> partitioner
   ) {
-    RemoteTableSpec spec = new BaseTableSpec(params.name().tableName(), partitioner);
+    RemoteTableSpec<Bytes, Integer> spec =
+        new BaseTableSpec<>(params.name().tableName(), partitioner);
 
     if (params.timeToLive().isPresent()) {
-      spec = new TtlTableSpec(spec, params.timeToLive().get());
+      spec = new TtlTableSpec<>(spec, params.timeToLive().get());
     }
 
     if (params.schemaType() == SchemaTypes.KVSchema.FACT) {
-      spec = new TimeWindowedCompactionTableSpec(spec);
+      spec = new TimeWindowedCompactionTableSpec<>(spec);
     }
 
     return spec;
   }
 
-  public static RemoteTableSpec fromWindowParams(
+  public static RemoteTableSpec<WindowedKey, SegmentPartition> fromWindowParams(
       final ResponsiveWindowParams params,
       final TablePartitioner<WindowedKey, SegmentPartition> partitioner
   ) {
-    return new BaseTableSpec(params.name().tableName(), partitioner);
+    return new BaseTableSpec<>(params.name().tableName(), partitioner);
   }
 
 }

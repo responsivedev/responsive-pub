@@ -29,7 +29,6 @@ public class KVDoc {
   public static final String VALUE = "value";
   public static final String EPOCH = "epoch";
   public static final String TIMESTAMP = "ts";
-  public static final String KAFKA_PARTITION = "partition";
   public static final String TOMBSTONE_TS = "tombstoneTs";
 
   // We use a string key for ID because mongo range scans don't work as expected for binary
@@ -39,7 +38,6 @@ public class KVDoc {
   byte[] value;
   long epoch;
   long timestamp;
-  int kafkaPartition;
   Date tombstoneTs;
 
   public KVDoc() {
@@ -50,14 +48,12 @@ public class KVDoc {
       @BsonProperty(ID) String id,
       @BsonProperty(VALUE) byte[] value,
       @BsonProperty(EPOCH) long epoch,
-      @BsonProperty(TIMESTAMP) long timestamp,
-      @BsonProperty(KAFKA_PARTITION) int kafkaPartition
+      @BsonProperty(TIMESTAMP) long timestamp
   ) {
     this.id = id;
     this.value = value;
     this.epoch = epoch;
     this.timestamp = timestamp;
-    this.kafkaPartition = kafkaPartition;
   }
 
   public String getKey() {
@@ -92,14 +88,6 @@ public class KVDoc {
     return timestamp;
   }
 
-  public int getKafkaPartition() {
-    return kafkaPartition;
-  }
-
-  public void setKafkaPartition(final int kafkaPartition) {
-    this.kafkaPartition = kafkaPartition;
-  }
-
   public Date getTombstoneTs() {
     return tombstoneTs;
   }
@@ -120,14 +108,12 @@ public class KVDoc {
     return epoch == kvDoc.epoch
         && Objects.equals(id, kvDoc.id)
         && Arrays.equals(value, kvDoc.value)
-        && Objects.equals(timestamp, kvDoc.timestamp)
-        && Objects.equals(kafkaPartition, kvDoc.kafkaPartition)
         && Objects.equals(tombstoneTs, kvDoc.tombstoneTs);
   }
 
   @Override
   public int hashCode() {
-    int result = Objects.hash(id, epoch, tombstoneTs, timestamp, kafkaPartition);
+    int result = Objects.hash(id, epoch, tombstoneTs);
     result = 31 * result + Arrays.hashCode(value);
     return result;
   }
@@ -139,8 +125,6 @@ public class KVDoc {
         + ", value=" + Arrays.toString(value)
         + ", epoch=" + epoch
         + ", tombstoneTs=" + tombstoneTs
-        + ", timestamp=" + timestamp
-        + ", kafkaPartition=" + kafkaPartition
         + '}';
   }
 }

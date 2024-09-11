@@ -36,6 +36,7 @@ import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.function.BooleanSupplier;
+import org.apache.kafka.common.utils.Bytes;
 
 /**
  * {@code CassandraClient} wraps a {@link CqlSession} with utility methods
@@ -49,10 +50,10 @@ public class CassandraClient {
   private final CqlSession session;
 
   private final ResponsiveConfig config;
-  private final TableCache<RemoteKVTable<BoundStatement>> kvFactory;
-  private final TableCache<RemoteKVTable<BoundStatement>> factFactory;
+  private final TableCache<Bytes, Integer, RemoteKVTable<BoundStatement>> kvFactory;
+  private final TableCache<Bytes, Integer, RemoteKVTable<BoundStatement>> factFactory;
   private final WindowedTableCache<RemoteWindowedTable<BoundStatement>> windowedFactory;
-  private final TableCache<CassandraFactTable> globalFactory;
+  private final TableCache<Bytes, Integer, CassandraFactTable> globalFactory;
 
   /**
    * @param session the Cassandra session, expected to be initialized
@@ -178,15 +179,15 @@ public class CassandraClient {
     session.close();
   }
 
-  public TableCache<CassandraFactTable> globalFactory() {
+  public TableCache<Bytes, Integer, CassandraFactTable> globalFactory() {
     return globalFactory;
   }
 
-  public TableCache<RemoteKVTable<BoundStatement>> kvFactory() {
+  public TableCache<Bytes, Integer, RemoteKVTable<BoundStatement>> kvFactory() {
     return kvFactory;
   }
 
-  public TableCache<RemoteKVTable<BoundStatement>> factFactory() {
+  public TableCache<Bytes, Integer, RemoteKVTable<BoundStatement>> factFactory() {
     return factFactory;
   }
 
