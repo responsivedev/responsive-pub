@@ -19,6 +19,7 @@ dependencies {
     implementation("com.scylladb:java-driver-query-builder:4.15.0.0")
     implementation("com.scylladb:java-driver-mapper-runtime:4.15.0.0")
     implementation("com.fasterxml.jackson.datatype:jackson-datatype-jdk8:2.15.2")
+    implementation("org.mongodb:mongodb-driver-core:4.10.2")
 
     testImplementation(testlibs.bundles.base)
     testImplementation(testlibs.bundles.testcontainers)
