@@ -12,6 +12,7 @@ import java.util.HashMap;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import org.apache.kafka.common.utils.Bytes;
 import org.slf4j.Logger;
@@ -75,6 +76,19 @@ class PocketKVFlushManager extends KVFlushManager {
     if (writers.containsKey(pssId)) {
       throw new IllegalStateException("already created writer for pss " + pssId);
     }
+    final var maybeWrittenOffset = writtenOffsets.get(pssId);
+    if (maybeWrittenOffset.isPresent()) {
+      final var writtenOffset = maybeWrittenOffset.get();
+      if (writtenOffset >= consumedOffset) {
+        // This can happen after a restart, during restore because we restore from
+        // the earliest written offset over all pss. For most pss we are restoring
+        // from an offset earlier than the pss's last written offset. In that case,
+        // we wait until we have crossed the written offset for the pss before sending
+        // actual records.
+        // TODO: we should be stricter when checking this case
+        return new NoopWriter(kafkaPartition);
+      }
+    }
     final var writer = new PocketKVWriter(
         storeId,
         pocketClient,
@@ -117,6 +131,27 @@ class PocketKVFlushManager extends KVFlushManager {
   @Override
   public String logPrefix() {
     return tableName() + ".pocket.flushmanager";
+  }
+
+  private static class NoopWriter implements RemoteWriter<Bytes, Integer> {
+    private final int kafkaPartition;
+
+    public NoopWriter(final int kafkaPartition) {
+      this.kafkaPartition = kafkaPartition;
+    }
+
+    @Override
+    public void insert(Bytes key, byte[] value, long epochMillis) {
+    }
+
+    @Override
+    public void delete(Bytes key) {
+    }
+
+    @Override
+    public CompletionStage<RemoteWriteResult<Integer>> flush() {
+      return CompletableFuture.completedStage(RemoteWriteResult.success(kafkaPartition));
+    }
   }
 
   private static class PocketKVWriter implements RemoteWriter<Bytes, Integer> {

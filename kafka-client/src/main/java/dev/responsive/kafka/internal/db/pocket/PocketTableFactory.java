@@ -9,22 +9,24 @@ import java.util.Objects;
 import java.util.UUID;
 
 public class PocketTableFactory {
-  private final PocketClient pocketClient;
+  private final String pocketHost;
+  private final int pocketPort;
 
   public PocketTableFactory(
       final String pocketHost,
       final int pocketPort
   ) {
-    Objects.requireNonNull(pocketHost);
-    pocketClient = GrpcPocketClient.connect(
-        String.format("%s:%d", pocketHost, pocketPort)
-    );
+    this.pocketHost = Objects.requireNonNull(pocketHost);
+    this.pocketPort = pocketPort;
   }
 
   public RemoteKVTable<WalEntry> kvTable(final String name) {
     final UUID storeId = new UUID(0, 0);
     final PssPartitioner pssPartitioner = PssRangePartitioner.create(
         List.of("000", "001", "010", "011", "100", "101", "110", "111")
+    );
+    final var pocketClient = GrpcPocketClient.connect(
+        String.format("%s:%d", pocketHost, pocketPort)
     );
     return new PocketKVTable(
         name,
@@ -35,6 +37,5 @@ public class PocketTableFactory {
   }
 
   public void close() {
-    pocketClient.close();
   }
 }

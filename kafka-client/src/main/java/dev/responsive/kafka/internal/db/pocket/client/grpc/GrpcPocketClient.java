@@ -16,19 +16,28 @@ import io.grpc.Grpc;
 import io.grpc.InsecureChannelCredentials;
 import io.grpc.ManagedChannel;
 import io.grpc.StatusRuntimeException;
+import io.grpc.stub.StreamObserver;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
 import java.util.function.Supplier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class GrpcPocketClient implements PocketClient {
+  static final Logger LOG = LoggerFactory.getLogger(GrpcPocketClient.class);
+
   static final long WAL_OFFSET_NONE = Long.MAX_VALUE;
 
   private final ManagedChannel channel;
   private final OtterPocketGrpc.OtterPocketBlockingStub stub;
   private final OtterPocketGrpc.OtterPocketStub asyncStub;
+  private Stats stats = new Stats();
 
   @VisibleForTesting
   GrpcPocketClient(
@@ -49,7 +58,8 @@ public class GrpcPocketClient implements PocketClient {
       final String target
   ) {
     final ChannelCredentials channelCredentials = InsecureChannelCredentials.create();
-    final ManagedChannel channel = Grpc.newChannelBuilder(target, channelCredentials).build();
+    final ManagedChannel channel = Grpc.newChannelBuilder(target, channelCredentials)
+        .build();
     final OtterPocketGrpc.OtterPocketBlockingStub stub = OtterPocketGrpc.newBlockingStub(channel);
     final OtterPocketGrpc.OtterPocketStub asyncStub = OtterPocketGrpc.newStub(channel);
     return new GrpcPocketClient(channel, stub, asyncStub);
@@ -154,6 +164,7 @@ public class GrpcPocketClient implements PocketClient {
 
   @Override
   public Optional<byte[]> get(final UUID storeId, LssId lssId, int pssId, Optional<Long> expectedWrittenOffset, byte[] key) {
+    final Instant start = Instant.now();
     final var requestBuilder = Otterpocket.GetRequest.newBuilder()
         .setStoreId(uuidProto(storeId))
         .setLssId(lssIdProto(lssId))
@@ -162,11 +173,20 @@ public class GrpcPocketClient implements PocketClient {
     expectedWrittenOffset.ifPresent(requestBuilder::setExpectedWrittenOffset);
     final var request = requestBuilder.build();
     final Otterpocket.GetResult result;
+    final GrpcMessageReceiver<Otterpocket.GetResult> receiver = new GrpcMessageReceiver<>();
+    asyncStub.get(request, receiver);
     try {
-      result = stub.get(request);
-    } catch (final StatusRuntimeException e) {
-      throw new PocketException(e);
+      result = receiver.message().toCompletableFuture().get();
+    } catch (final ExecutionException e) {
+      if (e.getCause() instanceof RuntimeException) {
+        throw (RuntimeException) e.getCause();
+      }
+      throw new RuntimeException(e.getCause());
+    } catch (final InterruptedException e) {
+      throw new RuntimeException(e);
     }
+    stats.recordRead(Duration.between(start, Instant.now()));
+    stats.log();
     if (!result.hasResult()) {
       return Optional.empty();
     }
@@ -191,6 +211,26 @@ public class GrpcPocketClient implements PocketClient {
   private void checkField(final Supplier<Boolean> check , final String field) {
     if (!check.get()) {
       throw new RuntimeException("otterpocket resp proto missing field " + field);
+    }
+  }
+
+  private static class Stats {
+    private long totalReads = 0;
+    private long totalReadsElapsedUs = 0;
+    private Instant lastLog = Instant.EPOCH;
+
+    public synchronized void recordRead(final Duration elapsed) {
+      totalReads += 1;
+      totalReadsElapsedUs += elapsed.toNanos() / 1_000;
+    }
+
+    public synchronized void log() {
+      final var now = Instant.now();
+      if (now.isBefore(lastLog.plus(Duration.ofSeconds(10)))) {
+        return;
+      }
+      lastLog = now;
+      LOG.info("pocket client read statistics: {} {}", totalReads, totalReadsElapsedUs);
     }
   }
 }

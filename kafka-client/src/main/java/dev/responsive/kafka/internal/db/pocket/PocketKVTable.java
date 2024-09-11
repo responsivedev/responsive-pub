@@ -49,25 +49,24 @@ public class PocketKVTable implements RemoteKVTable<WalEntry> {
 
     this.lssId = new LssId(kafkaPartition);
 
+    // TODO: we should write an empty segment periodically to any PSS that we haven't
+    //       written to to bump the written offset
     final HashMap<Integer, Optional<Long>> lastWrittenOffset = new HashMap<>();
-    boolean unflushedLogs = false;
-    final List<Long> flushedLogOffsets = new LinkedList<>();
     for (final int pss: pssPartitioner.allPss()) {
       final var offsets = pocketClient.getCurrentOffsets(storeId, lssId, pss);
-      if (offsets.flushedOffset().isPresent()) {
-        flushedLogOffsets.add(offsets.flushedOffset().get());
-      } else {
-        unflushedLogs = true;
-      }
       lastWrittenOffset.put(pss, offsets.writtenOffset());
     }
-    if (unflushedLogs) {
+    final var fetchOffsetOrMinusOne = lastWrittenOffset.values().stream()
+        .map(v -> v.orElse(-1L))
+        .min(Long::compare)
+        .orElse(-1L);
+    if (fetchOffsetOrMinusOne == -1) {
       this.fetchOffset = ResponsiveStoreRegistration.NO_COMMITTED_OFFSET;
-    } else if (!flushedLogOffsets.isEmpty()) {
-      this.fetchOffset = flushedLogOffsets.stream().min(Long::compareTo).get();
     } else {
-      throw new IllegalStateException("could not find earliest flushed offset");
+      this.fetchOffset = fetchOffsetOrMinusOne;
     }
+
+    LOG.info("restore pocket kv table from offset {} for {}", fetchOffset, kafkaPartition);
 
     flushManager = new PocketKVFlushManager(
         storeId,

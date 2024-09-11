@@ -116,7 +116,7 @@ public class PocketKVTableTest {
   }
 
   @Test
-  public void shouldRestoreFromLowestPssFlushedOffset() {
+  public void shouldRestoreFromLowestPssWrittenOffset() {
     // given:
     int endOffset = 100;
     for (final int pssId : pssPartitioner.allPss()) {
@@ -131,16 +131,6 @@ public class PocketKVTableTest {
           )
       );
       endOffset += 1;
-    }
-    for (final int pssId : pssPartitioner.allPss()) {
-      runTimeout(
-          () -> {
-            final var offsets
-                = pocketClient.getCurrentOffsets(STORE_ID, new LssId(PARTITION_ID), pssId);
-            offsets.flushedOffset().orElseThrow(() -> new RuntimeException("not flushed"));
-          },
-          Duration.ofMinutes(5)
-      );
     }
     table.init(PARTITION_ID);
 
@@ -166,16 +156,6 @@ public class PocketKVTableTest {
           )
       );
       endOffset += 1;
-    }
-    for (final int pssId : allPssExcept1) {
-      runTimeout(
-          () -> {
-            final var offsets
-                = pocketClient.getCurrentOffsets(STORE_ID, new LssId(PARTITION_ID), pssId);
-            offsets.flushedOffset().orElseThrow(() -> new RuntimeException("not flushed"));
-          },
-          Duration.ofMinutes(5)
-      );
     }
     table.init(PARTITION_ID);
 
