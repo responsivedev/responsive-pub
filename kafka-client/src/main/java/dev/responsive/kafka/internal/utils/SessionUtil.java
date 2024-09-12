@@ -31,8 +31,10 @@ import com.datastax.oss.driver.internal.core.session.throttling.ConcurrencyLimit
 import com.mongodb.ConnectionString;
 import com.mongodb.MongoClientSettings;
 import com.mongodb.MongoException;
+import com.mongodb.ReadConcern;
 import com.mongodb.ServerApi;
 import com.mongodb.ServerApiVersion;
+import com.mongodb.WriteConcern;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 import com.mongodb.client.MongoDatabase;
@@ -48,7 +50,6 @@ import org.bson.Document;
  * Responsive store.
  */
 public final class SessionUtil {
-
   private SessionUtil() {
   }
 
@@ -120,6 +121,8 @@ public final class SessionUtil {
 
     MongoClientSettings settings = MongoClientSettings.builder()
         .applyConnectionString(new ConnectionString(connectionString))
+        .readConcern(ReadConcern.MAJORITY)
+        .writeConcern(WriteConcern.MAJORITY)
         .serverApi(serverApi)
         .build();
 

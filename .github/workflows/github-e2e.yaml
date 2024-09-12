@@ -70,16 +70,16 @@ jobs:
         run: |
           docker push us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test:$KAFKA_CLIENT_VERSION
 
-      - name: "Build Config"
+      - name: "Build Async Test Config"
         working-directory: ./kafka-client-examples/e2e-test/docker/antithesis
         env:
           KAFKA_CLIENT_VERSION: latest
           BACKEND: ${{ inputs.backend }}
           CONFIG_IMG_VERSION: ${{ steps.kafka_client_version.outputs.KAFKA_CLIENT_VERSION }}
         run: |
-          cat config/docker-compose.yml.template | envsubst > config/docker-compose.yml
-          cp config/volumes/app-$BACKEND.properties config/volumes/app.properties
-          docker build . -t us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test-config:$CONFIG_IMG_VERSION
+          cat async/config/docker-compose.yml.template | envsubst > async/config/docker-compose.yml
+          cp async/config/volumes/app-$BACKEND.properties async/config/volumes/app.properties
+          docker build . -f async/Dockerfile -t us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test-config:$CONFIG_IMG_VERSION
 
       - name: "Push Config"
         env:

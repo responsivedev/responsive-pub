@@ -111,8 +111,8 @@ public class ResultsComparatorService<T extends Comparable<T>>
             matches++;
           } else if (responsive.hasNext() && baseline.hasNext()) {
             LOG.error(
-                "Expected to consume records in order, but they were not in order. "
-                    + "Most recent record from responsive is {} and most recent "
+                "ANTITHESIS NEVER: Expected to consume records in order, but they were not"
+                    + "in order. Most recent record from responsive is {} and most recent up"
                     + "record from baseline is {}",
                 r.record,
                 b.record

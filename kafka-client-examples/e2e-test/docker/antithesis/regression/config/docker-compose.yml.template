@@ -1,0 +1,57 @@
+version: '3'
+include:
+    - docker-compose-${BACKEND}.yml
+services:
+  application:
+    image: us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test:${KAFKA_CLIENT_VERSION}
+    container_name: application
+    hostname: application
+    depends_on:
+      - broker
+      - ${BACKEND}
+    environment:
+      E2E_APP_MODE: REGRESSION_BATCH
+      CONFIG_PATH: "/app.properties"
+      JAVA_OPTS: "-Dlog4j2.configurationFile=/log4j2.properties"
+    volumes:
+      - ./volumes/app.properties:/app.properties
+      - ./volumes/log4j2.properties:/log4j2.properties
+    networks:
+      backend:
+        ipv4_address: 10.0.0.40
+
+  baseline:
+    image: us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test:${KAFKA_CLIENT_VERSION}
+    container_name: baseline
+    hostname: baseline
+    depends_on:
+      - broker
+      - ${BACKEND}
+    environment:
+      E2E_APP_MODE: REGRESSION_BATCH_BASELINE
+      CONFIG_PATH: "/app.properties"
+      JAVA_OPTS: "-Dlog4j2.configurationFile=/log4j2.properties"
+    volumes:
+      - ./volumes/app.properties:/app.properties
+      - ./volumes/log4j2.properties:/log4j2.properties
+    networks:
+      backend:
+        ipv4_address: 10.0.0.41
+
+  driver:
+    image: us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test:${KAFKA_CLIENT_VERSION}
+    container_name: driver
+    hostname: driver
+    depends_on:
+      - broker
+      - ${BACKEND}
+    environment:
+      E2E_APP_MODE: REGRESSION_BATCH_DRIVER
+      CONFIG_PATH: "/app.properties"
+      JAVA_OPTS: "-Dlog4j2.configurationFile=/log4j2.properties"
+    volumes:
+      - ./volumes/app.properties:/app.properties
+      - ./volumes/log4j2.properties:/log4j2.properties
+    networks:
+      backend:
+        ipv4_address: 10.0.0.42
