@@ -34,14 +34,13 @@ public class CassandraFactFlushManager extends KVFlushManager {
   public CassandraFactFlushManager(
       final CassandraFactTable table,
       final CassandraClient client,
-      final int kafkaPartition,
-      final TablePartitioner<Bytes, Integer> partitioner
+      final int kafkaPartition
   ) {
     this.table = table;
     this.client = client;
     this.kafkaPartition = kafkaPartition;
-    this.partitioner = partitioner;
 
+    partitioner = TablePartitioner.defaultPartitioner();
     logPrefix = String.format("%s[%d] fact-store", table.name(), kafkaPartition);
   }
 

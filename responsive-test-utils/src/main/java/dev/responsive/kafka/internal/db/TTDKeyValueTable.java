@@ -18,7 +18,6 @@ package dev.responsive.kafka.internal.db;
 
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.kafka.internal.clients.TTDCassandraClient;
-import dev.responsive.kafka.internal.db.partitioning.DefaultPartitioner;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.db.spec.DelegatingTableSpec;
 import dev.responsive.kafka.internal.db.spec.RemoteTableSpec;
@@ -35,29 +34,26 @@ public class TTDKeyValueTable extends TTDTable<Bytes> implements RemoteKVTable<B
   private final KVStoreStub stub;
 
   public static TTDKeyValueTable create(
-      final RemoteTableSpec<Bytes, Integer> spec,
+      final RemoteTableSpec spec,
       final CassandraClient client
   ) {
     return new TTDKeyValueTable(spec, (TTDCassandraClient) client);
   }
 
-  public TTDKeyValueTable(
-      final RemoteTableSpec<Bytes, Integer> spec,
-      final TTDCassandraClient client
-  ) {
+  public TTDKeyValueTable(final RemoteTableSpec spec, final TTDCassandraClient client) {
     super(client);
 
     name = spec.tableName();
     Duration ttl = null;
-    RemoteTableSpec<Bytes, Integer> maybeTtlSpec = spec;
+    RemoteTableSpec maybeTtlSpec = spec;
 
     while (maybeTtlSpec instanceof DelegatingTableSpec) {
       if (maybeTtlSpec instanceof TtlTableSpec) {
-        ttl = ((TtlTableSpec<Bytes, Integer>) maybeTtlSpec).ttl();
+        ttl = ((TtlTableSpec) maybeTtlSpec).ttl();
         break;
       }
 
-      maybeTtlSpec = ((DelegatingTableSpec<Bytes, Integer>) maybeTtlSpec).delegate();
+      maybeTtlSpec = ((DelegatingTableSpec) maybeTtlSpec).delegate();
     }
 
     stub = new KVStoreStub(ttl, time);
@@ -144,14 +140,7 @@ public class TTDKeyValueTable extends TTDTable<Bytes> implements RemoteKVTable<B
 
     @Override
     public TablePartitioner<Bytes, Integer> partitioner() {
-      return new DefaultPartitioner<>(0) {
-        @Override
-        public boolean belongs(final Bytes key, final int kafkaPartition) {
-          // TODO(agavra): does this class implement range scans correctly
-          // if TTD supports multiple partitions?
-          throw new UnsupportedOperationException("Not yet implemented.");
-        }
-      };
+      return TablePartitioner.defaultPartitioner();
     }
 
     @Override

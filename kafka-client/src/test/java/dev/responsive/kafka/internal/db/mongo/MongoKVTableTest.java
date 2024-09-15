@@ -17,7 +17,6 @@
 package dev.responsive.kafka.internal.db.mongo;
 
 import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_ENDPOINT_CONFIG;
-import static dev.responsive.kafka.internal.db.partitioning.TablePartitioner.defaultPartitioner;
 import static dev.responsive.kafka.internal.db.testutils.Matchers.sameKeyValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.contains;
@@ -26,8 +25,6 @@ import static org.hamcrest.Matchers.nullValue;
 
 import com.mongodb.client.MongoClient;
 import dev.responsive.kafka.api.config.StorageBackend;
-import dev.responsive.kafka.internal.db.partitioning.DefaultPartitioner;
-import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
 import dev.responsive.kafka.internal.utils.SessionUtil;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
@@ -52,7 +49,6 @@ class MongoKVTableTest {
       false,
       0
   );
-  private static final TablePartitioner<Bytes, Integer> PARTITIONER = defaultPartitioner(1);
 
   private String name;
   private MongoClient client;
@@ -71,7 +67,7 @@ class MongoKVTableTest {
   @Test
   public void shouldSucceedWriterWithSameEpoch() throws ExecutionException, InterruptedException {
     // Given:
-    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, PARTITIONER);
+    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED);
 
     var writerFactory = table.init(0);
     var writer = writerFactory.createWriter(0);
@@ -90,7 +86,7 @@ class MongoKVTableTest {
   @Test
   public void shouldSucceedWriterWithLargerEpoch() throws ExecutionException, InterruptedException {
     // Given:
-    var table = new MongoKVTable(client, name, UNSHARDED, PARTITIONER);
+    var table = new MongoKVTable(client, name, UNSHARDED);
     var writerFactory = table.init(0);
     var writer = writerFactory.createWriter(0);
     writer.insert(bytes(1), byteArray(1), 100);
@@ -98,7 +94,7 @@ class MongoKVTableTest {
 
     // When:
     // initialize new writer with higher epoch
-    table = new MongoKVTable(client, name, UNSHARDED, PARTITIONER);
+    table = new MongoKVTable(client, name, UNSHARDED);
     writerFactory = table.init(0);
     writer = writerFactory.createWriter(0);
     writer.insert(bytes(1), byteArray(1), 101);
@@ -111,11 +107,11 @@ class MongoKVTableTest {
   @Test
   public void shouldFenceWriterSmallerEpoch() throws ExecutionException, InterruptedException {
     // Given:
-    var table0 = new MongoKVTable(client, name, UNSHARDED, PARTITIONER);
+    var table0 = new MongoKVTable(client, name, UNSHARDED);
     var writerFactory0 = table0.init(0);
     var writer0 = writerFactory0.createWriter(0);
 
-    var table1 = new MongoKVTable(client, name, UNSHARDED, PARTITIONER);
+    var table1 = new MongoKVTable(client, name, UNSHARDED);
     var writerFactory1 = table1.init(0);
     var writer1 = writerFactory1.createWriter(0);
 
@@ -134,7 +130,7 @@ class MongoKVTableTest {
   @Test
   public void shouldReturnNullForNotInserted() {
     // given:
-    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, PARTITIONER);
+    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED);
     table.init(0);
 
     // when:
@@ -147,7 +143,7 @@ class MongoKVTableTest {
   @Test
   public void shouldReturnNullForDeletedRecord() {
     // given:
-    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, PARTITIONER);
+    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED);
     var writerFactory = table.init(0);
     var writer = writerFactory.createWriter(0);
     writer.insert(bytes(1), byteArray(1), 100);
@@ -166,7 +162,7 @@ class MongoKVTableTest {
   @Test
   public void shouldGetInsertedRecord() {
     // given:
-    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, PARTITIONER);
+    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED);
     var writerFactory = table.init(0);
     var writer = writerFactory.createWriter(0);
     writer.insert(bytes(1), byteArray(1), 100);
@@ -183,7 +179,7 @@ class MongoKVTableTest {
   @Test
   public void shouldFilterResultsWithOldTimestamp() {
     // given:
-    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, PARTITIONER);
+    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED);
     var writerFactory = table.init(0);
     var writer = writerFactory.createWriter(0);
     writer.insert(bytes(1), byteArray(1), 100);
@@ -199,7 +195,7 @@ class MongoKVTableTest {
   @Test
   public void shouldIncludeResultsWithNewerTimestamp() {
     // given:
-    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, PARTITIONER);
+    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED);
     var writerFactory = table.init(0);
     var writer = writerFactory.createWriter(0);
     writer.insert(bytes(1), byteArray(1), 100);
@@ -216,15 +212,7 @@ class MongoKVTableTest {
   @Test
   public void shouldHandlePartitionedRangeScansCorrectly() {
     // Given:
-    final MongoKVTable table =
-        new MongoKVTable(client, name, UNSHARDED, new DefaultPartitioner<>(2) {
-          @Override
-          public boolean belongs(final Bytes key, final int kafkaPartition) {
-            // since we manually insert into specific partitions, we will
-            // only consider the following key as belong to partition 1
-            return key.equals(bytes(10, 11, 13, 13)) ^ kafkaPartition == 0;
-          }
-        });
+    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED);
 
     final var writerFactory0 = table.init(0);
     final var writer0 = writerFactory0.createWriter(0);
@@ -259,7 +247,7 @@ class MongoKVTableTest {
 
   @Test
   public void shouldFilterTombstonesFromRangeScans() {
-    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, PARTITIONER);
+    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED);
     var writerFactory = table.init(0);
     var writer = writerFactory.createWriter(0);
     writer.insert(bytes(10, 11, 12, 13), byteArray(2), 100);
@@ -287,7 +275,7 @@ class MongoKVTableTest {
 
   @Test
   public void shouldFilterExpiredItemsFromRangeScans() {
-    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, PARTITIONER);
+    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED);
     var writerFactory = table.init(0);
     var writer = writerFactory.createWriter(0);
     writer.insert(bytes(10, 11, 12, 13), byteArray(2), 100);
@@ -312,13 +300,7 @@ class MongoKVTableTest {
 
   @Test
   public void shouldHandleFullScansCorrectly() {
-    final MongoKVTable table =
-        new MongoKVTable(client, name, UNSHARDED, new DefaultPartitioner<>(2) {
-          @Override
-          public boolean belongs(final Bytes key, final int kafkaPartition) {
-            return key.equals(bytes(11, 13, 14)) ^ kafkaPartition == 0;
-          }
-        });
+    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED);
 
     final var writerFactory0 = table.init(0);
     final var writer0 = writerFactory0.createWriter(0);
@@ -351,7 +333,7 @@ class MongoKVTableTest {
 
   @Test
   public void shouldFilterTombstonesFromFullScans() {
-    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, PARTITIONER);
+    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED);
     var writerFactory = table.init(0);
     var writer = writerFactory.createWriter(0);
     writer.insert(bytes(10, 11, 12, 13), byteArray(2), 100);
@@ -379,7 +361,7 @@ class MongoKVTableTest {
 
   @Test
   public void shouldFilterExpiredFromFullScans() {
-    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, PARTITIONER);
+    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED);
     var writerFactory = table.init(0);
     var writer = writerFactory.createWriter(0);
     writer.insert(bytes(10, 11, 12, 13), byteArray(2), 100);

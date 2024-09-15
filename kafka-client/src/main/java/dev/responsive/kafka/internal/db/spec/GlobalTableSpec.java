@@ -19,9 +19,9 @@ package dev.responsive.kafka.internal.db.spec;
 import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
 import com.datastax.oss.driver.api.querybuilder.schema.CreateTableWithOptions;
 
-public class GlobalTableSpec<K, V> extends DelegatingTableSpec<K, V> {
+public class GlobalTableSpec extends DelegatingTableSpec {
 
-  public GlobalTableSpec(final RemoteTableSpec<K, V> delegate) {
+  public GlobalTableSpec(final RemoteTableSpec delegate) {
     super(delegate);
   }
 

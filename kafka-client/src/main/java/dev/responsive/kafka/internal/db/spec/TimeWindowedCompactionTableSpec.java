@@ -24,9 +24,9 @@ import java.time.Duration;
 import java.util.EnumSet;
 import java.util.concurrent.TimeUnit;
 
-public class TimeWindowedCompactionTableSpec<K, V> extends DelegatingTableSpec<K, V> {
+public class TimeWindowedCompactionTableSpec extends DelegatingTableSpec {
 
-  public TimeWindowedCompactionTableSpec(final RemoteTableSpec<K, V> delegate) {
+  public TimeWindowedCompactionTableSpec(final RemoteTableSpec delegate) {
     super(delegate);
   }
 

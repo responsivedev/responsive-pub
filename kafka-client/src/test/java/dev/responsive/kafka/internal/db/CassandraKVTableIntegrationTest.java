@@ -82,7 +82,7 @@ public class CassandraKVTableIntegrationTest {
         name + "-changelog"
     );
     table = CassandraKeyValueTable.create(
-        new BaseTableSpec<>(name, partitioner), client);
+        new BaseTableSpec(name, partitioner), client);
   }
 
   @Test

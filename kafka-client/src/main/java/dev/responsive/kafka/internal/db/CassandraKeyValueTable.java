@@ -77,7 +77,7 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
   private final PreparedStatement ensureEpoch;
 
   public static CassandraKeyValueTable create(
-      final RemoteTableSpec<Bytes, Integer> spec,
+      final RemoteTableSpec spec,
       final CassandraClient client
   ) throws InterruptedException, TimeoutException {
     final String name = spec.tableName();
