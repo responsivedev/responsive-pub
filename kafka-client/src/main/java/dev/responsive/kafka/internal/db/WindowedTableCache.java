@@ -16,10 +16,8 @@
 
 package dev.responsive.kafka.internal.db;
 
-import dev.responsive.kafka.internal.db.partitioning.Segmenter;
 import dev.responsive.kafka.internal.db.partitioning.WindowSegmentPartitioner;
 import dev.responsive.kafka.internal.db.spec.RemoteTableSpec;
-import dev.responsive.kafka.internal.utils.WindowedKey;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeoutException;
@@ -30,10 +28,7 @@ public class WindowedTableCache<T extends RemoteTable<?, ?>> {
 
   @FunctionalInterface
   public interface Factory<T> {
-    T create(
-        final RemoteTableSpec<WindowedKey, Segmenter.SegmentPartition> spec,
-        WindowSegmentPartitioner partitioner
-    )
+    T create(final RemoteTableSpec spec, WindowSegmentPartitioner partitioner)
         throws InterruptedException, TimeoutException;
   }
 
@@ -48,10 +43,7 @@ public class WindowedTableCache<T extends RemoteTable<?, ?>> {
    * Creates a table with the supplied {@code tableName} with the
    * desired schema.
    */
-  public synchronized T create(
-      RemoteTableSpec<WindowedKey, Segmenter.SegmentPartition> spec,
-      WindowSegmentPartitioner partitioner
-  )
+  public synchronized T create(RemoteTableSpec spec, WindowSegmentPartitioner partitioner)
       throws InterruptedException, TimeoutException {
     final T existing = tables.get(spec.tableName());
     if (existing != null) {

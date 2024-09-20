@@ -142,11 +142,6 @@ public class InMemoryKVTable implements RemoteKVTable<Object> {
         public Integer metadataTablePartition(int kafkaPartition) {
           return kafkaPartition;
         }
-
-        @Override
-        public boolean belongs(final Bytes key, final int kafkaPartition) {
-          return kafkaPartition == InMemoryKVTable.this.kafkaPartition;
-        }
       };
     }
 

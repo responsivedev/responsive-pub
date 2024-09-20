@@ -19,11 +19,11 @@ package dev.responsive.kafka.internal.db.spec;
 import com.datastax.oss.driver.api.querybuilder.schema.CreateTableWithOptions;
 import java.time.Duration;
 
-public class TtlTableSpec<K, V> extends DelegatingTableSpec<K, V> {
+public class TtlTableSpec extends DelegatingTableSpec {
 
   private final Duration ttl;
 
-  public TtlTableSpec(final RemoteTableSpec<K, V> delegate, final Duration ttl) {
+  public TtlTableSpec(final RemoteTableSpec delegate, final Duration ttl) {
     super(delegate);
     this.ttl = ttl;
   }

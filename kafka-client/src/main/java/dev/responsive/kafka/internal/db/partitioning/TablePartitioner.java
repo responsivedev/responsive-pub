@@ -16,8 +16,6 @@
 
 package dev.responsive.kafka.internal.db.partitioning;
 
-import org.apache.kafka.common.utils.Bytes;
-
 public interface TablePartitioner<K, P> {
 
   /**
@@ -33,15 +31,27 @@ public interface TablePartitioner<K, P> {
    */
   P metadataTablePartition(final int kafkaPartition);
 
-  /**
-   * @param key             the data key
-   * @param kafkaPartition  the partition in kafka
-   * @return whether {@code key} belongs in {@code kafkaPartition}
-   */
-  boolean belongs(final Bytes key, final int kafkaPartition);
-
-  static <K> TablePartitioner<K, Integer> defaultPartitioner(final int numPartitions) {
-    return new DefaultPartitioner<>(numPartitions);
+  static <K> TablePartitioner<K, Integer> defaultPartitioner() {
+    return new DefaultPartitioner<>();
   }
 
+  /**
+   * A default, no-op partitioner that is one-to-one with the Kafka partition
+   * and has only a single dimension to the partitioning key
+   *
+   * @param <K> the record key type
+   */
+  class DefaultPartitioner<K> implements TablePartitioner<K, Integer> {
+
+    @Override
+    public Integer tablePartition(final int kafkaPartition, final K key) {
+      return kafkaPartition;
+    }
+
+    @Override
+    public Integer metadataTablePartition(final int kafkaPartition) {
+      return kafkaPartition;
+    }
+
+  }
 }

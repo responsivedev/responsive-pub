@@ -97,7 +97,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
   private final PreparedStatement ensureEpoch;
 
   public static CassandraWindowedTable create(
-      final RemoteTableSpec<WindowedKey, Segmenter.SegmentPartition> spec,
+      final RemoteTableSpec spec,
       final CassandraClient client,
       final WindowSegmentPartitioner partitioner
   ) throws InterruptedException, TimeoutException {

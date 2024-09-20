@@ -18,7 +18,6 @@ package dev.responsive.kafka.internal.db;
 
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.kafka.internal.clients.TTDCassandraClient;
-import dev.responsive.kafka.internal.db.partitioning.Segmenter;
 import dev.responsive.kafka.internal.db.partitioning.Segmenter.SegmentPartition;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.db.partitioning.WindowSegmentPartitioner;
@@ -37,7 +36,7 @@ public class TTDWindowedTable extends TTDTable<WindowedKey>
   private final WindowSegmentPartitioner partitioner;
 
   public static TTDWindowedTable create(
-      final RemoteTableSpec<WindowedKey, Segmenter.SegmentPartition> spec,
+      final RemoteTableSpec spec,
       final CassandraClient client,
       final WindowSegmentPartitioner partitioner
   ) {
@@ -45,7 +44,7 @@ public class TTDWindowedTable extends TTDTable<WindowedKey>
   }
 
   public TTDWindowedTable(
-      final RemoteTableSpec<WindowedKey, Segmenter.SegmentPartition> spec,
+      final RemoteTableSpec spec,
       final TTDCassandraClient client,
       WindowSegmentPartitioner partitioner
   ) {

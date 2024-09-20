@@ -17,7 +17,6 @@
 package dev.responsive.kafka.internal.db.partitioning;
 
 import dev.responsive.kafka.internal.utils.SessionKey;
-import org.apache.kafka.common.utils.Bytes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,15 +46,6 @@ public class SessionSegmentPartitioner implements
   @Override
   public Segmenter.SegmentPartition metadataTablePartition(final int kafkaPartition) {
     return new Segmenter.SegmentPartition(kafkaPartition, METADATA_SEGMENT_ID);
-  }
-
-  @Override
-  public boolean belongs(final Bytes key, final int kafkaPartition) {
-    throw new UnsupportedOperationException(
-        "SessionSegmentPartitioner relies on specific mapping of kafka partition to key. This "
-            + "method should not be called as the assumption is that only keys "
-            + "stored for the given partition will be returned. If this exception "
-            + "is seen in production please file a ticket with the Responsive team.");
   }
 
   public Segmenter segmenter() {

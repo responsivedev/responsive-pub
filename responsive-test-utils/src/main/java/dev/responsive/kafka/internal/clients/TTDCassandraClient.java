@@ -37,7 +37,6 @@ import dev.responsive.kafka.internal.utils.RemoteMonitor;
 import java.time.Duration;
 import java.util.OptionalInt;
 import java.util.concurrent.CompletionStage;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 
 public class TTDCassandraClient extends CassandraClient {
@@ -45,7 +44,7 @@ public class TTDCassandraClient extends CassandraClient {
   private final ResponsiveStoreRegistry storeRegistry = new ResponsiveStoreRegistry();
   private final TTDMockAdmin admin;
 
-  private final TableCache<Bytes, Integer, RemoteKVTable<BoundStatement>> kvFactory;
+  private final TableCache<RemoteKVTable<BoundStatement>> kvFactory;
   private final WindowedTableCache<RemoteWindowedTable<BoundStatement>> windowedFactory;
 
   public TTDCassandraClient(final TTDMockAdmin admin, final Time time) {
@@ -121,12 +120,12 @@ public class TTDCassandraClient extends CassandraClient {
   }
 
   @Override
-  public TableCache<Bytes, Integer, RemoteKVTable<BoundStatement>> kvFactory() {
+  public TableCache<RemoteKVTable<BoundStatement>> kvFactory() {
     return kvFactory;
   }
 
   @Override
-  public TableCache<Bytes, Integer, RemoteKVTable<BoundStatement>> factFactory() {
+  public TableCache<RemoteKVTable<BoundStatement>> factFactory() {
     return kvFactory;
   }
 

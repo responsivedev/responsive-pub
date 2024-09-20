@@ -44,14 +44,13 @@ public class MongoKVFlushManager extends KVFlushManager {
   public MongoKVFlushManager(
       final MongoKVTable table,
       final MongoCollection<KVDoc> kvDocs,
-      final int kafkaPartition,
-      final TablePartitioner<Bytes, Integer> partitioner
+      final int kafkaPartition
   ) {
     this.table = table;
     this.kvDocs = kvDocs;
     this.kafkaPartition = kafkaPartition;
-    this.partitioner = partitioner;
 
+    partitioner = TablePartitioner.defaultPartitioner();
     logPrefix = String.format("%s[%d] kv-store {epoch=%d} ",
                               table.name(), kafkaPartition, table.localEpoch(kafkaPartition));
     log = new LogContext(logPrefix).logger(MongoKVFlushManager.class);
