@@ -53,7 +53,7 @@ public class ResponsiveTopologyTestDriverWindowStoreTest {
   public void shouldRunWindowStoreWithoutResponsiveConnection() {
     // Given:
     final ResponsiveWindowParams params =
-        ResponsiveWindowParams.window("ttd-window-store", windowSize, retentionPeriod);
+        ResponsiveWindowParams.window("ttd-window-store", windowSize, retentionPeriod, false);
     final TopologyTestDriver driver = setupDriver(params);
 
     final TestInputTopic<String, Long> bids = driver.createInputTopic(
