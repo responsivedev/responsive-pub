@@ -63,10 +63,11 @@ public final class ResponsiveWindowParams {
   public static ResponsiveWindowParams window(
       final String name,
       final Duration windowSize,
-      final Duration retentionPeriod
+      final Duration retentionPeriod,
+      final boolean retainDuplicates
   ) {
     return new ResponsiveWindowParams(
-        name, WindowSchema.WINDOW, windowSize, retentionPeriod, false
+        name, WindowSchema.WINDOW, windowSize, retentionPeriod, retainDuplicates
     );
   }
 

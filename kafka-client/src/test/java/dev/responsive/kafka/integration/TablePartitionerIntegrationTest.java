@@ -260,7 +260,7 @@ public class TablePartitionerIntegrationTest {
     final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties);
 
     final var params = ResponsiveWindowParams
-        .window(storeName, WINDOW_SIZE, GRACE_PERIOD)
+        .window(storeName, WINDOW_SIZE, GRACE_PERIOD, false)
         .withNumSegments(NUM_SEGMENTS);
     try (
         final var streams = new ResponsiveKafkaStreams(

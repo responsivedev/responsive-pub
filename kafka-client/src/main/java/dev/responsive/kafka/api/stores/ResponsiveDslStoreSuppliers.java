@@ -39,7 +39,8 @@ public class ResponsiveDslStoreSuppliers implements DslStoreSuppliers {
         ResponsiveWindowParams.window(
             dslWindowParams.name(),
             dslWindowParams.windowSize(),
-            dslWindowParams.retentionPeriod().minus(dslWindowParams.windowSize())
+            dslWindowParams.retentionPeriod(),
+            dslWindowParams.retainDuplicates()
         )
     );
   }
