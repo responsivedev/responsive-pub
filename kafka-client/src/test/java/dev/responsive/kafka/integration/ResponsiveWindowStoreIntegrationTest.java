@@ -41,6 +41,7 @@ import static org.hamcrest.Matchers.equalTo;
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.StorageBackend;
+import dev.responsive.kafka.api.stores.ResponsiveDslStoreSuppliers;
 import dev.responsive.kafka.api.stores.ResponsiveStores;
 import dev.responsive.kafka.api.stores.ResponsiveWindowParams;
 import dev.responsive.kafka.testutils.KeyValueTimestamp;
@@ -77,10 +78,13 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.StreamJoined;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
+import org.apache.kafka.streams.state.BuiltInDslStoreSuppliers;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -146,15 +150,7 @@ public class ResponsiveWindowStoreIntegrationTest {
     input
         .groupByKey()
         .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofSeconds(5), Duration.ofSeconds(1)))
-        .aggregate(
-            () -> 0L,
-            (k, v, agg) -> agg + v,
-            ResponsiveStores.windowMaterialized(
-                ResponsiveWindowParams.window(
-                    name,
-                    Duration.ofSeconds(5),
-                    Duration.ofSeconds(1))
-            ))
+        .aggregate(() -> 0L, (k, v, agg) -> agg + v, Materialized.as(name))
         .toStream()
         .peek((k, v) -> {
           collect.put(k, v);
@@ -277,11 +273,9 @@ public class ResponsiveWindowStoreIntegrationTest {
             () -> "",
             (k, v, agg) -> agg + v,
             ResponsiveStores.windowMaterialized(
-                ResponsiveWindowParams.window(
-                    name,
-                    windowSize,
-                    gracePeriod
-                ).withNumSegments(numSegments)
+                ResponsiveWindowParams
+                    .window(name, windowSize, gracePeriod, false)
+                    .withNumSegments(numSegments)
             ))
         .toStream()
         .peek((k, v) -> {
@@ -347,15 +341,7 @@ public class ResponsiveWindowStoreIntegrationTest {
     input
         .groupByKey()
         .windowedBy(TimeWindows.ofSizeAndGrace(windowSize, gracePeriod).advanceBy(advance))
-        .aggregate(
-            () -> "",
-            (k, v, agg) -> agg + v,
-            ResponsiveStores.windowMaterialized(
-                ResponsiveWindowParams.window(
-                    name,
-                    windowSize,
-                    gracePeriod)
-            ))
+        .aggregate(() -> "", (k, v, agg) -> agg + v, Named.as(name))
         .toStream()
         .peek((k, v) -> {
           results.put(k, v);
@@ -444,18 +430,15 @@ public class ResponsiveWindowStoreIntegrationTest {
             latch1.countDown();
           }
         })
-        .join(other,
+        .join(
+            other,
             (v1, v2) -> {
               System.out.println("Joining: " + v1 + ", " + v2);
               return v1 + "-" + v2;
             },
             JoinWindows.ofTimeDifferenceWithNoGrace(windowSize.dividedBy(2)),
-            StreamJoined.with(
-                ResponsiveStores.windowStoreSupplier(
-                    "l" + name, windowSize, windowSize, true),
-                ResponsiveStores.windowStoreSupplier(
-                    "r" + name, windowSize, windowSize, true)
-            ))
+            StreamJoined.as(name)
+        )
         .peek((k, v) -> collect.computeIfAbsent(k, old -> new ArrayBlockingQueue<>(10)).add(v))
         .to(outputTopic());
 
