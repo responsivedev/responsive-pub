@@ -27,49 +27,10 @@ java {
     }
 }
 
-/*********** Generated Resources ***********/
-
-val gitCommitId: String by lazy {
-    val stdout = ByteArrayOutputStream()
-    //rootProject.exec {
-    exec {
-        commandLine("git", "rev-parse", "--verify", "--short", "HEAD")
-        standardOutput = stdout
-    }
-    stdout.toString().trim()
-}
-
-val writeVersionPropertiesFile = "writeVersionPropertiesFile"
-val gitVersion = version
-
-val resourcesDir = "$buildDir/resources/main"
-val versionFilePath = "$resourcesDir/version.properties"
-
-tasks.register(writeVersionPropertiesFile) {
-    val versionFile = file(versionFilePath)
-    outputs.file(versionFile)
-    doFirst {
-        file(versionFilePath).writeText(
-                "git.build.version=" + gitVersion + "\n" +
-                        "git.commit.id=" + gitCommitId + "\n"
-        )
-    }
-}
-
-tasks.compileJava {
-    dependsOn(tasks[writeVersionPropertiesFile])
-}
-
-tasks.publishToMavenLocal {
-    dependsOn(tasks[writeVersionPropertiesFile])
-}
-
-tasks.publish {
-    dependsOn(tasks[writeVersionPropertiesFile])
-}
+version = project(":kafka-client").version
 
 dependencies {
-    api(project(":kafka-client"))
+    implementation(project(":kafka-client"))
     implementation("com.google.code.findbugs:jsr305:3.0.2")
     implementation("org.springframework.kafka:spring-kafka:3.2.4")
     implementation("org.springframework.boot:spring-boot-starter:3.3.2")

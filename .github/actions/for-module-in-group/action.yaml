@@ -70,3 +70,14 @@ runs:
         OSSRH_PASSWORD: ${{ inputs.OSSRH_PASSWORD }}
         SIGNING_KEY: ${{ inputs.SIGNING_KEY }}
         SIGNING_PASSWORD: ${{ inputs.SIGNING_PASSWORD }}
+
+    - name: "Gradle Build & Publish | kafka-client: responsive-spring"
+      if: ${{ (inputs.module == 'kafka-client') && (inputs.action == 'gradle-build-and-publish') }}
+      uses: ./.github/actions/gradle-build-and-publish
+      with:
+        module: "responsive-spring"
+        force_version: ${{ steps.gradle-build-and-publish-root-module.outputs.release_version }}
+        OSSRH_USER: ${{ inputs.OSSRH_USER }}
+        OSSRH_PASSWORD: ${{ inputs.OSSRH_PASSWORD }}
+        SIGNING_KEY: ${{ inputs.SIGNING_KEY }}
+        SIGNING_PASSWORD: ${{ inputs.SIGNING_PASSWORD }}
