@@ -26,6 +26,7 @@ include("kafka-client-examples:simple-example")
 include("kafka-client-examples:e2e-test")
 include("kafka-client-bootstrap")
 include("responsive-test-utils")
+include("responsive-spring")
 
 include("controller-api")
 include("operator")
