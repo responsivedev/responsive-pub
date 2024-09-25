@@ -1,4 +1,4 @@
-package dev.responsive.kafka.internal.db.pocket.client;
+package dev.responsive.kafka.internal.db.rs3.client;
 
 import java.util.Objects;
 import java.util.concurrent.CompletionStage;

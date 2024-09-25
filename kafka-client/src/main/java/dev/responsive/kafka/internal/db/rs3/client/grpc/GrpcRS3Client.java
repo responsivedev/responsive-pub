@@ -1,14 +1,14 @@
-package dev.responsive.kafka.internal.db.pocket.client.grpc;
+package dev.responsive.kafka.internal.db.rs3.client.grpc;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.protobuf.ByteString;
-import dev.responsive.kafka.internal.db.pocket.client.CurrentOffsets;
-import dev.responsive.kafka.internal.db.pocket.client.LssId;
-import dev.responsive.kafka.internal.db.pocket.client.PocketClient;
-import dev.responsive.kafka.internal.db.pocket.client.PocketException;
-import dev.responsive.kafka.internal.db.pocket.client.Put;
-import dev.responsive.kafka.internal.db.pocket.client.StreamSenderMessageReceiver;
-import dev.responsive.kafka.internal.db.pocket.client.WalEntry;
+import dev.responsive.kafka.internal.db.rs3.client.CurrentOffsets;
+import dev.responsive.kafka.internal.db.rs3.client.LssId;
+import dev.responsive.kafka.internal.db.rs3.client.RS3Client;
+import dev.responsive.kafka.internal.db.rs3.client.RS3Exception;
+import dev.responsive.kafka.internal.db.rs3.client.Put;
+import dev.responsive.kafka.internal.db.rs3.client.StreamSenderMessageReceiver;
+import dev.responsive.kafka.internal.db.rs3.client.WalEntry;
 import dev.responsive.otterpocket.OtterPocketGrpc;
 import dev.responsive.otterpocket.Otterpocket;
 import io.grpc.ChannelCredentials;
@@ -16,7 +16,6 @@ import io.grpc.Grpc;
 import io.grpc.InsecureChannelCredentials;
 import io.grpc.ManagedChannel;
 import io.grpc.StatusRuntimeException;
-import io.grpc.stub.StreamObserver;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -24,13 +23,12 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executors;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class GrpcPocketClient implements PocketClient {
-  static final Logger LOG = LoggerFactory.getLogger(GrpcPocketClient.class);
+public class GrpcRS3Client implements RS3Client {
+  static final Logger LOG = LoggerFactory.getLogger(GrpcRS3Client.class);
 
   static final long WAL_OFFSET_NONE = Long.MAX_VALUE;
 
@@ -40,7 +38,7 @@ public class GrpcPocketClient implements PocketClient {
   private Stats stats = new Stats();
 
   @VisibleForTesting
-  GrpcPocketClient(
+  GrpcRS3Client(
       final ManagedChannel channel,
       final OtterPocketGrpc.OtterPocketBlockingStub stub,
       final OtterPocketGrpc.OtterPocketStub asyncStub
@@ -54,7 +52,7 @@ public class GrpcPocketClient implements PocketClient {
     channel.shutdownNow();
   }
 
-  public static GrpcPocketClient connect(
+  public static GrpcRS3Client connect(
       final String target
   ) {
     final ChannelCredentials channelCredentials = InsecureChannelCredentials.create();
@@ -62,7 +60,7 @@ public class GrpcPocketClient implements PocketClient {
         .build();
     final OtterPocketGrpc.OtterPocketBlockingStub stub = OtterPocketGrpc.newBlockingStub(channel);
     final OtterPocketGrpc.OtterPocketStub asyncStub = OtterPocketGrpc.newStub(channel);
-    return new GrpcPocketClient(channel, stub, asyncStub);
+    return new GrpcRS3Client(channel, stub, asyncStub);
   }
 
   @Override
@@ -75,7 +73,7 @@ public class GrpcPocketClient implements PocketClient {
           .setPssId(pssId)
           .build());
     } catch (final StatusRuntimeException e) {
-      throw new PocketException(e);
+      throw new RS3Exception(e);
     }
     checkField(result::hasWrittenOffset, "writtenOffset");
     checkField(result::hasFlushedOffset, "flushedOffset");
@@ -210,7 +208,7 @@ public class GrpcPocketClient implements PocketClient {
 
   private void checkField(final Supplier<Boolean> check , final String field) {
     if (!check.get()) {
-      throw new RuntimeException("otterpocket resp proto missing field " + field);
+      throw new RuntimeException("rs3 resp proto missing field " + field);
     }
   }
 
@@ -230,7 +228,7 @@ public class GrpcPocketClient implements PocketClient {
         return;
       }
       lastLog = now;
-      LOG.info("pocket client read statistics: {} {}", totalReads, totalReadsElapsedUs);
+      LOG.info("rs3 client read statistics: {} {}", totalReads, totalReadsElapsedUs);
     }
   }
 }

@@ -1,12 +1,12 @@
-package dev.responsive.kafka.internal.db.pocket;
+package dev.responsive.kafka.internal.db.rs3;
 
 import dev.responsive.kafka.internal.db.KVFlushManager;
 import dev.responsive.kafka.internal.db.RemoteWriter;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
-import dev.responsive.kafka.internal.db.pocket.client.LssId;
-import dev.responsive.kafka.internal.db.pocket.client.PocketClient;
-import dev.responsive.kafka.internal.db.pocket.client.StreamSender;
-import dev.responsive.kafka.internal.db.pocket.client.WalEntry;
+import dev.responsive.kafka.internal.db.rs3.client.LssId;
+import dev.responsive.kafka.internal.db.rs3.client.RS3Client;
+import dev.responsive.kafka.internal.db.rs3.client.StreamSender;
+import dev.responsive.kafka.internal.db.rs3.client.WalEntry;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
 import java.util.HashMap;
 import java.util.Objects;
@@ -18,29 +18,29 @@ import org.apache.kafka.common.utils.Bytes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-class PocketKVFlushManager extends KVFlushManager {
-  private static final Logger LOG = LoggerFactory.getLogger(PocketKVFlushManager.class);
+class RS3KVFlushManager extends KVFlushManager {
+  private static final Logger LOG = LoggerFactory.getLogger(RS3KVFlushManager.class);
 
   private final UUID storeId;
-  private final PocketClient pocketClient;
+  private final RS3Client rs3Client;
   private final LssId lssId;
-  private final PocketKVTable table;
+  private final RS3KVTable table;
   private final HashMap<Integer, Optional<Long>> writtenOffsets;
   private final int kafkaPartition;
   private final PssPartitioner pssPartitioner;
-  private final HashMap<Integer, PocketKVWriter> writers = new HashMap<>();
+  private final HashMap<Integer, RS3KVWriter> writers = new HashMap<>();
 
-  public PocketKVFlushManager(
+  public RS3KVFlushManager(
       final UUID storeId,
-      final PocketClient pocketClient,
+      final RS3Client rs3Client,
       final LssId lssId,
-      final PocketKVTable table,
+      final RS3KVTable table,
       final HashMap<Integer, Optional<Long>> writtenOffsets,
       final int kafkaPartition,
       final PssPartitioner pssPartitioner
   ) {
     this.storeId = Objects.requireNonNull(storeId);
-    this.pocketClient = Objects.requireNonNull(pocketClient);
+    this.rs3Client = Objects.requireNonNull(rs3Client);
     this.lssId = Objects.requireNonNull(lssId);
     this.table = Objects.requireNonNull(table);
     this.writtenOffsets = Objects.requireNonNull(writtenOffsets);
@@ -89,9 +89,9 @@ class PocketKVFlushManager extends KVFlushManager {
         return new NoopWriter(kafkaPartition);
       }
     }
-    final var writer = new PocketKVWriter(
+    final var writer = new RS3KVWriter(
         storeId,
-        pocketClient,
+        rs3Client,
         table,
         pssId,
         lssId,
@@ -130,7 +130,7 @@ class PocketKVFlushManager extends KVFlushManager {
 
   @Override
   public String logPrefix() {
-    return tableName() + ".pocket.flushmanager";
+    return tableName() + ".rs3.flushmanager";
   }
 
   private static class NoopWriter implements RemoteWriter<Bytes, Integer> {
@@ -154,19 +154,19 @@ class PocketKVFlushManager extends KVFlushManager {
     }
   }
 
-  private static class PocketKVWriter implements RemoteWriter<Bytes, Integer> {
+  private static class RS3KVWriter implements RemoteWriter<Bytes, Integer> {
     private final StreamSender<WalEntry> streamSender;
     private final CompletionStage<Optional<Long>> resultFuture;
-    private PocketKVTable table;
+    private RS3KVTable table;
     private final int pssId;
     private final LssId lssId;
     private final long endOffset;
     private final int kafkaPartition;
 
-    private PocketKVWriter(
+    private RS3KVWriter(
         final UUID storeId,
-        final PocketClient pocketClient,
-        final PocketKVTable table,
+        final RS3Client pocketClient,
+        final RS3KVTable table,
         final int pssId,
         final LssId lssId,
         final long endOffset,

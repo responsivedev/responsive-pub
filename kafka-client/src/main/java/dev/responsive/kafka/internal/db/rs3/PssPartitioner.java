@@ -1,4 +1,4 @@
-package dev.responsive.kafka.internal.db.pocket;
+package dev.responsive.kafka.internal.db.rs3;
 
 import java.util.List;
 

@@ -46,7 +46,7 @@ import dev.responsive.kafka.internal.db.CassandraClientFactory;
 import dev.responsive.kafka.internal.db.DefaultCassandraClientFactory;
 import dev.responsive.kafka.internal.db.mongo.CollectionCreationOptions;
 import dev.responsive.kafka.internal.db.mongo.ResponsiveMongoClient;
-import dev.responsive.kafka.internal.db.pocket.PocketTableFactory;
+import dev.responsive.kafka.internal.db.rs3.RS3TableFactory;
 import dev.responsive.kafka.internal.metrics.ClientVersionMetadata;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
@@ -531,7 +531,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
           sessionClients = new SessionClients(
               Optional.empty(),
               Optional.empty(),
-              Optional.of(new PocketTableFactory(pocketHost, pocketPort)),
+              Optional.of(new RS3TableFactory(pocketHost, pocketPort)),
               false,
               admin
           );

@@ -1,10 +1,10 @@
-package dev.responsive.kafka.internal.db.pocket.client;
+package dev.responsive.kafka.internal.db.rs3.client;
 
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-public interface PocketClient {
+public interface RS3Client {
   CurrentOffsets getCurrentOffsets(UUID storeId, LssId lssId, int pssId);
 
   StreamSenderMessageReceiver<WalEntry, Optional<Long>> writeWalSegmentAsync(

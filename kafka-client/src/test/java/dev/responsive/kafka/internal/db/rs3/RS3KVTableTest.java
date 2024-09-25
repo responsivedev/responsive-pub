@@ -1,4 +1,4 @@
-package dev.responsive.kafka.internal.db.pocket;
+package dev.responsive.kafka.internal.db.rs3;
 
 import static dev.responsive.kafka.testutils.ResponsiveExtension.PocketContainer;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -6,10 +6,10 @@ import static org.hamcrest.Matchers.is;
 
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.StorageBackend;
-import dev.responsive.kafka.internal.db.pocket.client.LssId;
-import dev.responsive.kafka.internal.db.pocket.client.PocketClient;
-import dev.responsive.kafka.internal.db.pocket.client.Put;
-import dev.responsive.kafka.internal.db.pocket.client.grpc.GrpcPocketClient;
+import dev.responsive.kafka.internal.db.rs3.client.LssId;
+import dev.responsive.kafka.internal.db.rs3.client.RS3Client;
+import dev.responsive.kafka.internal.db.rs3.client.Put;
+import dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRS3Client;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
@@ -29,12 +29,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-public class PocketKVTableTest {
+public class RS3KVTableTest {
   private static final UUID STORE_ID = new UUID(0, 0);
   private static final int PARTITION_ID = 1;
 
   private String testName;
-  private PocketClient pocketClient;
+  private RS3Client pocketClient;
   private final PssPartitioner pssPartitioner = PssRangePartitioner.create(
       List.of("000", "001", "010", "011", "100", "101", "110", "111")
   );
@@ -42,7 +42,7 @@ public class PocketKVTableTest {
   @RegisterExtension
   public static final ResponsiveExtension EXT = new ResponsiveExtension(StorageBackend.POCKET);
 
-  private PocketKVTable table;
+  private RS3KVTable table;
   private PocketContainer pocketContainer;
 
   @BeforeEach
@@ -54,8 +54,8 @@ public class PocketKVTableTest {
     testName = info.getTestMethod().orElseThrow().getName();
     final int port = pocketContainer.getMappedPort(50051);
     this.pocketContainer = pocketContainer;
-    pocketClient = GrpcPocketClient.connect(String.format("localhost:%d", port));
-    this.table = new PocketKVTable(
+    pocketClient = GrpcRS3Client.connect(String.format("localhost:%d", port));
+    this.table = new RS3KVTable(
         testName,
         STORE_ID,
         pocketClient,

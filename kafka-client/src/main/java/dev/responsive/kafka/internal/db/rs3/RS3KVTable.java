@@ -1,15 +1,13 @@
-package dev.responsive.kafka.internal.db.pocket;
+package dev.responsive.kafka.internal.db.rs3;
 
 import dev.responsive.kafka.internal.db.KVFlushManager;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
-import dev.responsive.kafka.internal.db.pocket.client.LssId;
-import dev.responsive.kafka.internal.db.pocket.client.PocketClient;
-import dev.responsive.kafka.internal.db.pocket.client.Put;
-import dev.responsive.kafka.internal.db.pocket.client.WalEntry;
+import dev.responsive.kafka.internal.db.rs3.client.LssId;
+import dev.responsive.kafka.internal.db.rs3.client.RS3Client;
+import dev.responsive.kafka.internal.db.rs3.client.Put;
+import dev.responsive.kafka.internal.db.rs3.client.WalEntry;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration;
 import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -18,26 +16,26 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class PocketKVTable implements RemoteKVTable<WalEntry> {
-  private static final Logger LOG = LoggerFactory.getLogger(PocketKVTable.class);
+public class RS3KVTable implements RemoteKVTable<WalEntry> {
+  private static final Logger LOG = LoggerFactory.getLogger(RS3KVTable.class);
 
   private final String name;
   private final UUID storeId;
-  private final PocketClient pocketClient;
+  private final RS3Client rs3Client;
   private final PssPartitioner pssPartitioner;
   private LssId lssId;
   private Long fetchOffset = ResponsiveStoreRegistration.NO_COMMITTED_OFFSET;
-  private PocketKVFlushManager flushManager;
+  private RS3KVFlushManager flushManager;
 
-  public PocketKVTable(
+  public RS3KVTable(
       final String name,
       final UUID storeId,
-      final PocketClient pocketClient,
+      final RS3Client rs3Client,
       final PssPartitioner pssPartitioner
   ) {
     this.name = Objects.requireNonNull(name);
     this.storeId = Objects.requireNonNull(storeId);
-    this.pocketClient = Objects.requireNonNull(pocketClient);
+    this.rs3Client = Objects.requireNonNull(rs3Client);
     this.pssPartitioner = Objects.requireNonNull(pssPartitioner);
   }
 
@@ -53,7 +51,7 @@ public class PocketKVTable implements RemoteKVTable<WalEntry> {
     //       written to to bump the written offset
     final HashMap<Integer, Optional<Long>> lastWrittenOffset = new HashMap<>();
     for (final int pss: pssPartitioner.allPss()) {
-      final var offsets = pocketClient.getCurrentOffsets(storeId, lssId, pss);
+      final var offsets = rs3Client.getCurrentOffsets(storeId, lssId, pss);
       lastWrittenOffset.put(pss, offsets.writtenOffset());
     }
     final var fetchOffsetOrMinusOne = lastWrittenOffset.values().stream()
@@ -66,11 +64,11 @@ public class PocketKVTable implements RemoteKVTable<WalEntry> {
       this.fetchOffset = fetchOffsetOrMinusOne;
     }
 
-    LOG.info("restore pocket kv table from offset {} for {}", fetchOffset, kafkaPartition);
+    LOG.info("restore rs3 kv table from offset {} for {}", fetchOffset, kafkaPartition);
 
-    flushManager = new PocketKVFlushManager(
+    flushManager = new RS3KVFlushManager(
         storeId,
-        pocketClient,
+        rs3Client,
         lssId,
         this,
         lastWrittenOffset,
@@ -83,7 +81,7 @@ public class PocketKVTable implements RemoteKVTable<WalEntry> {
   @Override
   public byte[] get(int kafkaPartition, Bytes key, long minValidTs) {
     final int pssId = pssPartitioner.pss(key.get(), kafkaPartition);
-    return pocketClient.get(storeId, lssId, pssId, flushManager.writtenOffset(pssId), key.get())
+    return rs3Client.get(storeId, lssId, pssId, flushManager.writtenOffset(pssId), key.get())
         .orElse(null);
   }
 

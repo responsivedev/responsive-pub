@@ -1,6 +1,6 @@
-package dev.responsive.kafka.internal.db.pocket.client.grpc;
+package dev.responsive.kafka.internal.db.rs3.client.grpc;
 
-import dev.responsive.kafka.internal.db.pocket.client.PocketException;
+import dev.responsive.kafka.internal.db.rs3.client.RS3Exception;
 import io.grpc.StatusException;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
@@ -24,7 +24,7 @@ public class GrpcMessageReceiver<T> implements StreamObserver<T> {
   @Override
   synchronized public void onError(final Throwable throwable) {
     if (throwable instanceof StatusRuntimeException || throwable instanceof StatusException) {
-      error = new PocketException(throwable);
+      error = new RS3Exception(throwable);
     } else if (throwable instanceof RuntimeException) {
       error = (RuntimeException) throwable;
     } else {

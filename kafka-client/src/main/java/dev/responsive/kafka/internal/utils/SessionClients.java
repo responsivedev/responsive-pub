@@ -21,7 +21,7 @@ import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.mongo.ResponsiveMongoClient;
-import dev.responsive.kafka.internal.db.pocket.PocketTableFactory;
+import dev.responsive.kafka.internal.db.rs3.RS3TableFactory;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
 import java.util.Optional;
@@ -38,7 +38,7 @@ public class SessionClients {
 
   private final Optional<ResponsiveMongoClient> mongoClient;
   private final Optional<CassandraClient> cassandraClient;
-  private final Optional<PocketTableFactory> pocketTableFactory;
+  private final Optional<RS3TableFactory> pocketTableFactory;
   private final boolean inMemory;
   private final Admin admin;
 
@@ -50,7 +50,7 @@ public class SessionClients {
   public SessionClients(
       final Optional<ResponsiveMongoClient> mongoClient,
       final Optional<CassandraClient> cassandraClient,
-      final Optional<PocketTableFactory> pocketTableFactory,
+      final Optional<RS3TableFactory> pocketTableFactory,
       final boolean inMemory,
       final Admin admin
   ) {
@@ -92,7 +92,7 @@ public class SessionClients {
     }
   }
 
-  public PocketTableFactory pocketTableFactory() {
+  public RS3TableFactory pocketTableFactory() {
     if (pocketTableFactory.isEmpty()) {
       final IllegalStateException fatalException =
           new IllegalStateException("pocket table factory was missing");
@@ -139,7 +139,7 @@ public class SessionClients {
   public void closeAll() {
     cassandraClient.ifPresent(CassandraClient::shutdown);
     mongoClient.ifPresent(ResponsiveMongoClient::close);
-    pocketTableFactory.ifPresent(PocketTableFactory::close);
+    pocketTableFactory.ifPresent(RS3TableFactory::close);
     admin.close();
 
     if (restoreListener != null) {

@@ -1,4 +1,4 @@
-package dev.responsive.kafka.internal.db.pocket.client;
+package dev.responsive.kafka.internal.db.rs3.client;
 
 public class LssId {
   private final int id;

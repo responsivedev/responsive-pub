@@ -1,4 +1,4 @@
-package dev.responsive.kafka.internal.db.pocket;
+package dev.responsive.kafka.internal.db.rs3;
 
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import java.util.Objects;

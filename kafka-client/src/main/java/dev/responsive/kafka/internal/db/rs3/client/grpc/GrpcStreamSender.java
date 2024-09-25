@@ -1,6 +1,6 @@
-package dev.responsive.kafka.internal.db.pocket.client.grpc;
+package dev.responsive.kafka.internal.db.rs3.client.grpc;
 
-import dev.responsive.kafka.internal.db.pocket.client.StreamSender;
+import dev.responsive.kafka.internal.db.rs3.client.StreamSender;
 import io.grpc.stub.StreamObserver;
 import java.util.Objects;
 import java.util.function.Function;

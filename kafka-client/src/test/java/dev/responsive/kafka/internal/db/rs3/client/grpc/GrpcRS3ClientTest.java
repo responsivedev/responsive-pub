@@ -1,4 +1,4 @@
-package dev.responsive.kafka.internal.db.pocket.client.grpc;
+package dev.responsive.kafka.internal.db.rs3.client.grpc;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.instanceOf;
@@ -9,8 +9,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.google.protobuf.ByteString;
-import dev.responsive.kafka.internal.db.pocket.client.LssId;
-import dev.responsive.kafka.internal.db.pocket.client.Put;
+import dev.responsive.kafka.internal.db.rs3.client.LssId;
+import dev.responsive.kafka.internal.db.rs3.client.Put;
 import dev.responsive.otterpocket.OtterPocketGrpc;
 import dev.responsive.otterpocket.Otterpocket;
 import io.grpc.ManagedChannel;
@@ -27,7 +27,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
-class GrpcPocketClientTest {
+class GrpcRS3ClientTest {
   private static final UUID STORE_ID = new UUID(100, 200);
   private static final LssId LSS_ID = new LssId(10);
   private static final int PSS_ID = 1;
@@ -44,11 +44,11 @@ class GrpcPocketClientTest {
   private ArgumentCaptor<StreamObserver<Otterpocket.WriteWALSegmentResult>>
       writeWALSegmentResultObserverCaptor;
 
-  private GrpcPocketClient client;
+  private GrpcRS3Client client;
 
   @BeforeEach
   public void setup() {
-    client = new GrpcPocketClient(channel, stub, asyncStub);
+    client = new GrpcRS3Client(channel, stub, asyncStub);
   }
 
   @Test
@@ -82,7 +82,7 @@ class GrpcPocketClientTest {
     // given:
     when(stub.getOffsets(any())).thenReturn(
         Otterpocket.GetOffsetsResult.newBuilder()
-            .setWrittenOffset(GrpcPocketClient.WAL_OFFSET_NONE)
+            .setWrittenOffset(GrpcRS3Client.WAL_OFFSET_NONE)
             .setFlushedOffset(123)
             .build()
     );
@@ -101,7 +101,7 @@ class GrpcPocketClientTest {
     when(stub.getOffsets(any())).thenReturn(
         Otterpocket.GetOffsetsResult.newBuilder()
             .setWrittenOffset(123)
-            .setFlushedOffset(GrpcPocketClient.WAL_OFFSET_NONE)
+            .setFlushedOffset(GrpcRS3Client.WAL_OFFSET_NONE)
             .build()
     );
 
@@ -195,7 +195,7 @@ class GrpcPocketClientTest {
         .setLssId(lssIdProto(LSS_ID))
         .setPssId(PSS_ID)
         .setStoreId(uuidProto(STORE_ID))
-        .setExpectedWrittenOffset(GrpcPocketClient.WAL_OFFSET_NONE)
+        .setExpectedWrittenOffset(GrpcRS3Client.WAL_OFFSET_NONE)
         .setEndOffset(20)
         .setPut(putProto(put1))
         .build()
