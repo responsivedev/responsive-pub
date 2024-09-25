@@ -37,6 +37,7 @@ import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.Printed;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueMapper;
+import org.junit.jupiter.api.Disabled;
 import org.springframework.boot.SpringApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -55,6 +56,7 @@ import org.springframework.kafka.streams.RecoveringDeserializationExceptionHandl
 @Configuration
 @EnableKafka
 @EnableResponsive
+@Disabled // ignore from tests
 public class KafkaStreamsApp {
 
   public static void main(String[] args) throws NoSuchMethodException {
