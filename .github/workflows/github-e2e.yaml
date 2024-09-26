@@ -7,6 +7,11 @@ on:
         type: string
         required: true
         default: 'scylla'
+      test-type:
+        description: 'Which test variant to run (options: async, regression)'
+        type: string
+        required: false
+        default: 'async'
       test-duration:
         description: 'The duration that the antithesis test runs'
         type: string
@@ -71,21 +76,21 @@ jobs:
           docker push us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test:$KAFKA_CLIENT_VERSION
 
       - name: "Build Async Test Config"
-        working-directory: ./kafka-client-examples/e2e-test/docker/antithesis
+        working-directory: ./kafka-client-examples/e2e-test/docker/antithesis/${{ inputs.test-type }}
         env:
           KAFKA_CLIENT_VERSION: latest
           BACKEND: ${{ inputs.backend }}
           CONFIG_IMG_VERSION: ${{ steps.kafka_client_version.outputs.KAFKA_CLIENT_VERSION }}
         run: |
-          cat async/config/docker-compose.yml.template | envsubst > async/config/docker-compose.yml
-          cp async/config/volumes/app-$BACKEND.properties async/config/volumes/app.properties
-          docker build . -f async/Dockerfile -t us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test-config:$CONFIG_IMG_VERSION
+          cat config/docker-compose.yml.template | envsubst > config/docker-compose.yml
+          cp config/volumes/app-$BACKEND.properties config/volumes/app.properties
+          docker build . -f Dockerfile -t us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test-config-${{ inputs.test-type }}:$CONFIG_IMG_VERSION
 
       - name: "Push Config"
         env:
           KAFKA_CLIENT_VERSION: ${{ steps.kafka_client_version.outputs.KAFKA_CLIENT_VERSION }}
         run: |
-          docker push us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test-config:$KAFKA_CLIENT_VERSION
+          docker push us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test-config-${{ inputs.test-type }}:$KAFKA_CLIENT_VERSION
 
       - name: "Run Antithesis Tests"
         uses: antithesishq/antithesis-trigger-action@main
@@ -95,7 +100,7 @@ jobs:
           username: ${{ secrets.ANTITHESIS_USERNAME }}
           password: ${{ secrets.ANTITHESIS_PASSWORD }}
           github_token: ${{ secrets.ANTITHESIS_GH_PAT }}
-          config_image: us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test-config:${{ steps.kafka_client_version.outputs.KAFKA_CLIENT_VERSION }}
+          config_image: us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test-config-${{ inputs.test-type }}:${{ steps.kafka_client_version.outputs.KAFKA_CLIENT_VERSION }}
           images: us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test:${{ steps.kafka_client_version.outputs.KAFKA_CLIENT_VERSION }};docker.io/mongo:5.0
           description: "responsive antithesis test run"
           email_recipients: "antithesis-responsive-aaaamurlsqy6e3hxnx6ksnec5y@antithesisgroup.slack.com"
@@ -107,5 +112,6 @@ jobs:
       #    ANTITHESIS_USERNAME: ${{ secrets.ANTITHESIS_USERNAME }}
       #    ANTITHESIS_PASSWORD: ${{ secrets.ANTITHESIS_PASSWORD }}
       #    DURATION: 0.5
+      #    TEST_TYPE: async
       #  run: |
-      #    curl -u "$ANTITHESIS_USERNAME:$ANTITHESIS_PASSWORD" -XPOST https://responsive.antithesis.com/api/v1/launch_experiment/responsive -d '{"params": {"antithesis.images":"us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test:'$KAFKA_CLIENT_VERSION'", "antithesis.config_image": "us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test-config:'$KAFKA_CLIENT_VERSION'", "custom.duration": '$DURATION', "antithesis.report.recipients": "antithesis-responsive-aaaamurlsqy6e3hxnx6ksnec5y@antithesisgroup.slack.com", "
+      #    curl -u "$ANTITHESIS_USERNAME:$ANTITHESIS_PASSWORD" -XPOST https://responsive.antithesis.com/api/v1/launch_experiment/responsive -d '{"params": {"antithesis.images":"us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test:'$KAFKA_CLIENT_VERSION'", "antithesis.config_image": "us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test-config-async:'$KAFKA_CLIENT_VERSION'", "custom.duration": '$DURATION', "antithesis.report.recipients": "antithesis-responsive-aaaamurlsqy6e3hxnx6ksnec5y@antithesisgroup.slack.com", "
