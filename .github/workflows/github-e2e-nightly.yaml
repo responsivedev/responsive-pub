@@ -11,4 +11,5 @@ jobs:
     with:
       test-duration: "6.0"
       backend: "scylla"
+      test-type: "async"
     secrets: inherit

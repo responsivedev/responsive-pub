@@ -10,6 +10,11 @@ on:
         options:
           - scylla
           - mongo
+      test-type:
+        description: 'Which test variant to run (options: async, regression)'
+        type: string
+        required: true
+        default: 'regression'
       test-duration:
         description: 'The duration that the antithesis test runs'
         type: string
@@ -23,5 +28,6 @@ jobs:
     uses: ./.github/workflows/github-e2e.yaml
     with:
       backend: ${{ inputs.backend }}
+      test-type: ${{ inputs.test-type }}
       test-duration: ${{ inputs.test-duration }}
     secrets: inherit
