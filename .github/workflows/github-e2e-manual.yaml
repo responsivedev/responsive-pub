@@ -12,14 +12,14 @@ on:
           - mongo
       test-type:
         description: 'Which test variant to run'
-        type: string
+        type: choice
         required: true
         default: 'regression'
         options:
           - async
           - regression
       test-duration:
-        description: 'The duration that the antithesis test runs'
+        description: 'The duration that the antithesis test runs (hours)'
         type: string
         required: false
         default: '0.5'
