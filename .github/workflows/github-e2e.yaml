@@ -8,7 +8,7 @@ on:
         required: true
         default: 'scylla'
       test-type:
-        description: 'Which test variant to run (options: async, regression)'
+        description: 'Which test variant to run'
         type: string
         required: true
         default: 'regression'

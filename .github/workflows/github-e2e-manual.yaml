@@ -11,10 +11,13 @@ on:
           - scylla
           - mongo
       test-type:
-        description: 'Which test variant to run (options: async, regression)'
+        description: 'Which test variant to run'
         type: string
         required: true
         default: 'regression'
+        options:
+          - async
+          - regression
       test-duration:
         description: 'The duration that the antithesis test runs'
         type: string
