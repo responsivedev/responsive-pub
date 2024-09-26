@@ -1,4 +1,4 @@
-name: Antithesis Test Run 
+name: Antithesis Test Run
 on:
   workflow_call:
     inputs:
@@ -10,8 +10,8 @@ on:
       test-type:
         description: 'Which test variant to run (options: async, regression)'
         type: string
-        required: false
-        default: 'async'
+        required: true
+        default: 'regression'
       test-duration:
         description: 'The duration that the antithesis test runs'
         type: string
@@ -75,13 +75,14 @@ jobs:
         run: |
           docker push us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test:$KAFKA_CLIENT_VERSION
 
-      - name: "Build Async Test Config"
+      - name: "Build Test Config"
         working-directory: ./kafka-client-examples/e2e-test/docker/antithesis/${{ inputs.test-type }}
         env:
           KAFKA_CLIENT_VERSION: latest
           BACKEND: ${{ inputs.backend }}
           CONFIG_IMG_VERSION: ${{ steps.kafka_client_version.outputs.KAFKA_CLIENT_VERSION }}
         run: |
+          echo "Building test config in $(pwd)"
           cat config/docker-compose.yml.template | envsubst > config/docker-compose.yml
           cp config/volumes/app-$BACKEND.properties config/volumes/app.properties
           docker build . -f Dockerfile -t us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test-config-${{ inputs.test-type }}:$CONFIG_IMG_VERSION
