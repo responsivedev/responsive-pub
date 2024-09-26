@@ -76,16 +76,15 @@ jobs:
           docker push us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test:$KAFKA_CLIENT_VERSION
 
       - name: "Build Test Config"
-        working-directory: ./kafka-client-examples/e2e-test/docker/antithesis/${{ inputs.test-type }}
+        working-directory: ./kafka-client-examples/e2e-test/docker/antithesis
         env:
           KAFKA_CLIENT_VERSION: latest
           BACKEND: ${{ inputs.backend }}
           CONFIG_IMG_VERSION: ${{ steps.kafka_client_version.outputs.KAFKA_CLIENT_VERSION }}
         run: |
-          echo "Building test config in $(pwd)"
-          cat config/docker-compose.yml.template | envsubst > config/docker-compose.yml
-          cp config/volumes/app-$BACKEND.properties config/volumes/app.properties
-          docker build . -f Dockerfile -t us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test-config-${{ inputs.test-type }}:$CONFIG_IMG_VERSION
+          cat ${{ inputs.test-type }}/config/docker-compose.yml.template | envsubst > ${{ inputs.test-type }}/config/docker-compose.yml
+          cp ${{ inputs.test-type }}/config/volumes/app-$BACKEND.properties ${{ inputs.test-type }}/config/volumes/app.properties
+          docker build . -f ${{ inputs.test-type }}/Dockerfile -t us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test-config-${{ inputs.test-type }}:$CONFIG_IMG_VERSION
 
       - name: "Push Config"
         env:
