@@ -84,11 +84,12 @@ public class STJoinExample extends AbstractKSExampleService {
             if (random < Params.EXCEPTION_INJECT_THRESHOLD) {
               throw new InjectedE2ETestException();
             }
-          }})
+          }
+        })
         .to(
-        resultsTopic(),
-        Produced.with(Serdes.String(), RegressionSchema.enrichedOrderSerde())
-    );
+            resultsTopic(),
+            Produced.with(Serdes.String(), RegressionSchema.enrichedOrderSerde())
+        );
 
     return builder.build();
   }
