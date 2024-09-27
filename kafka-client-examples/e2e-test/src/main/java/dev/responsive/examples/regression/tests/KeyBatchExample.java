@@ -18,6 +18,9 @@ package dev.responsive.examples.regression.tests;
 
 import static dev.responsive.examples.regression.RegConstants.ORDERS;
 
+import dev.responsive.examples.common.InjectedE2ETestException;
+import dev.responsive.examples.e2etest.Params;
+import dev.responsive.examples.e2etest.UrandomGenerator;
 import dev.responsive.examples.regression.RegressionSchema;
 import dev.responsive.examples.regression.model.GroupedOrder;
 import dev.responsive.examples.regression.model.Order;
@@ -41,6 +44,8 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 
 public class KeyBatchExample extends AbstractKSExampleService {
+
+  private final UrandomGenerator randomGenerator = new UrandomGenerator();
 
   public KeyBatchExample(final Map<String, Object> props, final boolean responsive) {
     super(
@@ -70,6 +75,14 @@ public class KeyBatchExample extends AbstractKSExampleService {
 
     builder.stream(ORDERS, Consumed.with(Serdes.String(), RegressionSchema.orderSerde()))
         .transform(BatchTransformer::new, "grouped-orders-store")
+        .peek((k, v) -> {
+          if (responsive) {
+            final var random = Math.abs(randomGenerator.nextLong() % 10000);
+            if (random < Params.EXCEPTION_INJECT_THRESHOLD) {
+              throw new InjectedE2ETestException();
+            }
+          }
+        })
         .to(resultsTopic(), Produced.with(Serdes.String(), RegressionSchema.groupedOrderSerde()));
 
     return builder.build();
