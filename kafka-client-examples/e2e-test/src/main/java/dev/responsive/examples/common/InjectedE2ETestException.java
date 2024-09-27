@@ -20,6 +20,6 @@ public class InjectedE2ETestException extends RuntimeException {
   private static final long serialVersionUID = 0L;
 
   public InjectedE2ETestException() {
-    super("injected e2e exception");
+    super("injected e2e test exception");
   }
 }
