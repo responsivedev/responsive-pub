@@ -42,6 +42,7 @@ import dev.responsive.kafka.internal.db.ResponsiveRetryPolicy;
 import java.net.InetSocketAddress;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.TimeUnit;
 import javax.annotation.Nullable;
 import org.bson.Document;
 
@@ -121,6 +122,7 @@ public final class SessionUtil {
 
     MongoClientSettings settings = MongoClientSettings.builder()
         .applyConnectionString(new ConnectionString(connectionString))
+        .applyToConnectionPoolSettings(b -> b.maxConnectionIdleTime(60000, TimeUnit.MILLISECONDS))
         .readConcern(ReadConcern.MAJORITY)
         .writeConcern(WriteConcern.MAJORITY)
         .serverApi(serverApi)
