@@ -87,7 +87,6 @@ public abstract class AbstractKSExampleService extends AbstractIdleService {
     LOG.info("Created keyspace...");
 
     LOG.info("Starting Kafka Streams...");
-
     kafkaStreams = responsive
         ? new ResponsiveKafkaStreams(buildTopology(), properties)
         : new KafkaStreams(buildTopology(), new StreamsConfig(properties));
