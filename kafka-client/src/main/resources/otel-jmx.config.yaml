@@ -180,6 +180,16 @@ rules:
    metricAttribute:
      clientid: param(client-id)
    mapping:
+     txn-init-time-ns-total:
+       metric: kafka.producer.txn.init.time.ns.total
+       type: gauge
+       desc: the total time spent initializing transactions for the producer
+       unit: '{nanoseconds}'
+     txn-abort-time-ns-total:
+       metric: kafka.producer.txn.abort.time.ns.total
+       type: gauge
+       desc: the total time spent aborting transactions in the producer
+       unit: '{nanoseconds}'
      txn-commit-time-ns-total:
        metric: kafka.producer.txn.commit.time.ns.total
        type: gauge
