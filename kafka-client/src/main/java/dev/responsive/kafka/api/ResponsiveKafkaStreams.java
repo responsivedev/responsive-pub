@@ -19,6 +19,7 @@ package dev.responsive.kafka.api;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.ASYNC_MAX_EVENTS_QUEUED_PER_ASYNC_THREAD_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.ASYNC_THREAD_POOL_SIZE_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.METRICS_ENABLED_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_ADDITIONAL_CONNECTION_STRING_PARAMS_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_ENDPOINT_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_PASSWORD_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_USERNAME_CONFIG;
@@ -493,7 +494,8 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
           final var mongoClient = SessionUtil.connect(
               hostname,
               clientId,
-              clientSecret == null ? null : clientSecret.value()
+              clientSecret == null ? null : clientSecret.value(),
+              responsiveConfig.getString(MONGO_ADDITIONAL_CONNECTION_STRING_PARAMS_CONFIG)
           );
           final boolean timestampFirstOrder =
               responsiveConfig.getBoolean(MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_CONFIG);

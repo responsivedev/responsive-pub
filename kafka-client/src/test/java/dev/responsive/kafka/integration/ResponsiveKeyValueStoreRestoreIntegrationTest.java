@@ -391,7 +391,8 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
       final var mongoClient = SessionUtil.connect(
           hostname,
           user,
-          pass == null ? null : pass.value()
+          pass == null ? null : pass.value(),
+          ""
       );
       table = new MongoKVTable(
           mongoClient,
