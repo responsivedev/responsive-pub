@@ -36,6 +36,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.hasItems;
 
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
+import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
@@ -72,7 +73,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 public class MinimalIntegrationTest {
 
   @RegisterExtension
-  static ResponsiveExtension EXTENSION = new ResponsiveExtension(StorageBackend.CASSANDRA);
+  static ResponsiveExtension EXTENSION = new ResponsiveExtension(StorageBackend.MONGO_DB);
 
   private static final String INPUT_TOPIC = "input";
   private static final String OUTPUT_TOPIC = "output";
@@ -159,6 +160,10 @@ public class MinimalIntegrationTest {
     properties.put(STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
     properties.put(STORE_FLUSH_RECORDS_TRIGGER_CONFIG, 1);
     properties.put(COMMIT_INTERVAL_MS_CONFIG, 1);
+
+    properties.put(
+        ResponsiveConfig.MONGO_ADDITIONAL_CONNECTION_STRING_PARAMS_CONFIG, "maxIdleTimeMs=60000"
+    );
 
     properties.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 1);
     properties.put(consumerPrefix(ConsumerConfig.METADATA_MAX_AGE_CONFIG), "1000");

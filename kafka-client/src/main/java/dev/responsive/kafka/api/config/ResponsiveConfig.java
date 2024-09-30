@@ -85,6 +85,10 @@ public class ResponsiveConfig extends AbstractConfig {
   public static final String MONGO_ENDPOINT_CONFIG = "responsive.mongo.endpoint";
   private static final String MONGO_ENDPOINT_DOC = "The MongoDB endpoint to connect to.";
 
+  public static final String MONGO_ADDITIONAL_CONNECTION_STRING_PARAMS_CONFIG = "responsive.mongo.additional.connection.string.params";
+  private static final String MONGO_ADDITIONAL_CONNECTION_STRING_PARAMS_DOC = "Additional MongoDB config options to be appended to the "
+      + "connection string. ";
+
   public static final String MONGO_COLLECTION_SHARDING_ENABLED_CONFIG = "responsive.mongo.collection.sharding.enabled";
   private static final boolean MONGO_COLLECTION_SHARDING_ENABLED_DEFAULT = false;
   private static final String MONGO_COLLECTION_SHARDING_ENABLED_DOC = "Toggles use of sharded collections. Set "
@@ -503,6 +507,12 @@ public class ResponsiveConfig extends AbstractConfig {
           MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_DEFAULT,
           Importance.LOW,
           MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_DOC
+      ).define(
+          MONGO_ADDITIONAL_CONNECTION_STRING_PARAMS_CONFIG,
+          Type.STRING,
+          "",
+          Importance.LOW,
+          MONGO_ADDITIONAL_CONNECTION_STRING_PARAMS_DOC
       ).define(
           WINDOW_BLOOM_FILTER_COUNT_CONFIG,
           Type.INT,

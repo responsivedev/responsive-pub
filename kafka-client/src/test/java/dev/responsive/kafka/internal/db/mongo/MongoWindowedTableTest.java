@@ -52,7 +52,7 @@ class MongoWindowedTableTest {
     name = info.getDisplayName().replace("()", "");
 
     final String mongoConnection = (String) props.get(MONGO_ENDPOINT_CONFIG);
-    client = SessionUtil.connect(mongoConnection, null, null);
+    client = SessionUtil.connect(mongoConnection, null, null, "");
 
     partitioner = new WindowSegmentPartitioner(10_000L, 1_000L, false);
     segment = partitioner.segmenter().activeSegments(0, 100).get(0);
