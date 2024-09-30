@@ -6,7 +6,7 @@ on:
         description: 'The backend storage type to use'
         type: choice
         required: true
-        default: 'scylla'
+        default: 'mongo'
         options:
           - scylla
           - mongo
