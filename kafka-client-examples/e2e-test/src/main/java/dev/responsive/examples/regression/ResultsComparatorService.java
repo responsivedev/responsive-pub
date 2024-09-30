@@ -24,6 +24,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZE
 
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.util.concurrent.AbstractExecutionThreadService;
+import dev.responsive.examples.common.EventSignals;
 import dev.responsive.examples.common.JsonDeserializer;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -81,6 +82,7 @@ public class ResultsComparatorService<T extends Comparable<T>>
     final var baselineBuffered = ArrayListMultimap.<Integer, Record<T>>create();
     final var responsiveBuffered = ArrayListMultimap.<Integer, Record<T>>create();
 
+    boolean loggedStartSignal = false;
     int matches = 0;
     while (isRunning()) {
       // avoid buffering too many records if the difference between
@@ -88,6 +90,12 @@ public class ResultsComparatorService<T extends Comparable<T>>
       pauseResume(responsiveConsumed, baselineConsumed);
 
       final var records = consumer.poll(Duration.ofSeconds(10));
+
+      if (!loggedStartSignal && !records.isEmpty()) {
+        EventSignals.logNumConsumedOutputRecords(records.count());
+        loggedStartSignal = true;
+      }
+
       records.records(resultsTopic(true)).forEach(r -> {
         responsiveConsumed[r.partition()]++;
         responsiveBuffered.put(r.partition(), new Record<>(r));
