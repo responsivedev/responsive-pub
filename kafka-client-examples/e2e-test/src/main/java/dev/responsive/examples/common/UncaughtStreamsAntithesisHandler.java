@@ -27,6 +27,7 @@ import com.datastax.oss.driver.api.core.servererrors.WriteFailureException;
 import com.datastax.oss.driver.api.core.servererrors.WriteTimeoutException;
 import com.mongodb.MongoNotPrimaryException;
 import com.mongodb.MongoQueryException;
+import com.mongodb.MongoSocketReadException;
 import com.mongodb.MongoTimeoutException;
 import java.net.ConnectException;
 import java.util.LinkedList;
@@ -77,6 +78,7 @@ public class UncaughtStreamsAntithesisHandler implements StreamsUncaughtExceptio
         InjectedE2ETestException.class,
         InvalidProducerEpochException.class,
         MongoNotPrimaryException.class,
+        MongoSocketReadException.class,
         MongoTimeoutException.class,
         ProducerFencedException.class,
         ReadFailureException.class,
