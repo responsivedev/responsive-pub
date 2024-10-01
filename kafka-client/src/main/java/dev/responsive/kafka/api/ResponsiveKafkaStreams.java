@@ -493,7 +493,8 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
           final var mongoClient = SessionUtil.connect(
               hostname,
               clientId,
-              clientSecret == null ? null : clientSecret.value()
+              clientSecret == null ? null : clientSecret.value(),
+              metrics
           );
           final boolean timestampFirstOrder =
               responsiveConfig.getBoolean(MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_CONFIG);
