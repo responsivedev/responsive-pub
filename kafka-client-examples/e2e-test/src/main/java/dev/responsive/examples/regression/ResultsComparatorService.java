@@ -22,6 +22,8 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_C
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 
+import com.antithesis.sdk.Assert;
+import com.antithesis.sdk.Lifecycle;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.util.concurrent.AbstractExecutionThreadService;
 import dev.responsive.examples.common.EventSignals;
@@ -82,7 +84,7 @@ public class ResultsComparatorService<T extends Comparable<T>>
     final var baselineBuffered = ArrayListMultimap.<Integer, Record<T>>create();
     final var responsiveBuffered = ArrayListMultimap.<Integer, Record<T>>create();
 
-    boolean loggedStartSignal = false;
+    boolean setupCompleteSignalFired = false;
     int matches = 0;
     while (isRunning()) {
       // avoid buffering too many records if the difference between
@@ -91,9 +93,13 @@ public class ResultsComparatorService<T extends Comparable<T>>
 
       final var records = consumer.poll(Duration.ofSeconds(10));
 
-      if (!loggedStartSignal && !records.isEmpty()) {
+      // Signal that the setup is complete we start seeing output records
+      // from the Responsive app and are ready to start injecting failures
+      if (!setupCompleteSignalFired
+          && records.records(resultsTopic(true)).iterator().hasNext()) {
+        Lifecycle.setupComplete(null);
         EventSignals.logNumConsumedOutputRecords(records.count());
-        loggedStartSignal = true;
+        setupCompleteSignalFired = true;
       }
 
       records.records(resultsTopic(true)).forEach(r -> {
@@ -109,6 +115,9 @@ public class ResultsComparatorService<T extends Comparable<T>>
         var responsive = responsiveBuffered.get(p).iterator();
         var baseline = baselineBuffered.get(p).iterator();
 
+        Assert.sometimes(responsive.hasNext(), "Saw Responsive app output", null);
+        Assert.sometimes(baseline.hasNext(), "Saw baseline app output", null);
+
         while (responsive.hasNext() && baseline.hasNext()) {
           final var r = responsive.next();
           final var b = baseline.next();
@@ -118,13 +127,13 @@ public class ResultsComparatorService<T extends Comparable<T>>
             baseline.remove();
             matches++;
           } else if (responsive.hasNext() && baseline.hasNext()) {
-            LOG.error(
-                "ANTITHESIS NEVER: Expected to consume records in order, but they were not"
-                    + "in order. Most recent record from responsive is {} and most recent up"
-                    + "record from baseline is {}",
+            Assert.unreachable(String.format(
+                "Expected to see identical output records in identical order, but the next set "
+                    + "of records did not match up. Most recent record from responsive is %s "
+                    + "and most recent record from baseline is %s",
                 r.record,
                 b.record
-            );
+            ), null);
           } else {
             // one of the streams is behind so we'll wait for the next
             // poll to see if any records come up here
