@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package dev.responsive.kafka.internal.db.mongo;
 
 import static dev.responsive.kafka.internal.db.mongo.MongoTelemetryListener.commandsFailedCount;
