@@ -29,7 +29,6 @@ import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.db.partitioning.WindowSegmentPartitioner;
 import dev.responsive.kafka.internal.db.spec.BaseTableSpec;
 import dev.responsive.kafka.internal.db.spec.TtlTableSpec;
-
 import java.util.concurrent.TimeoutException;
 
 public class ResponsiveMongoClient {

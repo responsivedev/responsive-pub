@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package dev.responsive.kafka.internal.db.mongo;
 
 import com.mongodb.event.CommandFailedEvent;
@@ -84,8 +85,8 @@ public class MongoTelemetryListener implements CommandListener {
       String command,
       boolean isSuccess
   ) {
-    String sensorName = "mongodb-commands" + "-" + command +
-        (isSuccess? "-succeeded" : "-failed");
+    String sensorName = "mongodb-commands" + "-" + command
+        + (isSuccess ? "-succeeded" : "-failed");
 
     Sensor sensor = metrics.getSensor(sensorName);
     if (sensor == null) {
