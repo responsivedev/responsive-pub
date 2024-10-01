@@ -61,7 +61,7 @@ class MongoSessionTableTest {
     name = info.getDisplayName().replace("()", "");
 
     final String mongoConnection = (String) props.get(MONGO_ENDPOINT_CONFIG);
-    client = SessionUtil.connect(mongoConnection, null, null, null);
+    client = SessionUtil.connect(mongoConnection, null, null, "", null);
   }
 
   /*

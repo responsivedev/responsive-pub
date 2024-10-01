@@ -19,6 +19,9 @@ package dev.responsive.examples.regression.tests;
 import static dev.responsive.examples.regression.RegConstants.CUSTOMERS;
 import static dev.responsive.examples.regression.RegConstants.ORDERS;
 
+import dev.responsive.examples.common.InjectedE2ETestException;
+import dev.responsive.examples.e2etest.Params;
+import dev.responsive.examples.e2etest.UrandomGenerator;
 import dev.responsive.examples.regression.RegressionSchema;
 import dev.responsive.examples.regression.model.Customer;
 import dev.responsive.examples.regression.model.EnrichedOrder;
@@ -34,6 +37,8 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Produced;
 
 public class STJoinExample extends AbstractKSExampleService {
+
+  private final UrandomGenerator randomGenerator = new UrandomGenerator();
 
   public STJoinExample(final Map<String, Object> props, final boolean responsive) {
     super(
@@ -72,10 +77,19 @@ public class STJoinExample extends AbstractKSExampleService {
         );
 
     // output to results topic
-    enrichedOrders.to(
-        resultsTopic(),
-        Produced.with(Serdes.String(), RegressionSchema.enrichedOrderSerde())
-    );
+    enrichedOrders
+        .peek((k, v) -> {
+          if (responsive) {
+            final var random = Math.abs(randomGenerator.nextLong() % 10000);
+            if (random < Params.EXCEPTION_INJECT_THRESHOLD) {
+              throw new InjectedE2ETestException();
+            }
+          }
+        })
+        .to(
+            resultsTopic(),
+            Produced.with(Serdes.String(), RegressionSchema.enrichedOrderSerde())
+        );
 
     return builder.build();
   }

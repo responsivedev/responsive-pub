@@ -392,6 +392,7 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
           hostname,
           user,
           pass == null ? null : pass.value(),
+          "",
           null
       );
       table = new MongoKVTable(

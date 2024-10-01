@@ -96,6 +96,7 @@ public final class SessionUtil {
       final String hostname,
       @Nullable final String clientId,
       @Nullable final String clientSecret,
+      final String additionalParams,
       @Nullable final ResponsiveMetrics metrics
   ) {
     final String connectionString;
@@ -118,12 +119,16 @@ public final class SessionUtil {
       connectionString = hostname;
     }
 
+    final String connectionStringWithParams = additionalParams.equals("")
+        ? connectionString
+        : connectionString + "/?" + additionalParams;
+
     ServerApi serverApi = ServerApi.builder()
         .version(ServerApiVersion.V1)
         .build();
 
     final MongoClientSettings.Builder settingsBuilder = MongoClientSettings.builder()
-        .applyConnectionString(new ConnectionString(connectionString))
+        .applyConnectionString(new ConnectionString(connectionStringWithParams))
         .readConcern(ReadConcern.MAJORITY)
         .writeConcern(WriteConcern.MAJORITY)
         .serverApi(serverApi);

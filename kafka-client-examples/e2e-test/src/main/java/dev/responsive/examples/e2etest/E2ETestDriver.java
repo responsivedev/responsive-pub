@@ -2,6 +2,7 @@ package dev.responsive.examples.e2etest;
 
 import com.google.common.collect.ImmutableMap;
 import dev.responsive.examples.common.E2ETestUtils;
+import dev.responsive.examples.common.EventSignals;
 import dev.responsive.examples.e2etest.E2ESchema.InputRecord;
 import dev.responsive.examples.e2etest.E2ESchema.OutputRecord;
 import java.time.Duration;
@@ -266,7 +267,8 @@ public class E2ETestDriver {
       return;
     }
     lastLog = Instant.now();
-    LOG.info("consumed {} records", recordsProcessed);
+
+    EventSignals.logNumConsumedOutputRecords(recordsProcessed);
     LOG.info("by key: {}",
         consumeState.values().stream()
             .map(v -> v.key + ":" + v.recvdCount)

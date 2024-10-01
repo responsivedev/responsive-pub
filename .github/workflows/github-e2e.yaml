@@ -6,7 +6,7 @@ on:
         description: 'The backend storage type to use'
         type: string
         required: true
-        default: 'scylla'
+        default: 'mongo'
       test-type:
         description: 'Which test variant to run'
         type: string
@@ -106,6 +106,8 @@ jobs:
           email_recipients: "antithesis-responsive-aaaamurlsqy6e3hxnx6ksnec5y@antithesisgroup.slack.com"
           additional_parameters: |-
             custom.duration=${{ inputs.test-duration }}
+            custom.database_type=${{ inputs.backend }}
+            custom.test_type=${{ inputs.test-type }}
 
       #  env:
       #    KAFKA_CLIENT_VERSION: ${{ steps.kafka_client_version.outputs.KAFKA_CLIENT_VERSION }}
