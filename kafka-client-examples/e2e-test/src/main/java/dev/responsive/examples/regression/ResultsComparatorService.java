@@ -100,8 +100,9 @@ public class ResultsComparatorService<T extends Comparable<T>>
         LOG.info("Received at least one output record, setup is complete");
         Lifecycle.setupComplete(null);
         setupCompleteSignalFired = true;
-
         EventSignals.logNumConsumedOutputRecords(records.count());
+
+        LOG.info("E2ETestDriver - consumed 1 records");
       }
 
       records.records(resultsTopic(true)).forEach(r -> {
