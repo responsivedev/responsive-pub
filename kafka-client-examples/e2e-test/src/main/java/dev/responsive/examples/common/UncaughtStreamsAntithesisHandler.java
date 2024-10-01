@@ -16,6 +16,7 @@
 
 package dev.responsive.examples.common;
 
+import com.antithesis.sdk.Assert;
 import com.datastax.oss.driver.api.core.AllNodesFailedException;
 import com.datastax.oss.driver.api.core.DriverTimeoutException;
 import com.datastax.oss.driver.api.core.connection.ConnectionInitException;
@@ -25,18 +26,17 @@ import com.datastax.oss.driver.api.core.servererrors.UnavailableException;
 import com.datastax.oss.driver.api.core.servererrors.WriteFailureException;
 import com.datastax.oss.driver.api.core.servererrors.WriteTimeoutException;
 import com.mongodb.MongoNotPrimaryException;
+import com.mongodb.MongoQueryException;
+import com.mongodb.MongoTimeoutException;
 import java.net.ConnectException;
 import java.util.LinkedList;
 import java.util.List;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.ProducerFencedException;
-import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TransactionAbortedException;
 import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
-import org.apache.kafka.streams.errors.TaskCorruptedException;
-import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,7 +53,7 @@ public class UncaughtStreamsAntithesisHandler implements StreamsUncaughtExceptio
           causalSummary(exception, new LinkedList<>()),
           exception
       );
-      LOG.error("ANTITHESIS NEVER: uncaught exception on test app stream thread");
+      Assert.unreachable("Uncaught exception on test app stream thread", null);
     }
     return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.REPLACE_THREAD;
   }
@@ -77,12 +77,10 @@ public class UncaughtStreamsAntithesisHandler implements StreamsUncaughtExceptio
         InjectedE2ETestException.class,
         InvalidProducerEpochException.class,
         MongoNotPrimaryException.class,
+        MongoTimeoutException.class,
         ProducerFencedException.class,
         ReadFailureException.class,
         ReadTimeoutException.class,
-        RebalanceInProgressException.class,
-        TaskCorruptedException.class,
-        TaskMigratedException.class,
         TimeoutException.class,
         java.util.concurrent.TimeoutException.class,
         TransactionAbortedException.class,
@@ -95,6 +93,13 @@ public class UncaughtStreamsAntithesisHandler implements StreamsUncaughtExceptio
         return false;
       }
     }
+
+    if (throwable instanceof MongoQueryException && throwable.getMessage().contains(
+            "Command failed with error 13436 (NotPrimaryOrSecondary)")
+    ) {
+      return false;
+    }
+
     seen.add(throwable);
     if (throwable.getCause() != null && !seen.contains(throwable.getCause())) {
       return shouldLogError(throwable.getCause(), seen);

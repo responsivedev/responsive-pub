@@ -1,5 +1,6 @@
 package dev.responsive.examples.e2etest;
 
+import com.antithesis.sdk.Lifecycle;
 import com.google.common.collect.ImmutableMap;
 import dev.responsive.examples.common.E2ETestUtils;
 import dev.responsive.examples.common.EventSignals;
@@ -62,6 +63,7 @@ public class E2ETestDriver {
   private final int maxOutstanding;
   private final Long recordsToProcess;
   private int recordsProcessed = 0;
+  private boolean setupCompleteSignalFired = false;
   private final String groupId;
   private volatile boolean keepRunning = true;
   private final Map<Integer, StalledPartition> stalledPartitions = new HashMap<>();
@@ -243,9 +245,17 @@ public class E2ETestDriver {
       }
       consumedOutputOffsets.put(cr.partition(), cr.offset());
       recordsProcessed += poppedOffsets.size();
+      maybeFireSetupCompleteSignal();
       maybeLogConsumed();
       maybeLogAllConsumed();
       cs.updateReceived(poppedOffsets, ps.partition(), cr.value().digest());
+    }
+  }
+
+  private void maybeFireSetupCompleteSignal() {
+    if (!setupCompleteSignalFired && recordsProcessed > 0) {
+      LOG.info("Received at least one output record, setup is complete");
+      Lifecycle.setupComplete(null);
     }
   }
 

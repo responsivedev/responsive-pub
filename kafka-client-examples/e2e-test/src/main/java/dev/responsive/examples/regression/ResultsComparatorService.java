@@ -97,9 +97,11 @@ public class ResultsComparatorService<T extends Comparable<T>>
       // from the Responsive app and are ready to start injecting failures
       if (!setupCompleteSignalFired
           && records.records(resultsTopic(true)).iterator().hasNext()) {
+        LOG.info("Received at least one output record, setup is complete");
         Lifecycle.setupComplete(null);
-        EventSignals.logNumConsumedOutputRecords(records.count());
         setupCompleteSignalFired = true;
+
+        EventSignals.logNumConsumedOutputRecords(records.count());
       }
 
       records.records(resultsTopic(true)).forEach(r -> {
