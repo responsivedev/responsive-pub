@@ -1,5 +1,6 @@
 package dev.responsive.examples.e2etest;
 
+import com.antithesis.sdk.Assert;
 import com.antithesis.sdk.Lifecycle;
 import com.google.common.collect.ImmutableMap;
 import dev.responsive.examples.common.E2ETestUtils;
@@ -345,17 +346,15 @@ public class E2ETestDriver {
           throw new RuntimeException(e);
         }
         if (Duration.between(start, Instant.now()).getSeconds() > 300) {
-          LOG.error("ANTITHESIS NEVER: waited longer than 300 seconds for offset {} {} {}",
-              upTo,
-              partition,
-              sent.isEmpty() ? "null" : sent.get(0).toString()
-          );
-          throw new IllegalStateException(String.format(
+          final String errorMessage = String.format(
               "waited longer than 300 seconds for offset %d %d %s",
               upTo,
               partition,
               sent.isEmpty() ? "null" : sent.get(0).toString()
-          ));
+          );
+          Assert.unreachable(errorMessage, null);
+          LOG.error(errorMessage);
+          throw new IllegalStateException(errorMessage);
         }
       }
       final List<RecordMetadata> popped = new ArrayList<>();
@@ -393,23 +392,20 @@ public class E2ETestDriver {
         final var stalledPartition = stalledPartitions.get(p);
         if (offsets.inputCommitted().get(tp) > stalledPartition.offset()) {
           LOG.info("resume faults");
-          faultStopper.startFaults();
+          faultStopper.resumeFaults();
           stalledPartitions.remove(p);
         } else if (offsets.timestamp()
             .isAfter(stalledPartition.detected().plus(stalledPartitionThreshold))) {
-          LOG.error("ANTITHESIS NEVER: Partition {} stalled at {} ({}) since {}",
-              p,
-              stalledPartition.offset(),
-              offsets.inputCommitted.get(tp),
-              Duration.between(stalledPartition.detected(), offsets.timestamp())
-          );
-          throw new IllegalStateException(String.format(
+          final String errorMessage = String.format(
               "Partition %d has not made progress from offset %d (current %d) for %s",
               p,
               stalledPartition.offset(),
               offsets.inputCommitted.get(tp),
               Duration.between(stalledPartition.detected(), offsets.timestamp())
-          ));
+          );
+          Assert.unreachable(errorMessage, null);
+          LOG.error(errorMessage);
+          throw new IllegalStateException(errorMessage);
         }
       } else {
         final List<CommittedAndEndOffsets> allCommittedAndEndOffsets = new LinkedList<>();
@@ -432,7 +428,7 @@ public class E2ETestDriver {
                 currentCommitted,
                 offsets.timestamp
             );
-            faultStopper.stopFaults();
+            faultStopper.pauseFaults();
             stalledPartitions.put(p, new StalledPartition(offsets.timestamp(), currentCommitted));
             break;
           }
@@ -562,11 +558,12 @@ public class E2ETestDriver {
       }
       final var expectedChecksum = checksum.current();
       if (!Arrays.equals(expectedChecksum, observedChecksum)) {
-        LOG.error("ANTITHESIS NEVER: checksum mismatch - key({}), recvdCount({}), {} {}",
-            key,
-            recvdCount,
-            Arrays.toString(checksum.current()),
-            observedChecksum
+        Assert.unreachable(
+            String.format("checksum mismatch - key(%s), recvdCount(%d), %s %s",
+                          key,
+                          recvdCount,
+                          Arrays.toString(checksum.current()),
+                          Arrays.toString(observedChecksum)), null
         );
         throw new IllegalStateException("checksum mismatch");
       }
@@ -577,7 +574,7 @@ public class E2ETestDriver {
     int refs = 0;
     private Instant stoppedAt = null;
 
-    private Instant stopFaults() {
+    private Instant pauseFaults() {
       if (refs == 0) {
         LOG.info("ANTITHESIS: Stop faults");
         stoppedAt = Instant.now();
@@ -586,7 +583,7 @@ public class E2ETestDriver {
       return stoppedAt;
     }
 
-    private void startFaults() {
+    private void resumeFaults() {
       refs -= 1;
       if (refs == 0) {
         LOG.info("ANTITHESIS: Start faults");
