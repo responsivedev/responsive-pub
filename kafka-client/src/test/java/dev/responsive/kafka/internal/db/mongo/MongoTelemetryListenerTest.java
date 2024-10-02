@@ -38,12 +38,12 @@ public class MongoTelemetryListenerTest {
   @Test
   public void shouldHaveCorrectNamesForSuccessMetrics() {
     final MetricName findSuccessCountName = commandsSucceededCount("find");
-    assertEquals("responsive-mongodb", findSuccessCountName.group());
+    assertEquals("mongodb", findSuccessCountName.group());
     assertEquals("commands-succeeded-count", findSuccessCountName.name());
     assertEquals(Collections.singletonMap("command", "find"), findSuccessCountName.tags());
 
     final MetricName findSuccessLatencyName = commandsSucceededLatency("find");
-    assertEquals("responsive-mongodb", findSuccessLatencyName.group());
+    assertEquals("mongodb", findSuccessLatencyName.group());
     assertEquals("commands-succeeded-cumulative-latency", findSuccessLatencyName.name());
     assertEquals(Collections.singletonMap("command", "find"), findSuccessLatencyName.tags());
   }
@@ -51,12 +51,12 @@ public class MongoTelemetryListenerTest {
   @Test
   public void shouldHaveCorrectNamesForFailureMetrics() {
     final MetricName findFailureCountName = commandsFailedCount("find");
-    assertEquals("responsive-mongodb", findFailureCountName.group());
+    assertEquals("mongodb", findFailureCountName.group());
     assertEquals("commands-failed-count", findFailureCountName.name());
     assertEquals(Collections.singletonMap("command", "find"), findFailureCountName.tags());
 
     final MetricName findFailureLatencyName = commandsFailedLatency("find");
-    assertEquals("responsive-mongodb", findFailureLatencyName.group());
+    assertEquals("mongodb", findFailureLatencyName.group());
     assertEquals("commands-failed-cumulative-latency", findFailureLatencyName.name());
     assertEquals(Collections.singletonMap("command", "find"), findFailureLatencyName.tags());
   }
