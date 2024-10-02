@@ -39,6 +39,8 @@ import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 import com.mongodb.client.MongoDatabase;
 import dev.responsive.kafka.internal.db.ResponsiveRetryPolicy;
+import dev.responsive.kafka.internal.db.mongo.MongoTelemetryListener;
+import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import java.net.InetSocketAddress;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -94,7 +96,8 @@ public final class SessionUtil {
       final String hostname,
       @Nullable final String clientId,
       @Nullable final String clientSecret,
-      final String additionalParams
+      final String additionalParams,
+      @Nullable final ResponsiveMetrics metrics
   ) {
     final String connectionString;
     if (clientId != null && clientSecret != null) {
@@ -124,12 +127,17 @@ public final class SessionUtil {
         .version(ServerApiVersion.V1)
         .build();
 
-    MongoClientSettings settings = MongoClientSettings.builder()
+    final MongoClientSettings.Builder settingsBuilder = MongoClientSettings.builder()
         .applyConnectionString(new ConnectionString(connectionStringWithParams))
         .readConcern(ReadConcern.MAJORITY)
         .writeConcern(WriteConcern.MAJORITY)
-        .serverApi(serverApi)
-        .build();
+        .serverApi(serverApi);
+
+    if (metrics != null) {
+      settingsBuilder.addCommandListener(new MongoTelemetryListener(metrics));
+    }
+
+    MongoClientSettings settings = settingsBuilder.build();
 
     // Create a new client and connect to the server
     MongoClient mongoClient = MongoClients.create(settings);

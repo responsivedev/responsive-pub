@@ -495,7 +495,8 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
               hostname,
               clientId,
               clientSecret == null ? null : clientSecret.value(),
-              responsiveConfig.getString(MONGO_ADDITIONAL_CONNECTION_STRING_PARAMS_CONFIG)
+              responsiveConfig.getString(MONGO_ADDITIONAL_CONNECTION_STRING_PARAMS_CONFIG),
+              metrics
           );
           final boolean timestampFirstOrder =
               responsiveConfig.getBoolean(MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_CONFIG);

@@ -223,6 +223,10 @@ public class ResponsiveMetrics implements Closeable {
     return metrics.sensor(sensorName);
   }
 
+  public Sensor getSensor(final String sensorName) {
+    return metrics.getSensor(sensorName);
+  }
+
   public void removeSensor(final String sensorName) {
     metrics.removeSensor(sensorName);
   }
