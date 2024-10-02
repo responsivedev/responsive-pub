@@ -46,7 +46,7 @@ dependencyResolutionManagement {
 
     versionCatalogs {
         create("libs") {
-            version("jackson", "2.14.2")
+            version("jackson", "2.15.2")
             version("kafka", "3.7.0")
             version("scylla", "4.15.0.0")
             version("javaoperatorsdk", "4.3.0")
@@ -67,6 +67,7 @@ dependencyResolutionManagement {
             library("scylla-mapper-runtime", "com.scylladb", "java-driver-mapper-runtime").versionRef("scylla")
             bundle("scylla", listOf("scylla-driver-core", "scylla-query-builder", "scylla-mapper-runtime"))
 
+            library("mongodb-driver-core", "org.mongodb", "mongodb-driver-core").versionRef("mongoDB")
             library("mongodb-driver-sync", "org.mongodb", "mongodb-driver-sync").versionRef("mongoDB")
 
             library("javaoperatorsdk", "io.javaoperatorsdk", "operator-framework").versionRef("javaoperatorsdk")

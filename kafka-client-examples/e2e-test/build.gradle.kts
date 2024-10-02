@@ -10,16 +10,17 @@ application {
 dependencies {
     // todo: how to set the version here?
     implementation(project(":kafka-client"))
-    implementation("com.google.guava:guava:32.1.1-jre")
-    implementation("org.apache.kafka:kafka-clients:3.7.0")
-    implementation("org.apache.kafka:kafka-streams:3.7.0")
-    implementation("org.apache.logging.log4j:log4j-slf4j-impl:2.20.0")
+    implementation(libs.kafka.clients)
+    implementation(libs.kafka.streams)
+
+    implementation("com.antithesis:sdk:1.3.1")
     implementation("org.apache.commons:commons-text:1.10.0")
-    implementation("com.scylladb:java-driver-core:4.15.0.0")
-    implementation("com.scylladb:java-driver-query-builder:4.15.0.0")
-    implementation("com.scylladb:java-driver-mapper-runtime:4.15.0.0")
-    implementation("com.fasterxml.jackson.datatype:jackson-datatype-jdk8:2.15.2")
-    implementation("org.mongodb:mongodb-driver-core:4.10.2")
+
+    implementation(libs.guava)
+    implementation(libs.slf4j.log4j2)
+    implementation(libs.bundles.scylla)
+    implementation(libs.jackson)
+    implementation(libs.mongodb.driver.core)
 
     testImplementation(testlibs.bundles.base)
     testImplementation(testlibs.bundles.testcontainers)
