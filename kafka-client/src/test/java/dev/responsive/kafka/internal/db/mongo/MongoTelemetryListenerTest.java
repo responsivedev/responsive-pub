@@ -36,7 +36,7 @@ import org.mockito.Mockito;
 public class MongoTelemetryListenerTest {
 
   @Test
-  public void testSuccessMetricNames() {
+  public void shouldHaveCorrectNamesForSuccessMetrics() {
     final MetricName findSuccessCountName = commandsSucceededCount("find");
     assertEquals("responsive-mongodb", findSuccessCountName.group());
     assertEquals("commands-succeeded-count", findSuccessCountName.name());
@@ -49,7 +49,7 @@ public class MongoTelemetryListenerTest {
   }
 
   @Test
-  public void testFailureMetricNames() {
+  public void shouldHaveCorrectNamesForFailureMetrics() {
     final MetricName findFailureCountName = commandsFailedCount("find");
     assertEquals("responsive-mongodb", findFailureCountName.group());
     assertEquals("commands-failed-count", findFailureCountName.name());
@@ -62,7 +62,7 @@ public class MongoTelemetryListenerTest {
   }
 
   @Test
-  public void testSuccessfulCommand() {
+  public void shouldRecordSuccessfulCommandExecution() {
     final ResponsiveMetrics metrics = new ResponsiveMetrics(
         new Metrics(),
         Mockito.mock(MetricsExportService.class)
@@ -107,7 +107,7 @@ public class MongoTelemetryListenerTest {
   }
 
   @Test
-  public void testFailedCommand() {
+  public void shouldRecordFailedCommandExecution() {
     final ResponsiveMetrics metrics = new ResponsiveMetrics(
         new Metrics(),
         Mockito.mock(MetricsExportService.class)

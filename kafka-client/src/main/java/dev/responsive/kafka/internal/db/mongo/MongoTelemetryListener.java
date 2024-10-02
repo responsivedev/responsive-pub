@@ -35,7 +35,7 @@ import org.apache.kafka.common.metrics.stats.CumulativeSum;
  * the MongoDB command name.
  */
 public class MongoTelemetryListener implements CommandListener {
-  private static final String MONGODB_METRICS_GROUP = "responsive-mongodb";
+  private static final String MONGODB_METRICS_GROUP = "mongodb";
 
   static final MetricName COMMANDS_SUCCEEDED_LATENCY = new MetricName(
       "commands-succeeded-cumulative-latency",
