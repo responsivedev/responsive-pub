@@ -146,7 +146,10 @@ public class InMemoryKVTable implements RemoteKVTable<Object> {
     }
 
     @Override
-    public RemoteWriter<Bytes, Integer> createWriter(Integer tablePartition) {
+    public RemoteWriter<Bytes, Integer> createWriter(
+        Integer tablePartition,
+        final long consumedOffset
+    ) {
       return new RemoteWriter<>() {
         @Override
         public void insert(Bytes key, byte[] value, long epochMillis) {

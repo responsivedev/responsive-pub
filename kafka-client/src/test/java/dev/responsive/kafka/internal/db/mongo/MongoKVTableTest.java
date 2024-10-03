@@ -70,7 +70,7 @@ class MongoKVTableTest {
     final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED);
 
     var writerFactory = table.init(0);
-    var writer = writerFactory.createWriter(0);
+    var writer = writerFactory.createWriter(0, 0);
     writer.insert(bytes(1), byteArray(1), 100);
     writer.flush();
 
@@ -88,7 +88,7 @@ class MongoKVTableTest {
     // Given:
     var table = new MongoKVTable(client, name, UNSHARDED);
     var writerFactory = table.init(0);
-    var writer = writerFactory.createWriter(0);
+    var writer = writerFactory.createWriter(0, 0);
     writer.insert(bytes(1), byteArray(1), 100);
     writer.flush();
 
@@ -96,7 +96,7 @@ class MongoKVTableTest {
     // initialize new writer with higher epoch
     table = new MongoKVTable(client, name, UNSHARDED);
     writerFactory = table.init(0);
-    writer = writerFactory.createWriter(0);
+    writer = writerFactory.createWriter(0, 0);
     writer.insert(bytes(1), byteArray(1), 101);
     final CompletionStage<RemoteWriteResult<Integer>> flush = writer.flush();
 
@@ -109,11 +109,11 @@ class MongoKVTableTest {
     // Given:
     var table0 = new MongoKVTable(client, name, UNSHARDED);
     var writerFactory0 = table0.init(0);
-    var writer0 = writerFactory0.createWriter(0);
+    var writer0 = writerFactory0.createWriter(0, 0);
 
     var table1 = new MongoKVTable(client, name, UNSHARDED);
     var writerFactory1 = table1.init(0);
-    var writer1 = writerFactory1.createWriter(0);
+    var writer1 = writerFactory1.createWriter(0, 0);
 
     writer1.insert(bytes(1), byteArray(1), 100);
     writer1.flush();
@@ -145,10 +145,10 @@ class MongoKVTableTest {
     // given:
     final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED);
     var writerFactory = table.init(0);
-    var writer = writerFactory.createWriter(0);
+    var writer = writerFactory.createWriter(0, 0);
     writer.insert(bytes(1), byteArray(1), 100);
     writer.flush();
-    writer = writerFactory.createWriter(0);
+    writer = writerFactory.createWriter(0, 0);
     writer.delete(bytes(1));
     writer.flush();
 
@@ -164,7 +164,7 @@ class MongoKVTableTest {
     // given:
     final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED);
     var writerFactory = table.init(0);
-    var writer = writerFactory.createWriter(0);
+    var writer = writerFactory.createWriter(0, 0);
     writer.insert(bytes(1), byteArray(1), 100);
     writer.flush();
 
@@ -181,7 +181,7 @@ class MongoKVTableTest {
     // given:
     final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED);
     var writerFactory = table.init(0);
-    var writer = writerFactory.createWriter(0);
+    var writer = writerFactory.createWriter(0, 0);
     writer.insert(bytes(1), byteArray(1), 100);
     writer.flush();
 
@@ -197,7 +197,7 @@ class MongoKVTableTest {
     // given:
     final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED);
     var writerFactory = table.init(0);
-    var writer = writerFactory.createWriter(0);
+    var writer = writerFactory.createWriter(0, 0);
     writer.insert(bytes(1), byteArray(1), 100);
     writer.flush();
 
@@ -215,9 +215,9 @@ class MongoKVTableTest {
     final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED);
 
     final var writerFactory0 = table.init(0);
-    final var writer0 = writerFactory0.createWriter(0);
+    final var writer0 = writerFactory0.createWriter(0, 0);
     final var writerFactory1 = table.init(1);
-    final var writer1 = writerFactory1.createWriter(1);
+    final var writer1 = writerFactory1.createWriter(1, 0);
 
     writer0.insert(bytes(10, 11, 12, 12, 13), byteArray(1), 100);
     writer0.insert(bytes(10, 11, 12, 13), byteArray(2), 100);
@@ -249,12 +249,12 @@ class MongoKVTableTest {
   public void shouldFilterTombstonesFromRangeScans() {
     final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED);
     var writerFactory = table.init(0);
-    var writer = writerFactory.createWriter(0);
+    var writer = writerFactory.createWriter(0, 0);
     writer.insert(bytes(10, 11, 12, 13), byteArray(2), 100);
     writer.insert(bytes(10, 11, 13), byteArray(3), 100);
     writer.insert(bytes(10, 11, 13, 14), byteArray(4), 100);
     writer.flush();
-    writer = writerFactory.createWriter(0);
+    writer = writerFactory.createWriter(0, 0);
     writer.delete(bytes(10, 11, 13));
     writer.flush();
 
@@ -277,7 +277,7 @@ class MongoKVTableTest {
   public void shouldFilterExpiredItemsFromRangeScans() {
     final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED);
     var writerFactory = table.init(0);
-    var writer = writerFactory.createWriter(0);
+    var writer = writerFactory.createWriter(0, 0);
     writer.insert(bytes(10, 11, 12, 13), byteArray(2), 100);
     writer.insert(bytes(10, 11, 13), byteArray(3), 90);
     writer.insert(bytes(10, 11, 13, 14), byteArray(4), 100);
@@ -303,9 +303,9 @@ class MongoKVTableTest {
     final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED);
 
     final var writerFactory0 = table.init(0);
-    final var writer0 = writerFactory0.createWriter(0);
+    final var writer0 = writerFactory0.createWriter(0, 0);
     final var writerFactory1 = table.init(1);
-    final var writer1 = writerFactory1.createWriter(1);
+    final var writer1 = writerFactory1.createWriter(1, 0);
 
     writer0.insert(bytes(10, 11, 12, 13), byteArray(2), 100);
     writer0.insert(bytes(10, 11, 13), byteArray(3), 100);
@@ -335,12 +335,12 @@ class MongoKVTableTest {
   public void shouldFilterTombstonesFromFullScans() {
     final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED);
     var writerFactory = table.init(0);
-    var writer = writerFactory.createWriter(0);
+    var writer = writerFactory.createWriter(0, 0);
     writer.insert(bytes(10, 11, 12, 13), byteArray(2), 100);
     writer.insert(bytes(10, 11, 13), byteArray(3), 100);
     writer.insert(bytes(10, 11, 13, 14), byteArray(4), 100);
     writer.flush();
-    writer = writerFactory.createWriter(0);
+    writer = writerFactory.createWriter(0, 0);
     writer.delete(bytes(10, 11, 13));
     writer.flush();
 
@@ -363,7 +363,7 @@ class MongoKVTableTest {
   public void shouldFilterExpiredFromFullScans() {
     final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED);
     var writerFactory = table.init(0);
-    var writer = writerFactory.createWriter(0);
+    var writer = writerFactory.createWriter(0, 0);
     writer.insert(bytes(10, 11, 12, 13), byteArray(2), 100);
     writer.insert(bytes(10, 11, 13), byteArray(3), 90);
     writer.insert(bytes(10, 11, 13, 14), byteArray(4), 100);

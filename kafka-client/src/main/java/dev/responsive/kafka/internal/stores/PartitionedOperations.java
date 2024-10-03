@@ -108,6 +108,9 @@ public class PartitionedOperations implements KeyValueOperations {
       case IN_MEMORY:
         table = createInMemory(params);
         break;
+      case RS3:
+        table = createRS3(params, sessionClients);
+        break;
       default:
         throw new IllegalStateException("Unexpected value: " + sessionClients.storageBackend());
     }
@@ -211,6 +214,13 @@ public class PartitionedOperations implements KeyValueOperations {
       final SessionClients sessionClients
   ) throws InterruptedException, TimeoutException {
     return sessionClients.mongoClient().kvTable(params.name().tableName());
+  }
+
+  private static RemoteKVTable<?> createRS3(
+      final ResponsiveKeyValueParams params,
+      final SessionClients sessionClients
+  ) {
+    return sessionClients.rs3TableFactory().kvTable(params.name().tableName());
   }
 
   @SuppressWarnings("rawtypes")

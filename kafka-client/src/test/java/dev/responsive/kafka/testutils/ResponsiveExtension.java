@@ -24,6 +24,8 @@ import static dev.responsive.kafka.api.config.ResponsiveConfig.CASSANDRA_PORT_CO
 import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_ENDPOINT_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_ENV_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_ORG_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.RS3_HOSTNAME_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.RS3_PORT_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_BACKEND_TYPE_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.TASK_ASSIGNOR_CLASS_OVERRIDE;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.loggedConfig;
@@ -38,20 +40,24 @@ import java.util.Map;
 import org.apache.kafka.clients.admin.Admin;
 import org.junit.jupiter.api.extension.AfterAllCallback;
 import org.junit.jupiter.api.extension.BeforeAllCallback;
+import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.ParameterContext;
 import org.junit.jupiter.api.extension.ParameterResolutionException;
 import org.junit.jupiter.api.extension.ParameterResolver;
 import org.testcontainers.containers.CassandraContainer;
+import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.KafkaContainer;
 import org.testcontainers.containers.MongoDBContainer;
 
-public class ResponsiveExtension implements BeforeAllCallback, AfterAllCallback,
+public class ResponsiveExtension implements BeforeAllCallback, BeforeEachCallback, AfterAllCallback,
     ParameterResolver {
 
   public static CassandraContainer<?> cassandra = new CassandraContainer<>(TestConstants.CASSANDRA)
       .withInitScript("CassandraDockerInit.cql")
       .withReuse(true);
+  public static RS3Container rs3 = new RS3Container("rs3:0.1.0")
+      .withExposedPorts(50051);
   public static KafkaContainer kafka = new KafkaContainer(TestConstants.KAFKA)
       .withEnv("KAFKA_GROUP_MIN_SESSION_TIMEOUT_MS", "1000")
       .withEnv("KAFKA_GROUP_MAX_SESSION_TIMEOUT_MS", "60000")
@@ -78,6 +84,9 @@ public class ResponsiveExtension implements BeforeAllCallback, AfterAllCallback,
       case MONGO_DB:
         mongo.start();
         break;
+      case RS3:
+        rs3.start();
+        break;
       default:
         throw new IllegalStateException("Unexpected value: " + backend);
     }
@@ -87,9 +96,18 @@ public class ResponsiveExtension implements BeforeAllCallback, AfterAllCallback,
   }
 
   @Override
+  public void beforeEach(ExtensionContext extensionContext) {
+    if (backend.equals(StorageBackend.RS3)) {
+      rs3.stop();
+      rs3.start();
+    }
+  }
+
+  @Override
   public void afterAll(final ExtensionContext context) throws Exception {
     cassandra.stop();
     mongo.stop();
+    rs3.stop();
     kafka.stop();
     admin.close();
   }
@@ -102,6 +120,7 @@ public class ResponsiveExtension implements BeforeAllCallback, AfterAllCallback,
     return parameterContext.getParameter().getType().equals(CassandraContainer.class)
         || parameterContext.getParameter().getType().equals(KafkaContainer.class)
         || parameterContext.getParameter().getType().equals(MongoDBContainer.class)
+        || parameterContext.getParameter().getType().equals(RS3Container.class)
         || parameterContext.getParameter().getType().equals(Admin.class)
         || isContainerConfig(parameterContext);
   }
@@ -117,6 +136,8 @@ public class ResponsiveExtension implements BeforeAllCallback, AfterAllCallback,
       return mongo;
     } else if (parameterContext.getParameter().getType() == KafkaContainer.class) {
       return kafka;
+    } else if (parameterContext.getParameter().getType() == RS3Container.class) {
+      return rs3;
     } else if (parameterContext.getParameter().getType() == Admin.class) {
       return admin;
     } else if (isContainerConfig(parameterContext)) {
@@ -140,6 +161,11 @@ public class ResponsiveExtension implements BeforeAllCallback, AfterAllCallback,
           map.put(STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.MONGO_DB.name());
           map.put(MONGO_ENDPOINT_CONFIG, mongo.getConnectionString());
           break;
+        case RS3:
+          map.put(STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.RS3.name());
+          map.put(RS3_HOSTNAME_CONFIG, "localhost");
+          map.put(RS3_PORT_CONFIG, rs3.getMappedPort(50051));
+          break;
         default:
           throw new IllegalStateException("Unexpected value: " + backend);
       }
@@ -158,5 +184,11 @@ public class ResponsiveExtension implements BeforeAllCallback, AfterAllCallback,
     final Parameter param = context.getParameter();
     return (param.getType().equals(Map.class) || param.getType().equals(ResponsiveConfig.class))
         && param.getAnnotation(ResponsiveConfigParam.class) != null;
+  }
+
+  public static class RS3Container extends GenericContainer<RS3Container> {
+    public RS3Container(final String image) {
+      super(image);
+    }
   }
 }
