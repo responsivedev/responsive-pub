@@ -65,7 +65,8 @@ public final class SessionUtil {
       @Nullable final String password,
       final int maxConcurrentRequests,
       @Nullable ResponsiveMetrics metrics
-      ) {
+
+  ) {
     final CqlSessionBuilder sessionBuilder = CqlSession.builder()
         .withLocalDatacenter(datacenter)
         .addContactPoint(address);
@@ -84,7 +85,8 @@ public final class SessionUtil {
     return sessionBuilder
         .withConfigLoader(DriverConfigLoader
             .programmaticBuilder()
-            .withString(DefaultDriverOption.METRICS_FACTORY_CLASS, CassandraMetricsFactory.class.getCanonicalName())
+            .withString(DefaultDriverOption.METRICS_FACTORY_CLASS,
+                        CassandraMetricsFactory.class.getCanonicalName())
             .withLong(REQUEST_TIMEOUT, 5000)
             .withClass(RETRY_POLICY_CLASS, ResponsiveRetryPolicy.class)
             .withClass(REQUEST_THROTTLER_CLASS, ConcurrencyLimitingRequestThrottler.class)

@@ -31,7 +31,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.junit.jupiter.api.Test;
 import org.opentest4j.AssertionFailedError;
 
-class CassandraMetricsSeFactoryTest {
+class CassandraMetricsFactoryTest {
 
   @Test
   public void shouldRecordCountOfBytesSent() {
@@ -107,8 +107,12 @@ class CassandraMetricsSeFactoryTest {
       KafkaMetric countMetric = assertRegisteredMetric(metrics, "cql-requests-count");
       assertEquals((double) 2, countMetric.metricValue());
 
-      KafkaMetric latencyMetric = assertRegisteredMetric(metrics, "cql-requests-cumulative-latency");
-      assertEquals((double) (request1Latency.toMillis() + request2Latency.toMillis()), latencyMetric.metricValue());
+      KafkaMetric latencyMetric = assertRegisteredMetric(
+          metrics,
+          "cql-requests-cumulative-latency"
+      );
+      long expectedTotalLatency = request1Latency.toMillis() + request2Latency.toMillis();
+      assertEquals((double) expectedTotalLatency, latencyMetric.metricValue());
     }
   }
 
@@ -162,8 +166,12 @@ class CassandraMetricsSeFactoryTest {
 
       // Then
       assertTrue(sessionUpdater.isEnabled(DefaultSessionMetric.THROTTLING_DELAY, null));
-      KafkaMetric delayMetric = assertRegisteredMetric(metrics, "throttling-cumulative-delay");
-      assertEquals((double) (throttleDelay1.toMillis() + throttleDelay2.toMillis()), delayMetric.metricValue());
+      KafkaMetric delayMetric = assertRegisteredMetric(
+          metrics,
+          "throttling-cumulative-delay"
+      );
+      long expectedTotalDelay = throttleDelay1.toMillis() + throttleDelay2.toMillis();
+      assertEquals((double) expectedTotalDelay, delayMetric.metricValue());
     }
   }
 
@@ -193,9 +201,12 @@ class CassandraMetricsSeFactoryTest {
       String name
   ) {
     return metrics.metrics().entrySet().stream()
-        .filter(entry -> "cassandra-driver".equals(entry.getKey().group()) && name.equals(entry.getKey().name()))
+        .filter(entry -> "cassandra-driver".equals(entry.getKey().group())
+            && name.equals(entry.getKey().name()))
         .findFirst()
-        .orElseThrow(() -> new AssertionFailedError("Failed to find expected metric '" + name + "' in registry."))
+        .orElseThrow(() -> new AssertionFailedError(
+            "Failed to find expected metric '" + name + "' in registry."
+        ))
         .getValue();
   }
 
