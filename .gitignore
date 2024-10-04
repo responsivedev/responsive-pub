@@ -235,3 +235,6 @@ kafka-client-examples/e2e-test/docker/antithesis/config/volumes/kafka*
 kafka-client-examples/e2e-test/docker/antithesis/config/volumes/scylla*
 kafka-client-examples/e2e-test/docker/antithesis/config/volumes/zookeeper*
 kafka-client-examples/e2e-test/docker/antithesis/config/volumes/mongo*
+
+# jenv local version file
+.java-version

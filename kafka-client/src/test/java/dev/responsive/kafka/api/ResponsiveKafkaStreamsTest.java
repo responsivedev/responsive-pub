@@ -37,6 +37,7 @@ import dev.responsive.kafka.api.config.CompatibilityMode;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.CassandraClientFactory;
+import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.testutils.IntegrationTestUtils;
 import java.util.HashMap;
 import java.util.Map;
@@ -91,7 +92,10 @@ class ResponsiveKafkaStreamsTest {
 
   private final CassandraClientFactory mockCassandryFactory = new CassandraClientFactory() {
     @Override
-    public CqlSession createCqlSession(final ResponsiveConfig config) {
+    public CqlSession createCqlSession(
+        final ResponsiveConfig config,
+        final ResponsiveMetrics metrics
+    ) {
       return Mockito.mock(CqlSession.class);
     }
 

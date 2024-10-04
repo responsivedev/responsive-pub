@@ -479,7 +479,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       final var backendType = ConfigUtils.storageBackend(responsiveConfig);
       switch (backendType) {
         case CASSANDRA:
-          final var cqlSession = cassandraFactory.createCqlSession(responsiveConfig);
+          final var cqlSession = cassandraFactory.createCqlSession(responsiveConfig, metrics);
           sessionClients = new SessionClients(
               Optional.empty(),
               Optional.of(cassandraFactory.createClient(cqlSession, responsiveConfig)),

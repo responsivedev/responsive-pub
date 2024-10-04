@@ -68,6 +68,7 @@ import dev.responsive.kafka.internal.db.mongo.MongoKVTable;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.db.spec.BaseTableSpec;
+import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.stores.SchemaTypes.KVSchema;
 import dev.responsive.kafka.internal.utils.SessionUtil;
 import dev.responsive.kafka.testutils.IntegrationTestUtils;
@@ -362,7 +363,7 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
     final RemoteKVTable<?> table;
     if (EXTENSION.backend == StorageBackend.CASSANDRA) {
       final CassandraClient cassandraClient = defaultFactory.createClient(
-          defaultFactory.createCqlSession(config),
+          defaultFactory.createCqlSession(config, null),
           config);
 
       switch (type) {
@@ -500,8 +501,11 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
     private final AtomicReference<Fault> fault = new AtomicReference<>(null);
 
     @Override
-    public CqlSession createCqlSession(ResponsiveConfig config) {
-      final CqlSession wrapped = wrappedFactory.createCqlSession(config);
+    public CqlSession createCqlSession(
+        final ResponsiveConfig config,
+        final ResponsiveMetrics metrics
+    ) {
+      final CqlSession wrapped = wrappedFactory.createCqlSession(config, null);
       final var spy = spy(wrapped);
       doAnswer(a -> {
         final Fault fault = this.fault.get();
