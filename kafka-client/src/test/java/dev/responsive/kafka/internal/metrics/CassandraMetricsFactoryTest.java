@@ -17,18 +17,24 @@
 package dev.responsive.kafka.internal.metrics;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.datastax.oss.driver.api.core.metadata.Node;
+import com.datastax.oss.driver.api.core.metrics.DefaultNodeMetric;
 import com.datastax.oss.driver.api.core.metrics.DefaultSessionMetric;
 import com.datastax.oss.driver.internal.core.context.InternalDriverContext;
+import com.datastax.oss.driver.internal.core.metrics.NodeMetricUpdater;
 import com.datastax.oss.driver.internal.core.metrics.SessionMetricUpdater;
 import java.time.Duration;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.opentest4j.AssertionFailedError;
 
 class CassandraMetricsFactoryTest {
@@ -193,6 +199,128 @@ class CassandraMetricsFactoryTest {
       assertTrue(sessionUpdater.isEnabled(DefaultSessionMetric.THROTTLING_ERRORS, null));
       KafkaMetric metric = assertRegisteredMetric(metrics, "throttling-errors-count");
       assertEquals(11.0, metric.metricValue());
+    }
+  }
+
+  @Test
+  public void shouldAggregateAndRecordNodeRequestErrors() {
+    try (Metrics metrics = new Metrics()) {
+      // Given
+      InternalDriverContext driverContext = mock(InternalDriverContext.class);
+      when(driverContext.getMetricRegistry()).thenReturn(new ResponsiveMetrics(metrics));
+      final CassandraMetricsFactory factory = new CassandraMetricsFactory(driverContext);
+      final NodeMetricUpdater nodeMetricUpdater = factory.newNodeUpdater(Mockito.mock(Node.class));
+
+      // When
+      nodeMetricUpdater.incrementCounter(DefaultNodeMetric.OTHER_ERRORS, null, 1);
+      nodeMetricUpdater.incrementCounter(DefaultNodeMetric.WRITE_TIMEOUTS, null, 2);
+      nodeMetricUpdater.incrementCounter(DefaultNodeMetric.READ_TIMEOUTS, null, 3);
+      nodeMetricUpdater.incrementCounter(DefaultNodeMetric.UNSENT_REQUESTS, null, 4);
+      nodeMetricUpdater.incrementCounter(DefaultNodeMetric.UNAVAILABLES, null, 5);
+      nodeMetricUpdater.incrementCounter(DefaultNodeMetric.ABORTED_REQUESTS, null, 6);
+      // Ignore connection errors since they are aggregated separately
+      nodeMetricUpdater.incrementCounter(DefaultNodeMetric.CONNECTION_INIT_ERRORS, null, 20);
+      nodeMetricUpdater.incrementCounter(DefaultNodeMetric.AUTHENTICATION_ERRORS, null, 40);
+
+      //Then
+      assertTrue(nodeMetricUpdater.isEnabled(DefaultNodeMetric.OTHER_ERRORS, null));
+      assertTrue(nodeMetricUpdater.isEnabled(DefaultNodeMetric.WRITE_TIMEOUTS, null));
+      assertTrue(nodeMetricUpdater.isEnabled(DefaultNodeMetric.READ_TIMEOUTS, null));
+      assertTrue(nodeMetricUpdater.isEnabled(DefaultNodeMetric.UNSENT_REQUESTS, null));
+      assertTrue(nodeMetricUpdater.isEnabled(DefaultNodeMetric.UNAVAILABLES, null));
+      assertTrue(nodeMetricUpdater.isEnabled(DefaultNodeMetric.ABORTED_REQUESTS, null));
+      KafkaMetric metric = assertRegisteredMetric(metrics, "cql-request-errors-count");
+      assertEquals(21.0, metric.metricValue());
+    }
+  }
+
+  @Test
+  public void shouldAggregateAndRecordNodeConnectionErrors() {
+    try (Metrics metrics = new Metrics()) {
+      // Given
+      InternalDriverContext driverContext = mock(InternalDriverContext.class);
+      when(driverContext.getMetricRegistry()).thenReturn(new ResponsiveMetrics(metrics));
+      final CassandraMetricsFactory factory = new CassandraMetricsFactory(driverContext);
+      final NodeMetricUpdater nodeMetricUpdater = factory.newNodeUpdater(Mockito.mock(Node.class));
+
+      // When
+      nodeMetricUpdater.incrementCounter(DefaultNodeMetric.CONNECTION_INIT_ERRORS, null, 1);
+      nodeMetricUpdater.incrementCounter(DefaultNodeMetric.AUTHENTICATION_ERRORS, null, 2);
+
+      // Ignore connection errors since they are aggregated separately
+      nodeMetricUpdater.incrementCounter(DefaultNodeMetric.OTHER_ERRORS, null, 10);
+      nodeMetricUpdater.incrementCounter(DefaultNodeMetric.WRITE_TIMEOUTS, null, 20);
+      nodeMetricUpdater.incrementCounter(DefaultNodeMetric.READ_TIMEOUTS, null,  30);
+      nodeMetricUpdater.incrementCounter(DefaultNodeMetric.UNSENT_REQUESTS, null, 40);
+      nodeMetricUpdater.incrementCounter(DefaultNodeMetric.UNAVAILABLES, null, 50);
+      nodeMetricUpdater.incrementCounter(DefaultNodeMetric.ABORTED_REQUESTS, null, 60);
+
+      //Then
+      assertTrue(nodeMetricUpdater.isEnabled(DefaultNodeMetric.CONNECTION_INIT_ERRORS, null));
+      assertTrue(nodeMetricUpdater.isEnabled(DefaultNodeMetric.AUTHENTICATION_ERRORS, null));
+      KafkaMetric metric = assertRegisteredMetric(metrics, "connection-errors-count");
+      assertEquals(3.0, metric.metricValue());
+    }
+  }
+
+  @Test
+  public void shouldAggregateAndRecordCountOfNodeRetries() {
+    try (Metrics metrics = new Metrics()) {
+      // Given
+      InternalDriverContext driverContext = mock(InternalDriverContext.class);
+      when(driverContext.getMetricRegistry()).thenReturn(new ResponsiveMetrics(metrics));
+      final CassandraMetricsFactory factory = new CassandraMetricsFactory(driverContext);
+      final NodeMetricUpdater nodeMetricUpdater = factory.newNodeUpdater(Mockito.mock(Node.class));
+
+      // When
+      nodeMetricUpdater.incrementCounter(DefaultNodeMetric.RETRIES, null, 1);
+      // The value may be incremented by a number greater than 1
+      nodeMetricUpdater.incrementCounter(DefaultNodeMetric.RETRIES, null, 5);
+
+      //Then
+      assertTrue(nodeMetricUpdater.isEnabled(DefaultNodeMetric.RETRIES, null));
+      KafkaMetric metric = assertRegisteredMetric(metrics, "cql-request-retries-count");
+      assertEquals(6.0, metric.metricValue());
+    }
+  }
+
+  @Test
+  public void shouldAggregateAndRecordCountOfNodeIgnores() {
+    try (Metrics metrics = new Metrics()) {
+      // Given
+      InternalDriverContext driverContext = mock(InternalDriverContext.class);
+      when(driverContext.getMetricRegistry()).thenReturn(new ResponsiveMetrics(metrics));
+      final CassandraMetricsFactory factory = new CassandraMetricsFactory(driverContext);
+      final NodeMetricUpdater nodeMetricUpdater = factory.newNodeUpdater(Mockito.mock(Node.class));
+
+      // When
+      nodeMetricUpdater.incrementCounter(DefaultNodeMetric.IGNORES, null, 1);
+      // The value may be incremented by a number greater than 1
+      nodeMetricUpdater.incrementCounter(DefaultNodeMetric.IGNORES, null, 3);
+
+      //Then
+      assertTrue(nodeMetricUpdater.isEnabled(DefaultNodeMetric.IGNORES, null));
+      KafkaMetric metric = assertRegisteredMetric(metrics, "cql-request-ignores-count");
+      assertEquals(4.0, metric.metricValue());
+    }
+  }
+
+  @Test
+  public void shouldUseSameNodeUpdaterForAllNodes() {
+    try (Metrics metrics = new Metrics()) {
+      // Given
+      InternalDriverContext driverContext = mock(InternalDriverContext.class);
+      when(driverContext.getMetricRegistry()).thenReturn(new ResponsiveMetrics(metrics));
+      final CassandraMetricsFactory factory = new CassandraMetricsFactory(driverContext);
+
+      // When
+      Node node1 = Mockito.mock(Node.class);
+      when(node1.getHostId()).thenReturn(UUID.randomUUID());
+      Node node2 = Mockito.mock(Node.class);
+      when(node2.getHostId()).thenReturn(UUID.randomUUID());
+
+      // Then
+      assertSame(factory.newNodeUpdater(node1), factory.newNodeUpdater(node2));
     }
   }
 

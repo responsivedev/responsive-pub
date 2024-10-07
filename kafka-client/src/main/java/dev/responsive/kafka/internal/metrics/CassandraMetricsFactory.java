@@ -18,10 +18,13 @@ package dev.responsive.kafka.internal.metrics;
 
 import com.datastax.oss.driver.api.core.context.DriverContext;
 import com.datastax.oss.driver.api.core.metadata.Node;
+import com.datastax.oss.driver.api.core.metrics.DefaultNodeMetric;
 import com.datastax.oss.driver.api.core.metrics.DefaultSessionMetric;
 import com.datastax.oss.driver.api.core.metrics.Metrics;
+import com.datastax.oss.driver.api.core.metrics.NodeMetric;
 import com.datastax.oss.driver.api.core.metrics.SessionMetric;
 import com.datastax.oss.driver.internal.core.context.InternalDriverContext;
+import com.datastax.oss.driver.internal.core.metrics.MetricUpdater;
 import com.datastax.oss.driver.internal.core.metrics.MetricsFactory;
 import com.datastax.oss.driver.internal.core.metrics.NodeMetricUpdater;
 import com.datastax.oss.driver.internal.core.metrics.NoopNodeMetricUpdater;
@@ -51,11 +54,18 @@ import org.apache.kafka.common.metrics.stats.CumulativeSum;
 public class CassandraMetricsFactory implements MetricsFactory {
   static final String CASSANDRA_METRICS_GROUP = "cassandra-driver";
   private final SessionMetricUpdater sessionMetricUpdater;
+  private final NodeMetricUpdater nodeMetricUpdater;
 
   public CassandraMetricsFactory(final DriverContext driverContext) {
-    this.sessionMetricUpdater = fetchMetrics(driverContext)
-        .map(metrics -> (SessionMetricUpdater) new CassandraMetricUpdater(metrics))
-        .orElse(NoopSessionMetricUpdater.INSTANCE);
+    final Optional<ResponsiveMetrics> metricsOpt = fetchMetrics(driverContext);
+    if (metricsOpt.isPresent()) {
+      final ResponsiveMetrics metrics = metricsOpt.get();
+      this.sessionMetricUpdater = new ResponsiveSessionMetricUpdater(metrics);
+      this.nodeMetricUpdater = new ResponsiveNodeMetricUpdater(metrics);
+    } else {
+      this.sessionMetricUpdater = NoopSessionMetricUpdater.INSTANCE;
+      this.nodeMetricUpdater = NoopNodeMetricUpdater.INSTANCE;
+    }
   }
 
   private static Optional<ResponsiveMetrics> fetchMetrics(DriverContext driverContext) {
@@ -84,52 +94,59 @@ public class CassandraMetricsFactory implements MetricsFactory {
 
   @Override
   public NodeMetricUpdater newNodeUpdater(final Node node) {
-    return NoopNodeMetricUpdater.INSTANCE;
+    return nodeMetricUpdater;
   }
 
-  private static class CassandraMetricUpdater implements SessionMetricUpdater {
-    private final ResponsiveMetrics metrics;
+  private abstract static class ResponsiveMetricUpdater<T> implements MetricUpdater<T> {
 
-    private CassandraMetricUpdater(final ResponsiveMetrics metrics) {
-      this.metrics = metrics;
-    }
+    protected abstract Sensor getOrCreateSensor(T metric);
 
     @Override
     public void incrementCounter(
-        final SessionMetric sessionMetric,
+        final T metric,
         @Nullable final String profileName,
         final long amount
     ) {
-      getOrCreateSensor(sessionMetric).record(amount);
+      getOrCreateSensor(metric).record(amount);
     }
 
     @Override
     public void updateHistogram(
-        final SessionMetric sessionMetric,
+        final T metric,
         @Nullable final String s,
         final long value
     ) {
-      getOrCreateSensor(sessionMetric).record(value);
+      getOrCreateSensor(metric).record(value);
     }
 
     @Override
     public void markMeter(
-        final SessionMetric sessionMetric,
+        final T metric,
         @Nullable final String profileName,
         final long amount
     ) {
-      getOrCreateSensor(sessionMetric).record(amount);
+      getOrCreateSensor(metric).record(amount);
     }
 
     @Override
     public void updateTimer(
-        final SessionMetric sessionMetric,
+        final T metric,
         @Nullable final String profileName,
         final long duration,
         final TimeUnit timeUnit
     ) {
-      getOrCreateSensor(sessionMetric)
+      getOrCreateSensor(metric)
           .record(TimeUnit.MILLISECONDS.convert(duration, timeUnit));
+    }
+  }
+
+  private static class ResponsiveSessionMetricUpdater
+      extends ResponsiveMetricUpdater<SessionMetric>
+      implements SessionMetricUpdater {
+    private final ResponsiveMetrics metrics;
+
+    private ResponsiveSessionMetricUpdater(final ResponsiveMetrics metrics) {
+      this.metrics = metrics;
     }
 
     @Override
@@ -162,7 +179,8 @@ public class CassandraMetricsFactory implements MetricsFactory {
       }
     }
 
-    Sensor getOrCreateSensor(SessionMetric metric) {
+    @Override
+    protected Sensor getOrCreateSensor(SessionMetric metric) {
       final DefaultSessionMetric sessionMetric  = asDefaultSessionMetric(metric);
       final String sensorName = sensorName(sessionMetric);
 
@@ -237,13 +255,149 @@ public class CassandraMetricsFactory implements MetricsFactory {
             ), new CumulativeSum());
             break;
 
-          case CONNECTED_NODES:
-          case THROTTLING_QUEUE_SIZE:
-          case CQL_PREPARED_CACHE_SIZE:
           default:
             break;
         }
       }
+      return sensor;
+    }
+  }
+
+  // Note: we use a `NodeMetricUpdater` to get access to some of the other client
+  // metrics, but we do not expose node-level information. Each exposed metric
+  // is rolled up into a session-level metric to avoid exploding the number of
+  // metrics collected. Similarly, we roll up related metrics into totals.
+  private static class ResponsiveNodeMetricUpdater
+      extends ResponsiveMetricUpdater<NodeMetric>
+      implements NodeMetricUpdater {
+    private final ResponsiveMetrics metrics;
+
+    private ResponsiveNodeMetricUpdater(final ResponsiveMetrics metrics) {
+      this.metrics = metrics;
+    }
+
+    private DefaultNodeMetric asDefaultNodeMetric(NodeMetric metric) {
+      if (metric instanceof DefaultNodeMetric) {
+        return (DefaultNodeMetric) metric;
+      } else {
+        return DefaultNodeMetric.fromPath(metric.getPath());
+      }
+    }
+
+    @Override
+    public boolean isEnabled(
+        final NodeMetric metric,
+        @Nullable final String profileName
+    ) {
+      switch (asDefaultNodeMetric(metric)) {
+        case AUTHENTICATION_ERRORS:
+        case CONNECTION_INIT_ERRORS:
+        case UNSENT_REQUESTS:
+        case ABORTED_REQUESTS:
+        case WRITE_TIMEOUTS:
+        case READ_TIMEOUTS:
+        case UNAVAILABLES:
+        case OTHER_ERRORS:
+        case RETRIES:
+        case IGNORES:
+          return true;
+        default:
+          return false;
+      }
+    }
+
+    private String sensorName(DefaultNodeMetric metric) {
+      switch (metric) {
+        case AUTHENTICATION_ERRORS:
+        case CONNECTION_INIT_ERRORS:
+          return "cassandra-connection-errors";
+
+        case UNSENT_REQUESTS:
+        case ABORTED_REQUESTS:
+        case WRITE_TIMEOUTS:
+        case READ_TIMEOUTS:
+        case UNAVAILABLES:
+        case OTHER_ERRORS:
+          return "cassandra-request-errors";
+
+        case RETRIES:
+        case IGNORES:
+        default:
+          return "cassandra-" + metric.getPath();
+      }
+    }
+
+    @Override
+    protected Sensor getOrCreateSensor(final NodeMetric metric) {
+      final DefaultNodeMetric nodeMetric  = asDefaultNodeMetric(metric);
+      final String sensorName = sensorName(nodeMetric);
+
+      Sensor sensor = metrics.getSensor(sensorName);
+      if (sensor == null) {
+        sensor = metrics.addSensor(sensorName);
+
+        switch (nodeMetric) {
+          case AUTHENTICATION_ERRORS:
+          case CONNECTION_INIT_ERRORS:
+            // Exposed as a Counter
+            sensor.add(new MetricName(
+                "connection-errors-count",
+                CASSANDRA_METRICS_GROUP,
+                "Cumulative count of all connection errors",
+                Collections.emptyMap()
+            ), new CumulativeSum());
+            break;
+
+          case UNSENT_REQUESTS:
+          case ABORTED_REQUESTS:
+          case WRITE_TIMEOUTS:
+          case READ_TIMEOUTS:
+          case UNAVAILABLES:
+          case OTHER_ERRORS:
+            // Exposed as a Counter
+            // Unlike ignores and retries, the driver does not expose an error total,
+            // so we do the work here instead.
+            sensor.add(new MetricName(
+                "cql-request-errors-count",
+                CASSANDRA_METRICS_GROUP,
+                "Cumulative count of all request errors",
+                Collections.emptyMap()
+            ), new CumulativeSum());
+            break;
+
+          case RETRIES:
+            // From reference doc:
+            // # The total number of errors on this node that caused the RetryPolicy to trigger a
+            // # retry (exposed as a Counter).
+            // #
+            // # This is a sum of all the other retries.* metrics.
+            sensor.add(new MetricName(
+                "cql-request-retries-count",
+                CASSANDRA_METRICS_GROUP,
+                "Cumulative count of all request retries",
+                Collections.emptyMap()
+            ), new CumulativeSum());
+            break;
+
+          case IGNORES:
+            // From reference doc:
+            // # The total number of errors on this node that were ignored by the RetryPolicy
+            // (exposed as a Counter).
+            // #
+            // # This is a sum of all the other ignores.* metrics.
+            sensor.add(new MetricName(
+                "cql-request-ignores-count",
+                CASSANDRA_METRICS_GROUP,
+                "Cumulative count of all request ignores",
+                Collections.emptyMap()
+            ), new CumulativeSum());
+            break;
+
+          default:
+            break;
+        }
+      }
+
       return sensor;
     }
   }
