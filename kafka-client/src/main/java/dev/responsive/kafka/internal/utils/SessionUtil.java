@@ -26,6 +26,7 @@ import static com.datastax.oss.driver.api.core.config.DefaultDriverOption.RETRY_
 import com.datastax.oss.driver.api.core.ConsistencyLevel;
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.CqlSessionBuilder;
+import com.datastax.oss.driver.api.core.config.DefaultDriverOption;
 import com.datastax.oss.driver.api.core.config.DriverConfigLoader;
 import com.datastax.oss.driver.internal.core.session.throttling.ConcurrencyLimitingRequestThrottler;
 import com.mongodb.ConnectionString;
@@ -40,6 +41,7 @@ import com.mongodb.client.MongoClients;
 import com.mongodb.client.MongoDatabase;
 import dev.responsive.kafka.internal.db.ResponsiveRetryPolicy;
 import dev.responsive.kafka.internal.db.mongo.MongoTelemetryListener;
+import dev.responsive.kafka.internal.metrics.CassandraMetricsFactory;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import java.net.InetSocketAddress;
 import java.net.URLEncoder;
@@ -61,11 +63,17 @@ public final class SessionUtil {
       final String keyspace,
       @Nullable final String username,
       @Nullable final String password,
-      final int maxConcurrentRequests
+      final int maxConcurrentRequests,
+      @Nullable ResponsiveMetrics metrics
+
   ) {
     final CqlSessionBuilder sessionBuilder = CqlSession.builder()
-        .addContactPoint(address)
-        .withLocalDatacenter(datacenter);
+        .withLocalDatacenter(datacenter)
+        .addContactPoint(address);
+
+    if (metrics != null) {
+      sessionBuilder.withMetricRegistry(metrics);
+    }
 
     if (username != null && password != null) {
       sessionBuilder.withAuthCredentials(username, password);
@@ -77,6 +85,8 @@ public final class SessionUtil {
     return sessionBuilder
         .withConfigLoader(DriverConfigLoader
             .programmaticBuilder()
+            .withString(DefaultDriverOption.METRICS_FACTORY_CLASS,
+                        CassandraMetricsFactory.class.getCanonicalName())
             .withLong(REQUEST_TIMEOUT, 5000)
             .withClass(RETRY_POLICY_CLASS, ResponsiveRetryPolicy.class)
             .withClass(REQUEST_THROTTLER_CLASS, ConcurrencyLimitingRequestThrottler.class)

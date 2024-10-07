@@ -10,13 +10,17 @@ import static dev.responsive.kafka.api.config.ResponsiveConfig.MAX_CONCURRENT_RE
 import com.datastax.oss.driver.api.core.CqlSession;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.config.ConfigUtils;
+import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.utils.SessionUtil;
 import java.net.InetSocketAddress;
 import org.apache.kafka.common.config.types.Password;
 
 public class DefaultCassandraClientFactory implements CassandraClientFactory {
   @Override
-  public CqlSession createCqlSession(final ResponsiveConfig config) {
+  public CqlSession createCqlSession(
+      final ResponsiveConfig config,
+      final ResponsiveMetrics metrics
+  ) {
     final InetSocketAddress address = InetSocketAddress.createUnresolved(
         config.getString(CASSANDRA_HOSTNAME_CONFIG),
         config.getInt(CASSANDRA_PORT_CONFIG)
@@ -34,7 +38,8 @@ public class DefaultCassandraClientFactory implements CassandraClientFactory {
         keyspace,
         username,
         password == null ? null : password.value(),
-        maxConcurrency
+        maxConcurrency,
+        metrics
     );
   }
 
