@@ -9,7 +9,7 @@ public class Params {
   public static final int PARTITIONS
       = Integer.parseInt(System.getenv().getOrDefault("PARTITIONS", "8"));
   public static final int EXCEPTION_INJECT_THRESHOLD
-      = Integer.parseInt(System.getenv().getOrDefault("EXCEPTION_INJECT_THRESHOLD", "1"));
+      = Integer.parseInt(System.getenv().getOrDefault("EXCEPTION_INJECT_THRESHOLD", "0"));
   public static final int NUM_KEYS
       = Integer.parseInt(System.getenv().getOrDefault("NUM_KEYS", "32"));
   public static final int MAX_OUTSTANDING
