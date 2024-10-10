@@ -347,3 +347,88 @@ rules:
        type: gauge
        desc: total records processed
        unit: '{records}'
+
+ # MongoDB Client Metrics
+ - bean: dev.responsive:type=mongodb-client,command=*
+   metricAttribute:
+       command: param(command)
+   mapping:
+       commands-succeeded-count:
+         metric: mongodb.client.commands.succeeded.count
+         type: gauge
+         desc: count of commands that succeeded
+         unit: '{commands}'
+       commands-succeeded-cumulative-latency:
+         metric: mongodb.client.commands.succeeded.cumulative.latency
+         type: gauge
+         desc: cumulative commands succeeded latency
+         unit: '{milliseconds}'
+       commands-failed-count:
+         metric: mongodb.client.commands.failed.count
+         type: gauge
+         desc: count of commands that failed
+         unit: '{commands}'
+       commands-failed-cumulative-latency:
+         metric: mongodb.client.commands.succeeded.failed.latency
+         type: gauge
+         desc: cumulative commands failed latency
+         unit: '{milliseconds}'
+
+  # Cassandra Client Metrics
+ - bean: dev.responsive:type=cassandra-client
+   mapping:
+      bytes-sent:
+        metric: cassandra.driver.bytes.sent.count
+        type: gauge
+        desc: count of bytes sent
+        unit: '{bytes}'
+      bytes-received:
+        metric: cassandra.driver.bytes.received.count
+        type: gauge
+        desc: count of bytes received
+        unit: '{bytes}'
+      cql-requests-count:
+        metric: cassandra.driver.cql.request.count
+        type: gauge
+        desc: count of CQL requests
+        unit: '{requests}'
+      cql-requests-cumulative-latency:
+        metric: cassandra.driver.cql.request.cumulative.latency
+        type: gauge
+        desc: cumulative CQL request latency in milliseconds
+        unit: '{milliseconds}'
+      cql-request-errors-count:
+        metric: cassandra.driver.cql.request.errors
+        type: gauge
+        desc: count of all request errors
+        unit: '{errors}'
+      cql-request-timeouts-count:
+        metric: cassandra.driver.cql.request.timeout.count
+        type: gauge
+        desc: count of CQL request timeouts
+        unit: '{errors}'
+      cql-request-ignores-count:
+        metric: cassandra.driver.cql.request.ignores.count
+        type: gauge
+        desc: count of all request ignores
+        unit: '{errors}'
+      cql-request-retries-count:
+        metric: cassandra.driver.cql.request.retries.count
+        type: gauge
+        desc: count of all request retries
+        unit: '{errors}'
+      throttling-cumulative-delay:
+        metric: cassandra.driver.throttling.cumulative.delay
+        type: gauge
+        desc: cumulative throttling delay in milliseconds
+        unit: '{milliseconds}'
+      throttling-errors-count:
+        metric: cassandra.driver.throttling.errors.count
+        type: gauge
+        desc: count of throttling errors
+        unit: '{errors}'
+      connection-errors-count:
+        metric: cassandra.driver.connection.errors.count
+        type: gauge
+        desc: cumulative count of all connection errors
+        unit: '{errors}'

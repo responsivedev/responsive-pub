@@ -52,7 +52,7 @@ import org.apache.kafka.common.metrics.stats.CumulativeSum;
  * </p>
  */
 public class CassandraMetricsFactory implements MetricsFactory {
-  static final String CASSANDRA_METRICS_GROUP = "cassandra-driver";
+  static final String CASSANDRA_METRICS_GROUP = "cassandra-client";
   private final SessionMetricUpdater sessionMetricUpdater;
   private final NodeMetricUpdater nodeMetricUpdater;
 

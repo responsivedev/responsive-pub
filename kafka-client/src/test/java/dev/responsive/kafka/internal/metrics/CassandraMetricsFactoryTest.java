@@ -329,7 +329,7 @@ class CassandraMetricsFactoryTest {
       String name
   ) {
     return metrics.metrics().entrySet().stream()
-        .filter(entry -> "cassandra-driver".equals(entry.getKey().group())
+        .filter(entry -> "cassandra-client".equals(entry.getKey().group())
             && name.equals(entry.getKey().name()))
         .findFirst()
         .orElseThrow(() -> new AssertionFailedError(
