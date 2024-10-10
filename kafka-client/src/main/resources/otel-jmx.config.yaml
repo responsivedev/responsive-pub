@@ -349,7 +349,7 @@ rules:
        unit: '{records}'
 
  # MongoDB Client Metrics
- - bean: dev.responsive:type=mongodb,command=*
+ - bean: dev.responsive:type=mongodb-client,command=*
    metricAttribute:
        command: param(command)
    mapping:
@@ -375,7 +375,7 @@ rules:
          unit: '{milliseconds}'
 
   # Cassandra Client Metrics
- - bean: dev.responsive:type=cassandra-driver
+ - bean: dev.responsive:type=cassandra-client
    mapping:
       bytes-sent:
         metric: cassandra.driver.bytes.sent.count
