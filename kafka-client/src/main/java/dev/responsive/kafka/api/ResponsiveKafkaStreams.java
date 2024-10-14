@@ -305,6 +305,13 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       throw new ConfigException(errorMsg);
     }
 
+    // Override to false unless specifically enabled by user
+    propsWithOverrides.putIfAbsent(
+        InternalConfig.STATE_UPDATER_ENABLED,
+        false
+    );
+
+    // Allow users to override in case they prefer to manually inject Responsive stores
     propsWithOverrides.putIfAbsent(
         StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG,
         ResponsiveDslStoreSuppliers.class.getName()
