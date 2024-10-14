@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.Serdes;
@@ -47,6 +48,7 @@ public class E2ETestApplication {
   private final String outputTopic;
   private final int partitions;
   private final int exceptionThreshold;
+  private final AtomicBoolean pauseFaultInjection;
 
   public E2ETestApplication(
       final Map<String, Object> properties,
@@ -54,7 +56,8 @@ public class E2ETestApplication {
       final String inputTopic,
       final String outputTopic,
       final int partitions,
-      final int exceptionThreshold
+      final int exceptionThreshold,
+      final AtomicBoolean pauseFaultInjection
   ) {
     this.properties = Objects.requireNonNull(properties);
     this.inputTopic = Objects.requireNonNull(inputTopic);
@@ -62,6 +65,7 @@ public class E2ETestApplication {
     this.name = Objects.requireNonNull(name);
     this.partitions = partitions;
     this.exceptionThreshold = exceptionThreshold;
+    this.pauseFaultInjection = pauseFaultInjection;
     LOG.info("build topology");
   }
 
@@ -111,7 +115,7 @@ public class E2ETestApplication {
     }
     final KStream<Long, OutputRecord> result = stream
         .processValues(AsyncFixedKeyProcessorSupplier.createAsyncProcessorSupplier(
-            new E2ETestProcessorSupplier(name, exceptionThreshold)),
+            new E2ETestProcessorSupplier(name, exceptionThreshold, pauseFaultInjection)),
             Named.as("AsyncProcessor"),
             name
         );
@@ -137,15 +141,24 @@ public class E2ETestApplication {
 
   static class E2ETestProcessor implements FixedKeyProcessor<Long, InputRecord, OutputRecord> {
     private final String storeName;
+    private final int exceptionThreshold;
+    private final AtomicBoolean pauseFaultInjection;
+    private final UrandomGenerator randomGenerator = new UrandomGenerator();
+
+    // Effectively final after #init
     private FixedKeyProcessorContext<Long, OutputRecord> context;
     private TimestampedKeyValueStore<Long, OutputRecord> store;
     private int partition;
-    private final int exceptionThreshold;
-    private final UrandomGenerator randomGenerator = new UrandomGenerator();
 
-    E2ETestProcessor(final String storeName, final int exceptionThreshold) {
+
+    E2ETestProcessor(
+        final String storeName,
+        final int exceptionThreshold,
+        final AtomicBoolean pauseFaultInjection
+    ) {
       this.storeName = Objects.requireNonNull(storeName);
       this.exceptionThreshold = exceptionThreshold;
+      this.pauseFaultInjection = pauseFaultInjection;
     }
 
     @Override
@@ -158,7 +171,7 @@ public class E2ETestApplication {
     @Override
     public void process(final FixedKeyRecord<Long, InputRecord> record) {
       final var random = Math.abs(randomGenerator.nextLong() % 10000);
-      if (random < exceptionThreshold) {
+      if (random < exceptionThreshold && !pauseFaultInjection.get()) {
         throw new InjectedE2ETestException();
       }
       final ValueAndTimestamp<OutputRecord> old = store.get(record.key());
@@ -192,15 +205,21 @@ public class E2ETestApplication {
       implements FixedKeyProcessorSupplier<Long, InputRecord, OutputRecord> {
     private final String storeName;
     private final int exceptionThreshold;
+    private final AtomicBoolean pauseFaultInjection;
 
-    E2ETestProcessorSupplier(final String storeName, final int exceptionThreshold) {
+    E2ETestProcessorSupplier(
+        final String storeName,
+        final int exceptionThreshold,
+        final AtomicBoolean pauseFaultInjection
+    ) {
       this.storeName = Objects.requireNonNull(storeName);
       this.exceptionThreshold = exceptionThreshold;
+      this.pauseFaultInjection = pauseFaultInjection;
     }
 
     @Override
     public FixedKeyProcessor<Long, InputRecord, OutputRecord> get() {
-      return new E2ETestProcessor(storeName, exceptionThreshold);
+      return new E2ETestProcessor(storeName, exceptionThreshold, pauseFaultInjection);
     }
 
     @Override

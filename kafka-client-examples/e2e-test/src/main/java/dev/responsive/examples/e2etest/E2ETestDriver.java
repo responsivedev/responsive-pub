@@ -2,6 +2,9 @@ package dev.responsive.examples.e2etest;
 
 import com.antithesis.sdk.Assert;
 import com.antithesis.sdk.Lifecycle;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.ImmutableMap;
 import dev.responsive.examples.common.E2ETestUtils;
 import dev.responsive.examples.common.EventSignals;
@@ -159,7 +162,7 @@ public class E2ETestDriver {
         .collect(Collectors.joining(","))
     );
     LOG.info("processed by key: {}", consumeState.values().stream()
-        .map(v -> String.format("key(%d) count(%d)", v.key, v.recvdCount))
+        .map(v -> String.format("key(%d) count(%d)", v.key, v.numReceived))
         .collect(Collectors.joining(","))
     );
   }
@@ -267,7 +270,7 @@ public class E2ETestDriver {
     if (Instant.now().isBefore(lastAllLog.plusSeconds(60))) {
       return;
     }
-    if (consumeState.values().stream().map(v -> v.recvdCount).allMatch(count -> count > 0)) {
+    if (consumeState.values().stream().map(v -> v.numReceived).allMatch(count -> count > 0)) {
       lastAllLog = Instant.now();
       LOG.info("received at least one of all records: {}", recordsProcessed);
     }
@@ -282,7 +285,7 @@ public class E2ETestDriver {
     EventSignals.logNumConsumedOutputRecords(recordsProcessed);
     LOG.info("by key: {}",
         consumeState.values().stream()
-            .map(v -> v.key + ":" + v.recvdCount)
+            .map(v -> v.key + ":" + v.numReceived)
             .collect(Collectors.joining(","))
     );
   }
@@ -346,13 +349,20 @@ public class E2ETestDriver {
           throw new RuntimeException(e);
         }
         if (Duration.between(start, Instant.now()).getSeconds() > 300) {
+          final ObjectNode assertNode = new ObjectMapper().createObjectNode();
+          assertNode.put("key", key);
+          assertNode.put("partition", partition);
+          assertNode.put("offset", upTo);
+          assertNode.put("earliestSent", sent.isEmpty() ? "null" : sent.get(0).toString());
+          Assert.unreachable("Waited longer than 300s to pop offsets", assertNode);
+
           final String errorMessage = String.format(
-              "waited longer than 300 seconds for offset %d %d %s",
+              "waited longer than 300 seconds for offset %d of partition %d (earliest sent: %s)",
               upTo,
               partition,
               sent.isEmpty() ? "null" : sent.get(0).toString()
           );
-          Assert.unreachable(errorMessage, null);
+
           LOG.error(errorMessage);
           throw new IllegalStateException(errorMessage);
         }
@@ -386,24 +396,36 @@ public class E2ETestDriver {
   }
 
   private void checkNoStalledPartitions(final CommittedAndEndOffsets offsets) {
-    for (int p = 0; p < partitions; p++) {
-      final var tp = new TopicPartition(inputTopic, p);
-      if (stalledPartitions.containsKey(p)) {
-        final var stalledPartition = stalledPartitions.get(p);
+    for (int partition = 0; partition < partitions; partition++) {
+      final var tp = new TopicPartition(inputTopic, partition);
+      if (stalledPartitions.containsKey(partition)) {
+        final var stalledPartition = stalledPartitions.get(partition);
         if (offsets.inputCommitted().get(tp) > stalledPartition.offset()) {
           LOG.info("resume faults");
           faultStopper.resumeFaults();
-          stalledPartitions.remove(p);
+          stalledPartitions.remove(partition);
         } else if (offsets.timestamp()
             .isAfter(stalledPartition.detected().plus(stalledPartitionThreshold))) {
+          final long inputCommittedOffset = offsets.inputCommitted.get(tp);
+          final Duration timeStalled = Duration.between(
+              stalledPartition.detected(),
+              offsets.timestamp()
+          );
+
+          final ObjectNode assertNode = new ObjectMapper().createObjectNode();
+          assertNode.put("partition", partition);
+          assertNode.put("lastCommittedOffset", stalledPartition.offset());
+          assertNode.put("inputCommittedOffset", inputCommittedOffset);
+          assertNode.put("timeStalledMs", timeStalled.toMillis());
+          Assert.unreachable("Stalled partition", assertNode);
+
           final String errorMessage = String.format(
               "Partition %d has not made progress from offset %d (current %d) for %s",
-              p,
+              partition,
               stalledPartition.offset(),
-              offsets.inputCommitted.get(tp),
-              Duration.between(stalledPartition.detected(), offsets.timestamp())
+              inputCommittedOffset,
+              timeStalled
           );
-          Assert.unreachable(errorMessage, null);
           LOG.error(errorMessage);
           throw new IllegalStateException(errorMessage);
         }
@@ -424,12 +446,12 @@ public class E2ETestDriver {
           if (Duration.between(os.timestamp(), offsets.timestamp())
               .compareTo(faultStopThreshold) > 0) {
             LOG.info("pausing faults due stall on partition {} at {} {}",
-                p,
+                partition,
                 currentCommitted,
                 offsets.timestamp
             );
             faultStopper.pauseFaults();
-            stalledPartitions.put(p, new StalledPartition(offsets.timestamp(), currentCommitted));
+            stalledPartitions.put(partition, new StalledPartition(offsets.timestamp(), currentCommitted));
             break;
           }
         }
@@ -535,7 +557,7 @@ public class E2ETestDriver {
 
   private static class ConsumeState {
     private final long key;
-    private long recvdCount = 0;
+    private long numReceived = 0;
     private Instant lastReceived = Instant.now();
     private AccumulatingChecksum checksum = new AccumulatingChecksum();
 
@@ -551,20 +573,20 @@ public class E2ETestDriver {
       lastReceived = Instant.now();
       for (final var rm : offsets) {
         checksum = checksum
-            .updateWith(recvdCount)
+            .updateWith(numReceived)
             .updateWith(rm.offset())
             .updateWith(partition);
-        recvdCount += 1;
+        numReceived += 1;
       }
       final var expectedChecksum = checksum.current();
       if (!Arrays.equals(expectedChecksum, observedChecksum)) {
-        Assert.unreachable(
-            String.format("checksum mismatch - key(%s), recvdCount(%d), %s %s",
-                          key,
-                          recvdCount,
-                          Arrays.toString(checksum.current()),
-                          Arrays.toString(observedChecksum)), null
-        );
+        final ObjectNode assertNode = new ObjectMapper().createObjectNode();
+        assertNode.put("key", key);
+        assertNode.put("expectedCheckSum", expectedChecksum);
+        assertNode.put("observedCheckSum", observedChecksum);
+        assertNode.put("numRecordsReceived", numReceived);
+        Assert.unreachable("Checksum mismatch", assertNode);
+
         throw new IllegalStateException("checksum mismatch");
       }
     }
@@ -576,6 +598,7 @@ public class E2ETestDriver {
 
     private Instant pauseFaults() {
       if (refs == 0) {
+        Lifecycle.sendEvent("Pause fault injection");
         LOG.info("ANTITHESIS: Stop faults");
         stoppedAt = Instant.now();
       }
