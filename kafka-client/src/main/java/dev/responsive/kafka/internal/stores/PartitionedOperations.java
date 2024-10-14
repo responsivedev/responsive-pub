@@ -37,6 +37,8 @@ import dev.responsive.kafka.internal.db.inmemory.InMemoryKVTable;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
+import dev.responsive.kafka.internal.utils.GroupTraceRoot;
+import dev.responsive.kafka.internal.utils.GroupTraceSpan;
 import dev.responsive.kafka.internal.utils.Result;
 import dev.responsive.kafka.internal.utils.SessionClients;
 import dev.responsive.kafka.internal.utils.TableName;
@@ -53,6 +55,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.slf4j.Logger;
@@ -67,12 +70,14 @@ public class PartitionedOperations implements KeyValueOperations {
   private final RemoteKVTable<?> table;
   private final CommitBuffer<Bytes, ?> buffer;
   private final TopicPartition changelog;
+  private GroupTraceSpan restoreSpan;
 
   private final ResponsiveStoreRegistry storeRegistry;
   private final ResponsiveStoreRegistration registration;
   private final ResponsiveRestoreListener restoreListener;
   private final boolean migrationMode;
   private final long startingTimestamp;
+  private final TaskId taskId;
 
   public static PartitionedOperations create(
       final TableName name,
@@ -84,6 +89,7 @@ public class PartitionedOperations implements KeyValueOperations {
         String.format("store [%s] ", name.kafkaName())
     ).logger(PartitionedOperations.class);
     final var context = asInternalProcessorContext(storeContext);
+
 
     // Save this so we don't have to rebuild the config map on every access
     final var appConfigs = storeContext.appConfigs();
@@ -163,7 +169,8 @@ public class PartitionedOperations implements KeyValueOperations {
         registration,
         sessionClients.restoreListener(),
         migrationMode,
-        startingTimestamp
+        startingTimestamp,
+        storeContext.taskId()
     );
   }
 
@@ -225,7 +232,8 @@ public class PartitionedOperations implements KeyValueOperations {
       final ResponsiveStoreRegistration registration,
       final ResponsiveRestoreListener restoreListener,
       final boolean migrationMode,
-      final long startingTimestamp
+      final long startingTimestamp,
+      final TaskId taskId
   ) {
     this.log = log;
     this.context = context;
@@ -238,10 +246,12 @@ public class PartitionedOperations implements KeyValueOperations {
     this.restoreListener = restoreListener;
     this.migrationMode = migrationMode;
     this.startingTimestamp = startingTimestamp;
+    this.taskId = taskId;
   }
 
   @Override
   public void put(final Bytes key, final byte[] value) {
+    maybeEndRestoreSpan();
     if (migratingAndTimestampTooEarly()) {
       // we are bootstrapping a store. Only apply the write if the timestamp
       // is fresher than the starting timestamp
@@ -252,6 +262,7 @@ public class PartitionedOperations implements KeyValueOperations {
 
   @Override
   public byte[] delete(final Bytes key) {
+    maybeEndRestoreSpan();
     // single writer prevents races (see putIfAbsent)
     final byte[] old = get(key);
     buffer.tombstone(key, currentRecordTimestamp());
@@ -269,6 +280,8 @@ public class PartitionedOperations implements KeyValueOperations {
       // and just return null
       return null;
     }
+
+    maybeEndRestoreSpan();
 
     // try the buffer first, it acts as a local cache
     // but this is also necessary for correctness as
@@ -336,6 +349,7 @@ public class PartitionedOperations implements KeyValueOperations {
 
   @Override
   public void close() {
+    maybeEndRestoreSpan();
     // no need to flush the buffer here, will happen through the kafka client commit as usual
     buffer.close();
     restoreListener.onStoreClosed(changelog, params.name().kafkaName());
@@ -344,6 +358,7 @@ public class PartitionedOperations implements KeyValueOperations {
 
   @Override
   public void restoreBatch(final Collection<ConsumerRecord<byte[], byte[]>> records) {
+    maybeStartRestoreSpan();
     buffer.restoreBatch(records);
   }
 
@@ -374,5 +389,21 @@ public class PartitionedOperations implements KeyValueOperations {
       return currentRecordTimestamp() < startingTimestamp;
     }
     return false;
+  }
+
+  private void maybeStartRestoreSpan() {
+    if (restoreSpan == null) {
+      restoreSpan = GroupTraceRoot.INSTANCE.get().rootSpan().childSpan("store-restore");
+      final var otelSpan = restoreSpan.span();
+      otelSpan.setAttribute("partition", this.registration.changelogTopicPartition().toString());
+      otelSpan.setAttribute("store", this.registration.storeName());
+      otelSpan.setAttribute("task", this.taskId.toString());
+    }
+  }
+
+  private void maybeEndRestoreSpan() {
+    if (restoreSpan != null) {
+      restoreSpan.end();
+    }
   }
 }

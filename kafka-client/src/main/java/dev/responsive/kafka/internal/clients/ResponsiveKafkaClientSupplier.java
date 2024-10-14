@@ -27,6 +27,8 @@ import dev.responsive.kafka.internal.metrics.EndOffsetsPoller;
 import dev.responsive.kafka.internal.metrics.MetricPublishingCommitListener;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistry;
+import dev.responsive.kafka.internal.utils.GroupTraceRoot;
+import dev.responsive.kafka.internal.utils.GroupTraceTaskAssignor;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.Arrays;
@@ -156,6 +158,11 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
 
     final String threadId = extractThreadIdFromConsumerClientId(clientId);
 
+    final String groupId = (String) config.get(ConsumerConfig.GROUP_ID_CONFIG);
+    final GroupTraceRoot traceRoot = GroupTraceRoot.create(groupId);
+
+    config.put(GroupTraceTaskAssignor.GROUP_TRACE_ROOT_CONFIG, traceRoot);
+
     final ListenersForThread tc = sharedListeners.getAndMaybeInitListenersForThread(
         eos,
         threadId,
@@ -175,7 +182,8 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
             tc.offsetRecorder.getConsumerListener(),
             tc.endOffsetsPollerListener,
             new CloseListener(threadId)
-        )
+        ),
+        traceRoot
     );
   }
 
@@ -358,9 +366,10 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
     default <K, V> ResponsiveConsumer<K, V> createResponsiveConsumer(
         final String clientId,
         final Consumer<K, V> wrapped,
-        final List<ResponsiveConsumer.Listener> listeners
+        final List<ResponsiveConsumer.Listener> listeners,
+        final GroupTraceRoot traceRoot
     ) {
-      return new ResponsiveConsumer<>(clientId, wrapped, listeners);
+      return new ResponsiveConsumer<>(clientId, wrapped, listeners, traceRoot);
     }
 
     default <K, V> ResponsiveGlobalConsumer createGlobalConsumer(

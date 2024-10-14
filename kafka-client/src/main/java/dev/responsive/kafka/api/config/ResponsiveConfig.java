@@ -23,6 +23,7 @@ import com.datastax.oss.driver.api.core.ConsistencyLevel;
 import com.datastax.oss.driver.api.core.DefaultConsistencyLevel;
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.internal.db.partitioning.Murmur3Hasher;
+import dev.responsive.kafka.internal.utils.GroupTraceTaskAssignor;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Map;
@@ -33,7 +34,7 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigDef.Validator;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.types.Password;
-import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
+import org.apache.kafka.streams.processor.assignment.assignors.StickyTaskAssignor;
 
 /**
  * Configurations for {@link ResponsiveKafkaStreams}
@@ -290,7 +291,7 @@ public class ResponsiveConfig extends AbstractConfig {
   // These configuration values are required by Responsive, and a ConfigException will
   // be thrown if they are overridden to anything else
   public static final int NUM_STANDBYS_OVERRIDE = 0;
-  public static final String TASK_ASSIGNOR_CLASS_OVERRIDE = StickyTaskAssignor.class.getName();
+  public static final String TASK_ASSIGNOR_CLASS_OVERRIDE = GroupTraceTaskAssignor.class.getName();
 
   private static final ConfigDef CONFIG_DEF = new ConfigDef()
       .define(

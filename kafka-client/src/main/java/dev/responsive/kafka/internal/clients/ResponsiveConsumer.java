@@ -17,14 +17,17 @@
 package dev.responsive.kafka.internal.clients;
 
 
+import dev.responsive.kafka.internal.utils.GroupTraceRoot;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.common.TopicPartition;
@@ -35,20 +38,27 @@ public class ResponsiveConsumer<K, V> extends DelegatingConsumer<K, V> {
   private final Logger log;
 
   private final List<Listener> listeners;
+  private final GroupTraceRoot traceRoot;
 
   private static class RebalanceListener implements ConsumerRebalanceListener {
     private final ConsumerRebalanceListener wrappedRebalanceListener;
     private final List<Listener> listeners;
     private final Logger log;
+    private final GroupTraceRoot traceRoot;
+    private final ResponsiveConsumer<?, ?> consumer;
 
     public RebalanceListener(
         final ConsumerRebalanceListener wrappedRebalanceListener,
         final List<Listener> listeners,
-        final Logger log
+        final Logger log,
+        final GroupTraceRoot traceRoot,
+        final ResponsiveConsumer<?, ?> consumer
     ) {
       this.wrappedRebalanceListener = wrappedRebalanceListener;
       this.listeners = listeners;
       this.log = log;
+      this.traceRoot = traceRoot;
+      this.consumer = consumer;
     }
 
     @Override
@@ -61,31 +71,71 @@ public class ResponsiveConsumer<K, V> extends DelegatingConsumer<K, V> {
 
     @Override
     public void onPartitionsRevoked(final Collection<TopicPartition> partitions) {
+      traceRoot.refresh(consumer.groupMetadata().generationId());
+      final var spans = partitions.stream()
+          .map(p -> {
+            final var partitionSpan = traceRoot.rootSpan().childSpan("on-partitions-revoked");
+            partitionSpan.span().setAttribute("partition", p.toString());
+            return partitionSpan;
+          })
+          .collect(Collectors.toList());
       for (final var l : listeners) {
         ignoreException(log, () -> l.onPartitionsRevoked(partitions));
       }
-      wrappedRebalanceListener.onPartitionsRevoked(partitions);
+      try {
+        wrappedRebalanceListener.onPartitionsRevoked(partitions);
+      } catch (final RuntimeException e) {
+        for (final var span: spans) {
+          span.span().recordException(e);
+        }
+        throw e;
+      } finally {
+        for (final var span: spans) {
+          span.end();
+        }
+      }
     }
 
     @Override
     public void onPartitionsAssigned(final Collection<TopicPartition> partitions) {
+      traceRoot.refresh(consumer.groupMetadata().generationId());
+      final var spans = partitions.stream()
+          .map(p -> {
+            final var partitionSpan = traceRoot.rootSpan().childSpan("on-partitions-assigned");
+            partitionSpan.span().setAttribute("partition", p.toString());
+            return partitionSpan;
+          })
+          .collect(Collectors.toList());
       for (final var l : listeners) {
         ignoreException(log, () -> l.onPartitionsAssigned(partitions));
       }
-      wrappedRebalanceListener.onPartitionsAssigned(partitions);
+      try {
+        wrappedRebalanceListener.onPartitionsAssigned(partitions);
+      } catch (final RuntimeException e) {
+        for (final var span: spans) {
+          span.span().recordException(e);
+        }
+        throw e;
+      } finally {
+        for (final var span: spans) {
+          span.end();
+        }
+      }
     }
   }
 
   public ResponsiveConsumer(
       final String clientId,
       final Consumer<K, V> delegate,
-      final List<Listener> listeners
+      final List<Listener> listeners,
+      final GroupTraceRoot traceRoot
   ) {
     super(delegate);
     this.log = new LogContext(
         String.format("responsive-consumer [%s]", Objects.requireNonNull(clientId))
     ).logger(ResponsiveConsumer.class);
     this.listeners = Objects.requireNonNull(listeners);
+    this.traceRoot = traceRoot;
   }
 
   @Override
@@ -96,12 +146,17 @@ public class ResponsiveConsumer<K, V> extends DelegatingConsumer<K, V> {
 
   @Override
   public void subscribe(final Collection<String> topics, final ConsumerRebalanceListener callback) {
-    super.subscribe(topics, new RebalanceListener(callback, listeners, log));
+    super.subscribe(
+        topics,
+        new RebalanceListener(callback, listeners, log, traceRoot, this));
   }
 
   @Override
   public void subscribe(final Pattern pattern, final ConsumerRebalanceListener callback) {
-    super.subscribe(pattern, new RebalanceListener(callback, listeners, log));
+    super.subscribe(
+        pattern,
+        new RebalanceListener(callback, listeners, log, traceRoot, this)
+    );
   }
 
   @Override
@@ -126,6 +181,25 @@ public class ResponsiveConsumer<K, V> extends DelegatingConsumer<K, V> {
   public void close(final Duration timeout) {
     super.close(timeout);
     listeners.forEach(l -> ignoreException(l::onClose));
+  }
+
+  @SuppressWarnings("deprecation")
+  @Override
+  public ConsumerRecords<K, V> poll(long timeout) {
+    GroupTraceRoot.INSTANCE.set(traceRoot);
+    traceRoot.refresh(groupMetadata().generationId());
+    final var result = super.poll(timeout);
+    traceRoot.refresh(groupMetadata().generationId());
+    return result;
+  }
+
+  @Override
+  public ConsumerRecords<K, V> poll(Duration timeout) {
+    GroupTraceRoot.INSTANCE.set(traceRoot);
+    traceRoot.refresh(groupMetadata().generationId());
+    final var result = super.poll(timeout);
+    traceRoot.refresh(groupMetadata().generationId());
+    return result;
   }
 
   @Override

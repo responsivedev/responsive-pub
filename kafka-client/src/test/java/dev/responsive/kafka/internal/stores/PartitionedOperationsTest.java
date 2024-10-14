@@ -12,6 +12,7 @@ import java.time.Duration;
 import java.time.Instant;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -62,7 +63,8 @@ class PartitionedOperationsTest {
         registration,
         restoreListener,
         false,
-         -1
+         -1,
+        new TaskId(0, 0)
     );
     migrationPartitionedOperations = new PartitionedOperations(
         LOG,
@@ -75,7 +77,8 @@ class PartitionedOperationsTest {
         registration,
         restoreListener,
         true,
-        MIGRATE_START_TTL.toEpochMilli()
+        MIGRATE_START_TTL.toEpochMilli(),
+        new TaskId(0, 0)
     );
     when(registration.injectedStoreArgs()).thenReturn(new InjectedStoreArgs());
   }

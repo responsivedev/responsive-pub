@@ -126,7 +126,7 @@ class ResponsiveKafkaClientSupplierTest {
         factories.createResponsiveProducer(any(), (ResponsiveProducer<byte[], byte[]>) any(), any())
     ).thenReturn(responsiveProducer);
     lenient().when(factories.createResponsiveConsumer(
-        any(), (ResponsiveConsumer<byte[], byte[]>) any(), any())
+        any(), (ResponsiveConsumer<byte[], byte[]>) any(), any(), any())
     ).thenReturn(responsiveConsumer);
     lenient().when(factories.createMetricsPublishingCommitListener(any(), any(), any()))
         .thenReturn(commitMetricListener);
@@ -196,7 +196,7 @@ class ResponsiveKafkaClientSupplierTest {
 
     // then:
     verify(factories).createResponsiveConsumer(
-        any(), any(), consumerListenerCaptor.capture());
+        any(), any(), consumerListenerCaptor.capture(), any());
     assertThat(consumerListenerCaptor.getValue(), Matchers.hasItem(commitMetricListener));
     verify(factories).createMetricsPublishingCommitListener(
         metrics, "StreamThread-0", offsetRecorder);
@@ -229,7 +229,7 @@ class ResponsiveKafkaClientSupplierTest {
 
     // then:
     verify(factories).createResponsiveConsumer(
-        any(), any(), consumerListenerCaptor.capture());
+        any(), any(), consumerListenerCaptor.capture(), any());
     assertThat(consumerListenerCaptor.getValue(), Matchers.hasItem(consumerEndOffsetsPollListener));
   }
 
@@ -241,7 +241,7 @@ class ResponsiveKafkaClientSupplierTest {
 
     // then:
     verify(factories).createResponsiveConsumer(
-        any(), any(), consumerListenerCaptor.capture());
+        any(), any(), consumerListenerCaptor.capture(), any());
     consumerListenerCaptor.getValue().forEach(ResponsiveConsumer.Listener::onClose);
     verify(commitMetricListener, times(0)).close();
     verify(factories).createResponsiveProducer(any(), any(), producerListenerCaptor.capture());

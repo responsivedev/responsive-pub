@@ -21,6 +21,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 
+import dev.responsive.kafka.internal.utils.GroupTraceRoot;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
@@ -57,7 +58,7 @@ class ResponsiveConsumerTest {
   @BeforeEach
   public void setup() {
     consumer = new ResponsiveConsumer<>(
-        "clientid", wrapped, List.of(listener1, listener2));
+        "clientid", wrapped, List.of(listener1, listener2), GroupTraceRoot.create("foo"));
   }
 
   @Test

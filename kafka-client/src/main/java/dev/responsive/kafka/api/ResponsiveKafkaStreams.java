@@ -53,6 +53,7 @@ import dev.responsive.kafka.internal.metrics.exporter.MetricsExportService;
 import dev.responsive.kafka.internal.metrics.exporter.NoopMetricsExporterService;
 import dev.responsive.kafka.internal.metrics.exporter.otel.OtelMetricsService;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistry;
+import dev.responsive.kafka.internal.utils.GroupTraceExceptionHandler;
 import dev.responsive.kafka.internal.utils.SessionClients;
 import dev.responsive.kafka.internal.utils.SessionUtil;
 import java.time.Duration;
@@ -227,6 +228,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     responsiveStateListener = new ResponsiveStateListener(responsiveMetrics);
 
     sessionClients.initialize(responsiveMetrics, responsiveRestoreListener);
+    super.setUncaughtExceptionHandler(new GroupTraceExceptionHandler());
     super.setGlobalStateRestoreListener(responsiveRestoreListener);
     super.setStateListener(responsiveStateListener);
   }
@@ -288,6 +290,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       return propsWithOverrides;
     }
 
+    propsWithOverrides.put(StreamsConfig.TASK_ASSIGNOR_CLASS_CONFIG, TASK_ASSIGNOR_CLASS_OVERRIDE);
     final Object o = configs.originals().get(InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS);
     if (o == null) {
       propsWithOverrides.put(

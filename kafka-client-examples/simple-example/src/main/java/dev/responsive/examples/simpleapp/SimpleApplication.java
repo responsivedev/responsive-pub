@@ -13,6 +13,7 @@ import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
@@ -56,7 +57,7 @@ public class SimpleApplication {
   public SimpleApplication(final Map<?, ?> properties) {
     config = new Config(properties);
     maybeCreateTopics();
-    maybeCreateKeyspace();
+    //maybeCreateKeyspace();
     LOG.info("build topology");
     kafkaStreams = buildTopology(config, properties);
   }
@@ -113,11 +114,15 @@ public class SimpleApplication {
     try (final Admin admin = Admin.create(config.originals())) {
       final String source = config.getSourceTopic();
       for (final var topic : List.of(source, source + "-out", source + "-counts")) {
-        LOG.info("create topic {}", topic);
+        LOG.error("create topic {}", topic);
         try {
-          admin.createTopics(List.of(new NewTopic(topic, 1, (short) 1)));
+          admin.createTopics(List.of(new NewTopic(topic, 4, (short) 3)))
+              .all()
+              .get();
+        } catch (final ExecutionException|InterruptedException e) {
+          LOG.error("Error creating topic {}", topic, e);
         } catch (final RuntimeException e) {
-          LOG.info("Error creating topic: " + e);
+          LOG.error("Error creating topic: " + e);
         }
       }
     }

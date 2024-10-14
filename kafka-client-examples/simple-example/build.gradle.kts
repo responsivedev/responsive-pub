@@ -19,6 +19,7 @@ dependencies {
     implementation("com.scylladb:java-driver-core:4.15.0.0")
     implementation("com.scylladb:java-driver-query-builder:4.15.0.0")
     implementation("com.scylladb:java-driver-mapper-runtime:4.15.0.0")
+    implementation(libs.bundles.otel)
 }
 
 java {
