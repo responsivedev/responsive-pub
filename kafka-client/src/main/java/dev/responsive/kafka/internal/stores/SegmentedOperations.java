@@ -122,38 +122,53 @@ public class SegmentedOperations implements WindowOperations {
         changelog.partition(),
         flushManager
     );
-    final CommitBuffer<WindowedKey, ?> buffer = CommitBuffer.from(
-        batchFlusher,
-        sessionClients,
-        changelog,
-        keySpec,
-        params.name(),
-        params.retainDuplicates(),
-        responsiveConfig
-    );
-    final long restoreStartOffset = table.fetchOffset(changelog.partition());
-    final var registration = new ResponsiveStoreRegistration(
-        name.kafkaName(),
-        changelog,
-        restoreStartOffset == NO_COMMITTED_OFFSET
-            ? OptionalLong.empty()
-            : OptionalLong.of(restoreStartOffset),
-        buffer::flush,
-        streamThreadId()
-    );
-    storeRegistry.registerStore(registration);
 
-    return new SegmentedOperations(
-        context,
-        params,
-        table,
-        buffer,
-        changelog,
-        storeRegistry,
-        registration,
-        sessionClients.restoreListener(),
-        flushManager.streamTime()
-    );
+    // these objects need to be cleaned up once they're created. If this method fails
+    // then we should make sure we do the cleanup here.
+    CommitBuffer<WindowedKey, ?> buffer = null;
+    ResponsiveStoreRegistration registration = null;
+    try {
+      buffer = CommitBuffer.from(
+          batchFlusher,
+          sessionClients,
+          changelog,
+          keySpec,
+          params.name(),
+          params.retainDuplicates(),
+          responsiveConfig
+      );
+      final long restoreStartOffset = table.fetchOffset(changelog.partition());
+      registration = new ResponsiveStoreRegistration(
+          name.kafkaName(),
+          changelog,
+          restoreStartOffset == NO_COMMITTED_OFFSET
+              ? OptionalLong.empty()
+              : OptionalLong.of(restoreStartOffset),
+          buffer::flush,
+          streamThreadId()
+      );
+      storeRegistry.registerStore(registration);
+
+      return new SegmentedOperations(
+          context,
+          params,
+          table,
+          buffer,
+          changelog,
+          storeRegistry,
+          registration,
+          sessionClients.restoreListener(),
+          flushManager.streamTime()
+      );
+    } catch (final RuntimeException e) {
+      if (buffer != null) {
+        buffer.close();
+      }
+      if (registration != null) {
+        storeRegistry.deregisterStore(registration);
+      }
+      throw e;
+    }
   }
 
   private static RemoteWindowedTable<?> createCassandra(

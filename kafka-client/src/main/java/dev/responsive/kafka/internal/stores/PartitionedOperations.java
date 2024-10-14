@@ -123,48 +123,62 @@ public class PartitionedOperations implements KeyValueOperations {
         flushManager
     );
 
-    final CommitBuffer<Bytes, ?> buffer = CommitBuffer.from(
-        batchFlusher,
-        sessionClients,
-        changelog,
-        keySpec,
-        params.name(),
-        false,
-        config
-    );
+    // these objects need to be cleaned up once they're created. If this method fails
+    // then we should make sure we do the cleanup here.
+    CommitBuffer<Bytes, ?> buffer = null;
+    ResponsiveStoreRegistration registration = null;
+    try {
+      buffer = CommitBuffer.from(
+          batchFlusher,
+          sessionClients,
+          changelog,
+          keySpec,
+          params.name(),
+          false,
+          config
+      );
 
-    final long restoreStartOffset = table.fetchOffset(changelog.partition());
-    final var registration = new ResponsiveStoreRegistration(
-        name.kafkaName(),
-        changelog,
-        restoreStartOffset == NO_COMMITTED_OFFSET
-            ? OptionalLong.empty()
-            : OptionalLong.of(restoreStartOffset),
-        buffer::flush,
-        streamThreadId()
-    );
-    storeRegistry.registerStore(registration);
+      final long restoreStartOffset = table.fetchOffset(changelog.partition());
+      registration = new ResponsiveStoreRegistration(
+          name.kafkaName(),
+          changelog,
+          restoreStartOffset == NO_COMMITTED_OFFSET
+              ? OptionalLong.empty()
+              : OptionalLong.of(restoreStartOffset),
+          buffer::flush,
+          streamThreadId()
+      );
+      storeRegistry.registerStore(registration);
 
-    final boolean migrationMode = ConfigUtils.responsiveMode(config) == ResponsiveMode.MIGRATE;
-    long startingTimestamp = -1;
-    final Optional<Duration> ttl = params.timeToLive();
-    if (migrationMode && ttl.isPresent()) {
-      startingTimestamp = Instant.now().minus(ttl.get()).toEpochMilli();
+      final boolean migrationMode = ConfigUtils.responsiveMode(config) == ResponsiveMode.MIGRATE;
+      long startingTimestamp = -1;
+      final Optional<Duration> ttl = params.timeToLive();
+      if (migrationMode && ttl.isPresent()) {
+        startingTimestamp = Instant.now().minus(ttl.get()).toEpochMilli();
+      }
+
+      return new PartitionedOperations(
+          log,
+          context,
+          params,
+          table,
+          buffer,
+          changelog,
+          storeRegistry,
+          registration,
+          sessionClients.restoreListener(),
+          migrationMode,
+          startingTimestamp
+      );
+    } catch (final RuntimeException e) {
+      if (buffer != null) {
+        buffer.close();
+      }
+      if (registration != null) {
+        storeRegistry.deregisterStore(registration);
+      }
+      throw e;
     }
-
-    return new PartitionedOperations(
-        log,
-        context,
-        params,
-        table,
-        buffer,
-        changelog,
-        storeRegistry,
-        registration,
-        sessionClients.restoreListener(),
-        migrationMode,
-        startingTimestamp
-    );
   }
 
   private static RemoteKVTable<?> createInMemory(final ResponsiveKeyValueParams params) {
