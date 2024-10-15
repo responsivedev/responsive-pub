@@ -32,6 +32,7 @@ import com.datastax.oss.driver.api.core.cql.Statement;
 import com.datastax.oss.driver.internal.core.cql.DefaultBatchStatement;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import org.apache.kafka.common.utils.Bytes;
 import org.junit.jupiter.api.BeforeEach;
@@ -141,7 +142,8 @@ class LwtWriterTest {
   private static class TestRemoteTable extends CassandraKeyValueTable {
 
     public TestRemoteTable(final String tableName, final CassandraClient client) {
-      super(tableName, client, null, null, null, null, null, null, null, null, null, null, null);
+      super(tableName, client, null, Optional.empty(),
+            null, null, null, null, null, null, null, null, null, null, null, null);
     }
 
     @Override

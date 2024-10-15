@@ -38,12 +38,11 @@ public interface RemoteKVTable<S> extends RemoteTable<Bytes, S> {
    *
    * @param kafkaPartition  the kafka partition
    * @param key             the data key
-   * @param minValidTs      the minimum valid timestamp to apply semantic TTL,
-   *                        in epochMillis
+   * @param streamTimeMs   the current streamTime
    *
    * @return the value previously set
    */
-  byte[] get(int kafkaPartition, Bytes key, long minValidTs);
+  byte[] get(int kafkaPartition, Bytes key, long streamTimeMs);
 
   /**
    * Retrieves a range of key value pairs from the given {@code partitionKey} and
@@ -57,7 +56,7 @@ public interface RemoteKVTable<S> extends RemoteTable<Bytes, S> {
    * @param kafkaPartition  the kafka partition
    * @param from            the starting key (inclusive)
    * @param to              the ending key (inclusive)
-   * @param minValidTs      the minimum timestamp, in epochMillis, to consider valid
+   * @param streamTimeMs   the current streamTime
    *
    * @return an iterator of all key-value pairs in the range
    */
@@ -65,7 +64,7 @@ public interface RemoteKVTable<S> extends RemoteTable<Bytes, S> {
       int kafkaPartition,
       Bytes from,
       Bytes to,
-      long minValidTs
+      long streamTimeMs
   );
 
   /**
@@ -77,11 +76,11 @@ public interface RemoteKVTable<S> extends RemoteTable<Bytes, S> {
    * session).
    *
    * @param kafkaPartition  the kafka partition
-   * @param minValidTs      the minimum valid timestamp, in epochMilliis, to return
+   * @param streamTimeMs   the current streamTime
    *
    * @return an iterator of all key-value pairs
    */
-  KeyValueIterator<Bytes, byte[]> all(int kafkaPartition, long minValidTs);
+  KeyValueIterator<Bytes, byte[]> all(int kafkaPartition, long streamTimeMs);
 
   /**
    *  An approximate count of the total number of entries across all sub-partitions

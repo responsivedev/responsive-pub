@@ -110,6 +110,9 @@ public class TtlProvider<K, V> {
         valueSerde);
   }
 
+  /**
+   * @return the same TtlProvider with a key-and-value-based override function
+   */
   public TtlProvider<K, V> fromKeyAndValue(
       final BiFunction<K, V, Optional<TtlDuration>> computeTtlFromKeyAndValue,
       final Serde<K> keySerde,

@@ -94,7 +94,7 @@ public class TTDKeyValueTable extends TTDTable<Bytes> implements RemoteKVTable<B
   }
 
   @Override
-  public byte[] get(final int kafkaPartition, final Bytes key, long minValidTs) {
+  public byte[] get(final int kafkaPartition, final Bytes key, long streamTimeMs) {
     return stub.get(key);
   }
 
@@ -103,7 +103,7 @@ public class TTDKeyValueTable extends TTDTable<Bytes> implements RemoteKVTable<B
       final int kafkaPartition,
       Bytes from,
       final Bytes to,
-      long minValidTs
+      long streamTimeMs
   ) {
     return stub.range(from, to);
   }
@@ -111,7 +111,7 @@ public class TTDKeyValueTable extends TTDTable<Bytes> implements RemoteKVTable<B
   @Override
   public KeyValueIterator<Bytes, byte[]> all(
       final int kafkaPartition,
-      long minValidTs
+      long streamTimeMs
   ) {
     return stub.all();
   }
