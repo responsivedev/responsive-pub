@@ -19,16 +19,30 @@ package dev.responsive.kafka.api.stores;
 import dev.responsive.kafka.internal.utils.StateDeserializer;
 import java.time.Duration;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
 public class TtlProvider<K, V> {
 
-  public static TtlProvider<?, ?> defaultTtl(final Duration defaultTtl) {
-    return new TtlProvider<>(TtlType.DEFAULT_ONLY, defaultTtl, null, null, null);
+  public static TtlProvider<?, ?> withDefaultTtl(final Duration defaultTtl) {
+    return new TtlProvider<>(TtlType.DEFAULT_ONLY, TtlDuration.ofTtl(defaultTtl), null, null, null);
   }
 
-  public TtlProvider<K, ?> withKeyBasedTtl(final Function<K, TtlDuration> ttlForKey) {
+  /**
+   * @return a TtlProvider that will retain records indefinitely by default
+   */
+  public static TtlProvider withInfiniteDefaultTtl() {
+    return new TtlProvider(
+        TtlType.DEFAULT_ONLY,
+        TtlDuration.INFINITE_TTL,
+        null,
+        null,
+        null
+    );
+  }
+
+  public TtlProvider<K, ?> withKeyBasedTtl(final Function<K, Optional<TtlDuration>> ttlForKey) {
     if (ttlForValue != null || ttlForKeyAndValue != null) {
       throw new IllegalArgumentException("Must choose only one of key, value, or key-and-value ttl");
     }
@@ -36,7 +50,7 @@ public class TtlProvider<K, V> {
   }
 
   public TtlProvider<?, V> withValueBasedTtl(
-      final Function<V, TtlDuration> ttlForValue
+      final Function<V, Optional<TtlDuration>> ttlForValue
   ) {
     if (ttlForKey != null || ttlForKeyAndValue != null) {
       throw new IllegalArgumentException("Must choose only one of key, value, or key-and-value ttl");
@@ -45,7 +59,7 @@ public class TtlProvider<K, V> {
   }
 
   public TtlProvider<K, V> withKeyAndValueBasedTtl(
-      final BiFunction<K, V, TtlDuration> ttlForKeyAndValue
+      final BiFunction<K, V, Optional<TtlDuration>> ttlForKeyAndValue
   ) {
     if (ttlForKey != null || ttlForValue != null) {
       throw new IllegalArgumentException("Must choose only one of key, value, or key-and-value ttl");
@@ -55,9 +69,8 @@ public class TtlProvider<K, V> {
 
   public static class TtlDuration {
 
+    /* Equivalent to no ttl -- records are never expired */
     public static final TtlDuration INFINITE_TTL = new TtlDuration(Duration.ZERO);
-
-    public static final TtlDuration DEFAULT_TTL = new TtlDuration(null);
 
     public static TtlDuration ofTtl(final Duration ttl) {
       return new TtlDuration(ttl);
@@ -84,12 +97,12 @@ public class TtlProvider<K, V> {
 
       final TtlDuration that = (TtlDuration) o;
 
-      return Objects.equals(ttl, that.ttl);
+      return ttl.equals(that.ttl);
     }
 
     @Override
     public int hashCode() {
-      return ttl != null ? ttl.hashCode() : 0;
+      return ttl.hashCode();
     }
   }
 
@@ -101,19 +114,19 @@ public class TtlProvider<K, V> {
   }
 
   private final TtlType ttlType;
-  private final Duration defaultTtl;
+  private final TtlDuration defaultTtl;
 
   // Only 1 of these is used per instance, others will be null
-  private final Function<K, TtlDuration> ttlForKey;
-  private final Function<V, TtlDuration> ttlForValue;
-  private final BiFunction<K, V, TtlDuration> ttlForKeyAndValue;
+  private final Function<K, Optional<TtlDuration>> ttlForKey;
+  private final Function<V, Optional<TtlDuration>> ttlForValue;
+  private final BiFunction<K, V, Optional<TtlDuration>> ttlForKeyAndValue;
 
   public TtlProvider(
       final TtlType ttlType,
-      final Duration defaultTtl,
-      final Function<K, TtlDuration> ttlForKey,
-      final Function<V, TtlDuration> ttlForValue,
-      final BiFunction<K, V, TtlDuration> ttlForKeyAndValue
+      final TtlDuration defaultTtl,
+      final Function<K, Optional<TtlDuration>> ttlForKey,
+      final Function<V, Optional<TtlDuration>> ttlForValue,
+      final BiFunction<K, V, Optional<TtlDuration>> ttlForKeyAndValue
   ) {
     this.ttlType = ttlType;
     this.defaultTtl = defaultTtl;
@@ -122,7 +135,7 @@ public class TtlProvider<K, V> {
     this.ttlForKeyAndValue = ttlForKeyAndValue;
   }
 
-  public Duration defaultTtl() {
+  public TtlDuration defaultTtl() {
     return defaultTtl;
   }
 
@@ -131,21 +144,25 @@ public class TtlProvider<K, V> {
       final byte[] valueBytes,
       final StateDeserializer<K, V> stateDeserializer
   ) {
-    final K key;
-    final V value;
     switch (ttlType) {
       case DEFAULT_ONLY:
-        return TtlDuration.DEFAULT_TTL;
+        return defaultTtl;
       case KEY:
-        key = stateDeserializer.keyFrom(keyBytes);
-        return ttlForKey.apply(key);
+        final Optional<TtlDuration> keyOverride = ttlForKey.apply(
+            stateDeserializer.keyFrom(keyBytes)
+        );
+        return keyOverride.orElse(defaultTtl);
       case VALUE:
-        value = stateDeserializer.valueFrom(valueBytes);
-        return ttlForValue.apply(value);
+        final Optional<TtlDuration> valueOverride = ttlForValue.apply(
+            stateDeserializer.valueFrom(valueBytes)
+        );
+        return valueOverride.orElse(defaultTtl);
       case KEY_AND_VALUE:
-        key = stateDeserializer.keyFrom(keyBytes);
-        value = stateDeserializer.valueFrom(valueBytes);
-        return ttlForKeyAndValue.apply(key, value);
+        final Optional<TtlDuration> keyAndValueOverride = ttlForKeyAndValue.apply(
+            stateDeserializer.keyFrom(keyBytes),
+            stateDeserializer.valueFrom(valueBytes)
+        );
+        return keyAndValueOverride.orElse(defaultTtl);
       default:
         throw new IllegalStateException("Unrecognized ttl type: " + ttlType);
     }

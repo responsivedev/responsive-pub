@@ -42,14 +42,7 @@ public class TtlResolver<K, V> {
   }
 
   public TtlDuration resolveTtl(final Bytes keyBytes, final byte[] valueBytes) {
-    final TtlDuration computedTtl =
-        ttlProvider.computeTtl(keyBytes.get(), valueBytes, stateDeserializer);
-
-    if (computedTtl.equals(TtlDuration.DEFAULT_TTL)) {
-      return TtlDuration.ofTtl(ttlProvider.defaultTtl());
-    } else {
-      return computedTtl;
-    }
+    return ttlProvider.computeTtl(keyBytes.get(), valueBytes, stateDeserializer);
   }
 
 }

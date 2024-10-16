@@ -56,7 +56,7 @@ public final class ResponsiveStores {
    * @return a supplier for a key-value store with the given options
    *         that uses Responsive's storage for its backend
    */
-  public static KeyValueBytesStoreSupplier keyValueStore(final ResponsiveKeyValueParams params) {
+  public static ResponsiveKeyValueBytesStoreSupplier keyValueStore(final ResponsiveKeyValueParams params) {
     return new ResponsiveKeyValueBytesStoreSupplier(params);
   }
 
@@ -67,7 +67,7 @@ public final class ResponsiveStores {
    * @return a supplier for a key-value store with the given options
    *         that uses Responsive's storage for its backend
    */
-  public static KeyValueBytesStoreSupplier keyValueStore(final String name) {
+  public static ResponsiveKeyValueBytesStoreSupplier keyValueStore(final String name) {
     return keyValueStore(ResponsiveKeyValueParams.keyValue(name));
   }
 
@@ -93,7 +93,7 @@ public final class ResponsiveStores {
    * @return a supplier for a key-value store with the given options
    *         that uses Responsive's storage for its backend
    */
-  public static KeyValueBytesStoreSupplier factStore(final String name) {
+  public static ResponsiveKeyValueBytesStoreSupplier factStore(final String name) {
     return keyValueStore(ResponsiveKeyValueParams.fact(name));
   }
 
@@ -116,10 +116,12 @@ public final class ResponsiveStores {
    *         that uses Responsive's storage for its backend
    */
   public static <K, V> StoreBuilder<KeyValueStore<K, V>> keyValueStoreBuilder(
-      final KeyValueBytesStoreSupplier storeSupplier,
+      final ResponsiveKeyValueBytesStoreSupplier storeSupplier,
       final Serde<K> keySerde,
       final Serde<V> valueSerde
   ) {
+    storeSupplier.params().setKeyAndValueSerdes(keySerde, valueSerde);
+
     return new ResponsiveStoreBuilder<>(
         StoreType.KEY_VALUE,
         storeSupplier,
@@ -148,17 +150,12 @@ public final class ResponsiveStores {
    *         that uses Responsive's storage for its backend
    */
   public static <K, V> StoreBuilder<TimestampedKeyValueStore<K, V>> timestampedKeyValueStoreBuilder(
-      final KeyValueBytesStoreSupplier storeSupplier,
+      final ResponsiveKeyValueBytesStoreSupplier storeSupplier,
       final Serde<K> keySerde,
       final Serde<V> valueSerde
   ) {
-    if (storeSupplier instanceof ResponsiveKeyValueBytesStoreSupplier) {
-      ((ResponsiveKeyValueBytesStoreSupplier) storeSupplier).asTimestamped();
-    } else {
-      throw new IllegalArgumentException(
-          "Must supply a Responsive StoreSupplier via one of the ResponsiveStores APIs"
-      );
-    }
+    storeSupplier.asTimestamped();
+    storeSupplier.params().setKeyAndValueSerdes(keySerde, valueSerde);
 
     return new ResponsiveStoreBuilder<>(
         StoreType.TIMESTAMPED_KEY_VALUE,

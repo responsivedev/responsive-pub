@@ -32,6 +32,7 @@ import com.datastax.oss.driver.api.core.type.DataTypes;
 import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
 import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
 import com.datastax.oss.driver.api.querybuilder.schema.CreateTableWithOptions;
+import dev.responsive.kafka.api.stores.TtlProvider.TtlDuration;
 import dev.responsive.kafka.internal.db.spec.RemoteTableSpec;
 import dev.responsive.kafka.internal.stores.TtlResolver;
 import java.nio.ByteBuffer;
@@ -53,7 +54,7 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
   private final TtlResolver<?, ?> ttlResolver;
 
   private final PreparedStatement get;
-  private final PreparedStatement insert;
+  private final PreparedStatementBuilder insert;
   private final PreparedStatement delete;
   private final PreparedStatement fetchOffset;
   private final PreparedStatement setOffset;
@@ -61,14 +62,16 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
   public CassandraFactTable(
       final String name,
       final CassandraClient client,
+      final TtlResolver<?, ?> ttlResolver,
       final PreparedStatement get,
-      final PreparedStatement insert,
+      final PreparedStatementBuilder insert,
       final PreparedStatement delete,
       final PreparedStatement fetchOffset,
       final PreparedStatement setOffset
   ) {
     this.name = name;
     this.client = client;
+    this.ttlResolver = ttlResolver;
     this.get = get;
     this.insert = insert;
     this.delete = delete;
@@ -101,16 +104,8 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
     client.execute(createTable.build());
     client.execute(createMetadataTable.build());
 
-    final var insert = client.prepare(
-        QueryBuilder
-            .insertInto(name)
-            .value(ROW_TYPE.column(), RowType.DATA_ROW.literal())
-            .value(DATA_KEY.column(), bindMarker(DATA_KEY.bind()))
-            .value(TIMESTAMP.column(), bindMarker(TIMESTAMP.bind()))
-            .value(DATA_VALUE.column(), bindMarker(DATA_VALUE.bind()))
-            .build(),
-        QueryOp.WRITE
-    );
+    final PreparedStatementBuilder insert = (k, v) ->
+        buildInsertQuery(client, name, spec.ttlResolver(), k, v);
 
     final var get = client.prepare(
         QueryBuilder
@@ -158,6 +153,7 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
     return new CassandraFactTable(
         name,
         client,
+        spec.ttlResolver(),
         get,
         insert,
         delete,
@@ -255,6 +251,7 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
       final long epochMillis
   ) {
     return insert
+        .build(key, value)
         .bind()
         .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
         .setByteBuffer(DATA_VALUE.bind(), ByteBuffer.wrap(value))
@@ -299,4 +296,39 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
     return tableName + "_md";
   }
 
+  private static PreparedStatement buildInsertQuery(
+      final CassandraClient client,
+      final String name,
+      final TtlResolver<?, ?> ttlResolver,
+      final Bytes key,
+      final byte[] value
+  ) {
+    final TtlDuration resolvedTtl = ttlResolver.resolveTtl(key, value);
+    final var baseQuery = com.datastax.oss.driver.api.querybuilder.QueryBuilder
+        .insertInto(name)
+        .value(ROW_TYPE.column(), RowType.DATA_ROW.literal())
+        .value(DATA_KEY.column(), bindMarker(DATA_KEY.bind()))
+        .value(TIMESTAMP.column(), bindMarker(TIMESTAMP.bind()))
+        .value(DATA_VALUE.column(), bindMarker(DATA_VALUE.bind()));
+
+    if (resolvedTtl.equals(TtlDuration.INFINITE_TTL)) {
+      return client.prepare(
+          baseQuery
+              .usingTtl((int) ttlResolver.resolveTtl(key, value).ttl().toSeconds())
+              .build(),
+          QueryOp.WRITE
+      );
+    } else {
+      return client.prepare(
+          baseQuery.build(),
+          QueryOp.WRITE
+      );
+    }
+
+  }
+
+  @FunctionalInterface
+  private interface PreparedStatementBuilder {
+    PreparedStatement build(final Bytes key, final byte[] value);
+  }
 }

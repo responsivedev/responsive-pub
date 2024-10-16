@@ -26,6 +26,7 @@ import dev.responsive.kafka.internal.db.spec.RemoteTableSpec;
 import dev.responsive.kafka.internal.db.spec.TimeWindowedCompactionTableSpec;
 import dev.responsive.kafka.internal.db.spec.TtlTableSpec;
 import dev.responsive.kafka.internal.stores.SchemaTypes;
+import dev.responsive.kafka.internal.stores.TtlResolver;
 import dev.responsive.kafka.internal.utils.WindowedKey;
 import org.apache.kafka.common.utils.Bytes;
 
@@ -42,23 +43,25 @@ public class RemoteTableSpecFactory {
 
   public static RemoteTableSpec globalSpec(
       final ResponsiveKeyValueParams params,
-      final TablePartitioner<Bytes, Integer> partitioner
+      final TablePartitioner<Bytes, Integer> partitioner,
+      final TtlResolver<?, ?> ttlResolver
   ) {
     return new GlobalTableSpec(new BaseTableSpec(
         params.name().tableName(),
         partitioner,
-        params.ttlProvider()
+        ttlResolver
     ));
   }
 
   public static RemoteTableSpec fromKVParams(
       final ResponsiveKeyValueParams params,
-      final TablePartitioner<Bytes, Integer> partitioner
+      final TablePartitioner<Bytes, Integer> partitioner,
+      final TtlResolver<?, ?> ttlResolver
   ) {
     RemoteTableSpec spec = new BaseTableSpec(
         params.name().tableName(),
         partitioner,
-        params.ttlProvider()
+        ttlResolver
     );
 
     if (params.timeToLive().isPresent()) {

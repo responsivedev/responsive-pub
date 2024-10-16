@@ -27,6 +27,7 @@ import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.ResponsiveMode;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
+import dev.responsive.kafka.api.stores.TtlProvider;
 import dev.responsive.kafka.internal.config.ConfigUtils;
 import dev.responsive.kafka.internal.db.BatchFlusher;
 import dev.responsive.kafka.internal.db.BytesKeySpec;
@@ -50,6 +51,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.StateStoreContext;
@@ -97,13 +99,20 @@ public class PartitionedOperations implements KeyValueOperations {
         context.taskId().partition()
     );
 
+    final TtlResolver<?, ?> ttlResolver = new TtlResolver<Object, Object>(
+        changelog.topic(),
+        (Serde<Object>) params.keySerde(),
+        (Serde<Object>) params.valueSerde(),
+        (TtlProvider<Object, Object>) params.ttlProvider()
+    );
+
     final RemoteKVTable<?> table;
     switch (sessionClients.storageBackend()) {
       case CASSANDRA:
-        table = createCassandra(params, config, sessionClients, changelog.topic());
+        table = createCassandra(params, config, sessionClients, changelog.topic(), ttlResolver);
         break;
       case MONGO_DB:
-        table = createMongo(params, sessionClients);
+        table = createMongo(params, sessionClients, ttlResolver);
         break;
       case IN_MEMORY:
         table = createInMemory(params);
@@ -182,6 +191,7 @@ public class PartitionedOperations implements KeyValueOperations {
   }
 
   private static RemoteKVTable<?> createInMemory(final ResponsiveKeyValueParams params) {
+    // TODO(sophie): implement ttl for in-memory store?
     return new InMemoryKVTable(params.name().tableName());
   }
 
@@ -189,7 +199,8 @@ public class PartitionedOperations implements KeyValueOperations {
       final ResponsiveKeyValueParams params,
       final ResponsiveConfig config,
       final SessionClients sessionClients,
-      final String changelogTopicName
+      final String changelogTopicName,
+      final TtlResolver<?, ?> ttlResolver
   ) throws InterruptedException, TimeoutException {
 
     final int numChangelogPartitions =
@@ -209,7 +220,7 @@ public class PartitionedOperations implements KeyValueOperations {
             changelogTopicName
         );
     final var client = sessionClients.cassandraClient();
-    final var spec = RemoteTableSpecFactory.fromKVParams(params, partitioner);
+    final var spec = RemoteTableSpecFactory.fromKVParams(params, partitioner, ttlResolver);
     switch (params.schemaType()) {
       case KEY_VALUE:
         return client.kvFactory().create(spec);
@@ -222,9 +233,10 @@ public class PartitionedOperations implements KeyValueOperations {
 
   private static RemoteKVTable<?> createMongo(
       final ResponsiveKeyValueParams params,
-      final SessionClients sessionClients
+      final SessionClients sessionClients,
+      final TtlResolver<?, ?> ttlResolver
   ) throws InterruptedException, TimeoutException {
-    return sessionClients.mongoClient().kvTable(params.name().tableName(), params);
+    return sessionClients.mongoClient().kvTable(params.name().tableName(), params, ttlResolver);
   }
 
   @SuppressWarnings("rawtypes")
