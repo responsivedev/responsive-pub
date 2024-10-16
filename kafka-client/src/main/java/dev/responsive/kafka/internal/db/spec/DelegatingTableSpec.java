@@ -19,6 +19,7 @@ package dev.responsive.kafka.internal.db.spec;
 import com.datastax.oss.driver.api.querybuilder.schema.CreateTableWithOptions;
 import dev.responsive.kafka.internal.db.TableOperations;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
+import dev.responsive.kafka.internal.stores.TtlResolver;
 import java.util.EnumSet;
 
 public abstract class DelegatingTableSpec implements RemoteTableSpec {
@@ -37,6 +38,11 @@ public abstract class DelegatingTableSpec implements RemoteTableSpec {
   @Override
   public TablePartitioner<?, ?> partitioner() {
     return delegate.partitioner();
+  }
+
+  @Override
+  public TtlResolver<?, ?> ttlResolver() {
+    return delegate.ttlResolver();
   }
 
   @Override

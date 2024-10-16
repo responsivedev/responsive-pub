@@ -33,6 +33,7 @@ import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
 import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
 import com.datastax.oss.driver.api.querybuilder.schema.CreateTableWithOptions;
 import dev.responsive.kafka.internal.db.spec.RemoteTableSpec;
+import dev.responsive.kafka.internal.stores.TtlResolver;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.List;
@@ -45,11 +46,11 @@ import org.slf4j.LoggerFactory;
 
 public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
 
-  private static final Logger LOG = LoggerFactory.getLogger(
-      CassandraFactTable.class);
+  private static final Logger LOG = LoggerFactory.getLogger(CassandraFactTable.class);
 
   private final String name;
   private final CassandraClient client;
+  private final TtlResolver<?, ?> ttlResolver;
 
   private final PreparedStatement get;
   private final PreparedStatement insert;

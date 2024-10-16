@@ -19,16 +19,23 @@ package dev.responsive.kafka.internal.db.spec;
 import com.datastax.oss.driver.api.querybuilder.schema.CreateTableWithOptions;
 import dev.responsive.kafka.internal.db.TableOperations;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
+import dev.responsive.kafka.internal.stores.TtlResolver;
 import java.util.EnumSet;
 
 public class BaseTableSpec implements RemoteTableSpec {
 
   private final String name;
-  final TablePartitioner<?, ?> partitioner;
+  private final TablePartitioner<?, ?> partitioner;
+  private final TtlResolver<?, ?> ttlResolver;
 
-  public BaseTableSpec(final String name, final TablePartitioner<?, ?> partitioner) {
+  public BaseTableSpec(
+      final String name,
+      final TablePartitioner<?, ?> partitioner,
+      final TtlResolver<?, ?> ttlResolver
+  ) {
     this.name = name;
     this.partitioner = partitioner;
+    this.ttlResolver = ttlResolver;
   }
 
   @Override
@@ -39,6 +46,11 @@ public class BaseTableSpec implements RemoteTableSpec {
   @Override
   public TablePartitioner<?, ?> partitioner() {
     return partitioner;
+  }
+
+  @Override
+  public TtlResolver<?, ?> ttlResolver() {
+    return ttlResolver;
   }
 
   @Override

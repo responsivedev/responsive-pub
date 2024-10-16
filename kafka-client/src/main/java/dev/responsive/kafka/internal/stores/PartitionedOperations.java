@@ -224,7 +224,7 @@ public class PartitionedOperations implements KeyValueOperations {
       final ResponsiveKeyValueParams params,
       final SessionClients sessionClients
   ) throws InterruptedException, TimeoutException {
-    return sessionClients.mongoClient().kvTable(params.name().tableName());
+    return sessionClients.mongoClient().kvTable(params.name().tableName(), params);
   }
 
   @SuppressWarnings("rawtypes")

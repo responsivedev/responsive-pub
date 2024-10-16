@@ -44,14 +44,22 @@ public class RemoteTableSpecFactory {
       final ResponsiveKeyValueParams params,
       final TablePartitioner<Bytes, Integer> partitioner
   ) {
-    return new GlobalTableSpec(new BaseTableSpec(params.name().tableName(), partitioner));
+    return new GlobalTableSpec(new BaseTableSpec(
+        params.name().tableName(),
+        partitioner,
+        params.ttlProvider()
+    ));
   }
 
   public static RemoteTableSpec fromKVParams(
       final ResponsiveKeyValueParams params,
       final TablePartitioner<Bytes, Integer> partitioner
   ) {
-    RemoteTableSpec spec = new BaseTableSpec(params.name().tableName(), partitioner);
+    RemoteTableSpec spec = new BaseTableSpec(
+        params.name().tableName(),
+        partitioner,
+        params.ttlProvider()
+    );
 
     if (params.timeToLive().isPresent()) {
       spec = new TtlTableSpec(spec, params.timeToLive().get());
@@ -68,7 +76,7 @@ public class RemoteTableSpecFactory {
       final ResponsiveWindowParams params,
       final TablePartitioner<WindowedKey, SegmentPartition> partitioner
   ) {
-    return new BaseTableSpec(params.name().tableName(), partitioner);
+    return new BaseTableSpec(params.name().tableName(), partitioner, null);
   }
 
 }

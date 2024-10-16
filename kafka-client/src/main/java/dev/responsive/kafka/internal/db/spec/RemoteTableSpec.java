@@ -20,6 +20,7 @@ import com.datastax.oss.driver.api.querybuilder.schema.CreateTableWithOptions;
 import dev.responsive.kafka.internal.db.RemoteTable;
 import dev.responsive.kafka.internal.db.TableOperations;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
+import dev.responsive.kafka.internal.stores.TtlResolver;
 import java.util.EnumSet;
 
 /**
@@ -31,6 +32,8 @@ public interface RemoteTableSpec {
   String tableName();
 
   TablePartitioner<?, ?> partitioner();
+
+  TtlResolver<?, ?> ttlResolver();
 
   /**
    * @return the set of operations that are not supported by this table

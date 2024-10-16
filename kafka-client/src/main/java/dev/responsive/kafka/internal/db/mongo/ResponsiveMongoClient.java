@@ -18,6 +18,7 @@ package dev.responsive.kafka.internal.db.mongo;
 
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.model.WriteModel;
+import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.RemoteSessionTable;
 import dev.responsive.kafka.internal.db.RemoteWindowedTable;
@@ -70,23 +71,27 @@ public class ResponsiveMongoClient {
     );
   }
 
-  public RemoteKVTable<WriteModel<KVDoc>> kvTable(final String name)
-      throws InterruptedException, TimeoutException {
-    return kvTableCache.create(new BaseTableSpec(name, TablePartitioner.defaultPartitioner()));
+  public RemoteKVTable<WriteModel<KVDoc>> kvTable(
+      final String name,
+      final ResponsiveKeyValueParams params
+  ) throws InterruptedException, TimeoutException {
+    return kvTableCache.create(
+        new BaseTableSpec(name, TablePartitioner.defaultPartitioner(), params.ttlProvider())
+    );
   }
 
   public RemoteWindowedTable<WriteModel<WindowDoc>> windowedTable(
       final String name,
       final WindowSegmentPartitioner partitioner
   ) throws InterruptedException, TimeoutException {
-    return windowTableCache.create(new BaseTableSpec(name, partitioner), partitioner);
+    return windowTableCache.create(new BaseTableSpec(name, partitioner, null), partitioner);
   }
 
   public RemoteSessionTable<WriteModel<SessionDoc>> sessionTable(
       final String name,
       final SessionSegmentPartitioner partitioner
   ) throws InterruptedException, TimeoutException {
-    return sessionTableCache.create(new BaseTableSpec(name, partitioner), partitioner);
+    return sessionTableCache.create(new BaseTableSpec(name, partitioner, null), partitioner);
   }
 
   public void close() {
