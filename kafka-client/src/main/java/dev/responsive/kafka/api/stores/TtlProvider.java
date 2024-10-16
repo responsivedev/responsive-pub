@@ -73,12 +73,15 @@ public class TtlProvider<K, V> {
     public static final TtlDuration INFINITE_TTL = new TtlDuration(Duration.ZERO);
 
     public static TtlDuration ofTtl(final Duration ttl) {
+      if (ttl.equals(Duration.ZERO)) {
+        throw new IllegalArgumentException("ttl duration must be greater than zero");
+      }
       return new TtlDuration(ttl);
     }
 
     private final Duration ttl;
 
-    public TtlDuration(final Duration ttlValue) {
+    private TtlDuration(final Duration ttlValue) {
       this.ttl = ttlValue;
     }
 
