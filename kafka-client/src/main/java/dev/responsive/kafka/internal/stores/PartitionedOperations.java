@@ -37,8 +37,9 @@ import dev.responsive.kafka.internal.db.inmemory.InMemoryKVTable;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
-import dev.responsive.kafka.internal.utils.GroupTraceRoot;
-import dev.responsive.kafka.internal.utils.GroupTraceSpan;
+import dev.responsive.kafka.internal.tracing.ResponsiveSpan;
+import dev.responsive.kafka.internal.tracing.ResponsiveTracer;
+import dev.responsive.kafka.internal.tracing.otel.ResponsiveOtelTracer;
 import dev.responsive.kafka.internal.utils.Result;
 import dev.responsive.kafka.internal.utils.SessionClients;
 import dev.responsive.kafka.internal.utils.TableName;
@@ -70,7 +71,7 @@ public class PartitionedOperations implements KeyValueOperations {
   private final RemoteKVTable<?> table;
   private final CommitBuffer<Bytes, ?> buffer;
   private final TopicPartition changelog;
-  private GroupTraceSpan restoreSpan;
+  private ResponsiveSpan restoreSpan;
 
   private final ResponsiveStoreRegistry storeRegistry;
   private final ResponsiveStoreRegistration registration;
@@ -78,6 +79,7 @@ public class PartitionedOperations implements KeyValueOperations {
   private final boolean migrationMode;
   private final long startingTimestamp;
   private final TaskId taskId;
+  private final ResponsiveTracer tracer;
 
   public static PartitionedOperations create(
       final TableName name,
@@ -89,7 +91,6 @@ public class PartitionedOperations implements KeyValueOperations {
         String.format("store [%s] ", name.kafkaName())
     ).logger(PartitionedOperations.class);
     final var context = asInternalProcessorContext(storeContext);
-
 
     // Save this so we don't have to rebuild the config map on every access
     final var appConfigs = storeContext.appConfigs();
@@ -118,9 +119,19 @@ public class PartitionedOperations implements KeyValueOperations {
         throw new IllegalStateException("Unexpected value: " + sessionClients.storageBackend());
     }
 
-    final FlushManager<Bytes, ?> flushManager = table.init(changelog.partition());
+    ResponsiveTracer tracer = new ResponsiveOtelTracer(log)
+        .withTask(storeContext.taskId().toString())
+        .withPartition(changelog);
 
-    log.info("Remote table {} is available for querying.", name.tableName());
+    final var initSpan = tracer.span("remote-table-init", ResponsiveTracer.Level.INFO);
+    final FlushManager<Bytes, ?> flushManager;
+    try {
+      flushManager = table.init(changelog.partition());
+      initSpan.end(String.format("Remote table %s is available for querying.", name.tableName()));
+    } catch (final RuntimeException e) {
+      initSpan.end("remote table failed to init", e);
+      throw e;
+    }
 
     final BytesKeySpec keySpec = new BytesKeySpec();
     final BatchFlusher<Bytes, ?> batchFlusher = new BatchFlusher<>(
@@ -170,7 +181,8 @@ public class PartitionedOperations implements KeyValueOperations {
         sessionClients.restoreListener(),
         migrationMode,
         startingTimestamp,
-        storeContext.taskId()
+        storeContext.taskId(),
+        tracer
     );
   }
 
@@ -233,7 +245,8 @@ public class PartitionedOperations implements KeyValueOperations {
       final ResponsiveRestoreListener restoreListener,
       final boolean migrationMode,
       final long startingTimestamp,
-      final TaskId taskId
+      final TaskId taskId,
+      final ResponsiveTracer tracer
   ) {
     this.log = log;
     this.context = context;
@@ -247,6 +260,7 @@ public class PartitionedOperations implements KeyValueOperations {
     this.migrationMode = migrationMode;
     this.startingTimestamp = startingTimestamp;
     this.taskId = taskId;
+    this.tracer = tracer;
   }
 
   @Override
@@ -359,7 +373,9 @@ public class PartitionedOperations implements KeyValueOperations {
   @Override
   public void restoreBatch(final Collection<ConsumerRecord<byte[], byte[]>> records) {
     maybeStartRestoreSpan();
-    buffer.restoreBatch(records);
+    try(final var scope = restoreSpan.makeCurrent()) {
+      buffer.restoreBatch(records);
+    }
   }
 
   private long currentRecordTimestamp() {
@@ -393,17 +409,13 @@ public class PartitionedOperations implements KeyValueOperations {
 
   private void maybeStartRestoreSpan() {
     if (restoreSpan == null) {
-      restoreSpan = GroupTraceRoot.INSTANCE.get().rootSpan().childSpan("store-restore");
-      final var otelSpan = restoreSpan.span();
-      otelSpan.setAttribute("partition", this.registration.changelogTopicPartition().toString());
-      otelSpan.setAttribute("store", this.registration.storeName());
-      otelSpan.setAttribute("task", this.taskId.toString());
+      restoreSpan = tracer.span("restore", ResponsiveTracer.Level.INFO);
     }
   }
 
   private void maybeEndRestoreSpan() {
     if (restoreSpan != null) {
-      restoreSpan.end();
+      restoreSpan.end("restore completed");
     }
   }
 }

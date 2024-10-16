@@ -95,6 +95,9 @@ public class SimpleApplication {
     final AtomicLong msgCounter = new AtomicLong(0);
     final KStream<byte[], byte[]> result = stream.mapValues((k, v) -> {
       final var msgCount = msgCounter.incrementAndGet();
+      if (msgCount % 2 == 0) {
+        throw new RuntimeException("oops");
+      }
       if (msgCount % 1000 == 0) {
         System.out.printf("received %d %s%n", msgCount, new String(v));
       }

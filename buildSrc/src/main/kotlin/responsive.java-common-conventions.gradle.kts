@@ -151,7 +151,7 @@ allprojects {
 }
 
 tasks.withType<JavaCompile> {
-    options.compilerArgs.addAll(listOf("-Xlint:all", "-Werror"))
+    options.compilerArgs.addAll(listOf("-Xlint:all,-try", "-Werror"))
 }
 
 tasks.withType<Javadoc> {

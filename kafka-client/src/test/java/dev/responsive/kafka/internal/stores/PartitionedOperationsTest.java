@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
+import dev.responsive.kafka.internal.tracing.otel.ResponsiveOtelTracer;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
@@ -64,7 +65,8 @@ class PartitionedOperationsTest {
         restoreListener,
         false,
          -1,
-        new TaskId(0, 0)
+        new TaskId(0, 0),
+        new ResponsiveOtelTracer(LoggerFactory.getLogger(PartitionedOperationsTest.class))
     );
     migrationPartitionedOperations = new PartitionedOperations(
         LOG,
@@ -78,7 +80,8 @@ class PartitionedOperationsTest {
         restoreListener,
         true,
         MIGRATE_START_TTL.toEpochMilli(),
-        new TaskId(0, 0)
+        new TaskId(0, 0),
+        new ResponsiveOtelTracer(LoggerFactory.getLogger(PartitionedOperationsTest.class))
     );
     when(registration.injectedStoreArgs()).thenReturn(new InjectedStoreArgs());
   }

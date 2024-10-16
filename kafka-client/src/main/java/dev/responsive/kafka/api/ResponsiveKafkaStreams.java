@@ -53,7 +53,7 @@ import dev.responsive.kafka.internal.metrics.exporter.MetricsExportService;
 import dev.responsive.kafka.internal.metrics.exporter.NoopMetricsExporterService;
 import dev.responsive.kafka.internal.metrics.exporter.otel.OtelMetricsService;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistry;
-import dev.responsive.kafka.internal.utils.GroupTraceExceptionHandler;
+import dev.responsive.kafka.internal.utils.ResponsiveExceptionHandler;
 import dev.responsive.kafka.internal.utils.SessionClients;
 import dev.responsive.kafka.internal.utils.SessionUtil;
 import java.time.Duration;
@@ -228,7 +228,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     responsiveStateListener = new ResponsiveStateListener(responsiveMetrics);
 
     sessionClients.initialize(responsiveMetrics, responsiveRestoreListener);
-    super.setUncaughtExceptionHandler(new GroupTraceExceptionHandler());
+    super.setUncaughtExceptionHandler(new ResponsiveExceptionHandler());
     super.setGlobalStateRestoreListener(responsiveRestoreListener);
     super.setStateListener(responsiveStateListener);
   }
@@ -307,6 +307,13 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       LOG.error(errorMsg);
       throw new ConfigException(errorMsg);
     }
+
+    // Override to false unless specifically enabled by user
+    propsWithOverrides.putIfAbsent(
+        InternalConfig.STATE_UPDATER_ENABLED,
+        false
+    );
+
 
     propsWithOverrides.putIfAbsent(
         StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG,

@@ -32,7 +32,7 @@ public class Main {
     SdkTracerProvider sdkTracerProvider = SdkTracerProvider.builder()
         .addSpanProcessor(spanProcessor)
         .setResource(Resource.getDefault().toBuilder()
-            .put(ResourceAttributes.SERVICE_NAME, "rohan-test")
+            .put(ResourceAttributes.SERVICE_NAME, "rohan-test-2")
             .build())
         .build();
     OpenTelemetrySdk openTelemetry = OpenTelemetrySdk.builder()
