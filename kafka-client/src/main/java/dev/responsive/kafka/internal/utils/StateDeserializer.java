@@ -35,10 +35,10 @@ public class StateDeserializer<K, V> {
       final Serde<V> valueSerde
   ) {
     this.changelogTopic = changelogTopic;
-    this.keyDeserializer = keySerde.deserializer();
-    this.valueDeserializer = valueSerde.deserializer();
+    this.keyDeserializer = keySerde == null ? null : keySerde.deserializer();
+    this.valueDeserializer = valueSerde == null ? null : valueSerde.deserializer();
 
-    if (isTimestamped) {
+    if (isTimestamped && valueSerde != null) {
       timestampedValueDeserializer =
           Optional.of(new ValueAndTimestampSerde<>(valueSerde).deserializer());
     } else {

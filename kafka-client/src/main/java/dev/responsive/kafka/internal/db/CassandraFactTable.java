@@ -25,6 +25,7 @@ import static dev.responsive.kafka.internal.db.ColumnName.ROW_TYPE;
 import static dev.responsive.kafka.internal.db.ColumnName.TIMESTAMP;
 import static dev.responsive.kafka.internal.db.ColumnName.TTL_SECONDS;
 import static dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration.NO_COMMITTED_OFFSET;
+import static dev.responsive.kafka.internal.utils.Utils.getValueWithTtl;
 
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
@@ -44,6 +45,7 @@ import java.util.Optional;
 import javax.annotation.CheckReturnValue;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -295,7 +297,7 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
           .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
           .setByteBuffer(DATA_VALUE.bind(), ByteBuffer.wrap(value))
           .setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(epochMillis))
-          .setLong(TTL_SECONDS.bind(), rowTtl.get().ttl().toSeconds());
+          .setLong(TTL_SECONDS.bind(), rowTtl.get().toSeconds());
     } else {
       return insert
           .bind()
@@ -307,40 +309,24 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
 
   @Override
   public byte[] get(final int kafkaPartition, final Bytes key, long streamTimeMs) {
-    BoundStatement getQuery = get
-        .bind()
-        .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()));
+    return getValueWithTtl(key, streamTimeMs, ttlResolver, minValidTs -> {
+      final BoundStatement getQuery = get
+          .bind()
+          .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
+          .setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(minValidTs));
 
-    if (ttlResolver.canComputeWithoutValue()) {
-      final TtlDuration ttl = ttlResolver.resolveTtl(key, null);
-      if (ttl.isFinite()) {
-        final long minValidTs = streamTimeMs - ttl.toMillis();
-        getQuery = getQuery.setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(minValidTs));
+      final List<Row> result = client.execute(getQuery).all();
+      if (result.size() > 1) {
+        throw new IllegalStateException("Received multiple results for the same key");
+      } else if (result.isEmpty()) {
+        return null;
+      } else {
+        return ValueAndTimestamp.make(
+            Objects.requireNonNull(result.get(0).getByteBuffer(DATA_VALUE.column())).array(),
+            result.get(0).getLong(TIMESTAMP.column())
+        );
       }
-    }
-
-    final List<Row> result = client.execute(getQuery).all();
-    if (result.size() > 1) {
-      throw new IllegalArgumentException();
-    } else if (result.isEmpty()) {
-      return null;
-    } else {
-      final byte[] value = Objects.requireNonNull(
-          result.get(0).getByteBuffer(DATA_VALUE.column())
-      ).array();
-
-      if (!ttlResolver.canComputeWithoutValue()) {
-        final TtlDuration ttl = ttlResolver.resolveTtl(key, value);
-        if (ttl.isFinite()) {
-          final long minValidTs = streamTimeMs - ttl.toMillis();
-          final long recordTs = result.get(0).getLong(TIMESTAMP.column());
-          if (recordTs < minValidTs) {
-            return null;
-          }
-        }
-      }
-      return value;
-    }
+    });
   }
 
   @Override

@@ -16,6 +16,11 @@
 
 package dev.responsive.kafka.internal.utils;
 
+import static dev.responsive.kafka.internal.db.ColumnName.TIMESTAMP;
+
+import dev.responsive.kafka.api.stores.TtlProvider.TtlDuration;
+import dev.responsive.kafka.internal.stores.TtlResolver;
+import java.util.function.Function;
 import java.util.regex.Pattern;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
@@ -129,6 +134,38 @@ public final class Utils {
 
     LOG.warn("Unable to parse the stream thread id, falling back to thread name {}", threadName);
     return threadName;
+  }
+
+  public static <K, V> byte[] getValueWithTtl(
+      final Bytes key,
+      final long streamTimeMs,
+      final TtlResolver<K, V> ttlResolver,
+      final Function<Long, ValueAndTimestamp<byte[]>> fetchRecordForMinTs
+  ) {
+    long minValidTsFromKey = 0L;
+    if (ttlResolver.canComputeWithoutValue()) {
+      final TtlDuration ttl = ttlResolver.resolveTtl(key, null);
+      if (ttl.isFinite()) {
+        minValidTsFromKey = streamTimeMs - ttl.toMillis();
+      }
+    }
+
+    final ValueAndTimestamp<byte[]> result = fetchRecordForMinTs.apply(minValidTsFromKey);
+    if (result == null) {
+      return null;
+    }
+
+    if (!ttlResolver.canComputeWithoutValue()) {
+      final TtlDuration ttl = ttlResolver.resolveTtl(key, result.value());
+      if (ttl.isFinite()) {
+        final long minValidTsFromValue = streamTimeMs - ttl.toMillis();
+        final long recordTs = result.timestamp();
+        if (recordTs < minValidTsFromValue) {
+          return null;
+        }
+      }
+    }
+    return result.value();
   }
 
   public static <D> byte[] serialize(final D data, final Serde<D> serde) {

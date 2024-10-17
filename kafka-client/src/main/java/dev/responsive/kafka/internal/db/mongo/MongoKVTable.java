@@ -18,6 +18,7 @@ package dev.responsive.kafka.internal.db.mongo;
 
 import static com.mongodb.MongoClientSettings.getDefaultCodecRegistry;
 import static dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration.NO_COMMITTED_OFFSET;
+import static dev.responsive.kafka.internal.utils.Utils.getValueWithTtl;
 import static org.bson.codecs.configuration.CodecRegistries.fromProviders;
 import static org.bson.codecs.configuration.CodecRegistries.fromRegistries;
 
@@ -39,7 +40,6 @@ import dev.responsive.kafka.internal.db.MongoKVFlushManager;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.stores.TtlResolver;
 import dev.responsive.kafka.internal.utils.Iterators;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
 import java.util.concurrent.ConcurrentHashMap;
@@ -48,6 +48,7 @@ import java.util.concurrent.TimeUnit;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.bson.codecs.configuration.CodecProvider;
 import org.bson.codecs.configuration.CodecRegistry;
 import org.bson.codecs.pojo.PojoCodecProvider;
@@ -153,11 +154,13 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
 
   @Override
   public byte[] get(final int kafkaPartition, final Bytes key, final long streamTimeMs) {
-    final KVDoc v = docs.find(Filters.and(
-        Filters.eq(KVDoc.ID, keyCodec.encode(key)),
-        Filters.gte(KVDoc.TIMESTAMP, streamTimeMs)
-    )).first();
-    return v == null ? null : v.getValue();
+    return getValueWithTtl(key, streamTimeMs, ttlResolver, minValidTs -> {
+      final KVDoc v = docs.find(Filters.and(
+          Filters.eq(KVDoc.ID, keyCodec.encode(key)),
+          Filters.gte(KVDoc.TIMESTAMP, minValidTs)
+      )).first();
+      return v == null ? null : ValueAndTimestamp.make(v.getValue(), v.timestamp);
+    });
   }
 
   @Override
@@ -167,15 +170,19 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
       final Bytes to,
       final long streamTimeMs
   ) {
+    // TODO(sophie): filter by minValidTs if based on key or default only
+    final long minValidTs = 0L;
     final FindIterable<KVDoc> result = docs.find(
         Filters.and(
             Filters.gte(KVDoc.ID, keyCodec.encode(from)),
             Filters.lte(KVDoc.ID, keyCodec.encode(to)),
             Filters.not(Filters.exists(KVDoc.TOMBSTONE_TS)),
-            Filters.gte(KVDoc.TIMESTAMP, streamTimeMs),
+            Filters.gte(KVDoc.TIMESTAMP, minValidTs),
             Filters.eq(KVDoc.KAFKA_PARTITION, kafkaPartition)
         )
     );
+    // TODO(sophie): filter by minValidTs if based on value
+
     return Iterators.kv(
         result.iterator(),
         doc -> new KeyValue<>(
@@ -218,7 +225,8 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
             Updates.set(KVDoc.EPOCH, epoch),
             Updates.set(KVDoc.TIMESTAMP, epochMillis),
             Updates.set(KVDoc.KAFKA_PARTITION, kafkaPartition),
-            Updates.unset(KVDoc.TOMBSTONE_TS)
+            Updates.unset(KVDoc.TOMBSTONE_TS),
+            Updates.
         ),
         new UpdateOptions().upsert(true)
     );
