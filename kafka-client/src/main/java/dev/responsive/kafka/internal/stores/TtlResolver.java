@@ -19,30 +19,51 @@ package dev.responsive.kafka.internal.stores;
 import dev.responsive.kafka.api.stores.TtlProvider;
 import dev.responsive.kafka.api.stores.TtlProvider.TtlDuration;
 import dev.responsive.kafka.internal.utils.StateDeserializer;
-import org.apache.kafka.common.serialization.Serde;
+import java.util.Optional;
 import org.apache.kafka.common.utils.Bytes;
 
 public class TtlResolver<K, V> {
+
+  public static final TtlResolver<?, ?> NO_TTL = new TtlResolver<Object, Object>(
+      false, "ignored", TtlProvider.withInfiniteDefault()
+  );
 
   private final StateDeserializer<K, V> stateDeserializer;
   private final TtlProvider<K, V> ttlProvider;
 
   public TtlResolver(
+      final boolean isTimestamped,
       final String changelogTopic,
-      final Serde<K> keySerde,
-      final Serde<V> valueSerde,
       final TtlProvider<K, V> ttlProvider
   ) {
     this.stateDeserializer = new StateDeserializer<>(
+        isTimestamped,
         changelogTopic,
-        keySerde.deserializer(),
-        valueSerde.deserializer()
+        ttlProvider.keySerde(),
+        ttlProvider.valueSerde()
     );
     this.ttlProvider = ttlProvider;
   }
 
-  public TtlDuration resolveTtl(final Bytes keyBytes, final byte[] valueBytes) {
+  public TtlDuration defaultTtl() {
+    return ttlProvider.defaultTtl();
+  }
+
+  public boolean hasConstantTtl() {
+    return ttlProvider.hasConstantTtl();
+  }
+
+  public boolean canComputeWithoutValue() {
+    return ttlProvider.canComputeWithoutValue();
+  }
+
+  public Optional<TtlDuration> computeTtl(final Bytes keyBytes, final byte[] valueBytes) {
     return ttlProvider.computeTtl(keyBytes.get(), valueBytes, stateDeserializer);
+  }
+
+  public TtlDuration resolveTtl(final Bytes keyBytes, final byte[] valueBytes) {
+    final Optional<TtlDuration> ttl = computeTtl(keyBytes, valueBytes);
+    return ttl.orElse(defaultTtl());
   }
 
 }

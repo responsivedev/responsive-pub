@@ -52,7 +52,7 @@ public class ResponsiveKeyValueBytesStoreSupplier implements KeyValueBytesStoreS
     if (isTimestamped) {
       return new ResponsiveTimestampedKeyValueStore(params);
     } else {
-      return new ResponsiveKeyValueStore(params);
+      return new ResponsiveKeyValueStore(params, false);
     }
   }
 

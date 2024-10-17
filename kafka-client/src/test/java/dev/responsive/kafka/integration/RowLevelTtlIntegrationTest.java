@@ -158,7 +158,8 @@ public class RowLevelTtlIntegrationTest {
       return Collections.singleton(ResponsiveStores.keyValueStoreBuilder(
           ResponsiveStores.keyValueStore(
               ResponsiveKeyValueParams.fact(STORE_NAME).withTtlProvider(
-                  TtlProvider.withDefaultTtl(DEFAULT_TTL).withKeyBasedTtl(k -> ttlForKey(k))
+                  TtlProvider.<String, Object>withDefault(DEFAULT_TTL)
+                      .fromKey(RowLevelTtlIntegrationTest::ttlForKey, Serdes.String())
               )),
           Serdes.String(),
           Serdes.String()
@@ -167,7 +168,7 @@ public class RowLevelTtlIntegrationTest {
   }
 
   private static Optional<TtlDuration> ttlForKey(final String key) {
-
+    return Optional.empty(); //TODO(sophie): fill me out
   }
 
   private static class TtlProcessor implements Processor<String, String, String, String> {

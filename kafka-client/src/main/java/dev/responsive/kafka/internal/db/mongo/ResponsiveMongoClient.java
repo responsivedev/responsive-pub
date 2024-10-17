@@ -28,8 +28,7 @@ import dev.responsive.kafka.internal.db.WindowedTableCache;
 import dev.responsive.kafka.internal.db.partitioning.SessionSegmentPartitioner;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.db.partitioning.WindowSegmentPartitioner;
-import dev.responsive.kafka.internal.db.spec.BaseTableSpec;
-import dev.responsive.kafka.internal.db.spec.TtlTableSpec;
+import dev.responsive.kafka.internal.db.spec.DefaultCassandraTableSpec;
 import dev.responsive.kafka.internal.stores.TtlResolver;
 import java.util.concurrent.TimeoutException;
 
@@ -51,7 +50,7 @@ public class ResponsiveMongoClient {
             client,
             spec.tableName(),
             collectionCreationOptions,
-            spec instanceof TtlTableSpec ? ((TtlTableSpec) spec).ttl() : null
+            spec.ttlResolver()
         ));
     windowTableCache = new WindowedTableCache<>(
         (spec, partitioner) -> new MongoWindowedTable(
@@ -78,7 +77,7 @@ public class ResponsiveMongoClient {
       final TtlResolver<?, ?> ttlResolver
   ) throws InterruptedException, TimeoutException {
     return kvTableCache.create(
-        new BaseTableSpec(name, TablePartitioner.defaultPartitioner(), ttlResolver)
+        new DefaultCassandraTableSpec(name, TablePartitioner.defaultPartitioner(), ttlResolver)
     );
   }
 
@@ -86,14 +85,14 @@ public class ResponsiveMongoClient {
       final String name,
       final WindowSegmentPartitioner partitioner
   ) throws InterruptedException, TimeoutException {
-    return windowTableCache.create(new BaseTableSpec(name, partitioner, null), partitioner);
+    return windowTableCache.create(new DefaultCassandraTableSpec(name, partitioner, null), partitioner);
   }
 
   public RemoteSessionTable<WriteModel<SessionDoc>> sessionTable(
       final String name,
       final SessionSegmentPartitioner partitioner
   ) throws InterruptedException, TimeoutException {
-    return sessionTableCache.create(new BaseTableSpec(name, partitioner, null), partitioner);
+    return sessionTableCache.create(new DefaultCassandraTableSpec(name, partitioner, null), partitioner);
   }
 
   public void close() {

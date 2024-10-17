@@ -39,13 +39,13 @@ public class InMemoryKVTable implements RemoteKVTable<Object> {
   }
 
   @Override
-  public byte[] get(final int kafkaPartition, final Bytes key, final long minValidTs) {
+  public byte[] get(final int kafkaPartition, final Bytes key, final long streamTimeMs) {
     checkKafkaPartition(kafkaPartition);
     final var value = store.get(key);
     if (value == null) {
       return null;
     }
-    if (value.epochMillis() < minValidTs) {
+    if (value.epochMillis() < streamTimeMs) {
       return null;
     }
     return value.value();
@@ -56,7 +56,7 @@ public class InMemoryKVTable implements RemoteKVTable<Object> {
       final int kafkaPartition,
       final Bytes from,
       final Bytes to,
-      final long minValidTs
+      final long streamTimeMs
   ) {
     checkKafkaPartition(kafkaPartition);
     final var iter = store
@@ -64,14 +64,14 @@ public class InMemoryKVTable implements RemoteKVTable<Object> {
         .headMap(to, true)
         .entrySet()
         .iterator();
-    return iteratorWithTimeFilter(iter, minValidTs);
+    return iteratorWithTimeFilter(iter, streamTimeMs);
   }
 
   @Override
-  public KeyValueIterator<Bytes, byte[]> all(final int kafkaPartition, final long minValidTs) {
+  public KeyValueIterator<Bytes, byte[]> all(final int kafkaPartition, final long streamTimeMs) {
     checkKafkaPartition(kafkaPartition);
     final var iter = store.entrySet().iterator();
-    return iteratorWithTimeFilter(iter, minValidTs);
+    return iteratorWithTimeFilter(iter, streamTimeMs);
   }
 
   @Override

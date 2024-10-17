@@ -67,9 +67,10 @@ import dev.responsive.kafka.internal.db.mongo.CollectionCreationOptions;
 import dev.responsive.kafka.internal.db.mongo.MongoKVTable;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
-import dev.responsive.kafka.internal.db.spec.BaseTableSpec;
+import dev.responsive.kafka.internal.db.spec.DefaultCassandraTableSpec;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.stores.SchemaTypes.KVSchema;
+import dev.responsive.kafka.internal.stores.TtlResolver;
 import dev.responsive.kafka.internal.utils.SessionUtil;
 import dev.responsive.kafka.testutils.IntegrationTestUtils;
 import dev.responsive.kafka.testutils.IntegrationTestUtils.MockResponsiveKafkaStreams;
@@ -376,11 +377,15 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
               changelog.topic()
           );
           table = cassandraClient.kvFactory()
-              .create(new BaseTableSpec(aggName(), partitioner));
+              .create(new DefaultCassandraTableSpec(aggName(), partitioner, TtlResolver.NO_TTL));
           break;
         case FACT:
           table = cassandraClient.factFactory()
-              .create(new BaseTableSpec(aggName(), TablePartitioner.defaultPartitioner()));
+              .create(new DefaultCassandraTableSpec(
+                  aggName(),
+                  TablePartitioner.defaultPartitioner(),
+                  TtlResolver.NO_TTL
+              ));
           break;
         default:
           throw new IllegalArgumentException("Unexpected type " + type);

@@ -16,21 +16,34 @@
 
 package dev.responsive.kafka.internal.utils;
 
+import java.util.Optional;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.internals.ValueAndTimestampSerde;
 
 public class StateDeserializer<K, V> {
   private final String changelogTopic;
   private final Deserializer<K> keyDeserializer;
   private final Deserializer<V> valueDeserializer;
+  private final Optional<Deserializer<ValueAndTimestamp<V>>> timestampedValueDeserializer;
 
   public StateDeserializer(
+      final boolean isTimestamped,
       final String changelogTopic,
-      final Deserializer<K> keyDeserializer,
-      final Deserializer<V> valueDeserializer
+      final Serde<K> keySerde,
+      final Serde<V> valueSerde
   ) {
     this.changelogTopic = changelogTopic;
-    this.keyDeserializer = keyDeserializer;
-    this.valueDeserializer = valueDeserializer;
+    this.keyDeserializer = keySerde.deserializer();
+    this.valueDeserializer = valueSerde.deserializer();
+
+    if (isTimestamped) {
+      timestampedValueDeserializer =
+          Optional.of(new ValueAndTimestampSerde<>(valueSerde).deserializer());
+    } else {
+      timestampedValueDeserializer = Optional.empty();
+    }
   }
 
   public K keyFrom(final byte[] keyBytes) {
@@ -38,6 +51,10 @@ public class StateDeserializer<K, V> {
   }
 
   public V valueFrom(final byte[] valueBytes) {
-    return valueDeserializer.deserialize(changelogTopic, valueBytes);
+    if (timestampedValueDeserializer.isEmpty()) {
+      return valueDeserializer.deserialize(changelogTopic, valueBytes);
+    } else {
+      return timestampedValueDeserializer.get().deserialize(changelogTopic, valueBytes).value();
+    }
   }
 }

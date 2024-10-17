@@ -37,6 +37,7 @@ import com.mongodb.client.model.WriteModel;
 import com.mongodb.client.result.UpdateResult;
 import dev.responsive.kafka.internal.db.MongoKVFlushManager;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
+import dev.responsive.kafka.internal.stores.TtlResolver;
 import dev.responsive.kafka.internal.utils.Iterators;
 import java.time.Duration;
 import java.time.Instant;
@@ -61,6 +62,7 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
 
   private final String name;
   private final KeyCodec keyCodec;
+  private final TtlResolver<?, ?> ttlResolver;
   private final MongoCollection<KVDoc> docs;
   private final MongoCollection<KVMetadataDoc> metadata;
 
@@ -78,10 +80,11 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
       final MongoClient client,
       final String name,
       final CollectionCreationOptions collectionCreationOptions,
-      final Duration ttl
+      final TtlResolver<?, ?> ttlResolver
   ) {
     this.name = name;
     this.keyCodec = new StringKeyCodec();
+    this.ttlResolver = ttlResolver;
     final CodecProvider pojoCodecProvider = PojoCodecProvider.builder().automatic(true).build();
     final CodecRegistry pojoCodecRegistry = fromRegistries(
         getDefaultCodecRegistry(),
@@ -109,9 +112,8 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
         Indexes.descending(KVDoc.TOMBSTONE_TS),
         new IndexOptions().expireAfter(12L, TimeUnit.HOURS)
     );
-    if (ttl != null) {
-      final Duration expireAfter = ttl.plus(Duration.ofHours(12));
-      final long expireAfterSeconds = expireAfter.getSeconds();
+    if (ttlResolver.defaultTtl().isFinite()) {
+      final long expireAfterSeconds = ttlResolver.defaultTtl().toSeconds();
       docs.createIndex(
           Indexes.descending(KVDoc.TIMESTAMP),
           new IndexOptions().expireAfter(expireAfterSeconds, TimeUnit.SECONDS)
@@ -150,10 +152,10 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
   }
 
   @Override
-  public byte[] get(final int kafkaPartition, final Bytes key, final long minValidTs) {
+  public byte[] get(final int kafkaPartition, final Bytes key, final long streamTimeMs) {
     final KVDoc v = docs.find(Filters.and(
         Filters.eq(KVDoc.ID, keyCodec.encode(key)),
-        Filters.gte(KVDoc.TIMESTAMP, minValidTs)
+        Filters.gte(KVDoc.TIMESTAMP, streamTimeMs)
     )).first();
     return v == null ? null : v.getValue();
   }
@@ -163,14 +165,14 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
       final int kafkaPartition,
       final Bytes from,
       final Bytes to,
-      final long minValidTs
+      final long streamTimeMs
   ) {
     final FindIterable<KVDoc> result = docs.find(
         Filters.and(
             Filters.gte(KVDoc.ID, keyCodec.encode(from)),
             Filters.lte(KVDoc.ID, keyCodec.encode(to)),
             Filters.not(Filters.exists(KVDoc.TOMBSTONE_TS)),
-            Filters.gte(KVDoc.TIMESTAMP, minValidTs),
+            Filters.gte(KVDoc.TIMESTAMP, streamTimeMs),
             Filters.eq(KVDoc.KAFKA_PARTITION, kafkaPartition)
         )
     );
@@ -183,10 +185,10 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
   }
 
   @Override
-  public KeyValueIterator<Bytes, byte[]> all(final int kafkaPartition, final long minValidTs) {
+  public KeyValueIterator<Bytes, byte[]> all(final int kafkaPartition, final long streamTimeMs) {
     final FindIterable<KVDoc> result = docs.find(Filters.and(
         Filters.not(Filters.exists(KVDoc.TOMBSTONE_TS)),
-        Filters.gte(KVDoc.TIMESTAMP, minValidTs),
+        Filters.gte(KVDoc.TIMESTAMP, streamTimeMs),
         Filters.eq(KVDoc.KAFKA_PARTITION, kafkaPartition)
     ));
     return Iterators.kv(

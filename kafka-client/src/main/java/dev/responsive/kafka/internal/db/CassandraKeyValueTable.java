@@ -39,7 +39,7 @@ import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
 import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
 import com.datastax.oss.driver.api.querybuilder.schema.CreateTableWithOptions;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
-import dev.responsive.kafka.internal.db.spec.RemoteTableSpec;
+import dev.responsive.kafka.internal.db.spec.CassandraTableSpec;
 import dev.responsive.kafka.internal.utils.Iterators;
 import java.nio.ByteBuffer;
 import java.time.Duration;
@@ -77,7 +77,7 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
   private final PreparedStatement ensureEpoch;
 
   public static CassandraKeyValueTable create(
-      final RemoteTableSpec spec,
+      final CassandraTableSpec spec,
       final CassandraClient client
   ) throws InterruptedException, TimeoutException {
     final String name = spec.tableName();
@@ -338,7 +338,7 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
   public byte[] get(
       final int kafkaPartition,
       final Bytes key,
-      final long minValidTs
+      final long streamTimeMs
   ) {
     final int tablePartition = partitioner.tablePartition(kafkaPartition, key);
 
@@ -346,7 +346,7 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
         .bind()
         .setInt(PARTITION_KEY.bind(), tablePartition)
         .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
-        .setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(minValidTs));
+        .setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(streamTimeMs));
 
     final List<Row> result = client.execute(get).all();
     if (result.size() > 1) {
@@ -364,7 +364,7 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
       final int kafkaPartition,
       final Bytes from,
       final Bytes to,
-      final long minValidTs
+      final long streamTimeMs
   ) {
     // TODO: explore more efficient ways to serve bounded range queries, for now we have to
     //  iterate over all subpartitions and merge the results since we don't know which subpartitions
@@ -378,7 +378,7 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
           .setInt(PARTITION_KEY.bind(), partition)
           .setByteBuffer(FROM_BIND, ByteBuffer.wrap(from.get()))
           .setByteBuffer(TO_BIND, ByteBuffer.wrap(to.get()))
-          .setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(minValidTs));
+          .setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(streamTimeMs));
 
       final ResultSet result = client.execute(range);
       resultsPerPartition.add(Iterators.kv(result.iterator(), CassandraKeyValueTable::rows));
@@ -389,14 +389,14 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
   @Override
   public KeyValueIterator<Bytes, byte[]> all(
       final int kafkaPartition,
-      final long minValidTs
+      final long streamTimeMs
   ) {
     final List<KeyValueIterator<Bytes, byte[]>> resultsPerPartition = new LinkedList<>();
     for (final int partition : partitioner.allTablePartitions(kafkaPartition)) {
       final BoundStatement range = this.all
           .bind()
           .setInt(PARTITION_KEY.bind(), partition)
-          .setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(minValidTs));
+          .setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(streamTimeMs));
 
       final ResultSet result = client.execute(range);
       resultsPerPartition.add(Iterators.kv(result.iterator(), CassandraKeyValueTable::rows));

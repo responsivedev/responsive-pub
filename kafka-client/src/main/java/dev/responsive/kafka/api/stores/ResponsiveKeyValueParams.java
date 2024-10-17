@@ -17,7 +17,6 @@
 package dev.responsive.kafka.api.stores;
 
 import dev.responsive.kafka.internal.stores.SchemaTypes.KVSchema;
-import dev.responsive.kafka.internal.stores.TtlResolver;
 import dev.responsive.kafka.internal.utils.TableName;
 import java.time.Duration;
 import java.util.Optional;
@@ -28,9 +27,7 @@ public final class ResponsiveKeyValueParams {
   private final TableName name;
   private final KVSchema schema;
 
-  private TtlProvider ttlProvider = TtlProvider.withInfiniteDefaultTtl();
-  private Serde<?> keySerde;
-  private Serde<?> valueSerde;
+  private TtlProvider<?, ?> ttlProvider = TtlProvider.withInfiniteDefault();
 
   private ResponsiveKeyValueParams(
       final String name,
@@ -49,8 +46,7 @@ public final class ResponsiveKeyValueParams {
   }
 
   public ResponsiveKeyValueParams withTimeToLive(final Duration timeToLive) {
-    this.ttlProvider = TtlProvider.withDefaultTtl(timeToLive);
-    return this;
+    return withTtlProvider(TtlProvider.withDefault(timeToLive));
   }
 
   public ResponsiveKeyValueParams withTtlProvider(final TtlProvider<?, ?> ttlProvider) {
@@ -72,19 +68,6 @@ public final class ResponsiveKeyValueParams {
 
   public Optional<Duration> timeToLive() {
     return Optional.ofNullable(ttlProvider.defaultTtl().ttl());
-  }
-
-  public void setKeyAndValueSerdes(final Serde<?> keySerde, final Serde<?> valueSerde) {
-    this.keySerde = keySerde;
-    this.valueSerde = valueSerde;
-  }
-
-  public Serde<?> keySerde() {
-    return keySerde;
-  }
-
-  public Serde<?> valueSerde() {
-    return valueSerde;
   }
 
 }

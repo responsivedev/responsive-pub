@@ -42,10 +42,9 @@ import com.datastax.oss.driver.api.core.type.DataTypes;
 import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
 import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
 import com.datastax.oss.driver.api.querybuilder.schema.CreateTableWithOptions;
-import com.datastax.oss.driver.internal.querybuilder.schema.compaction.DefaultLeveledCompactionStrategy;
 import dev.responsive.kafka.internal.db.partitioning.Segmenter;
 import dev.responsive.kafka.internal.db.partitioning.WindowSegmentPartitioner;
-import dev.responsive.kafka.internal.db.spec.RemoteTableSpec;
+import dev.responsive.kafka.internal.db.spec.CassandraTableSpec;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
 import dev.responsive.kafka.internal.utils.Iterators;
 import dev.responsive.kafka.internal.utils.WindowedKey;
@@ -97,7 +96,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
   private final PreparedStatement ensureEpoch;
 
   public static CassandraWindowedTable create(
-      final RemoteTableSpec spec,
+      final CassandraTableSpec spec,
       final CassandraClient client,
       final WindowSegmentPartitioner partitioner
   ) throws InterruptedException, TimeoutException {
@@ -425,8 +424,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
         .withColumn(DATA_VALUE.column(), DataTypes.BLOB)
         .withColumn(OFFSET.column(), DataTypes.BIGINT)
         .withColumn(EPOCH.column(), DataTypes.BIGINT)
-        .withColumn(STREAM_TIME.column(), DataTypes.BIGINT)
-        .withCompaction(new DefaultLeveledCompactionStrategy()); // TODO: create a LCSTableSpec?
+        .withColumn(STREAM_TIME.column(), DataTypes.BIGINT);
   }
 
   public CassandraWindowedTable(

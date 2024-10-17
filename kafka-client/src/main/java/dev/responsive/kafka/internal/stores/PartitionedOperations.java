@@ -27,7 +27,6 @@ import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.ResponsiveMode;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
-import dev.responsive.kafka.api.stores.TtlProvider;
 import dev.responsive.kafka.internal.config.ConfigUtils;
 import dev.responsive.kafka.internal.db.BatchFlusher;
 import dev.responsive.kafka.internal.db.BytesKeySpec;
@@ -51,7 +50,6 @@ import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.StateStoreContext;
@@ -78,6 +76,7 @@ public class PartitionedOperations implements KeyValueOperations {
 
   public static PartitionedOperations create(
       final TableName name,
+      final boolean isTimestamped,
       final StateStoreContext storeContext,
       final ResponsiveKeyValueParams params
   ) throws InterruptedException, TimeoutException {
@@ -99,11 +98,10 @@ public class PartitionedOperations implements KeyValueOperations {
         context.taskId().partition()
     );
 
-    final TtlResolver<?, ?> ttlResolver = new TtlResolver<Object, Object>(
+    final TtlResolver<?, ?> ttlResolver = new TtlResolver<>(
+        isTimestamped,
         changelog.topic(),
-        (Serde<Object>) params.keySerde(),
-        (Serde<Object>) params.valueSerde(),
-        (TtlProvider<Object, Object>) params.ttlProvider()
+        params.ttlProvider()
     );
 
     final RemoteKVTable<?> table;
@@ -160,10 +158,10 @@ public class PartitionedOperations implements KeyValueOperations {
       storeRegistry.registerStore(registration);
 
       final boolean migrationMode = ConfigUtils.responsiveMode(config) == ResponsiveMode.MIGRATE;
-      long startingTimestamp = -1;
-      final Optional<Duration> ttl = params.timeToLive();
-      if (migrationMode && ttl.isPresent()) {
-        startingTimestamp = Instant.now().minus(ttl.get()).toEpochMilli();
+      long startTimeMs = -1;
+      if (migrationMode && params.ttlProvider().hasTtl()) {
+        // TODO(sophie): figure out how to account for row-level ttl in migration mode
+        startTimeMs = System.currentTimeMillis() - params.ttlProvider().defaultTtl().toMillis();
       }
 
       return new PartitionedOperations(
@@ -177,7 +175,7 @@ public class PartitionedOperations implements KeyValueOperations {
           registration,
           sessionClients.restoreListener(),
           migrationMode,
-          startingTimestamp
+          startTimeMs
       );
     } catch (final RuntimeException e) {
       if (buffer != null) {
@@ -311,7 +309,7 @@ public class PartitionedOperations implements KeyValueOperations {
     return table.get(
         changelog.partition(),
         key,
-        minValidTimestamp()
+        currentRecordTimestamp()
     );
   }
 
@@ -331,7 +329,7 @@ public class PartitionedOperations implements KeyValueOperations {
 
     return new LocalRemoteKvIterator<>(
         buffer.range(from, to),
-        table.range(changelog.partition(), from, to, minValidTimestamp())
+        table.range(changelog.partition(), from, to, currentRecordTimestamp())
     );
   }
 
@@ -345,7 +343,7 @@ public class PartitionedOperations implements KeyValueOperations {
   public KeyValueIterator<Bytes, byte[]> all() {
     return new LocalRemoteKvIterator<>(
         buffer.all(),
-        table.all(changelog.partition(), minValidTimestamp())
+        table.all(changelog.partition(), currentRecordTimestamp())
     );
   }
 
@@ -380,14 +378,6 @@ public class PartitionedOperations implements KeyValueOperations {
       return injectedClock.get().get();
     }
     return context.timestamp();
-  }
-
-  private long minValidTimestamp() {
-    // TODO: unwrapping the ttl from Duration to millis is somewhat heavy for the hot path
-    return params
-        .timeToLive()
-        .map(ttl -> currentRecordTimestamp() - ttl.toMillis())
-        .orElse(-1L);
   }
 
   private boolean migratingAndTimestampTooEarly() {
