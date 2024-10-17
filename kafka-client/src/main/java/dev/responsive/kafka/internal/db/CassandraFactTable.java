@@ -23,7 +23,9 @@ import static dev.responsive.kafka.internal.db.ColumnName.OFFSET;
 import static dev.responsive.kafka.internal.db.ColumnName.PARTITION_KEY;
 import static dev.responsive.kafka.internal.db.ColumnName.ROW_TYPE;
 import static dev.responsive.kafka.internal.db.ColumnName.TIMESTAMP;
+import static dev.responsive.kafka.internal.db.ColumnName.TTL_SECONDS;
 import static dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration.NO_COMMITTED_OFFSET;
+import static dev.responsive.kafka.internal.utils.Utils.getValueWithTtl;
 
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
@@ -32,27 +34,32 @@ import com.datastax.oss.driver.api.core.type.DataTypes;
 import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
 import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
 import com.datastax.oss.driver.api.querybuilder.schema.CreateTableWithOptions;
-import dev.responsive.kafka.internal.db.spec.RemoteTableSpec;
+import dev.responsive.kafka.api.stores.TtlProvider.TtlDuration;
+import dev.responsive.kafka.internal.db.spec.CassandraTableSpec;
+import dev.responsive.kafka.internal.stores.TtlResolver;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import javax.annotation.CheckReturnValue;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
 
-  private static final Logger LOG = LoggerFactory.getLogger(
-      CassandraFactTable.class);
+  private static final Logger LOG = LoggerFactory.getLogger(CassandraFactTable.class);
 
   private final String name;
   private final CassandraClient client;
+  private final TtlResolver<?, ?> ttlResolver;
 
   private final PreparedStatement get;
   private final PreparedStatement insert;
+  private final PreparedStatement insertWithTtl;
   private final PreparedStatement delete;
   private final PreparedStatement fetchOffset;
   private final PreparedStatement setOffset;
@@ -60,29 +67,34 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
   public CassandraFactTable(
       final String name,
       final CassandraClient client,
+      final TtlResolver<?, ?> ttlResolver,
       final PreparedStatement get,
       final PreparedStatement insert,
+      final PreparedStatement insertWithTtl,
       final PreparedStatement delete,
       final PreparedStatement fetchOffset,
       final PreparedStatement setOffset
   ) {
     this.name = name;
     this.client = client;
+    this.ttlResolver = ttlResolver;
     this.get = get;
     this.insert = insert;
+    this.insertWithTtl = insertWithTtl;
     this.delete = delete;
     this.fetchOffset = fetchOffset;
     this.setOffset = setOffset;
   }
 
   public static CassandraFactTable create(
-      final RemoteTableSpec spec,
+      final CassandraTableSpec spec,
       final CassandraClient client
   ) {
     final String name = spec.tableName();
     LOG.info("Creating fact data table {} in remote store.", name);
 
-    final CreateTableWithOptions createTable = spec.applyOptions(createTable(name));
+    final TtlResolver<?, ?> ttlResolver = spec.ttlResolver();
+    final CreateTableWithOptions createTable = spec.applyOptions(createTable(name, ttlResolver));
 
     // separate metadata from the main table for the fact schema, this is acceptable
     // because we don't use the metadata at all for fencing operations and writes to
@@ -107,6 +119,18 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
             .value(DATA_KEY.column(), bindMarker(DATA_KEY.bind()))
             .value(TIMESTAMP.column(), bindMarker(TIMESTAMP.bind()))
             .value(DATA_VALUE.column(), bindMarker(DATA_VALUE.bind()))
+            .build(),
+        QueryOp.WRITE
+    );
+
+    final var insertWithTtl = client.prepare(
+        QueryBuilder
+            .insertInto(name)
+            .value(ROW_TYPE.column(), RowType.DATA_ROW.literal())
+            .value(DATA_KEY.column(), bindMarker(DATA_KEY.bind()))
+            .value(TIMESTAMP.column(), bindMarker(TIMESTAMP.bind()))
+            .value(DATA_VALUE.column(), bindMarker(DATA_VALUE.bind()))
+            .usingTtl(bindMarker(TTL_SECONDS.bind()))
             .build(),
         QueryOp.WRITE
     );
@@ -157,22 +181,33 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
     return new CassandraFactTable(
         name,
         client,
+        ttlResolver,
         get,
         insert,
+        insertWithTtl,
         delete,
         fetchOffset,
         setOffset
     );
   }
 
-  private static CreateTableWithOptions createTable(final String tableName) {
-    return SchemaBuilder
+  private static CreateTableWithOptions createTable(
+      final String tableName,
+      final TtlResolver<?, ?> ttlResolver
+  ) {
+    final var baseOptions = SchemaBuilder
         .createTable(tableName)
         .ifNotExists()
         .withPartitionKey(ROW_TYPE.column(), DataTypes.TINYINT)
         .withPartitionKey(DATA_KEY.column(), DataTypes.BLOB)
         .withColumn(TIMESTAMP.column(), DataTypes.TIMESTAMP)
         .withColumn(DATA_VALUE.column(), DataTypes.BLOB);
+
+    if (ttlResolver.defaultTtl().isFinite()) {
+      return baseOptions.withDefaultTimeToLiveSeconds(ttlResolver.defaultTtl().toSeconds());
+    } else {
+      return baseOptions;
+    }
   }
 
   @Override
@@ -253,29 +288,45 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
       final byte[] value,
       final long epochMillis
   ) {
-    return insert
-        .bind()
-        .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
-        .setByteBuffer(DATA_VALUE.bind(), ByteBuffer.wrap(value))
-        .setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(epochMillis));
+    final Optional<TtlDuration> rowTtl = ttlResolver.computeTtl(key, value);
+
+    // if rowTtl is infinite but default ttl is finite, setting the ttl to 0 will remove it
+    if (rowTtl.isPresent() && (rowTtl.get().isFinite() || ttlResolver.defaultTtl().isFinite())) {
+      return insertWithTtl
+          .bind()
+          .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
+          .setByteBuffer(DATA_VALUE.bind(), ByteBuffer.wrap(value))
+          .setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(epochMillis))
+          .setLong(TTL_SECONDS.bind(), rowTtl.get().toSeconds());
+    } else {
+      return insert
+          .bind()
+          .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
+          .setByteBuffer(DATA_VALUE.bind(), ByteBuffer.wrap(value))
+          .setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(epochMillis));
+    }
   }
 
   @Override
-  public byte[] get(final int kafkaPartition, final Bytes key, long minValidTs) {
-    final BoundStatement get = this.get
-        .bind()
-        .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
-        .setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(minValidTs));
+  public byte[] get(final int kafkaPartition, final Bytes key, long streamTimeMs) {
+    return getValueWithTtl(key, streamTimeMs, ttlResolver, minValidTs -> {
+      final BoundStatement getQuery = get
+          .bind()
+          .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
+          .setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(minValidTs));
 
-    final List<Row> result = client.execute(get).all();
-    if (result.size() > 1) {
-      throw new IllegalArgumentException();
-    } else if (result.isEmpty()) {
-      return null;
-    } else {
-      final ByteBuffer value = result.get(0).getByteBuffer(DATA_VALUE.column());
-      return Objects.requireNonNull(value).array();
-    }
+      final List<Row> result = client.execute(getQuery).all();
+      if (result.size() > 1) {
+        throw new IllegalStateException("Received multiple results for the same key");
+      } else if (result.isEmpty()) {
+        return null;
+      } else {
+        return ValueAndTimestamp.make(
+            Objects.requireNonNull(result.get(0).getByteBuffer(DATA_VALUE.column())).array(),
+            result.get(0).getLong(TIMESTAMP.column())
+        );
+      }
+    });
   }
 
   @Override
@@ -283,14 +334,16 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
       final int kafkaPartition,
       final Bytes from,
       final Bytes to,
-      long minValidTs) {
+      long streamTimeMs
+  ) {
     throw new UnsupportedOperationException("range scans are not supported on fact tables.");
   }
 
   @Override
   public KeyValueIterator<Bytes, byte[]> all(
       final int kafkaPartition,
-      long minValidTs) {
+      long streamTimeMs
+  ) {
     throw new UnsupportedOperationException("all is not supported on fact tables");
   }
 

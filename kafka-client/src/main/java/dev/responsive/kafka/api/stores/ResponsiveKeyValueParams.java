@@ -20,14 +20,14 @@ import dev.responsive.kafka.internal.stores.SchemaTypes.KVSchema;
 import dev.responsive.kafka.internal.utils.TableName;
 import java.time.Duration;
 import java.util.Optional;
-import javax.annotation.Nullable;
+import org.apache.kafka.common.serialization.Serde;
 
 public final class ResponsiveKeyValueParams {
 
   private final TableName name;
   private final KVSchema schema;
 
-  @Nullable private Duration timeToLive = null;
+  private TtlProvider<?, ?> ttlProvider = TtlProvider.withInfiniteDefault();
 
   private ResponsiveKeyValueParams(
       final String name,
@@ -46,7 +46,11 @@ public final class ResponsiveKeyValueParams {
   }
 
   public ResponsiveKeyValueParams withTimeToLive(final Duration timeToLive) {
-    this.timeToLive = timeToLive;
+    return withTtlProvider(TtlProvider.withDefault(timeToLive));
+  }
+
+  public ResponsiveKeyValueParams withTtlProvider(final TtlProvider<?, ?> ttlProvider) {
+    this.ttlProvider = ttlProvider;
     return this;
   }
 
@@ -58,8 +62,12 @@ public final class ResponsiveKeyValueParams {
     return schema;
   }
 
+  public TtlProvider<?, ?> ttlProvider() {
+    return ttlProvider;
+  }
+
   public Optional<Duration> timeToLive() {
-    return Optional.ofNullable(timeToLive);
+    return Optional.ofNullable(ttlProvider.defaultTtl().ttl());
   }
 
 }

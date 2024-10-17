@@ -17,11 +17,10 @@
 package dev.responsive.kafka.internal.db;
 
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
+import dev.responsive.kafka.api.stores.TtlProvider.TtlDuration;
 import dev.responsive.kafka.internal.clients.TTDCassandraClient;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
-import dev.responsive.kafka.internal.db.spec.DelegatingTableSpec;
-import dev.responsive.kafka.internal.db.spec.RemoteTableSpec;
-import dev.responsive.kafka.internal.db.spec.TtlTableSpec;
+import dev.responsive.kafka.internal.db.spec.CassandraTableSpec;
 import dev.responsive.kafka.internal.stores.KVStoreStub;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
 import java.time.Duration;
@@ -34,26 +33,22 @@ public class TTDKeyValueTable extends TTDTable<Bytes> implements RemoteKVTable<B
   private final KVStoreStub stub;
 
   public static TTDKeyValueTable create(
-      final RemoteTableSpec spec,
+      final CassandraTableSpec spec,
       final CassandraClient client
   ) {
     return new TTDKeyValueTable(spec, (TTDCassandraClient) client);
   }
 
-  public TTDKeyValueTable(final RemoteTableSpec spec, final TTDCassandraClient client) {
+  public TTDKeyValueTable(final CassandraTableSpec spec, final TTDCassandraClient client) {
     super(client);
 
     name = spec.tableName();
-    Duration ttl = null;
-    RemoteTableSpec maybeTtlSpec = spec;
+    final TtlDuration defaultTtl = spec.ttlResolver().defaultTtl();
+    final Duration ttl = defaultTtl.isFinite() ? defaultTtl.ttl() : null;
 
-    while (maybeTtlSpec instanceof DelegatingTableSpec) {
-      if (maybeTtlSpec instanceof TtlTableSpec) {
-        ttl = ((TtlTableSpec) maybeTtlSpec).ttl();
-        break;
-      }
-
-      maybeTtlSpec = ((DelegatingTableSpec) maybeTtlSpec).delegate();
+    if (!spec.ttlResolver().hasConstantTtl()) {
+      throw new UnsupportedOperationException("The ResponsiveTopologyTestDriver does not yet "
+                                                  + "support key/value based ttl");
     }
 
     stub = new KVStoreStub(ttl, time);
@@ -94,7 +89,7 @@ public class TTDKeyValueTable extends TTDTable<Bytes> implements RemoteKVTable<B
   }
 
   @Override
-  public byte[] get(final int kafkaPartition, final Bytes key, long minValidTs) {
+  public byte[] get(final int kafkaPartition, final Bytes key, long streamTimeMs) {
     return stub.get(key);
   }
 
@@ -103,7 +98,7 @@ public class TTDKeyValueTable extends TTDTable<Bytes> implements RemoteKVTable<B
       final int kafkaPartition,
       Bytes from,
       final Bytes to,
-      long minValidTs
+      long streamTimeMs
   ) {
     return stub.range(from, to);
   }
@@ -111,7 +106,7 @@ public class TTDKeyValueTable extends TTDTable<Bytes> implements RemoteKVTable<B
   @Override
   public KeyValueIterator<Bytes, byte[]> all(
       final int kafkaPartition,
-      long minValidTs
+      long streamTimeMs
   ) {
     return stub.all();
   }

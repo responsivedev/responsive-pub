@@ -17,39 +17,43 @@
 package dev.responsive.kafka.internal.db.spec;
 
 import com.datastax.oss.driver.api.querybuilder.schema.CreateTableWithOptions;
-import dev.responsive.kafka.internal.db.TableOperations;
+import com.datastax.oss.driver.internal.querybuilder.schema.compaction.DefaultLeveledCompactionStrategy;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
-import java.util.EnumSet;
+import dev.responsive.kafka.internal.stores.TtlResolver;
 
-public abstract class DelegatingTableSpec implements RemoteTableSpec {
+public class DefaultCassandraTableSpec implements CassandraTableSpec {
 
-  private final RemoteTableSpec delegate;
+  private final String name;
+  private final TablePartitioner<?, ?> partitioner;
+  private final TtlResolver<?, ?> ttlResolver;
 
-  protected DelegatingTableSpec(final RemoteTableSpec delegate) {
-    this.delegate = delegate;
+  public DefaultCassandraTableSpec(
+      final String name,
+      final TablePartitioner<?, ?> partitioner,
+      final TtlResolver<?, ?> ttlResolver
+  ) {
+    this.name = name;
+    this.partitioner = partitioner;
+    this.ttlResolver = ttlResolver;
   }
 
   @Override
   public String tableName() {
-    return delegate.tableName();
+    return name;
   }
 
   @Override
   public TablePartitioner<?, ?> partitioner() {
-    return delegate.partitioner();
+    return partitioner;
   }
 
   @Override
-  public EnumSet<TableOperations> restrictedOperations() {
-    return delegate.restrictedOperations();
+  public TtlResolver<?, ?> ttlResolver() {
+    return ttlResolver;
   }
 
   @Override
   public CreateTableWithOptions applyOptions(final CreateTableWithOptions base) {
-    return delegate.applyOptions(base);
-  }
-
-  public RemoteTableSpec delegate() {
-    return delegate;
+    return base.withCompaction(new DefaultLeveledCompactionStrategy());
   }
 }

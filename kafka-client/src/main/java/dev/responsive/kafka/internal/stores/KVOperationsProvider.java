@@ -26,6 +26,7 @@ public interface KVOperationsProvider {
 
   KeyValueOperations provide(
       final ResponsiveKeyValueParams params,
+      final boolean isTimestamped,
       final StateStoreContext context,
       final Task.TaskType type
   ) throws InterruptedException, TimeoutException;
