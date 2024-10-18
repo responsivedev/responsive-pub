@@ -204,7 +204,7 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
         .withColumn(DATA_VALUE.column(), DataTypes.BLOB);
 
     if (ttlResolver.defaultTtl().isFinite()) {
-      return baseOptions.withDefaultTimeToLiveSeconds(ttlResolver.defaultTtl().toSeconds());
+      return baseOptions.withDefaultTimeToLiveSeconds((int) ttlResolver.defaultTtl().toSeconds());
     } else {
       return baseOptions;
     }

@@ -115,6 +115,7 @@ public class TtlProvider<K, V> {
       return new TtlDuration(Duration.ZERO, Ttl.INFINITE);
     }
 
+    // TODO(sophie): store ttl as long to avoid Duration conversions on the hot path
     private final Duration ttl;
     private final Ttl ttlType;
 
@@ -131,12 +132,19 @@ public class TtlProvider<K, V> {
       return ttlType.equals(Ttl.FINITE);
     }
 
-    public int toSeconds() {
-      return (int) ttl.toSeconds();
+    public long toSeconds() {
+      return ttl.toSeconds();
     }
 
     public long toMillis() {
       return ttl.toMillis();
+    }
+
+    public TtlDuration minus(final TtlDuration subtractant) {
+      if (!isFinite() || !subtractant.isFinite()) {
+        throw new IllegalStateException("Can't compute difference between infinite ttls");
+      }
+      return new TtlDuration(ttl.minus(subtractant.ttl), Ttl.FINITE);
     }
   }
 

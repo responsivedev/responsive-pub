@@ -263,7 +263,7 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
         .withColumn(TIMESTAMP.column(), DataTypes.TIMESTAMP);
 
     if (ttlResolver.defaultTtl().isFinite()) {
-      return baseOptions.withDefaultTimeToLiveSeconds(ttlResolver.defaultTtl().toSeconds());
+      return baseOptions.withDefaultTimeToLiveSeconds((int) ttlResolver.defaultTtl().toSeconds());
     } else {
       return baseOptions;
     }

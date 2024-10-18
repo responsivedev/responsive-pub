@@ -49,6 +49,10 @@ public class TtlResolver<K, V> {
     return ttlProvider.defaultTtl();
   }
 
+  public boolean hasTtl() {
+    return ttlProvider.hasTtl();
+  }
+
   public boolean hasConstantTtl() {
     return ttlProvider.hasConstantTtl();
   }
