@@ -16,7 +16,17 @@
 
 package dev.responsive.kafka.internal.utils;
 
+import static dev.responsive.kafka.internal.db.ColumnName.TIMESTAMP;
+
+import dev.responsive.kafka.api.stores.TtlProvider.TtlDuration;
+import dev.responsive.kafka.internal.stores.TtlResolver;
+import java.util.function.Function;
 import java.util.regex.Pattern;
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.internals.ValueAndTimestampSerde;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -24,6 +34,10 @@ import org.slf4j.LoggerFactory;
 public final class Utils {
 
   private static final Logger LOG = LoggerFactory.getLogger(Utils.class);
+
+  private static final Serde<String> STRING_SERDE = Serdes.String();
+  private static final Serde<ValueAndTimestamp<String>> VALUE_AND_TIMESTAMP_STRING_SERDE =
+      new ValueAndTimestampSerde<>(STRING_SERDE);
 
   private static final Pattern STREAM_THREAD_ID_PRODUCER_REGEX = Pattern.compile(".*-(StreamThread-\\d+)-producer");
   private static final Pattern STREAM_THREAD_ID_CONSUMER_REGEX = Pattern.compile(".*-(StreamThread-\\d+)-consumer");
@@ -120,6 +134,59 @@ public final class Utils {
 
     LOG.warn("Unable to parse the stream thread id, falling back to thread name {}", threadName);
     return threadName;
+  }
+
+  public static long millisToSeconds(final long millis) {
+    return millis / 1000L;
+  }
+
+  public static <K, V> byte[] getValueWithTtl(
+      final Bytes key,
+      final long streamTimeMs,
+      final TtlResolver<K, V> ttlResolver,
+      final Function<Long, ValueAndTimestamp<byte[]>> fetchRecordForMinTs
+  ) {
+    long minValidTsFromKey = 0L;
+    if (ttlResolver.canComputeWithoutValue()) {
+      final TtlDuration ttl = ttlResolver.resolveTtl(key, null);
+      if (ttl.isFinite()) {
+        minValidTsFromKey = streamTimeMs - ttl.toMillis();
+      }
+    }
+
+    final ValueAndTimestamp<byte[]> result = fetchRecordForMinTs.apply(minValidTsFromKey);
+    if (result == null) {
+      return null;
+    }
+
+    if (!ttlResolver.canComputeWithoutValue()) {
+      final TtlDuration ttl = ttlResolver.resolveTtl(key, result.value());
+      if (ttl.isFinite()) {
+        final long minValidTsFromValue = streamTimeMs - ttl.toMillis();
+        final long recordTs = result.timestamp();
+        if (recordTs < minValidTsFromValue) {
+          return null;
+        }
+      }
+    }
+    return result.value();
+  }
+
+  public static <D> byte[] serialize(final D data, final Serde<D> serde) {
+    return serde.serializer().serialize("ignored", data);
+  }
+
+  public static Bytes serializedKey(final String key) {
+    return Bytes.wrap(serialize(key, STRING_SERDE));
+  }
+
+  public static byte[] serializedValue(final String value) {
+    return serialize(value, STRING_SERDE);
+  }
+
+  public static byte[] serializedValueAndTimestamp(final String value, final long timestamp) {
+    final ValueAndTimestamp<String> valueAndTimestamp = ValueAndTimestamp.make(value, timestamp);
+    return serialize(valueAndTimestamp, VALUE_AND_TIMESTAMP_STRING_SERDE);
   }
 
 }

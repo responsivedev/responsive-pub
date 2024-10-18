@@ -16,12 +16,12 @@
 
 package dev.responsive.kafka.internal.db;
 
-import dev.responsive.kafka.internal.db.spec.RemoteTableSpec;
+import dev.responsive.kafka.internal.db.spec.CassandraTableSpec;
 
 /**
  * All possible operations on {@link org.apache.kafka.streams.state.KeyValueStore}
  * and {@link org.apache.kafka.streams.state.WindowStore}, used for checking whether
- * a particular {@link RemoteTableSpec} supports certain operations.
+ * a particular {@link CassandraTableSpec} supports certain operations.
  */
 public enum TableOperations {
   PUT,
@@ -31,7 +31,6 @@ public enum TableOperations {
 
   GET,
   RANGE,
-  ALL,
 
   FETCH,
   FETCH_TIME_RANGE,

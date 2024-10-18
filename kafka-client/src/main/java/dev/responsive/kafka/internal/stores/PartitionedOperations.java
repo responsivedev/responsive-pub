@@ -76,6 +76,7 @@ public class PartitionedOperations implements KeyValueOperations {
 
   public static PartitionedOperations create(
       final TableName name,
+      final boolean isTimestamped,
       final StateStoreContext storeContext,
       final ResponsiveKeyValueParams params
   ) throws InterruptedException, TimeoutException {
@@ -97,13 +98,19 @@ public class PartitionedOperations implements KeyValueOperations {
         context.taskId().partition()
     );
 
+    final TtlResolver<?, ?> ttlResolver = new TtlResolver<>(
+        isTimestamped,
+        changelog.topic(),
+        params.ttlProvider()
+    );
+
     final RemoteKVTable<?> table;
     switch (sessionClients.storageBackend()) {
       case CASSANDRA:
-        table = createCassandra(params, config, sessionClients, changelog.topic());
+        table = createCassandra(params, config, sessionClients, changelog.topic(), ttlResolver);
         break;
       case MONGO_DB:
-        table = createMongo(params, sessionClients);
+        table = createMongo(params, sessionClients, ttlResolver);
         break;
       case IN_MEMORY:
         table = createInMemory(params);
@@ -151,10 +158,10 @@ public class PartitionedOperations implements KeyValueOperations {
       storeRegistry.registerStore(registration);
 
       final boolean migrationMode = ConfigUtils.responsiveMode(config) == ResponsiveMode.MIGRATE;
-      long startingTimestamp = -1;
-      final Optional<Duration> ttl = params.timeToLive();
-      if (migrationMode && ttl.isPresent()) {
-        startingTimestamp = Instant.now().minus(ttl.get()).toEpochMilli();
+      long startTimeMs = -1;
+      if (migrationMode && params.ttlProvider().hasTtl()) {
+        // TODO(sophie): figure out how to account for row-level ttl in migration mode
+        startTimeMs = System.currentTimeMillis() - params.ttlProvider().defaultTtl().toMillis();
       }
 
       return new PartitionedOperations(
@@ -168,7 +175,7 @@ public class PartitionedOperations implements KeyValueOperations {
           registration,
           sessionClients.restoreListener(),
           migrationMode,
-          startingTimestamp
+          startTimeMs
       );
     } catch (final RuntimeException e) {
       if (buffer != null) {
@@ -182,6 +189,7 @@ public class PartitionedOperations implements KeyValueOperations {
   }
 
   private static RemoteKVTable<?> createInMemory(final ResponsiveKeyValueParams params) {
+    // TODO(sophie): implement ttl for in-memory store?
     return new InMemoryKVTable(params.name().tableName());
   }
 
@@ -189,7 +197,8 @@ public class PartitionedOperations implements KeyValueOperations {
       final ResponsiveKeyValueParams params,
       final ResponsiveConfig config,
       final SessionClients sessionClients,
-      final String changelogTopicName
+      final String changelogTopicName,
+      final TtlResolver<?, ?> ttlResolver
   ) throws InterruptedException, TimeoutException {
 
     final int numChangelogPartitions =
@@ -209,7 +218,7 @@ public class PartitionedOperations implements KeyValueOperations {
             changelogTopicName
         );
     final var client = sessionClients.cassandraClient();
-    final var spec = RemoteTableSpecFactory.fromKVParams(params, partitioner);
+    final var spec = RemoteTableSpecFactory.fromKVParams(params, partitioner, ttlResolver);
     switch (params.schemaType()) {
       case KEY_VALUE:
         return client.kvFactory().create(spec);
@@ -222,9 +231,10 @@ public class PartitionedOperations implements KeyValueOperations {
 
   private static RemoteKVTable<?> createMongo(
       final ResponsiveKeyValueParams params,
-      final SessionClients sessionClients
+      final SessionClients sessionClients,
+      final TtlResolver<?, ?> ttlResolver
   ) throws InterruptedException, TimeoutException {
-    return sessionClients.mongoClient().kvTable(params.name().tableName());
+    return sessionClients.mongoClient().kvTable(params.name().tableName(), params, ttlResolver);
   }
 
   @SuppressWarnings("rawtypes")
@@ -299,7 +309,7 @@ public class PartitionedOperations implements KeyValueOperations {
     return table.get(
         changelog.partition(),
         key,
-        minValidTimestamp()
+        currentRecordTimestamp()
     );
   }
 
@@ -319,7 +329,7 @@ public class PartitionedOperations implements KeyValueOperations {
 
     return new LocalRemoteKvIterator<>(
         buffer.range(from, to),
-        table.range(changelog.partition(), from, to, minValidTimestamp())
+        table.range(changelog.partition(), from, to, currentRecordTimestamp())
     );
   }
 
@@ -333,7 +343,7 @@ public class PartitionedOperations implements KeyValueOperations {
   public KeyValueIterator<Bytes, byte[]> all() {
     return new LocalRemoteKvIterator<>(
         buffer.all(),
-        table.all(changelog.partition(), minValidTimestamp())
+        table.all(changelog.partition(), currentRecordTimestamp())
     );
   }
 
@@ -368,14 +378,6 @@ public class PartitionedOperations implements KeyValueOperations {
       return injectedClock.get().get();
     }
     return context.timestamp();
-  }
-
-  private long minValidTimestamp() {
-    // TODO: unwrapping the ttl from Duration to millis is somewhat heavy for the hot path
-    return params
-        .timeToLive()
-        .map(ttl -> currentRecordTimestamp() - ttl.toMillis())
-        .orElse(-1L);
   }
 
   private boolean migratingAndTimestampTooEarly() {
