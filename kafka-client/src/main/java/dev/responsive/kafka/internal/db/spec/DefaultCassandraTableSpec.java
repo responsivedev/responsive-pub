@@ -17,20 +17,25 @@
 package dev.responsive.kafka.internal.db.spec;
 
 import com.datastax.oss.driver.api.querybuilder.schema.CreateTableWithOptions;
+import com.datastax.oss.driver.api.querybuilder.schema.compaction.CompactionStrategy;
 import com.datastax.oss.driver.internal.querybuilder.schema.compaction.DefaultLeveledCompactionStrategy;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.stores.TtlResolver;
+import java.util.Optional;
 
 public class DefaultCassandraTableSpec implements CassandraTableSpec {
 
+  private static final CompactionStrategy<?> DEFAULT_CASSANDRA_COMPACTION_STRATEGY =
+      new DefaultLeveledCompactionStrategy();
+
   private final String name;
   private final TablePartitioner<?, ?> partitioner;
-  private final TtlResolver<?, ?> ttlResolver;
+  private final Optional<TtlResolver<?, ?>> ttlResolver;
 
   public DefaultCassandraTableSpec(
       final String name,
       final TablePartitioner<?, ?> partitioner,
-      final TtlResolver<?, ?> ttlResolver
+      final Optional<TtlResolver<?, ?>> ttlResolver
   ) {
     this.name = name;
     this.partitioner = partitioner;
@@ -48,12 +53,12 @@ public class DefaultCassandraTableSpec implements CassandraTableSpec {
   }
 
   @Override
-  public TtlResolver<?, ?> ttlResolver() {
+  public Optional<TtlResolver<?, ?>> ttlResolver() {
     return ttlResolver;
   }
 
   @Override
   public CreateTableWithOptions applyOptions(final CreateTableWithOptions base) {
-    return base.withCompaction(new DefaultLeveledCompactionStrategy());
+    return base.withCompaction(DEFAULT_CASSANDRA_COMPACTION_STRATEGY);
   }
 }

@@ -24,12 +24,20 @@ import org.apache.kafka.common.utils.Bytes;
 
 public class TtlResolver<K, V> {
 
-  public static final TtlResolver<?, ?> NO_TTL = new TtlResolver<Object, Object>(
-      false, "ignored", TtlProvider.withInfiniteDefault()
-  );
+  public static final Optional<TtlResolver<?, ?>> NO_TTL = Optional.empty();
 
   private final StateDeserializer<K, V> stateDeserializer;
   private final TtlProvider<K, V> ttlProvider;
+
+  public static Optional<TtlResolver<?, ?>> fromTtlProvider(
+      final boolean isTimestamped,
+      final String changelogTopic,
+      final Optional<TtlProvider<?, ?>> ttlProvider
+  ) {
+    return ttlProvider.isPresent()
+        ? Optional.of(new TtlResolver<>(isTimestamped, changelogTopic, ttlProvider.get()))
+        : Optional.empty();
+  }
 
   public TtlResolver(
       final boolean isTimestamped,
@@ -57,8 +65,8 @@ public class TtlResolver<K, V> {
     return ttlProvider.hasConstantTtl();
   }
 
-  public boolean canComputeWithoutValue() {
-    return ttlProvider.canComputeWithoutValue();
+  public boolean needsValueToComputeTtl() {
+    return ttlProvider.needsValueToComputeTtl();
   }
 
   public Optional<TtlDuration> computeTtl(final Bytes keyBytes, final byte[] valueBytes) {

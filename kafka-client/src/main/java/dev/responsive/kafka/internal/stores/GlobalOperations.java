@@ -63,7 +63,7 @@ public class GlobalOperations implements KeyValueOperations {
     final var spec = RemoteTableSpecFactory.globalSpec(
         params,
         defaultPartitioner(),
-        new TtlResolver<>(false, changelogTopic.topic(), params.ttlProvider())
+        TtlResolver.fromTtlProvider(false, changelogTopic.topic(), params.ttlProvider())
     );
 
     final var table = client.globalFactory().create(spec);

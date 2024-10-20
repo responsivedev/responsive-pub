@@ -24,6 +24,7 @@ import dev.responsive.kafka.internal.db.spec.DefaultCassandraTableSpec;
 import dev.responsive.kafka.internal.db.spec.CassandraTableSpec;
 import dev.responsive.kafka.internal.stores.TtlResolver;
 import dev.responsive.kafka.internal.utils.WindowedKey;
+import java.util.Optional;
 import org.apache.kafka.common.utils.Bytes;
 
 /**
@@ -40,7 +41,7 @@ public class RemoteTableSpecFactory {
   public static CassandraTableSpec globalSpec(
       final ResponsiveKeyValueParams params,
       final TablePartitioner<Bytes, Integer> partitioner,
-      final TtlResolver<?, ?> ttlResolver
+      final Optional<TtlResolver<?, ?>> ttlResolver
   ) {
     return new DefaultCassandraTableSpec(
         params.name().tableName(),
@@ -52,7 +53,7 @@ public class RemoteTableSpecFactory {
   public static CassandraTableSpec fromKVParams(
       final ResponsiveKeyValueParams params,
       final TablePartitioner<Bytes, Integer> partitioner,
-      final TtlResolver<?, ?> ttlResolver
+      final Optional<TtlResolver<?, ?>> ttlResolver
   ) {
     return new DefaultCassandraTableSpec(
         params.name().tableName(),

@@ -41,7 +41,7 @@ public enum ColumnName {
   STREAM_TIME("streamTime", "streamtime"),
   WINDOW_START("windowStart", "windowstart", ts -> timestamp((long) ts)),
   TIMESTAMP("ts", "ts", ts -> timestamp((long) ts)),
-  TTL_SECONDS("ttl", "ttl", ttl -> ttlSeconds((long) ttl));
+  TTL_SECONDS("ttl", "ttl", ttl -> ttlSeconds((int) ttl));
 
   static final Bytes METADATA_KEY
       = Bytes.wrap("_metadata".getBytes(StandardCharsets.UTF_8));
@@ -59,10 +59,10 @@ public enum ColumnName {
   }
 
   private static Literal timestamp(final long ts) {
-    return QueryBuilder.literal(Instant.ofEpochMilli(ts));
+    return QueryBuilder.literal(ts);
   }
 
-  private static Literal ttlSeconds(final long ttl) {
+  private static Literal ttlSeconds(final int ttl) {
     return QueryBuilder.literal(ttl);
   }
 

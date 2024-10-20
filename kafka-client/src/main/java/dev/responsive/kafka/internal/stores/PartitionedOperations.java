@@ -98,7 +98,7 @@ public class PartitionedOperations implements KeyValueOperations {
         context.taskId().partition()
     );
 
-    final TtlResolver<?, ?> ttlResolver = new TtlResolver<>(
+    final Optional<TtlResolver<?, ?>> ttlResolver = TtlResolver.fromTtlProvider(
         isTimestamped,
         changelog.topic(),
         params.ttlProvider()
@@ -159,9 +159,14 @@ public class PartitionedOperations implements KeyValueOperations {
 
       final boolean migrationMode = ConfigUtils.responsiveMode(config) == ResponsiveMode.MIGRATE;
       long startTimeMs = -1;
-      if (migrationMode && params.ttlProvider().hasTtl()) {
+      if (migrationMode && params.ttlProvider().isPresent()) {
         // TODO(sophie): figure out how to account for row-level ttl in migration mode
-        startTimeMs = System.currentTimeMillis() - params.ttlProvider().defaultTtl().toMillis();
+        if (!params.ttlProvider().get().hasConstantTtl()) {
+          throw new UnsupportedOperationException("Row-level ttl overrides are not yet supported "
+                                                      + "with migration mode");
+        }
+        startTimeMs =
+            System.currentTimeMillis() - params.ttlProvider().get().defaultTtl().toMillis();
       }
 
       return new PartitionedOperations(
@@ -198,7 +203,7 @@ public class PartitionedOperations implements KeyValueOperations {
       final ResponsiveConfig config,
       final SessionClients sessionClients,
       final String changelogTopicName,
-      final TtlResolver<?, ?> ttlResolver
+      final Optional<TtlResolver<?, ?>> ttlResolver
   ) throws InterruptedException, TimeoutException {
 
     final int numChangelogPartitions =
@@ -232,7 +237,7 @@ public class PartitionedOperations implements KeyValueOperations {
   private static RemoteKVTable<?> createMongo(
       final ResponsiveKeyValueParams params,
       final SessionClients sessionClients,
-      final TtlResolver<?, ?> ttlResolver
+      final Optional<TtlResolver<?, ?>> ttlResolver
   ) throws InterruptedException, TimeoutException {
     return sessionClients.mongoClient().kvTable(params.name().tableName(), params, ttlResolver);
   }

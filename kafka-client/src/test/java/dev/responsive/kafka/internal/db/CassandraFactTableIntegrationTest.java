@@ -63,7 +63,7 @@ class CassandraFactTableIntegrationTest {
       final CassandraContainer<?> cassandra
   ) {
     String name = info.getTestMethod().orElseThrow().getName();
-    storeName = name + "store";
+    storeName = name + "--store";
 
     session = CqlSession.builder()
         .addContactPoint(cassandra.getContactPoint())
@@ -140,7 +140,7 @@ class CassandraFactTableIntegrationTest {
     client.factFactory().create(RemoteTableSpecFactory.fromKVParams(
         params,
         defaultPartitioner(),
-        new TtlResolver<>(false, "changelog-ignored", ttlProvider)
+        Optional.of(new TtlResolver<>(false, "changelog-ignored", ttlProvider))
     ));
 
     // Then:
@@ -176,7 +176,7 @@ class CassandraFactTableIntegrationTest {
     final var table = client.factFactory().create(RemoteTableSpecFactory.fromKVParams(
         params,
         defaultPartitioner(),
-        new TtlResolver<>(false, "changelog-ignored", ttlProvider)
+        Optional.of(new TtlResolver<>(false, "changelog-ignored", ttlProvider))
     ));
 
     table.init(1);
@@ -204,15 +204,15 @@ class CassandraFactTableIntegrationTest {
 
     lookupTime = Duration.ofMinutes(31).toMillis();
     assertThat(table.get(1, noTtlKey, lookupTime), is(val));
-    assertThat(table.get(1, defaultTtlKey, lookupTime), is(val));    // expired
+    assertThat(table.get(1, defaultTtlKey, lookupTime), nullValue());    // expired
     assertThat(table.get(1, tenMinTtlKey, lookupTime), nullValue()); // expired
     assertThat(table.get(1, fiftyMinTtlKey, lookupTime), is(val));
 
     lookupTime = Duration.ofMinutes(51).toMillis();
     assertThat(table.get(1, noTtlKey, lookupTime), is(val));
-    assertThat(table.get(1, defaultTtlKey, lookupTime), is(val));    // expired
+    assertThat(table.get(1, defaultTtlKey, lookupTime), nullValue());    // expired
     assertThat(table.get(1, tenMinTtlKey, lookupTime), nullValue()); // expired
-    assertThat(table.get(1, fiftyMinTtlKey, lookupTime), is(val));   // expired
+    assertThat(table.get(1, fiftyMinTtlKey, lookupTime), nullValue());   // expired
   }
 
   @Test
@@ -241,16 +241,16 @@ class CassandraFactTableIntegrationTest {
     final var table = client.factFactory().create(RemoteTableSpecFactory.fromKVParams(
         params,
         defaultPartitioner(),
-        new TtlResolver<>(false, "changelog-ignored", ttlProvider)
+        Optional.of(new TtlResolver<>(false, "changelog-ignored", ttlProvider))
     ));
 
     table.init(1);
 
     final Bytes tenMinTtlKey = serializedKey("10_MINUTE_RETENTION");
-    final Bytes defaultTtlKey = serializedKey("row_1");
-    final Bytes noTtlKey = serializedKey("row_2");
-    final Bytes twoMinTtlKey = serializedKey("row_3");
-    final Bytes fiftyMinTtlKey = serializedKey("row_4");
+    final Bytes defaultTtlKey = serializedKey("DEFAULT_30_MIN_RETENTION");
+    final Bytes noTtlKey = serializedKey("NO_TTL");
+    final Bytes twoMinTtlKey = serializedKey("2_MINUTE_RETENTION");
+    final Bytes fiftyMinTtlKey = serializedKey("50_MINUTE_RETENTION");
 
     final byte[] defaultTtlValue = serializedValue("DEFAULT"); // default is 30min
     final byte[] noTtlValue = serializedValue("NO_TTL");
@@ -319,7 +319,7 @@ class CassandraFactTableIntegrationTest {
     final var table = client.factFactory().create(RemoteTableSpecFactory.fromKVParams(
         params,
         defaultPartitioner(),
-        new TtlResolver<>(false, "changelog-ignored", ttlProvider)
+        Optional.of(new TtlResolver<>(false, "changelog-ignored", ttlProvider))
     ));
 
     table.init(1);

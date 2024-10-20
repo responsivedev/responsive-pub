@@ -20,6 +20,7 @@ import com.datastax.oss.driver.api.querybuilder.schema.CreateTableWithOptions;
 import dev.responsive.kafka.internal.db.RemoteTable;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.stores.TtlResolver;
+import java.util.Optional;
 
 /**
  * Defines the table specifications for a {@link RemoteTable} that are
@@ -31,7 +32,7 @@ public interface CassandraTableSpec {
 
   TablePartitioner<?, ?> partitioner();
 
-  TtlResolver<?, ?> ttlResolver();
+  Optional<TtlResolver<?, ?>> ttlResolver();
 
   CreateTableWithOptions applyOptions(final CreateTableWithOptions base);
 

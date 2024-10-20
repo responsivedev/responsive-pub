@@ -17,7 +17,6 @@
 package dev.responsive.kafka.internal.db;
 
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
-import dev.responsive.kafka.api.stores.TtlProvider.TtlDuration;
 import dev.responsive.kafka.internal.clients.TTDCassandraClient;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.db.spec.CassandraTableSpec;
@@ -43,15 +42,21 @@ public class TTDKeyValueTable extends TTDTable<Bytes> implements RemoteKVTable<B
     super(client);
 
     name = spec.tableName();
-    final TtlDuration defaultTtl = spec.ttlResolver().defaultTtl();
-    final Duration ttl = defaultTtl.isFinite() ? defaultTtl.ttl() : null;
+    final Duration defaultTtl;
+    if (spec.ttlResolver().isPresent()) {
+      defaultTtl = spec.ttlResolver().get().defaultTtl().isFinite()
+          ? spec.ttlResolver().get().defaultTtl().ttl()
+          : null;
 
-    if (!spec.ttlResolver().hasConstantTtl()) {
-      throw new UnsupportedOperationException("The ResponsiveTopologyTestDriver does not yet "
-                                                  + "support key/value based ttl");
+      if (!spec.ttlResolver().get().hasConstantTtl()) {
+        throw new UnsupportedOperationException("The ResponsiveTopologyTestDriver does not yet "
+                                                    + "support key/value based ttl");
+      }
+    } else  {
+      defaultTtl = null;
     }
 
-    stub = new KVStoreStub(ttl, time);
+    stub = new KVStoreStub(defaultTtl, time);
   }
 
   @Override

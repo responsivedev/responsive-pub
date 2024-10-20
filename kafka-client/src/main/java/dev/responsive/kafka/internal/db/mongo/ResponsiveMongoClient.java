@@ -30,6 +30,7 @@ import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.db.partitioning.WindowSegmentPartitioner;
 import dev.responsive.kafka.internal.db.spec.DefaultCassandraTableSpec;
 import dev.responsive.kafka.internal.stores.TtlResolver;
+import java.util.Optional;
 import java.util.concurrent.TimeoutException;
 
 public class ResponsiveMongoClient {
@@ -74,7 +75,7 @@ public class ResponsiveMongoClient {
   public RemoteKVTable<WriteModel<KVDoc>> kvTable(
       final String name,
       final ResponsiveKeyValueParams params,
-      final TtlResolver<?, ?> ttlResolver
+      final Optional<TtlResolver<?, ?>> ttlResolver
   ) throws InterruptedException, TimeoutException {
     return kvTableCache.create(
         new DefaultCassandraTableSpec(name, TablePartitioner.defaultPartitioner(), ttlResolver)

@@ -30,7 +30,6 @@ import static dev.responsive.kafka.internal.db.ColumnName.TTL_SECONDS;
 import static dev.responsive.kafka.internal.db.RowType.DATA_ROW;
 import static dev.responsive.kafka.internal.db.RowType.METADATA_ROW;
 import static dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration.NO_COMMITTED_OFFSET;
-import static dev.responsive.kafka.internal.utils.Utils.getValueWithTtl;
 
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.PreparedStatement;
@@ -47,7 +46,6 @@ import dev.responsive.kafka.internal.stores.TtlResolver;
 import dev.responsive.kafka.internal.utils.Iterators;
 import java.nio.ByteBuffer;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
@@ -57,7 +55,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -70,9 +67,10 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
   private final String name;
   private final CassandraClient client;
   private final SubPartitioner partitioner;
-  private final TtlResolver<?, ?> ttlResolver;
+  private final Optional<TtlResolver<?, ?>> ttlResolver;
 
   private final PreparedStatement get;
+  private final PreparedStatement getWithTimestamp;
   private final PreparedStatement range;
   private final PreparedStatement all;
   private final PreparedStatement insert;
@@ -123,6 +121,20 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
         QueryBuilder
             .selectFrom(name)
             .columns(DATA_VALUE.column())
+            .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
+            .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
+            .where(DATA_KEY.relation().isEqualTo(bindMarker(DATA_KEY.bind())))
+            .where(TIMESTAMP.relation().isGreaterThanOrEqualTo(bindMarker(TIMESTAMP.bind())))
+            // ALLOW FILTERING is OK b/c the query only scans one partition
+            .allowFiltering()
+            .build(),
+        QueryOp.READ
+    );
+
+    final var getWithTimestamp = client.prepare(
+        QueryBuilder
+            .selectFrom(name)
+            .columns(DATA_VALUE.column(), TIMESTAMP.column())
             .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
             .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
             .where(DATA_KEY.relation().isEqualTo(bindMarker(DATA_KEY.bind())))
@@ -234,6 +246,7 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
         (SubPartitioner) spec.partitioner(),
         ttlResolver,
         get,
+        getWithTimestamp,
         range,
         all,
         insert,
@@ -249,7 +262,7 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
 
   private static CreateTableWithOptions createTable(
       final String tableName,
-      final TtlResolver<?, ?> ttlResolver
+      final Optional<TtlResolver<?, ?>> ttlResolver
   ) {
     final var baseOptions = SchemaBuilder
         .createTable(tableName)
@@ -262,8 +275,9 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
         .withColumn(EPOCH.column(), DataTypes.BIGINT)
         .withColumn(TIMESTAMP.column(), DataTypes.TIMESTAMP);
 
-    if (ttlResolver.defaultTtl().isFinite()) {
-      return baseOptions.withDefaultTimeToLiveSeconds((int) ttlResolver.defaultTtl().toSeconds());
+    if (ttlResolver.isPresent() && ttlResolver.get().defaultTtl().isFinite()) {
+      final int defaultTtlSeconds = (int) ttlResolver.get().defaultTtl().toSeconds();
+      return baseOptions.withDefaultTimeToLiveSeconds(defaultTtlSeconds);
     } else {
       return baseOptions;
     }
@@ -274,8 +288,9 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
       final String name,
       final CassandraClient client,
       final SubPartitioner partitioner,
-      final TtlResolver<?, ?> ttlResolver,
+      final Optional<TtlResolver<?, ?>> ttlResolver,
       final PreparedStatement get,
+      final PreparedStatement getWithTimestamp,
       final PreparedStatement range,
       final PreparedStatement all,
       final PreparedStatement insert,
@@ -292,6 +307,7 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
     this.partitioner = partitioner;
     this.ttlResolver = ttlResolver;
     this.get = get;
+    this.getWithTimestamp = getWithTimestamp;
     this.range = range;
     this.all = all;
     this.insert = insert;
@@ -376,27 +392,63 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
       final Bytes key,
       final long streamTimeMs
   ) {
-    return getValueWithTtl(key, streamTimeMs, ttlResolver, minValidTs -> {
-      final int tablePartition = partitioner.tablePartition(kafkaPartition, key);
+    final int tablePartition = partitioner.tablePartition(kafkaPartition, key);
 
-      final BoundStatement get = this.get
+    long minValidTs = 0L;
+    if (ttlResolver.isPresent() && !ttlResolver.get().needsValueToComputeTtl()) {
+      final TtlDuration ttl = ttlResolver.get().resolveTtl(key, null);
+      if (ttl.isFinite()) {
+        minValidTs = streamTimeMs - ttl.toMillis();
+      }
+    }
+
+    if (ttlResolver.isEmpty() || !ttlResolver.get().needsValueToComputeTtl()) {
+      final BoundStatement getQuery = get
           .bind()
-          .setInt(PARTITION_KEY.bind(), tablePartition)
           .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
-          .setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(streamTimeMs));
+          .setInt(PARTITION_KEY.bind(), tablePartition)
+          .setLong(TIMESTAMP.bind(), minValidTs);
+      final List<Row> result = client.execute(getQuery).all();
 
-      final List<Row> result = client.execute(get).all();
       if (result.size() > 1) {
-        throw new IllegalStateException("Unexpected multiple results for point lookup");
+        throw new IllegalStateException("Received multiple results for the same key");
       } else if (result.isEmpty()) {
         return null;
       } else {
-        return ValueAndTimestamp.make(
-            Objects.requireNonNull(result.get(0).getByteBuffer(DATA_VALUE.column())).array(),
-            result.get(0).getLong(TIMESTAMP.column())
-        );
+        return getValueFromRow(result.get(0));
       }
-    });
+    } else {
+      final BoundStatement getQuery = getWithTimestamp
+          .bind()
+          .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
+          .setInt(PARTITION_KEY.bind(), tablePartition)
+          .setLong(TIMESTAMP.bind(), minValidTs);
+      final List<Row> result = client.execute(getQuery).all();
+
+      if (result.size() > 1) {
+        throw new IllegalStateException("Received multiple results for the same key");
+      } else if (result.isEmpty()) {
+        return null;
+      }
+
+      final Row rowResult = result.get(0);
+      final byte[] value = getValueFromRow(rowResult);
+      final TtlDuration ttl = ttlResolver.get().resolveTtl(key, value);
+
+      if (ttl.isFinite()) {
+        final long minValidTsFromValue = streamTimeMs - ttl.toMillis();
+        final long recordTs = rowResult.getLong(TIMESTAMP.column());
+        if (recordTs < minValidTsFromValue) {
+          return null;
+        }
+      }
+
+      return value;
+    }
+  }
+
+  private byte[] getValueFromRow(final Row row) {
+    return Objects.requireNonNull(row.getByteBuffer(DATA_VALUE.column())).array();
   }
 
   @Override
@@ -421,7 +473,7 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
           .setInt(PARTITION_KEY.bind(), partition)
           .setByteBuffer(FROM_BIND, ByteBuffer.wrap(from.get()))
           .setByteBuffer(TO_BIND, ByteBuffer.wrap(to.get()))
-          .setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(minValidTs));
+          .setLong(TIMESTAMP.bind(), minValidTs);
 
       final ResultSet result = client.execute(range);
       resultsPerPartition.add(Iterators.kv(result.iterator(), CassandraKeyValueTable::rows));
@@ -442,7 +494,7 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
       final BoundStatement range = this.all
           .bind()
           .setInt(PARTITION_KEY.bind(), partition)
-          .setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(minValidTs));
+          .setLong(TIMESTAMP.bind(), minValidTs);
 
       final ResultSet result = client.execute(range);
       resultsPerPartition.add(Iterators.kv(result.iterator(), CassandraKeyValueTable::rows));
@@ -458,27 +510,28 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
       final byte[] value,
       final long epochMillis
   ) {
-    final Optional<TtlDuration> rowTtl = ttlResolver.computeTtl(key, value);
-
     final int tablePartition = partitioner.tablePartition(kafkaPartition, key);
 
-    // if rowTtl is infinite but default ttl is finite, setting the ttl to 0 will remove it
-    if (rowTtl.isPresent() && (rowTtl.get().isFinite() || ttlResolver.defaultTtl().isFinite())) {
-      return insertWithTtl
-          .bind()
-          .setInt(PARTITION_KEY.bind(), tablePartition)
-          .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
-          .setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(epochMillis))
-          .setByteBuffer(DATA_VALUE.bind(), ByteBuffer.wrap(value))
-          .setLong(TTL_SECONDS.bind(), rowTtl.get().toSeconds());
-    } else {
+    if (ttlResolver.isPresent()) {
+      final Optional<TtlDuration> rowTtl = ttlResolver.get().computeTtl(key, value);
+
+      if (rowTtl.isPresent()) {
+        return insertWithTtl
+            .bind()
+            .setInt(PARTITION_KEY.bind(), tablePartition)
+            .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
+            .setLong(TIMESTAMP.bind(), epochMillis)
+            .setByteBuffer(DATA_VALUE.bind(), ByteBuffer.wrap(value))
+            .setInt(TTL_SECONDS.bind(), (int) rowTtl.get().toSeconds());
+      }
+    }
+
       return insert
           .bind()
           .setInt(PARTITION_KEY.bind(), tablePartition)
           .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
-          .setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(epochMillis))
+          .setLong(TIMESTAMP.bind(), epochMillis)
           .setByteBuffer(DATA_VALUE.bind(), ByteBuffer.wrap(value));
-    }
   }
 
   @Override

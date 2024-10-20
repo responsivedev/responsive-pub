@@ -16,18 +16,18 @@
 
 package dev.responsive.kafka.api.stores;
 
+import dev.responsive.kafka.api.stores.TtlProvider.TtlDuration;
 import dev.responsive.kafka.internal.stores.SchemaTypes.KVSchema;
 import dev.responsive.kafka.internal.utils.TableName;
 import java.time.Duration;
 import java.util.Optional;
-import org.apache.kafka.common.serialization.Serde;
 
 public final class ResponsiveKeyValueParams {
 
   private final TableName name;
   private final KVSchema schema;
 
-  private TtlProvider<?, ?> ttlProvider = TtlProvider.withInfiniteDefault();
+  private Optional<TtlProvider<?, ?>> ttlProvider = Optional.empty();
 
   private ResponsiveKeyValueParams(
       final String name,
@@ -50,7 +50,12 @@ public final class ResponsiveKeyValueParams {
   }
 
   public ResponsiveKeyValueParams withTtlProvider(final TtlProvider<?, ?> ttlProvider) {
-    this.ttlProvider = ttlProvider;
+    if (ttlProvider.hasConstantTtl() && !ttlProvider.defaultTtl().isFinite()) {
+      throw new IllegalArgumentException("Passed in ttlProvider with infinite ttl, "
+                                             + "this is equivalent to no ttl and you "
+                                             + "should not set the ttlProvider for this");
+    }
+    this.ttlProvider = Optional.of(ttlProvider);
     return this;
   }
 
@@ -62,12 +67,17 @@ public final class ResponsiveKeyValueParams {
     return schema;
   }
 
-  public TtlProvider<?, ?> ttlProvider() {
+  public Optional<TtlProvider<?, ?>> ttlProvider() {
     return ttlProvider;
   }
 
-  public Optional<Duration> timeToLive() {
-    return Optional.ofNullable(ttlProvider.defaultTtl().ttl());
+  public Optional<TtlDuration> defaultTimeToLive() {
+    if (ttlProvider.isPresent()) {
+      return Optional.ofNullable(ttlProvider.get().defaultTtl());
+
+    } else {
+      return Optional.empty();
+    }
   }
 
 }

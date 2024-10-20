@@ -29,7 +29,7 @@ public class TtlProvider<K, V> {
     return new TtlProvider<>(
         TtlType.DEFAULT_ONLY,
         TtlDuration.of(defaultTtl),
-        (ignoredK, ignoredV) -> Optional.of(TtlDuration.of(defaultTtl)),
+        (ignoredK, ignoredV) -> Optional.empty(),
         null,
         null
     );
@@ -42,7 +42,7 @@ public class TtlProvider<K, V> {
     return new TtlProvider<>(
         TtlType.DEFAULT_ONLY,
         TtlDuration.noTtl(),
-        (ignoredK, ignoredV) -> Optional.of(TtlDuration.noTtl()),
+        (ignoredK, ignoredV) -> Optional.empty(),
         null,
         null
     );
@@ -140,11 +140,28 @@ public class TtlProvider<K, V> {
       return ttl.toMillis();
     }
 
-    public TtlDuration minus(final TtlDuration subtractant) {
-      if (!isFinite() || !subtractant.isFinite()) {
-        throw new IllegalStateException("Can't compute difference between infinite ttls");
+    @Override
+    public boolean equals(final Object o) {
+      if (this == o) {
+        return true;
       }
-      return new TtlDuration(ttl.minus(subtractant.ttl), Ttl.FINITE);
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+
+      final TtlDuration that = (TtlDuration) o;
+
+      if (!ttl.equals(that.ttl)) {
+        return false;
+      }
+      return ttlType == that.ttlType;
+    }
+
+    @Override
+    public int hashCode() {
+      int result = ttl.hashCode();
+      result = 31 * result + ttlType.hashCode();
+      return result;
     }
   }
 
@@ -198,8 +215,8 @@ public class TtlProvider<K, V> {
     return ttlType == TtlType.DEFAULT_ONLY;
   }
 
-  public boolean canComputeWithoutValue() {
-    return ttlType == TtlType.DEFAULT_ONLY || ttlType == TtlType.KEY;
+  public boolean needsValueToComputeTtl() {
+    return ttlType == TtlType.VALUE|| ttlType == TtlType.KEY_AND_VALUE;
   }
 
   public Optional<TtlDuration> computeTtl(
@@ -229,7 +246,14 @@ public class TtlProvider<K, V> {
       default:
         throw new IllegalStateException("Unrecognized ttl type: " + ttlType);
     }
-    return computeTtl.apply(key, value);
+    final Optional<TtlDuration> rowTtlOverride = computeTtl.apply(key, value);
+
+    // Just return Optional.empty if the row override is actually equal to the default
+    // to help simplify handling logic for tables
+    if (rowTtlOverride.isPresent() && rowTtlOverride.get().equals(defaultTtl)) {
+      return Optional.empty();
+    }
+    return rowTtlOverride;
   }
 
 }
