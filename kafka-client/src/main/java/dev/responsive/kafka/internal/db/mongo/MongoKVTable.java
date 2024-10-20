@@ -285,7 +285,7 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
           final long ttlTsAdjustment = rowTtlDuration.toSeconds() - defaultTtlSeconds;
           ttlTimestamp = millisToSeconds(epochMillis) + ttlTsAdjustment;
         } else {
-          // approximate row-level "infinite" ttl by setting ttlTimestamp to the largest possible value
+          // approximate row-level "infinite" ttl by setting ttlTimestamp to largest possible value
           ttlTimestamp = Long.MAX_VALUE;
         }
       } else {

@@ -19,7 +19,6 @@ package dev.responsive.kafka.api.stores;
 import dev.responsive.kafka.internal.stores.ResponsiveKeyValueStore;
 import dev.responsive.kafka.internal.stores.ResponsiveTimestampedKeyValueStore;
 import java.util.Locale;
-import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;

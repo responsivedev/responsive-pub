@@ -146,6 +146,7 @@ public class RowLevelTtlIntegrationTest {
     return new ResponsiveKafkaStreams(builder.build(), properties);
   }
 
+  @SuppressWarnings("checkstyle:linelength")
   private static class TtlProcessorSupplier implements ProcessorSupplier<String, String, String, String> {
 
     @Override

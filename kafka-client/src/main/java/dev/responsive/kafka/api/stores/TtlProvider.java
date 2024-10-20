@@ -53,7 +53,7 @@ public class TtlProvider<K, V> {
       final Serde<K> keySerde
   ) {
     if (ttlType.equals(TtlType.VALUE) || ttlType.equals(TtlType.KEY_AND_VALUE)) {
-      throw new IllegalArgumentException("Must choose only one of key, value, or key-and-value ttl");
+      throw new IllegalArgumentException("Must choose only key, value, or key-and-value ttl");
     }
     return new TtlProvider<>(
         TtlType.KEY,
@@ -69,7 +69,7 @@ public class TtlProvider<K, V> {
       final Serde<V> valueSerde
   ) {
     if (ttlType.equals(TtlType.KEY) || ttlType.equals(TtlType.KEY_AND_VALUE)) {
-      throw new IllegalArgumentException("Must choose only one of key, value, or key-and-value ttl");
+      throw new IllegalArgumentException("Must choose only key, value, or key-and-value ttl");
     }
     return new TtlProvider<>(
         TtlType.VALUE,
@@ -85,7 +85,7 @@ public class TtlProvider<K, V> {
       final Serde<V> valueSerde
   ) {
     if (ttlType.equals(TtlType.KEY) || ttlType.equals(TtlType.VALUE)) {
-      throw new IllegalArgumentException("Must choose only one of key, value, or key-and-value ttl");
+      throw new IllegalArgumentException("Must choose only key, value, or key-and-value ttl");
     }
     return new TtlProvider<>(
         TtlType.KEY_AND_VALUE,
@@ -216,7 +216,7 @@ public class TtlProvider<K, V> {
   }
 
   public boolean needsValueToComputeTtl() {
-    return ttlType == TtlType.VALUE|| ttlType == TtlType.KEY_AND_VALUE;
+    return ttlType == TtlType.VALUE || ttlType == TtlType.KEY_AND_VALUE;
   }
 
   public Optional<TtlDuration> computeTtl(

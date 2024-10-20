@@ -16,10 +16,6 @@
 
 package dev.responsive.kafka.internal.utils;
 
-import dev.responsive.kafka.api.stores.TtlProvider.TtlDuration;
-import dev.responsive.kafka.internal.stores.TtlResolver;
-import java.util.Optional;
-import java.util.function.Function;
 import java.util.regex.Pattern;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;

@@ -86,14 +86,16 @@ public class ResponsiveMongoClient {
       final String name,
       final WindowSegmentPartitioner partitioner
   ) throws InterruptedException, TimeoutException {
-    return windowTableCache.create(new DefaultCassandraTableSpec(name, partitioner, null), partitioner);
+    return windowTableCache.create(
+        new DefaultCassandraTableSpec(name, partitioner, null), partitioner);
   }
 
   public RemoteSessionTable<WriteModel<SessionDoc>> sessionTable(
       final String name,
       final SessionSegmentPartitioner partitioner
   ) throws InterruptedException, TimeoutException {
-    return sessionTableCache.create(new DefaultCassandraTableSpec(name, partitioner, null), partitioner);
+    return sessionTableCache.create(
+        new DefaultCassandraTableSpec(name, partitioner, null), partitioner);
   }
 
   public void close() {

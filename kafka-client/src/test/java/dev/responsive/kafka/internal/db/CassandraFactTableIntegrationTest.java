@@ -228,7 +228,7 @@ class CassandraFactTableIntegrationTest {
         } else if (v.equals("NO_TTL")) {
           return Optional.of(TtlDuration.noTtl());
         } else {
-          return Optional.of(TtlDuration.of(Duration.ofSeconds(Long.parseLong(v))));
+          return Optional.of(TtlDuration.of(Duration.ofMinutes(Long.parseLong(v))));
         }
       }
     };
@@ -307,7 +307,7 @@ class CassandraFactTableIntegrationTest {
       } else if (v.equals("NO_TTL")) {
         return Optional.of(TtlDuration.noTtl());
       } else {
-        return Optional.of(TtlDuration.of(Duration.ofSeconds(Long.parseLong(v))));
+        return Optional.of(TtlDuration.of(Duration.ofMinutes(Long.parseLong(v))));
       }
     };
     final TtlProvider<String, String> ttlProvider = TtlProvider

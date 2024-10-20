@@ -25,7 +25,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
@@ -56,7 +55,9 @@ public final class ResponsiveStores {
    * @return a supplier for a key-value store with the given options
    *         that uses Responsive's storage for its backend
    */
-  public static ResponsiveKeyValueBytesStoreSupplier keyValueStore(final ResponsiveKeyValueParams params) {
+  public static ResponsiveKeyValueBytesStoreSupplier keyValueStore(
+      final ResponsiveKeyValueParams params
+  ) {
     return new ResponsiveKeyValueBytesStoreSupplier(params);
   }
 
@@ -196,7 +197,9 @@ public final class ResponsiveStores {
    * @return a supplier for a window store with the given options
    *         that uses Responsive's storage for its backend
    */
-  public static ResponsiveWindowStoreSupplier windowStoreSupplier(final ResponsiveWindowParams params) {
+  public static ResponsiveWindowStoreSupplier windowStoreSupplier(
+      final ResponsiveWindowParams params
+  ) {
     return new ResponsiveWindowStoreSupplier(params);
   }
 

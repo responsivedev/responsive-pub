@@ -378,7 +378,7 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
   }
 
   private byte[] getValueFromRow(final Row row) {
-      return Objects.requireNonNull(row.getByteBuffer(DATA_VALUE.column())).array();
+    return Objects.requireNonNull(row.getByteBuffer(DATA_VALUE.column())).array();
   }
 
   @Override

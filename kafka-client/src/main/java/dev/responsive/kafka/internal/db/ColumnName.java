@@ -22,7 +22,6 @@ import com.datastax.oss.driver.api.querybuilder.relation.ColumnRelationBuilder;
 import com.datastax.oss.driver.api.querybuilder.relation.Relation;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.time.Instant;
 import java.util.function.Function;
 import org.apache.kafka.common.utils.Bytes;
 

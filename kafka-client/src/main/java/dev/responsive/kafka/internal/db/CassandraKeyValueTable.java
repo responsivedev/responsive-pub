@@ -526,12 +526,12 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
       }
     }
 
-      return insert
-          .bind()
-          .setInt(PARTITION_KEY.bind(), tablePartition)
-          .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
-          .setLong(TIMESTAMP.bind(), epochMillis)
-          .setByteBuffer(DATA_VALUE.bind(), ByteBuffer.wrap(value));
+    return insert
+        .bind()
+        .setInt(PARTITION_KEY.bind(), tablePartition)
+        .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
+        .setLong(TIMESTAMP.bind(), epochMillis)
+        .setByteBuffer(DATA_VALUE.bind(), ByteBuffer.wrap(value));
   }
 
   @Override
