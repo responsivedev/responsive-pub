@@ -17,10 +17,6 @@
 package dev.responsive.kafka.internal.utils;
 
 import java.util.regex.Pattern;
-import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.streams.state.internals.ValueAndTimestampSerde;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,10 +24,6 @@ import org.slf4j.LoggerFactory;
 public final class Utils {
 
   private static final Logger LOG = LoggerFactory.getLogger(Utils.class);
-
-  private static final Serde<String> STRING_SERDE = Serdes.String();
-  private static final Serde<ValueAndTimestamp<String>> VALUE_AND_TIMESTAMP_STRING_SERDE =
-      new ValueAndTimestampSerde<>(STRING_SERDE);
 
   private static final Pattern STREAM_THREAD_ID_PRODUCER_REGEX = Pattern.compile(".*-(StreamThread-\\d+)-producer");
   private static final Pattern STREAM_THREAD_ID_CONSUMER_REGEX = Pattern.compile(".*-(StreamThread-\\d+)-consumer");

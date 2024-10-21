@@ -63,9 +63,14 @@ import org.apache.kafka.streams.KafkaStreams.StateListener;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.internals.ValueAndTimestampSerde;
 import org.junit.jupiter.api.TestInfo;
 
 public final class IntegrationTestUtils {
+
+  private static final Serde<String> STRING_SERDE = Serdes.String();
+  private static final Serde<ValueAndTimestamp<String>> VALUE_AND_TIMESTAMP_STRING_SERDE =
+      new ValueAndTimestampSerde<>(STRING_SERDE);
 
   /**
    * Simple override that allows plugging in a custom CassandraClientFactory
