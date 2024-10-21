@@ -47,10 +47,18 @@ public class StateDeserializer<K, V> {
   }
 
   public K keyFrom(final byte[] keyBytes) {
+    if (keyBytes == null || keyDeserializer == null) {
+      throw new IllegalStateException("Attempted to deserialize unprovided key");
+    }
+
     return keyDeserializer.deserialize(changelogTopic, keyBytes);
   }
 
   public V valueFrom(final byte[] valueBytes) {
+    if (valueBytes == null || valueDeserializer == null) {
+      throw new IllegalStateException("Attempted to deserialize unprovided value");
+    }
+
     if (timestampedValueDeserializer.isEmpty()) {
       return valueDeserializer.deserialize(changelogTopic, valueBytes);
     } else {

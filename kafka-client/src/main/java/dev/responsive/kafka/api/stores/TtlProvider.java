@@ -25,6 +25,15 @@ import org.apache.kafka.common.serialization.Serde;
 
 public class TtlProvider<K, V> {
 
+  /**
+   * Creates a new TtlProvider with the given default duration to retain records for unless
+   * overridden. To allow ttl overrides for individual records, you can use one of the
+   * {@link #fromKey(Function, Serde)}, {@link #fromValue(Function, Serde)},
+   * or {@link #fromKeyAndValue(BiFunction, Serde, Serde)} methods to define the row-level
+   * override function.
+   *
+   * @return a new TtlProvider that will retain records for the specified default duration
+   */
   public static <K, V> TtlProvider<K, V> withDefault(final Duration defaultTtl) {
     return new TtlProvider<>(
         TtlType.DEFAULT_ONLY,
@@ -36,9 +45,18 @@ public class TtlProvider<K, V> {
   }
 
   /**
-   * @return a TtlProvider that will retain records indefinitely by default
+   * Creates a new TtlProvider that has no default (equivalent to infinite retention for
+   * all records unless an override is specified).  Must be used in combination with
+   * exactly one of the {@link #fromKey(Function, Serde)}, {@link #fromValue(Function, Serde)},
+   * and {@link #fromKeyAndValue(BiFunction, Serde, Serde)} methods to define the row-level
+   * override function.
+   * <p>
+   * If no ttl whatsoever is desired for this store, simply don't configure a TtlProvider
+   * to begin with.
+   *
+   * @return a new TtlProvider that will retain records indefinitely by default
    */
-  public static <K, V> TtlProvider<K, V> withInfiniteDefault() {
+  public static <K, V> TtlProvider<K, V> withNoDefault() {
     return new TtlProvider<>(
         TtlType.DEFAULT_ONLY,
         TtlDuration.noTtl(),
@@ -48,6 +66,9 @@ public class TtlProvider<K, V> {
     );
   }
 
+  /**
+   * @return the same TtlProvider with a key-based override function
+   */
   public TtlProvider<K, V> fromKey(
       final Function<K, Optional<TtlDuration>> computeTtlFromKey,
       final Serde<K> keySerde
@@ -64,6 +85,9 @@ public class TtlProvider<K, V> {
     );
   }
 
+  /**
+   * @return the same TtlProvider with a value-based override function
+   */
   public TtlProvider<K, V> fromValue(
       final Function<V, Optional<TtlDuration>> computeTtlFromValue,
       final Serde<V> valueSerde
@@ -79,6 +103,9 @@ public class TtlProvider<K, V> {
         valueSerde);
   }
 
+  /**
+   * @return the same TtlProvider with a key-and-value-based override function
+   */
   public TtlProvider<K, V> fromKeyAndValue(
       final BiFunction<K, V, Optional<TtlDuration>> computeTtlFromKeyAndValue,
       final Serde<K> keySerde,
@@ -104,7 +131,7 @@ public class TtlProvider<K, V> {
     }
 
     public static TtlDuration of(final Duration ttl) {
-      if (ttl.equals(Duration.ZERO)) {
+      if (ttl.compareTo(Duration.ZERO) <= 0) {
         throw new IllegalArgumentException("ttl duration must be greater than zero");
       }
       return new TtlDuration(ttl, Ttl.FINITE);
@@ -125,6 +152,9 @@ public class TtlProvider<K, V> {
     }
 
     public Duration ttl() {
+      if (!isFinite()) {
+        throw new IllegalStateException("Can't convert TtlDuration to Duration unless finite");
+      }
       return ttl;
     }
 
@@ -205,10 +235,6 @@ public class TtlProvider<K, V> {
 
   public TtlDuration defaultTtl() {
     return defaultTtl;
-  }
-
-  public boolean hasTtl() {
-    return ttlType != TtlType.DEFAULT_ONLY || defaultTtl.isFinite();
   }
 
   public boolean hasConstantTtl() {

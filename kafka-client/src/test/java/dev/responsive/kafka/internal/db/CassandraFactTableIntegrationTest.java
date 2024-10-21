@@ -18,8 +18,8 @@ package dev.responsive.kafka.internal.db;
 
 import static dev.responsive.kafka.internal.db.partitioning.TablePartitioner.defaultPartitioner;
 import static dev.responsive.kafka.internal.stores.TtlResolver.NO_TTL;
-import static dev.responsive.kafka.internal.utils.Utils.serializedKey;
-import static dev.responsive.kafka.internal.utils.Utils.serializedValue;
+import static dev.responsive.kafka.testutils.IntegrationTestUtils.serializedKey;
+import static dev.responsive.kafka.testutils.IntegrationTestUtils.serializedValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.containsStringIgnoringCase;

@@ -19,7 +19,6 @@ package dev.responsive.kafka.internal.utils;
 import java.util.regex.Pattern;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.ValueAndTimestampSerde;
 import org.slf4j.Logger;
@@ -133,23 +132,6 @@ public final class Utils {
 
   public static long millisToSeconds(final long millis) {
     return millis / 1000L;
-  }
-
-  public static <D> byte[] serialize(final D data, final Serde<D> serde) {
-    return serde.serializer().serialize("ignored", data);
-  }
-
-  public static Bytes serializedKey(final String key) {
-    return Bytes.wrap(serialize(key, STRING_SERDE));
-  }
-
-  public static byte[] serializedValue(final String value) {
-    return serialize(value, STRING_SERDE);
-  }
-
-  public static byte[] serializedValueAndTimestamp(final String value, final long timestamp) {
-    final ValueAndTimestamp<String> valueAndTimestamp = ValueAndTimestamp.make(value, timestamp);
-    return serialize(valueAndTimestamp, VALUE_AND_TIMESTAMP_STRING_SERDE);
   }
 
 }
