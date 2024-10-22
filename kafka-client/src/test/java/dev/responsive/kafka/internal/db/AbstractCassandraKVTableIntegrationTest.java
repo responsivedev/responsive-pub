@@ -16,8 +16,37 @@
 
 package dev.responsive.kafka.internal.db;
 
+import com.datastax.oss.driver.api.core.CqlSession;
+import dev.responsive.kafka.api.config.ResponsiveConfig;
+import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
+import dev.responsive.kafka.testutils.ResponsiveConfigParam;
+import java.util.Map;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.TestInfo;
+import org.testcontainers.containers.CassandraContainer;
+
 public class AbstractCassandraKVTableIntegrationTest {
 
+  private String storeName; // ie the "kafkaName", NOT the "cassandraName"
+  private ResponsiveKeyValueParams params;
+  private CassandraClient client;
+  private CqlSession session;
 
+  @BeforeEach
+  public void before(
+      final TestInfo info,
+      @ResponsiveConfigParam final Map<String, Object> responsiveProps,
+      final CassandraContainer<?> cassandra
+  ) {
+    String name = info.getTestMethod().orElseThrow().getName();
+    storeName = name + "--store";
+
+    session = CqlSession.builder()
+        .addContactPoint(cassandra.getContactPoint())
+        .withLocalDatacenter(cassandra.getLocalDatacenter())
+        .withKeyspace("responsive_itests") // NOTE: this keyspace is expected to exist
+        .build();
+    client = new CassandraClient(session, ResponsiveConfig.responsiveConfig(responsiveProps));
+  }
 
 }

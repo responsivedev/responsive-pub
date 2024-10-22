@@ -63,7 +63,7 @@ class CassandraFactTableIntegrationTest {
       final CassandraContainer<?> cassandra
   ) {
     String name = info.getTestMethod().orElseThrow().getName();
-    storeName = name + "--store";
+    storeName = name + "-store";
 
     session = CqlSession.builder()
         .addContactPoint(cassandra.getContactPoint())
@@ -83,7 +83,7 @@ class CassandraFactTableIntegrationTest {
         .create(RemoteTableSpecFactory.fromKVParams(params, defaultPartitioner(), NO_TTL));
 
     // When:
-    schema.init(1);
+    final var ignored = schema.init(1);
     schema.init(2);
     client.execute(schema.setOffset(2, 10));
     final long offset1 = schema.fetchOffset(1);
