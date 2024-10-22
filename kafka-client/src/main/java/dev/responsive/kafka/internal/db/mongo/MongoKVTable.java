@@ -165,8 +165,8 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
 
   @Override
   public byte[] get(final int kafkaPartition, final Bytes key, final long streamTimeMs) {
-    boolean hasInfiniteTtl =  ttlResolver.isEmpty();
 
+    // Need to post-filter if value is needed to compute ttl
     if (ttlResolver.isPresent() && ttlResolver.get().needsValueToComputeTtl()) {
       final KVDoc v = docs.find(Filters.and(
           Filters.eq(KVDoc.ID, keyCodec.encode(key))
@@ -190,7 +190,8 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
       return value;
 
     } else {
-      if (ttlResolver.isPresent() && !ttlResolver.get().needsValueToComputeTtl()) {
+      // If ttl is default-only or key-based and computed ttl is finite, we can pre-filter
+      if (ttlResolver.isPresent()) {
 
         final TtlDuration ttl = ttlResolver.get().resolveTtl(key, null);
         if (ttl.isFinite()) {
@@ -203,6 +204,7 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
         }
       }
 
+      // If ttl is not used or infinite for this row, no filter is needed
       final KVDoc v = docs.find(Filters.and(
           Filters.eq(KVDoc.ID, keyCodec.encode(key))
       )).first();

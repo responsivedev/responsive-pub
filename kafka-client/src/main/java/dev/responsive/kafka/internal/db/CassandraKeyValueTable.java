@@ -108,6 +108,7 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
     final var insertWithTtl = client.prepare(
         QueryBuilder
             .insertInto(name)
+            .value(PARTITION_KEY.column(), bindMarker(PARTITION_KEY.bind()))
             .value(ROW_TYPE.column(), RowType.DATA_ROW.literal())
             .value(DATA_KEY.column(), bindMarker(DATA_KEY.bind()))
             .value(TIMESTAMP.column(), bindMarker(TIMESTAMP.bind()))
@@ -273,7 +274,7 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
         .withColumn(DATA_VALUE.column(), DataTypes.BLOB)
         .withColumn(OFFSET.column(), DataTypes.BIGINT)
         .withColumn(EPOCH.column(), DataTypes.BIGINT)
-        .withColumn(TIMESTAMP.column(), DataTypes.TIMESTAMP);
+        .withColumn(TIMESTAMP.column(), DataTypes.BIGINT);
 
     if (ttlResolver.isPresent() && ttlResolver.get().defaultTtl().isFinite()) {
       final int defaultTtlSeconds = (int) ttlResolver.get().defaultTtl().toSeconds();
