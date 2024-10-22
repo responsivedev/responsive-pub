@@ -42,12 +42,16 @@ public class BatchWriters<K, P> {
   }
 
   public RemoteWriter<K, P> findOrAddWriter(
-      final K key
+      final K key,
+      final long consumedOffset
   ) {
     flushManager.writeAdded(key);
 
     final P tablePartition = flushManager.partitioner().tablePartition(kafkaPartition, key);
-    return batchWriters.computeIfAbsent(tablePartition, flushManager::createWriter);
+    return batchWriters.computeIfAbsent(
+        tablePartition,
+        tp -> flushManager.createWriter(tp, consumedOffset)
+    );
   }
 
   public Collection<RemoteWriter<K, P>> allWriters() {

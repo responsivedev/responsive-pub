@@ -24,6 +24,8 @@ import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_ENDPOINT_CO
 import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_PASSWORD_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_USERNAME_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.RS3_HOSTNAME_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.RS3_PORT_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.TASK_ASSIGNOR_CLASS_OVERRIDE;
 import static dev.responsive.kafka.internal.metrics.ResponsiveMetrics.RESPONSIVE_METRICS_NAMESPACE;
 import static org.apache.kafka.streams.StreamsConfig.APPLICATION_ID_CONFIG;
@@ -45,6 +47,7 @@ import dev.responsive.kafka.internal.db.CassandraClientFactory;
 import dev.responsive.kafka.internal.db.DefaultCassandraClientFactory;
 import dev.responsive.kafka.internal.db.mongo.CollectionCreationOptions;
 import dev.responsive.kafka.internal.db.mongo.ResponsiveMongoClient;
+import dev.responsive.kafka.internal.db.rs3.RS3TableFactory;
 import dev.responsive.kafka.internal.metrics.ClientVersionMetadata;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
@@ -479,7 +482,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       final var admin = responsiveKafkaClientSupplier.getAdmin(responsiveConfig.originals());
       if (compatibilityMode == CompatibilityMode.METRICS_ONLY) {
         sessionClients = new SessionClients(
-            Optional.empty(), Optional.empty(), false, admin);
+            Optional.empty(), Optional.empty(), Optional.empty(), false, admin);
         return this;
       }
 
@@ -490,6 +493,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
           sessionClients = new SessionClients(
               Optional.empty(),
               Optional.of(cassandraFactory.createClient(cqlSession, responsiveConfig)),
+              Optional.empty(),
               false,
               admin
           );
@@ -515,6 +519,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
                   CollectionCreationOptions.fromConfig(responsiveConfig)
               )),
               Optional.empty(),
+              Optional.empty(),
               false,
               admin
           );
@@ -524,7 +529,20 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
           sessionClients = new SessionClients(
               Optional.empty(),
               Optional.empty(),
+              Optional.empty(),
               true,
+              admin
+          );
+          break;
+        case RS3:
+          LOG.info("using rs3 responsive store");
+          final var rs3Host = responsiveConfig.getString(RS3_HOSTNAME_CONFIG);
+          final var rs3Port = responsiveConfig.getInt(RS3_PORT_CONFIG);
+          sessionClients = new SessionClients(
+              Optional.empty(),
+              Optional.empty(),
+              Optional.of(new RS3TableFactory(rs3Host, rs3Port)),
+              false,
               admin
           );
           break;
