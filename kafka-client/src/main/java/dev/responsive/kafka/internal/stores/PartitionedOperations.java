@@ -40,8 +40,6 @@ import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
 import dev.responsive.kafka.internal.utils.Result;
 import dev.responsive.kafka.internal.utils.SessionClients;
 import dev.responsive.kafka.internal.utils.TableName;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.Collection;
 import java.util.Optional;
 import java.util.OptionalInt;
@@ -151,10 +149,14 @@ public class PartitionedOperations implements KeyValueOperations {
       storeRegistry.registerStore(registration);
 
       final boolean migrationMode = ConfigUtils.responsiveMode(config) == ResponsiveMode.MIGRATE;
-      long startingTimestamp = -1;
-      final Optional<Duration> ttl = params.timeToLive();
-      if (migrationMode && ttl.isPresent()) {
-        startingTimestamp = Instant.now().minus(ttl.get()).toEpochMilli();
+      long startTimeMs = -1;
+      if (migrationMode && params.ttlProvider().isPresent()) {
+        if (!params.ttlProvider().get().hasDefaultOnly()) {
+          throw new UnsupportedOperationException("Row-level ttl overrides are not yet supported "
+                                                      + "with migration mode");
+        }
+        startTimeMs =
+            System.currentTimeMillis() - params.ttlProvider().get().defaultTtl().toMillis();
       }
 
       return new PartitionedOperations(
@@ -168,7 +170,7 @@ public class PartitionedOperations implements KeyValueOperations {
           registration,
           sessionClients.restoreListener(),
           migrationMode,
-          startingTimestamp
+          startTimeMs
       );
     } catch (final RuntimeException e) {
       if (buffer != null) {
@@ -371,11 +373,12 @@ public class PartitionedOperations implements KeyValueOperations {
   }
 
   private long minValidTimestamp() {
-    // TODO: unwrapping the ttl from Duration to millis is somewhat heavy for the hot path
-    return params
-        .timeToLive()
-        .map(ttl -> currentRecordTimestamp() - ttl.toMillis())
-        .orElse(-1L);
+    if (params.ttlProvider().isEmpty()) {
+      return -1L;
+    }
+
+    final long ttlMs = params.defaultTimeToLive().get().toMillis();
+    return currentRecordTimestamp() - ttlMs;
   }
 
   private boolean migratingAndTimestampTooEarly() {
