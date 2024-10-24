@@ -168,7 +168,7 @@ public class TtlProvider<K, V> {
       this.ttlType = ttlType;
     }
 
-    public Duration ttl() {
+    public Duration duration() {
       if (!isFinite()) {
         throw new IllegalStateException("Can't convert TtlDuration to Duration unless finite");
       }

@@ -54,7 +54,7 @@ public class RemoteTableSpecFactory {
     RemoteTableSpec spec = new BaseTableSpec(params.name().tableName(), partitioner);
 
     if (params.ttlProvider().isPresent()) {
-      spec = new TtlTableSpec(spec, params.ttlProvider().get().defaultTtl().ttl());
+      spec = new TtlTableSpec(spec, params.ttlProvider().get().defaultTtl().duration());
     }
 
     if (params.schemaType() == SchemaTypes.KVSchema.FACT) {
