@@ -56,7 +56,9 @@ public final class ResponsiveStores {
    * @return a supplier for a key-value store with the given options
    *         that uses Responsive's storage for its backend
    */
-  public static KeyValueBytesStoreSupplier keyValueStore(final ResponsiveKeyValueParams params) {
+  public static ResponsiveKeyValueBytesStoreSupplier keyValueStore(
+      final ResponsiveKeyValueParams params
+  ) {
     return new ResponsiveKeyValueBytesStoreSupplier(params);
   }
 
@@ -67,7 +69,7 @@ public final class ResponsiveStores {
    * @return a supplier for a key-value store with the given options
    *         that uses Responsive's storage for its backend
    */
-  public static KeyValueBytesStoreSupplier keyValueStore(final String name) {
+  public static ResponsiveKeyValueBytesStoreSupplier keyValueStore(final String name) {
     return keyValueStore(ResponsiveKeyValueParams.keyValue(name));
   }
 
@@ -93,7 +95,7 @@ public final class ResponsiveStores {
    * @return a supplier for a key-value store with the given options
    *         that uses Responsive's storage for its backend
    */
-  public static KeyValueBytesStoreSupplier factStore(final String name) {
+  public static ResponsiveKeyValueBytesStoreSupplier factStore(final String name) {
     return keyValueStore(ResponsiveKeyValueParams.fact(name));
   }
 
@@ -116,7 +118,7 @@ public final class ResponsiveStores {
    *         that uses Responsive's storage for its backend
    */
   public static <K, V> StoreBuilder<KeyValueStore<K, V>> keyValueStoreBuilder(
-      final KeyValueBytesStoreSupplier storeSupplier,
+      final ResponsiveKeyValueBytesStoreSupplier storeSupplier,
       final Serde<K> keySerde,
       final Serde<V> valueSerde
   ) {
@@ -148,7 +150,7 @@ public final class ResponsiveStores {
    *         that uses Responsive's storage for its backend
    */
   public static <K, V> StoreBuilder<TimestampedKeyValueStore<K, V>> timestampedKeyValueStoreBuilder(
-      final KeyValueBytesStoreSupplier storeSupplier,
+      final ResponsiveKeyValueBytesStoreSupplier storeSupplier,
       final Serde<K> keySerde,
       final Serde<V> valueSerde
   ) {
@@ -202,8 +204,10 @@ public final class ResponsiveStores {
    * @return a supplier for a window store with the given options
    *         that uses Responsive's storage for its backend
    */
-  public static WindowBytesStoreSupplier windowStoreSupplier(final ResponsiveWindowParams params) {
-    return new ResponsiveWindowedStoreSupplier(params);
+  public static ResponsiveWindowBytesStoreSupplier windowStoreSupplier(
+      final ResponsiveWindowParams params
+  ) {
+    return new ResponsiveWindowBytesStoreSupplier(params);
   }
 
   /**
@@ -217,7 +221,7 @@ public final class ResponsiveStores {
    * @return a supplier for a window store with the given options
    *         that uses Responsive's storage for its backend
    */
-  public static WindowBytesStoreSupplier windowStoreSupplier(
+  public static ResponsiveWindowBytesStoreSupplier windowStoreSupplier(
       final String name,
       final Duration retentionPeriod,
       final Duration windowSize,
@@ -232,7 +236,7 @@ public final class ResponsiveStores {
         throw new IllegalArgumentException("Retention period cannot be less than window size");
       }
 
-      return new ResponsiveWindowedStoreSupplier(
+      return new ResponsiveWindowBytesStoreSupplier(
           ResponsiveWindowParams.window(name, windowSize, retentionPeriod, retainDuplicates)
       );
     } else {
@@ -242,7 +246,7 @@ public final class ResponsiveStores {
         );
       }
 
-      return new ResponsiveWindowedStoreSupplier(
+      return new ResponsiveWindowBytesStoreSupplier(
           ResponsiveWindowParams.streamStreamJoin(name, windowSize)
       );
     }
@@ -262,7 +266,7 @@ public final class ResponsiveStores {
    *         that uses Responsive's storage for its backend
    */
   public static <K, V> StoreBuilder<WindowStore<K, V>> windowStoreBuilder(
-      final WindowBytesStoreSupplier storeSupplier,
+      final ResponsiveWindowBytesStoreSupplier storeSupplier,
       final Serde<K> keySerde,
       final Serde<V> valueSerde
   ) {
@@ -289,7 +293,7 @@ public final class ResponsiveStores {
    *         that uses Responsive's storage for its backend
    */
   public static <K, V> StoreBuilder<TimestampedWindowStore<K, V>> timestampedWindowStoreBuilder(
-      final WindowBytesStoreSupplier storeSupplier,
+      final ResponsiveWindowBytesStoreSupplier storeSupplier,
       final Serde<K> keySerde,
       final Serde<V> valueSerde
   ) {
@@ -318,7 +322,7 @@ public final class ResponsiveStores {
       final ResponsiveWindowParams params
   ) {
     return new ResponsiveMaterialized<>(
-        Materialized.as(new ResponsiveWindowedStoreSupplier(params))
+        Materialized.as(new ResponsiveWindowBytesStoreSupplier(params))
     );
   }
 
@@ -329,10 +333,10 @@ public final class ResponsiveStores {
    * @return a supplier for a session store with the given options
    *         that uses Responsive's storage for its backend
    */
-  public static SessionBytesStoreSupplier sessionStoreSupplier(
+  public static ResponsiveSessionBytesStoreSupplier sessionStoreSupplier(
       final ResponsiveSessionParams params
   ) {
-    return new ResponsiveSessionStoreSupplier(params);
+    return new ResponsiveSessionBytesStoreSupplier(params);
   }
 
   /**
@@ -348,7 +352,7 @@ public final class ResponsiveStores {
    * that uses Responsive's storage for its backend
    */
   public static <K, V> StoreBuilder<SessionStore<K, V>> sessionStoreBuilder(
-      final SessionBytesStoreSupplier storeSupplier,
+      final ResponsiveSessionBytesStoreSupplier storeSupplier,
       final Serde<K> keySerde,
       final Serde<V> valueSerde
   ) {
@@ -374,7 +378,7 @@ public final class ResponsiveStores {
       final ResponsiveSessionParams params
   ) {
     return new ResponsiveMaterialized<>(
-        Materialized.as(new ResponsiveSessionStoreSupplier(params))
+        Materialized.as(new ResponsiveSessionBytesStoreSupplier(params))
     );
   }
 

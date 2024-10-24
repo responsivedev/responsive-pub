@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Responsive Computing, Inc.
+ * Copyright 2023 Responsive Computing, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,35 +18,45 @@ package dev.responsive.kafka.api.stores;
 
 import static dev.responsive.kafka.internal.utils.StoreUtil.computeSegmentInterval;
 
-import dev.responsive.kafka.internal.stores.ResponsiveSessionStore;
+import dev.responsive.kafka.internal.stores.ResponsiveWindowStore;
 import java.util.Locale;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
-import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
+import org.apache.kafka.streams.state.WindowStore;
 
-public class ResponsiveSessionStoreSupplier implements SessionBytesStoreSupplier {
+public class ResponsiveWindowBytesStoreSupplier implements WindowBytesStoreSupplier {
 
-  private final ResponsiveSessionParams params;
+  private final ResponsiveWindowParams params;
   private final long segmentIntervalMs;
 
-  public ResponsiveSessionStoreSupplier(final ResponsiveSessionParams params) {
+  public ResponsiveWindowBytesStoreSupplier(final ResponsiveWindowParams params) {
     this.params = params;
     this.segmentIntervalMs = computeSegmentInterval(params.retentionPeriod(), params.numSegments());
   }
 
   @Override
   public String name() {
-    return this.params.name().kafkaName();
+    return params.name().kafkaName();
   }
 
   @Override
-  public SessionStore<Bytes, byte[]> get() {
-    return new ResponsiveSessionStore(this.params);
+  public WindowStore<Bytes, byte[]> get() {
+    return new ResponsiveWindowStore(params);
   }
 
   @Override
   public long segmentIntervalMs() {
     return segmentIntervalMs;
+  }
+
+  @Override
+  public long windowSize() {
+    return params.windowSize();
+  }
+
+  @Override
+  public boolean retainDuplicates() {
+    return params.retainDuplicates();
   }
 
   @Override
