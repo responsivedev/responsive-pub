@@ -27,8 +27,9 @@ import dev.responsive.kafka.internal.db.WindowedTableCache;
 import dev.responsive.kafka.internal.db.partitioning.SessionSegmentPartitioner;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.db.partitioning.WindowSegmentPartitioner;
-import dev.responsive.kafka.internal.db.spec.BaseTableSpec;
-import dev.responsive.kafka.internal.db.spec.TtlTableSpec;
+import dev.responsive.kafka.internal.db.spec.DefaultTableSpec;
+import dev.responsive.kafka.internal.stores.TtlResolver;
+import java.util.Optional;
 import java.util.concurrent.TimeoutException;
 
 public class ResponsiveMongoClient {
@@ -49,7 +50,7 @@ public class ResponsiveMongoClient {
             client,
             spec.tableName(),
             collectionCreationOptions,
-            spec instanceof TtlTableSpec ? ((TtlTableSpec) spec).ttl() : null
+            spec.ttlResolver()
         ));
     windowTableCache = new WindowedTableCache<>(
         (spec, partitioner) -> new MongoWindowedTable(
@@ -70,23 +71,29 @@ public class ResponsiveMongoClient {
     );
   }
 
-  public RemoteKVTable<WriteModel<KVDoc>> kvTable(final String name)
-      throws InterruptedException, TimeoutException {
-    return kvTableCache.create(new BaseTableSpec(name, TablePartitioner.defaultPartitioner()));
+  public RemoteKVTable<WriteModel<KVDoc>> kvTable(
+      final String name,
+      final Optional<TtlResolver<?, ?>> ttlResolver
+  ) throws InterruptedException, TimeoutException {
+    return kvTableCache.create(
+        new DefaultTableSpec(name, TablePartitioner.defaultPartitioner(), ttlResolver)
+    );
   }
 
   public RemoteWindowedTable<WriteModel<WindowDoc>> windowedTable(
       final String name,
       final WindowSegmentPartitioner partitioner
   ) throws InterruptedException, TimeoutException {
-    return windowTableCache.create(new BaseTableSpec(name, partitioner), partitioner);
+    return windowTableCache.create(
+        new DefaultTableSpec(name, partitioner, Optional.empty()), partitioner);
   }
 
   public RemoteSessionTable<WriteModel<SessionDoc>> sessionTable(
       final String name,
       final SessionSegmentPartitioner partitioner
   ) throws InterruptedException, TimeoutException {
-    return sessionTableCache.create(new BaseTableSpec(name, partitioner), partitioner);
+    return sessionTableCache.create(
+        new DefaultTableSpec(name, partitioner, Optional.empty()), partitioner);
   }
 
   public void close() {

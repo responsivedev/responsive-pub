@@ -82,7 +82,7 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
   ) throws InterruptedException, TimeoutException {
     final String name = spec.tableName();
     LOG.info("Creating data table {} in remote store.", name);
-    client.execute(spec.applyOptions(createTable(name)).build());
+    client.execute(spec.defaultOptions(createTable(name)).build());
 
     client.awaitTable(name).await(Duration.ofSeconds(60));
 

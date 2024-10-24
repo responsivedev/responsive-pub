@@ -17,18 +17,29 @@
 package dev.responsive.kafka.internal.db.spec;
 
 import com.datastax.oss.driver.api.querybuilder.schema.CreateTableWithOptions;
-import dev.responsive.kafka.internal.db.TableOperations;
+import com.datastax.oss.driver.api.querybuilder.schema.compaction.CompactionStrategy;
+import com.datastax.oss.driver.internal.querybuilder.schema.compaction.DefaultLeveledCompactionStrategy;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
-import java.util.EnumSet;
+import dev.responsive.kafka.internal.stores.TtlResolver;
+import java.util.Optional;
 
-public class BaseTableSpec implements RemoteTableSpec {
+public class DefaultTableSpec implements RemoteTableSpec {
+
+  private static final CompactionStrategy<?> DEFAULT_CASSANDRA_COMPACTION_STRATEGY =
+      new DefaultLeveledCompactionStrategy();
 
   private final String name;
-  final TablePartitioner<?, ?> partitioner;
+  private final TablePartitioner<?, ?> partitioner;
+  private final Optional<TtlResolver<?, ?>> ttlResolver;
 
-  public BaseTableSpec(final String name, final TablePartitioner<?, ?> partitioner) {
+  public DefaultTableSpec(
+      final String name,
+      final TablePartitioner<?, ?> partitioner,
+      final Optional<TtlResolver<?, ?>> ttlResolver
+  ) {
     this.name = name;
     this.partitioner = partitioner;
+    this.ttlResolver = ttlResolver;
   }
 
   @Override
@@ -42,13 +53,12 @@ public class BaseTableSpec implements RemoteTableSpec {
   }
 
   @Override
-  public EnumSet<TableOperations> restrictedOperations() {
-    return EnumSet.noneOf(TableOperations.class);
+  public Optional<TtlResolver<?, ?>> ttlResolver() {
+    return ttlResolver;
   }
 
   @Override
-  public CreateTableWithOptions applyOptions(final CreateTableWithOptions base) {
-    // does nothing
-    return base;
+  public CreateTableWithOptions defaultOptions(final CreateTableWithOptions base) {
+    return base.withCompaction(DEFAULT_CASSANDRA_COMPACTION_STRATEGY);
   }
 }

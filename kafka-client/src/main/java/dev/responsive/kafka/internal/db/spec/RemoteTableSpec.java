@@ -18,9 +18,9 @@ package dev.responsive.kafka.internal.db.spec;
 
 import com.datastax.oss.driver.api.querybuilder.schema.CreateTableWithOptions;
 import dev.responsive.kafka.internal.db.RemoteTable;
-import dev.responsive.kafka.internal.db.TableOperations;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
-import java.util.EnumSet;
+import dev.responsive.kafka.internal.stores.TtlResolver;
+import java.util.Optional;
 
 /**
  * Defines the table specifications for a {@link RemoteTable} that are
@@ -32,11 +32,8 @@ public interface RemoteTableSpec {
 
   TablePartitioner<?, ?> partitioner();
 
-  /**
-   * @return the set of operations that are not supported by this table
-   */
-  EnumSet<TableOperations> restrictedOperations();
+  Optional<TtlResolver<?, ?>> ttlResolver();
 
-  CreateTableWithOptions applyOptions(final CreateTableWithOptions base);
+  CreateTableWithOptions defaultOptions(final CreateTableWithOptions base);
 
 }

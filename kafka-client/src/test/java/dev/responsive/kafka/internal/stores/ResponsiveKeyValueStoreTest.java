@@ -46,7 +46,8 @@ class ResponsiveKeyValueStoreTest {
     // Given:
     final var store = new ResponsiveKeyValueStore(
         ResponsiveKeyValueParams.keyValue("test"),
-        (params, context, type) -> ops
+        false,
+        (params, isTimestamped, context, type) -> ops
     );
     store.init((StateStoreContext) context, root);
     when(ops.get(any())).thenReturn(null);
@@ -63,7 +64,8 @@ class ResponsiveKeyValueStoreTest {
     // Given:
     final var store = new ResponsiveKeyValueStore(
         ResponsiveKeyValueParams.keyValue("test"),
-        (params, context, type) -> ops
+        false,
+        (params, isTimestamped, context, type) -> ops
     );
     store.init((StateStoreContext) context, root);
     when(ops.get(any())).thenReturn(new byte[]{125});

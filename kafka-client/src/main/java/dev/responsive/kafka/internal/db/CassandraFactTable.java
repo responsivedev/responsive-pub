@@ -82,7 +82,7 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
     final String name = spec.tableName();
     LOG.info("Creating fact data table {} in remote store.", name);
 
-    final CreateTableWithOptions createTable = spec.applyOptions(createTable(name));
+    final CreateTableWithOptions createTable = spec.defaultOptions(createTable(name));
 
     // separate metadata from the main table for the fact schema, this is acceptable
     // because we don't use the metadata at all for fencing operations and writes to

@@ -27,7 +27,7 @@ import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
-import dev.responsive.kafka.internal.db.spec.BaseTableSpec;
+import dev.responsive.kafka.internal.db.spec.DefaultTableSpec;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
 import java.util.ArrayList;
@@ -82,7 +82,7 @@ public class CassandraKVTableIntegrationTest {
         name + "-changelog"
     );
     table = CassandraKeyValueTable.create(
-        new BaseTableSpec(name, partitioner), client);
+        new DefaultTableSpec(name, partitioner), client);
   }
 
   @Test
