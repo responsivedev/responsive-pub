@@ -50,9 +50,6 @@ public class TtlProvider<K, V> {
    * exactly one of the {@link #fromKey(Function, Serde)}, {@link #fromValue(Function, Serde)},
    * and {@link #fromKeyAndValue(BiFunction, Serde, Serde)} methods to define the row-level
    * override function.
-   * <p>
-   * If no ttl whatsoever is desired for this store, simply don't configure a TtlProvider
-   * to begin with.
    *
    * @return a new TtlProvider that will retain records indefinitely by default
    */
@@ -159,12 +156,11 @@ public class TtlProvider<K, V> {
       return new TtlDuration(Duration.ZERO, Ttl.INFINITE);
     }
 
-    // TODO(sophie): store ttl as long to avoid Duration conversions on the hot path
-    private final Duration ttl;
+    private final Duration duration;
     private final Ttl ttlType;
 
     private TtlDuration(final Duration ttlValue, final Ttl ttlType) {
-      this.ttl = ttlValue;
+      this.duration = ttlValue;
       this.ttlType = ttlType;
     }
 
@@ -172,7 +168,7 @@ public class TtlProvider<K, V> {
       if (!isFinite()) {
         throw new IllegalStateException("Can't convert TtlDuration to Duration unless finite");
       }
-      return ttl;
+      return duration;
     }
 
     public boolean isFinite() {
@@ -180,11 +176,11 @@ public class TtlProvider<K, V> {
     }
 
     public long toSeconds() {
-      return ttl.toSeconds();
+      return duration.toSeconds();
     }
 
     public long toMillis() {
-      return ttl.toMillis();
+      return duration.toMillis();
     }
 
     @Override
@@ -198,7 +194,7 @@ public class TtlProvider<K, V> {
 
       final TtlDuration that = (TtlDuration) o;
 
-      if (!ttl.equals(that.ttl)) {
+      if (!duration.equals(that.duration)) {
         return false;
       }
       return ttlType == that.ttlType;
@@ -206,7 +202,7 @@ public class TtlProvider<K, V> {
 
     @Override
     public int hashCode() {
-      int result = ttl.hashCode();
+      int result = duration.hashCode();
       result = 31 * result + ttlType.hashCode();
       return result;
     }
@@ -254,7 +250,7 @@ public class TtlProvider<K, V> {
     return defaultTtl;
   }
 
-  public boolean hasConstantTtl() {
+  public boolean hasDefaultOnly() {
     return ttlType == TtlType.DEFAULT_ONLY;
   }
 

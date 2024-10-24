@@ -151,7 +151,7 @@ public class PartitionedOperations implements KeyValueOperations {
       final boolean migrationMode = ConfigUtils.responsiveMode(config) == ResponsiveMode.MIGRATE;
       long startTimeMs = -1;
       if (migrationMode && params.ttlProvider().isPresent()) {
-        if (!params.ttlProvider().get().hasConstantTtl()) {
+        if (!params.ttlProvider().get().hasDefaultOnly()) {
           throw new UnsupportedOperationException("Row-level ttl overrides are not yet supported "
                                                       + "with migration mode");
         }
@@ -377,7 +377,7 @@ public class PartitionedOperations implements KeyValueOperations {
       return -1L;
     }
 
-    final long ttlMs = params.ttlProvider().get().defaultTtl().toMillis();
+    final long ttlMs = params.defaultTimeToLive().get().toMillis();
     return currentRecordTimestamp() - ttlMs;
   }
 

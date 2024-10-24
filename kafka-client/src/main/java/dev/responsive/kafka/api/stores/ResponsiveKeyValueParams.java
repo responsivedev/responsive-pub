@@ -50,12 +50,12 @@ public final class ResponsiveKeyValueParams {
   }
 
   public ResponsiveKeyValueParams withTtlProvider(final TtlProvider<?, ?> ttlProvider) {
-    if (ttlProvider.hasConstantTtl() && !ttlProvider.defaultTtl().isFinite()) {
-      throw new IllegalArgumentException("Passed in ttlProvider with infinite ttl, "
-                                             + "this is equivalent to no ttl and you "
-                                             + "should not set the ttlProvider for this");
+    // If ttl is constant and infinite, it's equivalent to having no ttl at all
+    if (ttlProvider.hasDefaultOnly() && !ttlProvider.defaultTtl().isFinite()) {
+      this.ttlProvider = Optional.empty();
+    } else {
+      this.ttlProvider = Optional.of(ttlProvider);
     }
-    this.ttlProvider = Optional.of(ttlProvider);
     return this;
   }
 
