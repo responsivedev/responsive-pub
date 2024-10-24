@@ -20,19 +20,17 @@ import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.api.stores.ResponsiveWindowParams;
 import dev.responsive.kafka.internal.db.partitioning.Segmenter.SegmentPartition;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
-import dev.responsive.kafka.internal.db.spec.BaseTableSpec;
-import dev.responsive.kafka.internal.db.spec.GlobalTableSpec;
-import dev.responsive.kafka.internal.db.spec.RemoteTableSpec;
-import dev.responsive.kafka.internal.db.spec.TimeWindowedCompactionTableSpec;
-import dev.responsive.kafka.internal.db.spec.TtlTableSpec;
-import dev.responsive.kafka.internal.stores.SchemaTypes;
+import dev.responsive.kafka.internal.db.spec.CassandraTableSpec;
+import dev.responsive.kafka.internal.db.spec.DefaultCassandraTableSpec;
+import dev.responsive.kafka.internal.stores.TtlResolver;
 import dev.responsive.kafka.internal.utils.WindowedKey;
+import java.util.Optional;
 import org.apache.kafka.common.utils.Bytes;
 
 /**
  * Translates {@link dev.responsive.kafka.api.stores.ResponsiveKeyValueParams}
  * and {@link dev.responsive.kafka.api.stores.ResponsiveWindowParams} into
- * corresponding {@link RemoteTableSpec} instances.
+ * corresponding {@link CassandraTableSpec} instances.
  *
  * <p>Do not move functionality from this class into the above classes since
  * those are public classes and it's better to keep this functionality
@@ -40,35 +38,35 @@ import org.apache.kafka.common.utils.Bytes;
  */
 public class RemoteTableSpecFactory {
 
-  public static RemoteTableSpec globalSpec(
+  public static CassandraTableSpec globalSpec(
       final ResponsiveKeyValueParams params,
-      final TablePartitioner<Bytes, Integer> partitioner
+      final TablePartitioner<Bytes, Integer> partitioner,
+      final Optional<TtlResolver<?, ?>> ttlResolver
   ) {
-    return new GlobalTableSpec(new BaseTableSpec(params.name().tableName(), partitioner));
+    return new DefaultCassandraTableSpec(
+        params.name().tableName(),
+        partitioner,
+        ttlResolver
+    );
   }
 
-  public static RemoteTableSpec fromKVParams(
+  public static CassandraTableSpec fromKVParams(
       final ResponsiveKeyValueParams params,
-      final TablePartitioner<Bytes, Integer> partitioner
+      final TablePartitioner<Bytes, Integer> partitioner,
+      final Optional<TtlResolver<?, ?>> ttlResolver
   ) {
-    RemoteTableSpec spec = new BaseTableSpec(params.name().tableName(), partitioner);
-
-    if (params.timeToLive().isPresent()) {
-      spec = new TtlTableSpec(spec, params.timeToLive().get());
-    }
-
-    if (params.schemaType() == SchemaTypes.KVSchema.FACT) {
-      spec = new TimeWindowedCompactionTableSpec(spec);
-    }
-
-    return spec;
+    return new DefaultCassandraTableSpec(
+        params.name().tableName(),
+        partitioner,
+        ttlResolver
+    );
   }
 
-  public static RemoteTableSpec fromWindowParams(
+  public static CassandraTableSpec fromWindowParams(
       final ResponsiveWindowParams params,
       final TablePartitioner<WindowedKey, SegmentPartition> partitioner
   ) {
-    return new BaseTableSpec(params.name().tableName(), partitioner);
+    return new DefaultCassandraTableSpec(params.name().tableName(), partitioner, null);
   }
 
 }

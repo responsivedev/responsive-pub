@@ -24,12 +24,12 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 
-public class ResponsiveWindowedStoreSupplier implements WindowBytesStoreSupplier {
+public class ResponsiveWindowStoreSupplier implements WindowBytesStoreSupplier {
 
   private final ResponsiveWindowParams params;
   private final long segmentIntervalMs;
 
-  public ResponsiveWindowedStoreSupplier(final ResponsiveWindowParams params) {
+  public ResponsiveWindowStoreSupplier(final ResponsiveWindowParams params) {
     this.params = params;
     this.segmentIntervalMs = computeSegmentInterval(params.retentionPeriod(), params.numSegments());
   }

@@ -16,19 +16,24 @@
 
 package dev.responsive.kafka.internal.db.spec;
 
-import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
 import com.datastax.oss.driver.api.querybuilder.schema.CreateTableWithOptions;
+import dev.responsive.kafka.internal.db.RemoteTable;
+import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
+import dev.responsive.kafka.internal.stores.TtlResolver;
+import java.util.Optional;
 
-public class GlobalTableSpec extends DelegatingTableSpec {
+/**
+ * Defines the table specifications for a {@link RemoteTable} that are
+ * independent of the schema of the table.
+ */
+public interface CassandraTableSpec {
 
-  public GlobalTableSpec(final RemoteTableSpec delegate) {
-    super(delegate);
-  }
+  String tableName();
 
-  @Override
-  public CreateTableWithOptions applyOptions(final CreateTableWithOptions base) {
-    return delegate()
-        .applyOptions(base)
-        .withCompaction(SchemaBuilder.leveledCompactionStrategy());
-  }
+  TablePartitioner<?, ?> partitioner();
+
+  Optional<TtlResolver<?, ?>> ttlResolver();
+
+  CreateTableWithOptions applyOptions(final CreateTableWithOptions base);
+
 }
