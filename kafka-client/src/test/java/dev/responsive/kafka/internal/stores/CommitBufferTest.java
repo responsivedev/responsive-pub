@@ -30,6 +30,7 @@ import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_TOTAL;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.FLUSH_TOTAL_DESCRIPTION;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.TIME_SINCE_LAST_FLUSH;
 import static dev.responsive.kafka.internal.metrics.StoreMetrics.TIME_SINCE_LAST_FLUSH_DESCRIPTION;
+import static dev.responsive.kafka.internal.stores.TtlResolver.NO_TTL;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThan;
@@ -186,7 +187,7 @@ public class CommitBufferTest {
 
     sessionClients.initialize(responsiveMetrics, null);
     table = (CassandraKeyValueTable) client.kvFactory().create(
-        new DefaultTableSpec(name, partitioner));
+        new DefaultTableSpec(name, partitioner, NO_TTL));
     changelog = new TopicPartition(name + "-changelog", KAFKA_PARTITION);
 
     when(admin.deleteRecords(Mockito.any())).thenReturn(new DeleteRecordsResult(Map.of(
