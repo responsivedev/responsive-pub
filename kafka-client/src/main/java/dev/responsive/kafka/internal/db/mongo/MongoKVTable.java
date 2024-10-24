@@ -18,7 +18,6 @@ package dev.responsive.kafka.internal.db.mongo;
 
 import static com.mongodb.MongoClientSettings.getDefaultCodecRegistry;
 import static dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration.NO_COMMITTED_OFFSET;
-import static dev.responsive.kafka.internal.utils.Utils.millisToSeconds;
 import static org.bson.codecs.configuration.CodecRegistries.fromProviders;
 import static org.bson.codecs.configuration.CodecRegistries.fromRegistries;
 
@@ -285,14 +284,14 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
           // This effectively makes these records appear older or younger than they really are
           // so that they're retained according to the row-level ttl override
           final long ttlTsAdjustment = rowTtlDuration.toSeconds() - defaultTtlSeconds;
-          ttlTimestamp = millisToSeconds(epochMillis) + ttlTsAdjustment;
+          ttlTimestamp = TimeUnit.MILLISECONDS.toSeconds(epochMillis) + ttlTsAdjustment;
         } else {
           // approximate row-level "infinite" ttl by setting ttlTimestamp to largest possible value
           ttlTimestamp = Long.MAX_VALUE;
         }
       } else {
         // to apply the default ttl we just use the current time for ttlTimestamp
-        ttlTimestamp = millisToSeconds(epochMillis);
+        ttlTimestamp = TimeUnit.MILLISECONDS.toSeconds(epochMillis);
       }
       update = Updates.combine(
           update,

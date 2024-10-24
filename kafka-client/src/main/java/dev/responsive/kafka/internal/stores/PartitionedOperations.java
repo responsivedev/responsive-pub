@@ -111,7 +111,7 @@ public class PartitionedOperations implements KeyValueOperations {
         table = createMongo(params, sessionClients, ttlResolver);
         break;
       case IN_MEMORY:
-        table = createInMemory(params);
+        table = createInMemory(params, ttlResolver);
         break;
       default:
         throw new IllegalStateException("Unexpected value: " + sessionClients.storageBackend());
@@ -158,7 +158,6 @@ public class PartitionedOperations implements KeyValueOperations {
       final boolean migrationMode = ConfigUtils.responsiveMode(config) == ResponsiveMode.MIGRATE;
       long startTimeMs = -1;
       if (migrationMode && params.ttlProvider().isPresent()) {
-        // TODO(sophie): figure out how to account for row-level ttl in migration mode
         if (!params.ttlProvider().get().hasConstantTtl()) {
           throw new UnsupportedOperationException("Row-level ttl overrides are not yet supported "
                                                       + "with migration mode");
@@ -191,8 +190,13 @@ public class PartitionedOperations implements KeyValueOperations {
     }
   }
 
-  private static RemoteKVTable<?> createInMemory(final ResponsiveKeyValueParams params) {
-    // TODO(sophie): implement ttl for in-memory store?
+  private static RemoteKVTable<?> createInMemory(
+      final ResponsiveKeyValueParams params,
+      final Optional<TtlResolver<?, ?>> ttlResolver
+  ) {
+    if (ttlResolver.isPresent()) {
+      throw new UnsupportedOperationException("ttl is not yet supported for in-memory stores");
+    }
     return new InMemoryKVTable(params.name().tableName());
   }
 

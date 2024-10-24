@@ -122,8 +122,4 @@ public final class Utils {
     return threadName;
   }
 
-  public static long millisToSeconds(final long millis) {
-    return millis / 1000L;
-  }
-
 }
