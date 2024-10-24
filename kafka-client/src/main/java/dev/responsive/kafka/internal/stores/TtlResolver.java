@@ -58,7 +58,7 @@ public class TtlResolver<K, V> {
   }
 
   public boolean hasConstantTtl() {
-    return ttlProvider.hasConstantTtl();
+    return ttlProvider.hasDefaultOnly();
   }
 
   public boolean needsValueToComputeTtl() {

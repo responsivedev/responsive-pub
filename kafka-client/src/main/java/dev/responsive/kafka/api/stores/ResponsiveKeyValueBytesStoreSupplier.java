@@ -36,7 +36,7 @@ public class ResponsiveKeyValueBytesStoreSupplier implements KeyValueBytesStoreS
   public void asTimestamped() {
     this.isTimestamped = true;
   }
-  
+
   @Override
   public String name() {
     return params.name().kafkaName();

@@ -45,7 +45,7 @@ public class TTDKeyValueTable extends TTDTable<Bytes> implements RemoteKVTable<B
     final Duration defaultTtl;
     if (spec.ttlResolver().isPresent()) {
       defaultTtl = spec.ttlResolver().get().defaultTtl().isFinite()
-          ? spec.ttlResolver().get().defaultTtl().ttl()
+          ? spec.ttlResolver().get().defaultTtl().duration()
           : null;
 
       if (!spec.ttlResolver().get().hasConstantTtl()) {
