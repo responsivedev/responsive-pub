@@ -40,8 +40,6 @@ import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
 import dev.responsive.kafka.internal.utils.Result;
 import dev.responsive.kafka.internal.utils.SessionClients;
 import dev.responsive.kafka.internal.utils.TableName;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.Collection;
 import java.util.Optional;
 import java.util.OptionalInt;

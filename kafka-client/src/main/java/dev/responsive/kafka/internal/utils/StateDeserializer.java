@@ -65,7 +65,8 @@ public class StateDeserializer<K, V> {
   public V valueFrom(final byte[] valueBytes) {
     if (valueBytes == null || valueDeserializer == null) {
       final String errMgs = String.format(
-          "Tried to deserialize value where valueBytes==null is %s and valueDeserializer==null is %s",
+          "Tried to deserialize value where valueBytes==null is %s "
+              + "and valueDeserializer==null is %s",
           valueBytes == null, valueDeserializer == null);
       LOG.error(errMgs);
       throw new IllegalStateException(errMgs);
