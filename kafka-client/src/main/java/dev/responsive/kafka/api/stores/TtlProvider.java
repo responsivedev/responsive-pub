@@ -173,11 +173,11 @@ public class TtlProvider<K, V> {
     }
 
     public long toSeconds() {
-      return duration.toSeconds();
+      return duration().toSeconds();
     }
 
     public long toMillis() {
-      return duration.toMillis();
+      return duration().toMillis();
     }
 
     @Override

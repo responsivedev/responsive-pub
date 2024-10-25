@@ -194,10 +194,11 @@ public class PartitionedOperations implements KeyValueOperations {
       final ResponsiveKeyValueParams params,
       final Optional<TtlResolver<?, ?>> ttlResolver
   ) {
-    if (ttlResolver.isPresent()) {
-      throw new UnsupportedOperationException("ttl is not yet supported for in-memory stores");
+    if (ttlResolver.isPresent() && !ttlResolver.get().hasDefaultOnly()) {
+      throw new UnsupportedOperationException("Row-level ttl is not yet supported "
+                                                  + "for in-memory stores");
     }
-    return new InMemoryKVTable(params.name().tableName());
+    return new InMemoryKVTable(params.name().tableName(), ttlResolver);
   }
 
   private static RemoteKVTable<?> createCassandra(
@@ -316,7 +317,7 @@ public class PartitionedOperations implements KeyValueOperations {
     return table.get(
         changelog.partition(),
         key,
-        minValidTimestamp()
+        currentRecordTimestamp()
     );
   }
 
@@ -336,7 +337,7 @@ public class PartitionedOperations implements KeyValueOperations {
 
     return new LocalRemoteKvIterator<>(
         buffer.range(from, to),
-        table.range(changelog.partition(), from, to, minValidTimestamp())
+        table.range(changelog.partition(), from, to, currentRecordTimestamp())
     );
   }
 
@@ -350,7 +351,7 @@ public class PartitionedOperations implements KeyValueOperations {
   public KeyValueIterator<Bytes, byte[]> all() {
     return new LocalRemoteKvIterator<>(
         buffer.all(),
-        table.all(changelog.partition(), minValidTimestamp())
+        table.all(changelog.partition(), currentRecordTimestamp())
     );
   }
 
@@ -385,15 +386,6 @@ public class PartitionedOperations implements KeyValueOperations {
       return injectedClock.get().get();
     }
     return context.timestamp();
-  }
-
-  private long minValidTimestamp() {
-    if (params.ttlProvider().isEmpty()) {
-      return -1L;
-    }
-
-    final long ttlMs = params.defaultTimeToLive().get().toMillis();
-    return currentRecordTimestamp() - ttlMs;
   }
 
   private boolean migratingAndTimestampTooEarly() {

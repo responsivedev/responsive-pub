@@ -6,10 +6,12 @@ import dev.responsive.kafka.internal.db.RemoteWriter;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration;
+import dev.responsive.kafka.internal.stores.TtlResolver;
 import dev.responsive.kafka.internal.utils.Iterators;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentNavigableMap;
@@ -25,10 +27,12 @@ public class InMemoryKVTable implements RemoteKVTable<Object> {
 
   private int kafkaPartition;
   private final String name;
+  private final Optional<TtlResolver<?, ?>> ttlResolver;
   private final ConcurrentNavigableMap<Bytes, Value> store = new ConcurrentSkipListMap<>();
 
-  public InMemoryKVTable(String name) {
+  public InMemoryKVTable(final String name, final Optional<TtlResolver<?, ?>> ttlResolver) {
     this.name = Objects.requireNonNull(name);
+    this.ttlResolver = ttlResolver;
   }
 
   @Override
@@ -39,12 +43,17 @@ public class InMemoryKVTable implements RemoteKVTable<Object> {
   }
 
   @Override
-  public byte[] get(final int kafkaPartition, final Bytes key, final long minValidTs) {
+  public byte[] get(final int kafkaPartition, final Bytes key, final long streamTimeMs) {
     checkKafkaPartition(kafkaPartition);
     final var value = store.get(key);
     if (value == null) {
       return null;
     }
+
+    final long minValidTs = ttlResolver.isEmpty()
+        ? -1L
+        : streamTimeMs - ttlResolver.get().defaultTtl().toMillis();
+
     if (value.epochMillis() < minValidTs) {
       return null;
     }
@@ -56,21 +65,32 @@ public class InMemoryKVTable implements RemoteKVTable<Object> {
       final int kafkaPartition,
       final Bytes from,
       final Bytes to,
-      final long minValidTs
+      final long streamTimeMs
   ) {
     checkKafkaPartition(kafkaPartition);
+
     final var iter = store
         .tailMap(from, true)
         .headMap(to, true)
         .entrySet()
         .iterator();
+
+    final long minValidTs = ttlResolver.isEmpty()
+        ? -1L
+        : streamTimeMs - ttlResolver.get().defaultTtl().toMillis();
+
     return iteratorWithTimeFilter(iter, minValidTs);
   }
 
   @Override
-  public KeyValueIterator<Bytes, byte[]> all(final int kafkaPartition, final long minValidTs) {
+  public KeyValueIterator<Bytes, byte[]> all(final int kafkaPartition, final long streamTimeMs) {
     checkKafkaPartition(kafkaPartition);
     final var iter = store.entrySet().iterator();
+
+    final long minValidTs = ttlResolver.isEmpty()
+        ? -1L
+        : streamTimeMs - ttlResolver.get().defaultTtl().toMillis();
+
     return iteratorWithTimeFilter(iter, minValidTs);
   }
 

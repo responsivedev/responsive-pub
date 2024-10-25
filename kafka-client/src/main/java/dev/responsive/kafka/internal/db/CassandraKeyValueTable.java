@@ -40,6 +40,7 @@ import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
 import com.datastax.oss.driver.api.querybuilder.schema.CreateTableWithOptions;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.db.spec.RemoteTableSpec;
+import dev.responsive.kafka.internal.stores.TtlResolver;
 import dev.responsive.kafka.internal.utils.Iterators;
 import java.nio.ByteBuffer;
 import java.time.Duration;
@@ -47,6 +48,7 @@ import java.time.Instant;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.TimeoutException;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
@@ -64,6 +66,7 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
   private final String name;
   private final CassandraClient client;
   private final SubPartitioner partitioner;
+  private final Optional<TtlResolver<?, ?>> ttlResolver;
 
   private final PreparedStatement get;
   private final PreparedStatement range;
@@ -81,6 +84,7 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
       final CassandraClient client
   ) throws InterruptedException, TimeoutException {
     final String name = spec.tableName();
+    final var ttlResolver = spec.ttlResolver();
     LOG.info("Creating data table {} in remote store.", name);
     client.execute(spec.applyDefaultOptions(createTable(name)).build());
 
@@ -211,6 +215,7 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
         name,
         client,
         (SubPartitioner) spec.partitioner(),
+        ttlResolver,
         get,
         range,
         all,
@@ -242,6 +247,7 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
       final String name,
       final CassandraClient client,
       final SubPartitioner partitioner,
+      final Optional<TtlResolver<?, ?>> ttlResolver,
       final PreparedStatement get,
       final PreparedStatement range,
       final PreparedStatement all,
@@ -256,6 +262,7 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
     this.name = name;
     this.client = client;
     this.partitioner = partitioner;
+    this.ttlResolver = ttlResolver;
     this.get = get;
     this.range = range;
     this.all = all;
@@ -338,8 +345,12 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
   public byte[] get(
       final int kafkaPartition,
       final Bytes key,
-      final long minValidTs
+      final long streamTimeMs
   ) {
+    final long minValidTs = ttlResolver.isEmpty()
+        ? -1L
+        : streamTimeMs - ttlResolver.get().defaultTtl().toMillis();
+
     final int tablePartition = partitioner.tablePartition(kafkaPartition, key);
 
     final BoundStatement get = this.get
@@ -364,8 +375,12 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
       final int kafkaPartition,
       final Bytes from,
       final Bytes to,
-      final long minValidTs
+      final long streamTimeMs
   ) {
+    final long minValidTs = ttlResolver.isEmpty()
+        ? -1L
+        : streamTimeMs - ttlResolver.get().defaultTtl().toMillis();
+
     // TODO: explore more efficient ways to serve bounded range queries, for now we have to
     //  iterate over all subpartitions and merge the results since we don't know which subpartitions
     //  hold keys within the given range
@@ -389,8 +404,12 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
   @Override
   public KeyValueIterator<Bytes, byte[]> all(
       final int kafkaPartition,
-      final long minValidTs
+      final long streamTimeMs
   ) {
+    final long minValidTs = ttlResolver.isEmpty()
+        ? -1L
+        : streamTimeMs - ttlResolver.get().defaultTtl().toMillis();
+
     final List<KeyValueIterator<Bytes, byte[]>> resultsPerPartition = new LinkedList<>();
     for (final int partition : partitioner.allTablePartitions(kafkaPartition)) {
       final BoundStatement range = this.all
