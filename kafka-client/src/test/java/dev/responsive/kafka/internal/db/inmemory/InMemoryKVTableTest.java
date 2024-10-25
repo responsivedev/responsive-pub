@@ -1,6 +1,7 @@
 package dev.responsive.kafka.internal.db.inmemory;
 
 import static dev.responsive.kafka.internal.db.testutils.Matchers.sameKeyValue;
+import static dev.responsive.kafka.internal.stores.TtlResolver.NO_TTL;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.nullValue;
@@ -12,7 +13,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.junit.jupiter.api.Test;
 
 class InMemoryKVTableTest {
-  private final InMemoryKVTable table = new InMemoryKVTable("name");
+  private final InMemoryKVTable table = new InMemoryKVTable("name", NO_TTL);
   private final KVFlushManager flushManager =  table.init(0);
   private final RemoteWriter<Bytes, Integer> writer = flushManager.createWriter(0);
 

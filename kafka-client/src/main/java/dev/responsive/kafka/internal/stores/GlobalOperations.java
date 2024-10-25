@@ -36,7 +36,6 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 
 public class GlobalOperations implements KeyValueOperations {
 
-  private static final long ALL_VALID_TS = -1L; // Global stores don't support TTL
   private static final int IGNORED_PARTITION = -1; // Global stores ignored partitions
 
   private final String storeName;
@@ -46,6 +45,8 @@ public class GlobalOperations implements KeyValueOperations {
   private final GlobalProcessorContextImpl context;
   private final CassandraClient client;
   private final CassandraFactTable table;
+
+  private long streamTimeMs = -1L;
 
   public static GlobalOperations create(
       final StateStoreContext storeContext,
@@ -107,6 +108,10 @@ public class GlobalOperations implements KeyValueOperations {
       final long offset,
       final long timestamp
   ) {
+    if (streamTimeMs < timestamp) {
+      streamTimeMs = timestamp;
+    }
+
     client.execute(table.insert(IGNORED_PARTITION, key, value, timestamp));
     client.execute(table.setOffset(partition, offset));
   }
@@ -125,12 +130,12 @@ public class GlobalOperations implements KeyValueOperations {
 
   @Override
   public byte[] get(final Bytes key) {
-    return table.get(IGNORED_PARTITION, key, ALL_VALID_TS);
+    return table.get(IGNORED_PARTITION, key, streamTimeMs);
   }
 
   @Override
   public KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
-    return table.range(IGNORED_PARTITION, from, to, ALL_VALID_TS);
+    return table.range(IGNORED_PARTITION, from, to, streamTimeMs);
   }
 
   @Override
@@ -140,7 +145,7 @@ public class GlobalOperations implements KeyValueOperations {
 
   @Override
   public KeyValueIterator<Bytes, byte[]> all() {
-    return table.all(IGNORED_PARTITION, ALL_VALID_TS);
+    return table.all(IGNORED_PARTITION, streamTimeMs);
   }
 
   @Override

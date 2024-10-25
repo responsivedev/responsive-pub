@@ -72,6 +72,8 @@ public class PartitionedOperations implements KeyValueOperations {
   private final boolean migrationMode;
   private final long startingTimestamp;
 
+  private long streamTimeMs = -1L;
+
   public static PartitionedOperations create(
       final TableName name,
       final boolean isTimestamped,
@@ -274,12 +276,17 @@ public class PartitionedOperations implements KeyValueOperations {
 
   @Override
   public void put(final Bytes key, final byte[] value) {
-    if (migratingAndTimestampTooEarly()) {
+    final long currentRecordTimestamp = currentRecordTimestamp();
+    if (migratingAndTimestampTooEarly(currentRecordTimestamp)) {
       // we are bootstrapping a store. Only apply the write if the timestamp
       // is fresher than the starting timestamp
       return;
     }
-    buffer.put(key, value, currentRecordTimestamp());
+    if (streamTimeMs < currentRecordTimestamp) {
+      streamTimeMs = currentRecordTimestamp;
+    }
+
+    buffer.put(key, value, currentRecordTimestamp);
   }
 
   @Override
@@ -317,7 +324,7 @@ public class PartitionedOperations implements KeyValueOperations {
     return table.get(
         changelog.partition(),
         key,
-        currentRecordTimestamp()
+        streamTimeMs
     );
   }
 
@@ -337,7 +344,7 @@ public class PartitionedOperations implements KeyValueOperations {
 
     return new LocalRemoteKvIterator<>(
         buffer.range(from, to),
-        table.range(changelog.partition(), from, to, currentRecordTimestamp())
+        table.range(changelog.partition(), from, to, streamTimeMs)
     );
   }
 
@@ -351,7 +358,7 @@ public class PartitionedOperations implements KeyValueOperations {
   public KeyValueIterator<Bytes, byte[]> all() {
     return new LocalRemoteKvIterator<>(
         buffer.all(),
-        table.all(changelog.partition(), currentRecordTimestamp())
+        table.all(changelog.partition(), streamTimeMs)
     );
   }
 
@@ -388,14 +395,14 @@ public class PartitionedOperations implements KeyValueOperations {
     return context.timestamp();
   }
 
-  private boolean migratingAndTimestampTooEarly() {
+  private boolean migratingAndTimestampTooEarly(final long currentRecordTimestamp) {
     if (!migrationMode) {
       return false;
     }
     if (startingTimestamp > 0) {
       // we are bootstrapping a store. Only apply the write if the timestamp
       // is fresher than the starting timestamp
-      return currentRecordTimestamp() < startingTimestamp;
+      return currentRecordTimestamp < startingTimestamp;
     }
     return false;
   }
