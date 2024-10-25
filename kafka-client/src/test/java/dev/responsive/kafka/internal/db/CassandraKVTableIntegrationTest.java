@@ -17,9 +17,11 @@
 package dev.responsive.kafka.internal.db;
 
 import static dev.responsive.kafka.api.config.ResponsiveConfig.CASSANDRA_DESIRED_NUM_PARTITION_CONFIG;
+import static dev.responsive.kafka.internal.db.partitioning.TablePartitioner.defaultPartitioner;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.copyConfigWithOverrides;
 import static java.util.Collections.singletonMap;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasSize;
 
@@ -59,6 +61,7 @@ public class CassandraKVTableIntegrationTest {
   private static final int NUM_KAFKA_PARTITIONS = NUM_SUBPARTITIONS_TOTAL / 4;
 
   private CassandraClient client;
+  private CqlSession session;
   private String storeName; // ie the "kafkaName", NOT the "cassandraName"
   private ResponsiveConfig config;
 
@@ -68,7 +71,7 @@ public class CassandraKVTableIntegrationTest {
       final CassandraContainer<?> cassandra,
       @ResponsiveConfigParam final ResponsiveConfig config
   ) throws InterruptedException, TimeoutException {
-    final CqlSession session = CqlSession.builder()
+    this.session = CqlSession.builder()
         .addContactPoint(cassandra.getContactPoint())
         .withLocalDatacenter(cassandra.getLocalDatacenter())
         .withKeyspace("responsive_itests") // NOTE: this keyspace is expected to exist
@@ -196,8 +199,32 @@ public class CassandraKVTableIntegrationTest {
     }
   }
 
+  @SuppressWarnings("OptionalGetWithoutIsPresent")
   @Test
-  public void shouldRespectSemanticTtlForLookups() {
+  public void shouldRespectSemanticDefaultOnlyTtl()  {
+    // Given:
+    final var defaultTtl = Duration.ofMinutes(30);
+    final var ttlProvider = TtlProvider.<String, String>withDefault(defaultTtl);
+    final ResponsiveKeyValueParams params =
+        ResponsiveKeyValueParams.keyValue(storeName).withTtlProvider(ttlProvider);
+    final String tableName = params.name().tableName();
+
+    // When:
+    createTableFromParams(params);
+
+    // Then:
+    final var table = session.getMetadata()
+        .getKeyspace(session.getKeyspace().get())
+        .get()
+        .getTable(tableName)
+        .get();
+    final String describe = table.describe(false);
+
+    assertThat(describe, containsString("default_time_to_live = " + (int) defaultTtl.toSeconds()));
+  }
+
+  @Test
+  public void shouldRespectSemanticDefaultOnlyTtlForLookups() {
     // Given:
     final TtlProvider<?, ?> ttlProvider = TtlProvider.withDefault(Duration.ofMillis(100));
     final RemoteKVTable<BoundStatement> table = createTable(ttlProvider);
