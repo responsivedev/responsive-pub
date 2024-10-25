@@ -17,6 +17,7 @@
 package dev.responsive.kafka.internal.db;
 
 import static dev.responsive.kafka.internal.db.partitioning.TablePartitioner.defaultPartitioner;
+import static dev.responsive.kafka.internal.stores.TtlResolver.NO_TTL;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.containsStringIgnoringCase;
@@ -27,10 +28,13 @@ import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
+import dev.responsive.kafka.api.stores.TtlProvider;
+import dev.responsive.kafka.internal.stores.TtlResolver;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
 import java.time.Duration;
 import java.util.Map;
+import java.util.Optional;
 import org.apache.kafka.common.utils.Bytes;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -73,7 +77,7 @@ class CassandraFactTableIntegrationTest {
     final String tableName = params.name().tableName();
     final CassandraFactTable schema = (CassandraFactTable) client
         .factFactory()
-        .create(RemoteTableSpecFactory.fromKVParams(params, defaultPartitioner()));
+        .create(RemoteTableSpecFactory.fromKVParams(params, defaultPartitioner(), NO_TTL));
 
     // When:
     final var token = schema.init(1);
@@ -95,63 +99,13 @@ class CassandraFactTableIntegrationTest {
     assertThat(table.describe(false), containsStringIgnoringCase(tableName + "_md"));
   }
 
-  @SuppressWarnings("OptionalGetWithoutIsPresent")
-  @Test
-  public void shouldSetTtlAndCorrectTwcsOptions() throws Exception {
-    // Given:
-    final var ttl = Duration.ofDays(30);
-    params = ResponsiveKeyValueParams.fact(storeName).withTimeToLive(ttl);
-    final String tableName = params.name().tableName();
-
-    // When:
-    client.factFactory()
-        .create(RemoteTableSpecFactory.fromKVParams(params, defaultPartitioner()));
-
-    // Then:
-    final var table = session.getMetadata()
-        .getKeyspace(session.getKeyspace().get())
-        .get()
-        .getTable(tableName)
-        .get();
-    final String describe = table.describe(false);
-    assertThat(describe,
-        containsString(
-            "'class':'org.apache.cassandra.db.compaction.TimeWindowCompactionStrategy',"
-                + "'compaction_window_size':'" + (ttl.toMinutes() / 20) + "',"
-                + "'compaction_window_unit':'MINUTES'")
-    );
-    assertThat(describe, containsString("default_time_to_live = " + (int) ttl.toSeconds()));
-  }
-
-  @SuppressWarnings("OptionalGetWithoutIsPresent")
-  @Test
-  public void shouldUseTwcsWithoutTtl() throws Exception {
-    // Given:
-    params = ResponsiveKeyValueParams.fact(storeName);
-    final String tableName = params.name().tableName();
-
-    // When:
-    client.factFactory()
-        .create(RemoteTableSpecFactory.fromKVParams(params, defaultPartitioner()));
-
-    // Then:
-    final var table = session.getMetadata()
-        .getKeyspace(session.getKeyspace().get())
-        .get()
-        .getTable(tableName)
-        .get();
-    final String describe = table.describe(false);
-    assertThat(describe,
-        containsString("'org.apache.cassandra.db.compaction.TimeWindowCompactionStrategy'"));
-  }
-
   @Test
   public void shouldInsertAndDelete() throws Exception {
     // Given:
     params = ResponsiveKeyValueParams.fact(storeName);
     final RemoteKVTable<BoundStatement> table = client
         .factFactory()
-        .create(RemoteTableSpecFactory.fromKVParams(params, defaultPartitioner()));
+        .create(RemoteTableSpecFactory.fromKVParams(params, defaultPartitioner(), NO_TTL));
 
     table.init(1);
 
@@ -169,29 +123,31 @@ class CassandraFactTableIntegrationTest {
     assertThat(valAt1, nullValue());
   }
 
+  @SuppressWarnings("OptionalGetWithoutIsPresent")
   @Test
-  public void shouldRespectSemanticTTL() throws Exception {
+  public void shouldRespectSemanticDefaultOnlyTtl() throws Exception {
     // Given:
-    params = ResponsiveKeyValueParams.fact(storeName);
+    final var defaultTtl = Duration.ofMinutes(30);
+    final var ttlProvider = TtlProvider.<String, String>withDefault(defaultTtl);
+    params = ResponsiveKeyValueParams.fact(storeName).withTtlProvider(ttlProvider);
     final String tableName = params.name().tableName();
 
-    final RemoteKVTable<BoundStatement> table = client
-        .factFactory()
-        .create(RemoteTableSpecFactory.fromKVParams(params, defaultPartitioner()));
-
-    table.init(1);
-
-    final Bytes key = Bytes.wrap(new byte[]{0});
-    final byte[] val = new byte[]{1};
-
     // When:
-    client.execute(table.insert(1, key, val, CURRENT_TIME));
-    final byte[] valid = table.get(1, key, MIN_VALID_TS);
-    final byte[] expired = table.get(1, key, CURRENT_TIME + 100L);
+    client.factFactory().create(RemoteTableSpecFactory.fromKVParams(
+        params,
+        defaultPartitioner(),
+        Optional.of(new TtlResolver<>(false, "changelog-ignored", ttlProvider))
+    ));
 
-    // Then
-    assertThat(valid, is(val));
-    assertThat(expired, nullValue());
+    // Then:
+    final var table = session.getMetadata()
+        .getKeyspace(session.getKeyspace().get())
+        .get()
+        .getTable(tableName)
+        .get();
+    final String describe = table.describe(false);
+
+    assertThat(describe, containsString("default_time_to_live = " + (int) defaultTtl.toSeconds()));
   }
 
 }

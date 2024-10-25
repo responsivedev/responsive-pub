@@ -26,12 +26,17 @@ import static org.hamcrest.Matchers.hasSize;
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
+import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
+import dev.responsive.kafka.api.stores.TtlProvider;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
-import dev.responsive.kafka.internal.db.spec.BaseTableSpec;
+import dev.responsive.kafka.internal.db.spec.DefaultTableSpec;
+import dev.responsive.kafka.internal.stores.TtlResolver;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.concurrent.TimeoutException;
 import org.apache.kafka.common.utils.Bytes;
@@ -53,8 +58,9 @@ public class CassandraKVTableIntegrationTest {
   private static final int NUM_SUBPARTITIONS_TOTAL = 8;
   private static final int NUM_KAFKA_PARTITIONS = NUM_SUBPARTITIONS_TOTAL / 4;
 
-  private RemoteKVTable<BoundStatement> table;
   private CassandraClient client;
+  private String storeName; // ie the "kafkaName", NOT the "cassandraName"
+  private ResponsiveConfig config;
 
   @BeforeEach
   public void before(
@@ -67,9 +73,32 @@ public class CassandraKVTableIntegrationTest {
         .withLocalDatacenter(cassandra.getLocalDatacenter())
         .withKeyspace("responsive_itests") // NOTE: this keyspace is expected to exist
         .build();
-    client = new CassandraClient(session, config);
 
-    final String name = info.getTestMethod().orElseThrow().getName();
+    this.client = new CassandraClient(session, config);
+    this.storeName = info.getTestMethod().orElseThrow().getName();
+    this.config = config;
+  }
+
+  private <K, V> RemoteKVTable<BoundStatement> createTable(
+      final TtlProvider<K, V> ttlProvider
+  ) {
+    return createTableFromParams(
+        ResponsiveKeyValueParams.keyValue(storeName).withTtlProvider(ttlProvider)
+    );
+
+  }
+
+  private RemoteKVTable<BoundStatement> createTable() {
+    return createTableFromParams(
+        ResponsiveKeyValueParams.keyValue(storeName)
+    );
+  }
+
+  private RemoteKVTable<BoundStatement> createTableFromParams(
+      final ResponsiveKeyValueParams params
+  ) {
+    final String tableName = params.name().tableName();
+
     final ResponsiveConfig partitionerConfig = copyConfigWithOverrides(
         config,
         singletonMap(CASSANDRA_DESIRED_NUM_PARTITION_CONFIG, NUM_SUBPARTITIONS_TOTAL)
@@ -77,17 +106,27 @@ public class CassandraKVTableIntegrationTest {
     final var partitioner = SubPartitioner.create(
         OptionalInt.empty(),
         NUM_KAFKA_PARTITIONS,
-        name,
+        tableName,
         partitionerConfig,
-        name + "-changelog"
+        storeName + "-changelog"
     );
-    table = CassandraKeyValueTable.create(
-        new BaseTableSpec(name, partitioner), client);
+
+    final Optional<TtlResolver<?, ?>> ttlResolver =
+        TtlResolver.fromTtlProvider(false, "changelog-ignored", params.ttlProvider());
+
+    try {
+      return CassandraKeyValueTable.create(
+          new DefaultTableSpec(tableName, partitioner, ttlResolver), client);
+    } catch (final Exception e) {
+      throw new AssertionError("Failed to create table", e);
+    }
   }
 
   @Test
   public void shouldReturnAllKeysInLexicalOrderAcrossMultipleSubPartitions() {
     // Given:
+    final RemoteKVTable<BoundStatement> table = createTable();
+
     final List<BoundStatement> inserts = List.of(
         table.insert(0, Bytes.wrap(new byte[]{0x0, 0x1}), new byte[]{0x1}, CURRENT_TS),
         table.insert(0, Bytes.wrap(new byte[]{0x1, 0x0}), new byte[]{0x1}, CURRENT_TS),
@@ -115,6 +154,8 @@ public class CassandraKVTableIntegrationTest {
   @Test
   public void shouldReturnRangeKeysInLexicalOrderAcrossMultipleSubPartitions() {
     // Given:
+    final RemoteKVTable<BoundStatement> table = createTable();
+
     final List<BoundStatement> inserts = List.of(
         table.insert(0, Bytes.wrap("A".getBytes()), new byte[]{0x1}, CURRENT_TS),
         table.insert(0, Bytes.wrap("B".getBytes()), new byte[]{0x1}, CURRENT_TS),
@@ -158,6 +199,9 @@ public class CassandraKVTableIntegrationTest {
   @Test
   public void shouldRespectSemanticTtlForLookups() {
     // Given:
+    final TtlProvider<?, ?> ttlProvider = TtlProvider.withDefault(Duration.ofMillis(100));
+    final RemoteKVTable<BoundStatement> table = createTable(ttlProvider);
+
     client.execute(
         table.insert(0, Bytes.wrap(new byte[]{0x0, 0x1}), new byte[]{0x1}, CURRENT_TS));
 
@@ -173,6 +217,9 @@ public class CassandraKVTableIntegrationTest {
   @Test
   public void shouldRespectSemanticTtlForRangeQueries() {
     // Given:
+    final TtlProvider<?, ?> ttlProvider = TtlProvider.withDefault(Duration.ofMillis(100));
+    final RemoteKVTable<BoundStatement> table = createTable(ttlProvider);
+
     final List<BoundStatement> inserts = List.of(
         table.insert(0, Bytes.wrap(new byte[]{0x0, 0x0}), new byte[]{0x1}, CURRENT_TS + 10),
         // expired:
@@ -204,6 +251,9 @@ public class CassandraKVTableIntegrationTest {
   @Test
   public void shouldRespectSemanticTtlForAllQueries() {
     // Given:
+    final TtlProvider<?, ?> ttlProvider = TtlProvider.withDefault(Duration.ofMillis(100));
+    final RemoteKVTable<BoundStatement> table = createTable(ttlProvider);
+
     final List<BoundStatement> inserts = List.of(
         table.insert(0, Bytes.wrap(new byte[]{0x0, 0x0}), new byte[]{0x1}, CURRENT_TS + 10),
         // expired
@@ -231,6 +281,8 @@ public class CassandraKVTableIntegrationTest {
   @Test
   public void shouldSupportDataKeyThatEqualsMetadataKey() {
     // Given:
+    final RemoteKVTable<BoundStatement> table = createTable();
+
     final byte[] valBytes = new byte[]{0x1};
     client.execute(table.insert(0, ColumnName.METADATA_KEY, valBytes, CURRENT_TS));
 

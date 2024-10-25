@@ -41,6 +41,7 @@ public class ResponsiveKeyValueStore
 
   private final ResponsiveKeyValueParams params;
   private final TableName name;
+  private final boolean isTimestamped;
   private final KVOperationsProvider opsProvider;
 
   private Position position; // TODO(IQ): update the position during restoration
@@ -51,9 +52,13 @@ public class ResponsiveKeyValueStore
   private KeyValueOperations operations;
   private StateStoreContext context;
 
-  public ResponsiveKeyValueStore(final ResponsiveKeyValueParams params) {
+  public ResponsiveKeyValueStore(
+      final ResponsiveKeyValueParams params,
+      final boolean isTimestamped
+  ) {
     this(
         params,
+        isTimestamped,
         ResponsiveKeyValueStore::provideOperations
     );
   }
@@ -61,10 +66,12 @@ public class ResponsiveKeyValueStore
   // Visible for Testing
   public ResponsiveKeyValueStore(
       final ResponsiveKeyValueParams params,
+      final boolean isTimestamped,
       final KVOperationsProvider opsProvider
   ) {
     this.params = params;
     this.name = params.name();
+    this.isTimestamped = isTimestamped;
     this.position = Position.emptyPosition();
     this.opsProvider = opsProvider;
 
@@ -108,7 +115,7 @@ public class ResponsiveKeyValueStore
         log.warn("Unexpected standby task created, should transition to active shortly");
       }
 
-      operations = opsProvider.provide(params, storeContext, taskType);
+      operations = opsProvider.provide(params, isTimestamped, storeContext, taskType);
       log.info("Completed initializing state store");
 
       open = true;
@@ -120,12 +127,13 @@ public class ResponsiveKeyValueStore
 
   private static KeyValueOperations provideOperations(
       final ResponsiveKeyValueParams params,
+      final boolean isTimestamped,
       final StateStoreContext context,
       final TaskType taskType
   ) throws InterruptedException, TimeoutException {
     return (taskType == TaskType.GLOBAL)
         ? GlobalOperations.create(context, params)
-        : PartitionedOperations.create(params.name(), context, params);
+        : PartitionedOperations.create(params.name(), isTimestamped, context, params);
   }
 
   @Override

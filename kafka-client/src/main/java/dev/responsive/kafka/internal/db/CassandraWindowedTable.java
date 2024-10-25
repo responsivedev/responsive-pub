@@ -125,7 +125,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
     // (mainly the unpredictable ordering, as well as unidentifiable
     // bounds for the fetchRange queries, etc)
     LOG.info("Creating windowed data table {} in remote store.", name);
-    final CreateTableWithOptions createTable = spec.applyOptions(createTable(name));
+    final CreateTableWithOptions createTable = spec.applyDefaultOptions(createTable(name));
 
     client.execute(createTable.build());
     client.awaitTable(name).await(Duration.ofSeconds(60));

@@ -19,9 +19,7 @@ package dev.responsive.kafka.internal.db;
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.kafka.internal.clients.TTDCassandraClient;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
-import dev.responsive.kafka.internal.db.spec.DelegatingTableSpec;
 import dev.responsive.kafka.internal.db.spec.RemoteTableSpec;
-import dev.responsive.kafka.internal.db.spec.TtlTableSpec;
 import dev.responsive.kafka.internal.stores.KVStoreStub;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
 import java.time.Duration;
@@ -44,19 +42,21 @@ public class TTDKeyValueTable extends TTDTable<Bytes> implements RemoteKVTable<B
     super(client);
 
     name = spec.tableName();
-    Duration ttl = null;
-    RemoteTableSpec maybeTtlSpec = spec;
+    final Duration defaultTtl;
+    if (spec.ttlResolver().isPresent()) {
+      defaultTtl = spec.ttlResolver().get().defaultTtl().isFinite()
+          ? spec.ttlResolver().get().defaultTtl().duration()
+          : null;
 
-    while (maybeTtlSpec instanceof DelegatingTableSpec) {
-      if (maybeTtlSpec instanceof TtlTableSpec) {
-        ttl = ((TtlTableSpec) maybeTtlSpec).ttl();
-        break;
+      if (!spec.ttlResolver().get().hasDefaultOnly()) {
+        throw new UnsupportedOperationException("The ResponsiveTopologyTestDriver does not yet "
+                                                    + "support key/value based ttl");
       }
-
-      maybeTtlSpec = ((DelegatingTableSpec) maybeTtlSpec).delegate();
+    } else  {
+      defaultTtl = null;
     }
 
-    stub = new KVStoreStub(ttl, time);
+    stub = new KVStoreStub(defaultTtl, time);
   }
 
   @Override

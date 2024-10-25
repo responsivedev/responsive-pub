@@ -20,13 +20,11 @@ import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.api.stores.ResponsiveWindowParams;
 import dev.responsive.kafka.internal.db.partitioning.Segmenter.SegmentPartition;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
-import dev.responsive.kafka.internal.db.spec.BaseTableSpec;
-import dev.responsive.kafka.internal.db.spec.GlobalTableSpec;
+import dev.responsive.kafka.internal.db.spec.DefaultTableSpec;
 import dev.responsive.kafka.internal.db.spec.RemoteTableSpec;
-import dev.responsive.kafka.internal.db.spec.TimeWindowedCompactionTableSpec;
-import dev.responsive.kafka.internal.db.spec.TtlTableSpec;
-import dev.responsive.kafka.internal.stores.SchemaTypes;
+import dev.responsive.kafka.internal.stores.TtlResolver;
 import dev.responsive.kafka.internal.utils.WindowedKey;
+import java.util.Optional;
 import org.apache.kafka.common.utils.Bytes;
 
 /**
@@ -40,35 +38,23 @@ import org.apache.kafka.common.utils.Bytes;
  */
 public class RemoteTableSpecFactory {
 
-  public static RemoteTableSpec globalSpec(
-      final ResponsiveKeyValueParams params,
-      final TablePartitioner<Bytes, Integer> partitioner
-  ) {
-    return new GlobalTableSpec(new BaseTableSpec(params.name().tableName(), partitioner));
-  }
-
   public static RemoteTableSpec fromKVParams(
       final ResponsiveKeyValueParams params,
-      final TablePartitioner<Bytes, Integer> partitioner
+      final TablePartitioner<Bytes, Integer> partitioner,
+      final Optional<TtlResolver<?, ?>> ttlResolver
   ) {
-    RemoteTableSpec spec = new BaseTableSpec(params.name().tableName(), partitioner);
-
-    if (params.ttlProvider().isPresent()) {
-      spec = new TtlTableSpec(spec, params.defaultTimeToLive().get().duration());
-    }
-
-    if (params.schemaType() == SchemaTypes.KVSchema.FACT) {
-      spec = new TimeWindowedCompactionTableSpec(spec);
-    }
-
-    return spec;
+    return new DefaultTableSpec(
+        params.name().tableName(),
+        partitioner,
+        ttlResolver
+    );
   }
 
   public static RemoteTableSpec fromWindowParams(
       final ResponsiveWindowParams params,
       final TablePartitioner<WindowedKey, SegmentPartition> partitioner
   ) {
-    return new BaseTableSpec(params.name().tableName(), partitioner);
+    return new DefaultTableSpec(params.name().tableName(), partitioner, Optional.empty());
   }
 
 }

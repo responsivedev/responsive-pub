@@ -74,6 +74,7 @@ public class PartitionedOperations implements KeyValueOperations {
 
   public static PartitionedOperations create(
       final TableName name,
+      final boolean isTimestamped,
       final StateStoreContext storeContext,
       final ResponsiveKeyValueParams params
   ) throws InterruptedException, TimeoutException {
@@ -95,16 +96,22 @@ public class PartitionedOperations implements KeyValueOperations {
         context.taskId().partition()
     );
 
+    final Optional<TtlResolver<?, ?>> ttlResolver = TtlResolver.fromTtlProvider(
+        isTimestamped,
+        changelog.topic(),
+        params.ttlProvider()
+    );
+
     final RemoteKVTable<?> table;
     switch (sessionClients.storageBackend()) {
       case CASSANDRA:
-        table = createCassandra(params, config, sessionClients, changelog.topic());
+        table = createCassandra(params, config, sessionClients, changelog.topic(), ttlResolver);
         break;
       case MONGO_DB:
-        table = createMongo(params, sessionClients);
+        table = createMongo(params, sessionClients, ttlResolver);
         break;
       case IN_MEMORY:
-        table = createInMemory(params);
+        table = createInMemory(params, ttlResolver);
         break;
       default:
         throw new IllegalStateException("Unexpected value: " + sessionClients.storageBackend());
@@ -183,7 +190,13 @@ public class PartitionedOperations implements KeyValueOperations {
     }
   }
 
-  private static RemoteKVTable<?> createInMemory(final ResponsiveKeyValueParams params) {
+  private static RemoteKVTable<?> createInMemory(
+      final ResponsiveKeyValueParams params,
+      final Optional<TtlResolver<?, ?>> ttlResolver
+  ) {
+    if (ttlResolver.isPresent()) {
+      throw new UnsupportedOperationException("ttl is not yet supported for in-memory stores");
+    }
     return new InMemoryKVTable(params.name().tableName());
   }
 
@@ -191,7 +204,8 @@ public class PartitionedOperations implements KeyValueOperations {
       final ResponsiveKeyValueParams params,
       final ResponsiveConfig config,
       final SessionClients sessionClients,
-      final String changelogTopicName
+      final String changelogTopicName,
+      final Optional<TtlResolver<?, ?>> ttlResolver
   ) throws InterruptedException, TimeoutException {
 
     final int numChangelogPartitions =
@@ -211,7 +225,7 @@ public class PartitionedOperations implements KeyValueOperations {
             changelogTopicName
         );
     final var client = sessionClients.cassandraClient();
-    final var spec = RemoteTableSpecFactory.fromKVParams(params, partitioner);
+    final var spec = RemoteTableSpecFactory.fromKVParams(params, partitioner, ttlResolver);
     switch (params.schemaType()) {
       case KEY_VALUE:
         return client.kvFactory().create(spec);
@@ -224,9 +238,10 @@ public class PartitionedOperations implements KeyValueOperations {
 
   private static RemoteKVTable<?> createMongo(
       final ResponsiveKeyValueParams params,
-      final SessionClients sessionClients
+      final SessionClients sessionClients,
+      final Optional<TtlResolver<?, ?>> ttlResolver
   ) throws InterruptedException, TimeoutException {
-    return sessionClients.mongoClient().kvTable(params.name().tableName());
+    return sessionClients.mongoClient().kvTable(params.name().tableName(), ttlResolver);
   }
 
   @SuppressWarnings("rawtypes")

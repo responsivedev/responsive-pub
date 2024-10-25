@@ -56,17 +56,22 @@ public class GlobalOperations implements KeyValueOperations {
 
     // Save this so we don't have to rebuild the config map on every access
     final var appConfigs = storeContext.appConfigs();
+    final TopicPartition changelogTopic = new TopicPartition(context.topic(), 0);
 
     final SessionClients sessionClients = loadSessionClients(appConfigs);
     final var client = sessionClients.cassandraClient();
-    final var spec = RemoteTableSpecFactory.globalSpec(params, defaultPartitioner());
+    final var spec = RemoteTableSpecFactory.fromKVParams(
+        params,
+        defaultPartitioner(),
+        TtlResolver.fromTtlProvider(false, changelogTopic.topic(), params.ttlProvider())
+    );
 
     final var table = client.globalFactory().create(spec);
     table.init(IGNORED_PARTITION);
 
     return new GlobalOperations(
         params.name().kafkaName(),
-        new TopicPartition(context.topic(), 0),
+        changelogTopic,
         sessionClients.restoreListener(),
         context,
         client,

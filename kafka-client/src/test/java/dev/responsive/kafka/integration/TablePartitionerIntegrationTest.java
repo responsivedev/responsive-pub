@@ -49,7 +49,8 @@ import dev.responsive.kafka.internal.db.CassandraKeyValueTable;
 import dev.responsive.kafka.internal.db.partitioning.Hasher;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
-import dev.responsive.kafka.internal.db.spec.BaseTableSpec;
+import dev.responsive.kafka.internal.db.spec.DefaultTableSpec;
+import dev.responsive.kafka.internal.stores.TtlResolver;
 import dev.responsive.kafka.internal.utils.TableName;
 import dev.responsive.kafka.testutils.IntegrationTestUtils;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
@@ -182,7 +183,7 @@ public class TablePartitionerIntegrationTest {
           storeName + "-changelog"
       );
       final CassandraKeyValueTable table = CassandraKeyValueTable.create(
-          new BaseTableSpec(cassandraName, partitioner), client);
+          new DefaultTableSpec(cassandraName, partitioner, TtlResolver.NO_TTL), client);
 
       assertThat(client.numPartitions(cassandraName), is(OptionalInt.of(32)));
       assertThat(client.count(cassandraName, 0), is(2L));
@@ -232,7 +233,7 @@ public class TablePartitionerIntegrationTest {
       final String cassandraName = new TableName(storeName).tableName();
       final var partitioner = TablePartitioner.defaultPartitioner();
       final CassandraFactTable table = CassandraFactTable.create(
-          new BaseTableSpec(cassandraName, partitioner), client);
+          new DefaultTableSpec(cassandraName, partitioner, TtlResolver.NO_TTL), client);
 
       final var offset0 = table.fetchOffset(0);
       final var offset1 = table.fetchOffset(1);
@@ -311,7 +312,7 @@ public class TablePartitionerIntegrationTest {
           storeName + "-changelog"
       );
       final CassandraKeyValueTable table = CassandraKeyValueTable.create(
-          new BaseTableSpec(cassandraName, partitioner), client);
+          new DefaultTableSpec(cassandraName, partitioner, TtlResolver.NO_TTL), client);
 
       assertThat(client.numPartitions(cassandraName), is(OptionalInt.of(32)));
       assertThat(client.count(cassandraName, 0), is(2L));
