@@ -38,7 +38,7 @@ public interface RemoteKVTable<S> extends RemoteTable<Bytes, S> {
    *
    * @param kafkaPartition  the kafka partition
    * @param key             the data key
-   * @param streamTimeMs   the current streamTime
+   * @param streamTimeMs    the current streamTime
    *
    * @return the value previously set
    */
@@ -56,7 +56,7 @@ public interface RemoteKVTable<S> extends RemoteTable<Bytes, S> {
    * @param kafkaPartition  the kafka partition
    * @param from            the starting key (inclusive)
    * @param to              the ending key (inclusive)
-   * @param streamTimeMs   the current streamTime
+   * @param streamTimeMs    the current streamTime
    *
    * @return an iterator of all key-value pairs in the range
    */
@@ -76,7 +76,7 @@ public interface RemoteKVTable<S> extends RemoteTable<Bytes, S> {
    * session).
    *
    * @param kafkaPartition  the kafka partition
-   * @param streamTimeMs   the current streamTime
+   * @param streamTimeMs    the current streamTime
    *
    * @return an iterator of all key-value pairs
    */
