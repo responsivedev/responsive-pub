@@ -17,7 +17,6 @@
 package dev.responsive.kafka.internal.db;
 
 import static dev.responsive.kafka.api.config.ResponsiveConfig.CASSANDRA_DESIRED_NUM_PARTITION_CONFIG;
-import static dev.responsive.kafka.internal.db.partitioning.TablePartitioner.defaultPartitioner;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.copyConfigWithOverrides;
 import static java.util.Collections.singletonMap;
 import static org.hamcrest.MatcherAssert.assertThat;
