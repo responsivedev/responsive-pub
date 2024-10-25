@@ -65,10 +65,17 @@ public class TtlResolver<K, V> {
     return ttlProvider.needsValueToComputeTtl();
   }
 
+  /**
+   * @return the raw result from the user's ttl computation function for this row
+   */
   public Optional<TtlDuration> computeTtl(final Bytes keyBytes, final byte[] valueBytes) {
     return ttlProvider.computeTtl(keyBytes.get(), valueBytes, stateDeserializer);
   }
 
+  /**
+   * @return the actual ttl for this row after resolving the raw result returned by the user
+   *         (eg applying the default value)
+   */
   public TtlDuration resolveTtl(final Bytes keyBytes, final byte[] valueBytes) {
     final Optional<TtlDuration> ttl = computeTtl(keyBytes, valueBytes);
     return ttl.orElse(defaultTtl());
