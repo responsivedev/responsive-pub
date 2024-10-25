@@ -82,8 +82,21 @@ public class CassandraKVTableIntegrationTest {
   private <K, V> RemoteKVTable<BoundStatement> createTable(
       final TtlProvider<K, V> ttlProvider
   ) {
-    final ResponsiveKeyValueParams params = ResponsiveKeyValueParams.keyValue(storeName)
-        .withTtlProvider(ttlProvider);
+    return createTableFromParams(
+        ResponsiveKeyValueParams.keyValue(storeName).withTtlProvider(ttlProvider)
+    );
+
+  }
+
+  private RemoteKVTable<BoundStatement> createTable() {
+    return createTableFromParams(
+        ResponsiveKeyValueParams.keyValue(storeName)
+    );
+  }
+
+  private RemoteKVTable<BoundStatement> createTableFromParams(
+      final ResponsiveKeyValueParams params
+  ) {
     final String tableName = params.name().tableName();
 
     final ResponsiveConfig partitionerConfig = copyConfigWithOverrides(
@@ -98,9 +111,8 @@ public class CassandraKVTableIntegrationTest {
         storeName + "-changelog"
     );
 
-    final Optional<TtlResolver<?, ?>> ttlResolver = ttlProvider == null
-        ? Optional.empty()
-        : Optional.of(new TtlResolver<>(false, "changelog-ignored", ttlProvider));
+    final Optional<TtlResolver<?, ?>> ttlResolver =
+        TtlResolver.fromTtlProvider(false, "changelog-ignored", params.ttlProvider());
 
     try {
       return CassandraKeyValueTable.create(
@@ -108,10 +120,6 @@ public class CassandraKVTableIntegrationTest {
     } catch (final Exception e) {
       throw new AssertionError("Failed to create table", e);
     }
-  }
-
-  private RemoteKVTable<BoundStatement> createTable() {
-    return createTable(null);
   }
 
   @Test

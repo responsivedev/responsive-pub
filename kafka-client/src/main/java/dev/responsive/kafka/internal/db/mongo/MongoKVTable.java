@@ -71,14 +71,6 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
   public MongoKVTable(
       final MongoClient client,
       final String name,
-      final CollectionCreationOptions collectionCreationOptions
-  ) {
-    this(client, name, collectionCreationOptions, null);
-  }
-
-  public MongoKVTable(
-      final MongoClient client,
-      final String name,
       final CollectionCreationOptions collectionCreationOptions,
       final Optional<TtlResolver<?, ?>> ttlResolver
   ) {

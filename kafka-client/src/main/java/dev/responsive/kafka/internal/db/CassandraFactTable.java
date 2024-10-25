@@ -33,10 +33,12 @@ import com.datastax.oss.driver.api.querybuilder.QueryBuilder;
 import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
 import com.datastax.oss.driver.api.querybuilder.schema.CreateTableWithOptions;
 import dev.responsive.kafka.internal.db.spec.RemoteTableSpec;
+import dev.responsive.kafka.internal.stores.TtlResolver;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import javax.annotation.CheckReturnValue;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -82,7 +84,9 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
     final String name = spec.tableName();
     LOG.info("Creating fact data table {} in remote store.", name);
 
-    final CreateTableWithOptions createTable = spec.defaultOptions(createTable(name));
+    final CreateTableWithOptions createTable = spec.applyDefaultOptions(
+        createTable(name, spec.ttlResolver())
+    );
 
     // separate metadata from the main table for the fact schema, this is acceptable
     // because we don't use the metadata at all for fencing operations and writes to
@@ -165,14 +169,24 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
     );
   }
 
-  private static CreateTableWithOptions createTable(final String tableName) {
-    return SchemaBuilder
+  private static CreateTableWithOptions createTable(
+      final String tableName,
+      final Optional<TtlResolver<?, ?>> ttlResolver
+  ) {
+    final var baseOptions = SchemaBuilder
         .createTable(tableName)
         .ifNotExists()
         .withPartitionKey(ROW_TYPE.column(), DataTypes.TINYINT)
         .withPartitionKey(DATA_KEY.column(), DataTypes.BLOB)
         .withColumn(TIMESTAMP.column(), DataTypes.TIMESTAMP)
         .withColumn(DATA_VALUE.column(), DataTypes.BLOB);
+
+    if (ttlResolver.isPresent() && ttlResolver.get().defaultTtl().isFinite()) {
+      return baseOptions.withDefaultTimeToLiveSeconds(
+          (int) ttlResolver.get().defaultTtl().toSeconds());
+    } else {
+      return baseOptions;
+    }
   }
 
   @Override

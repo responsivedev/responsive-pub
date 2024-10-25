@@ -48,7 +48,7 @@ public class TTDKeyValueTable extends TTDTable<Bytes> implements RemoteKVTable<B
           ? spec.ttlResolver().get().defaultTtl().duration()
           : null;
 
-      if (!spec.ttlResolver().get().hasConstantTtl()) {
+      if (!spec.ttlResolver().get().hasDefaultOnly()) {
         throw new UnsupportedOperationException("The ResponsiveTopologyTestDriver does not yet "
                                                     + "support key/value based ttl");
       }

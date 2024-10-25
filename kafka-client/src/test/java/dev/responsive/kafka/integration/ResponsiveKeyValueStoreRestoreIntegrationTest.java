@@ -404,7 +404,8 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
       table = new MongoKVTable(
           mongoClient,
           aggName(),
-          CollectionCreationOptions.fromConfig(config)
+          CollectionCreationOptions.fromConfig(config),
+          TtlResolver.NO_TTL
       );
       table.init(0);
     } else {

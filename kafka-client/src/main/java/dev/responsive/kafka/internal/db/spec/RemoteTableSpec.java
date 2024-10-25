@@ -34,6 +34,6 @@ public interface RemoteTableSpec {
 
   Optional<TtlResolver<?, ?>> ttlResolver();
 
-  CreateTableWithOptions defaultOptions(final CreateTableWithOptions base);
+  CreateTableWithOptions applyDefaultOptions(final CreateTableWithOptions base);
 
 }

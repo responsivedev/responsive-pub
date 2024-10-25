@@ -58,7 +58,7 @@ public class DefaultTableSpec implements RemoteTableSpec {
   }
 
   @Override
-  public CreateTableWithOptions defaultOptions(final CreateTableWithOptions base) {
+  public CreateTableWithOptions applyDefaultOptions(final CreateTableWithOptions base) {
     return base.withCompaction(DEFAULT_CASSANDRA_COMPACTION_STRATEGY);
   }
 }
