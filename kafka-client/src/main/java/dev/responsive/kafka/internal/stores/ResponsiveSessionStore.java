@@ -24,7 +24,9 @@ import dev.responsive.kafka.api.stores.ResponsiveSessionParams;
 import dev.responsive.kafka.internal.utils.Iterators;
 import dev.responsive.kafka.internal.utils.SessionKey;
 import dev.responsive.kafka.internal.utils.TableName;
+import java.util.Collection;
 import java.util.concurrent.TimeoutException;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.ProcessorStateException;
@@ -32,6 +34,7 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
@@ -95,7 +98,7 @@ public class ResponsiveSessionStore implements SessionStore<Bytes, byte[]> {
     }
 
     log.info("Completed initializing state store");
-    storeContext.register(root, sessionOperations);
+    storeContext.register(root, (RecordBatchingStateRestoreCallback) this::restoreBatch);
     this.open = true;
   }
 
@@ -227,5 +230,12 @@ public class ResponsiveSessionStore implements SessionStore<Bytes, byte[]> {
    */
   private long minValidEndTimestamp() {
     return observedStreamTime - params.retentionPeriod() + 1;
+  }
+
+  public void restoreBatch(final Collection<ConsumerRecord<byte[], byte[]>> records) {
+    observedStreamTime = Math.max(
+        observedStreamTime,
+        sessionOperations.restoreBatch(records, observedStreamTime)
+    );
   }
 }

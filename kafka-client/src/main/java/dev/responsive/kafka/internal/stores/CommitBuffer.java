@@ -68,12 +68,10 @@ import org.apache.kafka.common.metrics.stats.CumulativeCount;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.slf4j.Logger;
 
-public class CommitBuffer<K extends Comparable<K>, P>
-    implements RecordBatchingStateRestoreCallback, Closeable {
+public class CommitBuffer<K extends Comparable<K>, P> implements Closeable {
 
   public static final int MAX_BATCH_SIZE = 1000;
 
@@ -444,10 +442,15 @@ public class CommitBuffer<K extends Comparable<K>, P>
     buffer.clear();
   }
 
-  @Override
-  public void restoreBatch(final Collection<ConsumerRecord<byte[], byte[]>> records) {
+
+  public long restoreBatch(
+      final Collection<ConsumerRecord<byte[], byte[]>> records,
+      final long currentStreamTimeMs
+  ) {
+    long streamTimeMs = currentStreamTimeMs;
     final List<ConsumerRecord<byte[], byte[]>> batch = new ArrayList<>(maxBatchSize);
     for (final ConsumerRecord<byte[], byte[]> r : records) {
+      streamTimeMs = Math.max(streamTimeMs, r.timestamp());
       batch.add(r);
       if (batch.size() >= maxBatchSize) {
         restoreCassandraBatch(batch);
@@ -457,6 +460,7 @@ public class CommitBuffer<K extends Comparable<K>, P>
     if (batch.size() > 0) {
       restoreCassandraBatch(batch);
     }
+    return streamTimeMs;
   }
 
   private void restoreCassandraBatch(final Collection<ConsumerRecord<byte[], byte[]>> records) {

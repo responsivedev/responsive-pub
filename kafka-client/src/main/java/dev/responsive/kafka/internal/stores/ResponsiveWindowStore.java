@@ -27,7 +27,9 @@ import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.stores.ResponsiveWindowParams;
 import dev.responsive.kafka.internal.utils.Iterators;
 import dev.responsive.kafka.internal.utils.TableName;
+import java.util.Collection;
 import java.util.concurrent.TimeoutException;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.ProcessorStateException;
@@ -35,6 +37,7 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
@@ -120,7 +123,7 @@ public class ResponsiveWindowStore
       log.info("Completed initializing state store");
 
       open = true;
-      storeContext.register(root, windowOperations);
+      storeContext.register(root, (RecordBatchingStateRestoreCallback) this::restoreBatch);
     } catch (InterruptedException | TimeoutException e) {
       throw new ProcessorStateException("Failed to initialize store.", e);
     }
@@ -352,6 +355,13 @@ public class ResponsiveWindowStore
   private long minValidTimestamp() {
     // add one b/c records expire exactly {retentionPeriod}ms after created
     return observedStreamTime - retentionPeriod + 1;
+  }
+
+  public void restoreBatch(final Collection<ConsumerRecord<byte[], byte[]>> records) {
+    observedStreamTime = Math.max(
+        observedStreamTime,
+        windowOperations.restoreBatch(records, observedStreamTime)
+    );
   }
 
 }

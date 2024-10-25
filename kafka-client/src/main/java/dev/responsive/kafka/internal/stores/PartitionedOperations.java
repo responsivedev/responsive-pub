@@ -291,6 +291,12 @@ public class PartitionedOperations implements KeyValueOperations {
 
   @Override
   public byte[] delete(final Bytes key) {
+    final long currentRecordTimestamp = currentRecordTimestamp();
+
+    if (streamTimeMs < currentRecordTimestamp) {
+      streamTimeMs = currentRecordTimestamp;
+    }
+
     // single writer prevents races (see putIfAbsent)
     final byte[] old = get(key);
     buffer.tombstone(key, currentRecordTimestamp());
@@ -383,7 +389,10 @@ public class PartitionedOperations implements KeyValueOperations {
 
   @Override
   public void restoreBatch(final Collection<ConsumerRecord<byte[], byte[]>> records) {
-    buffer.restoreBatch(records);
+    streamTimeMs = Math.max(
+        streamTimeMs,
+        buffer.restoreBatch(records, streamTimeMs)
+    );
   }
 
   private long currentRecordTimestamp() {
