@@ -82,11 +82,10 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
       final CassandraClient client
   ) {
     final String name = spec.tableName();
-    final var ttlResolver = spec.ttlResolver();
     LOG.info("Creating fact data table {} in remote store.", name);
 
     final CreateTableWithOptions createTable = spec.applyDefaultOptions(
-        createTable(name, ttlResolver)
+        createTable(name, spec.ttlResolver())
     );
 
     // separate metadata from the main table for the fact schema, this is acceptable
