@@ -40,6 +40,7 @@ import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
 import com.datastax.oss.driver.api.querybuilder.schema.CreateTableWithOptions;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.db.spec.RemoteTableSpec;
+import dev.responsive.kafka.internal.stores.TtlResolver;
 import dev.responsive.kafka.internal.utils.Iterators;
 import java.nio.ByteBuffer;
 import java.time.Duration;
@@ -47,6 +48,7 @@ import java.time.Instant;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.TimeoutException;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
@@ -81,8 +83,9 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
       final CassandraClient client
   ) throws InterruptedException, TimeoutException {
     final String name = spec.tableName();
+    final var ttlResolver = spec.ttlResolver();
     LOG.info("Creating data table {} in remote store.", name);
-    client.execute(spec.applyDefaultOptions(createTable(name)).build());
+    client.execute(spec.applyDefaultOptions(createTable(name, ttlResolver)).build());
 
     client.awaitTable(name).await(Duration.ofSeconds(60));
 
@@ -224,8 +227,11 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
     );
   }
 
-  private static CreateTableWithOptions createTable(final String tableName) {
-    return SchemaBuilder
+  private static CreateTableWithOptions createTable(
+      final String tableName,
+      final Optional<TtlResolver<?, ?>> ttlResolver
+  ) {
+    final var baseOptions = SchemaBuilder
         .createTable(tableName)
         .ifNotExists()
         .withPartitionKey(PARTITION_KEY.column(), DataTypes.INT)
@@ -235,6 +241,13 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
         .withColumn(OFFSET.column(), DataTypes.BIGINT)
         .withColumn(EPOCH.column(), DataTypes.BIGINT)
         .withColumn(TIMESTAMP.column(), DataTypes.TIMESTAMP);
+
+    if (ttlResolver.isPresent() && ttlResolver.get().defaultTtl().isFinite()) {
+      final int defaultTtlSeconds = (int) ttlResolver.get().defaultTtl().toSeconds();
+      return baseOptions.withDefaultTimeToLiveSeconds(defaultTtlSeconds);
+    } else {
+      return baseOptions;
+    }
   }
 
   // Visible for Testing
