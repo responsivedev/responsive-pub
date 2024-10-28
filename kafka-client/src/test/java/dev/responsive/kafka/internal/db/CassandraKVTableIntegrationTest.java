@@ -20,6 +20,7 @@ import static dev.responsive.kafka.api.config.ResponsiveConfig.CASSANDRA_DESIRED
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.copyConfigWithOverrides;
 import static java.util.Collections.singletonMap;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasSize;
 
@@ -38,6 +39,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -59,6 +61,7 @@ public class CassandraKVTableIntegrationTest {
   private static final int NUM_KAFKA_PARTITIONS = NUM_SUBPARTITIONS_TOTAL / 4;
 
   private CassandraClient client;
+  private CqlSession session;
   private String storeName; // ie the "kafkaName", NOT the "cassandraName"
   private ResponsiveConfig config;
 
@@ -68,7 +71,7 @@ public class CassandraKVTableIntegrationTest {
       final CassandraContainer<?> cassandra,
       @ResponsiveConfigParam final ResponsiveConfig config
   ) throws InterruptedException, TimeoutException {
-    final CqlSession session = CqlSession.builder()
+    this.session = CqlSession.builder()
         .addContactPoint(cassandra.getContactPoint())
         .withLocalDatacenter(cassandra.getLocalDatacenter())
         .withKeyspace("responsive_itests") // NOTE: this keyspace is expected to exist
@@ -194,6 +197,31 @@ public class CassandraKVTableIntegrationTest {
       assertThat(keys.get(8), equalTo(Bytes.wrap("G".getBytes())));
       assertThat(keys.get(9), equalTo(Bytes.wrap("H".getBytes())));
     }
+  }
+
+  @SuppressWarnings("OptionalGetWithoutIsPresent")
+  @Test
+  public void shouldConfigureDefaultTtl()  {
+    // Given:
+    final long ttlMs = 100L;
+    final TtlProvider<?, ?> ttlProvider = TtlProvider.withDefault(Duration.ofMillis(ttlMs));
+    final ResponsiveKeyValueParams params =
+        ResponsiveKeyValueParams.keyValue(storeName).withTtlProvider(ttlProvider);
+    final String tableName = params.name().tableName();
+
+    // When:
+    createTableFromParams(params);
+
+    // Then:
+    final var table = session.getMetadata()
+        .getKeyspace(session.getKeyspace().get())
+        .get()
+        .getTable(tableName)
+        .get();
+    final String describe = table.describe(false);
+
+    final int ttlSeconds = (int) TimeUnit.MILLISECONDS.toSeconds(ttlMs);
+    assertThat(describe, containsString("default_time_to_live = " + ttlSeconds));
   }
 
   @Test
