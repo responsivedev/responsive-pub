@@ -29,6 +29,7 @@ public class KVDoc {
   public static final String VALUE = "value";
   public static final String EPOCH = "epoch";
   public static final String TIMESTAMP = "ts";
+  public static final String TTL_TIMESTAMP = "ttlTs";
   public static final String KAFKA_PARTITION = "partition";
   public static final String TOMBSTONE_TS = "tombstoneTs";
 
@@ -39,6 +40,7 @@ public class KVDoc {
   byte[] value;
   long epoch;
   long timestamp;
+  long ttlTimestamp;
   int kafkaPartition;
   Date tombstoneTs;
 
@@ -51,12 +53,14 @@ public class KVDoc {
       @BsonProperty(VALUE) byte[] value,
       @BsonProperty(EPOCH) long epoch,
       @BsonProperty(TIMESTAMP) long timestamp,
+      @BsonProperty(TTL_TIMESTAMP) long ttlTimestamp,
       @BsonProperty(KAFKA_PARTITION) int kafkaPartition
   ) {
     this.id = id;
     this.value = value;
     this.epoch = epoch;
     this.timestamp = timestamp;
+    this.ttlTimestamp = ttlTimestamp;
     this.kafkaPartition = kafkaPartition;
   }
 
@@ -80,6 +84,10 @@ public class KVDoc {
     this.timestamp = timestamp;
   }
 
+  public void setTtlTimestamp(final long ttlTimestamp) {
+    this.ttlTimestamp = ttlTimestamp;
+  }
+
   public byte[] getValue() {
     return value;
   }
@@ -90,6 +98,10 @@ public class KVDoc {
 
   public long getTimestamp() {
     return timestamp;
+  }
+
+  public long getTtlTimestamp() {
+    return ttlTimestamp;
   }
 
   public int getKafkaPartition() {
@@ -121,13 +133,14 @@ public class KVDoc {
         && Objects.equals(id, kvDoc.id)
         && Arrays.equals(value, kvDoc.value)
         && Objects.equals(timestamp, kvDoc.timestamp)
+        && Objects.equals(ttlTimestamp, kvDoc.ttlTimestamp)
         && Objects.equals(kafkaPartition, kvDoc.kafkaPartition)
         && Objects.equals(tombstoneTs, kvDoc.tombstoneTs);
   }
 
   @Override
   public int hashCode() {
-    int result = Objects.hash(id, epoch, tombstoneTs, timestamp, kafkaPartition);
+    int result = Objects.hash(id, epoch, tombstoneTs, timestamp, ttlTimestamp, kafkaPartition);
     result = 31 * result + Arrays.hashCode(value);
     return result;
   }
@@ -140,6 +153,7 @@ public class KVDoc {
         + ", epoch=" + epoch
         + ", tombstoneTs=" + tombstoneTs
         + ", timestamp=" + timestamp
+        + ", ttlTimestamp=" + ttlTimestamp
         + ", kafkaPartition=" + kafkaPartition
         + '}';
   }

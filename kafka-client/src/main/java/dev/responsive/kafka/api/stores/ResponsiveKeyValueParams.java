@@ -71,13 +71,4 @@ public final class ResponsiveKeyValueParams {
     return ttlProvider;
   }
 
-  public Optional<TtlDuration> defaultTimeToLive() {
-    if (ttlProvider.isPresent()) {
-      return Optional.ofNullable(ttlProvider.get().defaultTtl());
-
-    } else {
-      return Optional.empty();
-    }
-  }
-
 }

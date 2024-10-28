@@ -19,6 +19,7 @@ package dev.responsive.kafka.integration;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_ENDPOINT_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_PASSWORD_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_USERNAME_CONFIG;
+import static dev.responsive.kafka.internal.stores.TtlResolver.NO_TTL;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.getCassandraValidName;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.pipeInput;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.slurpPartition;
@@ -377,14 +378,14 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
               changelog.topic()
           );
           table = cassandraClient.kvFactory()
-              .create(new DefaultTableSpec(aggName(), partitioner, TtlResolver.NO_TTL));
+              .create(new DefaultTableSpec(aggName(), partitioner, NO_TTL));
           break;
         case FACT:
           table = cassandraClient.factFactory()
               .create(new DefaultTableSpec(
                   aggName(),
                   TablePartitioner.defaultPartitioner(),
-                  TtlResolver.NO_TTL
+                  NO_TTL
               ));
           break;
         default:
@@ -405,7 +406,7 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
           mongoClient,
           aggName(),
           CollectionCreationOptions.fromConfig(config),
-          TtlResolver.NO_TTL
+          NO_TTL
       );
       table.init(0);
     } else {

@@ -18,6 +18,7 @@ package dev.responsive.kafka.internal.db.mongo;
 
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.model.WriteModel;
+import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.RemoteSessionTable;
 import dev.responsive.kafka.internal.db.RemoteWindowedTable;

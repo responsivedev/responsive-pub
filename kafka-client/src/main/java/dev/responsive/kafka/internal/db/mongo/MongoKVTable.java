@@ -35,11 +35,11 @@ import com.mongodb.client.model.UpdateOptions;
 import com.mongodb.client.model.Updates;
 import com.mongodb.client.model.WriteModel;
 import com.mongodb.client.result.UpdateResult;
+import dev.responsive.kafka.api.stores.TtlProvider.TtlDuration;
 import dev.responsive.kafka.internal.db.MongoKVFlushManager;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.stores.TtlResolver;
 import dev.responsive.kafka.internal.utils.Iterators;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
 import java.util.Optional;
@@ -52,6 +52,7 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.bson.codecs.configuration.CodecProvider;
 import org.bson.codecs.configuration.CodecRegistry;
 import org.bson.codecs.pojo.PojoCodecProvider;
+import org.bson.conversions.Bson;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -63,6 +64,8 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
 
   private final String name;
   private final KeyCodec keyCodec;
+  private final Optional<TtlResolver<?, ?>> ttlResolver;
+  private final long defaultTtlSeconds;
   private final MongoCollection<KVDoc> docs;
   private final MongoCollection<KVMetadataDoc> metadata;
 
@@ -76,6 +79,7 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
   ) {
     this.name = name;
     this.keyCodec = new StringKeyCodec();
+    this.ttlResolver = ttlResolver;
     final CodecProvider pojoCodecProvider = PojoCodecProvider.builder().automatic(true).build();
     final CodecRegistry pojoCodecRegistry = fromRegistries(
         getDefaultCodecRegistry(),
@@ -105,14 +109,19 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
     );
 
     if (ttlResolver.isPresent()) {
-      // TODO(sophie): account for infinite default ttl
-      final Duration expireAfter =
-          ttlResolver.get().defaultTtl().duration().plus(Duration.ofHours(12));
-      final long expireAfterSeconds = expireAfter.getSeconds();
+      // if the default ttl is infinite  we still have to define the ttl index for
+      // the table since the ttlProvider may apply row-level overrides. To approximate
+      // an "infinite" default retention, we just set the default ttl to the maximum value
+      defaultTtlSeconds = ttlResolver.get().defaultTtl().isFinite()
+          ? ttlResolver.get().defaultTtl().toSeconds()
+          : Long.MAX_VALUE;
+
       docs.createIndex(
-          Indexes.descending(KVDoc.TIMESTAMP),
-          new IndexOptions().expireAfter(expireAfterSeconds, TimeUnit.SECONDS)
+          Indexes.descending(KVDoc.TTL_TIMESTAMP),
+          new IndexOptions().expireAfter(defaultTtlSeconds, TimeUnit.SECONDS)
       );
+    } else {
+      defaultTtlSeconds = 0L;
     }
   }
 
@@ -147,12 +156,52 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
   }
 
   @Override
-  public byte[] get(final int kafkaPartition, final Bytes key, final long minValidTs) {
-    final KVDoc v = docs.find(Filters.and(
-        Filters.eq(KVDoc.ID, keyCodec.encode(key)),
-        Filters.gte(KVDoc.TIMESTAMP, minValidTs)
-    )).first();
-    return v == null ? null : v.getValue();
+  public byte[] get(final int kafkaPartition, final Bytes key, final long streamTimeMs) {
+
+    // Need to post-filter if value is needed to compute ttl
+    if (ttlResolver.isPresent() && ttlResolver.get().needsValueToComputeTtl()) {
+      final KVDoc v = docs.find(Filters.and(
+          Filters.eq(KVDoc.ID, keyCodec.encode(key))
+      )).first();
+
+      if (v == null) {
+        return null;
+      }
+
+      final byte[] value = v.getValue();
+      final TtlDuration ttl = ttlResolver.get().resolveTtl(key, value);
+
+      if (ttl.isFinite()) {
+        final long minValidTsFromValue = streamTimeMs - ttl.toMillis();
+        final long recordTs = v.getTimestamp();
+        if (recordTs < minValidTsFromValue) {
+          return null;
+        }
+      }
+
+      return value;
+
+    } else {
+      // If ttl is default-only or key-based and computed ttl is finite, we can pre-filter
+      if (ttlResolver.isPresent()) {
+
+        final TtlDuration ttl = ttlResolver.get().resolveTtl(key, null);
+        if (ttl.isFinite()) {
+          final long minValidTs = streamTimeMs - ttl.toMillis();
+          final KVDoc v = docs.find(Filters.and(
+              Filters.eq(KVDoc.ID, keyCodec.encode(key)),
+              Filters.gte(KVDoc.TIMESTAMP, minValidTs)
+          )).first();
+          return v == null ? null : v.getValue();
+        }
+      }
+
+      // If ttl is not used or infinite for this row, no filter is needed
+      final KVDoc v = docs.find(Filters.and(
+          Filters.eq(KVDoc.ID, keyCodec.encode(key))
+      )).first();
+      return v == null ? null : v.getValue();
+    }
   }
 
   @Override
@@ -160,8 +209,10 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
       final int kafkaPartition,
       final Bytes from,
       final Bytes to,
-      final long minValidTs
+      final long streamTimeMs
   ) {
+    // TODO(sophie): filter by minValidTs if based on key or default only
+    final long minValidTs = 0L;
     final FindIterable<KVDoc> result = docs.find(
         Filters.and(
             Filters.gte(KVDoc.ID, keyCodec.encode(from)),
@@ -171,6 +222,8 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
             Filters.eq(KVDoc.KAFKA_PARTITION, kafkaPartition)
         )
     );
+    // TODO(sophie): filter by minValidTs if based on value
+
     return Iterators.kv(
         result.iterator(),
         doc -> new KeyValue<>(
@@ -180,10 +233,10 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
   }
 
   @Override
-  public KeyValueIterator<Bytes, byte[]> all(final int kafkaPartition, final long minValidTs) {
+  public KeyValueIterator<Bytes, byte[]> all(final int kafkaPartition, final long streamTimeMs) {
     final FindIterable<KVDoc> result = docs.find(Filters.and(
         Filters.not(Filters.exists(KVDoc.TOMBSTONE_TS)),
-        Filters.gte(KVDoc.TIMESTAMP, minValidTs),
+        Filters.gte(KVDoc.TIMESTAMP, streamTimeMs),
         Filters.eq(KVDoc.KAFKA_PARTITION, kafkaPartition)
     ));
     return Iterators.kv(
@@ -203,18 +256,47 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
       final long epochMillis
   ) {
     final long epoch = kafkaPartitionToEpoch.get(kafkaPartition);
+
+    Bson update = Updates.combine(
+          Updates.set(KVDoc.VALUE, value),
+          Updates.set(KVDoc.EPOCH, epoch),
+          Updates.set(KVDoc.TIMESTAMP, epochMillis),
+          Updates.set(KVDoc.KAFKA_PARTITION, kafkaPartition),
+          Updates.unset(KVDoc.TOMBSTONE_TS));
+
+    if (ttlResolver.isPresent()) {
+      final Optional<TtlDuration> rowTtl = ttlResolver.get().computeTtl(key, value);
+
+      final long ttlTimestamp;
+      if (rowTtl.isPresent()) {
+        final var rowTtlDuration = rowTtl.get();
+        if (rowTtlDuration.isFinite()) {
+          // Mongo does not actually support row-level ttl so we have to "trick" it by building
+          // the ttl index from a special "ttlTimestamp" field rather than the true record
+          // timestamp, then adjusting the timestamp by the difference between row and default ttl.
+          // This effectively makes these records appear older or younger than they really are
+          // so that they're retained according to the row-level ttl override
+          final long ttlTsAdjustment = rowTtlDuration.toSeconds() - defaultTtlSeconds;
+          ttlTimestamp = TimeUnit.MILLISECONDS.toSeconds(epochMillis) + ttlTsAdjustment;
+        } else {
+          // approximate row-level "infinite" ttl by setting ttlTimestamp to largest possible value
+          ttlTimestamp = Long.MAX_VALUE;
+        }
+      } else {
+        // to apply the default ttl we just use the current time for ttlTimestamp
+        ttlTimestamp = TimeUnit.MILLISECONDS.toSeconds(epochMillis);
+      }
+      update = Updates.combine(
+          update,
+          Updates.set(KVDoc.TTL_TIMESTAMP, ttlTimestamp));
+    }
+
     return new UpdateOneModel<>(
         Filters.and(
             Filters.eq(KVDoc.ID, keyCodec.encode(key)),
             Filters.lte(KVDoc.EPOCH, epoch)
         ),
-        Updates.combine(
-            Updates.set(KVDoc.VALUE, value),
-            Updates.set(KVDoc.EPOCH, epoch),
-            Updates.set(KVDoc.TIMESTAMP, epochMillis),
-            Updates.set(KVDoc.KAFKA_PARTITION, kafkaPartition),
-            Updates.unset(KVDoc.TOMBSTONE_TS)
-        ),
+        update,
         new UpdateOptions().upsert(true)
     );
   }
