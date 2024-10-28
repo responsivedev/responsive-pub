@@ -19,6 +19,7 @@ package dev.responsive.kafka.internal.db;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.CASSANDRA_DESIRED_NUM_PARTITION_CONFIG;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.copyConfigWithOverrides;
 import static java.util.Collections.singletonMap;
+import static java.util.concurrent.TimeUnit.MINUTES;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
@@ -281,14 +282,14 @@ public class CassandraKVTableIntegrationTest {
   @Test
   public void shouldRespectSemanticDefaultOnlyTtlForAllQueries() {
     // Given:
-    final long ttlMs = 100L;
+    final long ttlMs = MINUTES.toMillis(100);
     final TtlProvider<?, ?> ttlProvider = TtlProvider.withDefault(Duration.ofMillis(ttlMs));
     final RemoteKVTable<BoundStatement> table = createTable(ttlProvider);
 
     final List<BoundStatement> inserts = List.of(
-        table.insert(0, Bytes.wrap(new byte[]{0x0, 0x0}), new byte[]{0x1}, 10L),
-        table.insert(0, Bytes.wrap(new byte[]{0x0, 0x1}), new byte[]{0x1}, 0L), // expired
-        table.insert(0, Bytes.wrap(new byte[]{0x0, 0x2}), new byte[]{0x1}, 20L)
+        table.insert(0, Bytes.wrap(new byte[]{0x0, 0x0}), new byte[]{0x1}, MINUTES.toMillis(10L)),
+        table.insert(0, Bytes.wrap(new byte[]{0x0, 0x1}), new byte[]{0x1}, MINUTES.toMillis(0L)), // expired
+        table.insert(0, Bytes.wrap(new byte[]{0x0, 0x2}), new byte[]{0x1}, MINUTES.toMillis(20L))
     );
     inserts.forEach(client::execute);
 
