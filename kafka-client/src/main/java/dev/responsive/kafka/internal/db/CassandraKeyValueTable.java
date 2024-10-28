@@ -274,7 +274,7 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
         .withColumn(DATA_VALUE.column(), DataTypes.BLOB)
         .withColumn(OFFSET.column(), DataTypes.BIGINT)
         .withColumn(EPOCH.column(), DataTypes.BIGINT)
-        .withColumn(TIMESTAMP.column(), DataTypes.BIGINT);
+        .withColumn(TIMESTAMP.column(), DataTypes.TIMESTAMP);
 
     if (ttlResolver.isPresent() && ttlResolver.get().defaultTtl().isFinite()) {
       final int defaultTtlSeconds = (int) ttlResolver.get().defaultTtl().toSeconds();

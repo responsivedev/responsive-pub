@@ -129,7 +129,7 @@ class CassandraFactTableIntegrationTest {
 
   @SuppressWarnings("OptionalGetWithoutIsPresent")
   @Test
-  public void shouldRespectSemanticDefaultOnlyTtl() throws Exception {
+  public void shouldConfigureDefaultTtl() throws Exception {
     // Given:
     final var defaultTtl = Duration.ofMinutes(30);
     final var ttlProvider = TtlProvider.<String, String>withDefault(defaultTtl);
