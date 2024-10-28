@@ -26,6 +26,7 @@ import dev.responsive.kafka.internal.db.RemoteTableSpecFactory;
 import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
 import dev.responsive.kafka.internal.utils.SessionClients;
 import java.util.Collection;
+import java.util.Optional;
 import java.util.concurrent.TimeoutException;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
@@ -67,7 +68,7 @@ public class GlobalOperations implements KeyValueOperations {
     final var spec = RemoteTableSpecFactory.fromKVParams(
         params,
         defaultPartitioner(),
-        TtlResolver.fromTtlProvider(false, changelogTopic.topic(), params.ttlProvider())
+        Optional.empty()
     );
 
     final var table = client.globalFactory().create(spec);

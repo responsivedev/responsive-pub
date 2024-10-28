@@ -20,13 +20,14 @@ import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import java.util.concurrent.TimeoutException;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.Task;
+import org.apache.kafka.streams.state.StateSerdes;
 
 @FunctionalInterface
 public interface KVOperationsProvider {
 
   KeyValueOperations provide(
       final ResponsiveKeyValueParams params,
-      final boolean isTimestamped,
+      final StateSerdes<?, ?> stateSerdes,
       final StateStoreContext context,
       final Task.TaskType type
   ) throws InterruptedException, TimeoutException;

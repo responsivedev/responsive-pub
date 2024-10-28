@@ -21,6 +21,7 @@ import dev.responsive.kafka.api.stores.TtlProvider.TtlDuration;
 import dev.responsive.kafka.internal.utils.StateDeserializer;
 import java.util.Optional;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.state.StateSerdes;
 
 public class TtlResolver<K, V> {
 
@@ -29,26 +30,25 @@ public class TtlResolver<K, V> {
   private final StateDeserializer<K, V> stateDeserializer;
   private final TtlProvider<K, V> ttlProvider;
 
-  public static Optional<TtlResolver<?, ?>> fromTtlProvider(
-      final boolean isTimestamped,
+  public static <K, V> Optional<TtlResolver<K, V>> fromTtlProvider(
+      final StateSerdes<K, V> stateSerdes,
       final String changelogTopic,
-      final Optional<TtlProvider<?, ?>> ttlProvider
+      final Optional<TtlProvider<K, V>> ttlProvider
   ) {
     return ttlProvider.isPresent()
-        ? Optional.of(new TtlResolver<>(isTimestamped, changelogTopic, ttlProvider.get()))
+        ? Optional.of(new TtlResolver<>(stateSerdes, changelogTopic, ttlProvider.get()))
         : Optional.empty();
   }
 
   public TtlResolver(
-      final boolean isTimestamped,
+      final StateSerdes<K, V> stateSerdes,
       final String changelogTopic,
       final TtlProvider<K, V> ttlProvider
   ) {
     this.stateDeserializer = new StateDeserializer<>(
-        isTimestamped,
         changelogTopic,
-        ttlProvider.keySerde(),
-        ttlProvider.valueSerde()
+        stateSerdes.keyDeserializer(),
+        stateSerdes.valueDeserializer()
     );
     this.ttlProvider = ttlProvider;
   }

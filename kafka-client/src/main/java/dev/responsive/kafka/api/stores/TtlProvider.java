@@ -28,8 +28,8 @@ public class TtlProvider<K, V> {
   /**
    * Creates a new TtlProvider with the given default duration to retain records for unless
    * overridden. To allow ttl overrides for individual records, you can use one of the
-   * {@link #fromKey(Function, Serde)}, {@link #fromValue(Function, Serde)},
-   * or {@link #fromKeyAndValue(BiFunction, Serde, Serde)} methods to define the row-level
+   * {@link #fromKey(Function)}, {@link #fromValue(Function)},
+   * or {@link #fromKeyAndValue(BiFunction)} methods to define the row-level
    * override function.
    *
    * @return a new TtlProvider that will retain records for the specified default duration
@@ -38,17 +38,15 @@ public class TtlProvider<K, V> {
     return new TtlProvider<>(
         TtlType.DEFAULT_ONLY,
         TtlDuration.of(defaultTtl),
-        (ignoredK, ignoredV) -> Optional.empty(),
-        null,
-        null
+        (ignoredK, ignoredV) -> Optional.empty()
     );
   }
 
   /**
    * Creates a new TtlProvider that has no default (equivalent to infinite retention for
    * all records unless an override is specified).  Must be used in combination with
-   * exactly one of the {@link #fromKey(Function, Serde)}, {@link #fromValue(Function, Serde)},
-   * and {@link #fromKeyAndValue(BiFunction, Serde, Serde)} methods to define the row-level
+   * exactly one of the {@link #fromKey(Function)}, {@link #fromValue(Function)},
+   * and {@link #fromKeyAndValue(BiFunction)} methods to define the row-level
    * override function.
    *
    * @return a new TtlProvider that will retain records indefinitely by default
@@ -57,9 +55,7 @@ public class TtlProvider<K, V> {
     return new TtlProvider<>(
         TtlType.DEFAULT_ONLY,
         TtlDuration.noTtl(),
-        (ignoredK, ignoredV) -> Optional.empty(),
-        null,
-        null
+        (ignoredK, ignoredV) -> Optional.empty()
     );
   }
 
@@ -67,23 +63,16 @@ public class TtlProvider<K, V> {
    * @return the same TtlProvider with a key-based override function
    */
   public TtlProvider<K, V> fromKey(
-      final Function<K, Optional<TtlDuration>> computeTtlFromKey,
-      final Serde<K> keySerde
+      final Function<K, Optional<TtlDuration>> computeTtlFromKey
   ) {
     if (ttlType.equals(TtlType.VALUE) || ttlType.equals(TtlType.KEY_AND_VALUE)) {
       throw new IllegalArgumentException("Must choose only key, value, or key-and-value ttl");
     }
 
-    if (keySerde == null || keySerde.deserializer() == null) {
-      throw new IllegalArgumentException("The key Serde and Deserializer must not be null");
-    }
-
     return new TtlProvider<>(
         TtlType.KEY,
         defaultTtl,
-        (k, ignored) -> computeTtlFromKey.apply(k),
-        keySerde,
-        null
+        (k, ignored) -> computeTtlFromKey.apply(k)
     );
   }
 
@@ -91,49 +80,33 @@ public class TtlProvider<K, V> {
    * @return the same TtlProvider with a value-based override function
    */
   public TtlProvider<K, V> fromValue(
-      final Function<V, Optional<TtlDuration>> computeTtlFromValue,
-      final Serde<V> valueSerde
+      final Function<V, Optional<TtlDuration>> computeTtlFromValue
   ) {
     if (ttlType.equals(TtlType.KEY) || ttlType.equals(TtlType.KEY_AND_VALUE)) {
       throw new IllegalArgumentException("Must choose only key, value, or key-and-value ttl");
     }
 
-    if (valueSerde == null || valueSerde.deserializer() == null) {
-      throw new IllegalArgumentException("The value Serde and Deserializer must not be null");
-    }
-
     return new TtlProvider<>(
         TtlType.VALUE,
         defaultTtl,
-        (ignored, v) -> computeTtlFromValue.apply(v),
-        null,
-        valueSerde);
+        (ignored, v) -> computeTtlFromValue.apply(v)
+       );
   }
 
   /**
    * @return the same TtlProvider with a key-and-value-based override function
    */
   public TtlProvider<K, V> fromKeyAndValue(
-      final BiFunction<K, V, Optional<TtlDuration>> computeTtlFromKeyAndValue,
-      final Serde<K> keySerde,
-      final Serde<V> valueSerde
+      final BiFunction<K, V, Optional<TtlDuration>> computeTtlFromKeyAndValue
   ) {
     if (ttlType.equals(TtlType.KEY) || ttlType.equals(TtlType.VALUE)) {
       throw new IllegalArgumentException("Must choose only key, value, or key-and-value ttl");
     }
 
-    if (keySerde == null || keySerde.deserializer() == null) {
-      throw new IllegalArgumentException("The key Serde and Deserializer must not be null");
-    } else if (valueSerde == null || valueSerde.deserializer() == null) {
-      throw new IllegalArgumentException("The value Serde and Deserializer must not be null");
-    }
-
     return new TtlProvider<>(
         TtlType.KEY_AND_VALUE,
         defaultTtl,
-        computeTtlFromKeyAndValue,
-        keySerde,
-        valueSerde
+        computeTtlFromKeyAndValue
     );
   }
 
@@ -218,32 +191,16 @@ public class TtlProvider<K, V> {
   private final TtlType ttlType;
   private final TtlDuration defaultTtl;
 
-  // Only non-null for key/value-based ttl providers
-  private final Serde<K> keySerde;
-  private final Serde<V> valueSerde;
-
   private final BiFunction<K, V, Optional<TtlDuration>> computeTtl;
 
   private TtlProvider(
       final TtlType ttlType,
       final TtlDuration defaultTtl,
-      final BiFunction<K, V, Optional<TtlDuration>> computeTtl,
-      final Serde<K> keySerde,
-      final Serde<V> valueSerde
+      final BiFunction<K, V, Optional<TtlDuration>> computeTtl
   ) {
     this.ttlType = ttlType;
     this.defaultTtl = defaultTtl;
-    this.keySerde = keySerde;
-    this.valueSerde = valueSerde;
     this.computeTtl = computeTtl;
-  }
-
-  public Serde<K> keySerde() {
-    return keySerde;
-  }
-
-  public Serde<V> valueSerde() {
-    return valueSerde;
   }
 
   public TtlDuration defaultTtl() {

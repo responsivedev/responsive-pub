@@ -33,6 +33,9 @@ import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StateSerdes;
+import org.apache.kafka.streams.state.internals.MeteredKeyValueStore;
+import org.apache.kafka.streams.state.internals.StoreAccessorUtil;
 import org.apache.kafka.streams.state.internals.StoreQueryUtils;
 import org.slf4j.Logger;
 
@@ -115,6 +118,8 @@ public class ResponsiveKeyValueStore
         log.warn("Unexpected standby task created, should transition to active shortly");
       }
 
+      final var stateSerdes = StoreAccessorUtil.extractKeyValueStoreSerdes(root);
+
       operations = opsProvider.provide(params, isTimestamped, storeContext, taskType);
       log.info("Completed initializing state store");
 
@@ -127,13 +132,13 @@ public class ResponsiveKeyValueStore
 
   private static KeyValueOperations provideOperations(
       final ResponsiveKeyValueParams params,
-      final boolean isTimestamped,
+      final StateSerdes<?, ?> stateSerdes,
       final StateStoreContext context,
       final TaskType taskType
   ) throws InterruptedException, TimeoutException {
     return (taskType == TaskType.GLOBAL)
         ? GlobalOperations.create(context, params)
-        : PartitionedOperations.create(params.name(), isTimestamped, context, params);
+        : PartitionedOperations.create(params.name(), stateSerdes, context, params);
   }
 
   @Override

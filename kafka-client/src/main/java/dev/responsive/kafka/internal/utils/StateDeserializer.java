@@ -16,11 +16,7 @@
 
 package dev.responsive.kafka.internal.utils;
 
-import java.util.Optional;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.streams.state.internals.ValueAndTimestampSerde;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,31 +26,20 @@ public class StateDeserializer<K, V> {
   private final String changelogTopic;
   private final Deserializer<K> keyDeserializer;
   private final Deserializer<V> valueDeserializer;
-  private final Optional<Deserializer<ValueAndTimestamp<V>>> timestampedValueDeserializer;
 
   public StateDeserializer(
-      final boolean isTimestamped,
       final String changelogTopic,
-      final Serde<K> keySerde,
-      final Serde<V> valueSerde
+      final Deserializer<K> keyDeserializer,
+      final Deserializer<V> valueDeserializer
   ) {
     this.changelogTopic = changelogTopic;
-    this.keyDeserializer = keySerde == null ? null : keySerde.deserializer();
-    this.valueDeserializer = valueSerde == null ? null : valueSerde.deserializer();
-
-    if (isTimestamped && valueSerde != null) {
-      timestampedValueDeserializer =
-          Optional.of(new ValueAndTimestampSerde<>(valueSerde).deserializer());
-    } else {
-      timestampedValueDeserializer = Optional.empty();
-    }
+    this.keyDeserializer = keyDeserializer;
+    this.valueDeserializer = valueDeserializer;
   }
 
   public K keyFrom(final byte[] keyBytes) {
-    if (keyBytes == null || keyDeserializer == null) {
-      final String errMgs = String.format(
-          "Tried to deserialize key where keyBytes==null is %s and keyDeserializer==null is %s",
-          keyBytes == null, keyDeserializer == null);
+    if (keyBytes == null) {
+      final String errMgs = String.format("Tried to deserialize key that was not provided");
       LOG.error(errMgs);
       throw new IllegalStateException(errMgs);
     }
@@ -63,19 +48,12 @@ public class StateDeserializer<K, V> {
   }
 
   public V valueFrom(final byte[] valueBytes) {
-    if (valueBytes == null || valueDeserializer == null) {
-      final String errMgs = String.format(
-          "Tried to deserialize value where valueBytes==null is %s "
-              + "and valueDeserializer==null is %s",
-          valueBytes == null, valueDeserializer == null);
+    if (valueBytes == null) {
+      final String errMgs = String.format("Tried to deserialize value that was not provided");
       LOG.error(errMgs);
       throw new IllegalStateException(errMgs);
     }
 
-    if (timestampedValueDeserializer.isEmpty()) {
-      return valueDeserializer.deserialize(changelogTopic, valueBytes);
-    } else {
-      return timestampedValueDeserializer.get().deserialize(changelogTopic, valueBytes).value();
-    }
+    return valueDeserializer.deserialize(changelogTopic, valueBytes);
   }
 }
