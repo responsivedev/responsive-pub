@@ -351,8 +351,11 @@ public class SegmentedOperations implements WindowOperations {
   }
 
   @Override
-  public void restoreBatch(final Collection<ConsumerRecord<byte[], byte[]>> records) {
-    buffer.restoreBatch(records);
+  public long restoreBatch(
+      final Collection<ConsumerRecord<byte[], byte[]>> records,
+      final long streamTimeMs
+  ) {
+    return buffer.restoreBatch(records, streamTimeMs);
   }
 
 }

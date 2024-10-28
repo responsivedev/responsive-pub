@@ -280,8 +280,11 @@ public class SessionOperationsImpl implements SessionOperations {
   }
 
   @Override
-  public void restoreBatch(final Collection<ConsumerRecord<byte[], byte[]>> records) {
-    this.buffer.restoreBatch(records);
+  public long restoreBatch(
+      final Collection<ConsumerRecord<byte[], byte[]>> records,
+      final long streamTimeMs
+  ) {
+    return buffer.restoreBatch(records, streamTimeMs);
   }
 
 }

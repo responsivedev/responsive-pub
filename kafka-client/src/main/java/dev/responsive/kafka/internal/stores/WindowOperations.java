@@ -19,13 +19,14 @@
 package dev.responsive.kafka.internal.stores;
 
 import java.io.Closeable;
+import java.util.Collection;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
-public interface WindowOperations extends Closeable, RecordBatchingStateRestoreCallback {
+public interface WindowOperations extends Closeable {
 
   long initialStreamTime();
 
@@ -75,6 +76,12 @@ public interface WindowOperations extends Closeable, RecordBatchingStateRestoreC
 
   KeyValueIterator<Windowed<Bytes>, byte[]> backwardAll();
 
+  long restoreBatch(
+      final Collection<ConsumerRecord<byte[], byte[]>> records,
+      final long streamTimeMs
+  );
+
   @Override
   void close();
+
 }

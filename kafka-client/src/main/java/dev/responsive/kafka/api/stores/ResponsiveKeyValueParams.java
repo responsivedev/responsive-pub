@@ -16,7 +16,6 @@
 
 package dev.responsive.kafka.api.stores;
 
-import dev.responsive.kafka.api.stores.TtlProvider.TtlDuration;
 import dev.responsive.kafka.internal.stores.SchemaTypes.KVSchema;
 import dev.responsive.kafka.internal.utils.TableName;
 import java.time.Duration;
@@ -69,15 +68,6 @@ public final class ResponsiveKeyValueParams {
 
   public Optional<TtlProvider<?, ?>> ttlProvider() {
     return ttlProvider;
-  }
-
-  public Optional<TtlDuration> defaultTimeToLive() {
-    if (ttlProvider.isPresent()) {
-      return Optional.ofNullable(ttlProvider.get().defaultTtl());
-
-    } else {
-      return Optional.empty();
-    }
   }
 
 }

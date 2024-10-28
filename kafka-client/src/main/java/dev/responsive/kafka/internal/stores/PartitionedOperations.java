@@ -72,6 +72,8 @@ public class PartitionedOperations implements KeyValueOperations {
   private final boolean migrationMode;
   private final long startingTimestamp;
 
+  private long streamTimeMs = -1L;
+
   public static PartitionedOperations create(
       final TableName name,
       final boolean isTimestamped,
@@ -194,10 +196,11 @@ public class PartitionedOperations implements KeyValueOperations {
       final ResponsiveKeyValueParams params,
       final Optional<TtlResolver<?, ?>> ttlResolver
   ) {
-    if (ttlResolver.isPresent()) {
-      throw new UnsupportedOperationException("ttl is not yet supported for in-memory stores");
+    if (ttlResolver.isPresent() && !ttlResolver.get().hasDefaultOnly()) {
+      throw new UnsupportedOperationException("Row-level ttl is not yet supported "
+                                                  + "for in-memory stores");
     }
-    return new InMemoryKVTable(params.name().tableName());
+    return new InMemoryKVTable(params.name().tableName(), ttlResolver);
   }
 
   private static RemoteKVTable<?> createCassandra(
@@ -273,16 +276,27 @@ public class PartitionedOperations implements KeyValueOperations {
 
   @Override
   public void put(final Bytes key, final byte[] value) {
-    if (migratingAndTimestampTooEarly()) {
+    final long currentRecordTimestamp = currentRecordTimestamp();
+    if (migratingAndTimestampTooEarly(currentRecordTimestamp)) {
       // we are bootstrapping a store. Only apply the write if the timestamp
       // is fresher than the starting timestamp
       return;
     }
-    buffer.put(key, value, currentRecordTimestamp());
+    if (streamTimeMs < currentRecordTimestamp) {
+      streamTimeMs = currentRecordTimestamp;
+    }
+
+    buffer.put(key, value, currentRecordTimestamp);
   }
 
   @Override
   public byte[] delete(final Bytes key) {
+    final long currentRecordTimestamp = currentRecordTimestamp();
+
+    if (streamTimeMs < currentRecordTimestamp) {
+      streamTimeMs = currentRecordTimestamp;
+    }
+
     // single writer prevents races (see putIfAbsent)
     final byte[] old = get(key);
     buffer.tombstone(key, currentRecordTimestamp());
@@ -316,7 +330,7 @@ public class PartitionedOperations implements KeyValueOperations {
     return table.get(
         changelog.partition(),
         key,
-        minValidTimestamp()
+        streamTimeMs
     );
   }
 
@@ -336,7 +350,7 @@ public class PartitionedOperations implements KeyValueOperations {
 
     return new LocalRemoteKvIterator<>(
         buffer.range(from, to),
-        table.range(changelog.partition(), from, to, minValidTimestamp())
+        table.range(changelog.partition(), from, to, streamTimeMs)
     );
   }
 
@@ -350,7 +364,7 @@ public class PartitionedOperations implements KeyValueOperations {
   public KeyValueIterator<Bytes, byte[]> all() {
     return new LocalRemoteKvIterator<>(
         buffer.all(),
-        table.all(changelog.partition(), minValidTimestamp())
+        table.all(changelog.partition(), streamTimeMs)
     );
   }
 
@@ -375,7 +389,10 @@ public class PartitionedOperations implements KeyValueOperations {
 
   @Override
   public void restoreBatch(final Collection<ConsumerRecord<byte[], byte[]>> records) {
-    buffer.restoreBatch(records);
+    streamTimeMs = Math.max(
+        streamTimeMs,
+        buffer.restoreBatch(records, streamTimeMs)
+    );
   }
 
   private long currentRecordTimestamp() {
@@ -387,23 +404,14 @@ public class PartitionedOperations implements KeyValueOperations {
     return context.timestamp();
   }
 
-  private long minValidTimestamp() {
-    if (params.ttlProvider().isEmpty()) {
-      return -1L;
-    }
-
-    final long ttlMs = params.defaultTimeToLive().get().toMillis();
-    return currentRecordTimestamp() - ttlMs;
-  }
-
-  private boolean migratingAndTimestampTooEarly() {
+  private boolean migratingAndTimestampTooEarly(final long currentRecordTimestamp) {
     if (!migrationMode) {
       return false;
     }
     if (startingTimestamp > 0) {
       // we are bootstrapping a store. Only apply the write if the timestamp
       // is fresher than the starting timestamp
-      return currentRecordTimestamp() < startingTimestamp;
+      return currentRecordTimestamp < startingTimestamp;
     }
     return false;
   }

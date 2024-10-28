@@ -19,6 +19,7 @@ package dev.responsive.kafka.internal.db.mongo;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_ENDPOINT_CONFIG;
 import static dev.responsive.kafka.internal.db.testutils.Matchers.sameKeyValue;
 import static dev.responsive.kafka.internal.stores.TtlResolver.NO_TTL;
+import static dev.responsive.kafka.testutils.IntegrationTestUtils.defaultOnlyTtl;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.is;
@@ -30,6 +31,7 @@ import dev.responsive.kafka.internal.stores.RemoteWriteResult;
 import dev.responsive.kafka.internal.utils.SessionUtil;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
+import java.time.Duration;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -180,10 +182,11 @@ class MongoKVTableTest {
   @Test
   public void shouldFilterResultsWithOldTimestamp() {
     // given:
-    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, NO_TTL);
+    final Duration ttl = Duration.ofMillis(100);
+    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, defaultOnlyTtl(ttl));
     var writerFactory = table.init(0);
     var writer = writerFactory.createWriter(0);
-    writer.insert(bytes(1), byteArray(1), 100);
+    writer.insert(bytes(1), byteArray(1), 0);
     writer.flush();
 
     // when:
@@ -196,10 +199,11 @@ class MongoKVTableTest {
   @Test
   public void shouldIncludeResultsWithNewerTimestamp() {
     // given:
-    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, NO_TTL);
+    final Duration ttl = Duration.ofMillis(100);
+    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, defaultOnlyTtl(ttl));
     var writerFactory = table.init(0);
     var writer = writerFactory.createWriter(0);
-    writer.insert(bytes(1), byteArray(1), 100);
+    writer.insert(bytes(1), byteArray(1), 0);
     writer.flush();
 
     // when:
@@ -276,7 +280,8 @@ class MongoKVTableTest {
 
   @Test
   public void shouldFilterExpiredItemsFromRangeScans() {
-    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, NO_TTL);
+    final Duration ttl = Duration.ofMillis(100);
+    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, defaultOnlyTtl(ttl));
     var writerFactory = table.init(0);
     var writer = writerFactory.createWriter(0);
     writer.insert(bytes(10, 11, 12, 13), byteArray(2), 100);
@@ -285,7 +290,7 @@ class MongoKVTableTest {
     writer.flush();
 
     // When:
-    final var iter = table.range(0, bytes(10, 11, 12, 13), bytes(10, 11, 13, 14), 100);
+    final var iter = table.range(0, bytes(10, 11, 12, 13), bytes(10, 11, 13, 14), 195);
 
     // Then:
     final List<KeyValue<Bytes, byte[]>> returned = new LinkedList<>();
@@ -362,7 +367,9 @@ class MongoKVTableTest {
 
   @Test
   public void shouldFilterExpiredFromFullScans() {
-    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, NO_TTL);
+    final Duration ttl = Duration.ofMillis(100);
+    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, defaultOnlyTtl(ttl));
+
     var writerFactory = table.init(0);
     var writer = writerFactory.createWriter(0);
     writer.insert(bytes(10, 11, 12, 13), byteArray(2), 100);
@@ -371,7 +378,7 @@ class MongoKVTableTest {
     writer.flush();
 
     // When:
-    final var iter = table.all(0, 100);
+    final var iter = table.all(0, 195);
 
     // Then:
     final List<KeyValue<Bytes, byte[]>> returned = new LinkedList<>();

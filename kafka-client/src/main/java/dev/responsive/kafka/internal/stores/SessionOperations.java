@@ -18,12 +18,13 @@ package dev.responsive.kafka.internal.stores;
 
 import dev.responsive.kafka.internal.utils.SessionKey;
 import java.io.Closeable;
+import java.util.Collection;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
-public interface SessionOperations extends Closeable, RecordBatchingStateRestoreCallback {
+public interface SessionOperations extends Closeable {
 
   long initialStreamTime();
 
@@ -46,6 +47,11 @@ public interface SessionOperations extends Closeable, RecordBatchingStateRestore
       final Bytes key,
       final long earliestSessionEnd,
       final long latestSessionEnd
+  );
+
+  long restoreBatch(
+      final Collection<ConsumerRecord<byte[], byte[]>> records,
+      final long streamTimeMs
   );
 
   @Override

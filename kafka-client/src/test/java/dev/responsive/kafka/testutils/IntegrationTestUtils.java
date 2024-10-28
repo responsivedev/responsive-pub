@@ -16,7 +16,9 @@ import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
 
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
+import dev.responsive.kafka.api.stores.TtlProvider;
 import dev.responsive.kafka.internal.db.CassandraClientFactory;
+import dev.responsive.kafka.internal.stores.TtlResolver;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -82,6 +84,16 @@ public final class IntegrationTestUtils {
               .build()
       );
     }
+  }
+
+  public static Optional<TtlResolver<?, ?>> defaultOnlyTtl(final Duration ttl) {
+    return Optional.of(new TtlResolver<>(false, "ignored", TtlProvider.withDefault(ttl)));
+  }
+
+  public static <K, V> Optional<TtlResolver<K, V>> forTtlProvider(
+      final TtlProvider<K, V> ttlProvider
+  ) {
+    return Optional.of(new TtlResolver<>(false, "ignored", ttlProvider));
   }
 
   public static ResponsiveConfig copyConfigWithOverrides(

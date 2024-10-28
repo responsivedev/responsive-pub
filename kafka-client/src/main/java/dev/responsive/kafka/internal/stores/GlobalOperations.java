@@ -52,6 +52,10 @@ public class GlobalOperations implements KeyValueOperations {
       final ResponsiveKeyValueParams params
   ) throws InterruptedException, TimeoutException {
 
+    if (params.ttlProvider().isPresent()) {
+      throw new UnsupportedOperationException("Global stores are not yet compatible with ttl");
+    }
+
     final var context = (GlobalProcessorContextImpl) storeContext;
 
     // Save this so we don't have to rebuild the config map on every access

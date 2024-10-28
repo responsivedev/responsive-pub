@@ -608,7 +608,7 @@ public class CommitBufferTest {
       );
 
       // When:
-      buffer.restoreBatch(List.of(record));
+      buffer.restoreBatch(List.of(record), -1L);
 
       // Then:
       assertThat(table.fetchOffset(KAFKA_PARTITION), is(100L));
@@ -650,7 +650,7 @@ public class CommitBufferTest {
     // When:
     final var e = assertThrows(
         RuntimeException.class,
-        () -> buffer.restoreBatch(List.of(record)));
+        () -> buffer.restoreBatch(List.of(record), -1L));
 
     // Then:
     final String errorMsg = "commit-buffer [" + tableName.tableName() + "-2] "
@@ -695,7 +695,7 @@ public class CommitBufferTest {
         .collect(Collectors.toList());
 
     // when:
-    buffer.restoreBatch(records);
+    buffer.restoreBatch(records, -1L);
 
     // then:
     for (int i = 0; i < 5; i++) {

@@ -52,6 +52,7 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
 
   private final String name;
   private final CassandraClient client;
+  private final Optional<TtlResolver<?, ?>> ttlResolver;
 
   private final PreparedStatement get;
   private final PreparedStatement insert;
@@ -62,6 +63,7 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
   public CassandraFactTable(
       final String name,
       final CassandraClient client,
+      final Optional<TtlResolver<?, ?>> ttlResolver,
       final PreparedStatement get,
       final PreparedStatement insert,
       final PreparedStatement delete,
@@ -70,6 +72,7 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
   ) {
     this.name = name;
     this.client = client;
+    this.ttlResolver = ttlResolver;
     this.get = get;
     this.insert = insert;
     this.delete = delete;
@@ -82,10 +85,11 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
       final CassandraClient client
   ) {
     final String name = spec.tableName();
+    final var ttlResolver = spec.ttlResolver();
     LOG.info("Creating fact data table {} in remote store.", name);
 
     final CreateTableWithOptions createTable = spec.applyDefaultOptions(
-        createTable(name, spec.ttlResolver())
+        createTable(name, ttlResolver)
     );
 
     // separate metadata from the main table for the fact schema, this is acceptable
@@ -161,6 +165,7 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
     return new CassandraFactTable(
         name,
         client,
+        ttlResolver,
         get,
         insert,
         delete,
@@ -275,7 +280,11 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
   }
 
   @Override
-  public byte[] get(final int kafkaPartition, final Bytes key, long minValidTs) {
+  public byte[] get(final int kafkaPartition, final Bytes key, long streamTimeMs) {
+    final long minValidTs = ttlResolver.isEmpty()
+        ? -1L
+        : streamTimeMs - ttlResolver.get().defaultTtl().toMillis();
+
     final BoundStatement get = this.get
         .bind()
         .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
@@ -297,14 +306,16 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
       final int kafkaPartition,
       final Bytes from,
       final Bytes to,
-      long minValidTs) {
+      long streamTimeMs
+  ) {
     throw new UnsupportedOperationException("range scans are not supported on fact tables.");
   }
 
   @Override
   public KeyValueIterator<Bytes, byte[]> all(
       final int kafkaPartition,
-      long minValidTs) {
+      long streamTimeMs
+  ) {
     throw new UnsupportedOperationException("all is not supported on fact tables");
   }
 
