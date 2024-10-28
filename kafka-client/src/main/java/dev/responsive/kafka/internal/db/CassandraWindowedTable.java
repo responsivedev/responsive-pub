@@ -425,8 +425,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
         .withColumn(DATA_VALUE.column(), DataTypes.BLOB)
         .withColumn(OFFSET.column(), DataTypes.BIGINT)
         .withColumn(EPOCH.column(), DataTypes.BIGINT)
-        .withColumn(STREAM_TIME.column(), DataTypes.BIGINT)
-        .withCompaction(new DefaultLeveledCompactionStrategy()); // TODO: create a LCSTableSpec?
+        .withColumn(STREAM_TIME.column(), DataTypes.BIGINT);
   }
 
   public CassandraWindowedTable(
