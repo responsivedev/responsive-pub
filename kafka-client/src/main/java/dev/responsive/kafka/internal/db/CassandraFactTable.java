@@ -323,7 +323,7 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
               .bind()
               .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
               .setByteBuffer(DATA_VALUE.bind(), ByteBuffer.wrap(value))
-              .setLong(TIMESTAMP.bind(), epochMillis)
+              .setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(epochMillis))
               .setInt(TTL_SECONDS.bind(), rowTtlOverrideSeconds);
       }
     }
@@ -370,7 +370,8 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
     final BoundStatement getQuery = get
         .bind()
         .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
-        .setLong(TIMESTAMP.bind(), minValidTimeMs);
+        .setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(minValidTimeMs));
+
     final List<Row> result = client.execute(getQuery).all();
 
     if (result.size() > 1) {
