@@ -35,7 +35,9 @@ import dev.responsive.kafka.testutils.ResponsiveExtension;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 import org.apache.kafka.common.utils.Bytes;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
@@ -127,27 +129,41 @@ class CassandraFactTableIntegrationTest {
   @Test
   public void shouldRespectSemanticDefaultOnlyTtl() throws Exception {
     // Given:
-    final var defaultTtl = Duration.ofMinutes(30);
-    final var ttlProvider = TtlProvider.<String, String>withDefault(defaultTtl);
+    final long ttlMs = 100L;
+    final var ttlProvider = TtlProvider.<String, String>withDefault(Duration.ofMillis(ttlMs));
     params = ResponsiveKeyValueParams.fact(storeName).withTtlProvider(ttlProvider);
     final String tableName = params.name().tableName();
 
-    // When:
-    client.factFactory().create(RemoteTableSpecFactory.fromKVParams(
+    final var table = client.factFactory().create(RemoteTableSpecFactory.fromKVParams(
         params,
         defaultPartitioner(),
         Optional.of(new TtlResolver<>(false, "changelog-ignored", ttlProvider))
     ));
 
-    // Then:
-    final var table = session.getMetadata()
+    // When:
+    final long insertTimeMs = 0L;
+    client.execute(
+        table.insert(0, Bytes.wrap(new byte[]{0x0, 0x1}), new byte[]{0x1}, insertTimeMs));
+
+    final String tableDescription = session.getMetadata()
         .getKeyspace(session.getKeyspace().get())
         .get()
         .getTable(tableName)
-        .get();
-    final String describe = table.describe(false);
+        .get()
+        .describe(false);
 
-    assertThat(describe, containsString("default_time_to_live = " + (int) defaultTtl.toSeconds()));
+    // Then:
+    final int ttlSeconds = (int) TimeUnit.MILLISECONDS.toSeconds(ttlMs);
+    assertThat(tableDescription, containsString("default_time_to_live = " + ttlSeconds));
+
+    final long lookupTimeValid = ttlMs - 1L;
+    final byte[] valid = table.get(0, Bytes.wrap(new byte[]{0x0, 0x1}), lookupTimeValid);
+
+    final long lookupTimeExpired = ttlMs + 1L;
+    final byte[] expired = table.get(0, Bytes.wrap(new byte[]{0x0, 0x1}), lookupTimeExpired);
+
+    assertThat(valid, Matchers.is(new byte[]{0x1}));
+    assertThat(expired, Matchers.nullValue());
   }
 
 }

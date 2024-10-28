@@ -197,45 +197,50 @@ public class CassandraKVTableIntegrationTest {
   }
 
   @Test
-  public void shouldRespectSemanticTtlForLookups() {
+  public void shouldRespectSemanticDefaultOnlyTtlForLookups() {
     // Given:
-    final TtlProvider<?, ?> ttlProvider = TtlProvider.withDefault(Duration.ofMillis(100));
+    final long ttlMs = 100L;
+    final TtlProvider<?, ?> ttlProvider = TtlProvider.withDefault(Duration.ofMillis(ttlMs));
     final RemoteKVTable<BoundStatement> table = createTable(ttlProvider);
 
-    client.execute(
-        table.insert(0, Bytes.wrap(new byte[]{0x0, 0x1}), new byte[]{0x1}, CURRENT_TS));
-
     // When:
-    final byte[] valid = table.get(0, Bytes.wrap(new byte[]{0x0, 0x1}), MIN_VALID_TS);
-    final byte[] expired = table.get(0, Bytes.wrap(new byte[]{0x0, 0x1}), CURRENT_TS + 1);
+    final long insertTimeMs = 0L;
+    client.execute(
+        table.insert(0, Bytes.wrap(new byte[]{0x0, 0x1}), new byte[]{0x1}, insertTimeMs));
 
     // Then:
+    final long lookupTimeValid = ttlMs - 1L;
+    final byte[] valid = table.get(0, Bytes.wrap(new byte[]{0x0, 0x1}), lookupTimeValid);
+
+    final long lookupTimeExpired = ttlMs + 1L;
+    final byte[] expired = table.get(0, Bytes.wrap(new byte[]{0x0, 0x1}), lookupTimeExpired);
+
     assertThat(valid, Matchers.is(new byte[]{0x1}));
     assertThat(expired, Matchers.nullValue());
   }
 
   @Test
-  public void shouldRespectSemanticTtlForRangeQueries() {
+  public void shouldRespectSemanticDefaultOnlyTtlForRangeQueries() {
     // Given:
-    final TtlProvider<?, ?> ttlProvider = TtlProvider.withDefault(Duration.ofMillis(100));
+    final long ttlMs = 100L;
+    final TtlProvider<?, ?> ttlProvider = TtlProvider.withDefault(Duration.ofMillis(ttlMs));
     final RemoteKVTable<BoundStatement> table = createTable(ttlProvider);
 
     final List<BoundStatement> inserts = List.of(
-        table.insert(0, Bytes.wrap(new byte[]{0x0, 0x0}), new byte[]{0x1}, CURRENT_TS + 10),
-        // expired:
-        table.insert(0, Bytes.wrap(new byte[]{0x0, 0x1}), new byte[]{0x1}, CURRENT_TS),
-        table.insert(0, Bytes.wrap(new byte[]{0x0, 0x2}), new byte[]{0x1}, CURRENT_TS + 20),
-        // not expired, but out of range:
-        table.insert(0, Bytes.wrap(new byte[]{0x1, 0x0}), new byte[]{0x1}, CURRENT_TS + 20)
+        table.insert(0, Bytes.wrap(new byte[]{0x0, 0x0}), new byte[]{0x1}, 10L),
+        table.insert(0, Bytes.wrap(new byte[]{0x0, 0x1}), new byte[]{0x1}, 0L), // expired
+        table.insert(0, Bytes.wrap(new byte[]{0x0, 0x2}), new byte[]{0x1}, 20L),
+        table.insert(0, Bytes.wrap(new byte[]{0x1, 0x0}), new byte[]{0x1}, 20L) // out of range
     );
     inserts.forEach(client::execute);
 
     // When:
+    final long lookupTimeMs = ttlMs + 5L;
     final KeyValueIterator<Bytes, byte[]> range = table.range(
         0,
         Bytes.wrap(new byte[]{0x0, 0x0}),
         Bytes.wrap(new byte[]{0x0, 0x3}),
-        CURRENT_TS + 5
+        lookupTimeMs
     );
 
     // Then:
@@ -249,23 +254,24 @@ public class CassandraKVTableIntegrationTest {
   }
 
   @Test
-  public void shouldRespectSemanticTtlForAllQueries() {
+  public void shouldRespectSemanticDefaultOnlyTtlForAllQueries() {
     // Given:
-    final TtlProvider<?, ?> ttlProvider = TtlProvider.withDefault(Duration.ofMillis(100));
+    final long ttlMs = 100L;
+    final TtlProvider<?, ?> ttlProvider = TtlProvider.withDefault(Duration.ofMillis(ttlMs));
     final RemoteKVTable<BoundStatement> table = createTable(ttlProvider);
 
     final List<BoundStatement> inserts = List.of(
-        table.insert(0, Bytes.wrap(new byte[]{0x0, 0x0}), new byte[]{0x1}, CURRENT_TS + 10),
-        // expired
-        table.insert(0, Bytes.wrap(new byte[]{0x0, 0x1}), new byte[]{0x1}, CURRENT_TS),
-        table.insert(0, Bytes.wrap(new byte[]{0x0, 0x2}), new byte[]{0x1}, CURRENT_TS + 20)
+        table.insert(0, Bytes.wrap(new byte[]{0x0, 0x0}), new byte[]{0x1}, 10L),
+        table.insert(0, Bytes.wrap(new byte[]{0x0, 0x1}), new byte[]{0x1}, 0L), // expired
+        table.insert(0, Bytes.wrap(new byte[]{0x0, 0x2}), new byte[]{0x1}, 20L)
     );
     inserts.forEach(client::execute);
 
     // When:
+    final long lookupTimeMs = ttlMs + 5L;
     final KeyValueIterator<Bytes, byte[]> range = table.all(
         0,
-        CURRENT_TS + 5
+        lookupTimeMs
     );
 
     // Then:
