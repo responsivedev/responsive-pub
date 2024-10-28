@@ -319,12 +319,12 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
             ? (int) rowTtl.get().toSeconds()
             : 0;
 
-          return insertWithTtl
-              .bind()
-              .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
-              .setByteBuffer(DATA_VALUE.bind(), ByteBuffer.wrap(value))
-              .setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(epochMillis))
-              .setInt(TTL_SECONDS.bind(), rowTtlOverrideSeconds);
+        return insertWithTtl
+            .bind()
+            .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
+            .setByteBuffer(DATA_VALUE.bind(), ByteBuffer.wrap(value))
+            .setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(epochMillis))
+            .setInt(TTL_SECONDS.bind(), rowTtlOverrideSeconds);
       }
     }
 
