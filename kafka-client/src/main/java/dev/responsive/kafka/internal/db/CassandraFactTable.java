@@ -402,7 +402,7 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
 
     if (ttl.isFinite()) {
       final long minValidTsFromValue = streamTimeMs - ttl.toMillis();
-      final long recordTs = rowResult.getLong(TIMESTAMP.column());
+      final long recordTs = rowResult.getInstant(TIMESTAMP.column()).toEpochMilli();
       if (recordTs < minValidTsFromValue) {
         return null;
       }
