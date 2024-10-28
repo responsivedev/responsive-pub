@@ -18,6 +18,8 @@ package dev.responsive.kafka.internal.db;
 
 import static dev.responsive.kafka.internal.db.partitioning.TablePartitioner.defaultPartitioner;
 import static dev.responsive.kafka.internal.stores.TtlResolver.NO_TTL;
+import static dev.responsive.kafka.testutils.SerdeUtils.serializedKey;
+import static dev.responsive.kafka.testutils.SerdeUtils.serializedValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.containsStringIgnoringCase;
@@ -29,6 +31,7 @@ import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.api.stores.TtlProvider;
+import dev.responsive.kafka.api.stores.TtlProvider.TtlDuration;
 import dev.responsive.kafka.internal.stores.TtlResolver;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
@@ -36,6 +39,9 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiFunction;
+import java.util.function.Function;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
@@ -46,9 +52,6 @@ import org.testcontainers.containers.CassandraContainer;
 
 @ExtendWith(ResponsiveExtension.class)
 class CassandraFactTableIntegrationTest {
-
-  private static final long CURRENT_TIME = 100L;
-  private static final long MIN_VALID_TS = 0L;
 
   private String storeName; // ie the "kafkaName", NOT the "cassandraName"
   private ResponsiveKeyValueParams params;
@@ -115,10 +118,10 @@ class CassandraFactTableIntegrationTest {
     final byte[] val = new byte[]{1};
 
     // When:
-    client.execute(table.insert(1, key, val, CURRENT_TIME));
-    final byte[] valAt0 = table.get(1, key, MIN_VALID_TS);
+    client.execute(table.insert(1, key, val, 0L));
+    final byte[] valAt0 = table.get(1, key, 0L);
     client.execute(table.delete(1, key));
-    final byte[] valAt1 = table.get(1, key, MIN_VALID_TS);
+    final byte[] valAt1 = table.get(1, key, 0L);
 
     // Then
     assertThat(valAt0, is(val));
@@ -182,6 +185,222 @@ class CassandraFactTableIntegrationTest {
     // Then:
     assertThat(valid, Matchers.is(new byte[]{0x1}));
     assertThat(expired, Matchers.nullValue());
+  }
+
+  @Test
+  public void shouldRespectSemanticKeyBasedTtl() throws Exception {
+    // Given:
+    final var defaultTtl = Duration.ofMillis(30);
+    final Function<String, Optional<TtlDuration>> ttlForKey = k -> {
+      if (k.equals("KEEP_FOREVER")) {
+        return Optional.of(TtlDuration.noTtl());
+      } else if (k.endsWith("DEFAULT_TTL")) {
+        return Optional.empty();
+      } else {
+        final long ttlMilliseconds = Long.parseLong(k);
+        return Optional.of(TtlDuration.of(Duration.ofMillis(ttlMilliseconds)));
+      }
+    };
+    final TtlProvider<String, String> ttlProvider = TtlProvider
+        .<String, String>withDefault(defaultTtl)
+        .fromKey(ttlForKey, Serdes.String());
+    params = ResponsiveKeyValueParams.fact(storeName).withTtlProvider(ttlProvider);
+
+    final var table = client.factFactory().create(RemoteTableSpecFactory.fromKVParams(
+        params,
+        defaultPartitioner(),
+        Optional.of(new TtlResolver<>(false, "changelog-ignored", ttlProvider))
+    ));
+
+    table.init(1);
+
+    final Bytes noTtlKey = serializedKey("KEEP_FOREVER");
+    final Bytes defaultTtlKey = serializedKey("DEFAULT_TTL"); // default is 30ms
+    final Bytes tenMsTtlKey = serializedKey(String.valueOf(10L));
+    final Bytes fiftyMsTtlKey = serializedKey(String.valueOf(50L));
+
+    final byte[] val = new byte[]{1};
+
+    // When:
+    final long insertTimeMs = 0L;
+    client.execute(table.insert(1, noTtlKey, val, insertTimeMs));
+    client.execute(table.insert(1, defaultTtlKey, val, insertTimeMs));
+    client.execute(table.insert(1, tenMsTtlKey, val, insertTimeMs));
+    client.execute(table.insert(1, fiftyMsTtlKey, val, insertTimeMs));
+
+    // Then
+    long lookupTime = Duration.ofMillis(11).toMillis();
+    assertThat(table.get(1, noTtlKey, lookupTime), is(val));
+    assertThat(table.get(1, defaultTtlKey, lookupTime), is(val));
+    assertThat(table.get(1, tenMsTtlKey, lookupTime), nullValue()); // expired
+    assertThat(table.get(1, fiftyMsTtlKey, lookupTime), is(val));
+
+    lookupTime = Duration.ofMillis(31).toMillis();
+    assertThat(table.get(1, noTtlKey, lookupTime), is(val));
+    assertThat(table.get(1, defaultTtlKey, lookupTime), nullValue());    // expired
+    assertThat(table.get(1, tenMsTtlKey, lookupTime), nullValue()); // expired
+    assertThat(table.get(1, fiftyMsTtlKey, lookupTime), is(val));
+
+    lookupTime = Duration.ofMillis(51).toMillis();
+    assertThat(table.get(1, noTtlKey, lookupTime), is(val));
+    assertThat(table.get(1, defaultTtlKey, lookupTime), nullValue());    // expired
+    assertThat(table.get(1, tenMsTtlKey, lookupTime), nullValue()); // expired
+    assertThat(table.get(1, fiftyMsTtlKey, lookupTime), nullValue());   // expired
+  }
+
+  @Test
+  public void shouldRespectSemanticKeyValueBasedTtl() throws Exception {
+    // Given:
+    final var defaultTtl = Duration.ofMillis(30);
+    final BiFunction<String, String, Optional<TtlDuration>> ttlForKeyAndValue = (k, v) -> {
+      if (k.equals("10_MS_RETENTION")) {
+        return Optional.of(TtlDuration.of(Duration.ofMillis(10)));
+      } else {
+        if (v.equals("DEFAULT")) {
+          return Optional.empty();
+        } else if (v.equals("NO_TTL")) {
+          return Optional.of(TtlDuration.noTtl());
+        } else {
+          return Optional.of(TtlDuration.of(Duration.ofMillis(Long.parseLong(v))));
+        }
+      }
+    };
+    final TtlProvider<String, String> ttlProvider = TtlProvider
+        .<String, String>withDefault(defaultTtl)
+        .fromKeyAndValue(ttlForKeyAndValue, Serdes.String(), Serdes.String());
+    params = ResponsiveKeyValueParams.fact(storeName).withTtlProvider(ttlProvider);
+
+
+    final var table = client.factFactory().create(RemoteTableSpecFactory.fromKVParams(
+        params,
+        defaultPartitioner(),
+        Optional.of(new TtlResolver<>(false, "changelog-ignored", ttlProvider))
+    ));
+
+    table.init(1);
+
+    final Bytes tenMsTtlKey = serializedKey("10_MS_RETENTION");
+    final Bytes defaultTtlKey = serializedKey("DEFAULT_30_MS_RETENTION");
+    final Bytes noTtlKey = serializedKey("NO_TTL");
+    final Bytes twoMsTtlKey = serializedKey("2_MS_RETENTION");
+    final Bytes fiftyMsTtlKey = serializedKey("50_MS_RETENTION");
+
+    final byte[] defaultTtlValue = serializedValue("DEFAULT"); // default is 30ms
+    final byte[] noTtlValue = serializedValue("NO_TTL");
+    final byte[] twoMsTtlValue = serializedValue(String.valueOf(2));
+    final byte[] fiftyMsTtlValue = serializedValue(String.valueOf(50));
+
+    final byte[] val = new byte[]{1};
+
+    // When
+    long insertTimeMs = 0L;
+    client.execute(table.insert(1, tenMsTtlKey, val, insertTimeMs));
+    client.execute(table.insert(1, defaultTtlKey, defaultTtlValue, insertTimeMs));
+    client.execute(table.insert(1, noTtlKey, noTtlValue, insertTimeMs));
+    client.execute(table.insert(1, twoMsTtlKey, twoMsTtlValue, insertTimeMs));
+    client.execute(table.insert(1, fiftyMsTtlKey, fiftyMsTtlValue, insertTimeMs));
+
+    // Then:
+    long lookupTime = Duration.ofMillis(3).toMillis();
+    assertThat(table.get(1, tenMsTtlKey, lookupTime), is(val));
+    assertThat(table.get(1, defaultTtlKey, lookupTime), is(defaultTtlValue));
+    assertThat(table.get(1, noTtlKey, lookupTime), is(noTtlValue));
+    assertThat(table.get(1, twoMsTtlKey, lookupTime), nullValue());            // expired
+    assertThat(table.get(1, fiftyMsTtlKey, lookupTime), is(fiftyMsTtlValue));
+
+    lookupTime = Duration.ofMillis(11).toMillis();
+    assertThat(table.get(1, tenMsTtlKey, lookupTime), nullValue());            // expired
+    assertThat(table.get(1, defaultTtlKey, lookupTime), is(defaultTtlValue));
+    assertThat(table.get(1, noTtlKey, lookupTime), is(noTtlValue));
+    assertThat(table.get(1, twoMsTtlKey, lookupTime), nullValue());            // expired
+    assertThat(table.get(1, fiftyMsTtlKey, lookupTime), is(fiftyMsTtlValue));
+
+    lookupTime = Duration.ofMillis(31).toMillis();
+    assertThat(table.get(1, tenMsTtlKey, lookupTime), nullValue());            // expired
+    assertThat(table.get(1, defaultTtlKey, lookupTime), nullValue());           // expired
+    assertThat(table.get(1, noTtlKey, lookupTime), is(noTtlValue));
+    assertThat(table.get(1, twoMsTtlKey, lookupTime), nullValue());            // expired
+    assertThat(table.get(1, fiftyMsTtlKey, lookupTime), is(fiftyMsTtlValue));
+
+    lookupTime = Duration.ofMillis(51).toMillis();
+    assertThat(table.get(1, tenMsTtlKey, lookupTime), nullValue());            // expired
+    assertThat(table.get(1, defaultTtlKey, lookupTime), nullValue());           // expired
+    assertThat(table.get(1, noTtlKey, lookupTime), is(noTtlValue));
+    assertThat(table.get(1, twoMsTtlKey, lookupTime), nullValue());            // expired
+    assertThat(table.get(1, fiftyMsTtlKey, lookupTime), nullValue());          // expired
+  }
+
+  @Test
+  public void shouldRespectOverridesWithValueBasedTtl() throws Exception {
+    // Given:
+    final var defaultTtl = Duration.ofMillis(30);
+    final Function<String, Optional<TtlDuration>> ttlForValue = v -> {
+      if (v.equals("DEFAULT")) {
+        return Optional.empty();
+      } else if (v.equals("NO_TTL")) {
+        return Optional.of(TtlDuration.noTtl());
+      } else {
+        return Optional.of(TtlDuration.of(Duration.ofMillis(Long.parseLong(v))));
+      }
+    };
+    final TtlProvider<String, String> ttlProvider = TtlProvider
+        .<String, String>withDefault(defaultTtl)
+        .fromValue(ttlForValue, Serdes.String());
+    params = ResponsiveKeyValueParams.fact(storeName).withTtlProvider(ttlProvider);
+
+
+    final var table = client.factFactory().create(RemoteTableSpecFactory.fromKVParams(
+        params,
+        defaultPartitioner(),
+        Optional.of(new TtlResolver<>(false, "changelog-ignored", ttlProvider))
+    ));
+
+    table.init(1);
+
+
+    final Bytes key = serializedKey("ignored");
+
+    final byte[] defaultTtlValue = serializedValue("DEFAULT"); // default is 30ms
+    final byte[] noTtlValue = serializedValue("NO_TTL");
+    final byte[] threeMsTtlValue = serializedValue(String.valueOf(3));
+    final byte[] tenMsTtlValue = serializedValue(String.valueOf(10));
+
+    // When
+    long currentTime = 0L;
+    // first record set to expire at 3ms
+    client.execute(table.insert(1, key, threeMsTtlValue, currentTime));
+
+    // Then:
+    currentTime = Duration.ofMillis(4).toMillis();
+    assertThat(table.get(1, key, currentTime), nullValue()); // expired
+
+    // insert new record with 3ms ttl -- now set to expire at 10ms
+    currentTime = Duration.ofMillis(7).toMillis();
+    client.execute(table.insert(1, key, threeMsTtlValue, currentTime));
+
+    // override with 10ms ttl -- now set to expire at 18ms
+    currentTime = Duration.ofMillis(8).toMillis();
+    client.execute(table.insert(1, key, tenMsTtlValue, currentTime));
+
+    // record should still exist after 10ms
+    currentTime = Duration.ofMillis(11).toMillis();
+    assertThat(table.get(1, key, currentTime), is(tenMsTtlValue));
+
+    // override with default ttl (30ms) -- now set to expire at 45ms
+    currentTime = Duration.ofMillis(15).toMillis();
+    client.execute(table.insert(1, key, defaultTtlValue, currentTime));
+
+    // record should still exist after 18ms
+    currentTime = Duration.ofMillis(20).toMillis();
+    assertThat(table.get(1, key, currentTime), is(defaultTtlValue));
+
+    // override with no ttl -- now set to never expire
+    currentTime = Duration.ofMillis(30).toMillis();
+    client.execute(table.insert(1, key, noTtlValue, currentTime));
+
+    // record should still exist after 45ms
+    currentTime = Duration.ofMillis(50).toMillis();
+    assertThat(table.get(1, key, currentTime), is(noTtlValue));
   }
 
 }
