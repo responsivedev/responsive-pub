@@ -19,7 +19,6 @@ package dev.responsive.kafka.internal.db;
 import static dev.responsive.kafka.internal.db.partitioning.TablePartitioner.defaultPartitioner;
 import static dev.responsive.kafka.internal.stores.TtlResolver.NO_TTL;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.defaultOnlyTtl;
-import static dev.responsive.kafka.testutils.IntegrationTestUtils.withTtlProvider;
 import static dev.responsive.kafka.testutils.SerdeUtils.serializedKey;
 import static dev.responsive.kafka.testutils.SerdeUtils.serializedValue;
 import static java.util.concurrent.TimeUnit.MINUTES;
@@ -35,6 +34,8 @@ import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.api.stores.TtlProvider;
 import dev.responsive.kafka.api.stores.TtlProvider.TtlDuration;
+import dev.responsive.kafka.internal.stores.TtlResolver;
+import dev.responsive.kafka.internal.utils.StateDeserializer;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
 import java.time.Duration;
@@ -43,7 +44,7 @@ import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
 import java.util.function.Function;
-import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
@@ -211,7 +212,9 @@ class CassandraFactTableIntegrationTest {
     final var table = client.factFactory().create(RemoteTableSpecFactory.fromKVParams(
         params,
         defaultPartitioner(),
-        withTtlProvider(ttlProvider, Serdes.String(), Serdes.String())
+        Optional.of(new TtlResolver<>(
+            new StateDeserializer<>("ignored", new StringDeserializer(), new StringDeserializer()),
+            ttlProvider))
     ));
 
     table.init(1);
@@ -276,8 +279,10 @@ class CassandraFactTableIntegrationTest {
     final var table = client.factFactory().create(RemoteTableSpecFactory.fromKVParams(
         params,
         defaultPartitioner(),
-        withTtlProvider(ttlProvider, Serdes.String(), Serdes.String()))
-    );
+        Optional.of(new TtlResolver<>(
+            new StateDeserializer<>("ignored", new StringDeserializer(), new StringDeserializer()),
+            ttlProvider))
+    ));
 
     table.init(1);
 
@@ -354,8 +359,10 @@ class CassandraFactTableIntegrationTest {
     final var table = client.factFactory().create(RemoteTableSpecFactory.fromKVParams(
         params,
         defaultPartitioner(),
-        withTtlProvider(ttlProvider, Serdes.String(), Serdes.String()))
-    );
+        Optional.of(new TtlResolver<>(
+            new StateDeserializer<>("ignored", new StringDeserializer(), new StringDeserializer()),
+            ttlProvider)
+    )));
 
     table.init(1);
 

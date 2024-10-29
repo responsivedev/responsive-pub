@@ -114,17 +114,6 @@ public final class IntegrationTestUtils {
         : Optional.empty();
   }
 
-  public static <K, V> Optional<TtlResolver<K, V>> withTtlProvider(
-      final TtlProvider<K, V> ttlProvider,
-      final Serde<K> keySerde,
-      final Serde<V> valueSerde
-  ) {
-    return Optional.of(new TtlResolver<>(
-        new StateDeserializer<>("ignored", keySerde.deserializer(), valueSerde.deserializer()),
-        ttlProvider)
-    );
-  }
-
   public static ResponsiveConfig copyConfigWithOverrides(
       final ResponsiveConfig original,
       final Map<String, Object> overrides
