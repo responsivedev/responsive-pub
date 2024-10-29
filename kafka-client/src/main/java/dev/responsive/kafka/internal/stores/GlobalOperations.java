@@ -50,10 +50,11 @@ public class GlobalOperations implements KeyValueOperations {
 
   public static GlobalOperations create(
       final StateStoreContext storeContext,
-      final ResponsiveKeyValueParams params
+      final ResponsiveKeyValueParams params,
+      final Optional<TtlResolver<?, ?>> ttlResolver
   ) throws InterruptedException, TimeoutException {
 
-    if (params.ttlProvider().isPresent()) {
+    if (ttlResolver.isPresent()) {
       throw new UnsupportedOperationException("Global stores are not yet compatible with ttl");
     }
 
@@ -68,7 +69,7 @@ public class GlobalOperations implements KeyValueOperations {
     final var spec = RemoteTableSpecFactory.fromKVParams(
         params,
         defaultPartitioner(),
-        Optional.empty()
+        ttlResolver
     );
 
     final var table = client.globalFactory().create(spec);

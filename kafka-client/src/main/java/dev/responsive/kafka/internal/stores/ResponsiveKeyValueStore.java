@@ -141,7 +141,7 @@ public class ResponsiveKeyValueStore
       final TaskType taskType
   ) throws InterruptedException, TimeoutException {
     return (taskType == TaskType.GLOBAL)
-        ? GlobalOperations.create(context, params)
+        ? GlobalOperations.create(context, params, ttlResolver)
         : PartitionedOperations.create(params.name(), ttlResolver, context, params);
   }
 
