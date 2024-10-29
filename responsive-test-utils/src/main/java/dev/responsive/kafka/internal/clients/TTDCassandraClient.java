@@ -32,35 +32,28 @@ import dev.responsive.kafka.internal.db.TTDKeyValueTable;
 import dev.responsive.kafka.internal.db.TTDWindowedTable;
 import dev.responsive.kafka.internal.db.TableCache;
 import dev.responsive.kafka.internal.db.WindowedTableCache;
+import dev.responsive.kafka.internal.db.inmemory.InMemoryKVTable;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistry;
 import dev.responsive.kafka.internal.utils.RemoteMonitor;
-import java.time.Duration;
 import java.util.OptionalInt;
 import java.util.concurrent.CompletionStage;
-import org.apache.kafka.common.utils.Time;
 
 public class TTDCassandraClient extends CassandraClient {
-  private final Time time;
   private final ResponsiveStoreRegistry storeRegistry = new ResponsiveStoreRegistry();
   private final TTDMockAdmin admin;
 
   private final TableCache<RemoteKVTable<BoundStatement>> kvFactory;
   private final WindowedTableCache<RemoteWindowedTable<BoundStatement>> windowedFactory;
 
-  public TTDCassandraClient(final TTDMockAdmin admin, final Time time) {
+  public TTDCassandraClient(final TTDMockAdmin admin) {
     super(loggedConfig(admin.props()));
-    this.time = time;
     this.admin = admin;
 
-    kvFactory = new TableCache<>(spec -> TTDKeyValueTable.create(spec, this));
+    kvFactory = new TableCache<>(spec -> new TTDKeyValueTable(spec, this));
     windowedFactory = new WindowedTableCache<>((spec, partitioner) -> TTDWindowedTable.create(spec,
         this,
         partitioner
     ));
-  }
-
-  public Time time() {
-    return time;
   }
 
   public ResponsiveStoreRegistry storeRegistry() {
@@ -71,12 +64,7 @@ public class TTDCassandraClient extends CassandraClient {
     return admin;
   }
 
-  public void advanceWallClockTime(final Duration advance) {
-    flush();
-    time.sleep(advance.toMillis());
-  }
-
-  private void flush() {
+  public void flush() {
     storeRegistry.stores().forEach(s -> s.onCommit().accept(0L));
   }
 
@@ -109,9 +97,10 @@ public class TTDCassandraClient extends CassandraClient {
 
   @Override
   public long count(final String tableName, final int tablePartition) {
-    final var kv = (TTDKeyValueTable) kvFactory.getTable(tableName);
+    final var kv = (InMemoryKVTable) kvFactory.getTable(tableName);
     final var window = (TTDWindowedTable) windowedFactory.getTable(tableName);
-    return (kv == null ? 0 : kv.count()) + (window == null ? 0 : window.count());
+    return (kv == null ? 0 : kv.approximateNumEntries(tablePartition))
+        + (window == null ? 0 : window.count());
   }
 
   @Override

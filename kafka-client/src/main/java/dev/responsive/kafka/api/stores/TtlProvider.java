@@ -53,7 +53,7 @@ public class TtlProvider<K, V> {
   public static <K, V> TtlProvider<K, V> withNoDefault() {
     return new TtlProvider<>(
         TtlType.DEFAULT_ONLY,
-        TtlDuration.noTtl(),
+        TtlDuration.infinite(),
         (ignoredK, ignoredV) -> Optional.empty()
     );
   }
@@ -131,7 +131,7 @@ public class TtlProvider<K, V> {
     }
 
     // No ttl will be applied, in other words infinite retention
-    public static TtlDuration noTtl() {
+    public static TtlDuration infinite() {
       return new TtlDuration(Duration.ZERO, Ttl.INFINITE);
     }
 

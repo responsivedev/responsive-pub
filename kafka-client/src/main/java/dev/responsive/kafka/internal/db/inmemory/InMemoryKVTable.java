@@ -1,5 +1,7 @@
 package dev.responsive.kafka.internal.db.inmemory;
 
+import com.datastax.oss.driver.api.core.cql.BoundStatement;
+import dev.responsive.kafka.api.stores.TtlProvider.TtlDuration;
 import dev.responsive.kafka.internal.db.KVFlushManager;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.RemoteWriter;
@@ -22,7 +24,9 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class InMemoryKVTable implements RemoteKVTable<Object> {
+// Note: this class doesn't actually use BoundStatements and applies all operations immediately,
+// we just stub the BoundStatement type so we can reuse this table for the TTD
+public class InMemoryKVTable implements RemoteKVTable<BoundStatement> {
   private static final Logger LOG = LoggerFactory.getLogger(InMemoryKVTable.class);
 
   private int kafkaPartition;
@@ -50,13 +54,16 @@ public class InMemoryKVTable implements RemoteKVTable<Object> {
       return null;
     }
 
-    final long minValidTs = ttlResolver.isEmpty()
-        ? -1L
-        : streamTimeMs - ttlResolver.get().defaultTtl().toMillis();
-
-    if (value.epochMillis() < minValidTs) {
-      return null;
+    if (ttlResolver.isPresent()) {
+      final TtlDuration rowTtl = ttlResolver.get().resolveTtl(key, value.value());
+      if (rowTtl.isFinite()) {
+        final long minValidTs = streamTimeMs - rowTtl.toMillis();
+        if (value.epochMillis < minValidTs) {
+          return null;
+        }
+      }
     }
+
     return value.value();
   }
 
@@ -67,6 +74,11 @@ public class InMemoryKVTable implements RemoteKVTable<Object> {
       final Bytes to,
       final long streamTimeMs
   ) {
+    if (ttlResolver.isPresent() && !ttlResolver.get().hasDefaultOnly()) {
+      throw new UnsupportedOperationException("Row-level ttl is not yet supported for range "
+                                                  + "queries on in-memory tables or TTD");
+    }
+
     checkKafkaPartition(kafkaPartition);
 
     final var iter = store
@@ -84,6 +96,11 @@ public class InMemoryKVTable implements RemoteKVTable<Object> {
 
   @Override
   public KeyValueIterator<Bytes, byte[]> all(final int kafkaPartition, final long streamTimeMs) {
+    if (ttlResolver.isPresent() && !ttlResolver.get().hasDefaultOnly()) {
+      throw new UnsupportedOperationException("Row-level ttl is not yet supported for range "
+                                                  + "queries on in-memory tables or TTD");
+    }
+
     checkKafkaPartition(kafkaPartition);
     final var iter = store.entrySet().iterator();
 
@@ -106,15 +123,19 @@ public class InMemoryKVTable implements RemoteKVTable<Object> {
   }
 
   @Override
-  public Object insert(int kafkaPartition, Bytes key, byte[] value, long epochMillis) {
+  public BoundStatement insert(int kafkaPartition, Bytes key, byte[] value, long epochMillis) {
     checkKafkaPartition(kafkaPartition);
-    return store.put(key, new Value(epochMillis, value));
+
+    store.put(key, new Value(epochMillis, value));
+    return null;
   }
 
   @Override
-  public Object delete(int kafkaPartition, Bytes key) {
+  public BoundStatement delete(int kafkaPartition, Bytes key) {
     checkKafkaPartition(kafkaPartition);
-    return store.remove(key);
+    store.remove(key);
+
+    return null;
   }
 
   @Override
@@ -152,17 +173,7 @@ public class InMemoryKVTable implements RemoteKVTable<Object> {
 
     @Override
     public TablePartitioner<Bytes, Integer> partitioner() {
-      return new TablePartitioner<>() {
-        @Override
-        public Integer tablePartition(int kafkaPartition, Bytes key) {
-          return kafkaPartition;
-        }
-
-        @Override
-        public Integer metadataTablePartition(int kafkaPartition) {
-          return kafkaPartition;
-        }
-      };
+      return TablePartitioner.defaultPartitioner();
     }
 
     @Override
