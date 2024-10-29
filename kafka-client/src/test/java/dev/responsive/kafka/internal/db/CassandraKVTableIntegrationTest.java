@@ -288,7 +288,8 @@ public class CassandraKVTableIntegrationTest {
 
     final List<BoundStatement> inserts = List.of(
         table.insert(0, Bytes.wrap(new byte[]{0x0, 0x0}), new byte[]{0x1}, MINUTES.toMillis(10L)),
-        table.insert(0, Bytes.wrap(new byte[]{0x0, 0x1}), new byte[]{0x1}, MINUTES.toMillis(0L)), // expired
+        // expired
+        table.insert(0, Bytes.wrap(new byte[]{0x0, 0x1}), new byte[]{0x1}, MINUTES.toMillis(0L)),
         table.insert(0, Bytes.wrap(new byte[]{0x0, 0x2}), new byte[]{0x1}, MINUTES.toMillis(20L))
     );
     inserts.forEach(client::execute);
