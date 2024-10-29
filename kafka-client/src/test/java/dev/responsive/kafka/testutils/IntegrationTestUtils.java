@@ -63,7 +63,6 @@ import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KafkaStreams.StateListener;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.Topology;
-
 import org.junit.jupiter.api.TestInfo;
 
 public final class IntegrationTestUtils {
