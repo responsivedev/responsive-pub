@@ -41,16 +41,14 @@ import java.util.concurrent.CompletionStage;
 import org.apache.kafka.common.utils.Time;
 
 public class TTDCassandraClient extends CassandraClient {
-  private final Time time;
   private final ResponsiveStoreRegistry storeRegistry = new ResponsiveStoreRegistry();
   private final TTDMockAdmin admin;
 
   private final TableCache<RemoteKVTable<BoundStatement>> kvFactory;
   private final WindowedTableCache<RemoteWindowedTable<BoundStatement>> windowedFactory;
 
-  public TTDCassandraClient(final TTDMockAdmin admin, final Time time) {
+  public TTDCassandraClient(final TTDMockAdmin admin) {
     super(loggedConfig(admin.props()));
-    this.time = time;
     this.admin = admin;
 
     kvFactory = new TableCache<>(spec -> new TTDKeyValueTable(spec, this));
@@ -60,21 +58,12 @@ public class TTDCassandraClient extends CassandraClient {
     ));
   }
 
-  public Time time() {
-    return time;
-  }
-
   public ResponsiveStoreRegistry storeRegistry() {
     return storeRegistry;
   }
 
   public TTDMockAdmin mockAdmin() {
     return admin;
-  }
-
-  public void advanceWallClockTime(final Duration advance) {
-    flush();
-    time.sleep(advance.toMillis());
   }
 
   public void flush() {

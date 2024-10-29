@@ -18,17 +18,14 @@ package dev.responsive.kafka.internal.db;
 
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.kafka.internal.clients.TTDCassandraClient;
-import org.apache.kafka.common.utils.Time;
 
 // TODO: use mock return values instead of null here and in the KV/Window child classes
 public abstract class TTDTable<K> implements RemoteTable<K, BoundStatement> {
 
   protected final TTDCassandraClient client;
-  protected final Time time;
 
   public TTDTable(final TTDCassandraClient client) {
     this.client = client;
-    this.time = client.time();
   }
 
   /**
