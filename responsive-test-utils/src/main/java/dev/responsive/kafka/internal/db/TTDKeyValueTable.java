@@ -17,7 +17,7 @@
 package dev.responsive.kafka.internal.db;
 
 import dev.responsive.kafka.internal.clients.TTDCassandraClient;
-import dev.responsive.kafka.internal.db.inmemory.InMemoryKVTable;;
+import dev.responsive.kafka.internal.db.inmemory.InMemoryKVTable;
 import dev.responsive.kafka.internal.db.spec.RemoteTableSpec;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueIterator;

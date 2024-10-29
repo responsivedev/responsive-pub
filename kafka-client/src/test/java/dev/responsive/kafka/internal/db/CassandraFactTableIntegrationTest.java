@@ -196,7 +196,7 @@ class CassandraFactTableIntegrationTest {
     final var defaultTtl = Duration.ofMinutes(30);
     final Function<String, Optional<TtlDuration>> ttlForKey = k -> {
       if (k.equals("KEEP_FOREVER")) {
-        return Optional.of(TtlDuration.noTtl());
+        return Optional.of(TtlDuration.infinite());
       } else if (k.endsWith("DEFAULT_TTL")) {
         return Optional.empty();
       } else {
@@ -264,7 +264,7 @@ class CassandraFactTableIntegrationTest {
         if (v.equals("DEFAULT")) {
           return Optional.empty();
         } else if (v.equals("NO_TTL")) {
-          return Optional.of(TtlDuration.noTtl());
+          return Optional.of(TtlDuration.infinite());
         } else {
           return Optional.of(TtlDuration.of(Duration.ofMinutes(Long.parseLong(v))));
         }
@@ -345,7 +345,7 @@ class CassandraFactTableIntegrationTest {
       if (v.equals("DEFAULT")) {
         return Optional.empty();
       } else if (v.equals("NO_TTL")) {
-        return Optional.of(TtlDuration.noTtl());
+        return Optional.of(TtlDuration.infinite());
       } else {
         return Optional.of(TtlDuration.of(Duration.ofMinutes(Long.parseLong(v))));
       }
