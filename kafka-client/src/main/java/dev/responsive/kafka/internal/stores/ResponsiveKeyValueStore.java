@@ -21,6 +21,7 @@ import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.internal.utils.TableName;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.TimeoutException;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
@@ -34,7 +35,6 @@ import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StateSerdes;
-import org.apache.kafka.streams.state.internals.MeteredKeyValueStore;
 import org.apache.kafka.streams.state.internals.StoreAccessorUtil;
 import org.apache.kafka.streams.state.internals.StoreQueryUtils;
 import org.slf4j.Logger;
@@ -118,9 +118,13 @@ public class ResponsiveKeyValueStore
         log.warn("Unexpected standby task created, should transition to active shortly");
       }
 
-      final var stateSerdes = StoreAccessorUtil.extractKeyValueStoreSerdes(root);
+      final StateSerdes<?, ?> stateSerdes = StoreAccessorUtil.extractKeyValueStoreSerdes(root);
+      final Optional<TtlResolver<?, ?>> ttlResolver = TtlResolver.fromTtlProviderAndStateSerdes(
+          stateSerdes,
+          params.ttlProvider()
+      );
 
-      operations = opsProvider.provide(params, isTimestamped, storeContext, taskType);
+      operations = opsProvider.provide(params, ttlResolver, storeContext, taskType);
       log.info("Completed initializing state store");
 
       open = true;
@@ -132,13 +136,13 @@ public class ResponsiveKeyValueStore
 
   private static KeyValueOperations provideOperations(
       final ResponsiveKeyValueParams params,
-      final StateSerdes<?, ?> stateSerdes,
+      final Optional<TtlResolver<?, ?>> ttlResolver,
       final StateStoreContext context,
       final TaskType taskType
   ) throws InterruptedException, TimeoutException {
     return (taskType == TaskType.GLOBAL)
         ? GlobalOperations.create(context, params)
-        : PartitionedOperations.create(params.name(), stateSerdes, context, params);
+        : PartitionedOperations.create(params.name(), ttlResolver, context, params);
   }
 
   @Override

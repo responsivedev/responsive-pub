@@ -53,7 +53,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.StateSerdes;
 import org.slf4j.Logger;
 
 public class PartitionedOperations implements KeyValueOperations {
@@ -77,7 +76,7 @@ public class PartitionedOperations implements KeyValueOperations {
 
   public static PartitionedOperations create(
       final TableName name,
-      final StateSerdes<?, ?> stateSerdes,
+      final Optional<TtlResolver<?, ?>> ttlResolver,
       final StateStoreContext storeContext,
       final ResponsiveKeyValueParams params
   ) throws InterruptedException, TimeoutException {
@@ -97,12 +96,6 @@ public class PartitionedOperations implements KeyValueOperations {
     final TopicPartition changelog = new TopicPartition(
         changelogFor(storeContext, name.kafkaName(), false),
         context.taskId().partition()
-    );
-
-    final Optional<TtlResolver<?, ?>> ttlResolver = TtlResolver.fromTtlProvider(
-        stateSerdes,
-        changelog.topic(),
-        params.ttlProvider()
     );
 
     final RemoteKVTable<?> table;

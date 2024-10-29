@@ -5,12 +5,12 @@ import org.apache.kafka.streams.state.StateSerdes;
 
 public class StoreAccessorUtil {
 
-  @SuppressWarnings("unchecked")
-  public static <K, V> StateSerdes<K, V> extractKeyValueStoreSerdes(
+  @SuppressWarnings("rawtypes")
+  public static StateSerdes<?, ?> extractKeyValueStoreSerdes(
       final StateStore store
   ) {
     if (store instanceof MeteredKeyValueStore) {
-      return ((MeteredKeyValueStore<K, V>) store).serdes;
+      return ((MeteredKeyValueStore) store).serdes;
     } else {
       throw new IllegalStateException("Attempted to extract serdes from store of type "
                                           + store.getClass().getName());

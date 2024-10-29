@@ -21,7 +21,6 @@ import java.time.Duration;
 import java.util.Optional;
 import java.util.function.BiFunction;
 import java.util.function.Function;
-import org.apache.kafka.common.serialization.Serde;
 
 public class TtlProvider<K, V> {
 
@@ -222,6 +221,7 @@ public class TtlProvider<K, V> {
   ) {
     final K key;
     final V value;
+
     switch (ttlType) {
       case DEFAULT_ONLY:
         key = null; //ignored

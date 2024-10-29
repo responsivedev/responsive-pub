@@ -30,26 +30,28 @@ public class TtlResolver<K, V> {
   private final StateDeserializer<K, V> stateDeserializer;
   private final TtlProvider<K, V> ttlProvider;
 
-  public static <K, V> Optional<TtlResolver<K, V>> fromTtlProvider(
-      final StateSerdes<K, V> stateSerdes,
-      final String changelogTopic,
-      final Optional<TtlProvider<K, V>> ttlProvider
+  @SuppressWarnings("unchecked")
+  public static <K, V> Optional<TtlResolver<?, ?>> fromTtlProviderAndStateSerdes(
+      final StateSerdes<?, ?> stateSerdes,
+      final Optional<TtlProvider<?, ?>> ttlProvider
   ) {
     return ttlProvider.isPresent()
-        ? Optional.of(new TtlResolver<>(stateSerdes, changelogTopic, ttlProvider.get()))
+        ? Optional.of(
+            new TtlResolver<>(
+                (StateDeserializer<K, V>) new StateDeserializer<>(
+                    stateSerdes.topic(),
+                    stateSerdes.keyDeserializer(),
+                    stateSerdes.valueDeserializer()),
+                (TtlProvider<K, V>) ttlProvider.get()
+            ))
         : Optional.empty();
   }
 
   public TtlResolver(
-      final StateSerdes<K, V> stateSerdes,
-      final String changelogTopic,
+      final StateDeserializer<K, V> stateDeserializer,
       final TtlProvider<K, V> ttlProvider
   ) {
-    this.stateDeserializer = new StateDeserializer<>(
-        changelogTopic,
-        stateSerdes.keyDeserializer(),
-        stateSerdes.valueDeserializer()
-    );
+    this.stateDeserializer = stateDeserializer;
     this.ttlProvider = ttlProvider;
   }
 

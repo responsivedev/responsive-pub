@@ -18,6 +18,7 @@ package dev.responsive.kafka.internal.db;
 
 import static dev.responsive.kafka.api.config.ResponsiveConfig.CASSANDRA_DESIRED_NUM_PARTITION_CONFIG;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.copyConfigWithOverrides;
+import static dev.responsive.kafka.testutils.IntegrationTestUtils.withTtlProvider;
 import static java.util.Collections.singletonMap;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -112,8 +113,7 @@ public class CassandraKVTableIntegrationTest {
         storeName + "-changelog"
     );
 
-    final Optional<TtlResolver<?, ?>> ttlResolver =
-        TtlResolver.fromTtlProvider(false, "changelog-ignored", params.ttlProvider());
+    final Optional<TtlResolver<?, ?>> ttlResolver = withTtlProvider(params.ttlProvider());
 
     try {
       return CassandraKeyValueTable.create(

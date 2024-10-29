@@ -19,6 +19,7 @@ import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.stores.TtlProvider;
 import dev.responsive.kafka.internal.db.CassandraClientFactory;
 import dev.responsive.kafka.internal.stores.TtlResolver;
+import dev.responsive.kafka.internal.utils.StateDeserializer;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -53,6 +54,7 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -62,6 +64,7 @@ import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KafkaStreams.StateListener;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.state.StateSerdes;
 import org.junit.jupiter.api.TestInfo;
 
 public final class IntegrationTestUtils {
@@ -87,13 +90,39 @@ public final class IntegrationTestUtils {
   }
 
   public static Optional<TtlResolver<?, ?>> defaultOnlyTtl(final Duration ttl) {
-    return Optional.of(new TtlResolver<>(false, "ignored", TtlProvider.withDefault(ttl)));
+    return Optional.of(new TtlResolver<>(
+        new StateDeserializer<>("ignored", null, null),
+        TtlProvider.withDefault(ttl))
+    );
   }
 
-  public static <K, V> Optional<TtlResolver<K, V>> forTtlProvider(
-      final TtlProvider<K, V> ttlProvider
+  public static Optional<TtlResolver<?, ?>> withTtlProvider(
+      final TtlProvider<?, ?> ttlProvider
   ) {
-    return Optional.of(new TtlResolver<>(false, "ignored", ttlProvider));
+    return Optional.of(new TtlResolver<>(
+        new StateDeserializer<>("ignored", null, null),
+        ttlProvider)
+    );
+  }
+
+  public static Optional<TtlResolver<?, ?>> withTtlProvider(
+      final Optional<TtlProvider<?, ?>> ttlProvider
+  ) {
+    return ttlProvider.isPresent()
+        ? Optional.of(
+            new TtlResolver<>(new StateDeserializer<>("ignored", null, null), ttlProvider.get()))
+        : Optional.empty();
+  }
+
+  public static <K, V> Optional<TtlResolver<K, V>> withTtlProvider(
+      final TtlProvider<K, V> ttlProvider,
+      final Serde<K> keySerde,
+      final Serde<V> valueSerde
+  ) {
+    return Optional.of(new TtlResolver<>(
+        new StateDeserializer<>("ignored", keySerde.deserializer(), valueSerde.deserializer()),
+        ttlProvider)
+    );
   }
 
   public static ResponsiveConfig copyConfigWithOverrides(

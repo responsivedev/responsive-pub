@@ -17,17 +17,17 @@
 package dev.responsive.kafka.internal.stores;
 
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
+import java.util.Optional;
 import java.util.concurrent.TimeoutException;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.Task;
-import org.apache.kafka.streams.state.StateSerdes;
 
 @FunctionalInterface
 public interface KVOperationsProvider {
 
   KeyValueOperations provide(
       final ResponsiveKeyValueParams params,
-      final StateSerdes<?, ?> stateSerdes,
+      final Optional<TtlResolver<?, ?>> ttlResolver,
       final StateStoreContext context,
       final Task.TaskType type
   ) throws InterruptedException, TimeoutException;
