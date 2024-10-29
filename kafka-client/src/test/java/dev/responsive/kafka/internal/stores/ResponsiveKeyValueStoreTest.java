@@ -22,9 +22,9 @@ import static org.mockito.Mockito.when;
 
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.state.internals.MeteredKeyValueStore;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -39,7 +39,7 @@ class ResponsiveKeyValueStoreTest {
   @Mock
   private InternalProcessorContext<?, ?> context;
   @Mock
-  private StateStore root;
+  private MeteredKeyValueStore<?, ?> root;
 
   @Test
   public void shouldPutIfAbsent() {
