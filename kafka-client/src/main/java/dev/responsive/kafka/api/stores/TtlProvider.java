@@ -59,6 +59,9 @@ public class TtlProvider<K, V> {
   }
 
   /**
+   * @param computeTtlFromKey function that returns the ttl override for this specific key,
+   *                          or {@link Optional#empty()} to use the default ttl
+   *
    * @return the same TtlProvider with a key-based override function
    */
   public TtlProvider<K, V> fromKey(
@@ -76,6 +79,8 @@ public class TtlProvider<K, V> {
   }
 
   /**
+   * @param computeTtlFromValue function that returns the ttl override for this specific value,
+   *                            or {@link Optional#empty()} to use the default ttl
    * @return the same TtlProvider with a value-based override function
    */
   public TtlProvider<K, V> fromValue(
@@ -93,6 +98,8 @@ public class TtlProvider<K, V> {
   }
 
   /**
+   * @param computeTtlFromKeyAndValue function that returns the ttl override for this specific key
+   *                                  and value, or {@link Optional#empty()} to use the default ttl
    * @return the same TtlProvider with a key-and-value-based override function
    */
   public TtlProvider<K, V> fromKeyAndValue(
