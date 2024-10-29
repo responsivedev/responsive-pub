@@ -28,6 +28,7 @@ import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.QueryOp;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.RemoteWindowedTable;
+import dev.responsive.kafka.internal.db.TTDKeyValueTable;
 import dev.responsive.kafka.internal.db.TTDWindowedTable;
 import dev.responsive.kafka.internal.db.TableCache;
 import dev.responsive.kafka.internal.db.WindowedTableCache;
@@ -52,7 +53,7 @@ public class TTDCassandraClient extends CassandraClient {
     this.time = time;
     this.admin = admin;
 
-    kvFactory = new TableCache<>(spec -> new InMemoryKVTable(spec.tableName(), spec.ttlResolver()));
+    kvFactory = new TableCache<>(spec -> new TTDKeyValueTable(spec, this));
     windowedFactory = new WindowedTableCache<>((spec, partitioner) -> TTDWindowedTable.create(spec,
         this,
         partitioner
@@ -76,7 +77,7 @@ public class TTDCassandraClient extends CassandraClient {
     time.sleep(advance.toMillis());
   }
 
-  private void flush() {
+  public void flush() {
     storeRegistry.stores().forEach(s -> s.onCommit().accept(0L));
   }
 

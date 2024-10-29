@@ -72,6 +72,11 @@ public class InMemoryKVTable implements RemoteKVTable<BoundStatement> {
       final Bytes to,
       final long streamTimeMs
   ) {
+    if (ttlResolver.isPresent() && !ttlResolver.get().hasDefaultOnly()) {
+      throw new UnsupportedOperationException("Row-level ttl is not yet supported for range "
+                                                  + "queries on in-memory tables");
+    }
+
     checkKafkaPartition(kafkaPartition);
 
     final var iter = store
@@ -89,6 +94,11 @@ public class InMemoryKVTable implements RemoteKVTable<BoundStatement> {
 
   @Override
   public KeyValueIterator<Bytes, byte[]> all(final int kafkaPartition, final long streamTimeMs) {
+    if (ttlResolver.isPresent() && !ttlResolver.get().hasDefaultOnly()) {
+      throw new UnsupportedOperationException("Row-level ttl is not yet supported for range "
+                                                  + "queries on in-memory tables");
+    }
+
     checkKafkaPartition(kafkaPartition);
     final var iter = store.entrySet().iterator();
 

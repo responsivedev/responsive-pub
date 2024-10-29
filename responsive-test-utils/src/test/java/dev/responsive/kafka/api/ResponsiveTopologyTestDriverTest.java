@@ -18,6 +18,7 @@ package dev.responsive.kafka.api;
 
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.api.stores.ResponsiveStores;
+import dev.responsive.kafka.api.stores.TtlProvider;
 import dev.responsive.kafka.internal.stores.SchemaTypes;
 import dev.responsive.kafka.internal.stores.SchemaTypes.KVSchema;
 import java.time.Duration;
@@ -85,9 +86,9 @@ public class ResponsiveTopologyTestDriverTest {
   @EnumSource(SchemaTypes.KVSchema.class)
   public void shouldRunAllKVStoreTypesWithDefaultOnlyTTLWithoutResponsiveConnection(final KVSchema type) {
     // Given:
-    final Duration ttl = Duration.ofMillis(15);
+    final Duration defaultTtl = Duration.ofMillis(15);
     final TopologyTestDriver driver = setupDriver(
-        paramsForType(type).withTimeToLive(ttl)
+        paramsForType(type).withTtlProvider(TtlProvider.withDefault(defaultTtl))
     );
 
     final TestInputTopic<String, String> bids = driver.createInputTopic(
@@ -98,24 +99,24 @@ public class ResponsiveTopologyTestDriverTest {
         "output", new StringDeserializer(), new StringDeserializer());
 
     // When:
-    people.pipeInput("1", "1,alice,CA"); // time = 0
-    driver.advanceWallClockTime(Duration.ofMillis(5));
-    people.pipeInput("2", "2,bob,OR");   // time = 5
-    driver.advanceWallClockTime(Duration.ofMillis(5));
-    people.pipeInput("3", "3,carol,CA"); // time = 10
+    people.pipeInput("1", "1,alice,CA", 0);  // insert time = 0
+    people.pipeInput("2", "2,bob,OR", 5);    // insert time = 5 (advances streamTime to 5)
+    people.pipeInput("3", "3,carol,CA", 10); // insert time = 10 (advances streamTime to 10)
     
-    bids.pipeInput("a", "a,100,1");      // time = 10
-    bids.pipeInput("b", "b,101,2");      // time = 10
+    bids.pipeInput("a", "a,100,1", 10);      // streamTime = 10
+    bids.pipeInput("b", "b,101,2", 10);      // streamTime = 10
 
-    driver.advanceWallClockTime(Duration.ofMillis(10));
-    bids.pipeInput("c", "c,102,1");      // time = 20 -- no result because alice has expired x.x
-    bids.pipeInput("d", "d,103,3");      // time = 20
+    people.pipeInput("4", "4,dean-ignored,VA", 20); // advances streamTime to 20
 
-    people.pipeInput("1", "1,alex,CA");  // time = 20
-    bids.pipeInput("e", "e,104,1");      // time = 20 -- new result as alex has replaced alice
+    bids.pipeInput("c", "c,102,1", 20);      // streamTime = 20 -- no result b/c alice has expired
+    bids.pipeInput("d", "d,103,3", 20);      // streamTime = 20
 
-    driver.advanceWallClockTime(Duration.ofMillis(10));
-    bids.pipeInput("f", "f,105,3");      // time = 30 -- no result because carol has expired x.x
+    people.pipeInput("1", "1,alex,CA", 20);  // streamTime = 20
+    bids.pipeInput("e", "e,104,1", 20);      // streamTime = 20 -- yes result as alex replaced alice
+
+    people.pipeInput("4", "4,ignored,VA", 30); // advances streamTime to 30
+
+    bids.pipeInput("f", "f,105,3", 30);      // streamTime = 30 -- no result b/c carol has expired
 
     // Then:
     final List<String> outputs = output.readValuesToList();
