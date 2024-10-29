@@ -83,7 +83,7 @@ public class ResponsiveTopologyTestDriverTest {
 
   @ParameterizedTest
   @EnumSource(SchemaTypes.KVSchema.class)
-  public void shouldRunAllKVStoreTypesWithTTLWithoutResponsiveConnection(final KVSchema type) {
+  public void shouldRunAllKVStoreTypesWithDefaultOnlyTTLWithoutResponsiveConnection(final KVSchema type) {
     // Given:
     final Duration ttl = Duration.ofMillis(15);
     final TopologyTestDriver driver = setupDriver(

@@ -28,10 +28,10 @@ import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.QueryOp;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.RemoteWindowedTable;
-import dev.responsive.kafka.internal.db.TTDKeyValueTable;
 import dev.responsive.kafka.internal.db.TTDWindowedTable;
 import dev.responsive.kafka.internal.db.TableCache;
 import dev.responsive.kafka.internal.db.WindowedTableCache;
+import dev.responsive.kafka.internal.db.inmemory.InMemoryKVTable;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistry;
 import dev.responsive.kafka.internal.utils.RemoteMonitor;
 import java.time.Duration;
@@ -52,7 +52,7 @@ public class TTDCassandraClient extends CassandraClient {
     this.time = time;
     this.admin = admin;
 
-    kvFactory = new TableCache<>(spec -> TTDKeyValueTable.create(spec, this));
+    kvFactory = new TableCache<>(spec -> new InMemoryKVTable(spec.tableName(), spec.ttlResolver()));
     windowedFactory = new WindowedTableCache<>((spec, partitioner) -> TTDWindowedTable.create(spec,
         this,
         partitioner
@@ -109,9 +109,10 @@ public class TTDCassandraClient extends CassandraClient {
 
   @Override
   public long count(final String tableName, final int tablePartition) {
-    final var kv = (TTDKeyValueTable) kvFactory.getTable(tableName);
+    final var kv = (InMemoryKVTable) kvFactory.getTable(tableName);
     final var window = (TTDWindowedTable) windowedFactory.getTable(tableName);
-    return (kv == null ? 0 : kv.count()) + (window == null ? 0 : window.count());
+    return (kv == null ? 0 : kv.approximateNumEntries(tablePartition))
+        + (window == null ? 0 : window.count());
   }
 
   @Override
