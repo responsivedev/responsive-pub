@@ -24,6 +24,8 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+// Note: this class doesn't actually use BoundStatements and applies all operations immediately,
+// we just stub the BoundStatement type so we can reuse this table for the TTD
 public class InMemoryKVTable implements RemoteKVTable<BoundStatement> {
   private static final Logger LOG = LoggerFactory.getLogger(InMemoryKVTable.class);
 
@@ -74,7 +76,7 @@ public class InMemoryKVTable implements RemoteKVTable<BoundStatement> {
   ) {
     if (ttlResolver.isPresent() && !ttlResolver.get().hasDefaultOnly()) {
       throw new UnsupportedOperationException("Row-level ttl is not yet supported for range "
-                                                  + "queries on in-memory tables");
+                                                  + "queries on in-memory tables or TTD");
     }
 
     checkKafkaPartition(kafkaPartition);
@@ -96,7 +98,7 @@ public class InMemoryKVTable implements RemoteKVTable<BoundStatement> {
   public KeyValueIterator<Bytes, byte[]> all(final int kafkaPartition, final long streamTimeMs) {
     if (ttlResolver.isPresent() && !ttlResolver.get().hasDefaultOnly()) {
       throw new UnsupportedOperationException("Row-level ttl is not yet supported for range "
-                                                  + "queries on in-memory tables");
+                                                  + "queries on in-memory tables or TTD");
     }
 
     checkKafkaPartition(kafkaPartition);

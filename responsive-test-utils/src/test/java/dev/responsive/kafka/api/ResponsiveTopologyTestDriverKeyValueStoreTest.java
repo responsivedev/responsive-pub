@@ -27,7 +27,6 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
-import java.util.function.Function;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;

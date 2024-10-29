@@ -33,9 +33,9 @@ public class TTDKeyValueTable extends InMemoryKVTable {
 
   @Override
   public byte[] get(final int kafkaPartition, final Bytes key, final long streamTimeMs) {
+    // trigger flush before lookup since CommitBuffer doesn't apply ttl
     client.flush();
 
-    // trigger flush before lookup since CommitBuffer doesn't apply ttl
     return super.get(kafkaPartition, key, streamTimeMs);
   }
 
@@ -46,17 +46,17 @@ public class TTDKeyValueTable extends InMemoryKVTable {
       final Bytes to,
       final long streamTimeMs
   ) {
+    // trigger flush before lookup since CommitBuffer doesn't apply ttl
     client.flush();
 
-    // trigger flush before lookup since CommitBuffer doesn't apply ttl
     return super.range(kafkaPartition, from, to, streamTimeMs);
   }
 
   @Override
   public KeyValueIterator<Bytes, byte[]> all(final int kafkaPartition, final long streamTimeMs) {
+    // trigger flush before lookup since CommitBuffer doesn't apply ttl
     client.flush();
 
-    // trigger flush before lookup since CommitBuffer doesn't apply ttl
     return super.all(kafkaPartition, streamTimeMs);
   }
 
