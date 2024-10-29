@@ -2,6 +2,8 @@ package dev.responsive.examples.e2etest;
 
 import com.antithesis.sdk.Assert;
 import com.antithesis.sdk.Lifecycle;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.ImmutableMap;
 import dev.responsive.examples.common.E2ETestUtils;
 import dev.responsive.examples.common.EventSignals;
@@ -43,6 +45,8 @@ import org.slf4j.LoggerFactory;
 
 public class E2ETestDriver {
   private static final Logger LOG = LoggerFactory.getLogger(E2ETestDriver.class);
+
+  private static final ObjectMapper MAPPER = new ObjectMapper();
 
   private final UrandomGenerator randomGenerator = new UrandomGenerator();
   private final Map<String, Object> properties;
@@ -345,14 +349,19 @@ public class E2ETestDriver {
         } catch (final InterruptedException e) {
           throw new RuntimeException(e);
         }
-        if (Duration.between(start, Instant.now()).getSeconds() > 300) {
+        int timeout = 300;
+        if (Duration.between(start, Instant.now()).getSeconds() > timeout) {
           final String errorMessage = String.format(
-              "waited longer than 300 seconds for offset %d %d %s",
+              "waited longer than %d seconds for offset %d %d %s",
+              timeout,
               upTo,
               partition,
               sent.isEmpty() ? "null" : sent.get(0).toString()
           );
-          Assert.unreachable(errorMessage, null);
+          Assert.unreachable(
+              String.format("waited longer than %d seconds for offset", timeout),
+              E2ETestDriver.buildDetails(errorMessage)
+          );
           LOG.error(errorMessage);
           throw new IllegalStateException(errorMessage);
         }
@@ -365,6 +374,12 @@ public class E2ETestDriver {
           String.join(", ", popped.stream().map(Object::toString).toList()));
       return popped;
     }
+  }
+
+  private static ObjectNode buildDetails(final String errorMessage) {
+    final var details = MAPPER.createObjectNode();
+    details.put("msg", errorMessage);
+    return details;
   }
 
   private Instant lastCommittedOffsetLog = Instant.EPOCH;
@@ -403,7 +418,14 @@ public class E2ETestDriver {
               offsets.inputCommitted.get(tp),
               Duration.between(stalledPartition.detected(), offsets.timestamp())
           );
-          Assert.unreachable(errorMessage, null);
+          Assert.unreachable(
+              String.format("Partition %d has not made progress from offset %d (current %d)",
+                  p,
+                  stalledPartition.offset(),
+                  offsets.inputCommitted.get(tp)
+              ),
+              E2ETestDriver.buildDetails(errorMessage)
+          );
           LOG.error(errorMessage);
           throw new IllegalStateException(errorMessage);
         }
