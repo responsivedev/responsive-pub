@@ -35,10 +35,8 @@ import dev.responsive.kafka.internal.db.WindowedTableCache;
 import dev.responsive.kafka.internal.db.inmemory.InMemoryKVTable;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistry;
 import dev.responsive.kafka.internal.utils.RemoteMonitor;
-import java.time.Duration;
 import java.util.OptionalInt;
 import java.util.concurrent.CompletionStage;
-import org.apache.kafka.common.utils.Time;
 
 public class TTDCassandraClient extends CassandraClient {
   private final ResponsiveStoreRegistry storeRegistry = new ResponsiveStoreRegistry();
