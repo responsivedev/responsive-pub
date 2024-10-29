@@ -18,7 +18,9 @@ package dev.responsive.kafka.internal.db;
 
 import static dev.responsive.kafka.api.config.ResponsiveConfig.CASSANDRA_DESIRED_NUM_PARTITION_CONFIG;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.copyConfigWithOverrides;
+import static dev.responsive.kafka.testutils.IntegrationTestUtils.withTtlProvider;
 import static java.util.Collections.singletonMap;
+import static java.util.concurrent.TimeUnit.MINUTES;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
@@ -52,9 +54,6 @@ import org.testcontainers.containers.CassandraContainer;
 
 @ExtendWith(ResponsiveExtension.class)
 public class CassandraKVTableIntegrationTest {
-
-  private static final long CURRENT_TS = 100L;
-  private static final long MIN_VALID_TS = 0L;
 
   // Set up with 4 subpartitions per kafka partition
   private static final int NUM_SUBPARTITIONS_TOTAL = 8;
@@ -114,8 +113,7 @@ public class CassandraKVTableIntegrationTest {
         storeName + "-changelog"
     );
 
-    final Optional<TtlResolver<?, ?>> ttlResolver =
-        TtlResolver.fromTtlProvider(false, "changelog-ignored", params.ttlProvider());
+    final Optional<TtlResolver<?, ?>> ttlResolver = withTtlProvider(params.ttlProvider());
 
     try {
       return CassandraKeyValueTable.create(
@@ -131,19 +129,19 @@ public class CassandraKVTableIntegrationTest {
     final RemoteKVTable<BoundStatement> table = createTable();
 
     final List<BoundStatement> inserts = List.of(
-        table.insert(0, Bytes.wrap(new byte[]{0x0, 0x1}), new byte[]{0x1}, CURRENT_TS),
-        table.insert(0, Bytes.wrap(new byte[]{0x1, 0x0}), new byte[]{0x1}, CURRENT_TS),
-        table.insert(0, Bytes.wrap(new byte[]{0x2, 0x0}), new byte[]{0x1}, CURRENT_TS),
-        table.insert(0, Bytes.wrap(new byte[]{0x2, 0x2}), new byte[]{0x1}, CURRENT_TS),
-        table.insert(0, Bytes.wrap(new byte[]{0x1, 0x1}), new byte[]{0x1}, CURRENT_TS),
-        table.insert(0, Bytes.wrap(new byte[]{0x0, 0x2}), new byte[]{0x1}, CURRENT_TS),
-        table.insert(0, Bytes.wrap(new byte[]{0x2}), new byte[]{0x1}, CURRENT_TS),
-        table.insert(0, Bytes.wrap(new byte[]{0x0}), new byte[]{0x1}, CURRENT_TS)
+        table.insert(0, Bytes.wrap(new byte[]{0x0, 0x1}), new byte[]{0x1}, 0L),
+        table.insert(0, Bytes.wrap(new byte[]{0x1, 0x0}), new byte[]{0x1}, 0L),
+        table.insert(0, Bytes.wrap(new byte[]{0x2, 0x0}), new byte[]{0x1}, 0L),
+        table.insert(0, Bytes.wrap(new byte[]{0x2, 0x2}), new byte[]{0x1}, 0L),
+        table.insert(0, Bytes.wrap(new byte[]{0x1, 0x1}), new byte[]{0x1}, 0L),
+        table.insert(0, Bytes.wrap(new byte[]{0x0, 0x2}), new byte[]{0x1}, 0L),
+        table.insert(0, Bytes.wrap(new byte[]{0x2}), new byte[]{0x1}, 0L),
+        table.insert(0, Bytes.wrap(new byte[]{0x0}), new byte[]{0x1}, 0L)
     );
     inserts.forEach(client::execute);
 
     // When:
-    final KeyValueIterator<Bytes, byte[]> all = table.all(0, MIN_VALID_TS);
+    final KeyValueIterator<Bytes, byte[]> all = table.all(0, 0L);
 
     // Then:
     Bytes old = all.next().key;
@@ -160,18 +158,18 @@ public class CassandraKVTableIntegrationTest {
     final RemoteKVTable<BoundStatement> table = createTable();
 
     final List<BoundStatement> inserts = List.of(
-        table.insert(0, Bytes.wrap("A".getBytes()), new byte[]{0x1}, CURRENT_TS),
-        table.insert(0, Bytes.wrap("B".getBytes()), new byte[]{0x1}, CURRENT_TS),
-        table.insert(0, Bytes.wrap("C".getBytes()), new byte[]{0x1}, CURRENT_TS),
-        table.insert(0, Bytes.wrap("CC".getBytes()), new byte[]{0x1}, CURRENT_TS),
-        table.insert(0, Bytes.wrap("CCC".getBytes()), new byte[]{0x1}, CURRENT_TS),
-        table.insert(0, Bytes.wrap("CD".getBytes()), new byte[]{0x1}, CURRENT_TS),
-        table.insert(0, Bytes.wrap("D".getBytes()), new byte[]{0x1}, CURRENT_TS),
-        table.insert(0, Bytes.wrap("E".getBytes()), new byte[]{0x1}, CURRENT_TS),
-        table.insert(0, Bytes.wrap("F".getBytes()), new byte[]{0x1}, CURRENT_TS),
-        table.insert(0, Bytes.wrap("G".getBytes()), new byte[]{0x1}, CURRENT_TS),
-        table.insert(0, Bytes.wrap("H".getBytes()), new byte[]{0x1}, CURRENT_TS),
-        table.insert(0, Bytes.wrap("I".getBytes()), new byte[]{0x1}, CURRENT_TS)
+        table.insert(0, Bytes.wrap("A".getBytes()), new byte[]{0x1}, 0L),
+        table.insert(0, Bytes.wrap("B".getBytes()), new byte[]{0x1}, 0L),
+        table.insert(0, Bytes.wrap("C".getBytes()), new byte[]{0x1}, 0L),
+        table.insert(0, Bytes.wrap("CC".getBytes()), new byte[]{0x1}, 0L),
+        table.insert(0, Bytes.wrap("CCC".getBytes()), new byte[]{0x1}, 0L),
+        table.insert(0, Bytes.wrap("CD".getBytes()), new byte[]{0x1}, 0L),
+        table.insert(0, Bytes.wrap("D".getBytes()), new byte[]{0x1}, 0L),
+        table.insert(0, Bytes.wrap("E".getBytes()), new byte[]{0x1}, 0L),
+        table.insert(0, Bytes.wrap("F".getBytes()), new byte[]{0x1}, 0L),
+        table.insert(0, Bytes.wrap("G".getBytes()), new byte[]{0x1}, 0L),
+        table.insert(0, Bytes.wrap("H".getBytes()), new byte[]{0x1}, 0L),
+        table.insert(0, Bytes.wrap("I".getBytes()), new byte[]{0x1}, 0L)
     );
     inserts.forEach(client::execute);
 
@@ -179,7 +177,7 @@ public class CassandraKVTableIntegrationTest {
         0,
         Bytes.wrap("B".getBytes()),
         Bytes.wrap("H".getBytes()),
-        MIN_VALID_TS)
+        0L)
     ) {
 
       // Then:
@@ -284,14 +282,15 @@ public class CassandraKVTableIntegrationTest {
   @Test
   public void shouldRespectSemanticDefaultOnlyTtlForAllQueries() {
     // Given:
-    final long ttlMs = 100L;
+    final long ttlMs = MINUTES.toMillis(100);
     final TtlProvider<?, ?> ttlProvider = TtlProvider.withDefault(Duration.ofMillis(ttlMs));
     final RemoteKVTable<BoundStatement> table = createTable(ttlProvider);
 
     final List<BoundStatement> inserts = List.of(
-        table.insert(0, Bytes.wrap(new byte[]{0x0, 0x0}), new byte[]{0x1}, 10L),
-        table.insert(0, Bytes.wrap(new byte[]{0x0, 0x1}), new byte[]{0x1}, 0L), // expired
-        table.insert(0, Bytes.wrap(new byte[]{0x0, 0x2}), new byte[]{0x1}, 20L)
+        table.insert(0, Bytes.wrap(new byte[]{0x0, 0x0}), new byte[]{0x1}, MINUTES.toMillis(10L)),
+        // expired
+        table.insert(0, Bytes.wrap(new byte[]{0x0, 0x1}), new byte[]{0x1}, MINUTES.toMillis(0L)),
+        table.insert(0, Bytes.wrap(new byte[]{0x0, 0x2}), new byte[]{0x1}, MINUTES.toMillis(20L))
     );
     inserts.forEach(client::execute);
 
@@ -318,10 +317,10 @@ public class CassandraKVTableIntegrationTest {
     final RemoteKVTable<BoundStatement> table = createTable();
 
     final byte[] valBytes = new byte[]{0x1};
-    client.execute(table.insert(0, ColumnName.METADATA_KEY, valBytes, CURRENT_TS));
+    client.execute(table.insert(0, ColumnName.METADATA_KEY, valBytes, 0L));
 
     // When:
-    final byte[] val = table.get(0, ColumnName.METADATA_KEY, MIN_VALID_TS);
+    final byte[] val = table.get(0, ColumnName.METADATA_KEY, 0L);
 
     // Then:
     assertThat(val, Matchers.is(valBytes));

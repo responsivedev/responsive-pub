@@ -76,7 +76,7 @@ public class PartitionedOperations implements KeyValueOperations {
 
   public static PartitionedOperations create(
       final TableName name,
-      final boolean isTimestamped,
+      final Optional<TtlResolver<?, ?>> ttlResolver,
       final StateStoreContext storeContext,
       final ResponsiveKeyValueParams params
   ) throws InterruptedException, TimeoutException {
@@ -96,12 +96,6 @@ public class PartitionedOperations implements KeyValueOperations {
     final TopicPartition changelog = new TopicPartition(
         changelogFor(storeContext, name.kafkaName(), false),
         context.taskId().partition()
-    );
-
-    final Optional<TtlResolver<?, ?>> ttlResolver = TtlResolver.fromTtlProvider(
-        isTimestamped,
-        changelog.topic(),
-        params.ttlProvider()
     );
 
     final RemoteKVTable<?> table;
