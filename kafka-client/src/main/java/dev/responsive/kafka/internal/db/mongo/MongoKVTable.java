@@ -108,7 +108,11 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
     );
 
     if (ttlResolver.isPresent()) {
-      // TODO(sophie): account for infinite default ttl
+      // TODO(sophie): account for infinite default ttl when we add row-level ttl
+      if (!ttlResolver.get().hasDefaultOnly()) {
+        throw new UnsupportedOperationException("Row-level ttl is not yet supported with MongoDB");
+      }
+
       this.defaultTtlMs = ttlResolver.get().defaultTtl().toMillis();
       final long expireAfterMs = defaultTtlMs + Duration.ofHours(12).toMillis();
 

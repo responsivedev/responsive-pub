@@ -20,6 +20,7 @@ import static dev.responsive.kafka.api.config.ResponsiveConfig.WINDOW_BLOOM_FILT
 import static dev.responsive.kafka.api.config.ResponsiveConfig.WINDOW_BLOOM_FILTER_EXPECTED_KEYS_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.WINDOW_BLOOM_FILTER_FPP_CONFIG;
 import static dev.responsive.kafka.internal.db.partitioning.Segmenter.UNINITIALIZED_STREAM_TIME;
+import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 
 import com.google.common.hash.BloomFilter;
 import com.google.common.hash.Funnels;
@@ -38,6 +39,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
+import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
@@ -104,6 +106,13 @@ public class ResponsiveWindowStore
       final ResponsiveConfig config = ResponsiveConfig.responsiveConfig(appConfigs);
 
       context = storeContext;
+
+      final TaskType taskType = asInternalProcessorContext(storeContext).taskType();
+      if (taskType == TaskType.STANDBY) {
+        log.error("Unexpected standby task created");
+        throw new IllegalStateException("Store " + name() + " was opened as a standby");
+      }
+
       windowOperations = SegmentedOperations.create(
           name,
           storeContext,

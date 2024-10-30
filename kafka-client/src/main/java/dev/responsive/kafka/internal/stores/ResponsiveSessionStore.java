@@ -18,6 +18,7 @@ package dev.responsive.kafka.internal.stores;
 
 
 import static dev.responsive.kafka.internal.db.partitioning.Segmenter.UNINITIALIZED_STREAM_TIME;
+import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.stores.ResponsiveSessionParams;
@@ -35,6 +36,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
+import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
@@ -83,6 +85,12 @@ public class ResponsiveSessionStore implements SessionStore<Bytes, byte[]> {
     final ResponsiveConfig responsiveConfig = ResponsiveConfig.responsiveConfig(appConfigs);
 
     this.context = storeContext;
+
+    final TaskType taskType = asInternalProcessorContext(storeContext).taskType();
+    if (taskType == TaskType.STANDBY) {
+      log.error("Unexpected standby task created");
+      throw new IllegalStateException("Store " + name() + " was opened as a standby");
+    }
 
     try {
       this.sessionOperations = SessionOperationsImpl.create(

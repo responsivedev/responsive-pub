@@ -44,7 +44,6 @@ public class ResponsiveKeyValueStore
 
   private final ResponsiveKeyValueParams params;
   private final TableName name;
-  private final boolean isTimestamped;
   private final KVOperationsProvider opsProvider;
 
   private Position position; // TODO(IQ): update the position during restoration
@@ -56,12 +55,10 @@ public class ResponsiveKeyValueStore
   private StateStoreContext context;
 
   public ResponsiveKeyValueStore(
-      final ResponsiveKeyValueParams params,
-      final boolean isTimestamped
+      final ResponsiveKeyValueParams params
   ) {
     this(
         params,
-        isTimestamped,
         ResponsiveKeyValueStore::provideOperations
     );
   }
@@ -69,12 +66,10 @@ public class ResponsiveKeyValueStore
   // Visible for Testing
   public ResponsiveKeyValueStore(
       final ResponsiveKeyValueParams params,
-      final boolean isTimestamped,
       final KVOperationsProvider opsProvider
   ) {
     this.params = params;
     this.name = params.name();
-    this.isTimestamped = isTimestamped;
     this.position = Position.emptyPosition();
     this.opsProvider = opsProvider;
 
@@ -115,7 +110,8 @@ public class ResponsiveKeyValueStore
       context = storeContext;
 
       if (taskType == TaskType.STANDBY) {
-        log.warn("Unexpected standby task created, should transition to active shortly");
+        log.error("Unexpected standby task created");
+        throw new IllegalStateException("Store " + name() + " was opened as a standby");
       }
 
       final StateSerdes<?, ?> stateSerdes = StoreAccessorUtil.extractKeyValueStoreSerdes(root);

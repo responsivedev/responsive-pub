@@ -10,13 +10,13 @@ public class ResponsiveTimestampedKeyValueStore
   public ResponsiveTimestampedKeyValueStore(
       final ResponsiveKeyValueParams params
   ) {
-    super(params, true);
+    super(params);
   }
 
   public ResponsiveTimestampedKeyValueStore(
       final ResponsiveKeyValueParams params,
       final KVOperationsProvider opsProvider
   ) {
-    super(params, true, opsProvider);
+    super(params, opsProvider);
   }
 }
