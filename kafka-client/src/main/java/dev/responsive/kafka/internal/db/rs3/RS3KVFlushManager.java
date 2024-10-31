@@ -55,17 +55,7 @@ class RS3KVFlushManager extends KVFlushManager {
 
   @Override
   public TablePartitioner<Bytes, Integer> partitioner() {
-    return new TablePartitioner<Bytes, Integer>() {
-      @Override
-      public Integer tablePartition(int kafkaPartition, Bytes key) {
-        return pssPartitioner.pss(key.get(), kafkaPartition);
-      }
-
-      @Override
-      public Integer metadataTablePartition(int kafkaPartition) {
-        throw new UnsupportedOperationException();
-      }
-    };
+    return new PssTablePartitioner(pssPartitioner);
   }
 
   @Override
@@ -104,7 +94,7 @@ class RS3KVFlushManager extends KVFlushManager {
   }
 
   @Override
-  public RemoteWriteResult<Integer> postFlush(long consumedOffset) {
+  public RemoteWriteResult<Integer> postFlush(final long consumedOffset) {
     for (final var entry : writers.entrySet()) {
       writtenOffsets.put(entry.getKey(), Optional.of(entry.getValue().endOffset()));
     }
@@ -123,7 +113,7 @@ class RS3KVFlushManager extends KVFlushManager {
   }
 
   @Override
-  public String failedFlushInfo(long batchOffset, Integer failedTablePartition) {
+  public String failedFlushInfo(long batchOffset, final Integer failedTablePartition) {
     // TODO: fill me in with info about last written offsets
     return "";
   }
@@ -141,11 +131,11 @@ class RS3KVFlushManager extends KVFlushManager {
     }
 
     @Override
-    public void insert(Bytes key, byte[] value, long epochMillis) {
+    public void insert(final Bytes key, final byte[] value, final long epochMillis) {
     }
 
     @Override
-    public void delete(Bytes key) {
+    public void delete(final Bytes key) {
     }
 
     @Override
@@ -194,12 +184,12 @@ class RS3KVFlushManager extends KVFlushManager {
     }
 
     @Override
-    public void insert(Bytes key, byte[] value, long epochMillis) {
+    public void insert(final Bytes key, final byte[] value, final long epochMillis) {
       streamSender.sendNext(table.insert(kafkaPartition, key, value, epochMillis));
     }
 
     @Override
-    public void delete(Bytes key) {
+    public void delete(final Bytes key) {
       streamSender.sendNext(table.delete(kafkaPartition, key));
     }
 

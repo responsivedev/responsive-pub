@@ -104,15 +104,7 @@ public class GrpcRS3Client implements RS3Client {
               .setPssId(pssId)
               .setEndOffset(endOffset)
               .setExpectedWrittenOffset(expectedWrittenOffset.orElse(WAL_OFFSET_NONE));
-          if (entry instanceof Put) {
-            final var put = (Put) entry;
-            final var putBuilder = Rs3.WriteWALSegmentRequest.Put.newBuilder()
-                .setKey(ByteString.copyFrom(put.key()));
-            if (put.value().isPresent()) {
-              putBuilder.setValue(ByteString.copyFrom(put.value().get()));
-            }
-            entryBuilder.setPut(putBuilder.build());
-          }
+          addWalEntryToSegment(entry, entryBuilder);
           return entryBuilder.build();
         },
         streamObserver
@@ -204,6 +196,21 @@ public class GrpcRS3Client implements RS3Client {
     return Rs3.LSSId.newBuilder()
         .setId(lssId.id())
         .build();
+  }
+
+  private void addWalEntryToSegment(
+      final WalEntry entry,
+      final Rs3.WriteWALSegmentRequest.Builder builder
+  ) {
+    if (entry instanceof Put) {
+      final var put = (Put) entry;
+      final var putBuilder = Rs3.WriteWALSegmentRequest.Put.newBuilder()
+          .setKey(ByteString.copyFrom(put.key()));
+      if (put.value().isPresent()) {
+        putBuilder.setValue(ByteString.copyFrom(put.value().get()));
+      }
+      builder.setPut(putBuilder.build());
+    }
   }
 
   private void checkField(final Supplier<Boolean> check, final String field) {

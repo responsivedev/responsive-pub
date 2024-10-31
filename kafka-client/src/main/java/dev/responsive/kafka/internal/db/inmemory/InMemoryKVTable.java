@@ -190,7 +190,7 @@ public class InMemoryKVTable implements RemoteKVTable<BoundStatement> {
 
     @Override
     public RemoteWriter<Bytes, Integer> createWriter(
-        Integer tablePartition,
+        final Integer tablePartition,
         final long consumedOffset
     ) {
       return new RemoteWriter<>() {

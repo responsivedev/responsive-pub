@@ -11,6 +11,7 @@ import java.util.HashMap;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.slf4j.Logger;
@@ -42,7 +43,12 @@ public class RS3KVTable implements RemoteKVTable<WalEntry> {
   @Override
   public KVFlushManager init(final int kafkaPartition) {
     if (flushManager != null) {
-      throw new IllegalStateException("already initialized");
+      LOG.error("already initialized for store {}:{}", name, kafkaPartition);
+      throw new IllegalStateException(String.format(
+          "already initialized for store %s:%d",
+          name,
+          kafkaPartition
+      ));
     }
 
     this.lssId = new LssId(kafkaPartition);
@@ -64,7 +70,16 @@ public class RS3KVTable implements RemoteKVTable<WalEntry> {
       this.fetchOffset = fetchOffsetOrMinusOne;
     }
 
-    LOG.info("restore rs3 kv table from offset {} for {}", fetchOffset, kafkaPartition);
+    final var writtenOffsetsStr = lastWrittenOffset.entrySet().stream()
+        .map(e -> String.format("%s -> %s",
+            e.getKey(),
+            e.getValue().map(Object::toString).orElse("none")))
+        .collect(Collectors.joining(","));
+    LOG.info("restore rs3 kv table from offset {} for {}. recorded written offsets: {}",
+        fetchOffset,
+        kafkaPartition,
+        writtenOffsetsStr
+    );
 
     flushManager = new RS3KVFlushManager(
         storeId,
@@ -103,7 +118,7 @@ public class RS3KVTable implements RemoteKVTable<WalEntry> {
   @Override
   public long approximateNumEntries(final int kafkaPartition) {
     LOG.warn("approximateNumEntries not implemented for RS3");
-    return 0;
+    return -1;
   }
 
   @Override
