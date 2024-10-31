@@ -59,7 +59,8 @@ public class ResponsiveExtension implements ParameterResolver {
   public static CassandraContainer<?> cassandra = new CassandraContainer<>(TestConstants.CASSANDRA)
       .withInitScript("CassandraDockerInit.cql")
       .withReuse(true);
-  public static RS3Container rs3 = new RS3Container("rs3:0.1.0")
+  public static RS3Container rs3
+      = new RS3Container("public.ecr.aws/j8q9y0n6/responsiveinc/rs3-server:latest")
       .withExposedPorts(50051);
   public static KafkaContainer kafka = new KafkaContainer(TestConstants.KAFKA)
       .withEnv("KAFKA_GROUP_MIN_SESSION_TIMEOUT_MS", "1000")
