@@ -3,7 +3,6 @@ package dev.responsive.kafka.internal.db.rs3;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.rs3.client.WalEntry;
 import dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRS3Client;
-import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
