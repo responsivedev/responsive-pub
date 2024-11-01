@@ -31,13 +31,11 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 
 public class RS3KVTableTest {
   private static final UUID STORE_ID = new UUID(0, 0);
-  private static final int PARTITION_ID = 1;
+  private static final int PARTITION_ID = 8;
 
   private String testName;
   private RS3Client pocketClient;
-  private final PssPartitioner pssPartitioner = PssRangePartitioner.create(
-      List.of("000", "001", "010", "011", "100", "101", "110", "111")
-  );
+  private final PssPartitioner pssPartitioner = new PssDirectPartitioner();
 
   @RegisterExtension
   public static final ResponsiveExtension EXT = new ResponsiveExtension(StorageBackend.RS3);

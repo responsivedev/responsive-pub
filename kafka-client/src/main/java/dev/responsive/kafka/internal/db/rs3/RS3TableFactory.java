@@ -21,9 +21,7 @@ public class RS3TableFactory {
 
   public RemoteKVTable<WalEntry> kvTable(final String name) {
     final UUID storeId = new UUID(0, 0);
-    final PssPartitioner pssPartitioner = PssRangePartitioner.create(
-        List.of("000", "001", "010", "011", "100", "101", "110", "111")
-    );
+    final PssPartitioner pssPartitioner = new PssDirectPartitioner();
     final var rs3Client = GrpcRS3Client.connect(
         String.format("%s:%d", rs3Host, rs3Port)
     );
