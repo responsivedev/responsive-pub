@@ -107,13 +107,13 @@ class RS3KVFlushManager extends KVFlushManager {
   }
 
   @Override
-  public RemoteWriteResult<Integer> updateOffset(long consumedOffset) {
+  public RemoteWriteResult<Integer> updateOffset(final long consumedOffset) {
     // no op for rs3 store. offsets are updated by RS3Client.writeWalSegment
     return RemoteWriteResult.success(null);
   }
 
   @Override
-  public String failedFlushInfo(long batchOffset, final Integer failedTablePartition) {
+  public String failedFlushInfo(final long batchOffset, final Integer failedTablePartition) {
     // TODO: fill me in with info about last written offsets
     return "";
   }
