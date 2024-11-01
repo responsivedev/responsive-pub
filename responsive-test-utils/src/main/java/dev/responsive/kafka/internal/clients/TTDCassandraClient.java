@@ -35,19 +35,23 @@ import dev.responsive.kafka.internal.db.WindowedTableCache;
 import dev.responsive.kafka.internal.db.inmemory.InMemoryKVTable;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistry;
 import dev.responsive.kafka.internal.utils.RemoteMonitor;
+import java.time.Duration;
 import java.util.OptionalInt;
 import java.util.concurrent.CompletionStage;
+import org.apache.kafka.common.utils.Time;
 
 public class TTDCassandraClient extends CassandraClient {
   private final ResponsiveStoreRegistry storeRegistry = new ResponsiveStoreRegistry();
   private final TTDMockAdmin admin;
+  private final Time time;
 
   private final TableCache<RemoteKVTable<BoundStatement>> kvFactory;
   private final WindowedTableCache<RemoteWindowedTable<BoundStatement>> windowedFactory;
 
-  public TTDCassandraClient(final TTDMockAdmin admin) {
+  public TTDCassandraClient(final TTDMockAdmin admin, final Time time) {
     super(loggedConfig(admin.props()));
     this.admin = admin;
+    this.time = time;
 
     kvFactory = new TableCache<>(spec -> new TTDKeyValueTable(spec, this));
     windowedFactory = new WindowedTableCache<>((spec, partitioner) -> TTDWindowedTable.create(spec,
@@ -62,6 +66,15 @@ public class TTDCassandraClient extends CassandraClient {
 
   public TTDMockAdmin mockAdmin() {
     return admin;
+  }
+
+  public long currentWallClockTimeMs() {
+    return time.milliseconds();
+  }
+
+  public void advanceWallClockTime(final Duration advance) {
+    flush();
+    time.sleep(advance.toMillis());
   }
 
   public void flush() {
