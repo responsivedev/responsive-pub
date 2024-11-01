@@ -5,6 +5,7 @@ import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
 
+import dev.responsive.kafka.internal.db.rs3.client.LssId;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
@@ -22,7 +23,7 @@ class PssRangePartitionerTest {
   @Test
   public void shouldComputePssIdsCorrectly() {
     // when:
-    final var allPss = partitioner.allPss();
+    final var allPss = partitioner.pssForLss(new LssId(0));
 
     // then:
     assertThat(allPss, containsInAnyOrder(8, 9, 10, 11, 3));
@@ -43,7 +44,7 @@ class PssRangePartitionerTest {
       }
 
       // when:
-      final int pss = partitioner.pss(new byte[]{testCase}, 0);
+      final int pss = partitioner.pss(new byte[]{testCase}, new LssId(0));
 
       // then:
       assertThat(pss, equalTo(expectedPss));
@@ -61,7 +62,7 @@ class PssRangePartitionerTest {
     final byte[] key = "test key".getBytes();
 
     // when:
-    final int pss = realPartitioner.pss(key, 0);
+    final int pss = realPartitioner.pss(key, new LssId(0));
 
     // then:
     assertThat(pss, is(3));

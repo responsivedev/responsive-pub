@@ -119,7 +119,7 @@ public class RS3KVTableTest {
   public void shouldRestoreFromLowestPssWrittenOffset() {
     // given:
     int endOffset = 100;
-    for (final int pssId : pssPartitioner.allPss()) {
+    for (final int pssId : pssPartitioner.pssForLss(new LssId(PARTITION_ID))) {
       pocketClient.writeWalSegment(
           STORE_ID,
           new LssId(PARTITION_ID),
@@ -142,7 +142,8 @@ public class RS3KVTableTest {
   @Test
   public void shouldRestoreFromStartIfLowestPssFlushedOffsetIsUnspecified() {
     int endOffset = 100;
-    final Queue<Integer> allPssExcept1 = new LinkedList<>(pssPartitioner.allPss());
+    final Queue<Integer> allPssExcept1 = new LinkedList<>(
+        pssPartitioner.pssForLss(new LssId(PARTITION_ID)));
     allPssExcept1.remove();
     for (final int pssId : allPssExcept1) {
       pocketClient.writeWalSegment(

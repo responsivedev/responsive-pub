@@ -1,6 +1,7 @@
 package dev.responsive.kafka.internal.db.rs3;
 
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
+import dev.responsive.kafka.internal.db.rs3.client.LssId;
 import java.util.Objects;
 import org.apache.kafka.common.utils.Bytes;
 
@@ -13,7 +14,7 @@ public class PssTablePartitioner implements TablePartitioner<Bytes, Integer> {
 
   @Override
   public Integer tablePartition(int kafkaPartition, Bytes key) {
-    return pssPartitioner.pss(key.get(), kafkaPartition);
+    return pssPartitioner.pss(key.get(), new LssId(kafkaPartition));
   }
 
   @Override

@@ -1,5 +1,6 @@
 package dev.responsive.kafka.internal.db.rs3;
 
+import dev.responsive.kafka.internal.db.rs3.client.LssId;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -48,7 +49,7 @@ public class PssRangePartitioner implements PssPartitioner {
   }
 
   @Override
-  public int pss(byte[] key, int partition) {
+  public int pss(byte[] key, LssId lss) {
     final String hashedBits = hashedBits(key);
     for (final Map.Entry<String, Integer> entry : pssByPrefix.entrySet()) {
       if (hashedBits.startsWith(entry.getKey())) {
@@ -60,7 +61,7 @@ public class PssRangePartitioner implements PssPartitioner {
   }
 
   @Override
-  public List<Integer> allPss() {
+  public List<Integer> pssForLss(LssId lssId) {
     return List.copyOf(pssByPrefix.values());
   }
 

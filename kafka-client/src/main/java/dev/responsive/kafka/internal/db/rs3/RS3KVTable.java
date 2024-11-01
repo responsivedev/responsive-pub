@@ -56,7 +56,7 @@ public class RS3KVTable implements RemoteKVTable<WalEntry> {
     // TODO: we should write an empty segment periodically to any PSS that we haven't
     //       written to to bump the written offset
     final HashMap<Integer, Optional<Long>> lastWrittenOffset = new HashMap<>();
-    for (final int pss : pssPartitioner.allPss()) {
+    for (final int pss : pssPartitioner.pssForLss(this.lssId)) {
       final var offsets = rs3Client.getCurrentOffsets(storeId, lssId, pss);
       lastWrittenOffset.put(pss, offsets.writtenOffset());
     }
@@ -95,7 +95,7 @@ public class RS3KVTable implements RemoteKVTable<WalEntry> {
 
   @Override
   public byte[] get(final int kafkaPartition, final Bytes key, final long minValidTs) {
-    final int pssId = pssPartitioner.pss(key.get(), kafkaPartition);
+    final int pssId = pssPartitioner.pss(key.get(), this.lssId);
     return rs3Client.get(storeId, lssId, pssId, flushManager.writtenOffset(pssId), key.get())
         .orElse(null);
   }
