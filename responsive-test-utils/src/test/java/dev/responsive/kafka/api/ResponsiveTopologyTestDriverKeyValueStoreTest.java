@@ -86,7 +86,7 @@ public class ResponsiveTopologyTestDriverKeyValueStoreTest {
 
   @ParameterizedTest
   @EnumSource(SchemaTypes.KVSchema.class)
-  public void shouldRunWithoutResponsiveConnectionAndKeyBasedTtl(final KVSchema type) {
+  public void shouldEnforceKeyBasedTtlByAdvancingStreamTime(final KVSchema type) {
     // Given:
     final Duration defaultTtl = Duration.ofMillis(15);
 
@@ -114,15 +114,15 @@ public class ResponsiveTopologyTestDriverKeyValueStoreTest {
     people.pipeInput("2", "2,bob,OR", 5);       // insert time = 5 (advances streamTime to 5)
     people.pipeInput("3", "3,carol,CA", 10);    // insert time = 10 (advances streamTime to 10)
 
-    bids.pipeInput("a", "a,100,1", 10);      // streamTime = 10
-    bids.pipeInput("b", "b,101,2", 10);      // streamTime = 10
+    bids.pipeInput("a", "a,100,1", 10);      // streamTime = 10 -- result as alice is not expired
+    bids.pipeInput("b", "b,101,2", 10);      // streamTime = 10 -- result as bob is not expired
 
     people.pipeInput("4", "4,dean-ignored,VA", 20); // advances streamTime to 20
 
     bids.pipeInput("c", "c,102,1", 20);      // streamTime = 20 -- no result b/c alice has expired
-    bids.pipeInput("d", "d,103,3", 20);      // streamTime = 20
+    bids.pipeInput("d", "d,103,3", 20);      // streamTime = 20 -- result as carol is not expired
 
-    people.pipeInput("1", "1,alex,CA", 20);  // streamTime = 20
+    people.pipeInput("1", "1,alex,CA", 20);  // insert streamTime = 20
     bids.pipeInput("e", "e,104,1", 20);      // streamTime = 20 -- yes result as alex replaced alice
 
     people.pipeInput("4", "4,ignored,VA", 30); // advances streamTime to 30
@@ -130,6 +130,64 @@ public class ResponsiveTopologyTestDriverKeyValueStoreTest {
     bids.pipeInput("f", "f,105,3", 30);      // streamTime = 30 -- no result b/c carol has expired
 
     bids.pipeInput("g", "g,106,0", 30);      // streamTime = 30 -- yes result b/c id 0 is infinite
+
+    // Then:
+    final List<String> outputs = output.readValuesToList();
+    MatcherAssert.assertThat(outputs, Matchers.contains(
+        "a,100,1,1,alice,CA",
+        "d,103,3,3,carol,CA",
+        "e,104,1,1,alex,CA",
+        "g,106,0,0,infinite,CA"
+    ));
+    driver.close();
+  }
+
+  @ParameterizedTest
+  @EnumSource(SchemaTypes.KVSchema.class)
+  public void shouldEnforceKeyBasedTtlByAdvancingWallclockTime(final KVSchema type) {
+    // Given:
+    final Duration defaultTtl = Duration.ofMillis(15);
+
+    // Apply infinite retention only to key (ie "person id") of 0, everyone else is default
+    final TtlProvider<String, ?> ttlProvider = TtlProvider.<String, Object>withDefault(defaultTtl)
+        .fromKey(k -> {
+          if (k.equals("0")) {
+            return Optional.of(TtlDuration.infinite());
+          } else {
+            return Optional.empty();
+          }
+        });
+    final TopologyTestDriver driver = setupDriver(paramsForType(type).withTtlProvider(ttlProvider));
+
+    final TestInputTopic<String, String> bids = driver.createInputTopic(
+        "bids", new StringSerializer(), new StringSerializer());
+    final TestInputTopic<String, String> people = driver.createInputTopic(
+        "people", new StringSerializer(), new StringSerializer());
+    final TestOutputTopic<String, String> output = driver.createOutputTopic(
+        "output", new StringDeserializer(), new StringDeserializer());
+
+    // When:
+    people.pipeInput("0", "0,infinite,CA", 0);  // insert time = 0
+    people.pipeInput("1", "1,alice,CA", 0);     // insert time = 0
+    people.pipeInput("2", "2,bob,OR", 5);       // insert time = 5
+    people.pipeInput("3", "3,carol,CA", 10);    // insert time = 10
+
+    bids.pipeInput("a", "a,100,1", 10);      // streamTime = 10 -- result as alice is not expired
+    bids.pipeInput("b", "b,101,2", 10);      // streamTime = 10 -- result as bob is not expired
+
+    driver.advanceWallClockTime(Duration.ofMillis(20)); // advances wallclock time to 20
+
+    bids.pipeInput("c", "c,102,1", 20);       // time = 20 -- no result b/c alice has expired
+    bids.pipeInput("d", "d,103,3", 20);       // time = 20 -- result since carol is not expired
+
+    people.pipeInput("1", "1,alex,CA", 20);   // insert time = 20
+    bids.pipeInput("e", "e,104,1", 20);       // time = 20 -- result as alex has replaced alice
+
+    driver.advanceWallClockTime(Duration.ofMillis(30)); // advances wallclock time to 30
+
+    bids.pipeInput("f", "f,105,3", 30);      // time = 30 -- no result b/c carol has expired
+
+    bids.pipeInput("g", "g,106,0", 30);      // time = 30 -- result b/c person w/ id 0 is infinite
 
     // Then:
     final List<String> outputs = output.readValuesToList();

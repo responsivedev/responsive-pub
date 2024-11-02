@@ -36,7 +36,10 @@ public class TTDKeyValueTable extends InMemoryKVTable {
     // trigger flush before lookup since CommitBuffer doesn't apply ttl
     client.flush();
 
-    return super.get(kafkaPartition, key, streamTimeMs);
+    // take the max of mock "wallclock" time and stream-time since ttl is applied on both
+    final long currentTimeMs = Math.max(streamTimeMs, client.currentWallClockTimeMs());
+
+    return super.get(kafkaPartition, key, currentTimeMs);
   }
 
   @Override
@@ -49,7 +52,10 @@ public class TTDKeyValueTable extends InMemoryKVTable {
     // trigger flush before lookup since CommitBuffer doesn't apply ttl
     client.flush();
 
-    return super.range(kafkaPartition, from, to, streamTimeMs);
+    // take the max of mock "wallclock" time and stream-time since ttl is applied on both
+    final long currentTimeMs = Math.max(streamTimeMs, client.currentWallClockTimeMs());
+
+    return super.range(kafkaPartition, from, to, currentTimeMs);
   }
 
   @Override
@@ -57,7 +63,10 @@ public class TTDKeyValueTable extends InMemoryKVTable {
     // trigger flush before lookup since CommitBuffer doesn't apply ttl
     client.flush();
 
-    return super.all(kafkaPartition, streamTimeMs);
+    // take the max of mock "wallclock" time and stream-time since ttl is applied on both
+    final long currentTimeMs = Math.max(streamTimeMs, client.currentWallClockTimeMs());
+
+    return super.all(kafkaPartition, currentTimeMs);
   }
 
 }

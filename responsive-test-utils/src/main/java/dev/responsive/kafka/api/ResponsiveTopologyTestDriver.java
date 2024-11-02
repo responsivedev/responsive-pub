@@ -97,21 +97,22 @@ public class ResponsiveTopologyTestDriver extends TopologyTestDriver {
         topology,
         config,
         initialWallClockTime,
-        new TTDCassandraClient(new TTDMockAdmin(baseProps(config), topology))
+        new TTDCassandraClient(
+            new TTDMockAdmin(baseProps(config), topology),
+            mockTime(initialWallClockTime))
     );
   }
 
   /**
-   * Advances the internal mock time which can be used to trigger some Kafka Streams
-   * functionality such as wall-clock punctuators, or force Responsive to flush
-   * its internal buffers.
+   * Advances the internal mock time used for Responsive-specific features such as ttl, as well
+   * as the mock time used for various Kafka Streams functionality such as wall-clock punctuators.
    * See {@link TopologyTestDriver#advanceWallClockTime(Duration)} for more details.
    *
    * @param advance the amount of time to advance wall-clock time
    */
   @Override
   public void advanceWallClockTime(final Duration advance) {
-    client.flush();
+    client.advanceWallClockTime(advance);
     super.advanceWallClockTime(advance);
   }
 
