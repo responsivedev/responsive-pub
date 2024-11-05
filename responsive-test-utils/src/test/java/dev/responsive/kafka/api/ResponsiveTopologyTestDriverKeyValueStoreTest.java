@@ -117,16 +117,14 @@ public class ResponsiveTopologyTestDriverKeyValueStoreTest {
     bids.pipeInput("a", "a,100,1", 10);      // streamTime = 10 -- result as alice is not expired
     bids.pipeInput("b", "b,101,2", 10);      // streamTime = 10 -- result as bob is not expired
 
-    people.pipeInput("4", "4,dean-ignored,VA", 20); // advances streamTime to 20
-
+    // advance streamTime to 20
     bids.pipeInput("c", "c,102,1", 20);      // streamTime = 20 -- no result b/c alice has expired
     bids.pipeInput("d", "d,103,3", 20);      // streamTime = 20 -- result as carol is not expired
 
     people.pipeInput("1", "1,alex,CA", 20);  // insert streamTime = 20
     bids.pipeInput("e", "e,104,1", 20);      // streamTime = 20 -- yes result as alex replaced alice
 
-    people.pipeInput("4", "4,ignored,VA", 30); // advances streamTime to 30
-
+    // advance streamTime to 30
     bids.pipeInput("f", "f,105,3", 30);      // streamTime = 30 -- no result b/c carol has expired
 
     bids.pipeInput("g", "g,106,0", 30);      // streamTime = 30 -- yes result b/c id 0 is infinite
