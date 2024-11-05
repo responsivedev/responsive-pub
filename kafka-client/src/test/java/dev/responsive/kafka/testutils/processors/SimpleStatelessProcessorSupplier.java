@@ -14,7 +14,7 @@
  *  limitations under the License.
  */
 
-package dev.responsive.kafka.testutils;
+package dev.responsive.kafka.testutils.processors;
 
 import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessorContext;

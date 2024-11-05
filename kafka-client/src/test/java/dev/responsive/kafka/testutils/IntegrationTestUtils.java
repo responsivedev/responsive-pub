@@ -496,7 +496,6 @@ public final class IntegrationTestUtils {
     }
   }
 
-
   public static Map<String, Object> getDefaultMutablePropertiesWithStringSerdes(
       final Map<String, Object> responsiveProps,
       final String name

@@ -14,11 +14,11 @@
  *  limitations under the License.
  */
 
-package dev.responsive.kafka.testutils;
+package dev.responsive.kafka.testutils.processors;
 
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.api.stores.ResponsiveStores;
-import dev.responsive.kafka.testutils.SimpleStatefulProcessor.ComputeStatefulOutput;
+import dev.responsive.kafka.testutils.processors.SimpleStatefulProcessor.ComputeStatefulOutput;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;

@@ -14,9 +14,9 @@
  *  limitations under the License.
  */
 
-package dev.responsive.kafka.testutils;
+package dev.responsive.kafka.testutils.processors;
 
-import dev.responsive.kafka.testutils.SimpleStatefulProcessorSupplier.SimpleProcessorOutput;
+import dev.responsive.kafka.testutils.processors.SimpleStatefulProcessorSupplier.SimpleProcessorOutput;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;

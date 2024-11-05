@@ -16,10 +16,14 @@
 
 package dev.responsive.kafka.integration;
 
+import static dev.responsive.kafka.testutils.IntegrationTestUtils.getDefaultMutablePropertiesWithStringSerdes;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.pipeTimestampedRecords;
+import static dev.responsive.kafka.testutils.IntegrationTestUtils.readOutput;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.startAppAndAwaitRunning;
+import static dev.responsive.kafka.testutils.processors.GenericProcessorSuppliers.getFixedKeySupplier;
 import static org.apache.kafka.streams.StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.hasItems;
 
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.config.StorageBackend;
@@ -30,6 +34,7 @@ import dev.responsive.kafka.testutils.KeyValueTimestamp;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
 import dev.responsive.kafka.testutils.StoreComparatorSuppliers;
+import dev.responsive.kafka.testutils.processors.ScanningProcessor;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -105,6 +110,106 @@ public class ResponsiveKeyValueStoreIntegrationTest {
 
   private String outputTopic() {
     return name + "." + OUTPUT_TOPIC;
+  }
+
+  @Test
+  public void shouldAggregateAcrossAllKeysUsingAllQuery() throws Exception {
+    // Given:
+    final Map<String, Object> properties =
+        getDefaultMutablePropertiesWithStringSerdes(responsiveProps, name);
+    final KafkaProducer<String, String> producer = new KafkaProducer<>(properties);
+
+    final StreamsBuilder builder = new StreamsBuilder();
+
+    final KStream<String, String> input = builder.stream(inputTopic());
+
+    final StoreBuilder<KeyValueStore<String, String>> storeBuilder =
+        ResponsiveStores.keyValueStoreBuilder(
+            ResponsiveStores.keyValueStore(ResponsiveKeyValueParams.keyValue(name)),
+            Serdes.String(),
+            Serdes.String());
+    input
+        .processValues(getFixedKeySupplier(
+            name -> new ScanningProcessor(name, s -> s.all()), storeBuilder), name)
+        .to(outputTopic());
+
+    try (final var streams = new ResponsiveKafkaStreams(builder.build(), properties)) {
+      startAppAndAwaitRunning(Duration.ofSeconds(10), streams);
+
+      final List<KeyValueTimestamp<String, String>> records = Arrays.asList(
+          new KeyValueTimestamp<>("A", "A", 0L),
+          new KeyValueTimestamp<>("B", "B", 0L),
+          new KeyValueTimestamp<>("C", "C", 0L),
+          new KeyValueTimestamp<>("A", "a", 0L),
+          new KeyValueTimestamp<>("D", "D", 0L)
+      );
+
+      // When:
+      pipeTimestampedRecords(producer, inputTopic(), records);
+
+      // Then:
+      final var kvs = readOutput(outputTopic(), 0, 5, true, properties);
+      assertThat(
+          kvs,
+          hasItems(
+              new KeyValue<>("A", "A"),
+              new KeyValue<>("B", "AB"),
+              new KeyValue<>("C", "ABC"),
+              new KeyValue<>("A", "ABCa"),
+              new KeyValue<>("D", "aBCD"))
+      );
+    }
+  }
+
+  @Test
+  public void shouldAggregateAllCapitalLettersUsingRangeQuery() throws Exception {
+    // Given:
+    final Map<String, Object> properties = getDefaultMutablePropertiesWithStringSerdes(
+        responsiveProps,
+        name
+    );
+    final KafkaProducer<String, String> producer = new KafkaProducer<>(properties);
+
+    final StreamsBuilder builder = new StreamsBuilder();
+
+    final KStream<String, String> input = builder.stream(inputTopic());
+
+    final StoreBuilder<KeyValueStore<String, String>> storeBuilder =
+        ResponsiveStores.keyValueStoreBuilder(
+            ResponsiveStores.keyValueStore(ResponsiveKeyValueParams.keyValue(name)),
+            Serdes.String(),
+            Serdes.String());
+    input
+        .processValues(getFixedKeySupplier(
+            name -> new ScanningProcessor(name, s -> s.range("A", "Z")), storeBuilder), name)
+        .to(outputTopic());
+
+    try (final var streams = new ResponsiveKafkaStreams(builder.build(), properties)) {
+      startAppAndAwaitRunning(Duration.ofSeconds(10), streams);
+
+      final List<KeyValueTimestamp<String, String>> records = Arrays.asList(
+          new KeyValueTimestamp<>("A", "A", 0L),
+          new KeyValueTimestamp<>("b", "b", 0L),
+          new KeyValueTimestamp<>("C", "C", 0L),
+          new KeyValueTimestamp<>("d", "d", 0L),
+          new KeyValueTimestamp<>("E", "E", 0L)
+      );
+
+      // When:
+      pipeTimestampedRecords(producer, inputTopic(), records);
+
+      // Then:
+      final var kvs = readOutput(outputTopic(), 0, 5, true, properties);
+      assertThat(
+          kvs,
+          hasItems(
+              new KeyValue<>("A", "A"),
+              new KeyValue<>("b", "Ab"),
+              new KeyValue<>("C", "AC"),
+              new KeyValue<>("d", "ACd"),
+              new KeyValue<>("E", "ACE"))
+      );
+    }
   }
 
   /*
