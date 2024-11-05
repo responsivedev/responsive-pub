@@ -300,6 +300,13 @@ public class PartitionedOperations implements KeyValueOperations {
 
   @Override
   public byte[] get(final Bytes key) {
+    final long currentRecordTimestamp = currentRecordTimestamp();
+
+    // streamTime is used for ttl so we want to advance it before/during the get, not only on put
+    if (streamTimeMs < currentRecordTimestamp) {
+      streamTimeMs = currentRecordTimestamp;
+    }
+
     if (migrationMode) {
       // we don't want to issue gets in migration mode since
       // we're just reading from the changelog. the problem is

@@ -403,6 +403,46 @@ public final class IntegrationTestUtils {
     }
   }
 
+  public static <K, V> List<KeyValueTimestamp<K, V>> readOutputWithTimestamps(
+      final String topic,
+      final long from,
+      final long numEvents,
+      final int numPartitions,
+      final boolean readUncommitted,
+      final Map<String, Object> originals
+  ) throws TimeoutException {
+    final Map<String, Object> properties = new HashMap<>(originals);
+    properties.put(ISOLATION_LEVEL_CONFIG, readUncommitted
+        ? IsolationLevel.READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT)
+        : IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT));
+
+    final List<TopicPartition> partitions = IntStream.range(0, numPartitions)
+        .mapToObj(i -> new TopicPartition(topic, i))
+        .collect(Collectors.toList());
+
+    try (final KafkaConsumer<K, V> consumer = new KafkaConsumer<>(properties)) {
+      consumer.assign(partitions);
+      partitions.forEach(tp -> consumer.seek(tp, from));
+
+      final long end = System.nanoTime() + TimeUnit.SECONDS.toNanos(60);
+      final List<KeyValueTimestamp<K, V>> result = new ArrayList<>();
+      while (result.size() < numEvents) {
+        // this is configured to only poll one record at a time, so we
+        // can guarantee we won't accidentally poll more than numEvents
+        final ConsumerRecords<K, V> polled = consumer.poll(Duration.ofSeconds(30));
+        for (ConsumerRecord<K, V> rec : polled) {
+          result.add(new KeyValueTimestamp<>(rec.key(), rec.value(), rec.timestamp()));
+        }
+        if (System.nanoTime() > end) {
+          throw new TimeoutException(
+              "Timed out trying to read " + numEvents + " events from " + partitions
+                  + ". Read " + result.size() + " records: " + result);
+        }
+      }
+      return result;
+    }
+  }
+
   public static void startAppAndAwaitRunning(
       final Duration timeout,
       final ResponsiveKafkaStreams... streams
