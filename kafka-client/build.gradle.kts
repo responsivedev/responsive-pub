@@ -62,6 +62,19 @@ tasks.publish {
     dependsOn(tasks[writeVersionPropertiesFile])
 }
 
+configurations {
+    create("testArtifacts")
+}
+
+tasks.register<Jar>("testJar") {
+    from(sourceSets["test"].output)
+    archiveClassifier.set("test")
+}
+
+artifacts {
+    add("testArtifacts", tasks["testJar"])
+}
+
 /********************************************/
 
 dependencies {

@@ -21,6 +21,7 @@ import static dev.responsive.kafka.testutils.IntegrationTestUtils.createTopicsAn
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.pipeTimestampedRecords;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.readOutputWithTimestamps;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.startAppAndAwaitRunning;
+import static dev.responsive.kafka.testutils.processors.Deduplicator.deduplicatorApp;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
@@ -39,33 +40,23 @@ import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
-import dev.responsive.kafka.api.stores.ResponsiveStores;
 import dev.responsive.kafka.api.stores.TtlProvider;
 import dev.responsive.kafka.api.stores.TtlProvider.TtlDuration;
 import dev.responsive.kafka.testutils.KeyValueTimestamp;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
 import java.time.Duration;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.processor.api.Processor;
-import org.apache.kafka.streams.processor.api.ProcessorContext;
-import org.apache.kafka.streams.processor.api.ProcessorSupplier;
-import org.apache.kafka.streams.processor.api.Record;
-import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -202,35 +193,13 @@ public class RowLevelTtlIntegrationTest {
   }
 
   private ResponsiveKafkaStreams buildStreams(final Map<String, Object> properties) {
-    final StreamsBuilder builder = new StreamsBuilder();
+        final var params = ResponsiveKeyValueParams.fact(STORE_NAME).withTtlProvider(
+        TtlProvider.<String, ValueAndTimestamp<String>>withDefault(DEFAULT_TTL)
+            .fromKeyAndValue(RowLevelTtlIntegrationTest::ttlForKeyAndValue)
+    );
+    final Topology topology = deduplicatorApp(inputTopic(), outputTopic(), params);
 
-    final KStream<String, String> input = builder.stream(inputTopic());
-    input.process(new TtlProcessorSupplier(), STORE_NAME)
-        .to(outputTopic());
-
-    return new ResponsiveKafkaStreams(builder.build(), properties);
-  }
-
-  @SuppressWarnings("checkstyle:linelength")
-  private static class TtlProcessorSupplier implements ProcessorSupplier<String, String, String, String> {
-
-    @Override
-    public Processor<String, String, String, String> get() {
-      return new TtlDeduplicator();
-    }
-
-    @Override
-    public Set<StoreBuilder<?>> stores() {
-      return Collections.singleton(ResponsiveStores.timestampedKeyValueStoreBuilder(
-          ResponsiveStores.keyValueStore(
-              ResponsiveKeyValueParams.fact(STORE_NAME).withTtlProvider(
-                  TtlProvider.<String, ValueAndTimestamp<String>>withDefault(DEFAULT_TTL)
-                      .fromKeyAndValue(RowLevelTtlIntegrationTest::ttlForKeyAndValue)
-              )),
-          Serdes.String(),
-          Serdes.String()
-      ));
-    }
+    return new ResponsiveKafkaStreams(topology, properties);
   }
 
   private static Optional<TtlDuration> ttlForKeyAndValue(
@@ -264,31 +233,6 @@ public class RowLevelTtlIntegrationTest {
 
     // finally, just fall back to default ttl (10s)
     return Optional.empty();
-  }
-
-  private static class TtlDeduplicator implements Processor<String, String, String, String> {
-
-    private ProcessorContext<String, String> context;
-    private TimestampedKeyValueStore<String, String> ttlStore;
-
-    @Override
-    public void init(final ProcessorContext<String, String> context) {
-      this.context = context;
-      this.ttlStore = context.getStateStore(STORE_NAME);
-    }
-
-    @Override
-    public void process(final Record<String, String> record) {
-      final ValueAndTimestamp<String> previous = ttlStore.putIfAbsent(
-          record.key(),
-          ValueAndTimestamp.make(record.value(), record.timestamp())
-      );
-
-      if (previous == null) {
-        context.forward(record);
-      }
-
-    }
   }
 
   private Map<String, Object> getMutableProperties() {

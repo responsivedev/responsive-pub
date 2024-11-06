@@ -17,7 +17,7 @@
 package dev.responsive.kafka.internal.db.mongo;
 
 import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_ENDPOINT_CONFIG;
-import static dev.responsive.kafka.internal.db.testutils.Matchers.sameKeyValue;
+import static dev.responsive.kafka.testutils.Matchers.sameKeyValue;
 import static dev.responsive.kafka.internal.stores.TtlResolver.NO_TTL;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.defaultOnlyTtl;
 import static org.hamcrest.MatcherAssert.assertThat;
