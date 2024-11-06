@@ -1,8 +1,8 @@
 package dev.responsive.kafka.internal.db.inmemory;
 
-import static dev.responsive.kafka.testutils.Matchers.sameKeyValue;
 import static dev.responsive.kafka.internal.stores.TtlResolver.NO_TTL;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.defaultOnlyTtl;
+import static dev.responsive.kafka.testutils.Matchers.sameKeyValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.nullValue;

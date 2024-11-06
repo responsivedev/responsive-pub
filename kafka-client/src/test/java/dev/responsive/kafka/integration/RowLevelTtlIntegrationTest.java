@@ -193,7 +193,7 @@ public class RowLevelTtlIntegrationTest {
   }
 
   private ResponsiveKafkaStreams buildStreams(final Map<String, Object> properties) {
-        final var params = ResponsiveKeyValueParams.fact(STORE_NAME).withTtlProvider(
+    final var params = ResponsiveKeyValueParams.fact(STORE_NAME).withTtlProvider(
         TtlProvider.<String, ValueAndTimestamp<String>>withDefault(DEFAULT_TTL)
             .fromKeyAndValue(RowLevelTtlIntegrationTest::ttlForKeyAndValue)
     );
