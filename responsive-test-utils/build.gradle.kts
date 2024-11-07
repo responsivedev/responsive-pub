@@ -24,11 +24,13 @@ dependencies {
     implementation(project(":kafka-client"))
     api(libs.kafka.streams.test.utils)
 
+    implementation(libs.bundles.scylla)
+
     implementation(variantOf(libs.kafka.clients) {
         classifier("test")
     })
 
-    implementation(libs.bundles.scylla)
+    testImplementation(project(":kafka-client", configuration = "testArtifacts"))
 
     testImplementation(testlibs.bundles.base)
     testImplementation(libs.bundles.logging)
