@@ -66,7 +66,7 @@ public class ResponsiveConfig extends AbstractConfig {
 
   public static final String STORAGE_BACKEND_TYPE_CONFIG = "responsive.storage.backend.type";
   private static final String STORAGE_BACKEND_TYPE_DOC = "The storage backend";
-  private static final StorageBackend STORAGE_BACKEND_TYPE_DEFAULT = StorageBackend.CASSANDRA;
+  private static final StorageBackend STORAGE_BACKEND_TYPE_DEFAULT = StorageBackend.MONGO_DB;
 
   public static final String RESPONSIVE_MODE = "responsive.mode";
   public static final String RESPONSIVE_MODE_DEFAULT = ResponsiveMode.RUN.name();

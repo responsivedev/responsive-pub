@@ -33,9 +33,14 @@ import static org.apache.kafka.streams.StreamsConfig.InternalConfig.INTERNAL_TAS
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.StorageBackend;
 import java.lang.reflect.Parameter;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.clients.admin.Admin;
+import org.junit.AfterClass;
+import org.junit.BeforeClass;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.AfterAllCallback;
 import org.junit.jupiter.api.extension.BeforeAllCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
@@ -46,8 +51,7 @@ import org.testcontainers.containers.CassandraContainer;
 import org.testcontainers.containers.KafkaContainer;
 import org.testcontainers.containers.MongoDBContainer;
 
-public class ResponsiveExtension implements BeforeAllCallback, AfterAllCallback,
-    ParameterResolver {
+public class ResponsiveExtension implements ParameterResolver {
 
   public static CassandraContainer<?> cassandra = new CassandraContainer<>(TestConstants.CASSANDRA)
       .withInitScript("CassandraDockerInit.cql")
@@ -60,7 +64,13 @@ public class ResponsiveExtension implements BeforeAllCallback, AfterAllCallback,
 
   public static Admin admin;
 
-  public StorageBackend backend = StorageBackend.CASSANDRA;
+  public StorageBackend backend = StorageBackend.MONGO_DB;
+
+
+  static {
+    startAll();
+    Runtime.getRuntime().addShutdownHook(new Thread(ResponsiveExtension::stopAll));
+  }
 
   public ResponsiveExtension() {
   }
@@ -69,25 +79,14 @@ public class ResponsiveExtension implements BeforeAllCallback, AfterAllCallback,
     this.backend = backend;
   }
 
-  @Override
-  public void beforeAll(final ExtensionContext context) throws Exception {
-    switch (backend) {
-      case CASSANDRA:
-        cassandra.start();
-        break;
-      case MONGO_DB:
-        mongo.start();
-        break;
-      default:
-        throw new IllegalStateException("Unexpected value: " + backend);
-    }
-
+  private static void startAll() {
+    cassandra.start();
+    mongo.start();
     kafka.start();
     admin = Admin.create(Map.of(BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers()));
   }
 
-  @Override
-  public void afterAll(final ExtensionContext context) throws Exception {
+  private static void stopAll() {
     cassandra.stop();
     mongo.stop();
     kafka.stop();
@@ -129,20 +128,18 @@ public class ResponsiveExtension implements BeforeAllCallback, AfterAllCallback,
           CASSANDRA_CHECK_INTERVAL_MS, 100
       ));
 
-      switch (backend) {
-        case CASSANDRA:
-          map.put(STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.CASSANDRA.name());
-          map.put(CASSANDRA_HOSTNAME_CONFIG, cassandra.getContactPoint().getHostName());
-          map.put(CASSANDRA_PORT_CONFIG, cassandra.getContactPoint().getPort());
-          map.put(CASSANDRA_DATACENTER_CONFIG, cassandra.getLocalDatacenter());
-          break;
-        case MONGO_DB:
-          map.put(STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.MONGO_DB.name());
-          map.put(MONGO_ENDPOINT_CONFIG, mongo.getConnectionString());
-          break;
-        default:
-          throw new IllegalStateException("Unexpected value: " + backend);
+      if (backend == StorageBackend.CASSANDRA) {
+        map.put(STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.CASSANDRA.name());
+      } else if (backend == StorageBackend.MONGO_DB) {
+        map.put(STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.MONGO_DB.name());
       }
+
+      // throw in configuration for both backends since som tests are parameterized with both
+      // cassandra and mongo
+      map.put(CASSANDRA_HOSTNAME_CONFIG, cassandra.getContactPoint().getHostName());
+      map.put(CASSANDRA_PORT_CONFIG, cassandra.getContactPoint().getPort());
+      map.put(CASSANDRA_DATACENTER_CONFIG, cassandra.getLocalDatacenter());
+      map.put(MONGO_ENDPOINT_CONFIG, mongo.getConnectionString());
 
       if (parameterContext.getParameter().getType().equals(Map.class)) {
         return map;
@@ -158,5 +155,15 @@ public class ResponsiveExtension implements BeforeAllCallback, AfterAllCallback,
     final Parameter param = context.getParameter();
     return (param.getType().equals(Map.class) || param.getType().equals(ResponsiveConfig.class))
         && param.getAnnotation(ResponsiveConfigParam.class) != null;
+  }
+
+  /**
+   * Remove the @Disabled annotation and run this after running in debug mode to tear everything
+   * down
+   */
+  @Test
+  @Disabled
+  public void tearDownContainers() {
+    stopAll();
   }
 }
