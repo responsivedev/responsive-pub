@@ -33,16 +33,9 @@ import static org.apache.kafka.streams.StreamsConfig.InternalConfig.INTERNAL_TAS
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.StorageBackend;
 import java.lang.reflect.Parameter;
-import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.clients.admin.Admin;
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
-import org.junit.jupiter.api.Disabled;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.AfterAllCallback;
-import org.junit.jupiter.api.extension.BeforeAllCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.ParameterContext;
 import org.junit.jupiter.api.extension.ParameterResolutionException;
@@ -66,10 +59,24 @@ public class ResponsiveExtension implements ParameterResolver {
 
   public StorageBackend backend = StorageBackend.MONGO_DB;
 
-
   static {
     startAll();
+
     Runtime.getRuntime().addShutdownHook(new Thread(ResponsiveExtension::stopAll));
+  }
+
+  public static void startAll() {
+    cassandra.start();
+    mongo.start();
+    kafka.start();
+    admin = Admin.create(Map.of(BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers()));
+  }
+
+  public static void stopAll() {
+    cassandra.stop();
+    mongo.stop();
+    kafka.stop();
+    admin.close();
   }
 
   public ResponsiveExtension() {
@@ -77,20 +84,6 @@ public class ResponsiveExtension implements ParameterResolver {
 
   public ResponsiveExtension(final StorageBackend backend) {
     this.backend = backend;
-  }
-
-  private static void startAll() {
-    cassandra.start();
-    mongo.start();
-    kafka.start();
-    admin = Admin.create(Map.of(BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers()));
-  }
-
-  private static void stopAll() {
-    cassandra.stop();
-    mongo.stop();
-    kafka.stop();
-    admin.close();
   }
 
   @Override
@@ -157,13 +150,4 @@ public class ResponsiveExtension implements ParameterResolver {
         && param.getAnnotation(ResponsiveConfigParam.class) != null;
   }
 
-  /**
-   * Remove the @Disabled annotation and run this after running in debug mode to tear everything
-   * down
-   */
-  @Test
-  @Disabled
-  public void tearDownContainers() {
-    stopAll();
-  }
 }

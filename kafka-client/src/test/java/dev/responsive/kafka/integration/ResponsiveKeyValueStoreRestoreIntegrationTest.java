@@ -65,7 +65,6 @@ import dev.responsive.kafka.internal.db.DefaultCassandraClientFactory;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.mongo.CollectionCreationOptions;
 import dev.responsive.kafka.internal.db.mongo.MongoKVTable;
-import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.db.spec.DefaultTableSpec;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
@@ -82,7 +81,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -365,12 +363,12 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
           defaultFactory.createCqlSession(config, null),
           config);
 
-          table = cassandraClient.factFactory()
-              .create(new DefaultTableSpec(
-                  aggName(),
-                  TablePartitioner.defaultPartitioner(),
-                  TtlResolver.NO_TTL
-              ));
+      table = cassandraClient.factFactory()
+          .create(new DefaultTableSpec(
+              aggName(),
+              TablePartitioner.defaultPartitioner(),
+              TtlResolver.NO_TTL
+          ));
 
     } else if (type == KVSchema.KEY_VALUE) {
       final var hostname = config.getString(MONGO_ENDPOINT_CONFIG);
