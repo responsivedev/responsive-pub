@@ -40,6 +40,7 @@ import static org.hamcrest.Matchers.notNullValue;
 import com.datastax.oss.driver.api.core.CqlSession;
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
+import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.api.stores.ResponsiveStores;
 import dev.responsive.kafka.api.stores.ResponsiveWindowParams;
@@ -84,11 +85,13 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
-import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.extension.RegisterExtension;
 import org.testcontainers.containers.CassandraContainer;
 
-@ExtendWith(ResponsiveExtension.class)
 public class TablePartitionerIntegrationTest {
+
+  @RegisterExtension
+  static ResponsiveExtension EXTENSION = new ResponsiveExtension(StorageBackend.CASSANDRA);
 
   private static final int NUM_PARTITIONS_INPUT = 2;
   private static final int NUM_PARTITIONS_OUTPUT = 1;
