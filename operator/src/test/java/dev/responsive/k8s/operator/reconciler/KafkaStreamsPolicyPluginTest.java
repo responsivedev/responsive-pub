@@ -50,6 +50,7 @@ import io.fabric8.kubernetes.client.dsl.MixedOperation;
 import io.fabric8.kubernetes.client.dsl.NonNamespaceOperation;
 import io.fabric8.kubernetes.client.dsl.PodResource;
 import io.fabric8.kubernetes.client.dsl.RollableScalableResource;
+import io.javaoperatorsdk.operator.api.config.ConfigurationService;
 import io.javaoperatorsdk.operator.api.config.ControllerConfiguration;
 import io.javaoperatorsdk.operator.api.reconciler.Context;
 import io.javaoperatorsdk.operator.api.reconciler.EventSourceContext;
@@ -124,6 +125,8 @@ class KafkaStreamsPolicyPluginTest {
   private ArgumentCaptor<ControllerOuterClass.CurrentStateRequest> currentStateRequestCaptor;
   @Mock
   private ControllerClient controllerClient;
+  @Mock
+  private ConfigurationService configService;
   private final PodResource pod1 = mockPodResource("p1");
   private final PodResource pod2 = mockPodResource("p2");
 
@@ -194,6 +197,9 @@ class KafkaStreamsPolicyPluginTest {
     lenient().when(ctx.getSecondaryResource(
             ActionsWithTimestamp.class))
         .thenReturn(Optional.of(new ActionsWithTimestamp()));
+    lenient().when(controllerConfig.getConfigurationService()).thenReturn(configService);
+    lenient().when(configService.parseResourceVersionsForEventFilteringAndCaching())
+        .thenReturn(false);
   }
 
 
