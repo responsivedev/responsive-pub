@@ -49,12 +49,13 @@ dependencyResolutionManagement {
             version("jackson", "2.15.2")
             version("kafka", "3.7.1")
             version("scylla", "4.15.0.0")
-            version("javaoperatorsdk", "4.3.0")
+            version("javaoperatorsdk", "4.9.6")
             version("grpc", "1.52.1")
             version("protobuf-java", "3.22.3")
             version("slf4j", "1.7.5")
             version("log4j2", "2.20.0")
             version("mongoDB", "4.10.2")
+            version("fabric8", "6.13.4")
 
             library("jackson", "com.fasterxml.jackson.datatype", "jackson-datatype-jdk8").versionRef("jackson")
 
@@ -81,7 +82,7 @@ dependencyResolutionManagement {
             bundle("grpc", listOf("grpc-netty", "grpc-protobuf", "grpc-stub", "javax-annotation-api"))
 
             library("protobuf-java-util", "com.google.protobuf", "protobuf-java-util").versionRef("protobuf-java")
-            library("crd-generator-atp", "io.fabric8", "crd-generator-apt").version("6.5.1")
+            library("crd-generator-atp", "io.fabric8", "crd-generator-apt").versionRef("fabric8")
 
             library("guava", "com.google.guava:guava:32.1.3-jre")
 

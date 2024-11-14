@@ -21,6 +21,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 import dev.responsive.controller.client.ControllerClient;
 import dev.responsive.k8s.crd.ResponsivePolicy;
@@ -34,11 +35,11 @@ import io.fabric8.kubernetes.api.model.apiextensions.v1.CustomResourceDefinition
 import io.fabric8.kubernetes.client.Config;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.KubernetesClientBuilder;
+import io.fabric8.kubernetes.client.utils.KubernetesSerialization;
 import io.fabric8.kubernetes.client.utils.Serialization;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.javaoperatorsdk.operator.Operator;
-import io.javaoperatorsdk.operator.api.config.ControllerConfiguration;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
@@ -67,12 +68,13 @@ public class OperatorE2EIntegrationTest {
 
   @BeforeAll
   public static void setUp() {
-    Serialization.jsonMapper().registerModule(new Jdk8Module());
-
     K3S.start();
     Config config = Config.fromKubeconfig(K3S.getKubeConfigYaml());
+    ObjectMapper mapper = new ObjectMapper();
+    mapper.registerModule(new Jdk8Module());
     kubernetesClient = new KubernetesClientBuilder()
         .withConfig(config)
+        .withKubernetesSerialization(new KubernetesSerialization(mapper, true))
         .build();
 
     Namespace namespace = new NamespaceBuilder()
@@ -116,20 +118,10 @@ public class OperatorE2EIntegrationTest {
         .thenThrow(new StatusRuntimeException(Status.NOT_FOUND));
 
     final var reconciler = new ResponsivePolicyReconciler("", controllerClient);
-    final var operator = new Operator(kubernetesClient);
+    final var operator = new Operator(o -> o.withKubernetesClient(kubernetesClient));
     operator.register(
         reconciler,
-        new ControllerConfiguration<>() {
-          @Override
-          public String getAssociatedReconcilerClassName() {
-            return ResponsivePolicyReconciler.class.getName();
-          }
-
-          @Override
-          public String getLabelSelector() {
-            return "environment=test";
-          }
-        }
+        o -> o.withLabelSelector("environment=test")
     );
 
     operator.start();

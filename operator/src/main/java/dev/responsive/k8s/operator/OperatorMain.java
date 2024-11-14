@@ -16,12 +16,15 @@
 
 package dev.responsive.k8s.operator;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 import dev.responsive.controller.client.grpc.ControllerGrpcClient;
 import dev.responsive.k8s.operator.reconciler.ResponsivePolicyReconciler;
-import io.fabric8.kubernetes.client.utils.Serialization;
+import io.fabric8.kubernetes.client.Config;
+import io.fabric8.kubernetes.client.ConfigBuilder;
+import io.fabric8.kubernetes.client.KubernetesClientBuilder;
+import io.fabric8.kubernetes.client.utils.KubernetesSerialization;
 import io.javaoperatorsdk.operator.Operator;
-import io.javaoperatorsdk.operator.api.config.ControllerConfiguration;
 import java.io.FileReader;
 import java.io.Reader;
 import java.util.Properties;
@@ -38,6 +41,9 @@ public class OperatorMain {
   private static final Logger LOG = LoggerFactory.getLogger(OperatorMain.class);
   private static final String API_KEY_CONFIG = "responsive.platform.api.key";
   private static final String SECRET_CONFIG = "responsive.platform.api.secret";
+
+  // copied from io.javaoperatorsdk.operator.api.config.ConfigurationService
+  private static final int DEFAULT_MAX_CONCURRENT_REQUEST = 512;
 
   public static void main(String[] args) {
     LOG.info("Starting main");
@@ -76,8 +82,20 @@ public class OperatorMain {
     final String apiKey = config.getProperty(API_KEY_CONFIG, "");
     final String secret = config.getProperty(SECRET_CONFIG, "");
 
-    final Operator operator = new Operator();
-    Serialization.jsonMapper().registerModule(new Jdk8Module());
+    final ObjectMapper mapper = new ObjectMapper();
+    mapper.registerModule(new Jdk8Module());
+    // we override the k8s client here so we can supply our own ObjectMapper
+    final Operator operator = new Operator(o -> o
+        .withSSABasedCreateUpdateMatchForDependentResources(false)
+        .withKubernetesClient(
+            new KubernetesClientBuilder()
+                // copied from io.javaoperatorsdk.operator.api.config.ConfigurationService
+                .withConfig(new ConfigBuilder(Config.autoConfigure(null))
+                    .withMaxConcurrentRequests(DEFAULT_MAX_CONCURRENT_REQUEST)
+                    .build())
+                .withKubernetesSerialization(new KubernetesSerialization(mapper, true))
+                .build()
+    ));
     final ResponsivePolicyReconciler reconciler =
         new ResponsivePolicyReconciler(environment, new ControllerGrpcClient(
             target,
@@ -86,17 +104,7 @@ public class OperatorMain {
             tlsOff
         ));
 
-    operator.register(reconciler, new ControllerConfiguration<>() {
-      @Override
-      public String getAssociatedReconcilerClassName() {
-        return ResponsivePolicyReconciler.class.getName();
-      }
-
-      @Override
-      public String getLabelSelector() {
-        return selector;
-      }
-    });
+    operator.register(reconciler, o -> o.withLabelSelector(selector));
 
     operator.start();
   }

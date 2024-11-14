@@ -27,6 +27,7 @@ import dev.responsive.k8s.crd.ResponsivePolicyStatus;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.javaoperatorsdk.operator.api.reconciler.Context;
+import io.javaoperatorsdk.operator.api.reconciler.ControllerConfiguration;
 import io.javaoperatorsdk.operator.api.reconciler.EventSourceContext;
 import io.javaoperatorsdk.operator.api.reconciler.EventSourceInitializer;
 import io.javaoperatorsdk.operator.api.reconciler.Reconciler;
@@ -46,6 +47,7 @@ import responsive.controller.v1.controller.proto.ControllerOuterClass.Applicatio
 /**
  * Core reconciliation handler for operator
  */
+@ControllerConfiguration
 public class ResponsivePolicyReconciler implements
     Reconciler<ResponsivePolicy>, EventSourceInitializer<ResponsivePolicy> {
   private static final Logger LOG = LoggerFactory.getLogger(ResponsivePolicyReconciler.class);

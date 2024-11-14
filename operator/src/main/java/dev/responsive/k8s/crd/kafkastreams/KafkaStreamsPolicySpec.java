@@ -3,10 +3,12 @@ package dev.responsive.k8s.crd.kafkastreams;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import dev.responsive.k8s.crd.PolicyCooldownSpec;
+import io.fabric8.generator.annotation.ValidationRule;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
+@ValidationRule(value = "self.maxReplicas >= self.minReplicas")
 public class KafkaStreamsPolicySpec {
 
   private final int maxReplicas;
