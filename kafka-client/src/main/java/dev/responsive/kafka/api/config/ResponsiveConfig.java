@@ -49,6 +49,13 @@ public class ResponsiveConfig extends AbstractConfig {
   public static final String RESPONSIVE_ENV_CONFIG = "responsive.env";
   private static final String RESPONSIVE_ENV_DOC = "The Responsive environment slug (not the environment ID).";
 
+  public static final String RESPONSIVE_LICENSE_CONFIG = "responsive.license";
+  private static final String RESPONSIVE_LICENSE_DOC = "The license you're using to run Responsive";
+
+  public static final String RESPONSIVE_LICENSE_FILE_CONFIG = "responsive.license.file";
+  private static final String RESPONSIVE_LICENSE_FILE_DOC
+      = "A path to a file containing your license.";
+
   public static final String COMPATIBILITY_MODE_CONFIG = "responsive.compatibility.mode";
   private static final String COMPATIBILITY_MODE_DOC = "This configuration enables running Responsive "
       + "in compatibility mode, disabling certain features.";
@@ -314,6 +321,18 @@ public class ResponsiveConfig extends AbstractConfig {
           new ConfigDef.NonEmptyString(),
           Importance.HIGH,
           RESPONSIVE_ENV_DOC
+      ).define(
+          RESPONSIVE_LICENSE_CONFIG,
+          Type.STRING,
+          "",
+          Importance.HIGH,
+          RESPONSIVE_LICENSE_DOC
+      ).define(
+          RESPONSIVE_LICENSE_FILE_CONFIG,
+          Type.STRING,
+          "",
+          Importance.HIGH,
+          RESPONSIVE_LICENSE_FILE_DOC
       ).define(
           STORAGE_BACKEND_TYPE_CONFIG,
           Type.STRING,

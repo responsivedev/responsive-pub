@@ -17,7 +17,10 @@
 package dev.responsive.kafka.api;
 
 import static dev.responsive.kafka.api.config.ResponsiveConfig.COMPATIBILITY_MODE_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.PLATFORM_API_KEY_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_ENV_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_LICENSE_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_LICENSE_FILE_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_ORG_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
@@ -37,14 +40,22 @@ import dev.responsive.kafka.api.config.CompatibilityMode;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.CassandraClientFactory;
+import dev.responsive.kafka.internal.license.exception.LicenseAuthenticationException;
+import dev.responsive.kafka.internal.license.exception.LicenseUseViolationException;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.testutils.IntegrationTestUtils;
+import java.io.File;
+import java.io.IOException;
+import java.net.URISyntaxException;
+import java.nio.file.Files;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
@@ -62,6 +73,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class ResponsiveKafkaStreamsTest {
+  private static final String DECODED_LICENSE_FILE
+      = "test-licenses/test-license.json";
+  private static final String DECODED_INVALID_LICENSE_FILE
+      = "test-licenses/test-license-invalid-signature.json";
+  private static final String DECODED_TRIAL_EXPIRED_LICENSE_FILE
+      = "test-licenses/test-license-trial-expired.json";
 
   private final KafkaClientSupplier supplier = new DefaultKafkaClientSupplier() {
     @Override
@@ -126,6 +143,11 @@ class ResponsiveKafkaStreamsTest {
 
     properties.put(RESPONSIVE_ORG_CONFIG, "responsive");
     properties.put(RESPONSIVE_ENV_CONFIG, "license-test");
+
+    properties.put(
+        RESPONSIVE_LICENSE_CONFIG,
+        getEncodedLicense(DECODED_LICENSE_FILE)
+    );
   }
 
   @SuppressWarnings("resource")
@@ -171,4 +193,123 @@ class ResponsiveKafkaStreamsTest {
     ks.close();
   }
 
+  @Test
+  public void shouldAcceptLicenseInLicenseFile() {
+    // given:
+    final File licenseFile = writeLicenseFile(DECODED_LICENSE_FILE);
+    properties.put(RESPONSIVE_LICENSE_CONFIG, "");
+    properties.put(ResponsiveConfig.RESPONSIVE_LICENSE_FILE_CONFIG, licenseFile.getAbsolutePath());
+    properties.put(COMPATIBILITY_MODE_CONFIG, CompatibilityMode.METRICS_ONLY.name());
+    final StreamsBuilder builder = new StreamsBuilder();
+    builder.stream("foo").to("bar");
+
+    // when/then (no throw):
+    final var ks = new ResponsiveKafkaStreams(builder.build(), properties, supplier);
+    ks.close();
+  }
+
+  @Test
+  public void shouldThrowOnLicenseWithInvalidSignature() {
+    // given:
+    properties.put(
+        RESPONSIVE_LICENSE_CONFIG,
+        getEncodedLicense(DECODED_INVALID_LICENSE_FILE)
+    );
+    properties.put(COMPATIBILITY_MODE_CONFIG, CompatibilityMode.METRICS_ONLY.name());
+    final StreamsBuilder builder = new StreamsBuilder();
+    builder.stream("foo").to("bar");
+
+    // when/then:
+    assertThrows(
+        LicenseAuthenticationException.class,
+        () -> {
+          final var ks = new ResponsiveKafkaStreams(builder.build(), properties, supplier);
+          ks.close();
+        }
+    );
+  }
+
+  @Test
+  public void shouldThrowOnExpiredLicense() {
+    // given:
+    properties.put(
+        RESPONSIVE_LICENSE_CONFIG,
+        getEncodedLicense(DECODED_TRIAL_EXPIRED_LICENSE_FILE)
+    );
+    properties.put(COMPATIBILITY_MODE_CONFIG, CompatibilityMode.METRICS_ONLY.name());
+    final StreamsBuilder builder = new StreamsBuilder();
+    builder.stream("foo").to("bar");
+
+    // when/then:
+    assertThrows(
+        LicenseUseViolationException.class,
+        () -> {
+          final var ks = new ResponsiveKafkaStreams(builder.build(), properties, supplier);
+          ks.close();
+        }
+    );
+  }
+
+  @Test
+  public void shouldThrowIfNoLicenseOrApiKeyConfigured() {
+    // given:
+    properties.put(PLATFORM_API_KEY_CONFIG, "");
+    properties.put(RESPONSIVE_LICENSE_CONFIG, "");
+    properties.put(RESPONSIVE_LICENSE_FILE_CONFIG, "");
+    properties.put(COMPATIBILITY_MODE_CONFIG, CompatibilityMode.METRICS_ONLY.name());
+    final StreamsBuilder builder = new StreamsBuilder();
+    builder.stream("foo").to("bar");
+
+    // when/then:
+    assertThrows(
+        ConfigException.class,
+        () -> {
+          final var ks = new ResponsiveKafkaStreams(builder.build(), properties, supplier);
+          ks.close();
+        }
+    );
+  }
+
+  @Test
+  public void shouldSkipLicenseCheckIfApiKeyConfigured() {
+    // given:
+    properties.put(PLATFORM_API_KEY_CONFIG, "some-api-key");
+    properties.put(RESPONSIVE_LICENSE_CONFIG, "");
+    properties.put(RESPONSIVE_LICENSE_FILE_CONFIG, "");
+    properties.put(COMPATIBILITY_MODE_CONFIG, CompatibilityMode.METRICS_ONLY.name());
+    final StreamsBuilder builder = new StreamsBuilder();
+    builder.stream("foo").to("bar");
+
+    // when/then (no  throw):
+    final var ks = new ResponsiveKafkaStreams(builder.build(), properties, supplier);
+    ks.close();
+  }
+
+  private File writeLicenseFile(final String decodedLicenseFilename) {
+    final String encoded = getEncodedLicense(decodedLicenseFilename);
+    try {
+      final File encodedFile = File.createTempFile("rkst", null);
+      encodedFile.deleteOnExit();
+      Files.writeString(encodedFile.toPath(), encoded);
+      return encodedFile;
+    } catch (final IOException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  private String getEncodedLicense(final String filename) {
+    return Base64.getEncoder().encodeToString(slurpFile(filename));
+  }
+
+  private byte[] slurpFile(final String filename) {
+    try {
+      final File file = new File(ResponsiveKafkaStreamsTest.class.getClassLoader()
+          .getResource(filename)
+          .toURI()
+      );
+      return Files.readAllBytes(file.toPath());
+    } catch (final IOException | URISyntaxException e) {
+      throw new RuntimeException(e);
+    }
+  }
 }

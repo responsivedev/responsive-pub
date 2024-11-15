@@ -33,7 +33,7 @@ class LicenseAuthenticatorTest {
   @Test
   public void shouldVerifyLicense() {
     // given:
-    final LicenseDocument license = loadLicense("license-test.json");
+    final LicenseDocument license = loadLicense("test-license.json");
 
     // when/then (no throw):
     verifier.authenticate(license);
@@ -42,7 +42,7 @@ class LicenseAuthenticatorTest {
   @Test
   public void shouldThrowForFailedSignatureVerification() {
     // given:
-    final LicenseDocument license = loadLicense("license-test-invalid-signature.json");
+    final LicenseDocument license = loadLicense("test-license-invalid-signature.json");
 
     // when/then:
     assertThrows(
@@ -52,18 +52,17 @@ class LicenseAuthenticatorTest {
   }
 
   private static LicenseDocument loadLicense(final String file) {
-    return loadResource(file, LicenseDocument.class);
+    return loadResource("test-licenses/" + file, LicenseDocument.class);
   }
 
   private static SigningKeys loadSigningKeys() {
-    return loadResource("signing-keys.json", SigningKeys.class);
+    return loadResource("license-keys/license-keys.json", SigningKeys.class);
   }
 
   private static <T> T loadResource(final String path, final Class<T> clazz) {
-    final String fullPath = "license-test/license-verifier/" + path;
     try {
       return MAPPER.readValue(
-          LicenseAuthenticatorTest.class.getClassLoader().getResource(fullPath),
+          LicenseAuthenticatorTest.class.getClassLoader().getResource(path),
           clazz
       );
     } catch (final IOException e) {
