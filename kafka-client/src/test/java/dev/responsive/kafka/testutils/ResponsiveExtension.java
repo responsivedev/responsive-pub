@@ -35,6 +35,9 @@ import dev.responsive.kafka.api.config.StorageBackend;
 import java.lang.reflect.Parameter;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadPoolExecutor;
 import org.apache.kafka.clients.admin.Admin;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.ParameterContext;
@@ -66,10 +69,20 @@ public class ResponsiveExtension implements ParameterResolver {
   }
 
   public static void startAll() {
-    cassandra.start();
-    mongo.start();
-    kafka.start();
-    admin = Admin.create(Map.of(BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers()));
+    final ExecutorService executor = Executors.newFixedThreadPool(4);
+    final var cassandraFuture = executor.submit(cassandra::start);
+    final var mongoFuture = executor.submit(mongo::start);
+    final var kafkaFuture = executor.submit(kafka::start);
+
+    try {
+      kafkaFuture.get();
+      admin = Admin.create(Map.of(BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers()));
+
+      cassandraFuture.get();
+      mongoFuture.get();
+    } catch (final Exception e) {
+
+    }
   }
 
   public static void stopAll() {
