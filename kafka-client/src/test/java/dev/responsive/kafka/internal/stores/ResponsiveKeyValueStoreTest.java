@@ -45,7 +45,7 @@ class ResponsiveKeyValueStoreTest {
   public void shouldPutIfAbsent() {
     // Given:
     final var store = new ResponsiveKeyValueStore(
-        ResponsiveKeyValueParams.keyValue("license-test"),
+        ResponsiveKeyValueParams.keyValue("test"),
         (params, ttlResolver, context, type) -> ops
     );
     store.init((StateStoreContext) context, root);
@@ -62,7 +62,7 @@ class ResponsiveKeyValueStoreTest {
   public void shouldNotPutIfAbsentWhenPresent() {
     // Given:
     final var store = new ResponsiveKeyValueStore(
-        ResponsiveKeyValueParams.keyValue("license-test"),
+        ResponsiveKeyValueParams.keyValue("test"),
         (params, ttlResolver, context, type) -> ops
     );
     store.init((StateStoreContext) context, root);
