@@ -1,0 +1,9 @@
+{
+  "keys": [
+    {
+      "type": "RSA_4096",
+      "keyId": "test",
+      "path": "license-test/license-verifier/keys/test.pem"
+    }
+  ]
+}

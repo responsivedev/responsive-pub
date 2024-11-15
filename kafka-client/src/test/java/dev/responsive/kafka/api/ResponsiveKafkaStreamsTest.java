@@ -125,7 +125,7 @@ class ResponsiveKafkaStreamsTest {
     properties.put(DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.LongSerde.class.getName());
 
     properties.put(RESPONSIVE_ORG_CONFIG, "responsive");
-    properties.put(RESPONSIVE_ENV_CONFIG, "test");
+    properties.put(RESPONSIVE_ENV_CONFIG, "license-test");
   }
 
   @SuppressWarnings("resource")

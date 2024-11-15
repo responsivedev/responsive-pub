@@ -121,5 +121,4 @@ public final class Utils {
     LOG.warn("Unable to parse the stream thread id, falling back to thread name {}", threadName);
     return threadName;
   }
-
 }
