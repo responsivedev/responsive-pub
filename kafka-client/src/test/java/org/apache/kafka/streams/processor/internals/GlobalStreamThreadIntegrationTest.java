@@ -347,7 +347,7 @@ public class GlobalStreamThreadIntegrationTest {
 
     @Override
     public String metricsScope() {
-      return "test";
+      return "license-test";
     }
   }
 
