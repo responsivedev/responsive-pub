@@ -55,7 +55,7 @@ public class InMemoryKVTable implements RemoteKVTable<BoundStatement> {
     }
 
     if (ttlResolver.isPresent()) {
-      final TtlDuration rowTtl = ttlResolver.get().resolveTtl(key, value.value());
+      final TtlDuration rowTtl = ttlResolver.get().resolveRowTtl(key, value.value());
       if (rowTtl.isFinite()) {
         final long minValidTs = streamTimeMs - rowTtl.toMillis();
         if (value.epochMillis < minValidTs) {

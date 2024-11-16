@@ -46,6 +46,7 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.processor.MockProcessorContext;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -55,6 +56,8 @@ import org.testcontainers.containers.CassandraContainer;
 
 @ExtendWith(ResponsiveExtension.class)
 class CassandraFactTableIntegrationTest {
+
+  private final MockProcessorContext mockContext = new MockProcessorContext();
 
   private String storeName; // ie the "kafkaName", NOT the "cassandraName"
   private ResponsiveKeyValueParams params;
@@ -214,7 +217,8 @@ class CassandraFactTableIntegrationTest {
         defaultPartitioner(),
         Optional.of(new TtlResolver<>(
             new StateDeserializer<>("ignored", new StringDeserializer(), new StringDeserializer()),
-            ttlProvider))
+            ttlProvider,
+            mockContext))
     ));
 
     table.init(1);
@@ -228,6 +232,7 @@ class CassandraFactTableIntegrationTest {
 
     // When:
     final long insertTimeMs = 0L;
+    mockContext.setCurrentSystemTimeMs(insertTimeMs);
     client.execute(table.insert(1, noTtlKey, val, insertTimeMs));
     client.execute(table.insert(1, defaultTtlKey, val, insertTimeMs));
     client.execute(table.insert(1, tenMinTtlKey, val, insertTimeMs));
@@ -281,7 +286,8 @@ class CassandraFactTableIntegrationTest {
         defaultPartitioner(),
         Optional.of(new TtlResolver<>(
             new StateDeserializer<>("ignored", new StringDeserializer(), new StringDeserializer()),
-            ttlProvider))
+            ttlProvider,
+            mockContext))
     ));
 
     table.init(1);
@@ -301,6 +307,7 @@ class CassandraFactTableIntegrationTest {
 
     // When
     long insertTimeMs = 0L;
+    mockContext.setCurrentSystemTimeMs(insertTimeMs);
     client.execute(table.insert(1, tenMinTtlKey, val, insertTimeMs));
     client.execute(table.insert(1, defaultTtlKey, defaultTtlValue, insertTimeMs));
     client.execute(table.insert(1, noTtlKey, noTtlValue, insertTimeMs));
@@ -361,7 +368,8 @@ class CassandraFactTableIntegrationTest {
         defaultPartitioner(),
         Optional.of(new TtlResolver<>(
             new StateDeserializer<>("ignored", new StringDeserializer(), new StringDeserializer()),
-            ttlProvider)
+            ttlProvider,
+            mockContext)
     )));
 
     table.init(1);
@@ -375,6 +383,7 @@ class CassandraFactTableIntegrationTest {
 
     // When
     long currentTimeMs = 0L;
+    mockContext.setCurrentSystemTimeMs(currentTimeMs);
     // first record set to expire at 3ms
     client.execute(table.insert(1, key, threeMinTtlValue, currentTimeMs));
 
@@ -384,10 +393,12 @@ class CassandraFactTableIntegrationTest {
 
     // insert new record with 3ms ttl -- now set to expire at 10ms
     currentTimeMs = Duration.ofMinutes(7).toMillis();
+    mockContext.setCurrentSystemTimeMs(currentTimeMs);
     client.execute(table.insert(1, key, threeMinTtlValue, currentTimeMs));
 
     // override with 10ms ttl -- now set to expire at 18ms
     currentTimeMs = Duration.ofMinutes(8).toMillis();
+    mockContext.setCurrentSystemTimeMs(currentTimeMs);
     client.execute(table.insert(1, key, tenMinTtlValue, currentTimeMs));
 
     // record should still exist after 10ms
@@ -396,6 +407,7 @@ class CassandraFactTableIntegrationTest {
 
     // override with default ttl (30ms) -- now set to expire at 45ms
     currentTimeMs = Duration.ofMinutes(15).toMillis();
+    mockContext.setCurrentSystemTimeMs(currentTimeMs);
     client.execute(table.insert(1, key, defaultTtlValue, currentTimeMs));
 
     // record should still exist after 18ms
@@ -404,6 +416,7 @@ class CassandraFactTableIntegrationTest {
 
     // override with no ttl -- now set to never expire
     currentTimeMs = Duration.ofMinutes(30).toMillis();
+    mockContext.setCurrentSystemTimeMs(currentTimeMs);
     client.execute(table.insert(1, key, noTtlValue, currentTimeMs));
 
     // record should still exist after 45ms
@@ -411,4 +424,5 @@ class CassandraFactTableIntegrationTest {
     assertThat(table.get(1, key, currentTimeMs), is(noTtlValue));
   }
 
+  
 }

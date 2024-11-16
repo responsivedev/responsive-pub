@@ -308,7 +308,8 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
       final long epochMillis
   ) {
     if (ttlResolver.isPresent()) {
-      final Optional<TtlDuration> rowTtl = ttlResolver.get().computeTtl(key, value);
+      final Optional<TtlDuration> rowTtl =
+          ttlResolver.get().computeInsertTtl(key, value, epochMillis);
 
       // If user happens to return same ttl value as the default, skip applying it at
       // the row level since this is less efficient in Scylla
@@ -342,7 +343,7 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
     } else if (ttlResolver.get().needsValueToComputeTtl()) {
       return postFilterGet(key, streamTimeMs);
     } else {
-      final TtlDuration ttl = ttlResolver.get().resolveTtl(key, null);
+      final TtlDuration ttl = ttlResolver.get().resolveRowTtl(key, null);
       if (ttl.isFinite()) {
         final long minValidTimeMs = streamTimeMs - ttl.toMillis();
         return preFilterGet(key, minValidTimeMs);
@@ -398,7 +399,7 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
 
     final Row rowResult = result.get(0);
     final byte[] value = getValueFromRow(rowResult);
-    final TtlDuration ttl = ttlResolver.get().resolveTtl(key, value);
+    final TtlDuration ttl = ttlResolver.get().resolveRowTtl(key, value);
 
     if (ttl.isFinite()) {
       final long minValidTsFromValue = streamTimeMs - ttl.toMillis();

@@ -162,6 +162,10 @@ public class TtlProvider<K, V> {
       return duration().toMillis();
     }
 
+    public TtlDuration minus(final long otherMs) {
+      return TtlDuration.of(duration().minusMillis(otherMs));
+    }
+
     @Override
     public boolean equals(final Object o) {
       if (this == o) {

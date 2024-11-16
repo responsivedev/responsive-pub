@@ -21,6 +21,7 @@ import dev.responsive.kafka.api.stores.TtlProvider.TtlDuration;
 import dev.responsive.kafka.internal.utils.StateDeserializer;
 import java.util.Optional;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.StateSerdes;
 
 public class TtlResolver<K, V> {
@@ -29,11 +30,13 @@ public class TtlResolver<K, V> {
 
   private final StateDeserializer<K, V> stateDeserializer;
   private final TtlProvider<K, V> ttlProvider;
+  private final ProcessorContext processorContext;
 
   @SuppressWarnings("unchecked")
   public static <K, V> Optional<TtlResolver<?, ?>> fromTtlProviderAndStateSerdes(
       final StateSerdes<?, ?> stateSerdes,
-      final Optional<TtlProvider<?, ?>> ttlProvider
+      final Optional<TtlProvider<?, ?>> ttlProvider,
+      final ProcessorContext processorContext
   ) {
     return ttlProvider.isPresent()
         ? Optional.of(
@@ -42,17 +45,20 @@ public class TtlResolver<K, V> {
                     stateSerdes.topic(),
                     stateSerdes.keyDeserializer(),
                     stateSerdes.valueDeserializer()),
-                (TtlProvider<K, V>) ttlProvider.get()
+                (TtlProvider<K, V>) ttlProvider.get(),
+                processorContext
             ))
         : Optional.empty();
   }
 
   public TtlResolver(
       final StateDeserializer<K, V> stateDeserializer,
-      final TtlProvider<K, V> ttlProvider
+      final TtlProvider<K, V> ttlProvider,
+      final ProcessorContext processorContext
   ) {
     this.stateDeserializer = stateDeserializer;
     this.ttlProvider = ttlProvider;
+    this.processorContext = processorContext;
   }
 
   public TtlDuration defaultTtl() {
@@ -68,18 +74,33 @@ public class TtlResolver<K, V> {
   }
 
   /**
-   * @return the raw result from the user's ttl computation function for this row
+   * @return the raw result from the user's ttl computation function for this row,
+   *         adjusted by the difference between current time and the record timestamp.
+   *         Used for writes.
    */
-  public Optional<TtlDuration> computeTtl(final Bytes keyBytes, final byte[] valueBytes) {
-    return ttlProvider.computeTtl(keyBytes.get(), valueBytes, stateDeserializer);
+  public Optional<TtlDuration> computeInsertTtl(
+      final Bytes keyBytes,
+      final byte[] valueBytes,
+      final long timestampMs
+  ) {
+    return ttlProvider.computeTtl(keyBytes.get(), valueBytes, stateDeserializer)
+        .map(ttl -> {
+          if (ttl.isFinite()) {
+            return ttl.minus(processorContext.currentSystemTimeMs() - timestampMs);
+          } else {
+            return ttl;
+          }
+        });
   }
 
   /**
    * @return the actual ttl for this row after resolving the raw result returned by the user
-   *         (eg applying the default value)
+   *         (eg applying the default value). Used for reads
    */
-  public TtlDuration resolveTtl(final Bytes keyBytes, final byte[] valueBytes) {
-    final Optional<TtlDuration> ttl = computeTtl(keyBytes, valueBytes);
+  public TtlDuration resolveRowTtl(final Bytes keyBytes, final byte[] valueBytes) {
+    final Optional<TtlDuration> ttl =
+        ttlProvider.computeTtl(keyBytes.get(), valueBytes,  stateDeserializer);
+
     return ttl.orElse(defaultTtl());
   }
 

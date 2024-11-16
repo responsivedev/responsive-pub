@@ -90,7 +90,7 @@ public final class IntegrationTestUtils {
   public static Optional<TtlResolver<?, ?>> defaultOnlyTtl(final Duration ttl) {
     return Optional.of(new TtlResolver<>(
         new StateDeserializer<>("ignored", null, null),
-        TtlProvider.withDefault(ttl))
+        TtlProvider.withDefault(ttl), null)
     );
   }
 
@@ -99,7 +99,7 @@ public final class IntegrationTestUtils {
   ) {
     return Optional.of(new TtlResolver<>(
         new StateDeserializer<>("ignored", null, null),
-        ttlProvider)
+        ttlProvider, null)
     );
   }
 
@@ -108,7 +108,8 @@ public final class IntegrationTestUtils {
   ) {
     return ttlProvider.isPresent()
         ? Optional.of(
-            new TtlResolver<>(new StateDeserializer<>("ignored", null, null), ttlProvider.get()))
+            new TtlResolver<>(new StateDeserializer<>("ignored", null, null), ttlProvider.get(),
+                              null))
         : Optional.empty();
   }
 

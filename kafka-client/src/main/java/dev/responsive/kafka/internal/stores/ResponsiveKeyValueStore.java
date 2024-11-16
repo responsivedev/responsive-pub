@@ -98,7 +98,8 @@ public class ResponsiveKeyValueStore
   @Override
   public void init(final StateStoreContext storeContext, final StateStore root) {
     try {
-      final TaskType taskType = asInternalProcessorContext(storeContext).taskType();
+      final var internalProcessorContext = asInternalProcessorContext(storeContext);
+      final TaskType taskType = internalProcessorContext.taskType();
       log = new LogContext(
           String.format(
               "%sstore [%s] ",
@@ -117,7 +118,8 @@ public class ResponsiveKeyValueStore
       final StateSerdes<?, ?> stateSerdes = StoreAccessorUtil.extractKeyValueStoreSerdes(root);
       final Optional<TtlResolver<?, ?>> ttlResolver = TtlResolver.fromTtlProviderAndStateSerdes(
           stateSerdes,
-          params.ttlProvider()
+          params.ttlProvider(),
+          internalProcessorContext
       );
 
       operations = opsProvider.provide(params, ttlResolver, storeContext, taskType);
