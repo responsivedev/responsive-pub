@@ -1,202 +1,397 @@
 
-                                 Apache License
-                           Version 2.0, January 2004
-                        http://www.apache.org/licenses/
+                         Responsive Business Source License
+                           Version 1.0, November 2024
+                  https://www.responsive.dev/legal/responsive-bsl-10
 
-   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+THIS RESPONSIVE BUSINESS SOURCE LICENSE ("Agreement") provides the terms and conditions by which
+you may use the Software (defined below), and is entered into between you ("you" or "Licensee") and
+Responsive, Inc., a Delaware corporation ("Licensor") as of the date of your first access to the
+Software or the date on which you click a button or check a box marked "I Agree" or something
+similar (the "Effective Date"). By accessing or using the Software, or by clicking a button or
+checking a box marked "I Agree" or something similar, you signify that you have read, understood,
+and agree to be bound by the terms and conditions set forth in this Agreement.
 
-   1. Definitions.
+If you are entering into this Agreement on behalf of a company, organization, or other entity,
+then: (1) "you" and "Licensee" include you and that entity. (2) You represent and warrant that
+you are an authorized representative of the entity with the authority to bind the entity to this
+Agreement, and that you agree to this Agreement on the entity’s behalf.
 
-      "License" shall mean the terms and conditions for use, reproduction,
-      and distribution as defined by Sections 1 through 9 of this document.
+## 1. Definitions
 
-      "Licensor" shall mean the copyright owner or entity authorized by
-      the copyright owner that is granting the License.
+1.1 “Cloud Services” means the cloud-based services provided by Licensor under separate
+[Cloud Services Terms](https://www.responsive.dev/responsive-cloud-terms-of-service).
 
-      "Legal Entity" shall mean the union of the acting entity and all
-      other entities that control, are controlled by, or are under common
-      control with that entity. For the purposes of this definition,
-      "control" means (i) the power, direct or indirect, to cause the
-      direction or management of such entity, whether by contract or
-      otherwise, or (ii) ownership of fifty percent (50%) or more of the
-      outstanding shares, or (iii) beneficial ownership of such entity.
+1.2 “Commercial License Key” means the cryptographic key issued by Licensor that enables use of the
+Software and enforces the Trial Period limitation.
 
-      "You" (or "Your") shall mean an individual or Legal Entity
-      exercising permissions granted by this License.
+1.3 “Licensed Materials” means the Software and the Documentation collectively.
 
-      "Source" form shall mean the preferred form for making modifications,
-      including but not limited to software source code, documentation
-      source, and configuration files.
+1.4 “Production Usage” means use of the Software in a production environment to process live data or
+provide services to end users.
 
-      "Object" form shall mean any form resulting from mechanical
-      transformation or translation of a Source form, including but
-      not limited to compiled object code, generated documentation,
-      and conversions to other media types.
+1.5 “Source Code” means the human-readable form of the Software’s programming code made available by
+licensor.
 
-      "Work" shall mean the work of authorship, whether in Source or
-      Object form, made available under the License, as indicated by a
-      copyright notice that is included in or attached to the work
-      (an example is provided in the Appendix below).
+1.6 “Trial Period” means 60 days from initial activation, unless otherwise agreed in writing between
+the parties.
 
-      "Derivative Works" shall mean any work, whether in Source or Object
-      form, that is based on (or derived from) the Work and for which the
-      editorial revisions, annotations, elaborations, or other modifications
-      represent, as a whole, an original work of authorship. For the purposes
-      of this License, Derivative Works shall not include works that remain
-      separable from, or merely link (or bind by name) to the interfaces of,
-      the Work and Derivative Works thereof.
+## 2. License
 
-      "Contribution" shall mean any work of authorship, including
-      the original version of the Work and any modifications or additions
-      to that Work or Derivative Works thereof, that is intentionally
-      submitted to Licensor for inclusion in the Work by the copyright owner
-      or by an individual or Legal Entity authorized to submit on behalf of
-      the copyright owner. For the purposes of this definition, "submitted"
-      means any form of electronic, verbal, or written communication sent
-      to the Licensor or its representatives, including but not limited to
-      communication on electronic mailing lists, source code control systems,
-      and issue tracking systems that are managed by, or on behalf of, the
-      Licensor for the purpose of discussing and improving the Work, but
-      excluding communication that is conspicuously marked or otherwise
-      designated in writing by the copyright owner as "Not a Contribution."
+### 2.1 Trial License
 
-      "Contributor" shall mean Licensor and any individual or Legal Entity
-      on behalf of whom a Contribution has been received by Licensor and
-      subsequently incorporated within the Work.
+(a) During the Trial Period, Licensor grants Licensee a limited, non-exclusive,
+non-transferable license, without the right to sublicense, to (i) install and use the Software,
+including both object code and Source Code access as specified below, on Licensee’s internal server
+in the country to which such Software is delivered; (ii) use the Software for evaluation purposes;
+and (iii) use the accompanying documentation (the “Documentation”). During the Trial Period,
+Licensee may not make use of the Software and any output generated by using the Software (the
+“Output”) for any commercial or production purposes. During the Trial Period, Licensee shall not
+make the Software and the Output available to any third parties.
 
-   2. Grant of Copyright License. Subject to the terms and conditions of
-      this License, each Contributor hereby grants to You a perpetual,
-      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
-      copyright license to reproduce, prepare Derivative Works of,
-      publicly display, publicly perform, sublicense, and distribute the
-      Work and such Derivative Works in Source or Object form.
+(b) Upon the expiration of the Trial Period, the license granted in Section 2.1(a)
+shall terminate, and Licensee shall uninstall and cease use of the Software, unless converted to a
+Commercial License through the purchase of a Commercial License Key. Licensor may also
+include a “time bomb” within the Software that shall prevent use of the Software after the Trial
+Period has expired.
 
-   3. Grant of Patent License. Subject to the terms and conditions of
-      this License, each Contributor hereby grants to You a perpetual,
-      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
-      (except as stated in this section) patent license to make, have made,
-      use, offer to sell, sell, import, and otherwise transfer the Work,
-      where such license applies only to those patent claims licensable
-      by such Contributor that are necessarily infringed by their
-      Contribution(s) alone or by combination of their Contribution(s)
-      with the Work to which such Contribution(s) was submitted. If You
-      institute patent litigation against any entity (including a
-      cross-claim or counterclaim in a lawsuit) alleging that the Work
-      or a Contribution incorporated within the Work constitutes direct
-      or contributory patent infringement, then any patent licenses
-      granted to You under this License for that Work shall terminate
-      as of the date such litigation is filed.
+### 2.2 Commerical License
 
-   4. Redistribution. You may reproduce and distribute copies of the
-      Work or Derivative Works thereof in any medium, with or without
-      modifications, and in Source or Object form, provided that You
-      meet the following conditions:
+(a) Subject to the terms of this Agreement and the purchase of a Commercial
+License Key, Licensor grants to Licensee a limited, non-exclusive, non-transferable license during
+the Term, without the right to sublicense, to install and use the Software, including both object code
+and Source Code access as specified below, and the accompanying Documentation on Licensee’s
+internal server in the country to which such Software is delivered solely for internal use as it relates
+to operations of Licensee.
 
-      (a) You must give any other recipients of the Work or
-          Derivative Works a copy of this License; and
+(b) Upon the expiration of the Commercial License Key, the license granted in
+Section 2.2(a) above shall terminate, and Licensee shall uninstall and cease use of the Software,
+unless extended pursuant to a new Commercial License through the purchase of a new Commercial
+License Key. Licensor may also include a “time bomb” within the Software that shall prevent use of
+the Software after the Commercial License Key has expired.
 
-      (b) You must cause any modified files to carry prominent notices
-          stating that You changed the files; and
+### 2.3 Additional Restrictions on Use
 
-      (c) You must retain, in the Source form of any Derivative Works
-          that You distribute, all copyright, patent, trademark, and
-          attribution notices from the Source form of the Work,
-          excluding those notices that do not pertain to any part of
-          the Derivative Works; and
+Licensee shall not, and shall not permit any third
+party to: (a) use the Licensed Materials except to the extent permitted in this Section 2; (b) modify
+or create any derivative work of any part of the Licensed Materials; (c) permit any parent,
+subsidiaries, affiliated entities or third parties to use the Licensed Materials; (d) process or permit to
+be processed the data of any other party unless in connection with Licensee’s authorized use of the
+Software; (e) market, sell, license, sublicense, distribute, publish, display, reproduce, rent, lease,
+loan, assign or otherwise transfer to a third party the Licensed Materials or any copy thereof, in
+whole or in part; or (f) use the Licensed Materials for third-party training, commercial time-sharing
+or service bureau use. Licensee agrees that, except to the extent permitted by law or expressly
+permitted under Section 2.4, it shall not cause or permit the disassembly, decompilation or reverse
+engineering of the Software or otherwise attempt to gain access to the source code to the Software
+(or the underlying ideas, algorithms, structure or organization of the object code in the Software).
+Without limiting the foregoing, in the event that Licensee desires to reverse engineer the Software
+for interoperability purposes, Licensee agrees to first contact Licensor and provide Licensor an
+opportunity to create such changes as are needed for interoperability purposes. Licensee agrees that
+only Licensor shall have the right to maintain, enhance or otherwise modify the Licensed Materials.
 
-      (d) If the Work includes a "NOTICE" text file as part of its
-          distribution, then any Derivative Works that You distribute must
-          include a readable copy of the attribution notices contained
-          within such NOTICE file, excluding those notices that do not
-          pertain to any part of the Derivative Works, in at least one
-          of the following places: within a NOTICE text file distributed
-          as part of the Derivative Works; within the Source form or
-          documentation, if provided along with the Derivative Works; or,
-          within a display generated by the Derivative Works, if and
-          wherever such third-party notices normally appear. The contents
-          of the NOTICE file are for informational purposes only and
-          do not modify the License. You may add Your own attribution
-          notices within Derivative Works that You distribute, alongside
-          or as an addendum to the NOTICE text from the Work, provided
-          that such additional attribution notices cannot be construed
-          as modifying the License.
+### 2.4 Source Code Access
 
-      You may add Your own copyright statement to Your modifications and
-      may provide additional or different license terms and conditions
-      for use, reproduction, or distribution of Your modifications, or
-      for any such Derivative Works as a whole, provided Your use,
-      reproduction, and distribution of the Work otherwise complies with
-      the conditions stated in this License.
+The Source Code is owned exclusively by Licensor. By
+accessing the Source Code, you agree to the following terms and restrictions:
 
-   5. Submission of Contributions. Unless You explicitly state otherwise,
-      any Contribution intentionally submitted for inclusion in the Work
-      by You to the Licensor shall be under the terms and conditions of
-      this License, without any additional terms or conditions.
-      Notwithstanding the above, nothing herein shall supersede or modify
-      the terms of any separate license agreement you may have executed
-      with Licensor regarding such Contributions.
+(a) Prohibited Actions. You are expressly prohibited from: (a) Using the Source
+Code, in whole or in part, in any product, service, or software offering; (b) Incorporating, linking to,
+or combining the Source Code with any other software or service; (c) Compiling, building, or
+generating binaries or executable versions of the Source Code except when authorized by a valid
+Commercial License Key; (d) Attempting to bypass or circumvent the Commercial License Key
+requirements through compilation or any other means; (e) Creating derivative works based on the
+Source Code; (f) Developing, producing, or enabling competing products or services; (g)
+Redistributing, sharing, publishing, disclosing, or exposing the Source Code to any third party; (h)
+Using the Source Code to assist, enable, or support the development of competing products; (i)
+Removing or modifying any proprietary notices, labels, or marks from the Source Code; (j) Using
+automated tools to analyze, decompile, or extract information from the Source Code; (k) Allowing
+any third party to access, view, or use the Source Code; or (l) Using the Source Code after
+termination or expiration of your license.
 
-   6. Trademarks. This License does not grant permission to use the trade
-      names, trademarks, service marks, or product names of the Licensor,
-      except as required for reasonable and customary use in describing the
-      origin of the Work and reproducing the content of the NOTICE file.
+(b) Permitted Actions. You may only: (a) View and study the Source Code for
+understanding the Software’s functionality; (b) Compile the Source Code when expressly
+authorized by a valid Commercial License Key; (c) Access the Source Code for security review and
+compliance verification; (d) Use the Source Code as explicitly permitted in writing by Licensor.
 
-   7. Disclaimer of Warranty. Unless required by applicable law or
-      agreed to in writing, Licensor provides the Work (and each
-      Contributor provides its Contributions) on an "AS IS" BASIS,
-      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
-      implied, including, without limitation, any warranties or conditions
-      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
-      PARTICULAR PURPOSE. You are solely responsible for determining the
-      appropriateness of using or redistributing the Work and assume any
-      risks associated with Your exercise of permissions under this License.
+(c) Security Requirements. You must: (a) Maintain strict confidentiality of the
+Source Code; (b) Implement reasonable security measures to prevent unauthorized access; (c) Track
+and monitor all Source Code access; (d) Immediately report any unauthorized access or use; (e)
+Ensure Source Code access is limited to authorized individuals under your direct control.
 
-   8. Limitation of Liability. In no event and under no legal theory,
-      whether in tort (including negligence), contract, or otherwise,
-      unless required by applicable law (such as deliberate and grossly
-      negligent acts) or agreed to in writing, shall any Contributor be
-      liable to You for damages, including any direct, indirect, special,
-      incidental, or consequential damages of any character arising as a
-      result of this License or out of the use or inability to use the
-      Work (including but not limited to damages for loss of goodwill,
-      work stoppage, computer failure or malfunction, or any and all
-      other commercial damages or losses), even if such Contributor
-      has been advised of the possibility of such damages.
+(d) Ownership and Rights (a) All Source Code remains Licensor’s exclusive
+intellectual property; (b) No ownership rights or implied licenses are granted to the Source Code;
 
-   9. Accepting Warranty or Additional Liability. While redistributing
-      the Work or Derivative Works thereof, You may choose to offer,
-      and charge a fee for, acceptance of support, warranty, indemnity,
-      or other liability obligations and/or rights consistent with this
-      License. However, in accepting such obligations, You may act only
-      on Your own behalf and on Your sole responsibility, not on behalf
-      of any other Contributor, and only if You agree to indemnify,
-      defend, and hold each Contributor harmless for any liability
-      incurred by, or claims asserted against, such Contributor by reason
-      of your accepting any such warranty or additional liability.
+(c) All rights not expressly granted are reserved by Licensor; (d) Any unauthorized use immediately
+terminates your Source Code access rights.
 
-   END OF TERMS AND CONDITIONS
+### 2.5 Reservation of Rights
 
-   APPENDIX: How to apply the Apache License to your work.
+Licensor reserves all rights not otherwise expressly granted
+in this Section 2.
 
-      To apply the Apache License to your work, attach the following
-      boilerplate notice, with the fields enclosed by brackets "[]"
-      replaced with your own identifying information. (Don't include
-      the brackets!)  The text should be enclosed in the appropriate
-      comment syntax for the file format. We also recommend that a
-      file or class name and description of purpose be included on the
-      same "printed page" as the copyright notice for easier
-      identification within third-party archives.
+### 2.6 Third Party Software.
 
-   Copyright [yyyy] [name of copyright owner]
+Licensee acknowledges that it may use certain third party
+software in connection with the Software and that Licensor makes no warranties, express or
+implied, with respect to any such third party software.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
+## 3. Payment Terms
 
-       http://www.apache.org/licenses/LICENSE-2.0
+### 3.1 Fees
 
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+The license fees, and, if applicable, maintenance and support fees, will be
+specified at the time of purchase. All fees are non-refundable unless otherwise specified.
+
+### 3.2 Payment
+
+Payment for a Commercial License Key must be made in full at the time of
+purchase. Any additional invoices must be paid within thirty (30) days of receipt. Failure to comply
+with the payment terms may result in suspension of access to the Licensed Software until all
+outstanding payments are received.
+
+## 4. Cloud  Services Integration
+
+### 4.1 Relationship of Services
+
+This License governs your use of the Software. Cloud
+Services are governed by separate Cloud Services Terms available at
+https://www.responsive.dev/responsive-cloud-terms-of-service . When using both the Software and
+Cloud Services, each agreement applies independently. The Software may be used on its own or in
+conjunction with Cloud Services. Your rights to use the Software are not dependent on using Cloud
+Services.
+
+### 4.2 Independent Operation
+
+Purchasing a Software license does not require the use of
+Cloud Services, and purchasing Cloud Services does not grant additional rights to the Software.
+Each product is licensed and sold independently, with separate pricing and terms.
+
+### 4.3 Termination Effects
+
+Termination or expiration of Cloud Services does not affect
+your Software license, and termination of your Software license does not affect your Cloud Services
+subscription. However, breach of either agreement may, at Licensor’s discretion, constitute grounds
+for termination of both. Compliance with both agreements is required when using both products.
+
+### 4.4 Data and Integration
+
+Data processed by the Software may be transmitted to Cloud
+Services when configured. You are responsible for configuring and managing integration features,
+as well as ensuring the security and privacy of data transmission between the Software and Cloud
+Services.
+
+### 4.5 Service Levels
+
+Any service levels for Cloud Services are specified in the Cloud
+Services Terms. The performance of the Software is independent of Cloud Services availability.
+Licensor is not responsible for issues arising from the interaction between the Software and Cloud
+Services. Cloud Services uptime does not guarantee Software functionality and vice versa.
+
+## 5. Compliance Verification
+
+You must maintain reasonable processes to track: (a) Source
+Code access and usage; (b) Compliance with Trial Period limitations; (c) Commercial License Key
+usage.
+
+## 6. Ownership
+
+Licensee acknowledges and agrees that Licensor or its licensors own and shall
+retain all proprietary rights, title and interest, including all patent, copyright, trade secret, know-
+how, design rights, trademark, and other intellectual property rights, in and to the Licensed
+Materials and any changes, corrections, bug fixes, enhancements, updates and other modifications
+thereto (collectively, “Modifications”), whether made by or on behalf of Licensee, Licensor or any
+third party, and as between the parties all such rights shall vest in and be assigned to Licensor.
+Licensee acknowledges that the license granted under this Agreement does not provide Licensee
+with title to or ownership of the Licensed Materials, but only a right of limited use under the terms
+and conditions of this Agreement. Licensee shall keep the Licensed Materials free and clear of all
+claims, liens and encumbrances. In the event ownership of any Licensed Materials or Modifications
+vest in Licensee, Licensee hereby assigns to Licensor all of its right, title and interest in and to all
+intellectual property and other rights (and where relevant such assignment is by present assignment
+of future copyright) in such Licensed Materials or Modifications, and waives any and all moral
+rights in such Licensed Materials or Modifications to which it may now or in the future be entitled
+under the laws of any jurisdiction.
+
+## 7. Confidentiality
+
+Licensee agrees that all material and information relating to the Licensed
+Materials is made available for use solely under and in accordance with the terms and conditions of
+this Software License Agreement. Licensee has no right at any time during or after cancellation or
+termination of this Software License Agreement to disclose such material and/or information
+relating to the Licensed Materials, whether directly or indirectly, to any third-party without
+Licensor’s prior written approval. Licensee shall hold harmless, defend, and indemnify Licensor
+from and against any and all losses, costs, damages, and expenses arising out of or in connection
+with Licensee&#39;s failure to comply with requirements of this Section 7.
+
+### 7.1 Opt-Out Metrics Collection
+
+Licensee acknowledges and agrees that Licensor may collect certain usage metrics and information
+related to Licensee's use of the Licensed Materials, including but not limited to the number of
+API calls, feature utilization, performance data, and device information (collectively, "Usage
+Metrics"). Usage Metrics will be collected by Licensor for the purpose of billing, product
+improvement, and analysis of adoption trends. Licensee may opt out of this Usage Metrics collection
+by providing written notice to Licensor.
+
+### 7.2 Usage-Based Licensing
+
+If Licensee has purchased a usage-based license for the Licensed Materials, Licensee is required to
+provide the Usage Metrics specified by Licensor. Licensee agrees to transmit such Usage Metrics to
+Licensor on a regular basis as required under the terms of the usage-based license. Licensee
+acknowledges that continued use of the Licensed Materials under a usage-based license is
+contingent on Licensee's compliance with this Usage Metrics reporting requirement, and that
+Licensee may not opt out of Usage Metrics collection in this case.
+
+
+## 8. Limited Warranty
+
+There are no third-party beneficiaries to this Software License
+Agreement. Consequently, Licensor provides no warranty at all to any person, other than the limited
+warranty provided to Licensee hereunder. Licensee will be solely responsible for the development
+of the applications authorized by this Software License Agreement and for providing all support or
+services required or requested by end users of the applications. Licensee will not make any
+representations or warranties to its employees, customers, end users or any other third-party on
+Licensor’s behalf. Licensor assumes no responsibility under this Software License Agreement,
+either directly or indirectly, for damages to Licensee or third parties resulting from the direct or
+indirect use of the applications created by or on behalf of Licensee.
+
+## 9. Infringement
+
+Licensee shall indemnify and hold harmless Licensor and its officers,
+directors, employees, agents, successors and assigns against any damages, losses, and expenses
+(including reasonable attorneys’ fees) arising from any third-party action to the extent based upon a
+claim that the Software infringes any copyright or trademark or misappropriates any trade secret, to
+the extent that such claim is based on any of the following: (a) any method or process in which the
+Software may be used; (b) compliance with Licensee’s specifications; (c) use of Software other than
+a current unaltered release of the Software; or (d) the combination, operation or use of the Software
+with non-Licensor programs or data, except where such combination, operation, or use is explicitly
+intended or recommended by Licensor.
+
+## 10. Limitation of Liability
+
+THE CUMULATIVE LIABILITY OF LICENSOR FOR ALL
+CLAIMS RELATING TO THE LICENSED MATERIALS AND THIS SOFTWARE LICENSE
+AGREEMENT, INCLUDING ANY CAUSE OF ACTION SOUNDING IN CONTRACT, TORT,
+OR STRICT LIABILITY, SHALL NOT EXCEED THE TOTAL AMOUNT OF ALL FEES PAID
+TO LICENSOR HEREUNDER. THIS LIMITATION OF LIABILITY IS INTENDED TO APPLY
+WITHOUT REGARD TO WHETHER OTHER PROVISIONS OF THIS SOFTWARE LICENSE
+AGREEMENT HAVE BEEN BREACHED OR HAVE PROVEN INEFFECTIVE. LICENSOR
+SHALL HAVE NO LIABILITY FOR LOSS OF DATA OR DOCUMENTATION, IT BEING
+UNDERSTOOD THAT LICENSEE IS RESPONSIBLE FOR REASONABLE BACK-UP
+PRECAUTIONS. IN NO EVENT SHALL LICENSOR BE LIABLE FOR ANY LOSS OF
+PROFITS; ANY INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES;
+OR ANY CLAIMS OR DEMANDS BROUGHT AGAINST LICENSEE, EVEN IF LICENSOR
+HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH CLAIMS OR DEMANDS. THIS
+LIMITATION UPON DAMAGES AND CLAIMS IS INTENDED TO APPLY WITHOUT
+REGARD TO WHETHER OTHER PROVISIONS OF THIS SOFTWARE LICENSE
+AGREEMENT HAVE BEEN BREACHED OR HAVE PROVEN INEFFECTIVE. LICENSEE
+MAY HAVE ADDITIONAL RIGHTS UNDER CERTAIN LAWS (E.G., CONSUMER LAWS)
+THAT DO NOT ALLOW THE EXCLUSION OF IMPLIED WARRANTIES, OR THE
+EXCLUSION OR LIMITATION OF CERTAIN DAMAGES. IF SUCH LAWS APPLY,
+CERTAIN EXCLUSIONS OR LIMITATIONS MAY NOT APPLY TO LICENSEE; HOWEVER,
+ALL OTHER RESTRICTIONS AND LIMITATIONS SHALL REMAIN IN EFFECT.
+
+## 11. Term and Termination
+
+### 11.1 Term
+
+The term of this Software License Agreement will begin as of the date that Licensee
+receives the Software and will remain in effect perpetually unless terminated under this Section 11.
+
+### 11.2 Termination for Convenience
+
+During the Trial Period, Licensor may terminate this Software License Agreement at any time.
+
+### 11.3 Termination for Cause
+
+Licensor may terminate this Software License Agreement at
+if Licensee breaches its obligations hereunder. Licensor will affect such termination by giving
+Licensee notice of termination, specifying therein the alleged breach. If the breach is curable,
+Licensee will have a grace period of thirty (30) days after such notice is served to cure the breach
+described therein. If the breach is cured within the thirty (30) day grace period, then this Software
+License Agreement will remain in effect; otherwise, this Software License Agreement will
+automatically terminate upon the conclusion of the thirty (30) day grace period.
+
+## 12 Effect of Termination
+
+Upon termination of the Software License Agreement for any
+reason the following terms shall apply: (a) all rights granted under this Software License Agreement
+will immediately terminate and Licensee must immediately stop all use of the Licensed Materials;
+(b) Licensee must return to Licensor or destroy all copies of the Licensed Materials provided to or
+made by or on behalf of Licensee, and will, within ten (10) days after the effective date of
+termination, provide Licensor with written certification that all such copies have been returned or
+destroyed; and (c) all provisions of this Software License Agreement with the exception of the
+licenses granted hereunder will survive termination of this Software License Agreement for any
+reason. Termination of the Software License Agreement will not affect Licensee’s obligation to pay
+all amounts accrued hereunder prior to the effective date of termination. Licensee agrees that the
+termination of this Software License Agreement by Licensor can never entail liability for Licensor
+to pay damages to Licensee for anticipated or missing profits that could otherwise have arisen
+through Licensee&#39;s use of the License.
+
+## 13 Miscellaneous
+
+### 13.1 Severability
+If any term or provision of the Software License Agreement is found to
+be invalid under any applicable statute or rule of law, then, that provision notwithstanding, the
+Software License Agreement will remain in full force and effect, and in such event, such provision
+will be changed and interpreted so as to best accomplish the objectives of such unenforceable or
+invalid provision within the limits of applicable law or applicable court decisions.
+
+### 13.2 Governing Law/Forum Selection
+This Software License Agreement and any claim,
+cause of action or dispute arising out of, or related thereto, shall be governed by and construed in
+accordance with the laws of the State of Delaware, regardless of Licensee’s country of origin or
+where Licensee uses the licenses from, without giving effect to any conflict of law principles, which
+would result in the application of the laws of a jurisdiction other than the State of Delaware. Any
+dispute, claim, or controversy arising out of, connected with, or relating to this Software License
+Agreement, the Licensed Software, or any use related thereto, will be submitted to the sole and
+exclusive jurisdiction of the competent court located in State of California.
+
+### 13.3 No Joint Venture
+
+Nothing contained in the Software License Agreement will be
+construed so as to make the parties partners or joint venturers or to permit either party to bind the
+other party to any agreement or purport to act on behalf of the other party in any respect.
+
+### 13.4 Waiver and Modifications
+No amendment or modification of this Software License
+Agreement, nor any waiver of any rights hereunder, will be effective unless assented to in a writing
+signed by authorized representatives of both parties. Any such waiver will be narrowly construed to
+apply only to the specific provision and under the specific circumstances for which it was given and
+will not apply with respect to any repeated or continued violation of the same provision or any other
+provision. No other course of dealing between or among any of the parties to this Software License
+Agreement or any delay in exercising any rights pursuant to this Software License Agreement will
+operate as a waiver of any rights of any party to this Software License Agreement. Except as
+expressly provided in this Software License Agreement, no party who is not a party to this Software
+License Agreement will have any right or obligation pursuant to this Software License Agreement.
+
+### 13.5 Import/Export Law
+Licensee may not import, use, or otherwise export or re-export
+the Licensed Materials except as authorized by United States law and the laws of the jurisdiction in
+which the Licensed Materials were obtained.
+
+### 13.6 Federal Government End Use Provisions
+
+Licensor may provide the Licensed
+Materials for ultimate federal government end use solely in accordance with the following:
+Government technical data and software rights related to the Licensed Materials include only those
+rights customarily provided to the public as defined in this Software License Agreement. This
+customary commercial license is provided in accordance with FAR 12.211 (Technical Data) and
+FAR 12.212 (Computer Software), and the Department of Defense transactions, DFAR 252.227-
+7015 (Technical Data - Commercial Items) and DFAR 227.7202-3 (Rights in Commercial
+Computer Software or Computer Software Documentation). If a government agency has a need for
+rights not conveyed under these terms, it must negotiate with Licensor to determine if there are
+acceptable terms for transferring such rights, and a mutually acceptable written addendum
+specifically conveying such rights.
+
+### 13.7 Assignment
+
+This Software License Agreement, or any of your rights and obligations
+under this Software License Agreement, cannot be assigned or otherwise transferred in whole or in
+part, and any such attempted assignment or transfer by Licensee in violation of the foregoing will be
+null and void.
+
+### 13.8 Entire Agreement
+
+This Software License Agreement, including all invoices
+hereunder, constitutes the sole and entire agreement of the parties with respect to the subject matter
+hereof and supersedes and cancels any prior and contemporaneous oral or written proposals,
+promises, or agreements. There are no promises, covenants, or undertakings other than those
+expressly set forth in this Software License Agreement.
