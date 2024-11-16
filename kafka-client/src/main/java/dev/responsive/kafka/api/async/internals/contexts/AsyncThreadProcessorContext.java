@@ -23,18 +23,18 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.Optional;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.FixedKeyRecord;
-import org.apache.kafka.streams.processor.api.ProcessingContext;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.api.RecordMetadata;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 
 /**
  * A special kind of mock/wrapper context to be used by the AsyncThread.
@@ -70,7 +70,7 @@ import org.apache.kafka.streams.processor.api.RecordMetadata;
  *   (ie one per AsyncThread per StreamThread per async processor per partition)
  *   Equivalently, one per AsyncThread for each "original" ProcessorContext in Streams
  */
-public class AsyncThreadProcessorContext<KOut, VOut> implements MergedProcessorContext<KOut, VOut> {
+public class AsyncThreadProcessorContext<KOut, VOut> extends DelegatingProcessorContext<KOut, VOut, InternalProcessorContext<KOut, VOut>> {
 
   // The AsyncEvent that is currently being processed by this AsyncThread. Updated each
   // time a new event is picked up from the processing queue but before beginning
@@ -82,7 +82,7 @@ public class AsyncThreadProcessorContext<KOut, VOut> implements MergedProcessorC
   // in to the async processor during init. This MUST be protected from
   // any mutations and should only be delegated to in pure getters that
   // access immutable fields (such as applicationId)
-  private final ProcessingContext taskContext;
+  private final InternalProcessorContext<KOut, VOut> taskContext;
 
   // TODO: we won't need to do this until we support async with the DSL and support
   //  the new windowed emit semantics specifically, which is the only thing using it,
@@ -94,7 +94,7 @@ public class AsyncThreadProcessorContext<KOut, VOut> implements MergedProcessorC
   //  further inspection but isn't supported by either the async framework or in
   //  Responsive in general, so it's not urgent.
   public AsyncThreadProcessorContext(
-      final ProcessingContext taskContext,
+      final InternalProcessorContext<KOut, VOut> taskContext,
       final AsyncEvent currentAsyncEvent
   ) {
     this.taskContext = taskContext;
@@ -203,6 +203,11 @@ public class AsyncThreadProcessorContext<KOut, VOut> implements MergedProcessorC
   }
 
   @Override
+  public InternalProcessorContext<KOut, VOut> delegate() {
+    return taskContext;
+  }
+
+  @Override
   // This is an immutable field so it's safe to delegate
   public String applicationId() {
     return taskContext.applicationId();
@@ -234,7 +239,7 @@ public class AsyncThreadProcessorContext<KOut, VOut> implements MergedProcessorC
 
   @Override
   // This is an immutable field so it's safe to delegate
-  public StreamsMetrics metrics() {
+  public StreamsMetricsImpl metrics() {
     return taskContext.metrics();
   }
 

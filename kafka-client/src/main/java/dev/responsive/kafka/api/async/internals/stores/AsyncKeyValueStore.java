@@ -31,6 +31,7 @@ import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.internals.WrappedStateStore;
 import org.slf4j.Logger;
 
 /**
@@ -45,7 +46,9 @@ import org.slf4j.Logger;
  * -One for each AsyncThread per physical state store instance
  *   (ie per state store per processor per partition per AsyncThread per StreamThread
  */
-public class AsyncKeyValueStore<KS, VS> implements KeyValueStore<KS, VS> {
+public class AsyncKeyValueStore<KS, VS>
+    extends WrappedStateStore<KeyValueStore<?, ?>, KS, VS>
+    implements KeyValueStore<KS, VS> {
 
   private final Logger log;
 
@@ -59,6 +62,7 @@ public class AsyncKeyValueStore<KS, VS> implements KeyValueStore<KS, VS> {
       final KeyValueStore<?, ?> userDelegate,
       final DelayedAsyncStoreWriter delayedWriter
   ) {
+    super(userDelegate);
     this.log = new LogContext(String.format(" async-store [%s-%d]", name, partition))
         .logger(AsyncKeyValueStore.class);
     this.userDelegate = (KeyValueStore<KS, VS>) userDelegate;

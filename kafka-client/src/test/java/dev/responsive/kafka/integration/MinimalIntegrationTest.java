@@ -16,6 +16,7 @@
 
 package dev.responsive.kafka.integration;
 
+import static dev.responsive.kafka.api.config.ResponsiveConfig.ASYNC_THREAD_POOL_SIZE_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.STORE_FLUSH_RECORDS_TRIGGER_CONFIG;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.createTopicsAndWait;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.pipeInput;
@@ -36,6 +37,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.hasItems;
 
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
+import dev.responsive.kafka.api.ResponsiveStreamsBuilder;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
@@ -55,6 +57,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Named;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -69,7 +72,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
  * the development workflow, and therefore is disabled by default (to speed
  * up test time).
  */
-@Disabled
+//@Disabled
 public class MinimalIntegrationTest {
 
   @RegisterExtension
@@ -133,12 +136,12 @@ public class MinimalIntegrationTest {
   }
 
   private ResponsiveKafkaStreams buildStreams(final Map<String, Object> properties) {
-    final StreamsBuilder builder = new StreamsBuilder();
+    final StreamsBuilder builder = new ResponsiveStreamsBuilder();
 
     final KStream<Long, Long> input = builder.stream(inputTopic());
     input
         .groupByKey()
-        .count(Named.as("count"))
+        .count(Materialized.as("count"))
         .toStream()
         .to(outputTopic());
 
@@ -160,6 +163,7 @@ public class MinimalIntegrationTest {
     properties.put(STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
     properties.put(STORE_FLUSH_RECORDS_TRIGGER_CONFIG, 1);
     properties.put(COMMIT_INTERVAL_MS_CONFIG, 1);
+    properties.put(ASYNC_THREAD_POOL_SIZE_CONFIG, 2);
 
     properties.put(
         ResponsiveConfig.MONGO_ADDITIONAL_CONNECTION_STRING_PARAMS_CONFIG, "maxIdleTimeMs=60000"

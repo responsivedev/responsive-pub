@@ -143,13 +143,6 @@ public final class AsyncProcessorSupplier<KIn, VIn, KOut, VOut>
       final ProcessorSupplier<KIn, VIn, KOut, VOut> userProcessorSupplier,
       final Set<StoreBuilder<?>> userStoreBuilders
   ) {
-    if (userStoreBuilders == null || userStoreBuilders.isEmpty()) {
-      throw new UnsupportedOperationException(
-          "Async processing currently requires at least one state store be "
-              + "connected to the async processor, and that stores be connected "
-              + "by implementing the #stores method in your processor supplier");
-    }
-
     this.userProcessorSupplier = userProcessorSupplier;
     this.asyncStoreBuilders = initializeAsyncBuilders(userStoreBuilders);
   }

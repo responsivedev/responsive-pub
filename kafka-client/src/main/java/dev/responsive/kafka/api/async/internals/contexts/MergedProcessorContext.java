@@ -18,11 +18,12 @@ package dev.responsive.kafka.api.async.internals.contexts;
 
 import org.apache.kafka.streams.processor.api.FixedKeyProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 
 /**
  * Simple interface for processor contexts that may be used for both
  * fixed-key and non-fixed-key processors
  */
 public interface MergedProcessorContext<KOut, VOut>
-    extends ProcessorContext<KOut, VOut>, FixedKeyProcessorContext<KOut, VOut> {
+    extends InternalProcessorContext<KOut, VOut>, FixedKeyProcessorContext<KOut, VOut> {
 }

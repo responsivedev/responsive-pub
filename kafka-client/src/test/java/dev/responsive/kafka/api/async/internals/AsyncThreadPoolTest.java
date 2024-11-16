@@ -26,6 +26,7 @@ import java.util.concurrent.TimeoutException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.ProcessingContext;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -43,7 +44,7 @@ class AsyncThreadPoolTest {
   @Mock
   private AsyncUserProcessorContext<String, String> userContext;
   @Mock
-  private ProcessingContext originalContext;
+  private InternalProcessorContext<String, String> originalContext;
   @Mock
   private ProcessorRecordContext recordContext;
   private final FinalizingQueue finalizingQueue0 = new FinalizingQueue("fq", 0);

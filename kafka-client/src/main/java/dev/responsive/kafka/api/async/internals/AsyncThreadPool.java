@@ -29,6 +29,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.ProcessingContext;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.slf4j.Logger;
 
 public class AsyncThreadPool {
@@ -156,7 +157,7 @@ public class AsyncThreadPool {
       final TaskId taskId,
       final List<AsyncEvent> events,
       final FinalizingQueue finalizingQueue,
-      final ProcessingContext taskContext,
+      final InternalProcessorContext<KOut, VOut> taskContext,
       final AsyncUserProcessorContext<KOut, VOut> asyncProcessorContext,
       final AsyncProcessorMetricsRecorder processorMetricsRecorder
   ) {
@@ -273,7 +274,7 @@ public class AsyncThreadPool {
 
     private AsyncEventTask(
         final AsyncEvent event,
-        final ProcessingContext taskContext,
+        final InternalProcessorContext<KOut, VOut> taskContext,
         final AsyncUserProcessorContext<KOut, VOut> userContext,
         final Semaphore queueSemaphore,
         final AsyncProcessorMetricsRecorder metricsRecorder

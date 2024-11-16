@@ -81,6 +81,8 @@ dependencies {
     api(libs.kafka.streams)
 
     implementation("dev.responsive:controller-api:0.16.0")
+    implementation("net.bytebuddy:byte-buddy:1.14.17")
+    implementation("net.bytebuddy:byte-buddy-agent:1.14.18")
     implementation(libs.bundles.scylla)
     implementation(libs.bundles.commons)
     implementation(libs.mongodb.driver.sync)
