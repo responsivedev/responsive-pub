@@ -78,7 +78,7 @@ public class AsyncTimestampedKeyValueStoreBuilder<K, V>
     final KeyValueStore<Bytes, byte[]> store = storeSupplier.get();
     if (!(store instanceof TimestampedBytesStore)) {
       throw new IllegalStateException("Timestamped store builder expects store supplier to provide "
-                                          + "store that implements TimestampedBytesStore");
+          + "store that implements TimestampedBytesStore. Got " + store.getClass().getName());
     }
 
     return new MeteredTimestampedKeyValueStore<>(

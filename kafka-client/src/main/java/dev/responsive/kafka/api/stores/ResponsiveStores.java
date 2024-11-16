@@ -72,6 +72,12 @@ public final class ResponsiveStores {
     return keyValueStore(ResponsiveKeyValueParams.keyValue(name));
   }
 
+  public static ResponsiveKeyValueBytesStoreSupplier timestampedKeyValueStore(final String name) {
+    final var store = keyValueStore(ResponsiveKeyValueParams.keyValue(name));
+    store.asTimestamped();
+    return store;
+  }
+
   /**
    * See for example {@link Stores#persistentKeyValueStore(String)}. A fact store
    * assumes that all writes for a given key will always have the same value. The

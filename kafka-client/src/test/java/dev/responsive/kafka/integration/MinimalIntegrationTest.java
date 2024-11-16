@@ -67,6 +67,8 @@ import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.RegisterExtension;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * This class tests the most minimal Kafka Streams application that uses
@@ -79,6 +81,7 @@ public class MinimalIntegrationTest {
 
   @RegisterExtension
   static ResponsiveExtension EXTENSION = new ResponsiveExtension(StorageBackend.MONGO_DB);
+  private static final Logger LOG = LoggerFactory.getLogger(MinimalIntegrationTest.class);
 
   private static final String INPUT_TOPIC = "input";
   private static final String OUTPUT_TOPIC = "output";
@@ -143,8 +146,9 @@ public class MinimalIntegrationTest {
     final KStream<Long, Long> input = builder.stream(inputTopic());
     input
         .groupByKey()
-        .count(ResponsiveMaterialized.as(ResponsiveStores.keyValueStore("counts")))
+        .count(ResponsiveMaterialized.as(ResponsiveStores.timestampedKeyValueStore("counts")))
         .toStream()
+        .peek((k, v) -> LOG.info("{}:{}", k, v))
         .to(outputTopic());
 
     return new ResponsiveKafkaStreams(builder.build(), properties);
@@ -163,8 +167,8 @@ public class MinimalIntegrationTest {
     properties.put(DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.LongSerde.class.getName());
     properties.put(NUM_STREAM_THREADS_CONFIG, 1);
     properties.put(STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
-    properties.put(STORE_FLUSH_RECORDS_TRIGGER_CONFIG, 1);
-    properties.put(COMMIT_INTERVAL_MS_CONFIG, 1);
+    properties.put(STORE_FLUSH_RECORDS_TRIGGER_CONFIG, 100);
+    properties.put(COMMIT_INTERVAL_MS_CONFIG, 1000);
     properties.put(ASYNC_THREAD_POOL_SIZE_CONFIG, 2);
 
     properties.put(

@@ -13,21 +13,28 @@
 package dev.responsive.kafka.api;
 
 import dev.responsive.kafka.api.async.AsyncProcessorSupplier;
+import dev.responsive.kafka.internal.stores.ResponsiveStoreBuilder;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import net.bytebuddy.ByteBuddy;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyConfig;
+import org.apache.kafka.streams.kstream.internals.KeyValueStoreMaterializer;
+import org.apache.kafka.streams.kstream.internals.MaterializedStoreFactory;
+import org.apache.kafka.streams.kstream.internals.MaterializedStoreFactoryUtil;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
+import org.apache.kafka.streams.processor.internals.StoreBuilderWrapper;
 import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.StoreSupplier;
 
 public class ResponsiveStreamsBuilder extends StreamsBuilder {
 
@@ -104,7 +111,7 @@ public class ResponsiveStreamsBuilder extends StreamsBuilder {
       return super.buildTopology();
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private Object proxyNodeFactory(
         final String name,
         final Object nodeFactory,
@@ -118,16 +125,26 @@ public class ResponsiveStreamsBuilder extends StreamsBuilder {
 
       Field supplierField = nodeFactory.getClass().getDeclaredField("supplier");
       supplierField.setAccessible(true);
-      ProcessorSupplier<?, ?, ?, ?> supplier = new AsyncProcessorSupplier<>(
+      AsyncProcessorSupplier<?, ?, ?, ?> supplier = new AsyncProcessorSupplier<>(
           (ProcessorSupplier<?, ?, ?, ?>) supplierField.get(nodeFactory),
           stateFactories.entrySet()
               .stream()
               .filter(e -> stateStoreNames.contains(e.getKey()))
               .map(Map.Entry::getValue)
-              .map(ReadOnlyStoreBuilder::new)
-              .collect(
-              Collectors.toSet())
+              .map(store -> {
+                final ReadOnlyStoreBuilder<?> builder = new ReadOnlyStoreBuilder<>(store);
+                return (ResponsiveStoreBuilderWrapper<?, ?, ?>) ResponsiveStoreBuilderWrapper.from(
+                    builder);
+              })
+              .collect(Collectors.toSet())
       );
+
+      supplier.stores().forEach(store -> {
+        final StoreBuilderWrapper factory = new StoreBuilderWrapper(store);
+        factory.connectedProcessorNames()
+            .addAll(stateFactories.get(store.name()).connectedProcessorNames());
+        stateFactories.put(store.name(), factory);
+      });
 
       Field predField = nodeFactory.getClass().getSuperclass().getDeclaredField("predecessors");
       predField.setAccessible(true);
@@ -136,13 +153,50 @@ public class ResponsiveStreamsBuilder extends StreamsBuilder {
       final Object proxy = new ByteBuddy()
           .subclass(nodeFactory.getClass())
           .make()
-          .load(InternalTopologyBuilder.class.getClassLoader(), net.bytebuddy.dynamic.loading.ClassLoadingStrategy.Default.INJECTION)
+          .load(
+              InternalTopologyBuilder.class.getClassLoader(),
+              net.bytebuddy.dynamic.loading.ClassLoadingStrategy.Default.INJECTION
+          )
           .getLoaded()
           .getConstructor(String.class, String[].class, ProcessorSupplier.class)
           .newInstance(name, predecessors, supplier);
 
       stateStoreNamesField.set(proxy, stateStoreNames);
       return proxy;
+    }
+  }
+
+  public static class ResponsiveStoreBuilderWrapper<K, V, T extends StateStore> extends
+      ResponsiveStoreBuilder<K, V, T> {
+
+    @SuppressWarnings("unchecked")
+    public static <K, V, T extends StateStore> ResponsiveStoreBuilder<K, V, T> from(
+        ReadOnlyStoreBuilder<T> delegate
+    ) {
+      if (delegate.factory instanceof KeyValueStoreMaterializer) {
+        final MaterializedStoreFactory<K, V, T> factory =
+            (MaterializedStoreFactory<K, V, T>) delegate.factory;
+        final var mat = MaterializedStoreFactoryUtil.getMaterialized(factory);
+        return new ResponsiveStoreBuilderWrapper<>(
+            StoreType.TIMESTAMPED_KEY_VALUE,
+            mat.storeSupplier(),
+            delegate,
+            mat.keySerde(),
+            mat.valueSerde()
+        );
+      }
+
+      throw new IllegalStateException();
+    }
+
+    private ResponsiveStoreBuilderWrapper(
+        final StoreType storeType,
+        final StoreSupplier<?> userStoreSupplier,
+        final StoreBuilder<T> userStoreBuilder,
+        final Serde<K> keySerde,
+        final Serde<?> valueSerde
+    ) {
+      super(storeType, userStoreSupplier, userStoreBuilder, keySerde, valueSerde);
     }
   }
 
