@@ -139,7 +139,7 @@ public final class AsyncProcessorSupplier<KIn, VIn, KOut, VOut>
     return new AsyncProcessorSupplier<>(processorSupplier, processorSupplier.stores());
   }
 
-  private AsyncProcessorSupplier(
+  public AsyncProcessorSupplier(
       final ProcessorSupplier<KIn, VIn, KOut, VOut> userProcessorSupplier,
       final Set<StoreBuilder<?>> userStoreBuilders
   ) {

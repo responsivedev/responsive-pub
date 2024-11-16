@@ -23,7 +23,6 @@ import static dev.responsive.kafka.api.async.internals.AsyncUtils.isStreamThread
 import dev.responsive.kafka.api.async.internals.events.DelayedWrite;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.api.ProcessingContext;
-import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.slf4j.Logger;
 
 /**

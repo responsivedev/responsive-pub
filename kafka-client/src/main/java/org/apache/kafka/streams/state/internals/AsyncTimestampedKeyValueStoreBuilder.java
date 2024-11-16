@@ -24,6 +24,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -56,7 +57,7 @@ public class AsyncTimestampedKeyValueStoreBuilder<K, V>
     );
   }
 
-  private AsyncTimestampedKeyValueStoreBuilder(
+  public AsyncTimestampedKeyValueStoreBuilder(
       final KeyValueBytesStoreSupplier storeSupplier,
       final Serde<K> keySerde,
       final Serde<V> valueSerde,

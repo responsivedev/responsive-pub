@@ -40,6 +40,8 @@ import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.ResponsiveStreamsBuilder;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.StorageBackend;
+import dev.responsive.kafka.api.stores.ResponsiveStores;
+import dev.responsive.kafka.internal.stores.ResponsiveMaterialized;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
 import java.time.Duration;
@@ -141,7 +143,7 @@ public class MinimalIntegrationTest {
     final KStream<Long, Long> input = builder.stream(inputTopic());
     input
         .groupByKey()
-        .count(Materialized.as("count"))
+        .count(ResponsiveMaterialized.as(ResponsiveStores.keyValueStore("counts")))
         .toStream()
         .to(outputTopic());
 
