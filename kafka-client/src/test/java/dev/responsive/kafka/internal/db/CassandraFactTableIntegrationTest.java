@@ -31,6 +31,7 @@ import static org.hamcrest.Matchers.nullValue;
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
+import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.api.stores.TtlProvider;
 import dev.responsive.kafka.api.stores.TtlProvider.TtlDuration;
@@ -50,11 +51,13 @@ import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
-import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.extension.RegisterExtension;
 import org.testcontainers.containers.CassandraContainer;
 
-@ExtendWith(ResponsiveExtension.class)
 class CassandraFactTableIntegrationTest {
+
+  @RegisterExtension
+  static ResponsiveExtension EXTENSION = new ResponsiveExtension(StorageBackend.CASSANDRA);
 
   private String storeName; // ie the "kafkaName", NOT the "cassandraName"
   private ResponsiveKeyValueParams params;

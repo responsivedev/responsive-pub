@@ -29,6 +29,7 @@ import static org.hamcrest.Matchers.hasSize;
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
+import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.api.stores.TtlProvider;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
@@ -49,11 +50,13 @@ import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
-import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.extension.RegisterExtension;
 import org.testcontainers.containers.CassandraContainer;
 
-@ExtendWith(ResponsiveExtension.class)
 public class CassandraKVTableIntegrationTest {
+
+  @RegisterExtension
+  static ResponsiveExtension EXTENSION = new ResponsiveExtension(StorageBackend.CASSANDRA);
 
   // Set up with 4 subpartitions per kafka partition
   private static final int NUM_SUBPARTITIONS_TOTAL = 8;

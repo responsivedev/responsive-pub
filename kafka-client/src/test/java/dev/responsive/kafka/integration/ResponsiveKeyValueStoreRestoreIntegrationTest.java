@@ -65,7 +65,6 @@ import dev.responsive.kafka.internal.db.DefaultCassandraClientFactory;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.mongo.CollectionCreationOptions;
 import dev.responsive.kafka.internal.db.mongo.MongoKVTable;
-import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.db.spec.DefaultTableSpec;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
@@ -82,7 +81,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -123,11 +121,8 @@ import org.junit.jupiter.params.provider.EnumSource;
 
 public class ResponsiveKeyValueStoreRestoreIntegrationTest {
 
-  // hardcoding CASSANDRA, but this test passes with MONGODB as well
-  private static final StorageBackend BACKEND = StorageBackend.CASSANDRA;
-
   @RegisterExtension
-  static ResponsiveExtension EXTENSION = new ResponsiveExtension(BACKEND);
+  static ResponsiveExtension EXTENSION = new ResponsiveExtension();
 
   private static final int NUM_PARTITIONS = 1;
   private static final int MAX_POLL_MS = 5000;
@@ -172,7 +167,7 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
   @ParameterizedTest
   @EnumSource(KVSchema.class)
   public void shouldFlushStoresBeforeClose(final KVSchema type) throws Exception {
-    final Map<String, Object> properties = getMutableProperties();
+    final Map<String, Object> properties = getMutableProperties(type);
     final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties);
     final KafkaClientSupplier defaultClientSupplier = new DefaultKafkaClientSupplier();
     final CassandraClientFactory defaultFactory = new DefaultCassandraClientFactory();
@@ -205,7 +200,7 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
   @EnumSource(KVSchema.class)
   public void shouldRepairOffsetsIfOutOfRangeAndConfigured(final KVSchema type) throws Exception {
     // Given:
-    final Map<String, Object> properties = getMutableProperties();
+    final Map<String, Object> properties = getMutableProperties(type);
     properties.put(ResponsiveConfig.RESTORE_OFFSET_REPAIR_ENABLED_CONFIG, true);
     final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties);
     final KafkaClientSupplier defaultClientSupplier = new DefaultKafkaClientSupplier();
@@ -274,7 +269,7 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
   @ParameterizedTest
   @EnumSource(KVSchema.class)
   public void shouldRestoreUnflushedChangelog(final KVSchema type) throws Exception {
-    final Map<String, Object> properties = getMutableProperties();
+    final Map<String, Object> properties = getMutableProperties(type);
     final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties);
     final KafkaClientSupplier defaultClientSupplier = new DefaultKafkaClientSupplier();
     final CassandraClientFactory defaultFactory = new DefaultCassandraClientFactory();
@@ -362,35 +357,20 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
       final TopicPartition changelog
   ) throws InterruptedException, TimeoutException {
     final RemoteKVTable<?> table;
-    if (EXTENSION.backend == StorageBackend.CASSANDRA) {
+
+    if (type == KVSchema.FACT) {
       final CassandraClient cassandraClient = defaultFactory.createClient(
           defaultFactory.createCqlSession(config, null),
           config);
 
-      switch (type) {
-        case KEY_VALUE:
-          final SubPartitioner partitioner = SubPartitioner.create(
-              OptionalInt.empty(),
-              NUM_PARTITIONS,
+      table = cassandraClient.factFactory()
+          .create(new DefaultTableSpec(
               aggName(),
-              config,
-              changelog.topic()
-          );
-          table = cassandraClient.kvFactory()
-              .create(new DefaultTableSpec(aggName(), partitioner, TtlResolver.NO_TTL));
-          break;
-        case FACT:
-          table = cassandraClient.factFactory()
-              .create(new DefaultTableSpec(
-                  aggName(),
-                  TablePartitioner.defaultPartitioner(),
-                  TtlResolver.NO_TTL
-              ));
-          break;
-        default:
-          throw new IllegalArgumentException("Unexpected type " + type);
-      }
-    } else if (EXTENSION.backend == StorageBackend.MONGO_DB) {
+              TablePartitioner.defaultPartitioner(),
+              TtlResolver.NO_TTL
+          ));
+
+    } else if (type == KVSchema.KEY_VALUE) {
       final var hostname = config.getString(MONGO_ENDPOINT_CONFIG);
       final String user = config.getString(MONGO_USERNAME_CONFIG);
       final Password pass = config.getPassword(MONGO_PASSWORD_CONFIG);
@@ -409,7 +389,7 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
       );
       table.init(0);
     } else {
-      throw new IllegalArgumentException(EXTENSION.backend + " Unsupported");
+      throw new IllegalArgumentException("Unsupported type: " + type);
     }
     return table;
   }
@@ -573,8 +553,16 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
     }
   }
 
-  private Map<String, Object> getMutableProperties() {
+  private Map<String, Object> getMutableProperties(final KVSchema type) {
     final Map<String, Object> properties = new HashMap<>(responsiveProps);
+
+    if (type == KVSchema.FACT) {
+      properties.put(ResponsiveConfig.STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.CASSANDRA.name());
+    } else if (type == KVSchema.KEY_VALUE) {
+      properties.put(ResponsiveConfig.STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.MONGO_DB.name());
+    } else {
+      throw new IllegalArgumentException("Unexpected schema type: " + type.name());
+    }
 
     properties.put(KEY_SERIALIZER_CLASS_CONFIG, LongSerializer.class);
     properties.put(VALUE_SERIALIZER_CLASS_CONFIG, LongSerializer.class);
@@ -601,14 +589,6 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
     properties.put(ResponsiveConfig.STORE_FLUSH_RECORDS_TRIGGER_CONFIG, 0);
 
     return properties;
-  }
-
-  private ResponsiveKeyValueParams params(final KVSchema type, final String name) {
-    switch (type) {
-      case KEY_VALUE:  return ResponsiveKeyValueParams.keyValue(name);
-      case FACT:       return ResponsiveKeyValueParams.fact(name);
-      default:         throw new IllegalArgumentException();
-    }
   }
 
   private long firstOffset(final TopicPartition topic)

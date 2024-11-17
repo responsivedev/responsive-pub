@@ -90,7 +90,7 @@ class ResponsiveKafkaStreamsTest {
     }
   };
 
-  private final CassandraClientFactory mockCassandryFactory = new CassandraClientFactory() {
+  private final CassandraClientFactory mockCassandraFactory = new CassandraClientFactory() {
     @Override
     public CqlSession createCqlSession(
         final ResponsiveConfig config,
@@ -145,7 +145,7 @@ class ResponsiveKafkaStreamsTest {
             builder.build(),
             properties,
             supplier,
-            mockCassandryFactory
+            mockCassandraFactory
         )
     );
     assertThat(

@@ -48,6 +48,7 @@ import static org.mockito.Mockito.when;
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
+import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.internal.db.BatchFlusher;
 import dev.responsive.kafka.internal.db.BytesKeySpec;
 import dev.responsive.kafka.internal.db.CassandraClient;
@@ -101,6 +102,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.extension.RegisterExtension;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -108,10 +110,13 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.testcontainers.containers.CassandraContainer;
 
-@ExtendWith({MockitoExtension.class, ResponsiveExtension.class})
+@ExtendWith({MockitoExtension.class})
 @MockitoSettings(strictness = Strictness.LENIENT)
 
 public class CommitBufferTest {
+
+  @RegisterExtension
+  static ResponsiveExtension EXTENSION = new ResponsiveExtension(StorageBackend.CASSANDRA);
 
   private static final KeySpec<Bytes> KEY_SPEC = new BytesKeySpec();
   private static final Bytes KEY = Bytes.wrap(ByteBuffer.allocate(4).putInt(0).array());
