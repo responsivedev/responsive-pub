@@ -26,7 +26,6 @@ import dev.responsive.examples.regression.RegressionSchema;
 import dev.responsive.examples.regression.model.Customer;
 import dev.responsive.examples.regression.model.EnrichedOrder;
 import dev.responsive.examples.regression.model.Order;
-import dev.responsive.kafka.api.stores.ResponsiveStores;
 import java.time.Duration;
 import java.util.Map;
 import org.apache.kafka.common.serialization.Serdes;
