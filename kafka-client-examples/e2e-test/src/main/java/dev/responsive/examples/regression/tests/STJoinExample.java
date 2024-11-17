@@ -26,6 +26,8 @@ import dev.responsive.examples.regression.RegressionSchema;
 import dev.responsive.examples.regression.model.Customer;
 import dev.responsive.examples.regression.model.EnrichedOrder;
 import dev.responsive.examples.regression.model.Order;
+import dev.responsive.kafka.api.stores.ResponsiveStores;
+import java.time.Duration;
 import java.util.Map;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -35,6 +37,7 @@ import org.apache.kafka.streams.kstream.Joined;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.kstream.TimeWindows;
 
 public class STJoinExample extends AbstractKSExampleService {
 
@@ -58,6 +61,7 @@ public class STJoinExample extends AbstractKSExampleService {
     // Read orders from the orders topic
     final KStream<String, Order> orders =
         builder.stream(ORDERS, Consumed.with(Serdes.String(), RegressionSchema.orderSerde()));
+
 
     // Read customers from the customers topic
     final KTable<String, Customer> customers =
@@ -86,6 +90,11 @@ public class STJoinExample extends AbstractKSExampleService {
             }
           }
         })
+        .groupByKey()
+        .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofDays(1), Duration.ofHours(12)))
+        .reduce(EnrichedOrder::combineWith)
+        .toStream()
+        .selectKey((w, v) -> w.key())
         .to(
             resultsTopic(),
             Produced.with(Serdes.String(), RegressionSchema.enrichedOrderSerde())

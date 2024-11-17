@@ -10,7 +10,7 @@ services:
       - broker
       - ${BACKEND}
     environment:
-      E2E_APP_MODE: REGRESSION_BATCH
+      E2E_APP_MODE: REGRESSION_ST_JOIN
       CONFIG_PATH: "/app.properties"
       JAVA_OPTS: "-Dlog4j2.configurationFile=/log4j2.properties"
     volumes:
@@ -28,7 +28,7 @@ services:
       - broker
       - ${BACKEND}
     environment:
-      E2E_APP_MODE: REGRESSION_BATCH_BASELINE
+      E2E_APP_MODE: REGRESSION_ST_BASELINE
       CONFIG_PATH: "/app.properties"
       JAVA_OPTS: "-Dlog4j2.configurationFile=/log4j2.properties"
     volumes:
@@ -46,7 +46,7 @@ services:
       - broker
       - ${BACKEND}
     environment:
-      E2E_APP_MODE: REGRESSION_BATCH_DRIVER
+      E2E_APP_MODE: REGRESSION_ST_DRIVER
       CONFIG_PATH: "/app.properties"
       JAVA_OPTS: "-Dlog4j2.configurationFile=/log4j2.properties"
     volumes:
