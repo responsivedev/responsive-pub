@@ -33,21 +33,25 @@ import static org.apache.kafka.streams.StreamsConfig.InternalConfig.INTERNAL_TAS
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.StorageBackend;
 import java.lang.reflect.Parameter;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadPoolExecutor;
 import org.apache.kafka.clients.admin.Admin;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.ParameterContext;
 import org.junit.jupiter.api.extension.ParameterResolutionException;
 import org.junit.jupiter.api.extension.ParameterResolver;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.CassandraContainer;
 import org.testcontainers.containers.KafkaContainer;
 import org.testcontainers.containers.MongoDBContainer;
+import org.testcontainers.lifecycle.Startables;
 
 public class ResponsiveExtension implements ParameterResolver {
+
+  private static final Logger LOG = LoggerFactory.getLogger(ResponsiveExtension.class);
 
   public static CassandraContainer<?> cassandra = new CassandraContainer<>(TestConstants.CASSANDRA)
       .withInitScript("CassandraDockerInit.cql")
@@ -69,20 +73,22 @@ public class ResponsiveExtension implements ParameterResolver {
   }
 
   public static void startAll() {
-    final ExecutorService executor = Executors.newFixedThreadPool(4);
-    final var cassandraFuture = executor.submit(cassandra::start);
-    final var mongoFuture = executor.submit(mongo::start);
-    final var kafkaFuture = executor.submit(kafka::start);
+    final Instant start = Instant.now();
+    LOG.info("Starting up Responsive test harness at {}", start);
 
+    final var kafkaFuture = Startables.deepStart(kafka);
+    final var storageFuture = Startables.deepStart(cassandra, mongo);
     try {
       kafkaFuture.get();
       admin = Admin.create(Map.of(BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers()));
-
-      cassandraFuture.get();
-      mongoFuture.get();
+      storageFuture.get();
     } catch (final Exception e) {
-
+      throw new RuntimeException("Responsive test harness startup failed", e);
     }
+
+    final Instant end = Instant.now();
+    LOG.info("Finished starting up Responsive test harness at {}, took {}",
+             end, Duration.ofMillis(end.toEpochMilli() - start.toEpochMilli()));
   }
 
   public static void stopAll() {

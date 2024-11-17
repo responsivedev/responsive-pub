@@ -35,7 +35,6 @@ import static org.mockito.Mockito.when;
 import com.datastax.oss.driver.api.core.CqlSession;
 import dev.responsive.kafka.api.config.CompatibilityMode;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
-import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.CassandraClientFactory;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
@@ -127,7 +126,6 @@ class ResponsiveKafkaStreamsTest {
 
     properties.put(RESPONSIVE_ORG_CONFIG, "responsive");
     properties.put(RESPONSIVE_ENV_CONFIG, "test");
-    properties.put(ResponsiveConfig.STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.CASSANDRA.name());
   }
 
   @SuppressWarnings("resource")
