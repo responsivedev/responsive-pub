@@ -25,6 +25,8 @@ import com.datastax.oss.driver.api.core.servererrors.ReadTimeoutException;
 import com.datastax.oss.driver.api.core.servererrors.UnavailableException;
 import com.datastax.oss.driver.api.core.servererrors.WriteFailureException;
 import com.datastax.oss.driver.api.core.servererrors.WriteTimeoutException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.mongodb.MongoNotPrimaryException;
 import com.mongodb.MongoQueryException;
 import com.mongodb.MongoSocketReadException;
@@ -54,7 +56,13 @@ public class UncaughtStreamsAntithesisHandler implements StreamsUncaughtExceptio
           causalSummary(exception, new LinkedList<>()),
           exception
       );
-      Assert.unreachable("Uncaught exception on test app stream thread", null);
+
+      final ObjectNode assertNode = new ObjectMapper().createObjectNode();
+      assertNode.put("exceptionClass", exception.getClass().getName());
+      assertNode.put("exceptionMessage", exception.getMessage());
+      assertNode.put("summary", causalSummary(exception, new LinkedList<>()));
+      Assert.unreachable("Uncaught exception on test app stream thread", assertNode);
+
     }
     return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.REPLACE_THREAD;
   }
@@ -69,6 +77,13 @@ public class UncaughtStreamsAntithesisHandler implements StreamsUncaughtExceptio
   }
 
   private boolean shouldLogError(final Throwable throwable, List<Throwable> seen) {
+    if (throwable instanceof InjectedE2ETestException) {
+      final ObjectNode assertNode = new ObjectMapper().createObjectNode();
+      assertNode.put("seenExceptions", seen.toString());
+      Assert.reachable("Caught injected e2e test exception", assertNode);
+      return false;
+    }
+
     final List<Class<? extends Throwable>> dontcare = List.of(
         AllNodesFailedException.class,
         ConnectException.class,

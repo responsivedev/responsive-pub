@@ -16,6 +16,7 @@
 
 package dev.responsive.examples.regression;
 
+import static dev.responsive.examples.common.E2ETestUtils.buildAssertionContext;
 import static dev.responsive.examples.regression.RegConstants.NUM_PARTITIONS;
 import static dev.responsive.examples.regression.RegConstants.resultsTopic;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_CONFIG;
@@ -24,6 +25,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZE
 
 import com.antithesis.sdk.Assert;
 import com.antithesis.sdk.Lifecycle;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.util.concurrent.AbstractExecutionThreadService;
 import dev.responsive.examples.common.EventSignals;
@@ -129,13 +131,24 @@ public class ResultsComparatorService<T extends Comparable<T>>
             baseline.remove();
             matches++;
           } else if (responsive.hasNext() && baseline.hasNext()) {
-            Assert.unreachable(String.format(
+            final String errorMessage = String.format(
                 "Expected to see identical output records in identical order, but the next set "
                     + "of records did not match up. Most recent record from responsive is %s "
                     + "and most recent record from baseline is %s",
                 r.record,
-                b.record
-            ), null);
+                b.record);
+
+            final ObjectNode errorDetails = buildAssertionContext(errorMessage);
+            errorDetails.put("responsiveKey", r.record.key());
+            errorDetails.put("baselineKey", b.record.key());
+            errorDetails.put("responsiveValue", r.record.value().toString());
+            errorDetails.put("baselineValue", b.record.value().toString());
+            errorDetails.put("responsiveRecord", r.record.toString());
+            errorDetails.put("baselineRecord", b.record.toString());
+
+            Assert.unreachable("Mismatch between next record of Responsive & baseline",
+                               errorDetails);
+
           } else {
             // one of the streams is behind so we'll wait for the next
             // poll to see if any records come up here
