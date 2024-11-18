@@ -81,7 +81,7 @@ class PublicKeyPemFileParserTest {
   }
 
   private File getPemFile(final String filename) {
-    final String path = "license-test/public-key-pem-file-parser/" + filename;
+    final String path = "public-key-pem-file-parser-test/" + filename;
     try {
       return new File(
           PublicKeyPemFileParserTest.class.getClassLoader().getResource(path).toURI()
