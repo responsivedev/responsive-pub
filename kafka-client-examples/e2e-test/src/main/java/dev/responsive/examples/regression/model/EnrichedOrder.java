@@ -33,4 +33,12 @@ public record EnrichedOrder(
         .thenComparing(r -> customer.customerName())
         .compare(this, o);
   }
+
+  public EnrichedOrder combineWith(final EnrichedOrder other) {
+    final double totalAmount = order.amount() + other.order.amount();
+    return new EnrichedOrder(
+        new Order(order().orderId(), order.customerId(), totalAmount),
+        customer
+    );
+  }
 }
