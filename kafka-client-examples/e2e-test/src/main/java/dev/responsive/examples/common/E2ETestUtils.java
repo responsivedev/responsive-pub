@@ -23,6 +23,8 @@ import com.datastax.oss.driver.api.core.cql.ResultSet;
 import com.datastax.oss.driver.api.core.cql.SimpleStatement;
 import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
 import com.datastax.oss.driver.api.querybuilder.schema.CreateKeyspace;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.responsive.kafka.api.config.StorageBackend;
 import java.net.InetSocketAddress;
 import java.time.Duration;
@@ -44,6 +46,14 @@ import org.slf4j.LoggerFactory;
 
 public class E2ETestUtils {
   private static final Logger LOG = LoggerFactory.getLogger(E2ETestUtils.class);
+
+  private static final ObjectMapper MAPPER = new ObjectMapper();
+
+  public static ObjectNode buildAssertionContext(final String message) {
+    final var details = MAPPER.createObjectNode();
+    details.put("msg", message);
+    return details;
+  }
 
   /**
    * Creates topics if they do not already exist.
