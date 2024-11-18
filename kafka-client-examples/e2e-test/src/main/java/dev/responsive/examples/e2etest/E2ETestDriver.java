@@ -4,7 +4,6 @@ import static dev.responsive.examples.common.E2ETestUtils.buildAssertionContext;
 
 import com.antithesis.sdk.Assert;
 import com.antithesis.sdk.Lifecycle;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.common.collect.ImmutableMap;
 import dev.responsive.examples.common.E2ETestUtils;
@@ -467,7 +466,10 @@ public class E2ETestDriver {
                 offsets.timestamp
             );
             faultStopper.pauseFaults();
-            stalledPartitions.put(partition, new StalledPartition(offsets.timestamp(), currentCommitted));
+            stalledPartitions.put(
+                partition,
+                new StalledPartition(offsets.timestamp(), currentCommitted)
+            );
             break;
           }
         }
