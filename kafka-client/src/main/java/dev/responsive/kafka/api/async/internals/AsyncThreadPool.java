@@ -40,7 +40,6 @@ import java.util.stream.Collectors;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.api.ProcessingContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.slf4j.Logger;
 
