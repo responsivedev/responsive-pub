@@ -102,7 +102,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   private Cancellable punctuator;
 
   // the context passed to us in init, ie the one created for this task and owned by Kafka Streams
-  private ProcessingContext taskContext;
+  private InternalProcessorContext<KOut, VOut> taskContext;
 
   // the async context owned by the StreamThread that is running this processor/task
   private StreamThreadProcessorContext<KOut, VOut> streamThreadContext;
