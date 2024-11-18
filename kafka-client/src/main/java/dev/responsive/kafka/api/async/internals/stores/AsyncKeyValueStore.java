@@ -19,14 +19,13 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.StateStoreContext;
-import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.internals.WrappedStateStore;
 import org.slf4j.Logger;
 
 /**
@@ -41,7 +40,9 @@ import org.slf4j.Logger;
  * -One for each AsyncThread per physical state store instance
  *   (ie per state store per processor per partition per AsyncThread per StreamThread
  */
-public class AsyncKeyValueStore<KS, VS> implements KeyValueStore<KS, VS> {
+public class AsyncKeyValueStore<KS, VS>
+    extends WrappedStateStore<KeyValueStore<?, ?>, KS, VS>
+    implements KeyValueStore<KS, VS> {
 
   private final Logger log;
 
@@ -55,6 +56,7 @@ public class AsyncKeyValueStore<KS, VS> implements KeyValueStore<KS, VS> {
       final KeyValueStore<?, ?> userDelegate,
       final DelayedAsyncStoreWriter delayedWriter
   ) {
+    super(userDelegate);
     this.log = new LogContext(String.format(" async-store [%s-%d]", name, partition))
         .logger(AsyncKeyValueStore.class);
     this.userDelegate = (KeyValueStore<KS, VS>) userDelegate;
@@ -124,44 +126,12 @@ public class AsyncKeyValueStore<KS, VS> implements KeyValueStore<KS, VS> {
   }
 
   @Override
-  public void init(final StateStoreContext context, final StateStore root) {
-    userDelegate.init(context, root);
-  }
-
-  @Override
-  public void flush() {
-    // TODO: how should we handle this, particularly in the ALOS case where it might be
-    //  called as part of regular processing?
-    userDelegate.flush();
-  }
-
-  @Override
-  public void close() {
-    userDelegate.close();
-  }
-
-  @Override
-  public boolean persistent() {
-    return userDelegate.persistent();
-  }
-
-  @Override
-  public boolean isOpen() {
-    return userDelegate.isOpen();
-  }
-
-  @Override
   public <R> QueryResult<R> query(
       final Query<R> query,
       final PositionBound positionBound,
       final QueryConfig config
   ) {
     throw new UnsupportedOperationException("IQv2 not yet supported with async processing");
-  }
-
-  @Override
-  public Position getPosition() {
-    return userDelegate.getPosition();
   }
 
   @Override
