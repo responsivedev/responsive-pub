@@ -13,8 +13,6 @@
 package dev.responsive.kafka.internal.db.spec;
 
 import com.datastax.oss.driver.api.querybuilder.schema.CreateTableWithOptions;
-import com.datastax.oss.driver.api.querybuilder.schema.compaction.CompactionStrategy;
-import com.datastax.oss.driver.internal.querybuilder.schema.compaction.DefaultLeveledCompactionStrategy;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.stores.TtlResolver;
 import java.util.Optional;
