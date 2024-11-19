@@ -28,6 +28,7 @@ import static org.apache.kafka.streams.StreamsConfig.METRICS_RECORDING_LEVEL_CON
 import static org.apache.kafka.streams.StreamsConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.NUM_STREAM_THREADS_CONFIG;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.responsive.kafka.api.async.internals.AsyncThreadPoolRegistry;
 import dev.responsive.kafka.api.config.CompatibilityMode;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
@@ -41,6 +42,11 @@ import dev.responsive.kafka.internal.db.CassandraClientFactory;
 import dev.responsive.kafka.internal.db.DefaultCassandraClientFactory;
 import dev.responsive.kafka.internal.db.mongo.CollectionCreationOptions;
 import dev.responsive.kafka.internal.db.mongo.ResponsiveMongoClient;
+import dev.responsive.kafka.internal.license.LicenseAuthenticator;
+import dev.responsive.kafka.internal.license.LicenseChecker;
+import dev.responsive.kafka.internal.license.model.LicenseDocument;
+import dev.responsive.kafka.internal.license.model.LicenseInfo;
+import dev.responsive.kafka.internal.license.model.SigningKeys;
 import dev.responsive.kafka.internal.metrics.ClientVersionMetadata;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
@@ -51,7 +57,11 @@ import dev.responsive.kafka.internal.metrics.exporter.otel.OtelMetricsService;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistry;
 import dev.responsive.kafka.internal.utils.SessionClients;
 import dev.responsive.kafka.internal.utils.SessionUtil;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.time.Duration;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -83,6 +93,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class ResponsiveKafkaStreams extends KafkaStreams {
+
+  private static final String SIGNING_KEYS_PATH = "/responsive-license-keys/license-keys.json";
 
   private static final Logger LOG = LoggerFactory.getLogger(ResponsiveKafkaStreams.class);
 
@@ -196,6 +208,8 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
         params.time
     );
 
+    validateLicense(params.responsiveConfig);
+
     if (params.compatibilityMode == CompatibilityMode.FULL) {
       try {
         ResponsiveStreamsConfig.validateStreamsConfig(applicationConfigs);
@@ -254,6 +268,57 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
             streamsConfig.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX)
         )
     ), exportService);
+  }
+
+  private static void validateLicense(final ResponsiveConfig configs) {
+    if (!configs.getString(ResponsiveConfig.PLATFORM_API_KEY_CONFIG).isEmpty()) {
+      return;
+    }
+    final LicenseDocument licenseDocument = loadLicense(configs);
+    final SigningKeys signingKeys = loadSigningKeys();
+    final LicenseAuthenticator licenseAuthenticator = new LicenseAuthenticator(signingKeys);
+    final LicenseInfo licenseInfo = licenseAuthenticator.authenticate(licenseDocument);
+    final LicenseChecker checker = new LicenseChecker();
+    checker.checkLicense(licenseInfo);
+  }
+
+  private static SigningKeys loadSigningKeys() {
+    try {
+      return new ObjectMapper().readValue(
+          ResponsiveKafkaStreams.class.getResource(SIGNING_KEYS_PATH),
+          SigningKeys.class
+      );
+    } catch (final IOException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  private static LicenseDocument loadLicense(final ResponsiveConfig configs) {
+    final String license = configs.getString(ResponsiveConfig.RESPONSIVE_LICENSE_CONFIG);
+    final String licenseFile = configs.getString(ResponsiveConfig.RESPONSIVE_LICENSE_FILE_CONFIG);
+    if (license.isEmpty() == licenseFile.isEmpty()) {
+      throw new ConfigException(String.format(
+          "Must set exactly one of %s or %s",
+          ResponsiveConfig.RESPONSIVE_LICENSE_CONFIG,
+          ResponsiveConfig.RESPONSIVE_LICENSE_FILE_CONFIG
+      ));
+    }
+    final String licenseB64;
+    if (!license.isEmpty()) {
+      licenseB64 = license;
+    } else {
+      try {
+        licenseB64 = Files.readString(new File(licenseFile).toPath());
+      } catch (final IOException e) {
+        throw new RuntimeException(e);
+      }
+    }
+    final ObjectMapper mapper = new ObjectMapper();
+    try {
+      return mapper.readValue(Base64.getDecoder().decode(licenseB64), LicenseDocument.class);
+    } catch (final IOException e) {
+      throw new RuntimeException(e);
+    }
   }
 
   /**

@@ -18,9 +18,7 @@ import dev.responsive.kafka.internal.license.model.LicenseDocument;
 import dev.responsive.kafka.internal.license.model.LicenseDocumentV1;
 import dev.responsive.kafka.internal.license.model.LicenseInfo;
 import dev.responsive.kafka.internal.license.model.SigningKeys;
-import java.io.File;
 import java.io.IOException;
-import java.net.URISyntaxException;
 import java.security.GeneralSecurityException;
 import java.security.KeyFactory;
 import java.security.NoSuchAlgorithmException;
@@ -83,13 +81,7 @@ public class LicenseAuthenticator {
   }
 
   private PublicKey loadPublicKey(final SigningKeys.SigningKey signingKey) {
-    final File file;
-    try {
-      file = new File(this.getClass().getClassLoader().getResource(signingKey.path()).toURI());
-    } catch (final URISyntaxException e) {
-      throw new RuntimeException(e);
-    }
-    final byte[] publicKeyBytes = PublicKeyPemFileParser.parsePemFile(file);
+    final byte[] publicKeyBytes = PublicKeyPemFileParser.parsePemFileInResource(signingKey.path());
     final KeyFactory keyFactory;
     try {
       keyFactory = KeyFactory.getInstance("RSA");
