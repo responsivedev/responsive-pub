@@ -106,7 +106,10 @@ public class KeyBatchExample extends AbstractKSExampleService {
       final long ts = record.timestamp();
 
       // first add the order to the list of orders that are stored
-      store.put(storedKey(record.key(), ts), new StoredOrder(Optional.of(record.value()), Optional.empty()));
+      store.put(
+          storedKey(record.key(), ts),
+          new StoredOrder(Optional.of(record.value()), Optional.empty())
+      );
 
       // next, we need to update the tracked metadata row to
       // check whether the value ought to be emitted

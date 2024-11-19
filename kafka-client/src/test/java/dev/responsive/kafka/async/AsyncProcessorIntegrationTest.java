@@ -33,9 +33,11 @@ import static org.apache.kafka.streams.StreamsConfig.APPLICATION_ID_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.COMMIT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_V2;
 import static org.apache.kafka.streams.StreamsConfig.NUM_STREAM_THREADS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.PROCESSING_GUARANTEE_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.PROCESSOR_WRAPPER_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
 import static org.apache.kafka.streams.StreamsConfig.producerPrefix;
@@ -204,12 +206,14 @@ public class AsyncProcessorIntegrationTest {
   @Test
   public void shouldWrapDSLWithAsync() throws Exception {
     final Map<String, Object> properties = getMutableProperties();
-    properties.put(StreamsConfig.PROCESSOR_WRAPPER_CLASS_CONFIG, AsyncProcessorWrapper.class);
-    properties.put(StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG, ResponsiveDslStoreSuppliers.class);
+    properties.put(PROCESSOR_WRAPPER_CLASS_CONFIG, AsyncProcessorWrapper.class);
+    properties.put(DSL_STORE_SUPPLIERS_CLASS_CONFIG, ResponsiveDslStoreSuppliers.class);
     properties.put(COMMIT_INTERVAL_MS_CONFIG, 0L);
     properties.put(VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
 
-    final StreamsBuilder builder = new StreamsBuilder(new TopologyConfig(new StreamsConfig(properties)));
+    final StreamsBuilder builder = new StreamsBuilder(
+        new TopologyConfig(new StreamsConfig(properties))
+    );
 
     final KStream<String, String> stream = builder.stream(inputTopic);
     final KTable<String, String> table = builder.table(inputTableTopic);

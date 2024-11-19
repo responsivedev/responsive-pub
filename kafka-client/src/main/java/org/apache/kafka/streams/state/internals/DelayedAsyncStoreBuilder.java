@@ -115,21 +115,27 @@ public class DelayedAsyncStoreBuilder<K, V, T extends StateStore>
     }
   }
 
-  private KeyValueStore<Bytes, byte[]> maybeWrapCachingKV(final KeyValueStore<Bytes, byte[]> inner) {
+  private KeyValueStore<Bytes, byte[]> maybeWrapCachingKV(
+      final KeyValueStore<Bytes, byte[]> inner
+  ) {
     if (!cachingEnabled()) {
       return inner;
     }
     return new CachingKeyValueStore(inner, true);
   }
 
-  private KeyValueStore<Bytes, byte[]> maybeWrapLoggingKV(final KeyValueStore<Bytes, byte[]> inner) {
+  private KeyValueStore<Bytes, byte[]> maybeWrapLoggingKV(
+      final KeyValueStore<Bytes, byte[]> inner
+  ) {
     if (!loggingEnabled()) {
       return inner;
     }
     return new ChangeLoggingKeyValueBytesStore(inner);
   }
 
-  private KeyValueStore<Bytes, byte[]> maybeWrapLoggingTimestampedKV(final KeyValueStore<Bytes, byte[]> inner) {
+  private KeyValueStore<Bytes, byte[]> maybeWrapLoggingTimestampedKV(
+      final KeyValueStore<Bytes, byte[]> inner
+  ) {
     if (!loggingEnabled()) {
       return inner;
     }
