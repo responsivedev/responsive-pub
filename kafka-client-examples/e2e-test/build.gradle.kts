@@ -15,6 +15,10 @@ plugins {
     id("responsive.docker")
 }
 
+repositories {
+    mavenLocal()
+}
+
 application {
     mainClass.set("dev.responsive.examples.e2etest.Main")
 }

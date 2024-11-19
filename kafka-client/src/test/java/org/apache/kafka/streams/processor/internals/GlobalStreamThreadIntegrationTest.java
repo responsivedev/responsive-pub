@@ -44,7 +44,6 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Serdes.ByteArraySerde;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.StateRestoreListener;
@@ -263,7 +262,7 @@ public class GlobalStreamThreadIntegrationTest {
       final TestStoreSupplier storeSupplier,
       final StateRestoreListener restoreListener,
       final File tempDir) {
-    final Time time = new SystemTime();
+    final Time time = Time.SYSTEM;
     final InternalTopologyBuilder builder = new InternalTopologyBuilder();
     builder.addGlobalStore(
         new StoreBuilderWrapper(
@@ -291,7 +290,8 @@ public class GlobalStreamThreadIntegrationTest {
           public void process(final Record<Object, Object> record) {
             global.put(record.key(), record.value());
           }
-        }
+        },
+        false
     );
 
     final String baseDirectoryName = tempDir.getAbsolutePath();

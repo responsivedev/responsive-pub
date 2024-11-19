@@ -31,6 +31,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.metrics.KafkaMetric;
 
 public abstract class DelegatingConsumer<K, V> implements Consumer<K, V> {
 
@@ -78,12 +79,6 @@ public abstract class DelegatingConsumer<K, V> implements Consumer<K, V> {
   @Override
   public void unsubscribe() {
     delegate.unsubscribe();
-  }
-
-  @Override
-  @Deprecated
-  public ConsumerRecords<K, V> poll(final long timeout) {
-    return delegate.poll(timeout);
   }
 
   @Override
@@ -156,18 +151,6 @@ public abstract class DelegatingConsumer<K, V> implements Consumer<K, V> {
   @Override
   public long position(final TopicPartition partition, final Duration timeout) {
     return delegate.position(partition, timeout);
-  }
-
-  @Override
-  @Deprecated
-  public OffsetAndMetadata committed(final TopicPartition partition) {
-    return delegate.committed(partition);
-  }
-
-  @Override
-  @Deprecated
-  public OffsetAndMetadata committed(final TopicPartition partition, final Duration timeout) {
-    return delegate.committed(partition, timeout);
   }
 
   @Override
@@ -293,5 +276,15 @@ public abstract class DelegatingConsumer<K, V> implements Consumer<K, V> {
   @Override
   public Uuid clientInstanceId(final Duration duration) {
     return delegate.clientInstanceId(duration);
+  }
+
+  @Override
+  public void registerMetricForSubscription(final KafkaMetric metric) {
+    delegate.registerMetricForSubscription(metric);
+  }
+
+  @Override
+  public void unregisterMetricFromSubscription(final KafkaMetric metric) {
+    delegate.unregisterMetricFromSubscription(metric);
   }
 }

@@ -13,11 +13,15 @@
 package dev.responsive.kafka.api.stores;
 
 import dev.responsive.kafka.internal.stores.ResponsiveMaterialized;
-import dev.responsive.kafka.internal.stores.ResponsiveStoreBuilder;
-import dev.responsive.kafka.internal.stores.ResponsiveStoreBuilder.StoreType;
+import dev.responsive.kafka.internal.stores.ResponsiveStoreBuilder.ResponsiveKeyValueStoreBuilder;
+import dev.responsive.kafka.internal.stores.ResponsiveStoreBuilder.ResponsiveSessionStoreBuilder;
+import dev.responsive.kafka.internal.stores.ResponsiveStoreBuilder.ResponsiveTimestampedKeyValueStoreBuilder;
+import dev.responsive.kafka.internal.stores.ResponsiveStoreBuilder.ResponsiveTimestampedWindowStoreBuilder;
+import dev.responsive.kafka.internal.stores.ResponsiveStoreBuilder.ResponsiveWindowStoreBuilder;
 import java.time.Duration;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -117,12 +121,11 @@ public final class ResponsiveStores {
       final Serde<K> keySerde,
       final Serde<V> valueSerde
   ) {
-    return new ResponsiveStoreBuilder<>(
-        StoreType.KEY_VALUE,
+    return new ResponsiveKeyValueStoreBuilder<>(
         storeSupplier,
-        Stores.keyValueStoreBuilder(storeSupplier, keySerde, valueSerde),
         keySerde,
-        valueSerde
+        valueSerde,
+        Time.SYSTEM
     );
   }
 
@@ -151,15 +154,11 @@ public final class ResponsiveStores {
   ) {
     storeSupplier.asTimestamped();
 
-    return new ResponsiveStoreBuilder<>(
-        StoreType.TIMESTAMPED_KEY_VALUE,
+    return new ResponsiveTimestampedKeyValueStoreBuilder<>(
         storeSupplier,
-        Stores.timestampedKeyValueStoreBuilder(
-            storeSupplier,
-            keySerde,
-            valueSerde),
         keySerde,
-        valueSerde
+        valueSerde,
+        Time.SYSTEM
     );
   }
 
@@ -259,12 +258,11 @@ public final class ResponsiveStores {
       final Serde<K> keySerde,
       final Serde<V> valueSerde
   ) {
-    return new ResponsiveStoreBuilder<>(
-        StoreType.WINDOW,
+    return new ResponsiveWindowStoreBuilder<>(
         storeSupplier,
-        Stores.windowStoreBuilder(storeSupplier, keySerde, valueSerde),
         keySerde,
-        valueSerde
+        valueSerde,
+        Time.SYSTEM
     );
   }
 
@@ -286,15 +284,11 @@ public final class ResponsiveStores {
       final Serde<K> keySerde,
       final Serde<V> valueSerde
   ) {
-    return new ResponsiveStoreBuilder<>(
-        StoreType.TIMESTAMPED_WINDOW,
+    return new ResponsiveTimestampedWindowStoreBuilder<>(
         storeSupplier,
-        Stores.timestampedWindowStoreBuilder(
-            storeSupplier,
-            keySerde,
-            valueSerde),
         keySerde,
-        valueSerde
+        valueSerde,
+        Time.SYSTEM
     );
   }
 
@@ -345,12 +339,11 @@ public final class ResponsiveStores {
       final Serde<K> keySerde,
       final Serde<V> valueSerde
   ) {
-    return new ResponsiveStoreBuilder<>(
-        StoreType.SESSION,
+    return new ResponsiveSessionStoreBuilder<>(
         storeSupplier,
-        Stores.sessionStoreBuilder(storeSupplier, keySerde, valueSerde),
         keySerde,
-        valueSerde
+        valueSerde,
+        Time.SYSTEM
     );
   }
 

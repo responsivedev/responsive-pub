@@ -15,6 +15,7 @@ package dev.responsive.kafka.internal.clients;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -182,7 +183,8 @@ public class ResponsiveGlobalConsumer extends DelegatingConsumer<byte[], byte[]>
     public SingletonConsumerRecords(
         final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> records
     ) {
-      super(records);
+      super(records, Collections.emptyMap());
+      // TODO(sophie): need to pass in the actual next offsets here?
     }
 
     @Override

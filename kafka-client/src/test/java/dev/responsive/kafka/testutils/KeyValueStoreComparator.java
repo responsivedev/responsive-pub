@@ -17,7 +17,6 @@ import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
@@ -167,18 +166,6 @@ public class KeyValueStoreComparator<K, V> implements KeyValueStore<K, V> {
   @Override
   public String name() {
     return this.sourceOfTruth.name();
-  }
-
-  @Override
-  @Deprecated
-  public void init(final ProcessorContext context, final StateStore root) {
-    if (context instanceof StateStoreContext) {
-      init((StateStoreContext) context, root);
-    } else {
-      throw new UnsupportedOperationException(
-          "Use ResponsiveSessionStore#init(StateStoreContext, StateStore) instead."
-      );
-    }
   }
 
   @Override

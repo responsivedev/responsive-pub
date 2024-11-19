@@ -15,8 +15,6 @@ package dev.responsive.kafka.api.async.internals;
 import static dev.responsive.kafka.api.async.internals.AsyncThreadPool.ASYNC_THREAD_NAME;
 
 import dev.responsive.kafka.api.async.internals.stores.AbstractAsyncStoreBuilder;
-import dev.responsive.kafka.internal.stores.ResponsiveStoreBuilder;
-import dev.responsive.kafka.internal.stores.ResponsiveStoreBuilder.StoreType;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -24,8 +22,7 @@ import java.util.Set;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.internals.AsyncKeyValueStoreBuilder;
-import org.apache.kafka.streams.state.internals.AsyncTimestampedKeyValueStoreBuilder;
+import org.apache.kafka.streams.state.internals.DelayedAsyncStoreBuilder;
 
 public class AsyncUtils {
 
@@ -60,43 +57,22 @@ public class AsyncUtils {
         || isStreamThread(threadName, streamThreadName);
   }
 
-  public static Map<String, AbstractAsyncStoreBuilder<?, ?, ?>> initializeAsyncBuilders(
+  public static Map<String, AbstractAsyncStoreBuilder<?>> initializeAsyncBuilders(
       final Set<StoreBuilder<?>> userConnectedStores
   ) {
     if (userConnectedStores == null || userConnectedStores.isEmpty()) {
       return Collections.emptyMap();
     }
 
-    final Map<String, AbstractAsyncStoreBuilder<?, ?, ?>> asyncStoreBuilders = new HashMap<>();
+    final Map<String, AbstractAsyncStoreBuilder<?>> asyncStoreBuilders = new HashMap<>();
     for (final StoreBuilder<?> builder : userConnectedStores) {
       final String storeName = builder.name();
-      if (builder instanceof ResponsiveStoreBuilder) {
-        final ResponsiveStoreBuilder<?, ?, ?> responsiveBuilder =
-            (ResponsiveStoreBuilder<?, ?, ?>) builder;
 
-        final StoreType storeType = responsiveBuilder.storeType();
+      asyncStoreBuilders.put(
+          storeName,
+          new DelayedAsyncStoreBuilder<>(builder)
+      );
 
-        final AbstractAsyncStoreBuilder<?, ?, ?> storeBuilder;
-        if (storeType.equals(StoreType.TIMESTAMPED_KEY_VALUE)) {
-          storeBuilder = new AsyncTimestampedKeyValueStoreBuilder<>(responsiveBuilder);
-        } else if (storeType.equals(StoreType.KEY_VALUE)) {
-          storeBuilder = new AsyncKeyValueStoreBuilder<>(responsiveBuilder);
-        } else {
-          throw new UnsupportedOperationException(
-              "Only key-value stores are supported by async processors at this time");
-        }
-
-        asyncStoreBuilders.put(
-            storeName,
-            storeBuilder
-        );
-
-      } else {
-        throw new IllegalStateException(String.format(
-            "Detected the StoreBuilder for %s was not created via the ResponsiveStores factory, "
-                + "please ensure that all store builders and suppliers are provided through the "
-                + "appropriate API from ResponsiveStores", storeName));
-      }
     }
     return asyncStoreBuilders;
   }

@@ -31,7 +31,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
@@ -79,18 +78,6 @@ public class ResponsiveWindowStore
   @Override
   public String name() {
     return name.kafkaName();
-  }
-
-  @Override
-  @Deprecated
-  public void init(final ProcessorContext context, final StateStore root) {
-    if (context instanceof StateStoreContext) {
-      init((StateStoreContext) context, root);
-    } else {
-      throw new UnsupportedOperationException(
-          "Use ResponsiveWindowStore#init(StateStoreContext, StateStore) instead."
-      );
-    }
   }
 
   @Override

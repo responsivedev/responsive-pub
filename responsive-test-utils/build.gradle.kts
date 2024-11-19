@@ -14,6 +14,10 @@ plugins {
     id("responsive.java-library-conventions")
 }
 
+repositories {
+    mavenLocal()
+}
+
 version = project(":kafka-client").version
 
 dependencies {
