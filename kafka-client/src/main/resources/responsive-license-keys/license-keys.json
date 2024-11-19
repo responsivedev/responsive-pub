@@ -1,1 +1,9 @@
-{"keys":  []}
+{
+  "keys":  [
+    {
+      "type": "RSA_4096",
+      "keyId": "license-signing-key-0",
+      "path": "/responsive-license-keys/keys/license-signing-key-0.pem"
+    }
+  ]
+}

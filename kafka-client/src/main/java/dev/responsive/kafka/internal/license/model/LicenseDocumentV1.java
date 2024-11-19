@@ -43,18 +43,22 @@ public class LicenseDocumentV1 extends LicenseDocument {
     this.algo = algo;
   }
 
+  @JsonProperty("info")
   public String info() {
     return info;
   }
 
+  @JsonProperty("key")
   public String key() {
     return key;
   }
 
+  @JsonProperty("signature")
   public String signature() {
     return signature;
   }
 
+  @JsonProperty("algo")
   public String algo() {
     return algo;
   }

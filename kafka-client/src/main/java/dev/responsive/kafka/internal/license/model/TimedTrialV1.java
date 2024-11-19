@@ -38,7 +38,18 @@ public class TimedTrialV1 extends LicenseInfo {
     this.expiresAt = expiresAt;
   }
 
+  @JsonProperty("email")
+  public String email() {
+    return email;
+  }
+
+  @JsonProperty("expiresAt")
   public long expiresAt() {
     return expiresAt;
+  }
+
+  @JsonProperty("issuedAt")
+  public long issuedAt() {
+    return issuedAt;
   }
 }

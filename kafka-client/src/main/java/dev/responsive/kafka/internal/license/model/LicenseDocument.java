@@ -37,4 +37,9 @@ public abstract class LicenseDocument {
   public LicenseDocument(@JsonProperty("version") final String version) {
     this.version = version;
   }
+
+  @JsonProperty("version")
+  public String version() {
+    return version;
+  }
 }

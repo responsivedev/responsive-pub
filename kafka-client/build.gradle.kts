@@ -95,4 +95,6 @@ dependencies {
     testImplementation(testlibs.bundles.base)
     testImplementation(testlibs.bundles.testcontainers)
     testImplementation(libs.kafka.streams.test.utils)
+    testImplementation("software.amazon.awssdk:kms:2.20.0")
+    testImplementation("software.amazon.awssdk:sso:2.20.0")
 }

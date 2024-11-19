@@ -35,4 +35,9 @@ public abstract class LicenseInfo {
   LicenseInfo(@JsonProperty("type") final String type) {
     this.type = type;
   }
+
+  @JsonProperty("type")
+  public String type() {
+    return type;
+  }
 }
