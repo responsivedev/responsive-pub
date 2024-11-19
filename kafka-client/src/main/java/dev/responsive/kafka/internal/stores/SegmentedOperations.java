@@ -24,7 +24,7 @@ import dev.responsive.kafka.api.stores.ResponsiveWindowParams;
 import dev.responsive.kafka.internal.db.BatchFlusher;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.RemoteTableSpecFactory;
-import dev.responsive.kafka.internal.db.RemoteWindowedTable;
+import dev.responsive.kafka.internal.db.RemoteWindowTable;
 import dev.responsive.kafka.internal.db.WindowFlushManager;
 import dev.responsive.kafka.internal.db.WindowedKeySpec;
 import dev.responsive.kafka.internal.db.mongo.ResponsiveMongoClient;
@@ -56,7 +56,7 @@ public class SegmentedOperations implements WindowOperations {
   @SuppressWarnings("rawtypes")
   private final InternalProcessorContext context;
   private final ResponsiveWindowParams params;
-  private final RemoteWindowedTable<?> table;
+  private final RemoteWindowTable<?> table;
   private final CommitBuffer<WindowedKey, ?> buffer;
   private final TopicPartition changelog;
 
@@ -94,7 +94,7 @@ public class SegmentedOperations implements WindowOperations {
         params.retainDuplicates()
     );
 
-    final RemoteWindowedTable<?> table;
+    final RemoteWindowTable<?> table;
     switch (sessionClients.storageBackend()) {
       case CASSANDRA:
         table = createCassandra(params, sessionClients, partitioner);
@@ -165,7 +165,7 @@ public class SegmentedOperations implements WindowOperations {
     }
   }
 
-  private static RemoteWindowedTable<?> createCassandra(
+  private static RemoteWindowTable<?> createCassandra(
       final ResponsiveWindowParams params,
       final SessionClients clients,
       final WindowSegmentPartitioner partitioner
@@ -184,7 +184,7 @@ public class SegmentedOperations implements WindowOperations {
     }
   }
 
-  private static RemoteWindowedTable<?> createMongo(
+  private static RemoteWindowTable<?> createMongo(
       final ResponsiveWindowParams params,
       final SessionClients clients,
       final WindowSegmentPartitioner partitioner
@@ -205,7 +205,7 @@ public class SegmentedOperations implements WindowOperations {
   public SegmentedOperations(
       final InternalProcessorContext context,
       final ResponsiveWindowParams params,
-      final RemoteWindowedTable table,
+      final RemoteWindowTable table,
       final CommitBuffer<WindowedKey, ?> buffer,
       final TopicPartition changelog,
       final ResponsiveStoreRegistry storeRegistry,

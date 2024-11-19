@@ -23,9 +23,9 @@ import com.datastax.oss.driver.api.core.cql.Statement;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.QueryOp;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
-import dev.responsive.kafka.internal.db.RemoteWindowedTable;
+import dev.responsive.kafka.internal.db.RemoteWindowTable;
 import dev.responsive.kafka.internal.db.TTDKeyValueTable;
-import dev.responsive.kafka.internal.db.TTDWindowedTable;
+import dev.responsive.kafka.internal.db.TTDWindowTable;
 import dev.responsive.kafka.internal.db.TableCache;
 import dev.responsive.kafka.internal.db.WindowedTableCache;
 import dev.responsive.kafka.internal.db.inmemory.InMemoryKVTable;
@@ -42,7 +42,7 @@ public class TTDCassandraClient extends CassandraClient {
   private final Time time;
 
   private final TableCache<RemoteKVTable<BoundStatement>> kvFactory;
-  private final WindowedTableCache<RemoteWindowedTable<BoundStatement>> windowedFactory;
+  private final WindowedTableCache<RemoteWindowTable<BoundStatement>> windowedFactory;
 
   public TTDCassandraClient(final TTDMockAdmin admin, final Time time) {
     super(loggedConfig(admin.props()));
@@ -50,10 +50,8 @@ public class TTDCassandraClient extends CassandraClient {
     this.time = time;
 
     kvFactory = new TableCache<>(spec -> new TTDKeyValueTable(spec, this));
-    windowedFactory = new WindowedTableCache<>((spec, partitioner) -> TTDWindowedTable.create(spec,
-        this,
-        partitioner
-    ));
+    windowedFactory = new WindowedTableCache<>(
+        (spec, partitioner) -> TTDWindowTable.create(spec, this, partitioner));
   }
 
   public ResponsiveStoreRegistry storeRegistry() {
@@ -107,7 +105,7 @@ public class TTDCassandraClient extends CassandraClient {
   @Override
   public long count(final String tableName, final int tablePartition) {
     final var kv = (InMemoryKVTable) kvFactory.getTable(tableName);
-    final var window = (TTDWindowedTable) windowedFactory.getTable(tableName);
+    final var window = (TTDWindowTable) windowedFactory.getTable(tableName);
     return (kv == null ? 0 : kv.approximateNumEntries(tablePartition))
         + (window == null ? 0 : window.count());
   }
@@ -128,7 +126,7 @@ public class TTDCassandraClient extends CassandraClient {
   }
 
   @Override
-  public WindowedTableCache<RemoteWindowedTable<BoundStatement>> windowedFactory() {
+  public WindowedTableCache<RemoteWindowTable<BoundStatement>> windowedFactory() {
     return windowedFactory;
   }
 }

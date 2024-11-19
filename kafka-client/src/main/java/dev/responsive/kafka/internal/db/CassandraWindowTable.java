@@ -59,9 +59,9 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatement> {
+public class CassandraWindowTable implements RemoteWindowTable<BoundStatement> {
 
-  private static final Logger LOG = LoggerFactory.getLogger(CassandraWindowedTable.class);
+  private static final Logger LOG = LoggerFactory.getLogger(CassandraWindowTable.class);
 
   private static final String KEY_FROM_BIND = "kf";
   private static final String KEY_TO_BIND = "kt";
@@ -91,7 +91,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
   private final PreparedStatement reserveEpoch;
   private final PreparedStatement ensureEpoch;
 
-  public static CassandraWindowedTable create(
+  public static CassandraWindowTable create(
       final RemoteTableSpec spec,
       final CassandraClient client,
       final WindowSegmentPartitioner partitioner
@@ -383,7 +383,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
         QueryOp.WRITE
     );
 
-    return new CassandraWindowedTable(
+    return new CassandraWindowTable(
         name,
         client,
         partitioner,
@@ -423,7 +423,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
         .withColumn(STREAM_TIME.column(), DataTypes.BIGINT);
   }
 
-  public CassandraWindowedTable(
+  public CassandraWindowTable(
       final String name,
       final CassandraClient client,
       final WindowSegmentPartitioner partitioner,
@@ -847,7 +847,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
           .setInstant(WINDOW_TO_BIND, Instant.ofEpochMilli(timeTo));
 
       final ResultSet result = client.execute(get);
-      segmentIterators.add(Iterators.kv(result.iterator(), CassandraWindowedTable::windowRows));
+      segmentIterators.add(Iterators.kv(result.iterator(), CassandraWindowTable::windowRows));
     }
 
     return Iterators.wrapped(segmentIterators);
@@ -872,7 +872,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
           .setInstant(WINDOW_TO_BIND, Instant.ofEpochMilli(timeTo));
 
       final ResultSet result = client.execute(get);
-      segmentIterators.add(Iterators.kv(result.iterator(), CassandraWindowedTable::windowRows));
+      segmentIterators.add(Iterators.kv(result.iterator(), CassandraWindowTable::windowRows));
     }
 
     return Iterators.wrapped(segmentIterators);
@@ -897,7 +897,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
           .setByteBuffer(KEY_TO_BIND, ByteBuffer.wrap(toKey.get()));
 
       final ResultSet result = client.execute(get);
-      segmentIterators.add(Iterators.kv(result.iterator(), CassandraWindowedTable::windowRows));
+      segmentIterators.add(Iterators.kv(result.iterator(), CassandraWindowTable::windowRows));
     }
 
     return Iterators.filterKv(
@@ -925,7 +925,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
           .setByteBuffer(KEY_TO_BIND, ByteBuffer.wrap(toKey.get()));
 
       final ResultSet result = client.execute(get);
-      segmentIterators.add(Iterators.kv(result.iterator(), CassandraWindowedTable::windowRows));
+      segmentIterators.add(Iterators.kv(result.iterator(), CassandraWindowTable::windowRows));
     }
 
     return Iterators.filterKv(
@@ -951,7 +951,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
           .setInstant(KEY_TO_BIND, Instant.ofEpochMilli(timeTo));
 
       final ResultSet result = client.execute(get);
-      segmentIterators.add(Iterators.kv(result.iterator(), CassandraWindowedTable::windowRows));
+      segmentIterators.add(Iterators.kv(result.iterator(), CassandraWindowTable::windowRows));
     }
 
     return Iterators.filterKv(
@@ -977,7 +977,7 @@ public class CassandraWindowedTable implements RemoteWindowedTable<BoundStatemen
           .setInstant(KEY_TO_BIND, Instant.ofEpochMilli(timeTo));
 
       final ResultSet result = client.execute(get);
-      segmentIterators.add(Iterators.kv(result.iterator(), CassandraWindowedTable::windowRows));
+      segmentIterators.add(Iterators.kv(result.iterator(), CassandraWindowTable::windowRows));
     }
 
     return Iterators.filterKv(

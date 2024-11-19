@@ -47,7 +47,7 @@ public class CassandraClient {
   private final ResponsiveConfig config;
   private final TableCache<RemoteKVTable<BoundStatement>> kvFactory;
   private final TableCache<RemoteKVTable<BoundStatement>> factFactory;
-  private final WindowedTableCache<RemoteWindowedTable<BoundStatement>> windowedFactory;
+  private final WindowedTableCache<RemoteWindowTable<BoundStatement>> windowedFactory;
   private final TableCache<CassandraFactTable> globalFactory;
 
   /**
@@ -63,9 +63,9 @@ public class CassandraClient {
     this.kvFactory = new TableCache<>(spec -> CassandraKeyValueTable.create(spec, this));
     this.factFactory = new TableCache<>(spec -> CassandraFactTable.create(spec, this));
     this.windowedFactory =
-        new WindowedTableCache<>((spec, partitioner) -> CassandraWindowedTable.create(spec,
-            this,
-            partitioner
+        new WindowedTableCache<>((spec, partitioner) -> CassandraWindowTable.create(spec,
+                                                                                    this,
+                                                                                    partitioner
         ));
     this.globalFactory = new TableCache<>(spec -> CassandraFactTable.create(spec, this));
   }
@@ -186,7 +186,7 @@ public class CassandraClient {
     return factFactory;
   }
 
-  public WindowedTableCache<RemoteWindowedTable<BoundStatement>> windowedFactory() {
+  public WindowedTableCache<RemoteWindowTable<BoundStatement>> windowedFactory() {
     return windowedFactory;
   }
 }

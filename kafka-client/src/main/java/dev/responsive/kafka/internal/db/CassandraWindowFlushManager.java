@@ -27,7 +27,7 @@ public class CassandraWindowFlushManager extends WindowFlushManager {
   private final String logPrefix;
   private final Logger log;
 
-  private final CassandraWindowedTable table;
+  private final CassandraWindowTable table;
   private final CassandraClient client;
 
   private final TablePartitioner<WindowedKey, SegmentPartition> partitioner;
@@ -35,7 +35,7 @@ public class CassandraWindowFlushManager extends WindowFlushManager {
   private final long epoch;
 
   public CassandraWindowFlushManager(
-      final CassandraWindowedTable table,
+      final CassandraWindowTable table,
       final CassandraClient client,
       final WindowSegmentPartitioner partitioner,
       final int kafkaPartition,

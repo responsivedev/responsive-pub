@@ -13,6 +13,8 @@
 package dev.responsive.kafka.internal.db.mongo;
 
 import static com.mongodb.MongoClientSettings.getDefaultCodecRegistry;
+import static dev.responsive.kafka.internal.db.mongo.WindowDoc.ID_SUBFIELD_KEY;
+import static dev.responsive.kafka.internal.db.mongo.WindowDoc.ID_SUBFIELD_WINDOW_START;
 import static dev.responsive.kafka.internal.db.partitioning.Segmenter.UNINITIALIZED_STREAM_TIME;
 import static dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration.NO_COMMITTED_OFFSET;
 import static org.bson.codecs.configuration.CodecRegistries.fromProviders;
@@ -26,14 +28,16 @@ import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
 import com.mongodb.client.model.Filters;
 import com.mongodb.client.model.FindOneAndUpdateOptions;
+import com.mongodb.client.model.Indexes;
 import com.mongodb.client.model.ReturnDocument;
 import com.mongodb.client.model.UpdateOneModel;
 import com.mongodb.client.model.UpdateOptions;
 import com.mongodb.client.model.Updates;
 import com.mongodb.client.model.WriteModel;
 import com.mongodb.client.result.UpdateResult;
+import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.db.MongoWindowFlushManager;
-import dev.responsive.kafka.internal.db.RemoteWindowedTable;
+import dev.responsive.kafka.internal.db.RemoteWindowTable;
 import dev.responsive.kafka.internal.db.partitioning.Segmenter;
 import dev.responsive.kafka.internal.db.partitioning.Segmenter.SegmentPartition;
 import dev.responsive.kafka.internal.db.partitioning.WindowSegmentPartitioner;
@@ -58,9 +62,9 @@ import org.bson.conversions.Bson;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<WindowDoc>> {
+public class MongoWindowTable implements RemoteWindowTable<WriteModel<WindowDoc>> {
 
-  private static final Logger LOG = LoggerFactory.getLogger(MongoWindowedTable.class);
+  private static final Logger LOG = LoggerFactory.getLogger(MongoWindowTable.class);
   private static final String METADATA_COLLECTION_NAME = "window_metadata";
 
   private static final UpdateOptions UPSERT_OPTIONS = new UpdateOptions().upsert(true);
@@ -87,6 +91,7 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
     private final Segmenter segmenter;
     private final long epoch;
     private final CollectionCreationOptions collectionCreationOptions;
+    private final boolean timestampFirstOrder;
 
     // Recommended to keep the total number of collections under 10,000, so we should not
     // let num_segments * num_kafka_partitions exceed 10k at the most
@@ -99,13 +104,15 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
         final int kafkaPartition,
         final long streamTime,
         final long epoch,
-        final CollectionCreationOptions collectionCreationOptions
+        final CollectionCreationOptions collectionCreationOptions,
+        final boolean timestampFirstOrder
     ) {
       this.database = database;
       this.adminDatabase = adminDatabase;
       this.segmenter = segmenter;
       this.epoch = epoch;
       this.collectionCreationOptions = collectionCreationOptions;
+      this.timestampFirstOrder = timestampFirstOrder;
       this.segmentWindows = new ConcurrentHashMap<>();
 
       final List<SegmentPartition> activeSegments =
@@ -165,6 +172,17 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
             WindowDoc.class
         );
       }
+      if (timestampFirstOrder) {
+        windowDocs.createIndex(Indexes.compoundIndex(
+            Indexes.ascending(WindowDoc.ID_WINDOW_START_TS),
+            Indexes.ascending(WindowDoc.ID_RECORD_KEY)
+        ));
+      } else {
+        windowDocs.createIndex(Indexes.compoundIndex(
+            Indexes.ascending(WindowDoc.ID_RECORD_KEY),
+            Indexes.ascending(WindowDoc.ID_WINDOW_START_TS)
+        ));
+      }
       segmentWindows.put(segmentToCreate, windowDocs);
     }
 
@@ -189,7 +207,7 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
     }
   }
 
-  public MongoWindowedTable(
+  public MongoWindowTable(
       final MongoClient client,
       final String name,
       final WindowSegmentPartitioner partitioner,
@@ -258,7 +276,8 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
             kafkaPartition,
             metaDoc.streamTime,
             metaDoc.epoch,
-            collectionCreationOptions
+            collectionCreationOptions,
+            timestampFirstOrder
         )
     );
 
@@ -522,8 +541,38 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
       final long timeFrom,
       final long timeTo
   ) {
-    throw new UnsupportedOperationException("fetchRange not yet supported for Mongo backends");
+    final List<KeyValueIterator<WindowedKey, byte[]>> segmentIterators = new LinkedList<>();
+    final var partitionSegments = kafkaPartitionToSegments.get(kafkaPartition);
 
+    for (final var segment : partitioner.segmenter().range(kafkaPartition, timeFrom, timeTo)) {
+      final var segmentWindows = partitionSegments.segmentWindows.get(segment);
+      if (segmentWindows == null) {
+        continue;
+      }
+      final ArrayList<Bson> filters = new ArrayList<>(4);
+
+      // order matters when filtering on fields in a compound index
+      if (timestampFirstOrder) {
+        filters.add(Filters.gte(ID_SUBFIELD_WINDOW_START, timeFrom));
+        filters.add(Filters.lte(ID_SUBFIELD_WINDOW_START, timeTo));
+        filters.add(Filters.gte(ID_SUBFIELD_KEY, keyCodec.encode(fromKey)));
+        filters.add(Filters.lte(ID_SUBFIELD_KEY, keyCodec.encode(toKey)));
+      } else {
+        filters.add(Filters.gte(ID_SUBFIELD_KEY, keyCodec.encode(fromKey)));
+        filters.add(Filters.lte(ID_SUBFIELD_KEY, keyCodec.encode(toKey)));
+        filters.add(Filters.gte(ID_SUBFIELD_WINDOW_START, timeFrom));
+        filters.add(Filters.lte(ID_SUBFIELD_WINDOW_START, timeTo));
+      }
+      final FindIterable<WindowDoc> fetchResults = segmentWindows.find(Filters.and(filters));
+
+      if (retainDuplicates) {
+        segmentIterators.add(
+            new DuplicateKeyListValueIterator(fetchResults.iterator(), this::windowedKeyFromDoc));
+      } else {
+        segmentIterators.add(Iterators.kv(fetchResults.iterator(), this::windowFromDoc));
+      }
+    }
+    return Iterators.wrapped(segmentIterators);
   }
 
   @Override
@@ -543,7 +592,37 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
       final long timeFrom,
       final long timeTo
   ) {
-    throw new UnsupportedOperationException("fetchAll not yet supported for Mongo backends");
+    final List<KeyValueIterator<WindowedKey, byte[]>> segmentIterators = new LinkedList<>();
+    final var partitionSegments = kafkaPartitionToSegments.get(kafkaPartition);
+
+    for (final var segment : partitioner.segmenter().range(kafkaPartition, timeFrom, timeTo)) {
+      final var segmentWindows = partitionSegments.segmentWindows.get(segment);
+      if (segmentWindows == null) {
+        continue;
+      }
+      final ArrayList<Bson> filters = new ArrayList<>(2);
+      filters.add(Filters.gte(ID_SUBFIELD_WINDOW_START, timeFrom));
+      filters.add(Filters.lte(ID_SUBFIELD_WINDOW_START, timeTo));
+
+      if (!timestampFirstOrder) {
+        LOG.warn("WindowStore#fetchAll should be used with caution as a full table scan is "
+                     + "required for range queries with no key bound when the key is indexed "
+                     + "first. If your application makes heavy use of this API, consider "
+                     + "setting " + ResponsiveConfig.MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_CONFIG
+                     + "to 'true' for better performance of #fetchAll at the cost of worse "
+                     + "performance of the #fetch(key, timeFrom, timeTo API.");
+      }
+
+      final FindIterable<WindowDoc> fetchResults = segmentWindows.find(Filters.and(filters));
+
+      if (retainDuplicates) {
+        segmentIterators.add(
+            new DuplicateKeyListValueIterator(fetchResults.iterator(), this::windowedKeyFromDoc));
+      } else {
+        segmentIterators.add(Iterators.kv(fetchResults.iterator(), this::windowFromDoc));
+      }
+    }
+    return Iterators.wrapped(segmentIterators);
   }
 
   @Override

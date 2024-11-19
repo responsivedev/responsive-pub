@@ -24,22 +24,22 @@ import dev.responsive.kafka.internal.utils.WindowedKey;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
-public class TTDWindowedTable extends TTDTable<WindowedKey>
-    implements RemoteWindowedTable<BoundStatement>  {
+public class TTDWindowTable extends TTDTable<WindowedKey>
+    implements RemoteWindowTable<BoundStatement> {
 
   private final String name;
   private final WindowStoreStub stub;
   private final WindowSegmentPartitioner partitioner;
 
-  public static TTDWindowedTable create(
+  public static TTDWindowTable create(
       final RemoteTableSpec spec,
       final CassandraClient client,
       final WindowSegmentPartitioner partitioner
   ) {
-    return new TTDWindowedTable(spec, (TTDCassandraClient) client, partitioner);
+    return new TTDWindowTable(spec, (TTDCassandraClient) client, partitioner);
   }
 
-  public TTDWindowedTable(
+  public TTDWindowTable(
       final RemoteTableSpec spec,
       final TTDCassandraClient client,
       WindowSegmentPartitioner partitioner
@@ -157,11 +157,11 @@ public class TTDWindowedTable extends TTDTable<WindowedKey>
   private static class TTDWindowFlushManager extends WindowFlushManager {
 
     private final String logPrefix;
-    private final TTDWindowedTable table;
+    private final TTDWindowTable table;
     private final WindowSegmentPartitioner partitioner;
 
     public TTDWindowFlushManager(
-        final TTDWindowedTable table,
+        final TTDWindowTable table,
         final int kafkaPartition,
         final WindowSegmentPartitioner partitioner
     ) {
