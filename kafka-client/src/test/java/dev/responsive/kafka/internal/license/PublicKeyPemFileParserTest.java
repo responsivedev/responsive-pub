@@ -20,8 +20,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import java.io.File;
-import java.net.URISyntaxException;
 import org.junit.jupiter.api.Test;
 
 class PublicKeyPemFileParserTest {
@@ -29,10 +27,10 @@ class PublicKeyPemFileParserTest {
   @Test
   public void shouldParseValidPemFile() {
     // given:
-    final File file = getPemFile("valid.pem");
+    final String file = getPemFile("valid.pem");
 
     // when:
-    final byte[] key = PublicKeyPemFileParser.parsePemFile(file);
+    final byte[] key = PublicKeyPemFileParser.parsePemFileInResource(file);
 
     // then:
     assertThat(new String(key), is("foobarbaz"));
@@ -41,10 +39,10 @@ class PublicKeyPemFileParserTest {
   @Test
   public void shouldParsePemFileWithRealKey() {
     // given:
-    final File file = getPemFile("valid-real.pem");
+    final String file = getPemFile("valid-real.pem");
 
     // when:
-    final byte[] key = PublicKeyPemFileParser.parsePemFile(file);
+    final byte[] key = PublicKeyPemFileParser.parsePemFileInResource(file);
 
     // then:
     assertThat(key.length, is(550));
@@ -53,10 +51,10 @@ class PublicKeyPemFileParserTest {
   @Test
   public void shouldParseValidPemFileWithComment() {
     // given:
-    final File file = getPemFile("valid-with-comment.pem");
+    final String file = getPemFile("valid-with-comment.pem");
 
     // when:
-    final byte[] key = PublicKeyPemFileParser.parsePemFile(file);
+    final byte[] key = PublicKeyPemFileParser.parsePemFileInResource(file);
 
     // then:
     assertThat(new String(key), is("foobarbaz"));
@@ -65,29 +63,24 @@ class PublicKeyPemFileParserTest {
   @Test
   public void shouldFailToParseInvalidPemFileWithMissingFooter() {
     // given:
-    final File file = getPemFile("invalid-missing-footer.pem");
+    final String file = getPemFile("invalid-missing-footer.pem");
 
     // when/then:
-    assertThrows(IllegalArgumentException.class, () -> PublicKeyPemFileParser.parsePemFile(file));
+    assertThrows(
+        IllegalArgumentException.class, () -> PublicKeyPemFileParser.parsePemFileInResource(file));
   }
 
   @Test
   public void shouldFailToParseInvalidPemFileWithMissingHeader() {
     // given:
-    final File file = getPemFile("invalid-missing-header.pem");
+    final String file = getPemFile("invalid-missing-header.pem");
 
     // when/then:
-    assertThrows(IllegalArgumentException.class, () -> PublicKeyPemFileParser.parsePemFile(file));
+    assertThrows(
+        IllegalArgumentException.class, () -> PublicKeyPemFileParser.parsePemFileInResource(file));
   }
 
-  private File getPemFile(final String filename) {
-    final String path = "public-key-pem-file-parser-test/" + filename;
-    try {
-      return new File(
-          PublicKeyPemFileParserTest.class.getClassLoader().getResource(path).toURI()
-      );
-    } catch (final URISyntaxException e) {
-      throw new RuntimeException(e);
-    }
+  private String getPemFile(final String filename) {
+    return "/public-key-pem-file-parser-test/" + filename;
   }
 }

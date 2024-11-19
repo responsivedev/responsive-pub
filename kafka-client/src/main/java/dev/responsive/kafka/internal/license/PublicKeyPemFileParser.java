@@ -16,11 +16,13 @@
 
 package dev.responsive.kafka.internal.license;
 
-import java.io.File;
+import java.io.BufferedReader;
 import java.io.IOException;
-import java.nio.file.Files;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.util.Base64;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class PublicKeyPemFileParser {
   private static final String HEADER_PREFIX = "-----";
@@ -31,12 +33,18 @@ public class PublicKeyPemFileParser {
   private static final String END_PUBLIC_KEY_HEADER
       = HEADER_PREFIX + END_PUBLIC_KEY + HEADER_PREFIX;
 
-  public static byte[] parsePemFile(final File file) {
-    final List<String> lines;
-    try {
-      lines = Files.readAllLines(file.toPath());
-    } catch (IOException e) {
+  public static byte[] parsePemFileInResource(final String path) {
+    try (final InputStream inputStream = PublicKeyPemFileParser.class.getResourceAsStream(path)) {
+      return parsePemFile(inputStream);
+    } catch (final IOException e) {
       throw new RuntimeException(e);
+    }
+  }
+
+  private static byte[] parsePemFile(final InputStream inputStream) throws IOException {
+    final List<String> lines;
+    try (final BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream))) {
+      lines = reader.lines().collect(Collectors.toList());
     }
     final StringBuilder keyB64Builder = new StringBuilder();
     boolean foundBegin = false;
