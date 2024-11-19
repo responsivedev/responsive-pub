@@ -98,7 +98,7 @@ import org.slf4j.LoggerFactory;
 
 public class ResponsiveKafkaStreams extends KafkaStreams {
 
-  private static final String SIGNING_KEYS_PATH = "license-keys/license-keys.json";
+  private static final String SIGNING_KEYS_PATH = "/responsive-license-keys/license-keys.json";
 
   private static final Logger LOG = LoggerFactory.getLogger(ResponsiveKafkaStreams.class);
 
@@ -289,7 +289,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
   private static SigningKeys loadSigningKeys() {
     try {
       return new ObjectMapper().readValue(
-          ResponsiveKafkaStreams.class.getClassLoader().getResource(SIGNING_KEYS_PATH),
+          ResponsiveKafkaStreams.class.getResource(SIGNING_KEYS_PATH),
           SigningKeys.class
       );
     } catch (final IOException e) {

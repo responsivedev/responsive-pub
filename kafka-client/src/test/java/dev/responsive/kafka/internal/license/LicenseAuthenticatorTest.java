@@ -56,7 +56,7 @@ class LicenseAuthenticatorTest {
   }
 
   private static SigningKeys loadSigningKeys() {
-    return loadResource("license-keys/license-keys.json", SigningKeys.class);
+    return loadResource("responsive-license-keys/license-keys.json", SigningKeys.class);
   }
 
   private static <T> T loadResource(final String path, final Class<T> clazz) {
