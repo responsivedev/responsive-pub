@@ -71,7 +71,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   private final Processor<KIn, VIn, KOut, VOut> userProcessor;
   private final FixedKeyProcessor<KIn, VIn, VOut> userFixedKeyProcessor;
 
-  private final Map<String, AbstractAsyncStoreBuilder<?, ?, ?>> connectedStoreBuilders;
+  private final Map<String, AbstractAsyncStoreBuilder<?>> connectedStoreBuilders;
 
   // Tracks all pending events, ie from moment of creation to end of finalization/transition
   // to "DONE" state. Used to make sure all events are flushed during a commit.
@@ -115,14 +115,14 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
 
   public static <KIn, VIn, KOut, VOut> AsyncProcessor<KIn, VIn, KOut, VOut> createAsyncProcessor(
       final Processor<KIn, VIn, KOut, VOut> userProcessor,
-      final Map<String, AbstractAsyncStoreBuilder<?, ?, ?>> connectedStoreBuilders
+      final Map<String, AbstractAsyncStoreBuilder<?>> connectedStoreBuilders
   ) {
     return new AsyncProcessor<>(userProcessor, null, connectedStoreBuilders);
   }
 
   public static <KIn, VIn, VOut> AsyncProcessor<KIn, VIn, KIn, VOut> createAsyncFixedKeyProcessor(
       final FixedKeyProcessor<KIn, VIn, VOut> userProcessor,
-      final Map<String, AbstractAsyncStoreBuilder<?, ?, ?>> connectedStoreBuilders
+      final Map<String, AbstractAsyncStoreBuilder<?>> connectedStoreBuilders
   ) {
     return new AsyncProcessor<>(null, userProcessor, connectedStoreBuilders);
   }
@@ -135,7 +135,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   private AsyncProcessor(
       final Processor<KIn, VIn, KOut, VOut> userProcessor,
       final FixedKeyProcessor<KIn, VIn, VOut> userFixedKeyProcessor,
-      final Map<String, AbstractAsyncStoreBuilder<?, ?, ?>> connectedStoreBuilders
+      final Map<String, AbstractAsyncStoreBuilder<?>> connectedStoreBuilders
   ) {
     this.userProcessor = userProcessor;
     this.userFixedKeyProcessor = userFixedKeyProcessor;
@@ -377,10 +377,10 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   private static void registerFlushListenerForStoreBuilders(
       final String streamThreadName,
       final int partition,
-      final Collection<AbstractAsyncStoreBuilder<?, ?, ?>> asyncStoreBuilders,
+      final Collection<AbstractAsyncStoreBuilder<?>> asyncStoreBuilders,
       final AsyncFlushListener flushPendingEvents
   ) {
-    for (final AbstractAsyncStoreBuilder<?, ?, ?> builder : asyncStoreBuilders) {
+    for (final AbstractAsyncStoreBuilder<?> builder : asyncStoreBuilders) {
       builder.registerFlushListenerWithAsyncStore(streamThreadName, partition, flushPendingEvents);
     }
   }
@@ -738,7 +738,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    */
   private void verifyConnectedStateStores(
       final Map<String, AsyncKeyValueStore<?, ?>> accessedStores,
-      final Map<String, AbstractAsyncStoreBuilder<?, ?, ?>> connectedStores
+      final Map<String, AbstractAsyncStoreBuilder<?>> connectedStores
   ) {
     if (!accessedStores.keySet().equals(connectedStores.keySet())) {
       log.error(

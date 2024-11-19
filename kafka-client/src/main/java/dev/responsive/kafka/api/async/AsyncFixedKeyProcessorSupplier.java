@@ -37,7 +37,7 @@ public class AsyncFixedKeyProcessorSupplier<KIn, VIn, VOut>
     implements FixedKeyProcessorSupplier<KIn, VIn, VOut> {
 
   private final FixedKeyProcessorSupplier<KIn, VIn, VOut> userProcessorSupplier;
-  private final Map<String, AbstractAsyncStoreBuilder<?, ?, ?>> asyncStoreBuilders;
+  private final Map<String, AbstractAsyncStoreBuilder<?>> asyncStoreBuilders;
 
   /**
    * Create an AsyncProcessorSupplier that wraps a custom {@link ProcessorSupplier}

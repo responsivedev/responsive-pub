@@ -15,27 +15,14 @@ package dev.responsive.kafka.api.async.internals;
 import static dev.responsive.kafka.api.async.internals.AsyncThreadPool.ASYNC_THREAD_NAME;
 
 import dev.responsive.kafka.api.async.internals.stores.AbstractAsyncStoreBuilder;
-import dev.responsive.kafka.internal.stores.ResponsiveStoreBuilder;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
-import org.apache.kafka.streams.processor.internals.StoreFactory.FactoryWrappingStoreBuilder;
-import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.StoreBuilder.StoreType;
-import org.apache.kafka.streams.state.internals.AsyncKeyValueStoreBuilder;
-import org.apache.kafka.streams.state.internals.AsyncTimestampedKeyValueStoreBuilder;
-import org.apache.kafka.streams.state.internals.CachingKeyValueStore;
-import org.apache.kafka.streams.state.internals.ChangeLoggingKeyValueBytesStore;
 import org.apache.kafka.streams.state.internals.DelayedAsyncStoreBuilder;
-import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
-import org.apache.kafka.streams.state.internals.MeteredKeyValueStore;
-import org.apache.kafka.streams.state.internals.TimestampedKeyValueStoreBuilder;
 
 public class AsyncUtils {
 
@@ -70,14 +57,14 @@ public class AsyncUtils {
         || isStreamThread(threadName, streamThreadName);
   }
 
-  public static Map<String, AbstractAsyncStoreBuilder<?, ?, ?>> initializeAsyncBuilders(
+  public static Map<String, AbstractAsyncStoreBuilder<?>> initializeAsyncBuilders(
       final Set<StoreBuilder<?>> userConnectedStores
   ) {
     if (userConnectedStores == null || userConnectedStores.isEmpty()) {
       return Collections.emptyMap();
     }
 
-    final Map<String, AbstractAsyncStoreBuilder<?, ?, ?>> asyncStoreBuilders = new HashMap<>();
+    final Map<String, AbstractAsyncStoreBuilder<?>> asyncStoreBuilders = new HashMap<>();
     for (final StoreBuilder<?> builder : userConnectedStores) {
       final String storeName = builder.name();
 

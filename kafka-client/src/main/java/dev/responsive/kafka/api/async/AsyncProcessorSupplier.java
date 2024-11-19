@@ -118,7 +118,7 @@ public final class AsyncProcessorSupplier<KIn, VIn, KOut, VOut>
 
   private final ProcessorSupplier<KIn, VIn, KOut, VOut> userProcessorSupplier;
 
-  private Map<String, AbstractAsyncStoreBuilder<?, ?, ?>> asyncStoreBuilders = null;
+  private Map<String, AbstractAsyncStoreBuilder<?>> asyncStoreBuilders = null;
 
   /**
    * Create an AsyncProcessorSupplier that wraps a custom {@link ProcessorSupplier}

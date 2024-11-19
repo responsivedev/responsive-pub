@@ -21,10 +21,9 @@ import org.apache.kafka.streams.processor.internals.StoreFactory.FactoryWrapping
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.TimestampedBytesStore;
 
 public class DelayedAsyncStoreBuilder<K, V, T extends StateStore>
-    extends AbstractAsyncStoreBuilder<K, V, T> {
+    extends AbstractAsyncStoreBuilder<T> {
 
   private final StoreBuilder<T> inner;
   private StoreBuilder<T> innerResolved;

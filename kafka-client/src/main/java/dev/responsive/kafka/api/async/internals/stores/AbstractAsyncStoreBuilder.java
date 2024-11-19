@@ -17,25 +17,19 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
-import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.internals.AsyncKeyValueStoreBuilder;
 
 /**
  * A copy of the {@link org.apache.kafka.streams.state.internals.AbstractStoreBuilder} class with
  * a few additional methods related to async processing, such as de/registering flush listeners
  */
-public abstract class AbstractAsyncStoreBuilder<K, V, T extends StateStore>
+public abstract class AbstractAsyncStoreBuilder<T extends StateStore>
     implements StoreBuilder<T> {
 
   protected final String name;
-  protected Serde<K> keySerde;
-  protected Serde<V> valueSerde;
-  protected Time time;
   protected final Map<String, String> logConfig = new HashMap<>();
 
   private boolean cachingEnabled = false;
@@ -54,19 +48,10 @@ public abstract class AbstractAsyncStoreBuilder<K, V, T extends StateStore>
     this.name = name;
   }
 
-  public void initialize(final Serde<K> keySerde,
-                         final Serde<V> valueSerde,
-                         final Time time) {
-    Objects.requireNonNull(time, "time cannot be null");
-
-    this.keySerde = keySerde;
-    this.valueSerde = valueSerde;
-    this.time = time;
-  }
-
   /**
-   * Similar to the #maybeWrapCaching or #maybeWrapLogging methods in the StoreBuilder classes
-   * (eg {@link AsyncKeyValueStoreBuilder}, this method adds an additional layer to the store
+   * Similar to the #maybeWrapCaching or #maybeWrapLogging methods in the
+   * {@link org.apache.kafka.streams.state.internals.DelayedAsyncStoreBuilder},
+   * this method adds an additional layer to the store
    * hierarchy by wrapping it in a {@link AsyncFlushingKeyValueStore}.
    * <p>
    * This specific method is for use with KV stores, whether plain or timestamped.
