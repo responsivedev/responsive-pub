@@ -15,6 +15,10 @@ plugins {
     id("responsive.docker")
 }
 
+repositories {
+    mavenLocal()
+}
+
 application {
     mainClass.set("dev.responsive.kafka.bootstrap.main.Main")
 }

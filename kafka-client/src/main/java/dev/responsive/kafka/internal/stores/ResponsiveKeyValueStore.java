@@ -80,18 +80,6 @@ public class ResponsiveKeyValueStore
   }
 
   @Override
-  @Deprecated
-  public void init(final ProcessorContext context, final StateStore root) {
-    if (context instanceof StateStoreContext) {
-      init((StateStoreContext) context, root);
-    } else {
-      throw new UnsupportedOperationException(
-          "Use ResponsiveStore#init(StateStoreContext, StateStore) instead."
-      );
-    }
-  }
-
-  @Override
   public void init(final StateStoreContext storeContext, final StateStore root) {
     try {
       final TaskType taskType = asInternalProcessorContext(storeContext).taskType();

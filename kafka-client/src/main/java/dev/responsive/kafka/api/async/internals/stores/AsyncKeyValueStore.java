@@ -18,7 +18,6 @@ import java.util.List;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
@@ -113,16 +112,6 @@ public class AsyncKeyValueStore<KS, VS>
   @Override
   public String name() {
     return userDelegate.name();
-  }
-
-  @Override
-  @Deprecated
-  public void init(
-      final org.apache.kafka.streams.processor.ProcessorContext context,
-      final StateStore root
-  ) {
-    throw new UnsupportedOperationException("This init method is deprecated, please implement"
-                                                + "init(StateStoreContext, StateStore) instead");
   }
 
   @Override

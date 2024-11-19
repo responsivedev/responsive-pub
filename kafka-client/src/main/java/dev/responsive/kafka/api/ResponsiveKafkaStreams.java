@@ -284,16 +284,16 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       return propsWithOverrides;
     }
 
-    final Object o = configs.originals().get(InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS);
+    final Object o = configs.originals().get(StreamsConfig.TASK_ASSIGNOR_CLASS_CONFIG);
     if (o == null) {
       propsWithOverrides.put(
-          InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS,
+          StreamsConfig.TASK_ASSIGNOR_CLASS_CONFIG,
           TASK_ASSIGNOR_CLASS_OVERRIDE
       );
     } else if (!TASK_ASSIGNOR_CLASS_OVERRIDE.equals(o.toString())) {
       final String errorMsg = String.format(
           "Invalid Streams configuration value for '%s': got %s, expected '%s'",
-          InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS,
+          StreamsConfig.TASK_ASSIGNOR_CLASS_CONFIG,
           o,
           TASK_ASSIGNOR_CLASS_OVERRIDE
       );

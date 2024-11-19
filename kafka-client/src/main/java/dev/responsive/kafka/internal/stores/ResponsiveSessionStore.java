@@ -62,18 +62,6 @@ public class ResponsiveSessionStore implements SessionStore<Bytes, byte[]> {
   }
 
   @Override
-  @Deprecated
-  public void init(final ProcessorContext context, final StateStore root) {
-    if (context instanceof StateStoreContext) {
-      init((StateStoreContext) context, root);
-    } else {
-      throw new UnsupportedOperationException(
-          "Use ResponsiveSessionStore#init(StateStoreContext, StateStore) instead."
-      );
-    }
-  }
-
-  @Override
   public void init(final StateStoreContext storeContext, final StateStore root) {
     log.info("Initializing state store");
 

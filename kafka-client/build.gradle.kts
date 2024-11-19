@@ -33,6 +33,10 @@ plugins {
     id("java")
 }
 
+repositories {
+    mavenLocal()
+}
+
 /*********** Generated Resources ***********/
 
 val gitCommitId: String by lazy {

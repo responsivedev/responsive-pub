@@ -170,18 +170,6 @@ public class KeyValueStoreComparator<K, V> implements KeyValueStore<K, V> {
   }
 
   @Override
-  @Deprecated
-  public void init(final ProcessorContext context, final StateStore root) {
-    if (context instanceof StateStoreContext) {
-      init((StateStoreContext) context, root);
-    } else {
-      throw new UnsupportedOperationException(
-          "Use ResponsiveSessionStore#init(StateStoreContext, StateStore) instead."
-      );
-    }
-  }
-
-  @Override
   public void init(final StateStoreContext context, final StateStore root) {
     StateStoreContext proxy = (StateStoreContext) Proxy.newProxyInstance(
         InternalProcessorContext.class.getClassLoader(),

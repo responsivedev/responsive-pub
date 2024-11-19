@@ -15,6 +15,7 @@ package org.apache.kafka.streams.state.internals;
 import dev.responsive.kafka.api.async.internals.stores.AbstractAsyncStoreBuilder;
 import dev.responsive.kafka.api.async.internals.stores.AsyncFlushingKeyValueStore;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreBuilder;
+import java.lang.reflect.Field;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
@@ -37,16 +38,30 @@ public class AsyncKeyValueStoreBuilder<K, V>
       LoggerFactory.getLogger(AsyncKeyValueStoreBuilder.class);
   private final KeyValueBytesStoreSupplier storeSupplier;
 
-  @SuppressWarnings("unchecked")
-  public AsyncKeyValueStoreBuilder(
-      final ResponsiveStoreBuilder<?, ?, ?> responsiveBuilder
+  public static <K, V> AsyncKeyValueStoreBuilder<K, V> getAsyncBuilder(
+      final KeyValueStoreBuilder<K, V> storeBuilder
   ) {
-    this(
-        (KeyValueBytesStoreSupplier) responsiveBuilder.storeSupplier(),
-        (Serde<K>) responsiveBuilder.keySerde(),
-        responsiveBuilder.innerValueSerde(),
-        responsiveBuilder.time()
-    );
+    try {
+      final Field storeSupplierField = KeyValueStoreBuilder.class.getDeclaredField(
+          "storeSupplier");
+
+      // Set the accessibility as true
+      storeSupplierField.setAccessible(true);
+
+      // Store the value of private field in variable
+      final KeyValueBytesStoreSupplier storeSupplier =
+          (KeyValueBytesStoreSupplier) storeSupplierField.get(storeBuilder);
+
+      return new AsyncKeyValueStoreBuilder<>(
+          storeSupplier,
+          storeBuilder.keySerde,
+          storeBuilder.valueSerde,
+          storeBuilder.time
+      );
+    } catch (final Exception e) {
+      LOG.error("Unable to retrieve async store fields", e);
+      throw new IllegalStateException("Can't build async stores", e);
+    }
   }
 
   private AsyncKeyValueStoreBuilder(
@@ -56,10 +71,7 @@ public class AsyncKeyValueStoreBuilder<K, V>
       final Time time
   ) {
     super(
-        storeSupplier.name(),
-        keySerde,
-        valueSerde,
-        time
+        storeSupplier.name()
     );
     this.storeSupplier = storeSupplier;
     LOG.debug("Created async KV store builder with valueSerde = {}", valueSerde);
@@ -69,16 +81,7 @@ public class AsyncKeyValueStoreBuilder<K, V>
   public KeyValueStore<K, V> build() {
     final KeyValueStore<Bytes, byte[]> store = storeSupplier.get();
 
-    return new MeteredKeyValueStore<>(
-        wrapAsyncFlushingKV(
-            maybeWrapCaching(
-                maybeWrapLogging(store))
-        ),
-        storeSupplier.metricsScope(),
-        time,
-        keySerde,
-        valueSerde
-    );
+    return null;
   }
 
   private KeyValueStore<Bytes, byte[]> maybeWrapCaching(final KeyValueStore<Bytes, byte[]> inner) {

@@ -79,18 +79,6 @@ public class SessionStoreComparator<K, V> implements SessionStore<K, V> {
   }
 
   @Override
-  @Deprecated
-  public void init(final ProcessorContext context, final StateStore root) {
-    if (context instanceof StateStoreContext) {
-      init((StateStoreContext) context, root);
-    } else {
-      throw new UnsupportedOperationException(
-          "Use ResponsiveSessionStore#init(StateStoreContext, StateStore) instead."
-      );
-    }
-  }
-
-  @Override
   public void flush() {
     this.sourceOfTruth.flush();
     this.candidate.flush();

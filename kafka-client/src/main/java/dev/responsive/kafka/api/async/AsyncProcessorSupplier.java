@@ -117,7 +117,8 @@ public final class AsyncProcessorSupplier<KIn, VIn, KOut, VOut>
     implements ProcessorSupplier<KIn, VIn, KOut, VOut> {
 
   private final ProcessorSupplier<KIn, VIn, KOut, VOut> userProcessorSupplier;
-  private final Map<String, AbstractAsyncStoreBuilder<?, ?, ?>> asyncStoreBuilders;
+
+  private Map<String, AbstractAsyncStoreBuilder<?, ?, ?>> asyncStoreBuilders = null;
 
   /**
    * Create an AsyncProcessorSupplier that wraps a custom {@link ProcessorSupplier}
@@ -132,32 +133,30 @@ public final class AsyncProcessorSupplier<KIn, VIn, KOut, VOut>
   public static <KIn, VIn, KOut, VOut> AsyncProcessorSupplier<KIn, VIn, KOut, VOut> createAsyncProcessorSupplier(
       final ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier
   ) {
-    return new AsyncProcessorSupplier<>(processorSupplier, processorSupplier.stores());
+    return new AsyncProcessorSupplier<>(processorSupplier);
   }
 
   private AsyncProcessorSupplier(
-      final ProcessorSupplier<KIn, VIn, KOut, VOut> userProcessorSupplier,
-      final Set<StoreBuilder<?>> userStoreBuilders
+      final ProcessorSupplier<KIn, VIn, KOut, VOut> userProcessorSupplier
   ) {
-    if (userStoreBuilders == null || userStoreBuilders.isEmpty()) {
-      throw new UnsupportedOperationException(
-          "Async processing currently requires at least one state store be "
-              + "connected to the async processor, and that stores be connected "
-              + "by implementing the #stores method in your processor supplier");
-    }
-
     this.userProcessorSupplier = userProcessorSupplier;
-    this.asyncStoreBuilders = initializeAsyncBuilders(userStoreBuilders);
   }
 
   @Override
   public AsyncProcessor<KIn, VIn, KOut, VOut> get() {
+    maybeInitializeAsyncStoreBuilders();
     return createAsyncProcessor(userProcessorSupplier.get(), asyncStoreBuilders);
   }
 
   @Override
   public Set<StoreBuilder<?>> stores() {
+    maybeInitializeAsyncStoreBuilders();
     return new HashSet<>(asyncStoreBuilders.values());
   }
 
+  private void maybeInitializeAsyncStoreBuilders() {
+    if (asyncStoreBuilders == null) {
+      asyncStoreBuilders = initializeAsyncBuilders(userProcessorSupplier.stores());
+    }
+  }
 }

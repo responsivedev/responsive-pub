@@ -72,10 +72,6 @@ public class ResponsiveStoreBuilder<K, V, T extends StateStore> implements Store
     this.time = time;
   }
 
-  public StoreType storeType() {
-    return storeType;
-  }
-
   public StoreSupplier<?> storeSupplier() {
     return userStoreSupplier;
   }

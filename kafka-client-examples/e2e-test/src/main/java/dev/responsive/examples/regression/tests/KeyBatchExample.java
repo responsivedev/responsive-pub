@@ -32,9 +32,10 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Produced;
-import org.apache.kafka.streams.kstream.Transformer;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
@@ -70,7 +71,7 @@ public class KeyBatchExample extends AbstractKSExampleService {
     }
 
     builder.stream(ORDERS, Consumed.with(Serdes.String(), RegressionSchema.orderSerde()))
-        .transform(BatchTransformer::new, "grouped-orders-store")
+        .process(BatchTransformer::new, "grouped-orders-store")
         .peek((k, v) -> {
           if (responsive) {
             final var random = Math.abs(randomGenerator.nextLong() % 10000);
@@ -84,14 +85,13 @@ public class KeyBatchExample extends AbstractKSExampleService {
     return builder.build();
   }
 
-  private static class BatchTransformer
-      implements Transformer<String, Order, KeyValue<String, GroupedOrder>> {
+  private static class BatchTransformer implements Processor<String, Order, String, GroupedOrder> {
 
-    private ProcessorContext context;
+    private ProcessorContext<String, GroupedOrder> context;
     private KeyValueStore<String, StoredOrder> store;
 
     @Override
-    public void init(final ProcessorContext context) {
+    public void init(final ProcessorContext<String, GroupedOrder> context) {
       this.context = context;
       this.store = context.getStateStore("grouped-orders-store");
       this.context.schedule(
@@ -102,15 +102,15 @@ public class KeyBatchExample extends AbstractKSExampleService {
     }
 
     @Override
-    public KeyValue<String, GroupedOrder> transform(final String key, final Order value) {
-      final long ts = context.timestamp();
+    public void process(final Record<String, Order> record) {
+      final long ts = record.timestamp();
 
       // first add the order to the list of orders that are stored
-      store.put(storedKey(key, ts), new StoredOrder(Optional.of(value), Optional.empty()));
+      store.put(storedKey(record.key(), ts), new StoredOrder(Optional.of(record.value()), Optional.empty()));
 
       // next, we need to update the tracked metadata row to
       // check whether the value ought to be emitted
-      final String mKey = metaKey(key);
+      final String mKey = metaKey(record.key());
       final StoredOrder.Meta meta = Optional.ofNullable(store.get(mKey))
           .orElse(new StoredOrder(Optional.empty(), Optional.of(new StoredOrder.Meta(ts, 0, 0))))
           .meta()
@@ -122,17 +122,15 @@ public class KeyBatchExample extends AbstractKSExampleService {
       final StoredOrder.Meta newMeta = new StoredOrder.Meta(
           ts,
           meta.count() + 1,
-          meta.size() + (long) value.amount()
+          meta.size() + (long) record.value().amount()
       );
 
       if (shouldFlush(newMeta, ts)) {
-        doFlush(key);
+        doFlush(record.key());
         store.delete(mKey);
       } else {
         store.put(mKey, new StoredOrder(Optional.empty(), Optional.of(newMeta)));
       }
-
-      return null;
     }
 
     private void flushExpired(long ts) {
@@ -174,7 +172,7 @@ public class KeyBatchExample extends AbstractKSExampleService {
                       "Got stored order with no order! %s".formatted(value))));
         }
 
-        context.forward(key, result);
+        context.forward(new Record<>(key, result, 0L));
       }
     }
 

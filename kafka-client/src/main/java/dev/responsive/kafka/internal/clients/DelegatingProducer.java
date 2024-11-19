@@ -28,10 +28,11 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.metrics.KafkaMetric;
 
 public abstract class DelegatingProducer<K, V> implements Producer<K, V> {
 
-  private final Producer<K, V> delegate;
+  protected final Producer<K, V> delegate;
 
   public DelegatingProducer(final Producer<K, V> delegate) {
     this.delegate = delegate;
@@ -112,6 +113,16 @@ public abstract class DelegatingProducer<K, V> implements Producer<K, V> {
   @Override
   public void close(final Duration timeout) {
     delegate.close();
+  }
+
+  @Override
+  public void registerMetricForSubscription(final KafkaMetric metric) {
+    delegate.registerMetricForSubscription(metric);
+  }
+
+  @Override
+  public void unregisterMetricFromSubscription(final KafkaMetric metric) {
+    delegate.unregisterMetricFromSubscription(metric);
   }
 
 }

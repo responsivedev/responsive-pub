@@ -16,6 +16,10 @@ plugins {
     id("responsive.helm")
 }
 
+repositories {
+    mavenLocal()
+}
+
 application {
     mainClass.set("dev.responsive.k8s.operator.OperatorMain")
 }

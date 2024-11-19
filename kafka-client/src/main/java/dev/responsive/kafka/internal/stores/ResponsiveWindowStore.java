@@ -82,18 +82,6 @@ public class ResponsiveWindowStore
   }
 
   @Override
-  @Deprecated
-  public void init(final ProcessorContext context, final StateStore root) {
-    if (context instanceof StateStoreContext) {
-      init((StateStoreContext) context, root);
-    } else {
-      throw new UnsupportedOperationException(
-          "Use ResponsiveWindowStore#init(StateStoreContext, StateStore) instead."
-      );
-    }
-  }
-
-  @Override
   public void init(final StateStoreContext storeContext, final StateStore root) {
     try {
       log.info("Initializing state store");

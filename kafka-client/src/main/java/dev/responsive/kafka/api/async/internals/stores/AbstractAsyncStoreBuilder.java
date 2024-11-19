@@ -33,9 +33,9 @@ public abstract class AbstractAsyncStoreBuilder<K, V, T extends StateStore>
     implements StoreBuilder<T> {
 
   protected final String name;
-  protected final Serde<K> keySerde;
-  protected final Serde<V> valueSerde;
-  protected final Time time;
+  protected Serde<K> keySerde;
+  protected Serde<V> valueSerde;
+  protected Time time;
   protected final Map<String, String> logConfig = new HashMap<>();
 
   private boolean cachingEnabled = false;
@@ -48,14 +48,17 @@ public abstract class AbstractAsyncStoreBuilder<K, V, T extends StateStore>
       new ConcurrentHashMap<>();
 
   public AbstractAsyncStoreBuilder(
-      final String name,
-      final Serde<K> keySerde,
-      final Serde<V> valueSerde,
-      final Time time
+      final String name
   ) {
     Objects.requireNonNull(name, "name cannot be null");
-    Objects.requireNonNull(time, "time cannot be null");
     this.name = name;
+  }
+
+  public void initialize(final Serde<K> keySerde,
+                         final Serde<V> valueSerde,
+                         final Time time) {
+    Objects.requireNonNull(time, "time cannot be null");
+
     this.keySerde = keySerde;
     this.valueSerde = valueSerde;
     this.time = time;

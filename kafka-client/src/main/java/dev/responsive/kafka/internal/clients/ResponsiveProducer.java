@@ -32,11 +32,11 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.metrics.KafkaMetric;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class ResponsiveProducer<K, V> implements Producer<K, V> {
-  private final Producer<K, V> wrapped;
+public class ResponsiveProducer<K, V> extends DelegatingProducer<K, V> {
   private final List<Listener> listeners;
   private final Logger logger;
 
@@ -65,21 +65,12 @@ public class ResponsiveProducer<K, V> implements Producer<K, V> {
       final Producer<K, V> wrapped,
       final List<Listener> listeners
   ) {
+    super(wrapped);
     this.logger = LoggerFactory.getLogger(
         ResponsiveProducer.class.getName() + "." + Objects.requireNonNull(clientid));
-    this.wrapped = Objects.requireNonNull(wrapped);
     this.listeners = Objects.requireNonNull(listeners);
   }
 
-  @Override
-  public void initTransactions() {
-    wrapped.initTransactions();
-  }
-
-  @Override
-  public void beginTransaction() throws ProducerFencedException {
-    wrapped.beginTransaction();
-  }
 
   @Override
   @SuppressWarnings("deprecation")
@@ -87,7 +78,7 @@ public class ResponsiveProducer<K, V> implements Producer<K, V> {
       final Map<TopicPartition, OffsetAndMetadata> offsets,
       final String consumerGroupId
   ) throws ProducerFencedException {
-    wrapped.sendOffsetsToTransaction(offsets, consumerGroupId);
+    delegate.sendOffsetsToTransaction(offsets, consumerGroupId);
     for (final var l : listeners) {
       l.onSendOffsetsToTransaction(offsets, consumerGroupId);
     }
@@ -98,7 +89,7 @@ public class ResponsiveProducer<K, V> implements Producer<K, V> {
       final Map<TopicPartition, OffsetAndMetadata> offsets,
       final ConsumerGroupMetadata groupMetadata
   ) throws ProducerFencedException {
-    wrapped.sendOffsetsToTransaction(offsets, groupMetadata);
+    delegate.sendOffsetsToTransaction(offsets, groupMetadata);
     for (final var l : listeners) {
       l.onSendOffsetsToTransaction(offsets, groupMetadata.groupId());
     }
@@ -106,57 +97,38 @@ public class ResponsiveProducer<K, V> implements Producer<K, V> {
 
   @Override
   public void commitTransaction() throws ProducerFencedException {
-    wrapped.commitTransaction();
+    delegate.commitTransaction();
     listeners.forEach(Listener::onCommit);
   }
 
   @Override
   public void abortTransaction() throws ProducerFencedException {
-    wrapped.abortTransaction();
+    delegate.abortTransaction();
     listeners.forEach(Listener::onAbort);
   }
 
   @Override
   public Future<RecordMetadata> send(final ProducerRecord<K, V> record) {
-    return new RecordingFuture(wrapped.send(record), listeners);
+    return new RecordingFuture(delegate.send(record), listeners);
   }
 
   @Override
   public Future<RecordMetadata> send(final ProducerRecord<K, V> record, final Callback callback) {
     return new RecordingFuture(
-        wrapped.send(record, new RecordingCallback(callback, listeners)), listeners
+        delegate.send(record, new RecordingCallback(callback, listeners)), listeners
     );
   }
 
-  @Override
-  public void flush() {
-    wrapped.flush();
-  }
-
-  @Override
-  public List<PartitionInfo> partitionsFor(final String topic) {
-    return wrapped.partitionsFor(topic);
-  }
-
-  @Override
-  public Map<MetricName, ? extends Metric> metrics() {
-    return wrapped.metrics();
-  }
-
-  @Override
-  public Uuid clientInstanceId(final Duration duration) {
-    return wrapped.clientInstanceId(duration);
-  }
 
   @Override
   public void close() {
-    wrapped.close();
+    delegate.close();
     closeListeners();
   }
 
   @Override
   public void close(final Duration timeout) {
-    wrapped.close();
+    delegate.close(timeout);
     closeListeners();
   }
 
