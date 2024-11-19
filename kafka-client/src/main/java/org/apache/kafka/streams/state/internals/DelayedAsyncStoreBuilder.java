@@ -14,6 +14,8 @@ package org.apache.kafka.streams.state.internals;
 
 import dev.responsive.kafka.api.async.internals.stores.AbstractAsyncStoreBuilder;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreBuilder;
+import dev.responsive.kafka.internal.stores.ResponsiveStoreBuilder.ResponsiveKeyValueStoreBuilder;
+import dev.responsive.kafka.internal.stores.ResponsiveStoreBuilder.ResponsiveTimestampedKeyValueStoreBuilder;
 import java.lang.reflect.Field;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
@@ -47,51 +49,34 @@ public class DelayedAsyncStoreBuilder<K, V, T extends StateStore>
       }
     }
 
-    if (innerResolved instanceof ResponsiveStoreBuilder) {
-      final ResponsiveStoreBuilder responsiveBuilder = (ResponsiveStoreBuilder) innerResolved;
-      switch (responsiveBuilder.storeType()) {
-        case KEY_VALUE:
-          return (T) getKeyValueStore(
-              (KeyValueBytesStoreSupplier) responsiveBuilder.storeSupplier(),
-              responsiveBuilder.time(),
-              responsiveBuilder.keySerde(),
-              responsiveBuilder.innerValueSerde()
-          );
-        case TIMESTAMPED_KEY_VALUE:
-          final Serde valueSerde = responsiveBuilder.innerValueSerde();
-          return (T) getTimestampedKeyValueStore(
-              (KeyValueBytesStoreSupplier) responsiveBuilder.storeSupplier(),
-              responsiveBuilder.time(),
-              responsiveBuilder.keySerde(),
-              valueSerde == null ? null : new ValueAndTimestampSerde<>(valueSerde)
-          );
-        default:
-          throw new UnsupportedOperationException("Other store types not yet supported");
-      }
+    if (innerResolved instanceof KeyValueStoreBuilder) {
+      return (T) getKeyValueStore((KeyValueStoreBuilder) innerResolved);
+    } else if (innerResolved instanceof TimestampedKeyValueStoreBuilder) {
+      return (T) getTimestampedKeyValueStore((TimestampedKeyValueStoreBuilder) innerResolved);
     } else {
-      if (innerResolved instanceof KeyValueStoreBuilder) {
-        return (T) getKeyValueStore((KeyValueStoreBuilder) innerResolved);
-      } else if (innerResolved instanceof TimestampedKeyValueStoreBuilder) {
-        return (T) getTimestampedKeyValueStore((TimestampedKeyValueStoreBuilder) innerResolved);
-      } else {
-        throw new UnsupportedOperationException("Other store types not yet supported");
-      }
+      throw new UnsupportedOperationException("Other store types not yet supported");
     }
   }
 
-  @SuppressWarnings({"unchecked", "rawtypes"})
+  @SuppressWarnings({"rawtypes"})
   private StateStore getKeyValueStore(final KeyValueStoreBuilder kvBuilder) {
-    try {
-      final Field storeSupplierField = KeyValueStoreBuilder.class.getDeclaredField("storeSupplier");
-      storeSupplierField.setAccessible(true);
+    final KeyValueBytesStoreSupplier storeSupplier;
+    if (kvBuilder instanceof ResponsiveStoreBuilder.ResponsiveKeyValueStoreBuilder) {
+      storeSupplier = ((ResponsiveKeyValueStoreBuilder) kvBuilder).storeSupplier();
+    } else {
+      try {
+        final Field storeSupplierField =
+            KeyValueStoreBuilder.class.getDeclaredField("storeSupplier");
+        storeSupplierField.setAccessible(true);
 
-      final KeyValueBytesStoreSupplier storeSupplier =
-          (KeyValueBytesStoreSupplier) storeSupplierField.get(kvBuilder);
-
-      return getKeyValueStore(storeSupplier, kvBuilder.time, kvBuilder.keySerde, kvBuilder.valueSerde);
-    } catch (final Exception e) {
-      throw new IllegalStateException("Failed to build async key-value store", e);
+        storeSupplier =
+            (KeyValueBytesStoreSupplier) storeSupplierField.get(kvBuilder);
+      } catch (final Exception e) {
+        throw new IllegalStateException("Failed to retrieve store supplier for async "
+                                            + "key-value store", e);
+      }
     }
+    return getKeyValueStore(storeSupplier, kvBuilder.time, kvBuilder.keySerde, kvBuilder.valueSerde);
   }
 
   @SuppressWarnings({"unchecked", "rawtypes"})
@@ -115,27 +100,31 @@ public class DelayedAsyncStoreBuilder<K, V, T extends StateStore>
     );
   }
 
-  @SuppressWarnings({"unchecked", "rawtypes"})
+  @SuppressWarnings({"rawtypes"})
   private StateStore getTimestampedKeyValueStore(
       final TimestampedKeyValueStoreBuilder kvBuilder
   ) {
-    try {
-      final Field storeSupplierField =
-          TimestampedKeyValueStoreBuilder.class.getDeclaredField("storeSupplier");
-      storeSupplierField.setAccessible(true);
+    final KeyValueBytesStoreSupplier storeSupplier;
+    if (kvBuilder instanceof ResponsiveStoreBuilder.ResponsiveTimestampedKeyValueStoreBuilder) {
+      storeSupplier = ((ResponsiveTimestampedKeyValueStoreBuilder) kvBuilder).storeSupplier();
+    } else {
+      try {
+        final Field storeSupplierField =
+            TimestampedKeyValueStoreBuilder.class.getDeclaredField("storeSupplier");
+        storeSupplierField.setAccessible(true);
 
-      final KeyValueBytesStoreSupplier storeSupplier =
-          (KeyValueBytesStoreSupplier) storeSupplierField.get(kvBuilder);
-
-      return getTimestampedKeyValueStore(
-          storeSupplier,
-          kvBuilder.time,
-          kvBuilder.keySerde,
-          kvBuilder.valueSerde
-      );
-    } catch (final Exception e) {
-      throw new IllegalStateException("Failed to build async key-value store", e);
+        storeSupplier = (KeyValueBytesStoreSupplier) storeSupplierField.get(kvBuilder);
+      } catch (final Exception e) {
+        throw new IllegalStateException("Failed to build async key-value store", e);
+      }
     }
+
+    return getTimestampedKeyValueStore(
+        storeSupplier,
+        kvBuilder.time,
+        kvBuilder.keySerde,
+        kvBuilder.valueSerde
+    );
   }
 
   @SuppressWarnings({"unchecked", "rawtypes"})

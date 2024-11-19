@@ -16,130 +16,130 @@ import java.util.Map;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
+import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.StoreSupplier;
+import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.TimestampedWindowStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
+import org.apache.kafka.streams.state.WindowStore;
+import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
+import org.apache.kafka.streams.state.internals.SessionStoreBuilder;
+import org.apache.kafka.streams.state.internals.TimestampedKeyValueStoreBuilder;
+import org.apache.kafka.streams.state.internals.TimestampedWindowStoreBuilder;
+import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
 
-public class ResponsiveStoreBuilder<K, V, T extends StateStore> implements StoreBuilder<T> {
+public interface ResponsiveStoreBuilder<K, V, T extends StateStore> extends StoreBuilder<T> {
 
-  private final StoreType storeType;
-  private final StoreSupplier<?> userStoreSupplier;
-  private final StoreBuilder<T> userStoreBuilder;
-  private final Serde<K> keySerde;
-  // Note: the valueSerde is not necessary of type V, eg in case of timestamped stores
-  private final Serde<?> valueSerde;
-  private final Time time;
+  StoreSupplier<?> storeSupplier();
 
-  public enum StoreType {
-    KEY_VALUE,
-    TIMESTAMPED_KEY_VALUE,
-    WINDOW,
-    TIMESTAMPED_WINDOW,
-    SESSION
+  class ResponsiveKeyValueStoreBuilder<K, V, T> extends KeyValueStoreBuilder<K, V>
+      implements ResponsiveStoreBuilder<K, V, KeyValueStore<K, V>>  {
+
+    private final KeyValueBytesStoreSupplier storeSupplier;
+
+    public ResponsiveKeyValueStoreBuilder(
+        final KeyValueBytesStoreSupplier storeSupplier,
+        final Serde<K> keySerde,
+        final Serde<V> valueSerde,
+        final Time time
+    ) {
+      super(storeSupplier, keySerde, valueSerde, time);
+      this.storeSupplier = storeSupplier;
+    }
+
+    @Override
+    public KeyValueBytesStoreSupplier storeSupplier() {
+      return storeSupplier;
+    }
   }
 
-  public ResponsiveStoreBuilder(
-      final StoreType storeType,
-      final StoreSupplier<?> userStoreSupplier,
-      final StoreBuilder<T> userStoreBuilder,
-      final Serde<K> keySerde,
-      final Serde<?> valueSerde
-  ) {
-    // the time parameter only exists for Streams unit tests and in non-testing code
-    // will always hard-code Time.SYSTEM
-    this(
-        storeType,
-        userStoreSupplier,
-        userStoreBuilder,
-        keySerde,
-        valueSerde,
-        Time.SYSTEM
-    );
+  class ResponsiveTimestampedKeyValueStoreBuilder<K, V, T>
+      extends TimestampedKeyValueStoreBuilder<K, V>
+      implements ResponsiveStoreBuilder<K, ValueAndTimestamp<V>, TimestampedKeyValueStore<K, V>>  {
+
+    private final KeyValueBytesStoreSupplier storeSupplier;
+
+    public ResponsiveTimestampedKeyValueStoreBuilder(
+        final KeyValueBytesStoreSupplier storeSupplier,
+        final Serde<K> keySerde,
+        final Serde<V> valueSerde,
+        final Time time
+    ) {
+      super(storeSupplier, keySerde, valueSerde, time);
+      this.storeSupplier = storeSupplier;
+    }
+
+    @Override
+    public KeyValueBytesStoreSupplier storeSupplier() {
+      return storeSupplier;
+    }
   }
 
-  private ResponsiveStoreBuilder(
-      final StoreType storeType,
-      final StoreSupplier<?> userStoreSupplier,
-      final StoreBuilder<T> userStoreBuilder,
-      final Serde<K> keySerde,
-      final Serde<?> valueSerde,
-      final Time time
-  ) {
-    this.storeType = storeType;
-    this.userStoreSupplier = userStoreSupplier;
-    this.userStoreBuilder = userStoreBuilder;
-    this.keySerde = keySerde;
-    this.valueSerde = valueSerde;
-    this.time = time;
+  class ResponsiveWindowStoreBuilder<K, V, T> extends WindowStoreBuilder<K, V>
+      implements ResponsiveStoreBuilder<K, V, WindowStore<K, V>>  {
+
+    private final WindowBytesStoreSupplier storeSupplier;
+
+    public ResponsiveWindowStoreBuilder(
+        final WindowBytesStoreSupplier storeSupplier,
+        final Serde<K> keySerde,
+        final Serde<V> valueSerde,
+        final Time time
+    ) {
+      super(storeSupplier, keySerde, valueSerde, time);
+      this.storeSupplier = storeSupplier;
+    }
+
+    @Override
+    public WindowBytesStoreSupplier storeSupplier() {
+      return storeSupplier;
+    }
   }
 
-  public StoreType storeType() {
-    return storeType;
+  class ResponsiveTimestampedWindowStoreBuilder<K, V, T> extends TimestampedWindowStoreBuilder<K, V>
+      implements ResponsiveStoreBuilder<K, V, TimestampedWindowStore<K, V>>  {
+
+    private final WindowBytesStoreSupplier storeSupplier;
+
+    public ResponsiveTimestampedWindowStoreBuilder(
+        final WindowBytesStoreSupplier storeSupplier,
+        final Serde<K> keySerde,
+        final Serde<V> valueSerde,
+        final Time time
+    ) {
+      super(storeSupplier, keySerde, valueSerde, time);
+      this.storeSupplier = storeSupplier;
+    }
+
+    @Override
+    public WindowBytesStoreSupplier storeSupplier() {
+      return storeSupplier;
+    }
   }
 
-  public StoreSupplier<?> storeSupplier() {
-    return userStoreSupplier;
-  }
+  class ResponsiveSessionStoreBuilder<K, V, T> extends SessionStoreBuilder<K, V>
+      implements ResponsiveStoreBuilder<K, V, SessionStore<K, V>>  {
 
-  public Serde<K> keySerde() {
-    return keySerde;
-  }
+    private final SessionBytesStoreSupplier storeSupplier;
 
-  // For timestamped stores, this will be the serde for the inner value type
-  // which will not be the same type as V, which is the store's actual V type
-  // (and would actually be TimestampAndValue<VInner> for timestamped stores)
-  @SuppressWarnings("unchecked")
-  public <VInner> Serde<VInner> innerValueSerde() {
-    return (Serde<VInner>) valueSerde;
-  }
+    public ResponsiveSessionStoreBuilder(
+        final SessionBytesStoreSupplier storeSupplier,
+        final Serde<K> keySerde,
+        final Serde<V> valueSerde,
+        final Time time
+    ) {
+      super(storeSupplier, keySerde, valueSerde, time);
+      this.storeSupplier = storeSupplier;
+    }
 
-  public Time time() {
-    return time;
+    @Override
+    public SessionBytesStoreSupplier storeSupplier() {
+      return storeSupplier;
+    }
   }
-
-  @Override
-  public StoreBuilder<T> withCachingEnabled() {
-    userStoreBuilder.withCachingEnabled();
-    return this;
-  }
-
-  @Override
-  public StoreBuilder<T> withCachingDisabled() {
-    userStoreBuilder.withCachingDisabled();
-    return this;
-  }
-
-  @Override
-  public StoreBuilder<T> withLoggingEnabled(final Map<String, String> config) {
-    userStoreBuilder.withLoggingEnabled(config);
-    return this;
-  }
-
-  @Override
-  public StoreBuilder<T> withLoggingDisabled() {
-    userStoreBuilder.withLoggingDisabled();
-    throw new UnsupportedOperationException(
-        "Responsive stores are currently incompatible with disabling the changelog. "
-            + "Please reach out to us to request this feature.");
-  }
-
-  @Override
-  public T build() {
-    return userStoreBuilder.build();
-  }
-
-  @Override
-  public Map<String, String> logConfig() {
-    return userStoreBuilder.logConfig();
-  }
-
-  @Override
-  public boolean loggingEnabled() {
-    return userStoreBuilder.loggingEnabled();
-  }
-
-  @Override
-  public String name() {
-    return userStoreBuilder.name();
-  }
-
 }
