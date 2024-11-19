@@ -44,11 +44,10 @@ import dev.responsive.kafka.internal.license.exception.LicenseAuthenticationExce
 import dev.responsive.kafka.internal.license.exception.LicenseUseViolationException;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.testutils.IntegrationTestUtils;
+import dev.responsive.kafka.testutils.LicenseUtils;
 import java.io.File;
 import java.io.IOException;
-import java.net.URISyntaxException;
 import java.nio.file.Files;
-import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.clients.admin.Admin;
@@ -73,8 +72,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class ResponsiveKafkaStreamsTest {
-  private static final String DECODED_LICENSE_FILE
-      = "test-licenses/test-license.json";
   private static final String DECODED_INVALID_LICENSE_FILE
       = "test-licenses/test-license-invalid-signature.json";
   private static final String DECODED_TRIAL_EXPIRED_LICENSE_FILE
@@ -146,7 +143,7 @@ class ResponsiveKafkaStreamsTest {
 
     properties.put(
         RESPONSIVE_LICENSE_CONFIG,
-        getEncodedLicense(DECODED_LICENSE_FILE)
+        LicenseUtils.getLicense()
     );
   }
 
@@ -196,7 +193,7 @@ class ResponsiveKafkaStreamsTest {
   @Test
   public void shouldAcceptLicenseInLicenseFile() {
     // given:
-    final File licenseFile = writeLicenseFile(DECODED_LICENSE_FILE);
+    final File licenseFile = writeLicenseFile(LicenseUtils.getLicense());
     properties.put(RESPONSIVE_LICENSE_CONFIG, "");
     properties.put(ResponsiveConfig.RESPONSIVE_LICENSE_FILE_CONFIG, licenseFile.getAbsolutePath());
     properties.put(COMPATIBILITY_MODE_CONFIG, CompatibilityMode.METRICS_ONLY.name());
@@ -213,7 +210,7 @@ class ResponsiveKafkaStreamsTest {
     // given:
     properties.put(
         RESPONSIVE_LICENSE_CONFIG,
-        getEncodedLicense(DECODED_INVALID_LICENSE_FILE)
+        LicenseUtils.getEncodedLicense(DECODED_INVALID_LICENSE_FILE)
     );
     properties.put(COMPATIBILITY_MODE_CONFIG, CompatibilityMode.METRICS_ONLY.name());
     final StreamsBuilder builder = new StreamsBuilder();
@@ -234,7 +231,7 @@ class ResponsiveKafkaStreamsTest {
     // given:
     properties.put(
         RESPONSIVE_LICENSE_CONFIG,
-        getEncodedLicense(DECODED_TRIAL_EXPIRED_LICENSE_FILE)
+        LicenseUtils.getEncodedLicense(DECODED_TRIAL_EXPIRED_LICENSE_FILE)
     );
     properties.put(COMPATIBILITY_MODE_CONFIG, CompatibilityMode.METRICS_ONLY.name());
     final StreamsBuilder builder = new StreamsBuilder();
@@ -285,30 +282,13 @@ class ResponsiveKafkaStreamsTest {
     ks.close();
   }
 
-  private File writeLicenseFile(final String decodedLicenseFilename) {
-    final String encoded = getEncodedLicense(decodedLicenseFilename);
+  private File writeLicenseFile(final String encoded) {
     try {
       final File encodedFile = File.createTempFile("rkst", null);
       encodedFile.deleteOnExit();
       Files.writeString(encodedFile.toPath(), encoded);
       return encodedFile;
     } catch (final IOException e) {
-      throw new RuntimeException(e);
-    }
-  }
-
-  private String getEncodedLicense(final String filename) {
-    return Base64.getEncoder().encodeToString(slurpFile(filename));
-  }
-
-  private byte[] slurpFile(final String filename) {
-    try {
-      final File file = new File(ResponsiveKafkaStreamsTest.class.getClassLoader()
-          .getResource(filename)
-          .toURI()
-      );
-      return Files.readAllBytes(file.toPath());
-    } catch (final IOException | URISyntaxException e) {
       throw new RuntimeException(e);
     }
   }

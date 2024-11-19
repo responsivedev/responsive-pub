@@ -23,6 +23,7 @@ import static dev.responsive.kafka.api.config.ResponsiveConfig.CASSANDRA_HOSTNAM
 import static dev.responsive.kafka.api.config.ResponsiveConfig.CASSANDRA_PORT_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_ENDPOINT_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_ENV_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_LICENSE_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_ORG_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_BACKEND_TYPE_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.TASK_ASSIGNOR_CLASS_OVERRIDE;
@@ -126,7 +127,8 @@ public class ResponsiveExtension implements BeforeAllCallback, AfterAllCallback,
           INTERNAL_TASK_ASSIGNOR_CLASS, TASK_ASSIGNOR_CLASS_OVERRIDE,
           BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers(),
           CASSANDRA_DESIRED_NUM_PARTITION_CONFIG, -1,
-          CASSANDRA_CHECK_INTERVAL_MS, 100
+          CASSANDRA_CHECK_INTERVAL_MS, 100,
+          RESPONSIVE_LICENSE_CONFIG, LicenseUtils.getLicense()
       ));
 
       switch (backend) {
