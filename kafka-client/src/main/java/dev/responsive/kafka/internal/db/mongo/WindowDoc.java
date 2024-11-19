@@ -30,6 +30,10 @@ public class WindowDoc {
   public static final String ID_RECORD_KEY = "key";
   public static final String ID_WINDOW_START_TS = "windowStartTs";
 
+  // combined name of id and subfield, for use in query filters
+  public static final String ID_SUBFIELD_KEY = String.join(".", ID, ID_RECORD_KEY);
+  public static final String ID_SUBFIELD_WINDOW_START = String.join(".", ID, ID_WINDOW_START_TS);
+
   BasicDBObject id;
   byte[] value;
   List<byte[]> values;
