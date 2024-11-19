@@ -1,0 +1,8 @@
+{
+  "info": "eyJlbWFpbCI6InJvaGFuQHJlc3BvbnNpdmUuZGV2IiwiaXNzdWVkQXQiOjE3MzE3MDU5NzgsImV4cGlyZXNBdCI6MTczMTcwNTk3OCwidHlwZSI6InRpbWVkX3RyaWFsX3YxIn0=",
+  "signature": "pUgmJtjfm5icyFPV96vviJqA6YQMOJBPp7gISCdU0bih1hgGBSEblJTJ0SQVR8KtrurumJeK7NtQkPBbzeYACdsaRYOCHYmz+t6l8RYBpkBJp/qIbniR+hwipf6jtugTq1L4X2hL06Ro7LpvJxaxDt4Fm6o56n6Lr+6pSc8WO8eOaAb5stuOZzwVr1ZmnNjqoLZHpuNiNGKer2S0sV0TYRu1h3/HZCcNbVzs/h6MD4j7BvsSyJzJ/Ta9Ljrf95WANQZxW7V637xzIou1sIngX2BLnmSReuPYU2tclMS+JSFS5htIGYtkNTJdfKwcpIc07k20oEh0+dzn1UvZa0HQkHcCzCdDn3ROCZ5oAw0eLYk+qo8/4ldEC93S1lptlWrr+0c+y7hckzqFkG467oDTUiVBJ3E+sMJAuAE2CNeIPvw+l+WBFQlvSrdU0cexLY0ydXvTvR7GzijCfjuBQyO6XI5lEHGQ9WF8yS6p9Tij1rVX9xmnJyxFgoDD/QyDliP4I0pUeeXTOkacGYWj3k+UketnJs6QRdabZ4LoTrd1SucfCUieyQoRHMftEWGvb/YtZuL5GfDzVu/nxYPZgNrrv5ribymBxz7C0Rjo47imWC5X/OTbMj0vPPH05LPXG92ayuJaeL+pKO2fxepEZD1O3so9yxk83peMpNGN6Vest8s=",
+  "key": "test",
+  "algo": "RSASSA_PSS_SHA_256",
+  "messageType": "RAW",
+  "version": "1"
+}

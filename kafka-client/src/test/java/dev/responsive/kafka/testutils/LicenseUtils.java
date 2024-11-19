@@ -10,7 +10,7 @@ public final class LicenseUtils {
   private static final String DECODED_LICENSE_FILE
       = "test-licenses/test-license.json";
 
-  private LicenseUtils () {
+  private LicenseUtils() {
   }
 
   public static String getLicense() {
