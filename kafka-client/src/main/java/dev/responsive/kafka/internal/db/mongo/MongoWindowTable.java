@@ -37,7 +37,7 @@ import com.mongodb.client.model.WriteModel;
 import com.mongodb.client.result.UpdateResult;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.db.MongoWindowFlushManager;
-import dev.responsive.kafka.internal.db.RemoteWindowedTable;
+import dev.responsive.kafka.internal.db.RemoteWindowTable;
 import dev.responsive.kafka.internal.db.partitioning.Segmenter;
 import dev.responsive.kafka.internal.db.partitioning.Segmenter.SegmentPartition;
 import dev.responsive.kafka.internal.db.partitioning.WindowSegmentPartitioner;
@@ -62,9 +62,9 @@ import org.bson.conversions.Bson;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<WindowDoc>> {
+public class MongoWindowTable implements RemoteWindowTable<WriteModel<WindowDoc>> {
 
-  private static final Logger LOG = LoggerFactory.getLogger(MongoWindowedTable.class);
+  private static final Logger LOG = LoggerFactory.getLogger(MongoWindowTable.class);
   private static final String METADATA_COLLECTION_NAME = "window_metadata";
 
   private static final UpdateOptions UPSERT_OPTIONS = new UpdateOptions().upsert(true);
@@ -207,7 +207,7 @@ public class MongoWindowedTable implements RemoteWindowedTable<WriteModel<Window
     }
   }
 
-  public MongoWindowedTable(
+  public MongoWindowTable(
       final MongoClient client,
       final String name,
       final WindowSegmentPartitioner partitioner,

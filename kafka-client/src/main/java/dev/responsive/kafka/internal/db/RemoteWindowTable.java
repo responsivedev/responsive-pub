@@ -16,7 +16,7 @@ import dev.responsive.kafka.internal.utils.WindowedKey;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
-public interface RemoteWindowedTable<S> extends RemoteTable<WindowedKey, S> {
+public interface RemoteWindowTable<S> extends RemoteTable<WindowedKey, S> {
 
   /**
    * Initializes the table by setting the metadata fields to

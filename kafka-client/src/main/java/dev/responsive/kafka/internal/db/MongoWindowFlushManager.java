@@ -16,7 +16,7 @@ import com.mongodb.MongoBulkWriteException;
 import com.mongodb.MongoException;
 import com.mongodb.bulk.WriteConcernError;
 import com.mongodb.client.MongoCollection;
-import dev.responsive.kafka.internal.db.mongo.MongoWindowedTable;
+import dev.responsive.kafka.internal.db.mongo.MongoWindowTable;
 import dev.responsive.kafka.internal.db.mongo.MongoWriter;
 import dev.responsive.kafka.internal.db.mongo.WindowDoc;
 import dev.responsive.kafka.internal.db.partitioning.Segmenter.SegmentPartition;
@@ -33,14 +33,14 @@ public class MongoWindowFlushManager extends WindowFlushManager {
   private final String logPrefix;
   private final Logger log;
 
-  private final MongoWindowedTable table;
+  private final MongoWindowTable table;
   private final Function<SegmentPartition, MongoCollection<WindowDoc>> windowsForSegment;
 
   private final WindowSegmentPartitioner partitioner;
   private final int kafkaPartition;
 
   public MongoWindowFlushManager(
-      final MongoWindowedTable table,
+      final MongoWindowTable table,
       final Function<SegmentPartition, MongoCollection<WindowDoc>> windowsForSegment,
       final WindowSegmentPartitioner partitioner,
       final int kafkaPartition,
