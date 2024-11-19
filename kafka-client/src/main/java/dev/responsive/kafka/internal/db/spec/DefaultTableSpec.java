@@ -21,9 +21,6 @@ import java.util.Optional;
 
 public class DefaultTableSpec implements RemoteTableSpec {
 
-  private static final CompactionStrategy<?> DEFAULT_CASSANDRA_COMPACTION_STRATEGY =
-      new DefaultLeveledCompactionStrategy();
-
   private final String name;
   private final TablePartitioner<?, ?> partitioner;
   private final Optional<TtlResolver<?, ?>> ttlResolver;
@@ -55,6 +52,6 @@ public class DefaultTableSpec implements RemoteTableSpec {
 
   @Override
   public CreateTableWithOptions applyDefaultOptions(final CreateTableWithOptions base) {
-    return base.withCompaction(DEFAULT_CASSANDRA_COMPACTION_STRATEGY);
+    return base;
   }
 }
