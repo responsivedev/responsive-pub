@@ -13,16 +13,11 @@
 package dev.responsive.kafka.internal.db.spec;
 
 import com.datastax.oss.driver.api.querybuilder.schema.CreateTableWithOptions;
-import com.datastax.oss.driver.api.querybuilder.schema.compaction.CompactionStrategy;
-import com.datastax.oss.driver.internal.querybuilder.schema.compaction.DefaultLeveledCompactionStrategy;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.stores.TtlResolver;
 import java.util.Optional;
 
 public class DefaultTableSpec implements RemoteTableSpec {
-
-  private static final CompactionStrategy<?> DEFAULT_CASSANDRA_COMPACTION_STRATEGY =
-      new DefaultLeveledCompactionStrategy();
 
   private final String name;
   private final TablePartitioner<?, ?> partitioner;
@@ -55,6 +50,6 @@ public class DefaultTableSpec implements RemoteTableSpec {
 
   @Override
   public CreateTableWithOptions applyDefaultOptions(final CreateTableWithOptions base) {
-    return base.withCompaction(DEFAULT_CASSANDRA_COMPACTION_STRATEGY);
+    return base;
   }
 }
