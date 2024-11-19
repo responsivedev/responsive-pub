@@ -18,6 +18,7 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 
+@SuppressWarnings("checkstyle:OverloadMethodsDeclarationOrder")
 public class AsyncFlushingSessionStore 
     extends AbstractAsyncFlushingStore<SessionStore<Bytes, byte[]>>
     implements SessionStore<Bytes, byte[]> {

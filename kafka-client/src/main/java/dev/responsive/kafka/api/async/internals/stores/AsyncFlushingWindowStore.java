@@ -19,9 +19,10 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
+@SuppressWarnings("checkstyle:OverloadMethodsDeclarationOrder")
 public class AsyncFlushingWindowStore 
     extends AbstractAsyncFlushingStore<WindowStore<Bytes, byte[]>>
-    implements WindowStore<Bytes, byte[]>{
+    implements WindowStore<Bytes, byte[]> {
 
   public AsyncFlushingWindowStore(
       final WindowStore<Bytes, byte[]> inner,

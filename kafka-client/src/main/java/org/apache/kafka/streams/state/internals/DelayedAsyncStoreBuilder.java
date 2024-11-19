@@ -21,7 +21,6 @@ import dev.responsive.kafka.internal.stores.ResponsiveStoreBuilder.ResponsiveTim
 import dev.responsive.kafka.internal.stores.ResponsiveStoreBuilder.ResponsiveWindowStoreBuilder;
 import java.lang.reflect.Field;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.StateStore;
@@ -65,7 +64,7 @@ public class DelayedAsyncStoreBuilder<K, V, T extends StateStore>
     } else if (innerResolved instanceof TimestampedWindowStoreBuilder) {
       return (T) getTimestampedWindowStore((TimestampedWindowStoreBuilder) innerResolved);
     } else if (innerResolved instanceof SessionStoreBuilder) {
-        return (T) getSessionStore((SessionStoreBuilder) innerResolved);
+      return (T) getSessionStore((SessionStoreBuilder) innerResolved);
     } else {
       throw new UnsupportedOperationException("Other store types not yet supported");
     }

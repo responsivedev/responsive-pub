@@ -12,7 +12,6 @@
 
 package dev.responsive.kafka.internal.stores;
 
-import java.util.Map;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.StateStore;

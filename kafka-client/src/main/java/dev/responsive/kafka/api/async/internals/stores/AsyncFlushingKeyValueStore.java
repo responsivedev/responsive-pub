@@ -12,20 +12,13 @@
 
 package dev.responsive.kafka.api.async.internals.stores;
 
-import dev.responsive.kafka.api.async.internals.stores.StreamThreadFlushListeners.AsyncFlushListener;
 import java.util.List;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.internals.CacheFlushListener;
 import org.apache.kafka.streams.state.internals.CachedStateStore;
 import org.apache.kafka.streams.state.internals.CachingKeyValueStore;
-import org.apache.kafka.streams.state.internals.WrappedStateStore;
-import org.slf4j.Logger;
 
 /**
  * Simple wrapper class around Kafka Streams' {@link CachingKeyValueStore} class that
@@ -87,6 +80,5 @@ public class AsyncFlushingKeyValueStore
   public long approximateNumEntries() {
     return wrapped().approximateNumEntries();
   }
-
 
 }
