@@ -50,10 +50,8 @@ public class TTDCassandraClient extends CassandraClient {
     this.time = time;
 
     kvFactory = new TableCache<>(spec -> new TTDKeyValueTable(spec, this));
-    windowedFactory = new WindowedTableCache<>((spec, partitioner) -> TTDWindowTable.create(spec,
-                                                                                            this,
-                                                                                            partitioner
-    ));
+    windowedFactory = new WindowedTableCache<>(
+        (spec, partitioner) -> TTDWindowTable.create(spec, this, partitioner));
   }
 
   public ResponsiveStoreRegistry storeRegistry() {
