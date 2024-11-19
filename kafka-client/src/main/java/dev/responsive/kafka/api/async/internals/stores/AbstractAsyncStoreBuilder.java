@@ -20,7 +20,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.WindowStore;
 
 /**
  * A copy of the {@link org.apache.kafka.streams.state.internals.AbstractStoreBuilder} class with
@@ -55,7 +57,6 @@ public abstract class AbstractAsyncStoreBuilder<T extends StateStore>
    * hierarchy by wrapping it in a {@link AsyncFlushingKeyValueStore}.
    * <p>
    * This specific method is for use with KV stores, whether plain or timestamped.
-   * TODO: add equivalent for window/session stores
    */
   protected KeyValueStore<Bytes, byte[]> wrapAsyncFlushingKV(
       final KeyValueStore<Bytes, byte[]> inner
@@ -64,6 +65,40 @@ public abstract class AbstractAsyncStoreBuilder<T extends StateStore>
         getOrCreateFlushListeners(Thread.currentThread().getName());
 
     return new AsyncFlushingKeyValueStore(inner, threadFlushListeners);
+  }
+
+  /**
+   * Similar to the #maybeWrapCaching or #maybeWrapLogging methods in the
+   * {@link org.apache.kafka.streams.state.internals.DelayedAsyncStoreBuilder},
+   * this method adds an additional layer to the store
+   * hierarchy by wrapping it in a {@link AsyncFlushingWindowStore}.
+   * <p>
+   * This specific method is for use with window stores, whether plain or timestamped.
+   */
+  protected WindowStore<Bytes, byte[]> wrapAsyncFlushingWindow(
+      final WindowStore<Bytes, byte[]> inner
+  ) {
+    final StreamThreadFlushListeners threadFlushListeners =
+        getOrCreateFlushListeners(Thread.currentThread().getName());
+
+    return new AsyncFlushingWindowStore(inner, threadFlushListeners);
+  }
+
+  /**
+   * Similar to the #maybeWrapCaching or #maybeWrapLogging methods in the
+   * {@link org.apache.kafka.streams.state.internals.DelayedAsyncStoreBuilder},
+   * this method adds an additional layer to the store
+   * hierarchy by wrapping it in a {@link AsyncFlushingSessionStore}.
+   * <p>
+   * This specific method is for use with session stores, whether plain or timestamped.
+   */
+  protected SessionStore<Bytes, byte[]> wrapAsyncFlushingSession(
+      final SessionStore<Bytes, byte[]> inner
+  ) {
+    final StreamThreadFlushListeners threadFlushListeners =
+        getOrCreateFlushListeners(Thread.currentThread().getName());
+
+    return new AsyncFlushingSessionStore(inner, threadFlushListeners);
   }
 
   /**
