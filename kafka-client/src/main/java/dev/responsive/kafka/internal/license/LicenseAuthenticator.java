@@ -89,7 +89,7 @@ public class LicenseAuthenticator {
   private PublicKey loadPublicKey(final SigningKeys.SigningKey signingKey) {
     final File file;
     try {
-      file = new File(this.getClass().getClassLoader().getResource(signingKey.path()).toURI());
+      file = new File(this.getClass().getResource(signingKey.path()).toURI());
     } catch (final URISyntaxException e) {
       throw new RuntimeException(e);
     }

@@ -52,17 +52,17 @@ class LicenseAuthenticatorTest {
   }
 
   private static LicenseDocument loadLicense(final String file) {
-    return loadResource("test-licenses/" + file, LicenseDocument.class);
+    return loadResource("/test-licenses/" + file, LicenseDocument.class);
   }
 
   private static SigningKeys loadSigningKeys() {
-    return loadResource("responsive-license-keys/license-keys.json", SigningKeys.class);
+    return loadResource("/responsive-license-keys/license-keys.json", SigningKeys.class);
   }
 
   private static <T> T loadResource(final String path, final Class<T> clazz) {
     try {
       return MAPPER.readValue(
-          LicenseAuthenticatorTest.class.getClassLoader().getResource(path),
+          LicenseAuthenticatorTest.class.getResource(path),
           clazz
       );
     } catch (final IOException e) {
