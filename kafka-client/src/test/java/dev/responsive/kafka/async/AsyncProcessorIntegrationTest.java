@@ -241,7 +241,7 @@ public class AsyncProcessorIntegrationTest {
     pipeRecords(producer, inputTopic, streamInput);
 
     try (final var streams = new ResponsiveKafkaStreams(topology, properties)) {
-      startAppAndAwaitRunning(Duration.ofSeconds(60), streams);
+      startAppAndAwaitRunning(Duration.ofSeconds(30), streams);
 
       final List<KeyValue<String, String>> kvs = readOutput(
           outputTopic, 0, 3, numOutputPartitions, false, properties

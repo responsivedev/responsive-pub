@@ -396,12 +396,12 @@ public final class IntegrationTestUtils {
       consumer.assign(partitions);
       partitions.forEach(tp -> consumer.seek(tp, from));
 
-      final long end = System.nanoTime() + TimeUnit.SECONDS.toNanos(300);
+      final long end = System.nanoTime() + TimeUnit.SECONDS.toNanos(60);
       final List<KeyValue<K, V>> result = new ArrayList<>();
       while (result.size() < numEvents) {
         // this is configured to only poll one record at a time, so we
         // can guarantee we won't accidentally poll more than numEvents
-        final ConsumerRecords<K, V> polled = consumer.poll(Duration.ofSeconds(30));
+        final ConsumerRecords<K, V> polled = consumer.poll(Duration.ofSeconds(5));
         for (ConsumerRecord<K, V> rec : polled) {
           result.add(new KeyValue<>(rec.key(), rec.value()));
         }
