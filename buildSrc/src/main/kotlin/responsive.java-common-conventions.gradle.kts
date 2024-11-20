@@ -92,8 +92,8 @@ allprojects {
 
                     licenses {
                         license {
-                            name.set("The Apache License, Version 2.0")
-                            url.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
+                            name.set("Responsive Business Source License v1.0")
+                            url.set("https://www.responsive.dev/legal/responsive-bsl-10")
                         }
                     }
 
