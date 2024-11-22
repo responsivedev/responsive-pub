@@ -172,6 +172,7 @@ public class E2ETestApplication {
     public void process(final FixedKeyRecord<Long, InputRecord> record) {
       final var random = Math.abs(randomGenerator.nextLong() % 10000);
       if (random < exceptionThreshold) {
+        LOG.info("Injecting test exception");
         throw new InjectedE2ETestException();
       }
       final ValueAndTimestamp<OutputRecord> old = store.get(record.key());
