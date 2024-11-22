@@ -264,7 +264,18 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
     }
 
     private synchronized void derefListenersForThread(final String threadId) {
-      if (threadListeners.get(threadId).deref()) {
+      final var listener = threadListeners.get(threadId);
+      if (listener == null) {
+        final String errorMsg = String.format("Could not find thread listener for thread id %s. "
+                                                  + "Current thread name: %s. Other registered "
+                                                  + "thread listener ids: %s",
+                                              threadId, Thread.currentThread().getName(),
+                                              threadListeners.keySet());
+        LOG.error(errorMsg);
+        throw new IllegalStateException(errorMsg);
+      }
+
+      if (listener.deref()) {
         threadListeners.remove(threadId);
       }
     }

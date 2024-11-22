@@ -17,10 +17,13 @@ import static dev.responsive.kafka.api.config.ResponsiveConfig.CASSANDRA_HOSTNAM
 import static dev.responsive.kafka.api.config.ResponsiveConfig.CASSANDRA_PORT_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_BACKEND_TYPE_CONFIG;
 
+import com.antithesis.sdk.Assert;
+import com.datastax.oss.driver.api.core.AllNodesFailedException;
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.config.DriverConfigLoader;
 import com.datastax.oss.driver.api.core.cql.ResultSet;
 import com.datastax.oss.driver.api.core.cql.SimpleStatement;
+import com.datastax.oss.driver.api.core.metadata.Node;
 import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
 import com.datastax.oss.driver.api.querybuilder.schema.CreateKeyspace;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -129,7 +132,31 @@ public class E2ETestUtils {
    */
   public static void maybeCreateKeyspace(final Map<String, Object> properties) {
     if (properties.get(STORAGE_BACKEND_TYPE_CONFIG).equals(StorageBackend.CASSANDRA.name())) {
-      E2ETestUtils.retryFor(() -> doMaybeCreateKeyspace(properties), Duration.ofMinutes(5));
+      try {
+        E2ETestUtils.retryFor(() -> doMaybeCreateKeyspace(properties), Duration.ofMinutes(5));
+      } catch (final Exception e) {
+        final String errorMessage = "Failed to create Scylla keyspace within the timeout";
+        LOG.error(errorMessage, e);
+
+        final var errorDetails = buildAssertionContext(errorMessage);
+        errorDetails.put("exceptionType", e.getClass().getName());
+        if (e instanceof AllNodesFailedException) {
+          final Map<Node, List<Throwable>> allErrors = ((AllNodesFailedException) e).getAllErrors();
+          int nodeIdx = 1;
+          for (final var node : allErrors.entrySet()) {
+            final String nodeId = "node-" + nodeIdx;
+            errorDetails.put(nodeId + "_endPoint", node.getKey().getEndPoint().asMetricPrefix());
+
+            final var nodeErrors = node.getValue();
+            LOG.error("All errors for node at {}: {}", nodeId, nodeErrors);
+            int errorIdx = 1;
+            for (final var error : nodeErrors) {
+              errorDetails.put(nodeId + "_err-" + errorIdx, error.getMessage());
+            }
+          }
+          Assert.unreachable(errorMessage, errorDetails);
+        }
+      }
     }
   }
 

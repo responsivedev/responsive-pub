@@ -88,7 +88,8 @@ public class STJoinExample extends AbstractKSExampleService {
         })
         .groupByKey()
         .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofDays(1), Duration.ofHours(12)))
-        .reduce(EnrichedOrder::combineWith, Materialized.with(Serdes.String(), RegressionSchema.enrichedOrderSerde()))
+        .reduce(EnrichedOrder::combineWith,
+                Materialized.with(Serdes.String(), RegressionSchema.enrichedOrderSerde()))
         .toStream()
         .selectKey((w, v) -> w.key())
         .to(
