@@ -44,6 +44,27 @@ public class DelayedAsyncStoreBuilder<K, V, T extends StateStore>
     this.inner = inner;
   }
 
+  // We need to implement equals to handle the case of stores shared by multiple processors
+  // which check StoreBuilder equality to avoid adding the same store again for each processor
+  @Override
+  public boolean equals(final Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+
+    final DelayedAsyncStoreBuilder<?, ?, ?> that = (DelayedAsyncStoreBuilder<?, ?, ?>) o;
+
+    return inner.equals(that.inner);
+  }
+
+  @Override
+  public int hashCode() {
+    return inner.hashCode();
+  }
+
   @SuppressWarnings({"unchecked", "rawtypes"})
   @Override
   public T build() {

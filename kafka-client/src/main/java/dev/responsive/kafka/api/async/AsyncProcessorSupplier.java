@@ -140,6 +140,8 @@ public final class AsyncProcessorSupplier<KIn, VIn, KOut, VOut>
       final ProcessorSupplier<KIn, VIn, KOut, VOut> userProcessorSupplier
   ) {
     this.userProcessorSupplier = userProcessorSupplier;
+    final var stores = userProcessorSupplier.stores();
+    System.out.println("SOPHIE: stores at creation: " + stores);
   }
 
   @Override
