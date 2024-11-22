@@ -142,16 +142,16 @@ public class E2ETestUtils {
         errorDetails.put("exceptionType", e.getClass().getName());
         if (e instanceof AllNodesFailedException) {
           final Map<Node, List<Throwable>> allErrors = ((AllNodesFailedException) e).getAllErrors();
-          int node_i = 1;
+          int nodeIdx = 1;
           for (final var node : allErrors.entrySet()) {
-            final String nodeId = "node-" + node_i;
+            final String nodeId = "node-" + nodeIdx;
             errorDetails.put(nodeId + "_endPoint", node.getKey().getEndPoint().asMetricPrefix());
 
             final var nodeErrors = node.getValue();
             LOG.error("All errors for node at {}: {}", nodeId, nodeErrors);
-            int error_i = 1;
+            int errorIdx = 1;
             for (final var error : nodeErrors) {
-              errorDetails.put(nodeId + "_err-" + error_i, error.getMessage());
+              errorDetails.put(nodeId + "_err-" + errorIdx, error.getMessage());
             }
           }
           Assert.unreachable(errorMessage, errorDetails);
