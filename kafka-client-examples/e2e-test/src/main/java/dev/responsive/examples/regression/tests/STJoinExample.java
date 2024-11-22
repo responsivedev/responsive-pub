@@ -31,6 +31,7 @@ import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Joined;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.TimeWindows;
 
@@ -87,7 +88,7 @@ public class STJoinExample extends AbstractKSExampleService {
         })
         .groupByKey()
         .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofDays(1), Duration.ofHours(12)))
-        .reduce(EnrichedOrder::combineWith)
+        .reduce(EnrichedOrder::combineWith, Materialized.with(Serdes.String(), RegressionSchema.enrichedOrderSerde()))
         .toStream()
         .selectKey((w, v) -> w.key())
         .to(
