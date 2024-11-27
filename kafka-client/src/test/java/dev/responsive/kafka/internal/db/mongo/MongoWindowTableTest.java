@@ -160,7 +160,7 @@ class MongoWindowTableTest {
   @Test
   public void shouldFetchInserts() {
     // given:
-    final var writer = flushManager.createWriter(segment);
+    final var writer = flushManager.createWriter(segment, 0);
     final Bytes key = Bytes.wrap("key".getBytes());
     writer.insert(new WindowedKey(key, 100), "val".getBytes(), 110);
     writer.flush();
@@ -174,7 +174,7 @@ class MongoWindowTableTest {
 
   private void shouldReturnWindowsForFetch() {
     // given:
-    final var writer = flushManager.createWriter(segment);
+    final var writer = flushManager.createWriter(segment, 0);
     final Bytes key = Bytes.wrap("key".getBytes());
     final Bytes keyOther = Bytes.wrap("keyOther".getBytes());
     writer.insert(new WindowedKey(key, 99), "valEarly".getBytes(), 110);
@@ -220,7 +220,7 @@ class MongoWindowTableTest {
 
   private void shouldReturnWindowsForFetchRange() {
     // given:
-    final var writer = flushManager.createWriter(segment);
+    final var writer = flushManager.createWriter(segment, 0);
     final Bytes key = Bytes.wrap("key".getBytes()); // key out of range
     final Bytes keyA = Bytes.wrap("keyA".getBytes());
     final Bytes keyAA = Bytes.wrap("keyAA".getBytes());
@@ -285,7 +285,7 @@ class MongoWindowTableTest {
 
   private void shouldReturnWindowsForFetchAll() {
     // given:
-    final var writer = flushManager.createWriter(segment);
+    final var writer = flushManager.createWriter(segment, 0);
     final Bytes key = Bytes.wrap("key".getBytes());
     final Bytes keyA = Bytes.wrap("keyA".getBytes());
     final Bytes keyAA = Bytes.wrap("keyAA".getBytes());
@@ -361,7 +361,7 @@ class MongoWindowTableTest {
   @Test
   public void shouldEncodeKeyAsBase64String() {
     // given:
-    final var writer = flushManager.createWriter(segment);
+    final var writer = flushManager.createWriter(segment, 0);
     final Bytes key = Bytes.wrap("key".getBytes());
     writer.insert(new WindowedKey(key, 100), "val".getBytes(), 110);
     writer.flush();

@@ -37,8 +37,7 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.clients.admin.Admin;
-import org.junit.jupiter.api.extension.AfterAllCallback;
-import org.junit.jupiter.api.extension.BeforeAllCallback;
+import org.junit.jupiter.api.extension.AfterEachCallback;
 import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.ParameterContext;
@@ -52,7 +51,8 @@ import org.testcontainers.containers.KafkaContainer;
 import org.testcontainers.containers.MongoDBContainer;
 import org.testcontainers.lifecycle.Startables;
 
-public class ResponsiveExtension implements ParameterResolver {
+public class ResponsiveExtension
+    implements BeforeEachCallback, AfterEachCallback, ParameterResolver {
 
   private static final Logger LOG = LoggerFactory.getLogger(ResponsiveExtension.class);
 
@@ -76,6 +76,21 @@ public class ResponsiveExtension implements ParameterResolver {
     startAll();
 
     Runtime.getRuntime().addShutdownHook(new Thread(ResponsiveExtension::stopAll));
+  }
+
+  @Override
+  public void beforeEach(ExtensionContext extensionContext) {
+    if (backend.equals(StorageBackend.RS3)) {
+      rs3.stop();
+      rs3.start();
+    }
+  }
+
+  @Override
+  public void afterEach(ExtensionContext extensionContext) {
+    if (backend.equals(StorageBackend.RS3)) {
+      rs3.stop();
+    }
   }
 
   public static void startAll() {
@@ -154,7 +169,7 @@ public class ResponsiveExtension implements ParameterResolver {
         map.put(STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.CASSANDRA.name());
       } else if (backend == StorageBackend.MONGO_DB) {
         map.put(STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.MONGO_DB.name());
-      } else if (backend == StorageBackend>RS3) {
+      } else if (backend == StorageBackend.RS3) {
         map.put(STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.RS3.name());
         map.put(RS3_HOSTNAME_CONFIG, "localhost");
         map.put(RS3_PORT_CONFIG, rs3.getMappedPort(50051));
