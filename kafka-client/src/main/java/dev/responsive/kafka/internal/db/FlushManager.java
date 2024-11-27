@@ -21,7 +21,7 @@ public interface FlushManager<K, P> {
 
   TablePartitioner<K, P> partitioner();
 
-  RemoteWriter<K, P> createWriter(final P tablePartition);
+  RemoteWriter<K, P> createWriter(final P tablePartition, final long consumedOffset);
 
   void writeAdded(final K key);
 

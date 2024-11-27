@@ -65,4 +65,8 @@ public class TTDKeyValueTable extends InMemoryKVTable {
     return super.all(kafkaPartition, currentTimeMs);
   }
 
+  @Override
+  public long approximateNumEntries(final int kafkaPartition) {
+    return client.count(name(), kafkaPartition);
+  }
 }

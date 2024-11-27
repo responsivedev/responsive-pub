@@ -21,6 +21,8 @@ import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_ENDPOINT_CO
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_ENV_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_LICENSE_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_ORG_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.RS3_HOSTNAME_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.RS3_PORT_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_BACKEND_TYPE_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.TASK_ASSIGNOR_CLASS_OVERRIDE;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.loggedConfig;
@@ -35,6 +37,8 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.clients.admin.Admin;
+import org.junit.jupiter.api.extension.AfterEachCallback;
+import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.ParameterContext;
 import org.junit.jupiter.api.extension.ParameterResolutionException;
@@ -42,17 +46,22 @@ import org.junit.jupiter.api.extension.ParameterResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.CassandraContainer;
+import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.KafkaContainer;
 import org.testcontainers.containers.MongoDBContainer;
 import org.testcontainers.lifecycle.Startables;
 
-public class ResponsiveExtension implements ParameterResolver {
+public class ResponsiveExtension
+    implements BeforeEachCallback, AfterEachCallback, ParameterResolver {
 
   private static final Logger LOG = LoggerFactory.getLogger(ResponsiveExtension.class);
 
   public static CassandraContainer<?> cassandra = new CassandraContainer<>(TestConstants.CASSANDRA)
       .withInitScript("CassandraDockerInit.cql")
       .withReuse(true);
+  public static RS3Container rs3
+      = new RS3Container("public.ecr.aws/j8q9y0n6/responsiveinc/rs3-server:latest")
+      .withExposedPorts(50051);
   public static KafkaContainer kafka = new KafkaContainer(TestConstants.KAFKA)
       .withEnv("KAFKA_GROUP_MIN_SESSION_TIMEOUT_MS", "1000")
       .withEnv("KAFKA_GROUP_MAX_SESSION_TIMEOUT_MS", "60000")
@@ -67,6 +76,21 @@ public class ResponsiveExtension implements ParameterResolver {
     startAll();
 
     Runtime.getRuntime().addShutdownHook(new Thread(ResponsiveExtension::stopAll));
+  }
+
+  @Override
+  public void beforeEach(ExtensionContext extensionContext) {
+    if (backend.equals(StorageBackend.RS3)) {
+      rs3.stop();
+      rs3.start();
+    }
+  }
+
+  @Override
+  public void afterEach(ExtensionContext extensionContext) {
+    if (backend.equals(StorageBackend.RS3)) {
+      rs3.stop();
+    }
   }
 
   public static void startAll() {
@@ -110,6 +134,7 @@ public class ResponsiveExtension implements ParameterResolver {
     return parameterContext.getParameter().getType().equals(CassandraContainer.class)
         || parameterContext.getParameter().getType().equals(KafkaContainer.class)
         || parameterContext.getParameter().getType().equals(MongoDBContainer.class)
+        || parameterContext.getParameter().getType().equals(RS3Container.class)
         || parameterContext.getParameter().getType().equals(Admin.class)
         || isContainerConfig(parameterContext);
   }
@@ -125,6 +150,8 @@ public class ResponsiveExtension implements ParameterResolver {
       return mongo;
     } else if (parameterContext.getParameter().getType() == KafkaContainer.class) {
       return kafka;
+    } else if (parameterContext.getParameter().getType() == RS3Container.class) {
+      return rs3;
     } else if (parameterContext.getParameter().getType() == Admin.class) {
       return admin;
     } else if (isContainerConfig(parameterContext)) {
@@ -142,6 +169,10 @@ public class ResponsiveExtension implements ParameterResolver {
         map.put(STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.CASSANDRA.name());
       } else if (backend == StorageBackend.MONGO_DB) {
         map.put(STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.MONGO_DB.name());
+      } else if (backend == StorageBackend.RS3) {
+        map.put(STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.RS3.name());
+        map.put(RS3_HOSTNAME_CONFIG, "localhost");
+        map.put(RS3_PORT_CONFIG, rs3.getMappedPort(50051));
       }
 
       // throw in configuration for both backends since som tests are parameterized with both
@@ -167,4 +198,9 @@ public class ResponsiveExtension implements ParameterResolver {
         && param.getAnnotation(ResponsiveConfigParam.class) != null;
   }
 
+  public static class RS3Container extends GenericContainer<RS3Container> {
+    public RS3Container(final String image) {
+      super(image);
+    }
+  }
 }

@@ -17,6 +17,7 @@ import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.mongo.ResponsiveMongoClient;
+import dev.responsive.kafka.internal.db.rs3.RS3TableFactory;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
 import java.util.Optional;
@@ -33,6 +34,7 @@ public class SessionClients {
 
   private final Optional<ResponsiveMongoClient> mongoClient;
   private final Optional<CassandraClient> cassandraClient;
+  private final Optional<RS3TableFactory> rs3TableFactory;
   private final boolean inMemory;
   private final Admin admin;
 
@@ -44,11 +46,13 @@ public class SessionClients {
   public SessionClients(
       final Optional<ResponsiveMongoClient> mongoClient,
       final Optional<CassandraClient> cassandraClient,
+      final Optional<RS3TableFactory> rs3TableFactory,
       final boolean inMemory,
       final Admin admin
   ) {
     this.mongoClient = mongoClient;
     this.cassandraClient = cassandraClient;
+    this.rs3TableFactory = rs3TableFactory;
     this.inMemory = inMemory;
     this.admin = admin;
   }
@@ -71,6 +75,8 @@ public class SessionClients {
       return StorageBackend.MONGO_DB;
     } else if (cassandraClient.isPresent()) {
       return StorageBackend.CASSANDRA;
+    } else if (rs3TableFactory.isPresent()) {
+      return StorageBackend.RS3;
     } else if (inMemory) {
       return StorageBackend.IN_MEMORY;
     } else {
@@ -80,6 +86,16 @@ public class SessionClients {
           + "See https://docs.responsive.dev/getting-started/quickstart for a how-to guide for "
           + "getting started with Responsive stores.");
     }
+  }
+
+  public RS3TableFactory rs3TableFactory() {
+    if (rs3TableFactory.isEmpty()) {
+      final IllegalStateException fatalException =
+          new IllegalStateException("rs3 table factory was missing");
+      LOG.error(fatalException.getMessage(), fatalException);
+      throw fatalException;
+    }
+    return rs3TableFactory.get();
   }
 
   public ResponsiveMongoClient mongoClient() {
@@ -119,6 +135,7 @@ public class SessionClients {
   public void closeAll() {
     cassandraClient.ifPresent(CassandraClient::shutdown);
     mongoClient.ifPresent(ResponsiveMongoClient::close);
+    rs3TableFactory.ifPresent(RS3TableFactory::close);
     admin.close();
 
     if (restoreListener != null) {

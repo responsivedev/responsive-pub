@@ -10,17 +10,13 @@
  * licenses can be obtained at https://www.responsive.dev
  */
 
-package dev.responsive.kafka.api.config;
+package dev.responsive.kafka.internal.db.rs3.client;
 
-import java.util.Arrays;
+// exception types for interesting failures like unaligned wal segment of read offset check fail
+public class RS3Exception extends RuntimeException {
+  private static final long serialVersionUID = 0L;
 
-public enum StorageBackend {
-  CASSANDRA,
-  MONGO_DB,
-  IN_MEMORY,
-  RS3;
-
-  public static String[] names() {
-    return Arrays.stream(values()).map(Enum::name).toArray(String[]::new);
+  public RS3Exception(final Throwable cause) {
+    super(cause);
   }
 }

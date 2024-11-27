@@ -10,17 +10,16 @@
  * licenses can be obtained at https://www.responsive.dev
  */
 
-package dev.responsive.kafka.api.config;
+package dev.responsive.kafka.internal.db.rs3.client;
 
-import java.util.Arrays;
+public class LssId {
+  private final int id;
 
-public enum StorageBackend {
-  CASSANDRA,
-  MONGO_DB,
-  IN_MEMORY,
-  RS3;
+  public LssId(int id) {
+    this.id = id;
+  }
 
-  public static String[] names() {
-    return Arrays.stream(values()).map(Enum::name).toArray(String[]::new);
+  public int id() {
+    return id;
   }
 }

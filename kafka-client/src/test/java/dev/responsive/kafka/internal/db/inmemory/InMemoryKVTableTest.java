@@ -29,7 +29,7 @@ import org.junit.jupiter.api.Test;
 class InMemoryKVTableTest {
   private final InMemoryKVTable table = new InMemoryKVTable("name", NO_TTL);
   private final KVFlushManager flushManager =  table.init(0);
-  private final RemoteWriter<Bytes, Integer> writer = flushManager.createWriter(0);
+  private final RemoteWriter<Bytes, Integer> writer = flushManager.createWriter(0, 0);
 
   @Test
   public void shouldGetPuts() {
@@ -116,7 +116,7 @@ class InMemoryKVTableTest {
     final InMemoryKVTable table = new InMemoryKVTable("name", defaultOnlyTtl(ttl));
 
     final KVFlushManager flushManager =  table.init(0);
-    final RemoteWriter<Bytes, Integer> writer = flushManager.createWriter(0);
+    final RemoteWriter<Bytes, Integer> writer = flushManager.createWriter(0, 0);
 
     // when:
     writer.insert(Bytes.wrap("key".getBytes()), "val".getBytes(), 0);
@@ -133,7 +133,7 @@ class InMemoryKVTableTest {
 
     final InMemoryKVTable table = new InMemoryKVTable("name", defaultOnlyTtl(ttl));
     final KVFlushManager flushManager =  table.init(0);
-    final RemoteWriter<Bytes, Integer> writer = flushManager.createWriter(0);
+    final RemoteWriter<Bytes, Integer> writer = flushManager.createWriter(0, 0);
 
     writer.insert(Bytes.wrap("aaa".getBytes()), "val1".getBytes(), 100);
     writer.insert(Bytes.wrap("bbbb".getBytes()), "val2".getBytes(), 100);
@@ -164,7 +164,7 @@ class InMemoryKVTableTest {
 
     final InMemoryKVTable table = new InMemoryKVTable("name", defaultOnlyTtl(ttl));
     final KVFlushManager flushManager =  table.init(0);
-    final RemoteWriter<Bytes, Integer> writer = flushManager.createWriter(0);
+    final RemoteWriter<Bytes, Integer> writer = flushManager.createWriter(0, 0);
 
     writer.insert(Bytes.wrap("aaa".getBytes()), "val1".getBytes(), 100);
     writer.insert(Bytes.wrap("bbbb".getBytes()), "val2".getBytes(), 100);
