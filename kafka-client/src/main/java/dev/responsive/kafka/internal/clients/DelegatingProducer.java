@@ -49,15 +49,6 @@ public abstract class DelegatingProducer<K, V> implements Producer<K, V> {
   }
 
   @Override
-  @SuppressWarnings("deprecation")
-  public void sendOffsetsToTransaction(
-      final Map<TopicPartition, OffsetAndMetadata> offsets,
-      final String consumerGroupId
-  ) throws ProducerFencedException {
-    delegate.sendOffsetsToTransaction(offsets, consumerGroupId);
-  }
-
-  @Override
   public void sendOffsetsToTransaction(
       final Map<TopicPartition, OffsetAndMetadata> offsets,
       final ConsumerGroupMetadata groupMetadata

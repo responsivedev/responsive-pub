@@ -24,12 +24,14 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.processor.internals.StoreFactory.FactoryWrappingStoreBuilder;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 
@@ -68,9 +70,10 @@ public class DelayedAsyncStoreBuilder<K, V, T extends StateStore>
   @SuppressWarnings({"unchecked", "rawtypes"})
   @Override
   public T build() {
+
     if (innerResolved == null) {
       if (inner instanceof FactoryWrappingStoreBuilder) {
-        innerResolved = ((FactoryWrappingStoreBuilder) inner).resolveStoreBuilder();
+        innerResolved = (StoreBuilder<T>) ((FactoryWrappingStoreBuilder) inner).storeFactory().builder();
       } else {
         innerResolved = inner;
       }

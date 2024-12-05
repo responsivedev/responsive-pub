@@ -68,18 +68,6 @@ public class ResponsiveProducer<K, V> extends DelegatingProducer<K, V> {
 
 
   @Override
-  @SuppressWarnings("deprecation")
-  public void sendOffsetsToTransaction(
-      final Map<TopicPartition, OffsetAndMetadata> offsets,
-      final String consumerGroupId
-  ) throws ProducerFencedException {
-    delegate.sendOffsetsToTransaction(offsets, consumerGroupId);
-    for (final var l : listeners) {
-      l.onSendOffsetsToTransaction(offsets, consumerGroupId);
-    }
-  }
-
-  @Override
   public void sendOffsetsToTransaction(
       final Map<TopicPartition, OffsetAndMetadata> offsets,
       final ConsumerGroupMetadata groupMetadata

@@ -27,6 +27,7 @@ import static org.apache.kafka.streams.StreamsConfig.APPLICATION_ID_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.APPLICATION_SERVER_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.COMMIT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.PROCESSOR_WRAPPER_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.NUM_STREAM_THREADS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG;
@@ -35,6 +36,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
+import dev.responsive.kafka.api.async.AsyncProcessorWrapper;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.api.stores.ResponsiveStores;
@@ -408,6 +410,8 @@ public class ResponsiveWindowStoreIntegrationTest {
   public void shouldDoStreamStreamJoin() throws Exception {
     // Given:
     final Map<String, Object> properties = getMutablePropertiesWithStringSerdes();
+    properties.put(PROCESSOR_WRAPPER_CLASS_CONFIG, AsyncProcessorWrapper.class);
+
     properties.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
     final StreamsBuilder builder = new StreamsBuilder();
 

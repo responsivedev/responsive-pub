@@ -12,15 +12,17 @@
 
 package dev.responsive.kafka.api.async;
 
-import org.apache.kafka.streams.ProcessorWrapper;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.ProcessorWrapper;
+import org.apache.kafka.streams.processor.api.WrappedFixedKeyProcessorSupplier;
+import org.apache.kafka.streams.processor.api.WrappedProcessorSupplier;
 
 public class AsyncProcessorWrapper implements ProcessorWrapper {
 
 
   @Override
-  public <KIn, VIn, KOut, VOut> ProcessorSupplier<KIn, VIn, KOut, VOut> wrapProcessorSupplier(
+  public <KIn, VIn, KOut, VOut> WrappedProcessorSupplier<KIn, VIn, KOut, VOut> wrapProcessorSupplier(
       final String processorName,
       final ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier
   ) {
@@ -28,7 +30,7 @@ public class AsyncProcessorWrapper implements ProcessorWrapper {
   }
 
   @Override
-  public <KIn, VIn, VOut> FixedKeyProcessorSupplier<KIn, VIn, VOut> wrapFixedKeyProcessorSupplier(
+  public <KIn, VIn, VOut> WrappedFixedKeyProcessorSupplier<KIn, VIn, VOut> wrapFixedKeyProcessorSupplier(
       final String processorName,
       final FixedKeyProcessorSupplier<KIn, VIn, VOut> fixedKeyProcessorSupplier
   ) {

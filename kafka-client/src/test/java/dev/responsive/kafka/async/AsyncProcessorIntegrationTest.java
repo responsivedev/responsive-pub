@@ -42,6 +42,8 @@ import static org.apache.kafka.streams.StreamsConfig.STATESTORE_CACHE_MAX_BYTES_
 import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
 import static org.apache.kafka.streams.StreamsConfig.producerPrefix;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.instanceOf;
@@ -202,9 +204,57 @@ public class AsyncProcessorIntegrationTest {
     admin.deleteTopics(List.of(inputTopic, inputTableTopic, outputTopic));
   }
 
-
   @Test
   public void shouldWrapDSLWithAsync() throws Exception {
+    final Map<String, Object> properties = getMutableProperties();
+    properties.put(PROCESSOR_WRAPPER_CLASS_CONFIG, AsyncProcessorWrapper.class);
+    properties.put(DSL_STORE_SUPPLIERS_CLASS_CONFIG, ResponsiveDslStoreSuppliers.class);
+    properties.put(COMMIT_INTERVAL_MS_CONFIG, 0L);
+    properties.put(VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+
+    final StreamsBuilder builder = new StreamsBuilder(
+        new TopologyConfig(new StreamsConfig(properties))
+    );
+
+    final KStream<String, String> stream = builder.stream(inputTopic);
+
+    stream
+        .groupByKey()
+        .count()
+        .toStream()
+        .mapValues(String::valueOf)
+        .to(outputTopic);
+
+    final Properties props = new Properties();
+    props.putAll(properties);
+    final Topology topology = builder.build(props);
+
+    final KafkaProducer<String, String> producer = new KafkaProducer<>(properties);
+
+    final List<KeyValue<String, String>> streamInput = new LinkedList<>();
+    streamInput.add(new KeyValue<>("A", "a1"));
+    streamInput.add(new KeyValue<>("B", "b1"));
+    streamInput.add(new KeyValue<>("A", "a2"));
+    pipeRecords(producer, inputTopic, streamInput);
+
+    try (final var streams = new ResponsiveKafkaStreams(topology, properties)) {
+      startAppAndAwaitRunning(Duration.ofSeconds(30), streams);
+
+      final List<KeyValue<String, String>> kvs = readOutput(
+          outputTopic, 0, 3, numOutputPartitions, false, properties
+      );
+
+      final List<KeyValue<String, String>> expectedOutput = new LinkedList<>();
+      expectedOutput.add(new KeyValue<>("A", "1"));
+      expectedOutput.add(new KeyValue<>("B", "1"));
+      expectedOutput.add(new KeyValue<>("C", "2"));
+
+      assertThat(kvs, containsInAnyOrder(expectedOutput));
+    }
+  }
+
+  @Test
+  public void shouldExecuteDSLStreamTableJoinWithAsync() throws Exception {
     final Map<String, Object> properties = getMutableProperties();
     properties.put(PROCESSOR_WRAPPER_CLASS_CONFIG, AsyncProcessorWrapper.class);
     properties.put(DSL_STORE_SUPPLIERS_CLASS_CONFIG, ResponsiveDslStoreSuppliers.class);
@@ -221,6 +271,7 @@ public class AsyncProcessorIntegrationTest {
     stream
         .join(table, (l, r) -> l + "-" + r)
         .to(outputTopic);
+
 
     final Properties props = new Properties();
     props.putAll(properties);

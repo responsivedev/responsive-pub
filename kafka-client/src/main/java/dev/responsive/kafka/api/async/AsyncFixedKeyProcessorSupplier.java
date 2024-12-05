@@ -23,6 +23,7 @@ import java.util.Set;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.WrappedFixedKeyProcessorSupplier;
 import org.apache.kafka.streams.state.StoreBuilder;
 
 /**
@@ -34,10 +35,10 @@ import org.apache.kafka.streams.state.StoreBuilder;
  * documentation on the async processing framework.
  */
 public class AsyncFixedKeyProcessorSupplier<KIn, VIn, VOut>
-    implements FixedKeyProcessorSupplier<KIn, VIn, VOut> {
+    implements WrappedFixedKeyProcessorSupplier<KIn, VIn, VOut> {
 
   private final FixedKeyProcessorSupplier<KIn, VIn, VOut> userProcessorSupplier;
-  private final Map<String, AbstractAsyncStoreBuilder<?>> asyncStoreBuilders;
+  private Map<String, AbstractAsyncStoreBuilder<?>> asyncStoreBuilders = null;
 
   /**
    * Create an AsyncProcessorSupplier that wraps a custom {@link ProcessorSupplier}
@@ -52,24 +53,31 @@ public class AsyncFixedKeyProcessorSupplier<KIn, VIn, VOut>
   public static <KIn, VIn, VOut> AsyncFixedKeyProcessorSupplier<KIn, VIn, VOut> createAsyncProcessorSupplier(
       final FixedKeyProcessorSupplier<KIn, VIn, VOut> processorSupplier
   ) {
-    return new AsyncFixedKeyProcessorSupplier<>(processorSupplier, processorSupplier.stores());
+    return new AsyncFixedKeyProcessorSupplier<>(processorSupplier);
   }
 
   private AsyncFixedKeyProcessorSupplier(
-      final FixedKeyProcessorSupplier<KIn, VIn, VOut> userProcessorSupplier,
-      final Set<StoreBuilder<?>> userStoreBuilders
+      final FixedKeyProcessorSupplier<KIn, VIn, VOut> userProcessorSupplier
   ) {
     this.userProcessorSupplier = userProcessorSupplier;
-    this.asyncStoreBuilders = initializeAsyncBuilders(userStoreBuilders);
   }
 
   @Override
   public AsyncProcessor<KIn, VIn, KIn, VOut> get() {
+    maybeInitializeAsyncStoreBuilders();
+
     return createAsyncFixedKeyProcessor(userProcessorSupplier.get(), asyncStoreBuilders);
   }
 
   @Override
   public Set<StoreBuilder<?>> stores() {
+    maybeInitializeAsyncStoreBuilders();
     return new HashSet<>(asyncStoreBuilders.values());
+  }
+
+  private void maybeInitializeAsyncStoreBuilders() {
+    if (asyncStoreBuilders == null) {
+      asyncStoreBuilders = initializeAsyncBuilders(userProcessorSupplier.stores());
+    }
   }
 }

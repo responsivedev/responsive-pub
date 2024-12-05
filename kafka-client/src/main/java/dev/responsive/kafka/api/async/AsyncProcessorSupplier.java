@@ -28,6 +28,7 @@ import org.apache.kafka.streams.processor.api.FixedKeyProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.WrappedProcessorSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 
@@ -114,7 +115,7 @@ import org.apache.kafka.streams.state.StoreBuilder;
  *    {@link Processor} and requires at least one state store be connected.
  */
 public final class AsyncProcessorSupplier<KIn, VIn, KOut, VOut>
-    implements ProcessorSupplier<KIn, VIn, KOut, VOut> {
+    implements WrappedProcessorSupplier<KIn, VIn, KOut, VOut> {
 
   private final ProcessorSupplier<KIn, VIn, KOut, VOut> userProcessorSupplier;
 
@@ -140,8 +141,6 @@ public final class AsyncProcessorSupplier<KIn, VIn, KOut, VOut>
       final ProcessorSupplier<KIn, VIn, KOut, VOut> userProcessorSupplier
   ) {
     this.userProcessorSupplier = userProcessorSupplier;
-    final var stores = userProcessorSupplier.stores();
-    System.out.println("SOPHIE: stores at creation: " + stores);
   }
 
   @Override
