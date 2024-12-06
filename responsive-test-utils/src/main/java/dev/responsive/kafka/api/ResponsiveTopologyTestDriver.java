@@ -14,15 +14,21 @@ package dev.responsive.kafka.api;
 
 import static dev.responsive.kafka.internal.stores.TTDRestoreListener.mockRestoreListener;
 
+import dev.responsive.kafka.api.async.internals.AsyncThreadPoolRegistry;
+import dev.responsive.kafka.api.async.internals.AsyncUtils;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.clients.TTDCassandraClient;
 import dev.responsive.kafka.internal.clients.TTDMockAdmin;
 import dev.responsive.kafka.internal.config.InternalSessionConfigs;
+import dev.responsive.kafka.internal.metrics.ClientVersionMetadata;
+import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.utils.SessionClients;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collections;
 import java.util.Optional;
 import java.util.Properties;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
@@ -139,12 +145,28 @@ public class ResponsiveTopologyTestDriver extends TopologyTestDriver {
     final var restoreListener = mockRestoreListener(props);
     sessionClients.initialize(restoreListener.metrics(), restoreListener);
 
-    props.putAll(new InternalSessionConfigs.Builder()
+    final var metrics = new ResponsiveMetrics(new Metrics());
+    final String appId = userProps.getProperty(StreamsConfig.APPLICATION_ID_CONFIG);
+    metrics.initializeTags(
+        appId,
+        appId + "-client",
+        ClientVersionMetadata.loadVersionMetadata(),
+        Collections.emptyMap()
+    );
+
+    final var sessionConfig = new InternalSessionConfigs.Builder()
         .withSessionClients(sessionClients)
         .withStoreRegistry(client.storeRegistry())
-        .withTopologyDescription(topologyDescription)
-        .build()
-    );
+        .withMetrics(metrics)
+        .withTopologyDescription(topologyDescription);
+
+    AsyncUtils.configuredAsyncThreadPool(ResponsiveConfig.responsiveConfig(props), 1, metrics)
+        .ifPresent(threadPoolRegistry -> {
+          threadPoolRegistry.startNewAsyncThreadPool("Test worker");
+          sessionConfig.withAsyncThreadPoolRegistry(threadPoolRegistry);
+        });
+
+    props.putAll(sessionConfig.build());
     return props;
   }
 

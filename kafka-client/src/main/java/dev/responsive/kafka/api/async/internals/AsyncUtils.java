@@ -13,13 +13,18 @@
 package dev.responsive.kafka.api.async.internals;
 
 import static dev.responsive.kafka.api.async.internals.AsyncThreadPool.ASYNC_THREAD_NAME;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.ASYNC_MAX_EVENTS_QUEUED_PER_ASYNC_THREAD_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.ASYNC_THREAD_POOL_SIZE_CONFIG;
 
 import dev.responsive.kafka.api.async.internals.stores.AbstractAsyncStoreBuilder;
+import dev.responsive.kafka.api.config.ResponsiveConfig;
+import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreBuilder;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreBuilder.StoreType;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
@@ -128,6 +133,26 @@ public class AsyncUtils {
     }
 
     return result;
+  }
+
+  public static Optional<AsyncThreadPoolRegistry> configuredAsyncThreadPool(
+      final ResponsiveConfig responsiveConfig,
+      final int numStreamThreads,
+      final ResponsiveMetrics metrics
+  ) {
+    final int asyncThreadPoolSize = responsiveConfig.getInt(ASYNC_THREAD_POOL_SIZE_CONFIG);
+
+    if (asyncThreadPoolSize > 0) {
+      final AsyncThreadPoolRegistry asyncRegistry = new AsyncThreadPoolRegistry(
+          numStreamThreads,
+          asyncThreadPoolSize,
+          responsiveConfig.getInt(ASYNC_MAX_EVENTS_QUEUED_PER_ASYNC_THREAD_CONFIG),
+          metrics
+      );
+      return Optional.of(asyncRegistry);
+    } else {
+      return Optional.empty();
+    }
   }
 
 }
