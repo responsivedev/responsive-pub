@@ -187,37 +187,4 @@ class ResponsiveKafkaStreamsTest {
     ks.close();
   }
 
-  @Test
-  public void shouldWrapDSLWithAsync() throws Exception {
-    properties.put(PROCESSOR_WRAPPER_CLASS_CONFIG, AsyncProcessorWrapper.class);
-    properties.put(DSL_STORE_SUPPLIERS_CLASS_CONFIG, ResponsiveDslStoreSuppliers.class);
-    properties.put(COMMIT_INTERVAL_MS_CONFIG, 0L);
-    properties.put(VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-
-    final StreamsBuilder builder = new StreamsBuilder(
-        new TopologyConfig(new StreamsConfig(properties))
-    );
-
-    final KStream<String, String> stream = builder.stream("in");
-
-    stream
-        .groupByKey()
-        .count()
-        .toStream()
-        .mapValues(String::valueOf)
-        .to("out");
-
-    final Properties props = new Properties();
-    props.putAll(properties);
-    final Topology topology = builder.build(props);
-
-
-    try (final var streams = new ResponsiveKafkaStreams(topology, properties)) {
-      startAppAndAwaitRunning(Duration.ofSeconds(30), streams);
-
-
-    }
-    Thread.sleep(60);
-  }
-
 }

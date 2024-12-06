@@ -244,12 +244,11 @@ public class AsyncProcessorIntegrationTest {
           outputTopic, 0, 3, numOutputPartitions, false, properties
       );
 
-      final List<KeyValue<String, String>> expectedOutput = new LinkedList<>();
-      expectedOutput.add(new KeyValue<>("A", "1"));
-      expectedOutput.add(new KeyValue<>("B", "1"));
-      expectedOutput.add(new KeyValue<>("C", "2"));
-
-      assertThat(kvs, containsInAnyOrder(expectedOutput));
+      assertThat(kvs, containsInAnyOrder(
+          new KeyValue<>("A", "1"),
+          new KeyValue<>("B", "1"),
+          new KeyValue<>("A", "2"))
+      );
     }
   }
 

@@ -18,22 +18,33 @@ import org.apache.kafka.streams.processor.api.ProcessorWrapper;
 import org.apache.kafka.streams.processor.api.WrappedFixedKeyProcessorSupplier;
 import org.apache.kafka.streams.processor.api.WrappedProcessorSupplier;
 
+// TODO(sophie): only wrap when stores are Responsive (rather than eg rocksdb or in-memory)
 public class AsyncProcessorWrapper implements ProcessorWrapper {
-
 
   @Override
   public <KIn, VIn, KOut, VOut> WrappedProcessorSupplier<KIn, VIn, KOut, VOut> wrapProcessorSupplier(
       final String processorName,
       final ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier
   ) {
-    return AsyncProcessorSupplier.createAsyncProcessorSupplier(processorSupplier);
+    final var stores = processorSupplier.stores();
+    if (stores != null && !stores.isEmpty()) {
+      return AsyncProcessorSupplier.createAsyncProcessorSupplier(processorSupplier);
+    } else {
+      return ProcessorWrapper.asWrapped(processorSupplier);
+    }
   }
 
   @Override
   public <KIn, VIn, VOut> WrappedFixedKeyProcessorSupplier<KIn, VIn, VOut> wrapFixedKeyProcessorSupplier(
       final String processorName,
-      final FixedKeyProcessorSupplier<KIn, VIn, VOut> fixedKeyProcessorSupplier
+      final FixedKeyProcessorSupplier<KIn, VIn, VOut> processorSupplier
   ) {
-    return AsyncFixedKeyProcessorSupplier.createAsyncProcessorSupplier(fixedKeyProcessorSupplier);
+    final var stores = processorSupplier.stores();
+    if (stores != null && !stores.isEmpty()) {
+      return AsyncFixedKeyProcessorSupplier.createAsyncProcessorSupplier(processorSupplier);
+    } else {
+      return ProcessorWrapper.asWrappedFixedKey(processorSupplier);
+    }
+
   }
 }
