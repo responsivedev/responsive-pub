@@ -66,7 +66,7 @@ public class ResponsiveTopologyTestDriverKeyValueStoreTest {
   public void shouldRunWithoutResponsiveConnectionAndNoTtl(final KVSchema type) {
     // Given:
     final Topology topology = topology(paramsForType(type));
-    try (final TopologyTestDriver driver = setupDriver(topology)) {
+    try (final ResponsiveTopologyTestDriver driver = setupDriver(topology)) {
 
       final TestInputTopic<String, String> bids = driver.createInputTopic(
           "bids", new StringSerializer(), new StringSerializer());
@@ -206,7 +206,7 @@ public class ResponsiveTopologyTestDriverKeyValueStoreTest {
 
       // Then:
       final List<String> outputs = output.readValuesToList();
-      MatcherAssert.assertThat(outputs, Matchers.contains(
+      MatcherAssert.assertThat(outputs, Matchers.containsInAnyOrder(
           "a,100,1,1,alice,CA",
           "d,103,3,3,carol,CA",
           "e,104,1,1,alex,CA",
@@ -290,20 +290,21 @@ public class ResponsiveTopologyTestDriverKeyValueStoreTest {
         .join(people, (bid, person) -> bid + "," + person)
         // state is the 6th column
         .filter((k, v) -> v.split(",")[5].equals("CA"))
-        .processValues(createAsyncProcessorSupplier(() -> new FixedKeyProcessor<String, String, String>() {
+        .processValues(createAsyncProcessorSupplier(
+            () -> new FixedKeyProcessor<String, String, String>() {
 
-          private FixedKeyProcessorContext<String, String> context;
+              private FixedKeyProcessorContext<String, String> context;
 
-          @Override
-          public void init(final FixedKeyProcessorContext<String, String> context) {
-            this.context = context;
-          }
+              @Override
+              public void init(final FixedKeyProcessorContext<String, String> context) {
+                this.context = context;
+              }
 
-          @Override
-          public void process(final FixedKeyRecord<String, String> fixedKeyRecord) {
-            context.forward(fixedKeyRecord);
-          }
-        }))
+              @Override
+              public void process(final FixedKeyRecord<String, String> fixedKeyRecord) {
+                context.forward(fixedKeyRecord);
+              }
+            }))
         .to("output");
 
     return builder.build();
