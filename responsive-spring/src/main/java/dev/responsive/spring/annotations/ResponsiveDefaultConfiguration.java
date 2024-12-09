@@ -12,7 +12,7 @@
 
 package dev.responsive.spring.annotations;
 
-import dev.responsive.spring.config.ResponsiveFactoryBean;
+import dev.responsive.spring.config.ResponsiveKafkaStreamsCustomizer;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.UnsatisfiedDependencyException;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -35,8 +35,9 @@ public class ResponsiveDefaultConfiguration extends KafkaStreamsDefaultConfigura
   ) {
     KafkaStreamsConfiguration streamsConfig = streamsConfigProvider.getIfAvailable();
     if (streamsConfig != null) {
-      StreamsBuilderFactoryBean fb = new ResponsiveFactoryBean(streamsConfig);
+      StreamsBuilderFactoryBean fb = new StreamsBuilderFactoryBean(streamsConfig);
       configurerProvider.orderedStream().forEach(configurer -> configurer.configure(fb));
+      fb.setKafkaStreamsCustomizer((ResponsiveKafkaStreamsCustomizer) kafkaStreams -> { });
       return fb;
     } else {
       throw new UnsatisfiedDependencyException(KafkaStreamsDefaultConfiguration.class.getName(),

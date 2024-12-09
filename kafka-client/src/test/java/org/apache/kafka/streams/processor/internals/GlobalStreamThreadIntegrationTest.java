@@ -291,7 +291,8 @@ public class GlobalStreamThreadIntegrationTest {
           public void process(final Record<Object, Object> record) {
             global.put(record.key(), record.value());
           }
-        }
+        },
+        false
     );
 
     final String baseDirectoryName = tempDir.getAbsolutePath();

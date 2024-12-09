@@ -44,7 +44,7 @@ version = project(":kafka-client").version
 dependencies {
     implementation(project(":kafka-client"))
     implementation("com.google.code.findbugs:jsr305:3.0.2")
-    implementation("org.springframework.kafka:spring-kafka:3.2.4")
+    implementation("org.springframework.kafka:spring-kafka:3.3.0")
     implementation("org.springframework.boot:spring-boot-starter:3.3.2")
 
     testImplementation(testlibs.bundles.base)

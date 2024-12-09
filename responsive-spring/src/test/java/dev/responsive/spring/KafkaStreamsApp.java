@@ -99,9 +99,6 @@ public class KafkaStreamsApp {
 
   @Bean
   public KStream<String, String> magic(StreamsBuilder streamBuilder, KafkaAdmin admin) {
-    final Map<String, TopicDescription> streamingTopic1 = admin.describeTopics("streamingTopic1");
-    System.out.println(streamingTopic1);
-
     KStream<String, String> stream = streamBuilder.stream("streamingTopic1");
     stream
         .mapValues((ValueMapper<String, String>) String::toUpperCase)
