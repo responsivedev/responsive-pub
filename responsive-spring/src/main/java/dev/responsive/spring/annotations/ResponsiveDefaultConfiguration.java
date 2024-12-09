@@ -12,7 +12,13 @@
 
 package dev.responsive.spring.annotations;
 
+import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.spring.config.ResponsiveFactoryBean;
+import dev.responsive.spring.config.ResponsiveKafkaStreamsCustomizer;
+import java.util.Properties;
+import org.apache.kafka.streams.KafkaClientSupplier;
+import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.Topology;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.UnsatisfiedDependencyException;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -20,6 +26,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.annotation.KafkaStreamsDefaultConfiguration;
 import org.springframework.kafka.config.KafkaStreamsConfiguration;
+import org.springframework.kafka.config.KafkaStreamsCustomizer;
 import org.springframework.kafka.config.StreamsBuilderFactoryBean;
 import org.springframework.kafka.config.StreamsBuilderFactoryBeanConfigurer;
 
@@ -35,8 +42,9 @@ public class ResponsiveDefaultConfiguration extends KafkaStreamsDefaultConfigura
   ) {
     KafkaStreamsConfiguration streamsConfig = streamsConfigProvider.getIfAvailable();
     if (streamsConfig != null) {
-      StreamsBuilderFactoryBean fb = new ResponsiveFactoryBean(streamsConfig);
+      StreamsBuilderFactoryBean fb = new StreamsBuilderFactoryBean(streamsConfig);
       configurerProvider.orderedStream().forEach(configurer -> configurer.configure(fb));
+      fb.setKafkaStreamsCustomizer((ResponsiveKafkaStreamsCustomizer) kafkaStreams -> { });
       return fb;
     } else {
       throw new UnsatisfiedDependencyException(KafkaStreamsDefaultConfiguration.class.getName(),

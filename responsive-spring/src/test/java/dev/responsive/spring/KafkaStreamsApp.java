@@ -52,7 +52,7 @@ import org.springframework.kafka.streams.RecoveringDeserializationExceptionHandl
 @Configuration
 @EnableKafka
 @EnableResponsive
-@Disabled // ignore from tests
+//@Disabled // ignore from tests
 public class KafkaStreamsApp {
 
   public static void main(String[] args) throws NoSuchMethodException {
