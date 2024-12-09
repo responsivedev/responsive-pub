@@ -257,7 +257,7 @@ public class ResponsiveTopologyTestDriverKeyValueStoreTest {
       assertNull(transactionIdStore.get(key), "should have no txn id in state store");
 
       // send the same event in again, outside the dedupe window
-      inputTopic.pipeInput(key, value);
+      inputTopic.pipeInput(key, value, ttlMs + 1);
       assertNotNull(
           transactionIdStore.get(key), "should have a single txn id in state store, again");
     }
