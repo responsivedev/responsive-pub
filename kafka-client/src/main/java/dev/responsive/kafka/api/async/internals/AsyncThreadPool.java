@@ -182,7 +182,7 @@ public class AsyncThreadPool {
         = inFlight.computeIfAbsent(asyncProcessorId, k -> new ConcurrentHashMap<>());
 
     for (final AsyncEvent event : events) {
-      log.info("Scheduled event {}", event.inputRecord());
+      log.trace("Scheduled event {}", event.inputRecord());
       try {
         queueSemaphore.acquire();
       } catch (final InterruptedException e) {
