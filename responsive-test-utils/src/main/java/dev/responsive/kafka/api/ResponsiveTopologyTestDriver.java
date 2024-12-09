@@ -141,7 +141,7 @@ public class ResponsiveTopologyTestDriver extends TopologyTestDriverAccessor {
   ) {
     super(
         topology,
-        injectTestDriverProps(config, topology.describe(), cassandraClient),
+        testDriverProps(config, topology.describe(), cassandraClient),
         initialWallClockTime
     );
     this.client = cassandraClient;
@@ -160,7 +160,7 @@ public class ResponsiveTopologyTestDriver extends TopologyTestDriverAccessor {
     flush();
   }
 
-  private static Properties injectTestDriverProps(
+  private static Properties testDriverProps(
       final Properties baseProps,
       final TopologyDescription topologyDescription,
       final TTDCassandraClient client
