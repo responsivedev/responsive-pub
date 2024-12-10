@@ -58,13 +58,13 @@ public class ResponsiveTopologyTestDriverWindowStoreTest {
         "output", new StringDeserializer(), new LongDeserializer());
 
     // When:
-    bids.pipeInput("luna:1", 1L); // streamTime = 1     update <[0-9], 1>
-    bids.pipeInput("luna:6", 2L); // streamTime = 6     update <[0-9], 3>
-    bids.pipeInput("luna:10", 3L); // streamTime = 10   update <[10-19], 3>
-    bids.pipeInput("luna:5", 4L); // streamTime = 10    update <[0-9], 7>
-    bids.pipeInput("luna:18", 5L); // streamTime = 18   update <[10-19], 8>
-    bids.pipeInput("luna:2", 6L); // streamTime = 18    no update (outside grace)
-    bids.pipeInput("luna:23", 7L); // time = 23         update <[20-29], 7>
+    bids.pipeInput("luna:1", 1L, 1L); // streamTime = 1     update <[0-9], 1>
+    bids.pipeInput("luna:6", 2L, 6L); // streamTime = 6     update <[0-9], 3>
+    bids.pipeInput("luna:10", 3L, 10L); // streamTime = 10   update <[10-19], 3>
+    bids.pipeInput("luna:5", 4L, 5L); // streamTime = 10    update <[0-9], 7>
+    bids.pipeInput("luna:18", 5L, 18L); // streamTime = 18   update <[10-19], 8>
+    bids.pipeInput("luna:2", 6L, 2L); // streamTime = 18    no update (outside grace)
+    bids.pipeInput("luna:23", 7L, 23L); // time = 23         update <[20-29], 7>
 
     // Then:
     final List<Long> outputs = output.readValuesToList();

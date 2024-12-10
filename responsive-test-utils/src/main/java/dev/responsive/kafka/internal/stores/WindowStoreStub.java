@@ -28,9 +28,8 @@ public class WindowStoreStub {
   private final long retentionPeriod;
   private long observedStreamTime = 0L;
 
-  public WindowStoreStub() {
-    // TODO: how can we pass the actual retention period through to the store stub?
-    this.retentionPeriod = 15L;
+  public WindowStoreStub(final long retentionPeriod) {
+    this.retentionPeriod = retentionPeriod;
   }
 
   public void put(final WindowedKey key, final byte[] value) {
@@ -48,7 +47,7 @@ public class WindowStoreStub {
       final long windowStart
   ) {
     final WindowedKey windowedKey = new WindowedKey(key, windowStart);
-    if (windowStart < minValidTimestamp() && records.containsKey(windowedKey)) {
+    if (windowStart > minValidTimestamp() && records.containsKey(windowedKey)) {
       return records.get(windowedKey);
     } else {
       return null;
