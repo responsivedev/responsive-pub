@@ -274,7 +274,6 @@ public class AsyncProcessorIntegrationTest {
                     (ComputeStatelessOutput<String, String, InputRecord>) (r, c) -> {
                       sleepForMs(5L);
                       return new InputRecord(r.value() + "-L1");
-
                     }
                 )),
             Named.as("L1"))
@@ -777,7 +776,6 @@ public class AsyncProcessorIntegrationTest {
     properties.put(consumerPrefix(ConsumerConfig.METADATA_MAX_AGE_CONFIG), "1000");
     properties.put(consumerPrefix(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG), "earliest");
 
-    properties.put(STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.NONE.name());
     return properties;
   }
 
