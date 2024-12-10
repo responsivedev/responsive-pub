@@ -17,8 +17,8 @@ import static dev.responsive.kafka.internal.utils.Utils.extractThreadIdFromConsu
 import static dev.responsive.kafka.internal.utils.Utils.extractThreadIdFromProducerClientId;
 import static dev.responsive.kafka.internal.utils.Utils.extractThreadIdFromRestoreConsumerClientId;
 
-import dev.responsive.kafka.api.config.CompatibilityMode;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
+import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.internal.metrics.EndOffsetsPoller;
 import dev.responsive.kafka.internal.metrics.MetricPublishingCommitListener;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
@@ -65,7 +65,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
   private final EndOffsetsPoller endOffsetsPoller;
   private final String applicationId;
   private final boolean eos;
-  private final CompatibilityMode compatibilityMode;
+  private final StorageBackend storageBackend;
   private final boolean repairRestoreOffsetOutOfRange;
 
   public ResponsiveKafkaClientSupplier(
@@ -74,7 +74,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
       final StreamsConfig configs,
       final ResponsiveStoreRegistry storeRegistry,
       final ResponsiveMetrics metrics,
-      final CompatibilityMode compatibilityMode
+      final StorageBackend storageBackend
   ) {
     this(
         new Factories() {},
@@ -82,7 +82,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
         configs,
         storeRegistry,
         metrics,
-        compatibilityMode,
+        storageBackend,
         responsiveConfig.getBoolean(ResponsiveConfig.RESTORE_OFFSET_REPAIR_ENABLED_CONFIG)
     );
   }
@@ -93,14 +93,14 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
       final StreamsConfig configs,
       final ResponsiveStoreRegistry storeRegistry,
       final ResponsiveMetrics metrics,
-      final CompatibilityMode compatibilityMode,
+      final StorageBackend storageBackend,
       final boolean repairRestoreOffsetOutOfRange
   ) {
     this.factories = factories;
     this.wrapped = wrapped;
     this.storeRegistry = storeRegistry;
     this.metrics = metrics;
-    this.compatibilityMode = compatibilityMode;
+    this.storageBackend = storageBackend;
     this.repairRestoreOffsetOutOfRange = repairRestoreOffsetOutOfRange;
 
     eos = eosEnabled(configs);
@@ -177,7 +177,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
 
   @Override
   public Consumer<byte[], byte[]> getRestoreConsumer(final Map<String, Object> config) {
-    if (compatibilityMode == CompatibilityMode.METRICS_ONLY) {
+    if (storageBackend == StorageBackend.NONE) {
       return wrapped.getRestoreConsumer(config);
     }
 
@@ -195,7 +195,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
 
   @Override
   public Consumer<byte[], byte[]> getGlobalConsumer(final Map<String, Object> config) {
-    if (compatibilityMode == CompatibilityMode.METRICS_ONLY) {
+    if (storageBackend == StorageBackend.NONE) {
       return wrapped.getGlobalConsumer(config);
     }
 

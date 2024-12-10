@@ -265,7 +265,8 @@ public class AsyncProcessorIntegrationTest {
                       sleepForMs(1L);
                       return new SimpleProcessorOutput<>(val.getValue() + "-S1:" + newSum, newSum);
                     },
-                    ResponsiveKeyValueParams.fact(asyncStore1).withTimeToLive(TTL),
+                    ResponsiveStores.keyValueStore(
+                        ResponsiveKeyValueParams.fact(asyncStore1).withTimeToLive(TTL)),
                     Serdes.Integer()
                 )),
             Named.as("S1"),
@@ -276,7 +277,6 @@ public class AsyncProcessorIntegrationTest {
                     (ComputeStatelessOutput<String, String, InputRecord>) (r, c) -> {
                       sleepForMs(5L);
                       return new InputRecord(r.value() + "-L1");
-
                     }
                 )),
             Named.as("L1"))
@@ -297,7 +297,8 @@ public class AsyncProcessorIntegrationTest {
                       sleepForMs(1L);
                       return new SimpleProcessorOutput<>(r.value() + "-S2:" + newSum, newSum);
                     },
-                    ResponsiveKeyValueParams.fact(asyncStore2).withTimeToLive(TTL),
+                    ResponsiveStores.keyValueStore(
+                        ResponsiveKeyValueParams.fact(asyncStore2).withTimeToLive(TTL)),
                     Serdes.Integer()
                 )),
             Named.as("S2"),
@@ -387,7 +388,7 @@ public class AsyncProcessorIntegrationTest {
         .processValues(
             new SimpleStatefulProcessorSupplier<>(
                 this::computeNewValueForSourceProcessor,
-                ResponsiveKeyValueParams.fact(inKVStore).withTimeToLive(TTL),
+                ResponsiveStores.keyValueStore(ResponsiveKeyValueParams.fact(inKVStore).withTimeToLive(TTL)),
                 Serdes.String()),
             inKVStore)
         .processValues(
@@ -398,7 +399,8 @@ public class AsyncProcessorIntegrationTest {
         .processValues(
             new SimpleStatefulProcessorSupplier<>(
                 this::computeNewValueForSinkProcessor,
-                ResponsiveKeyValueParams.fact(outKVStore).withTimeToLive(TTL),
+                ResponsiveStores.keyValueStore(
+                    ResponsiveKeyValueParams.fact(outKVStore).withTimeToLive(TTL)),
                 Serdes.String(),
                 latestValues,
                 inputRecordsLatch),
@@ -506,14 +508,16 @@ public class AsyncProcessorIntegrationTest {
         .processValues(
             new SimpleStatefulProcessorSupplier<>(
                 this::computeNewValueForSourceProcessor,
-                ResponsiveKeyValueParams.fact(inKVStore).withTimeToLive(TTL),
+                ResponsiveStores.keyValueStore(
+                    ResponsiveKeyValueParams.fact(inKVStore).withTimeToLive(TTL)),
                 Serdes.String()),
             inKVStore)
         .processValues(
             createAsyncProcessorSupplier(
                 new SimpleStatefulProcessorSupplier<>(
                     this::computeNewValueForSingleStatefulAsyncProcessor,
-                    ResponsiveKeyValueParams.fact(asyncStore1).withTimeToLive(TTL),
+                    ResponsiveStores.keyValueStore(
+                        ResponsiveKeyValueParams.fact(asyncStore1).withTimeToLive(TTL)),
                     Serdes.String(),
                     processed
                 )),
@@ -522,7 +526,8 @@ public class AsyncProcessorIntegrationTest {
         .processValues(
             new SimpleStatefulProcessorSupplier<>(
                 this::computeNewValueForSinkProcessor,
-                ResponsiveKeyValueParams.fact(outKVStore).withTimeToLive(TTL),
+                ResponsiveStores.keyValueStore(
+                    ResponsiveKeyValueParams.fact(outKVStore).withTimeToLive(TTL)),
                 Serdes.String(),
                 latestValues,
                 inputRecordsLatch),
@@ -583,8 +588,7 @@ public class AsyncProcessorIntegrationTest {
     // this is the old way of connecting StoreBuilders to a topology, which async does not support
     builder.addStateStore(ResponsiveStores.timestampedKeyValueStoreBuilder(
         ResponsiveStores.keyValueStore(
-            ResponsiveKeyValueParams.fact(asyncStore1).withTimeToLive(TTL)
-        ),
+            ResponsiveKeyValueParams.fact(asyncStore1).withTimeToLive(TTL)),
         Serdes.String(),
         Serdes.String()));
 

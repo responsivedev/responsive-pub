@@ -52,11 +52,6 @@ public class ResponsiveConfig extends AbstractConfig {
   private static final String RESPONSIVE_LICENSE_FILE_DOC
       = "A path to a file containing your license.";
 
-  public static final String COMPATIBILITY_MODE_CONFIG = "responsive.compatibility.mode";
-  private static final String COMPATIBILITY_MODE_DOC = "This configuration enables running Responsive "
-      + "in compatibility mode, disabling certain features.";
-  private static final CompatibilityMode COMPATIBILITY_MODE_DEFAULT = CompatibilityMode.FULL;
-
   public static final String CONTROLLER_ENDPOINT_CONFIG = "responsive.controller.endpoint";
   private static final String CONTROLLER_ENDPOINT_DOC = "The endpoint of the running responsive "
       + "cloud controller. If enabled, metrics will be sent to this endpoint.";
@@ -314,13 +309,6 @@ public class ResponsiveConfig extends AbstractConfig {
 
   private static final ConfigDef CONFIG_DEF = new ConfigDef()
       .define(
-          COMPATIBILITY_MODE_CONFIG,
-          Type.STRING,
-          COMPATIBILITY_MODE_DEFAULT.name(),
-          ConfigDef.CaseInsensitiveValidString.in(CompatibilityMode.names()),
-          Importance.MEDIUM,
-          COMPATIBILITY_MODE_DOC
-      ).define(
           RESPONSIVE_ORG_CONFIG,
           Type.STRING,
           null,

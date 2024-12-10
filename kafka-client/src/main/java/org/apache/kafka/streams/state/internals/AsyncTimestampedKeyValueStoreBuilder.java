@@ -20,7 +20,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.slf4j.Logger;
@@ -71,10 +70,6 @@ public class AsyncTimestampedKeyValueStoreBuilder<K, V>
   @Override
   public TimestampedKeyValueStore<K, V> build() {
     final KeyValueStore<Bytes, byte[]> store = storeSupplier.get();
-    if (!(store instanceof TimestampedBytesStore)) {
-      throw new IllegalStateException("Timestamped store builder expects store supplier to provide "
-                                          + "store that implements TimestampedBytesStore");
-    }
 
     return new MeteredTimestampedKeyValueStore<>(
         wrapAsyncFlushingKV(
