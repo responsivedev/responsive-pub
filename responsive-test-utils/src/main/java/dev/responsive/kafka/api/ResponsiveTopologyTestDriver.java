@@ -229,8 +229,8 @@ public class ResponsiveTopologyTestDriver extends TopologyTestDriverAccessor {
     final int asyncThreadPoolSize = (int) props.getOrDefault(ASYNC_THREAD_POOL_SIZE_CONFIG, 0);
 
     if (asyncThreadPoolSize > 0) {
-      // stupid conversion to deal with Map<String, Object> vs Properties type discrepancy
       final Map<String, Object> configMap = new HashMap<>();
+      // stupid conversion to deal with Map<String, Object> vs Properties type discrepancy
       props.forEach((key, value) -> configMap.put(key.toString(), value));
 
       return Optional.of(getAsyncThreadPool(configMap, Thread.currentThread().getName()));
