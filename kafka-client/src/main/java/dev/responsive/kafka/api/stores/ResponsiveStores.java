@@ -145,11 +145,14 @@ public final class ResponsiveStores {
    *         that uses Responsive's storage for its backend
    */
   public static <K, V> StoreBuilder<TimestampedKeyValueStore<K, V>> timestampedKeyValueStoreBuilder(
-      final ResponsiveKeyValueBytesStoreSupplier storeSupplier,
+      final KeyValueBytesStoreSupplier storeSupplier,
       final Serde<K> keySerde,
       final Serde<V> valueSerde
   ) {
-    storeSupplier.asTimestamped();
+
+    if (storeSupplier instanceof ResponsiveKeyValueBytesStoreSupplier) {
+      ((ResponsiveKeyValueBytesStoreSupplier) storeSupplier).asTimestamped();
+    }
 
     return new ResponsiveStoreBuilder<>(
         StoreType.TIMESTAMPED_KEY_VALUE,
