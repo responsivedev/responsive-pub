@@ -12,10 +12,12 @@
 
 package dev.responsive.kafka.api;
 
+import static dev.responsive.kafka.api.async.AsyncFixedKeyProcessorSupplier.createAsyncProcessorSupplier;
 import static dev.responsive.kafka.testutils.processors.Deduplicator.deduplicatorApp;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
+import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.api.stores.ResponsiveStores;
 import dev.responsive.kafka.api.stores.TtlProvider;
@@ -38,6 +40,9 @@ import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
+import org.apache.kafka.streams.processor.api.FixedKeyProcessorContext;
+import org.apache.kafka.streams.processor.api.FixedKeyRecord;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.hamcrest.MatcherAssert;
@@ -61,7 +66,7 @@ public class ResponsiveTopologyTestDriverKeyValueStoreTest {
   public void shouldRunWithoutResponsiveConnectionAndNoTtl(final KVSchema type) {
     // Given:
     final Topology topology = topology(paramsForType(type));
-    try (final TopologyTestDriver driver = setupDriver(topology)) {
+    try (final ResponsiveTopologyTestDriver driver = setupDriver(topology)) {
 
       final TestInputTopic<String, String> bids = driver.createInputTopic(
           "bids", new StringSerializer(), new StringSerializer());
@@ -152,7 +157,8 @@ public class ResponsiveTopologyTestDriverKeyValueStoreTest {
 
   @ParameterizedTest
   @EnumSource(SchemaTypes.KVSchema.class)
-  public void shouldEnforceKeyBasedTtlByAdvancingWallclockTime(final KVSchema type) {
+  public void shouldEnforceKeyBasedTtlByAdvancingWallclockTime(final KVSchema type)
+      throws InterruptedException {
     // Given:
     final Duration defaultTtl = Duration.ofMillis(15);
 
@@ -200,7 +206,7 @@ public class ResponsiveTopologyTestDriverKeyValueStoreTest {
 
       // Then:
       final List<String> outputs = output.readValuesToList();
-      MatcherAssert.assertThat(outputs, Matchers.contains(
+      MatcherAssert.assertThat(outputs, Matchers.containsInAnyOrder(
           "a,100,1,1,alice,CA",
           "d,103,3,3,carol,CA",
           "e,104,1,1,alex,CA",
@@ -251,7 +257,7 @@ public class ResponsiveTopologyTestDriverKeyValueStoreTest {
       assertNull(transactionIdStore.get(key), "should have no txn id in state store");
 
       // send the same event in again, outside the dedupe window
-      inputTopic.pipeInput(key, value);
+      inputTopic.pipeInput(key, value, ttlMs + 1);
       assertNotNull(
           transactionIdStore.get(key), "should have a single txn id in state store, again");
     }
@@ -261,6 +267,7 @@ public class ResponsiveTopologyTestDriverKeyValueStoreTest {
     final Properties props = new Properties();
     props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
     props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
+    props.put(ResponsiveConfig.ASYNC_THREAD_POOL_SIZE_CONFIG, 2);
 
     return new ResponsiveTopologyTestDriver(topology, props, STARTING_TIME);
   }
@@ -283,6 +290,21 @@ public class ResponsiveTopologyTestDriverKeyValueStoreTest {
         .join(people, (bid, person) -> bid + "," + person)
         // state is the 6th column
         .filter((k, v) -> v.split(",")[5].equals("CA"))
+        .processValues(createAsyncProcessorSupplier(
+            () -> new FixedKeyProcessor<String, String, String>() {
+
+              private FixedKeyProcessorContext<String, String> context;
+
+              @Override
+              public void init(final FixedKeyProcessorContext<String, String> context) {
+                this.context = context;
+              }
+
+              @Override
+              public void process(final FixedKeyRecord<String, String> fixedKeyRecord) {
+                context.forward(fixedKeyRecord);
+              }
+            }))
         .to("output");
 
     return builder.build();

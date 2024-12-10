@@ -143,6 +143,10 @@ public class Segmenter {
     );
   }
 
+  public long retentionPeriodMs() {
+    return retentionPeriodMs;
+  }
+
   public long segmentIntervalMs() {
     return segmentIntervalMs;
   }

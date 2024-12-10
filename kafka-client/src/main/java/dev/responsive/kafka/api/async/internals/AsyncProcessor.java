@@ -12,9 +12,9 @@
 
 package dev.responsive.kafka.api.async.internals;
 
+import static dev.responsive.kafka.api.async.internals.AsyncUtils.getAsyncThreadPool;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.ASYNC_FLUSH_INTERVAL_MS_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.ASYNC_MAX_EVENTS_QUEUED_PER_KEY_CONFIG;
-import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadAsyncThreadPoolRegistry;
 
 import dev.responsive.kafka.api.async.AsyncProcessorSupplier;
 import dev.responsive.kafka.api.async.internals.contexts.AsyncUserProcessorContext;
@@ -40,7 +40,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
@@ -218,7 +217,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     final long punctuationInterval = configs.getLong(ASYNC_FLUSH_INTERVAL_MS_CONFIG);
     final int maxEventsPerKey = configs.getInt(ASYNC_MAX_EVENTS_QUEUED_PER_KEY_CONFIG);
 
-    this.asyncThreadPoolRegistration = getAsyncThreadPool(taskContext, streamThreadName);
+    this.asyncThreadPoolRegistration = getAsyncThreadPool(appConfigs, streamThreadName);
     asyncThreadPoolRegistration.registerAsyncProcessor(taskId, this::flushPendingEventsForCommit);
     asyncThreadPoolRegistration.threadPool().maybeInitThreadPoolMetrics();
 
@@ -756,17 +755,5 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     }
   }
 
-  private static AsyncThreadPoolRegistration getAsyncThreadPool(
-      final ProcessingContext context,
-      final String streamThreadName
-  ) {
-    try {
-      final AsyncThreadPoolRegistry registry = loadAsyncThreadPoolRegistry(context.appConfigs());
-      return registry.asyncThreadPoolForStreamThread(streamThreadName);
-    } catch (final Exception e) {
-      throw new ConfigException(
-          "Unable to locate async thread pool registry. Make sure to configure "
-              + ResponsiveConfig.ASYNC_THREAD_POOL_SIZE_CONFIG, e);
-    }
-  }
+
 }

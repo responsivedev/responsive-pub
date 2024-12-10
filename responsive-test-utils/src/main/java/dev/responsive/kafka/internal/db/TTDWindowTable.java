@@ -46,7 +46,7 @@ public class TTDWindowTable extends TTDTable<WindowedKey>
   ) {
     super(client);
     this.name = spec.tableName();
-    this.stub = new WindowStoreStub();
+    this.stub = new WindowStoreStub(partitioner.segmenter().retentionPeriodMs());
     this.partitioner = partitioner;
   }
 
@@ -207,17 +207,17 @@ public class TTDWindowTable extends TTDTable<WindowedKey>
         final long consumedOffset,
         final long streamTime
     ) {
-      return null;
+      return RemoteWriteResult.success(null);
     }
 
     @Override
     protected RemoteWriteResult<SegmentPartition> createSegment(final SegmentPartition partition) {
-      return null;
+      return RemoteWriteResult.success(null);
     }
 
     @Override
     protected RemoteWriteResult<SegmentPartition> deleteSegment(final SegmentPartition partition) {
-      return null;
+      return RemoteWriteResult.success(null);
     }
   }
 }

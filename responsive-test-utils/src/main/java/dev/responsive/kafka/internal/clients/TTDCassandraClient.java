@@ -67,7 +67,6 @@ public class TTDCassandraClient extends CassandraClient {
   }
 
   public void advanceWallClockTime(final Duration advance) {
-    flush();
     time.sleep(advance.toMillis());
   }
 

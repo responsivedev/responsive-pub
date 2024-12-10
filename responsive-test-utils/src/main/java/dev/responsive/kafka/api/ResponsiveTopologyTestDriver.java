@@ -12,28 +12,42 @@
 
 package dev.responsive.kafka.api;
 
+import static dev.responsive.kafka.api.async.internals.AsyncUtils.getAsyncThreadPool;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.ASYNC_THREAD_POOL_SIZE_CONFIG;
 import static dev.responsive.kafka.internal.stores.TTDRestoreListener.mockRestoreListener;
 
+import dev.responsive.kafka.api.async.internals.AsyncThreadPoolRegistration;
+import dev.responsive.kafka.api.async.internals.AsyncUtils;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.clients.TTDCassandraClient;
 import dev.responsive.kafka.internal.clients.TTDMockAdmin;
 import dev.responsive.kafka.internal.config.InternalSessionConfigs;
+import dev.responsive.kafka.internal.metrics.ClientVersionMetadata;
+import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.utils.SessionClients;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TTDUtils.TopologyTestDriverAccessor;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyDescription;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.test.TestRecord;
 
-public class ResponsiveTopologyTestDriver extends TopologyTestDriver {
+public class ResponsiveTopologyTestDriver extends TopologyTestDriverAccessor {
   public static final String RESPONSIVE_TTD_ORG = "Responsive";
   public static final String RESPONSIVE_TTD_ENV = "TopologyTestDriver";
 
   private final TTDCassandraClient client;
+  private final Optional<AsyncThreadPoolRegistration> asyncThreadPool;
 
   /**
    * Create a new test diver instance with default test properties.
@@ -91,7 +105,7 @@ public class ResponsiveTopologyTestDriver extends TopologyTestDriver {
   ) {
     this(
         topology,
-        config,
+        baseProps(config),
         initialWallClockTime,
         new TTDCassandraClient(
             new TTDMockAdmin(baseProps(config), topology),
@@ -109,7 +123,14 @@ public class ResponsiveTopologyTestDriver extends TopologyTestDriver {
   @Override
   public void advanceWallClockTime(final Duration advance) {
     client.advanceWallClockTime(advance);
+    client.flush();
     super.advanceWallClockTime(advance);
+  }
+
+  public void flush() {
+    asyncThreadPool.ifPresent(AsyncThreadPoolRegistration::flushAllAsyncEvents);
+    client.flush();
+    super.advanceWallClockTime(Duration.ZERO);
   }
 
   private ResponsiveTopologyTestDriver(
@@ -124,28 +145,55 @@ public class ResponsiveTopologyTestDriver extends TopologyTestDriver {
         initialWallClockTime
     );
     this.client = cassandraClient;
+    this.asyncThreadPool = getAsyncThreadPoolRegistration(super.props());
+  }
+
+  @Override
+  protected <K, V> void pipeRecord(
+      final String topic,
+      final TestRecord<K, V> record,
+      final Serializer<K> keySerializer,
+      final Serializer<V> valueSerializer,
+      final Instant time
+  ) {
+    super.pipeRecord(topic, record, keySerializer, valueSerializer, time);
+    flush();
   }
 
   private static Properties testDriverProps(
-      final Properties userProps,
+      final Properties baseProps,
       final TopologyDescription topologyDescription,
       final TTDCassandraClient client
   ) {
-    final Properties props = baseProps(userProps);
-
     final SessionClients sessionClients = new SessionClients(
         Optional.empty(), Optional.of(client), Optional.empty(), false, client.mockAdmin()
     );
-    final var restoreListener = mockRestoreListener(props);
+    final var restoreListener = mockRestoreListener(baseProps);
     sessionClients.initialize(restoreListener.metrics(), restoreListener);
 
-    props.putAll(new InternalSessionConfigs.Builder()
+    final var metrics = new ResponsiveMetrics(new Metrics());
+    final String appId = baseProps.getProperty(StreamsConfig.APPLICATION_ID_CONFIG);
+    metrics.initializeTags(
+        appId,
+        appId + "-client",
+        ClientVersionMetadata.loadVersionMetadata(),
+        Collections.emptyMap()
+    );
+
+    final var sessionConfig = new InternalSessionConfigs.Builder()
         .withSessionClients(sessionClients)
         .withStoreRegistry(client.storeRegistry())
-        .withTopologyDescription(topologyDescription)
-        .build()
-    );
-    return props;
+        .withMetrics(metrics)
+        .withTopologyDescription(topologyDescription);
+
+    AsyncUtils.configuredAsyncThreadPool(ResponsiveConfig.responsiveConfig(baseProps), 1, metrics)
+        .ifPresent(threadPoolRegistry -> {
+          threadPoolRegistry.startNewAsyncThreadPool(Thread.currentThread().getName());
+          sessionConfig.withAsyncThreadPoolRegistry(threadPoolRegistry);
+        });
+
+    baseProps.putAll(sessionConfig.build());
+    return baseProps;
   }
 
   @SuppressWarnings("deprecation")
@@ -175,6 +223,20 @@ public class ResponsiveTopologyTestDriver extends TopologyTestDriver {
     return mockTime;
   }
 
+  private static Optional<AsyncThreadPoolRegistration> getAsyncThreadPoolRegistration(
+      final Properties props
+  ) {
+    final int asyncThreadPoolSize = (int) props.getOrDefault(ASYNC_THREAD_POOL_SIZE_CONFIG, 0);
 
+    if (asyncThreadPoolSize > 0) {
+      final Map<String, Object> configMap = new HashMap<>();
+      // stupid conversion to deal with Map<String, Object> vs Properties type discrepancy
+      props.forEach((key, value) -> configMap.put(key.toString(), value));
+
+      return Optional.of(getAsyncThreadPool(configMap, Thread.currentThread().getName()));
+    } else {
+      return Optional.empty();
+    }
+  }
 
 }
