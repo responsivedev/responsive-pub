@@ -31,8 +31,8 @@ import static org.apache.kafka.streams.StreamsConfig.NUM_STREAM_THREADS_CONFIG;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.responsive.kafka.api.async.internals.AsyncThreadPoolRegistry;
 import dev.responsive.kafka.api.async.internals.AsyncUtils;
-import dev.responsive.kafka.api.config.CompatibilityMode;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
+import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.api.stores.ResponsiveDslStoreSuppliers;
 import dev.responsive.kafka.internal.clients.AsyncStreamsKafkaClientSupplier;
 import dev.responsive.kafka.internal.clients.ResponsiveKafkaClientSupplier;
@@ -212,14 +212,6 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
 
     validateLicense(params.responsiveConfig);
 
-    if (params.compatibilityMode == CompatibilityMode.FULL) {
-      try {
-        ResponsiveStreamsConfig.validateStreamsConfig(applicationConfigs);
-      } catch (final ConfigException e) {
-        throw new StreamsException("Configuration error, please check your properties", e);
-      }
-    }
-
     this.responsiveMetrics = params.metrics;
     this.sessionClients = params.sessionClients;
 
@@ -347,7 +339,11 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     propsWithOverrides.putAll(configs.originals());
     propsWithOverrides.putAll(internalConfBuilder.build());
 
-    if (ConfigUtils.compatibilityMode(configs) == CompatibilityMode.METRICS_ONLY) {
+    final var backend = ConfigUtils.storageBackend(configs);
+
+    ResponsiveStreamsConfig.validateStreamsConfig(propsWithOverrides, backend);
+
+    if (backend == StorageBackend.NONE) {
       return propsWithOverrides;
     }
 
@@ -466,7 +462,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     final StreamsConfig streamsConfig;
     final ResponsiveMetrics metrics;
     final ResponsiveStoreRegistry storeRegistry;
-    final CompatibilityMode compatibilityMode;
+    final StorageBackend storageBackend;
 
     // can be set during construction
     private Time time = Time.SYSTEM;
@@ -487,7 +483,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
 
       this.metrics = createMetrics(streamsConfig, responsiveConfig);
       this.storeRegistry = new ResponsiveStoreRegistry();
-      this.compatibilityMode = ConfigUtils.compatibilityMode(responsiveConfig);
+      this.storageBackend = ConfigUtils.storageBackend(responsiveConfig);
     }
 
     public Params withClientSupplier(final KafkaClientSupplier clientSupplier) {
@@ -526,29 +522,28 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
           streamsConfig,
           storeRegistry,
           metrics,
-          compatibilityMode
+          storageBackend
       );
 
       final var admin = responsiveKafkaClientSupplier.getAdmin(responsiveConfig.originals());
-      if (compatibilityMode == CompatibilityMode.METRICS_ONLY) {
-        sessionClients = new SessionClients(
-            Optional.empty(), Optional.empty(), Optional.empty(), false, admin);
-        return this;
-      }
 
       final var backendType = ConfigUtils.storageBackend(responsiveConfig);
       switch (backendType) {
         case CASSANDRA:
+          LOG.info("Using Cassandra responsive store");
+
           final var cqlSession = cassandraFactory.createCqlSession(responsiveConfig, metrics);
           sessionClients = new SessionClients(
               Optional.empty(),
               Optional.of(cassandraFactory.createClient(cqlSession, responsiveConfig)),
               Optional.empty(),
-              false,
+              storageBackend,
               admin
           );
           break;
         case MONGO_DB:
+          LOG.info("Using MongoDB responsive store");
+
           final var hostname = responsiveConfig.getString(MONGO_ENDPOINT_CONFIG);
           final String clientId = responsiveConfig.getString(MONGO_USERNAME_CONFIG);
           final Password clientSecret = responsiveConfig.getPassword(MONGO_PASSWORD_CONFIG);
@@ -570,29 +565,39 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
               )),
               Optional.empty(),
               Optional.empty(),
-              false,
+              storageBackend,
               admin
           );
           break;
         case IN_MEMORY:
-          LOG.info("using in-memory responsive store");
+          LOG.info("Using in-memory responsive store");
           sessionClients = new SessionClients(
               Optional.empty(),
               Optional.empty(),
               Optional.empty(),
-              true,
+              storageBackend,
               admin
           );
           break;
         case RS3:
-          LOG.info("using rs3 responsive store");
+          LOG.info("Using rs3 responsive store");
           final var rs3Host = responsiveConfig.getString(RS3_HOSTNAME_CONFIG);
           final var rs3Port = responsiveConfig.getInt(RS3_PORT_CONFIG);
           sessionClients = new SessionClients(
               Optional.empty(),
               Optional.empty(),
               Optional.of(new RS3TableFactory(rs3Host, rs3Port)),
-              false,
+              storageBackend,
+              admin
+          );
+          break;
+        case NONE:
+          LOG.info("Using non-responsive store");
+          sessionClients = new SessionClients(
+              Optional.empty(),
+              Optional.empty(),
+              Optional.empty(),
+              storageBackend,
               admin
           );
           break;
