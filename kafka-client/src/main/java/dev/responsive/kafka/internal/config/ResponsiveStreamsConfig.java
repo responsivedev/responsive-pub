@@ -34,7 +34,8 @@ public class ResponsiveStreamsConfig extends StreamsConfig {
     return new ResponsiveStreamsConfig(props, false);
   }
 
-  public static void validateStreamsConfig(final StreamsConfig streamsConfig) {
+  public static void validateStreamsConfig(final Map<?, ?> props) {
+    final StreamsConfig streamsConfig = streamsConfig(props);
     verifyNoStandbys(streamsConfig);
     verifyNotEosV1(streamsConfig);
   }

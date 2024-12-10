@@ -12,12 +12,12 @@
 
 package dev.responsive.kafka.api;
 
-import static dev.responsive.kafka.api.config.ResponsiveConfig.COMPATIBILITY_MODE_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.PLATFORM_API_KEY_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_ENV_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_LICENSE_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_LICENSE_FILE_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_ORG_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_BACKEND_TYPE_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
@@ -32,8 +32,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.when;
 
 import com.datastax.oss.driver.api.core.CqlSession;
-import dev.responsive.kafka.api.config.CompatibilityMode;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
+import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.CassandraClientFactory;
 import dev.responsive.kafka.internal.license.exception.LicenseAuthenticationException;
@@ -170,9 +170,9 @@ class ResponsiveKafkaStreamsTest {
   }
 
   @Test
-  public void shouldCreateResponsiveKafkaStreamsInMetricsOnlyModeWithUnverifiedConfigs() {
+  public void shouldCreateResponsiveKafkaStreamsInNonResponsiveStorageModeWithUnverifiedConfigs() {
     // Given:
-    properties.put(COMPATIBILITY_MODE_CONFIG, CompatibilityMode.METRICS_ONLY.name());
+    properties.put(STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.NONE.name());
     properties.put(NUM_STANDBY_REPLICAS_CONFIG, 2); // a config that would cause failure
 
     // When:
@@ -192,7 +192,7 @@ class ResponsiveKafkaStreamsTest {
     final File licenseFile = writeLicenseFile(LicenseUtils.getLicense());
     properties.put(RESPONSIVE_LICENSE_CONFIG, "");
     properties.put(ResponsiveConfig.RESPONSIVE_LICENSE_FILE_CONFIG, licenseFile.getAbsolutePath());
-    properties.put(COMPATIBILITY_MODE_CONFIG, CompatibilityMode.METRICS_ONLY.name());
+    properties.put(STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.NONE.name());
     final StreamsBuilder builder = new StreamsBuilder();
     builder.stream("foo").to("bar");
 
@@ -208,7 +208,7 @@ class ResponsiveKafkaStreamsTest {
         RESPONSIVE_LICENSE_CONFIG,
         LicenseUtils.getEncodedLicense(DECODED_INVALID_LICENSE_FILE)
     );
-    properties.put(COMPATIBILITY_MODE_CONFIG, CompatibilityMode.METRICS_ONLY.name());
+    properties.put(STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.NONE.name());
     final StreamsBuilder builder = new StreamsBuilder();
     builder.stream("foo").to("bar");
 
@@ -229,7 +229,7 @@ class ResponsiveKafkaStreamsTest {
         RESPONSIVE_LICENSE_CONFIG,
         LicenseUtils.getEncodedLicense(DECODED_TRIAL_EXPIRED_LICENSE_FILE)
     );
-    properties.put(COMPATIBILITY_MODE_CONFIG, CompatibilityMode.METRICS_ONLY.name());
+    properties.put(STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.NONE.name());
     final StreamsBuilder builder = new StreamsBuilder();
     builder.stream("foo").to("bar");
 
@@ -249,7 +249,7 @@ class ResponsiveKafkaStreamsTest {
     properties.put(PLATFORM_API_KEY_CONFIG, "");
     properties.put(RESPONSIVE_LICENSE_CONFIG, "");
     properties.put(RESPONSIVE_LICENSE_FILE_CONFIG, "");
-    properties.put(COMPATIBILITY_MODE_CONFIG, CompatibilityMode.METRICS_ONLY.name());
+    properties.put(STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.NONE.name());
     final StreamsBuilder builder = new StreamsBuilder();
     builder.stream("foo").to("bar");
 
@@ -269,7 +269,7 @@ class ResponsiveKafkaStreamsTest {
     properties.put(PLATFORM_API_KEY_CONFIG, "some-api-key");
     properties.put(RESPONSIVE_LICENSE_CONFIG, "");
     properties.put(RESPONSIVE_LICENSE_FILE_CONFIG, "");
-    properties.put(COMPATIBILITY_MODE_CONFIG, CompatibilityMode.METRICS_ONLY.name());
+    properties.put(STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.NONE.name());
     final StreamsBuilder builder = new StreamsBuilder();
     builder.stream("foo").to("bar");
 

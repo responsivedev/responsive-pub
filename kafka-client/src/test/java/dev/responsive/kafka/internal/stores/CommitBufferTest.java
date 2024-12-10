@@ -173,7 +173,7 @@ public class CommitBufferTest {
         Optional.empty(),
         Optional.of(client),
         Optional.empty(),
-        false,
+        StorageBackend.CASSANDRA,
         admin
     );
     final var responsiveMetrics = new ResponsiveMetrics(metrics);
