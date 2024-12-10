@@ -339,7 +339,11 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     propsWithOverrides.putAll(configs.originals());
     propsWithOverrides.putAll(internalConfBuilder.build());
 
-    if (ConfigUtils.storageBackend(configs) == StorageBackend.NONE) {
+    final var backend = ConfigUtils.storageBackend(configs);
+
+    ResponsiveStreamsConfig.validateStreamsConfig(propsWithOverrides, backend);
+
+    if (backend == StorageBackend.NONE) {
       return propsWithOverrides;
     }
 
@@ -371,12 +375,6 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
         StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG,
         ResponsiveDslStoreSuppliers.class.getName()
     );
-
-    try {
-      ResponsiveStreamsConfig.validateStreamsConfig(propsWithOverrides);
-    } catch (final ConfigException e) {
-      throw new StreamsException("Configuration error, please check your properties", e);
-    }
 
     return propsWithOverrides;
   }

@@ -26,6 +26,7 @@ import static org.apache.kafka.streams.StreamsConfig.APPLICATION_ID_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -34,6 +35,7 @@ import static org.mockito.Mockito.when;
 import com.datastax.oss.driver.api.core.CqlSession;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.StorageBackend;
+import dev.responsive.kafka.api.stores.ResponsiveDslStoreSuppliers;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.CassandraClientFactory;
 import dev.responsive.kafka.internal.license.exception.LicenseAuthenticationException;
@@ -154,8 +156,8 @@ class ResponsiveKafkaStreamsTest {
     builder.stream("foo").to("bar");
 
     // Then:
-    final StreamsException e = assertThrows(
-        StreamsException.class,
+    final ConfigException e = assertThrows(
+        ConfigException.class,
         () -> new IntegrationTestUtils.MockResponsiveKafkaStreams(
             builder.build(),
             properties,
@@ -164,7 +166,7 @@ class ResponsiveKafkaStreamsTest {
         )
     );
     assertThat(
-        e.getCause().getMessage(),
+        e.getMessage(),
         Matchers.containsString("Invalid Streams configuration value for 'num.standby.replicas'")
     );
   }
@@ -184,6 +186,34 @@ class ResponsiveKafkaStreamsTest {
     // Then:
     // no error is thrown
     ks.close();
+  }
+
+  @Test
+  public void shouldThrowWhenUsingResponsiveDslStoreSuppliersInNonResponsiveStorageMode() {
+    // Given:
+    properties.put(STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.NONE.name());
+    properties.put(DSL_STORE_SUPPLIERS_CLASS_CONFIG, ResponsiveDslStoreSuppliers.class.getName());
+
+    // When:
+    final StreamsBuilder builder = new StreamsBuilder();
+    builder.stream("foo").to("bar");
+
+    // then:
+    final ConfigException e = assertThrows(
+        ConfigException.class,
+        () -> {
+          final var ks = new ResponsiveKafkaStreams(builder.build(), properties, supplier);
+          ks.close();
+        }
+    );
+    assertThat(
+        e.getMessage(),
+        Matchers.containsString(
+            "Invalid Streams configuration value for 'dsl.store.suppliers.class': "
+                + "got class dev.responsive.kafka.api.stores.ResponsiveDslStoreSuppliers,"
+                + " incompatible with setting 'responsive.storage.backend.type' to NONE"
+        )
+    );
   }
 
   @Test
