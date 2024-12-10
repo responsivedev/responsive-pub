@@ -20,7 +20,6 @@ import dev.responsive.kafka.api.stores.ResponsiveDslStoreSuppliers;
 import java.util.Map;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.state.DslStoreSuppliers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

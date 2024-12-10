@@ -12,7 +12,6 @@
 
 package dev.responsive.kafka.testutils;
 
-import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.api.stores.ResponsiveStores;
 import dev.responsive.kafka.testutils.SimpleStatefulProcessor.ComputeStatefulOutput;
 import java.util.Collections;

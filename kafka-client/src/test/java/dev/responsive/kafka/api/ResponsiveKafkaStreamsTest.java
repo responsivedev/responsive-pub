@@ -58,7 +58,6 @@ import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
