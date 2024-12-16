@@ -102,6 +102,9 @@ public class PartitionedOperations implements KeyValueOperations {
       case MONGO_DB:
         table = createMongo(params, sessionClients, ttlResolver);
         break;
+      case DYNAMO_DB:
+        table = creatDynamoDb(params, sessionClients, ttlResolver);
+        break;
       case IN_MEMORY:
         table = createInMemory(params, ttlResolver);
         break;
@@ -245,6 +248,14 @@ public class PartitionedOperations implements KeyValueOperations {
       final SessionClients sessionClients
   ) {
     return sessionClients.rs3TableFactory().kvTable(params.name().tableName());
+  }
+
+  private static RemoteKVTable<?> creatDynamoDb(
+      final ResponsiveKeyValueParams params,
+      final SessionClients sessionClients,
+      final Optional<TtlResolver<?, ?>> ttlResolver
+  ) throws InterruptedException, TimeoutException {
+    return sessionClients.dynamoDbClient().kvTable(params.name().tableName(), ttlResolver);
   }
 
   @SuppressWarnings("rawtypes")

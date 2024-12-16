@@ -17,6 +17,7 @@ import java.util.Arrays;
 public enum StorageBackend {
   CASSANDRA,
   MONGO_DB,
+  DYNAMO_DB,
   IN_MEMORY,
   RS3;
 

@@ -52,6 +52,7 @@ dependencyResolutionManagement {
             version("log4j2", "2.20.0")
             version("mongoDB", "4.10.2")
             version("fabric8", "6.13.4")
+            version("aws", "2.29.20")
 
             library("jackson", "com.fasterxml.jackson.datatype", "jackson-datatype-jdk8").versionRef("jackson")
 
@@ -66,6 +67,10 @@ dependencyResolutionManagement {
 
             library("mongodb-driver-core", "org.mongodb", "mongodb-driver-core").versionRef("mongoDB")
             library("mongodb-driver-sync", "org.mongodb", "mongodb-driver-sync").versionRef("mongoDB")
+
+            library("dynamodb-sdk", "software.amazon.awssdk", "dynamodb").versionRef("aws")
+            library("netty-nio-client", "software.amazon.awssdk", "netty-nio-client").versionRef("aws")
+            bundle("dynamo", listOf("dynamodb-sdk", "netty-nio-client"))
 
             library("javaoperatorsdk", "io.javaoperatorsdk", "operator-framework").versionRef("javaoperatorsdk")
 
