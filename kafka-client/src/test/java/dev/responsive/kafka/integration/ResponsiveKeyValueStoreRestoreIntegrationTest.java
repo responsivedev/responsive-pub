@@ -12,6 +12,7 @@
 
 package dev.responsive.kafka.integration;
 
+import static dev.responsive.kafka.api.config.ResponsiveConfig.DYNAMODB_ENDPOINT_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_ENDPOINT_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_PASSWORD_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_USERNAME_CONFIG;
@@ -55,10 +56,12 @@ import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.api.stores.ResponsiveStores;
+import dev.responsive.kafka.internal.config.ConfigUtils;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.CassandraClientFactory;
 import dev.responsive.kafka.internal.db.DefaultCassandraClientFactory;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
+import dev.responsive.kafka.internal.db.dynamo.DynamoKVTable;
 import dev.responsive.kafka.internal.db.mongo.CollectionCreationOptions;
 import dev.responsive.kafka.internal.db.mongo.MongoKVTable;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
@@ -71,6 +74,7 @@ import dev.responsive.kafka.testutils.IntegrationTestUtils;
 import dev.responsive.kafka.testutils.IntegrationTestUtils.MockResponsiveKafkaStreams;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
+import java.net.URI;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.HashMap;
@@ -114,6 +118,11 @@ import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.http.nio.netty.NettyNioAsyncHttpClient;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 
 public class ResponsiveKeyValueStoreRestoreIntegrationTest {
 
@@ -352,41 +361,55 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
       final ResponsiveConfig config,
       final TopicPartition changelog
   ) throws InterruptedException, TimeoutException {
-    final RemoteKVTable<?> table;
 
-    if (type == KVSchema.FACT) {
-      final CassandraClient cassandraClient = defaultFactory.createClient(
-          defaultFactory.createCqlSession(config, null),
-          config);
+    RemoteKVTable<?> table;
+    switch (ConfigUtils.storageBackend(config)) {
+      case CASSANDRA:
+        final CassandraClient cassandraClient = defaultFactory.createClient(
+            defaultFactory.createCqlSession(config, null),
+            config);
 
-      table = cassandraClient.factFactory()
-          .create(new DefaultTableSpec(
-              aggName(),
-              TablePartitioner.defaultPartitioner(),
-              TtlResolver.NO_TTL
-          ));
-
-    } else if (type == KVSchema.KEY_VALUE) {
-      final var hostname = config.getString(MONGO_ENDPOINT_CONFIG);
-      final String user = config.getString(MONGO_USERNAME_CONFIG);
-      final Password pass = config.getPassword(MONGO_PASSWORD_CONFIG);
-      final var mongoClient = SessionUtil.connect(
-          hostname,
-          user,
-          pass == null ? null : pass.value(),
-          "",
-          null
-      );
-      table = new MongoKVTable(
-          mongoClient,
-          aggName(),
-          CollectionCreationOptions.fromConfig(config),
-          TtlResolver.NO_TTL
-      );
-      table.init(0);
-    } else {
-      throw new IllegalArgumentException("Unsupported type: " + type);
+        table = cassandraClient.factFactory()
+            .create(new DefaultTableSpec(
+                aggName(),
+                TablePartitioner.defaultPartitioner(),
+                TtlResolver.NO_TTL
+            ));
+        break;
+      case MONGO_DB:
+        final var hostname = config.getString(MONGO_ENDPOINT_CONFIG);
+        final String user = config.getString(MONGO_USERNAME_CONFIG);
+        final Password pass = config.getPassword(MONGO_PASSWORD_CONFIG);
+        final var mongoClient = SessionUtil.connect(
+            hostname,
+            user,
+            pass == null ? null : pass.value(),
+            "",
+            null
+        );
+        table = new MongoKVTable(
+            mongoClient,
+            aggName(),
+            CollectionCreationOptions.fromConfig(config),
+            TtlResolver.NO_TTL
+        );
+        break;
+      case DYNAMO_DB:
+        final var dynamoEndpoint = config.getString(DYNAMODB_ENDPOINT_CONFIG);
+        final var dynamoDB = DynamoDbAsyncClient.builder()
+            .region(Region.US_WEST_2)
+            .credentialsProvider(StaticCredentialsProvider.create(
+                AwsBasicCredentials.create("dummykey", "dummysecret")))
+            .endpointOverride(URI.create(dynamoEndpoint))
+            .httpClientBuilder(NettyNioAsyncHttpClient.builder())
+            .build();
+        table = new DynamoKVTable(dynamoDB, aggName());
+        break;
+      default:
+        throw new IllegalArgumentException(ConfigUtils.storageBackend(config).toString());
     }
+
+    table.init(0);
     return table;
   }
 
@@ -553,11 +576,8 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
     final Map<String, Object> properties = new HashMap<>(responsiveProps);
 
     if (type == KVSchema.FACT) {
+      // override the default since only cassandra has different behavior for fact stores
       properties.put(ResponsiveConfig.STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.CASSANDRA.name());
-    } else if (type == KVSchema.KEY_VALUE) {
-      properties.put(ResponsiveConfig.STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.MONGO_DB.name());
-    } else {
-      throw new IllegalArgumentException("Unexpected schema type: " + type.name());
     }
 
     properties.put(KEY_SERIALIZER_CLASS_CONFIG, LongSerializer.class);

@@ -16,6 +16,7 @@ import dev.responsive.kafka.api.config.CompatibilityMode;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.internal.db.CassandraClient;
+import dev.responsive.kafka.internal.db.DynamoClient;
 import dev.responsive.kafka.internal.db.mongo.ResponsiveMongoClient;
 import dev.responsive.kafka.internal.db.rs3.RS3TableFactory;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
@@ -35,6 +36,7 @@ public class SessionClients {
   private final Optional<ResponsiveMongoClient> mongoClient;
   private final Optional<CassandraClient> cassandraClient;
   private final Optional<RS3TableFactory> rs3TableFactory;
+  private final Optional<DynamoClient> dynamoDbClient;
   private final boolean inMemory;
   private final Admin admin;
 
@@ -47,12 +49,14 @@ public class SessionClients {
       final Optional<ResponsiveMongoClient> mongoClient,
       final Optional<CassandraClient> cassandraClient,
       final Optional<RS3TableFactory> rs3TableFactory,
+      final Optional<DynamoClient> dynamoDbClient,
       final boolean inMemory,
       final Admin admin
   ) {
     this.mongoClient = mongoClient;
     this.cassandraClient = cassandraClient;
     this.rs3TableFactory = rs3TableFactory;
+    this.dynamoDbClient = dynamoDbClient;
     this.inMemory = inMemory;
     this.admin = admin;
   }
@@ -77,6 +81,8 @@ public class SessionClients {
       return StorageBackend.CASSANDRA;
     } else if (rs3TableFactory.isPresent()) {
       return StorageBackend.RS3;
+    } else if (dynamoDbClient.isPresent()) {
+      return StorageBackend.DYNAMO_DB;
     } else if (inMemory) {
       return StorageBackend.IN_MEMORY;
     } else {
@@ -118,6 +124,17 @@ public class SessionClients {
     }
 
     return cassandraClient.get();
+  }
+
+  public DynamoClient dynamoDbClient() {
+    if (dynamoDbClient.isEmpty()) {
+      final IllegalStateException fatalException =
+          new IllegalStateException("DynamoDB client was missing");
+      LOG.error(fatalException.getMessage(), fatalException);
+      throw fatalException;
+    }
+
+    return dynamoDbClient.get();
   }
 
   public Admin admin() {

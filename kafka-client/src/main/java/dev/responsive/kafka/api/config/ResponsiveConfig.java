@@ -119,6 +119,11 @@ public class ResponsiveConfig extends AbstractConfig {
   public static final String RS3_PORT_CONFIG = "responsive.rs3.port";
   private static final String RS3_PORT_DOC = "The port to use when connecting to RS3.";
 
+  // ------------------ DynamoDB specific configurations -----------------------
+
+  public static final String DYNAMODB_ENDPOINT_CONFIG = "responsive.dynamodb.endpoint";
+  private static final String DYNAMODB_ENDPOINT_DOC = "The DynamoDB endpoint to connect to.";
+
   // ------------------ ScyllaDB specific configurations ----------------------
 
   public static final String CASSANDRA_USERNAME_CONFIG = "responsive.cassandra.username";
@@ -368,6 +373,16 @@ public class ResponsiveConfig extends AbstractConfig {
           new ConfigDef.NonEmptyString(),
           Importance.HIGH,
           MONGO_ENDPOINT_DOC
+      )
+
+      // dyanmodb connection configurations
+      .define(
+          DYNAMODB_ENDPOINT_CONFIG,
+          Type.STRING,
+          null,
+          new ConfigDef.NonEmptyString(),
+          Importance.HIGH,
+          DYNAMODB_ENDPOINT_DOC
       )
 
       // cassandra connection configurations

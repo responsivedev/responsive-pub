@@ -12,6 +12,7 @@
 
 package dev.responsive.kafka.api;
 
+import static dev.responsive.kafka.api.config.ResponsiveConfig.DYNAMODB_ENDPOINT_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.METRICS_ENABLED_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_ADDITIONAL_CONNECTION_STRING_PARAMS_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_ENDPOINT_CONFIG;
@@ -41,6 +42,7 @@ import dev.responsive.kafka.internal.config.InternalSessionConfigs;
 import dev.responsive.kafka.internal.config.ResponsiveStreamsConfig;
 import dev.responsive.kafka.internal.db.CassandraClientFactory;
 import dev.responsive.kafka.internal.db.DefaultCassandraClientFactory;
+import dev.responsive.kafka.internal.db.DynamoClient;
 import dev.responsive.kafka.internal.db.mongo.CollectionCreationOptions;
 import dev.responsive.kafka.internal.db.mongo.ResponsiveMongoClient;
 import dev.responsive.kafka.internal.db.rs3.RS3TableFactory;
@@ -61,6 +63,7 @@ import dev.responsive.kafka.internal.utils.SessionClients;
 import dev.responsive.kafka.internal.utils.SessionUtil;
 import java.io.File;
 import java.io.IOException;
+import java.net.URI;
 import java.nio.file.Files;
 import java.time.Duration;
 import java.util.Base64;
@@ -93,6 +96,11 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.http.nio.netty.NettyNioAsyncHttpClient;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 
 public class ResponsiveKafkaStreams extends KafkaStreams {
 
@@ -532,23 +540,26 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       final var admin = responsiveKafkaClientSupplier.getAdmin(responsiveConfig.originals());
       if (compatibilityMode == CompatibilityMode.METRICS_ONLY) {
         sessionClients = new SessionClients(
-            Optional.empty(), Optional.empty(), Optional.empty(), false, admin);
+            Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), false, admin);
         return this;
       }
 
       final var backendType = ConfigUtils.storageBackend(responsiveConfig);
       switch (backendType) {
         case CASSANDRA:
+          LOG.info("using Cassandra responsive store");
           final var cqlSession = cassandraFactory.createCqlSession(responsiveConfig, metrics);
           sessionClients = new SessionClients(
               Optional.empty(),
               Optional.of(cassandraFactory.createClient(cqlSession, responsiveConfig)),
+              Optional.empty(),
               Optional.empty(),
               false,
               admin
           );
           break;
         case MONGO_DB:
+          LOG.info("using MongoDB responsive store");
           final var hostname = responsiveConfig.getString(MONGO_ENDPOINT_CONFIG);
           final String clientId = responsiveConfig.getString(MONGO_USERNAME_CONFIG);
           final Password clientSecret = responsiveConfig.getPassword(MONGO_PASSWORD_CONFIG);
@@ -570,6 +581,27 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
               )),
               Optional.empty(),
               Optional.empty(),
+              Optional.empty(),
+              false,
+              admin
+          );
+          break;
+        case DYNAMO_DB:
+          LOG.info("using DynamoDB responsive store");
+          final var dynamoEndpoint = responsiveConfig.getString(DYNAMODB_ENDPOINT_CONFIG);
+          final var dynamoDB = DynamoDbAsyncClient.builder()
+              .region(Region.US_WEST_2)
+              // TODO(agavra): support real credentials
+              .credentialsProvider(StaticCredentialsProvider.create(
+                  AwsBasicCredentials.create("dummykey", "dummysecret")))
+              .endpointOverride(URI.create(dynamoEndpoint))
+              .httpClientBuilder(NettyNioAsyncHttpClient.builder())
+              .build();
+          sessionClients = new SessionClients(
+              Optional.empty(),
+              Optional.empty(),
+              Optional.empty(),
+              Optional.of(new DynamoClient(dynamoDB, responsiveConfig)),
               false,
               admin
           );
@@ -577,6 +609,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
         case IN_MEMORY:
           LOG.info("using in-memory responsive store");
           sessionClients = new SessionClients(
+              Optional.empty(),
               Optional.empty(),
               Optional.empty(),
               Optional.empty(),
@@ -592,6 +625,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
               Optional.empty(),
               Optional.empty(),
               Optional.of(new RS3TableFactory(rs3Host, rs3Port)),
+              Optional.empty(),
               false,
               admin
           );

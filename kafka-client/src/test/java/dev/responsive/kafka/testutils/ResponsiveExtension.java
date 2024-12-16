@@ -17,6 +17,7 @@ import static dev.responsive.kafka.api.config.ResponsiveConfig.CASSANDRA_DATACEN
 import static dev.responsive.kafka.api.config.ResponsiveConfig.CASSANDRA_DESIRED_NUM_PARTITION_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.CASSANDRA_HOSTNAME_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.CASSANDRA_PORT_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.DYNAMODB_ENDPOINT_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_ENDPOINT_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_ENV_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_LICENSE_CONFIG;
@@ -67,6 +68,7 @@ public class ResponsiveExtension
       .withEnv("KAFKA_GROUP_MAX_SESSION_TIMEOUT_MS", "60000")
       .withReuse(true);
   public static MongoDBContainer mongo = new MongoDBContainer(TestConstants.MONGODB);
+  public static DynamoDbContainer dynamo = new DynamoDbContainer(TestConstants.DYNAMODB);
 
   public static Admin admin;
 
@@ -98,7 +100,7 @@ public class ResponsiveExtension
     LOG.info("Starting up Responsive test harness at {}", start);
 
     final var kafkaFuture = Startables.deepStart(kafka);
-    final var storageFuture = Startables.deepStart(cassandra, mongo);
+    final var storageFuture = Startables.deepStart(cassandra, mongo, dynamo);
     try {
       kafkaFuture.get();
       admin = Admin.create(Map.of(BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers()));
@@ -115,6 +117,7 @@ public class ResponsiveExtension
   public static void stopAll() {
     cassandra.stop();
     mongo.stop();
+    dynamo.stop();
     kafka.stop();
     admin.close();
   }
@@ -152,6 +155,8 @@ public class ResponsiveExtension
       return kafka;
     } else if (parameterContext.getParameter().getType() == RS3Container.class) {
       return rs3;
+    } else if (parameterContext.getParameter().getType() == DynamoDbContainer.class) {
+      return dynamo;
     } else if (parameterContext.getParameter().getType() == Admin.class) {
       return admin;
     } else if (isContainerConfig(parameterContext)) {
@@ -173,6 +178,8 @@ public class ResponsiveExtension
         map.put(STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.RS3.name());
         map.put(RS3_HOSTNAME_CONFIG, "localhost");
         map.put(RS3_PORT_CONFIG, rs3.getMappedPort(50051));
+      } else if (backend == StorageBackend.DYNAMO_DB) {
+        map.put(STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.DYNAMO_DB.name());
       }
 
       // throw in configuration for both backends since som tests are parameterized with both
@@ -181,6 +188,7 @@ public class ResponsiveExtension
       map.put(CASSANDRA_PORT_CONFIG, cassandra.getContactPoint().getPort());
       map.put(CASSANDRA_DATACENTER_CONFIG, cassandra.getLocalDatacenter());
       map.put(MONGO_ENDPOINT_CONFIG, mongo.getConnectionString());
+      map.put(DYNAMODB_ENDPOINT_CONFIG, dynamo.getConnectionString());
 
       if (parameterContext.getParameter().getType().equals(Map.class)) {
         return map;

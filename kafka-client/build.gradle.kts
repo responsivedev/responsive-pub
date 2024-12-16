@@ -138,6 +138,7 @@ dependencies {
     implementation(libs.bundles.scylla)
     implementation(libs.bundles.commons)
     implementation(libs.mongodb.driver.sync)
+    implementation(libs.bundles.dynamo)
     implementation(libs.bundles.otel)
     implementation(libs.bundles.grpc)
     implementation(libs.protobuf.java.util)

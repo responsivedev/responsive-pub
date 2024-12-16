@@ -69,7 +69,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 public class MinimalIntegrationTest {
 
   @RegisterExtension
-  static ResponsiveExtension EXTENSION = new ResponsiveExtension(StorageBackend.MONGO_DB);
+  static ResponsiveExtension EXTENSION = new ResponsiveExtension(StorageBackend.DYNAMO_DB);
 
   private static final String INPUT_TOPIC = "input";
   private static final String OUTPUT_TOPIC = "output";
