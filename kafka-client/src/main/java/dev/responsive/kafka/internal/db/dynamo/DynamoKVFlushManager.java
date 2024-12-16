@@ -59,7 +59,10 @@ public class DynamoKVFlushManager extends KVFlushManager {
   }
 
   @Override
-  public RemoteWriter<Bytes, Integer> createWriter(final Integer tablePartition) {
+  public RemoteWriter<Bytes, Integer> createWriter(
+      final Integer tablePartition,
+      final long consumedOffset
+  ) {
     return new DynamoWriter<>(table, kafkaPartition, tablePartition, dynamo);
   }
 

@@ -65,7 +65,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
  * the development workflow, and therefore is disabled by default (to speed
  * up test time).
  */
-//@Disabled
+@Disabled
 public class MinimalIntegrationTest {
 
   @RegisterExtension

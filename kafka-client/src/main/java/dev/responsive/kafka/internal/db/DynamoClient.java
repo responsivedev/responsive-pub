@@ -12,11 +12,8 @@
 
 package dev.responsive.kafka.internal.db;
 
-import com.mongodb.client.model.WriteModel;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.db.dynamo.DynamoKVTable;
-import dev.responsive.kafka.internal.db.mongo.KVDoc;
-import dev.responsive.kafka.internal.db.mongo.MongoKVTable;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.db.spec.DefaultTableSpec;
 import dev.responsive.kafka.internal.stores.TtlResolver;

@@ -12,8 +12,6 @@
 
 package dev.responsive.kafka.api;
 
-import static dev.responsive.kafka.api.config.ResponsiveConfig.ASYNC_MAX_EVENTS_QUEUED_PER_ASYNC_THREAD_CONFIG;
-import static dev.responsive.kafka.api.config.ResponsiveConfig.ASYNC_THREAD_POOL_SIZE_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.DYNAMODB_ENDPOINT_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.METRICS_ENABLED_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_ADDITIONAL_CONNECTION_STRING_PARAMS_CONFIG;
@@ -607,6 +605,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
               false,
               admin
           );
+          break;
         case IN_MEMORY:
           LOG.info("using in-memory responsive store");
           sessionClients = new SessionClients(
