@@ -57,6 +57,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 /**
@@ -65,7 +66,8 @@ import org.junit.jupiter.api.extension.RegisterExtension;
  * the development workflow, and therefore is disabled by default (to speed
  * up test time).
  */
-@Disabled
+//@Disabled
+@Timeout(10_000_000)
 public class MinimalIntegrationTest {
 
   @RegisterExtension
