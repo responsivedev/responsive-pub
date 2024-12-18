@@ -76,8 +76,12 @@ import org.apache.kafka.streams.KafkaStreams.StateListener;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.Topology;
 import org.junit.jupiter.api.TestInfo;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public final class IntegrationTestUtils {
+
+  private static final Logger LOG = LoggerFactory.getLogger(IntegrationTestUtils.class);
 
   /**
    * Simple override that allows plugging in a custom CassandraClientFactory
@@ -336,6 +340,7 @@ public final class IntegrationTestUtils {
       final boolean readUncommitted,
       final Map<String, Object> originals
   ) throws TimeoutException {
+    LOG.info("Awaiting {} output events on topic {}", expected.size(), topic);
     final Map<String, Object> properties = new HashMap<>(originals);
     properties.put(ISOLATION_LEVEL_CONFIG, readUncommitted
         ? IsolationLevel.READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT)
@@ -363,6 +368,7 @@ public final class IntegrationTestUtils {
         }
       }
     }
+    LOG.info("Read {} output events on topic {} (finished awaitOutput)", expected.size(), topic);
   }
 
   public static <K, V> List<KeyValue<K, V>> readOutput(
