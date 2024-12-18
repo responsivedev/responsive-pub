@@ -20,7 +20,6 @@ import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
-import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
@@ -99,9 +98,6 @@ public class KafkaStreamsApp {
 
   @Bean
   public KStream<String, String> magic(StreamsBuilder streamBuilder, KafkaAdmin admin) {
-    final Map<String, TopicDescription> streamingTopic1 = admin.describeTopics("streamingTopic1");
-    System.out.println(streamingTopic1);
-
     KStream<String, String> stream = streamBuilder.stream("streamingTopic1");
     stream
         .mapValues((ValueMapper<String, String>) String::toUpperCase)

@@ -57,6 +57,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 /**
@@ -66,6 +67,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
  * up test time).
  */
 @Disabled
+@Timeout(10_000_000)
 public class MinimalIntegrationTest {
 
   @RegisterExtension

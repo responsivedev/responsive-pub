@@ -82,9 +82,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.RegisterExtension;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.testcontainers.containers.CassandraContainer;
 
 public class TablePartitionerIntegrationTest {
+
+  private static final Logger LOG = LoggerFactory.getLogger(TablePartitionerIntegrationTest.class);
 
   @RegisterExtension
   static ResponsiveExtension EXTENSION = new ResponsiveExtension(StorageBackend.CASSANDRA);
@@ -149,30 +153,38 @@ public class TablePartitionerIntegrationTest {
     final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties);
 
     try (
-        final var streams = new ResponsiveKafkaStreams(
-            keyValueStoreTopology(ResponsiveKeyValueParams.keyValue(storeName)),
-            properties);
         final var serializer = new LongSerializer();
         final var deserializer = new LongDeserializer()
     ) {
-      // When:
-      // this will send one key to each virtual partition using the LongBytesHasher
-      IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(20), streams);
-      IntegrationTestUtils.pipeInput(
-          inputTopic(), NUM_PARTITIONS_INPUT, producer, System::currentTimeMillis, 0, 100L,
-          LongStream.range(0, 32).toArray());
+      try (
+          final var streams = new ResponsiveKafkaStreams(
+              keyValueStoreTopology(ResponsiveKeyValueParams.keyValue(storeName)),
+              properties
+          )
+      ) {
+        // When:
+        // this will send one key to each virtual partition using the LongBytesHasher
+        IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(20), streams);
+        IntegrationTestUtils.pipeInput(
+            inputTopic(), NUM_PARTITIONS_INPUT, producer, System::currentTimeMillis, 0, 100L,
+            LongStream.range(0, 32).toArray()
+        );
 
-      // Then
-      IntegrationTestUtils.awaitOutput(
-          outputTopic(),
-          0,
-          LongStream.range(0, 32)
-              .boxed()
-              .map(k -> new KeyValue<>(k, 100L))
-              .collect(Collectors.toSet()),
-          true,
-          properties
-      );
+        // Then
+        IntegrationTestUtils.awaitOutput(
+            outputTopic(),
+            0,
+            LongStream.range(0, 32)
+                .boxed()
+                .map(k -> new KeyValue<>(k, 100L))
+                .collect(Collectors.toSet()),
+            false,
+            properties
+        );
+      }
+
+      // have this outside the try block so that kafka streams is closed and fully
+      // flushed before we assert
       final String cassandraName = new TableName(storeName).tableName();
       final var partitioner = SubPartitioner.create(
           OptionalInt.empty(),
@@ -181,6 +193,7 @@ public class TablePartitionerIntegrationTest {
           ResponsiveConfig.responsiveConfig(properties),
           storeName + "-changelog"
       );
+
       final CassandraKeyValueTable table = CassandraKeyValueTable.create(
           new DefaultTableSpec(cassandraName, partitioner, TtlResolver.NO_TTL), client);
 
@@ -188,6 +201,7 @@ public class TablePartitionerIntegrationTest {
       assertThat(client.count(cassandraName, 0), is(2L));
       assertThat(client.count(cassandraName, 16), is(2L));
 
+      LOG.info("Checking data in remote table");
       for (long tp = 0; tp < 32; ++tp) {
         final var kBytes = Bytes.wrap(serializer.serialize("", tp));
         final byte[] valBytes = table.get((int) tp % NUM_PARTITIONS_INPUT, kBytes, MIN_VALID_TS);
@@ -204,31 +218,38 @@ public class TablePartitionerIntegrationTest {
     final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties);
 
     try (
-        final var streams = new ResponsiveKafkaStreams(
-            keyValueStoreTopology(ResponsiveKeyValueParams.fact(storeName)),
+        final var serializer = new LongSerializer();
+        final var deserializer = new LongDeserializer()
+    ) {
+      try (
+          final var streams = new ResponsiveKafkaStreams(
+              keyValueStoreTopology(ResponsiveKeyValueParams.fact(storeName)),
+              properties
+          )
+      ) {
+        // When:
+        // this will send one key to each virtual partition using the LongBytesHasher
+        IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(10), streams);
+        IntegrationTestUtils.pipeInput(
+            inputTopic(), NUM_PARTITIONS_INPUT, producer, System::currentTimeMillis, 0, 100L,
+            LongStream.range(0, 32).toArray()
+        );
+
+        // Then
+        IntegrationTestUtils.awaitOutput(
+            outputTopic(),
+            0,
+            LongStream.range(0, 32)
+                .boxed()
+                .map(k -> new KeyValue<>(k, 100L))
+                .collect(Collectors.toSet()),
+            false,
             properties
         );
-        final var serializer = new LongSerializer();
-        final var deserializer = new LongDeserializer();
-    ) {
-      // When:
-      // this will send one key to each virtual partition using the LongBytesHasher
-      IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(10), streams);
-      IntegrationTestUtils.pipeInput(
-          inputTopic(), NUM_PARTITIONS_INPUT, producer, System::currentTimeMillis, 0, 100L,
-          LongStream.range(0, 32).toArray());
+      }
 
-      // Then
-      IntegrationTestUtils.awaitOutput(
-          outputTopic(),
-          0,
-          LongStream.range(0, 32)
-              .boxed()
-              .map(k -> new KeyValue<>(k, 100L))
-              .collect(Collectors.toSet()),
-          false,
-          properties
-      );
+      // have this outside the try block so that kafka streams is closed and fully
+      // flushed before we assert
       final String cassandraName = new TableName(storeName).tableName();
       final var partitioner = TablePartitioner.defaultPartitioner();
       final CassandraFactTable table = CassandraFactTable.create(
@@ -242,6 +263,7 @@ public class TablePartitionerIntegrationTest {
 
       Assertions.assertEquals(table.fetchOffset(2), NO_COMMITTED_OFFSET);
 
+      LOG.info("Checking data in remote table");
       // these store ValueAndTimestamp, so we need to just pluck the last 8 bytes
       for (long k = 0; k < 32; k++) {
         final var kBytes = Bytes.wrap(serializer.serialize("", k));
