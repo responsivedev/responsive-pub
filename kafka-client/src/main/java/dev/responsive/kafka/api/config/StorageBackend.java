@@ -18,7 +18,8 @@ public enum StorageBackend {
   CASSANDRA,
   MONGO_DB,
   IN_MEMORY,
-  RS3;
+  RS3,
+  NONE;
 
   public static String[] names() {
     return Arrays.stream(values()).map(Enum::name).toArray(String[]::new);

@@ -53,7 +53,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Throwables;
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.config.StorageBackend;
-import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.api.stores.ResponsiveStores;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
@@ -261,7 +260,7 @@ public class AsyncProcessorIntegrationTest {
                       sleepForMs(1L);
                       return new SimpleProcessorOutput<>(val.getValue() + "-S1:" + newSum, newSum);
                     },
-                    ResponsiveKeyValueParams.fact(asyncStore1),
+                    ResponsiveStores.factStore(asyncStore1),
                     Serdes.Integer()
                 )),
             Named.as("S1"),
@@ -272,7 +271,6 @@ public class AsyncProcessorIntegrationTest {
                     (ComputeStatelessOutput<String, String, InputRecord>) (r, c) -> {
                       sleepForMs(5L);
                       return new InputRecord(r.value() + "-L1");
-
                     }
                 )),
             Named.as("L1"))
@@ -293,7 +291,7 @@ public class AsyncProcessorIntegrationTest {
                       sleepForMs(1L);
                       return new SimpleProcessorOutput<>(r.value() + "-S2:" + newSum, newSum);
                     },
-                    ResponsiveKeyValueParams.fact(asyncStore2),
+                    ResponsiveStores.factStore(asyncStore2),
                     Serdes.Integer()
                 )),
             Named.as("S2"),
@@ -383,7 +381,7 @@ public class AsyncProcessorIntegrationTest {
         .processValues(
             new SimpleStatefulProcessorSupplier<>(
                 this::computeNewValueForSourceProcessor,
-                ResponsiveKeyValueParams.fact(inKVStore),
+                ResponsiveStores.factStore(inKVStore),
                 Serdes.String()),
             inKVStore)
         .processValues(
@@ -394,7 +392,7 @@ public class AsyncProcessorIntegrationTest {
         .processValues(
             new SimpleStatefulProcessorSupplier<>(
                 this::computeNewValueForSinkProcessor,
-                ResponsiveKeyValueParams.fact(outKVStore),
+                ResponsiveStores.factStore(outKVStore),
                 Serdes.String(),
                 latestValues,
                 inputRecordsLatch),
@@ -502,14 +500,14 @@ public class AsyncProcessorIntegrationTest {
         .processValues(
             new SimpleStatefulProcessorSupplier<>(
                 this::computeNewValueForSourceProcessor,
-                ResponsiveKeyValueParams.fact(inKVStore),
+                ResponsiveStores.factStore(inKVStore),
                 Serdes.String()),
             inKVStore)
         .processValues(
             createAsyncProcessorSupplier(
                 new SimpleStatefulProcessorSupplier<>(
                     this::computeNewValueForSingleStatefulAsyncProcessor,
-                    ResponsiveKeyValueParams.fact(asyncStore1),
+                    ResponsiveStores.factStore(asyncStore1),
                     Serdes.String(),
                     processed
                 )),
@@ -518,7 +516,7 @@ public class AsyncProcessorIntegrationTest {
         .processValues(
             new SimpleStatefulProcessorSupplier<>(
                 this::computeNewValueForSinkProcessor,
-                ResponsiveKeyValueParams.fact(outKVStore),
+                ResponsiveStores.factStore(outKVStore),
                 Serdes.String(),
                 latestValues,
                 inputRecordsLatch),
@@ -578,7 +576,7 @@ public class AsyncProcessorIntegrationTest {
 
     // this is the old way of connecting StoreBuilders to a topology, which async does not support
     builder.addStateStore(ResponsiveStores.timestampedKeyValueStoreBuilder(
-        ResponsiveStores.keyValueStore(ResponsiveKeyValueParams.fact(asyncStore1)),
+        ResponsiveStores.factStore(asyncStore1),
         Serdes.String(),
         Serdes.String()));
 

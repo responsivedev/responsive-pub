@@ -12,8 +12,6 @@
 
 package dev.responsive.kafka.internal.utils;
 
-import dev.responsive.kafka.api.config.CompatibilityMode;
-import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.mongo.ResponsiveMongoClient;
@@ -35,7 +33,7 @@ public class SessionClients {
   private final Optional<ResponsiveMongoClient> mongoClient;
   private final Optional<CassandraClient> cassandraClient;
   private final Optional<RS3TableFactory> rs3TableFactory;
-  private final boolean inMemory;
+  private final StorageBackend storageBackend;
   private final Admin admin;
 
   // These are effectively final, but have to be inserted after the SessionClients is
@@ -47,13 +45,13 @@ public class SessionClients {
       final Optional<ResponsiveMongoClient> mongoClient,
       final Optional<CassandraClient> cassandraClient,
       final Optional<RS3TableFactory> rs3TableFactory,
-      final boolean inMemory,
+      final StorageBackend storageBackend,
       final Admin admin
   ) {
     this.mongoClient = mongoClient;
     this.cassandraClient = cassandraClient;
     this.rs3TableFactory = rs3TableFactory;
-    this.inMemory = inMemory;
+    this.storageBackend = storageBackend;
     this.admin = admin;
   }
 
@@ -71,24 +69,17 @@ public class SessionClients {
   }
 
   public StorageBackend storageBackend() {
-    if (mongoClient.isPresent()) {
-      return StorageBackend.MONGO_DB;
-    } else if (cassandraClient.isPresent()) {
-      return StorageBackend.CASSANDRA;
-    } else if (rs3TableFactory.isPresent()) {
-      return StorageBackend.RS3;
-    } else if (inMemory) {
-      return StorageBackend.IN_MEMORY;
-    } else {
-      throw new IllegalArgumentException("Invalid Shared Clients Configuration. "
-          + "If you have configured " + ResponsiveConfig.COMPATIBILITY_MODE_CONFIG
-          + "=" + CompatibilityMode.METRICS_ONLY + " you cannot use Responsive storage. "
-          + "See https://docs.responsive.dev/getting-started/quickstart for a how-to guide for "
-          + "getting started with Responsive stores.");
-    }
+    return storageBackend;
   }
 
   public RS3TableFactory rs3TableFactory() {
+    if (storageBackend != StorageBackend.RS3) {
+      final IllegalStateException fatalException =
+          new IllegalStateException("Storage backend was " + storageBackend + " not rs3");
+      LOG.error(fatalException.getMessage(), fatalException);
+      throw fatalException;
+    }
+
     if (rs3TableFactory.isEmpty()) {
       final IllegalStateException fatalException =
           new IllegalStateException("rs3 table factory was missing");
@@ -99,6 +90,13 @@ public class SessionClients {
   }
 
   public ResponsiveMongoClient mongoClient() {
+    if (storageBackend != StorageBackend.MONGO_DB) {
+      final IllegalStateException fatalException =
+          new IllegalStateException("Storage backend was " + storageBackend + " not mongoDB");
+      LOG.error(fatalException.getMessage(), fatalException);
+      throw fatalException;
+    }
+
     if (mongoClient.isEmpty()) {
       final IllegalStateException fatalException =
           new IllegalStateException("MongoDB client was missing");
@@ -110,6 +108,13 @@ public class SessionClients {
   }
 
   public CassandraClient cassandraClient() {
+    if (storageBackend != StorageBackend.CASSANDRA) {
+      final IllegalStateException fatalException =
+          new IllegalStateException("Storage backend was " + storageBackend + " not cassandra");
+      LOG.error(fatalException.getMessage(), fatalException);
+      throw fatalException;
+    }
+
     if (cassandraClient.isEmpty()) {
       final IllegalStateException fatalException =
           new IllegalStateException("Cassandra client was missing");
