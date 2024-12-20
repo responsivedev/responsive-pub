@@ -12,8 +12,10 @@
 
 package dev.responsive.kafka.api.async;
 
+import static dev.responsive.kafka.api.async.internals.AsyncProcessor.createAsyncFixedKeyProcessor;
 import static dev.responsive.kafka.api.async.internals.AsyncProcessor.createAsyncProcessor;
 import static dev.responsive.kafka.api.async.internals.AsyncUtils.initializeAsyncBuilders;
+import static dev.responsive.kafka.internal.utils.Utils.isExecutingOnStreamThread;
 
 import dev.responsive.kafka.api.async.internals.AsyncProcessor;
 import dev.responsive.kafka.api.async.internals.stores.AbstractAsyncStoreBuilder;
@@ -144,7 +146,7 @@ public final class AsyncProcessorSupplier<KIn, VIn, KOut, VOut>
   }
 
   @Override
-  public AsyncProcessor<KIn, VIn, KOut, VOut> get() {
+  public Processor<KIn, VIn, KOut, VOut> get() {
     maybeInitializeAsyncStoreBuilders();
     return createAsyncProcessor(userProcessorSupplier.get(), asyncStoreBuilders);
   }

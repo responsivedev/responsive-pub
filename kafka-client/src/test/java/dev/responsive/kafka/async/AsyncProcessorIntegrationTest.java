@@ -21,6 +21,7 @@ import static dev.responsive.kafka.api.config.ResponsiveConfig.STORE_FLUSH_INTER
 import static dev.responsive.kafka.api.config.ResponsiveConfig.STORE_FLUSH_RECORDS_TRIGGER_CONFIG;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.createTopicsAndWait;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.pipeRecords;
+import static dev.responsive.kafka.testutils.IntegrationTestUtils.pipeTimestampedRecords;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.readOutput;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.startAppAndAwaitRunning;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.startAppAndAwaitState;
@@ -61,6 +62,7 @@ import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.api.stores.ResponsiveDslStoreSuppliers;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.api.stores.ResponsiveStores;
+import dev.responsive.kafka.testutils.KeyValueTimestamp;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
 import dev.responsive.kafka.testutils.SimpleStatefulProcessor.ComputeStatefulOutput;
@@ -98,6 +100,7 @@ import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse;
 import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Named;
@@ -253,7 +256,7 @@ public class AsyncProcessorIntegrationTest {
   }
 
   @Test
-  public void shouldExecuteDSLStreamTableJoinWithAsync() throws Exception {
+  public void shouldExecuteAsyncSTJoin() throws Exception {
     final Map<String, Object> properties = getMutableProperties();
     properties.put(PROCESSOR_WRAPPER_CLASS_CONFIG, AsyncProcessorWrapper.class);
     properties.put(DSL_STORE_SUPPLIERS_CLASS_CONFIG, ResponsiveDslStoreSuppliers.class);
@@ -270,7 +273,6 @@ public class AsyncProcessorIntegrationTest {
     stream
         .join(table, (l, r) -> l + "-" + r)
         .to(outputTopic);
-
 
     final Properties props = new Properties();
     props.putAll(properties);
@@ -305,6 +307,65 @@ public class AsyncProcessorIntegrationTest {
       assertThat(kvs.containsAll(expectedOutput), is(true));
     }
   }
+
+  @Test
+  public void shouldExecuteDSLStreamStreamJoinWithAsync() throws Exception {
+    final Map<String, Object> properties = getMutableProperties();
+    properties.put(PROCESSOR_WRAPPER_CLASS_CONFIG, AsyncProcessorWrapper.class);
+    properties.put(DSL_STORE_SUPPLIERS_CLASS_CONFIG, ResponsiveDslStoreSuppliers.class);
+    properties.put(COMMIT_INTERVAL_MS_CONFIG, 0L);
+    properties.put(NUM_STREAM_THREADS_CONFIG, 1);
+    properties.put(VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+
+    final StreamsBuilder builder = new StreamsBuilder(
+        new TopologyConfig(new StreamsConfig(properties))
+    );
+
+    final KStream<String, String> stream1 = builder.stream(inputTopic);
+    final KStream<String, String> stream2 = builder.stream(inputTableTopic);
+
+
+    final long ttlMs = 100_000L;
+    stream1
+        .join(stream2,
+              (l, r) -> l + "-" + r,
+              JoinWindows.ofTimeDifferenceAndGrace(Duration.ofMillis(ttlMs), Duration.ofHours(1)))
+        .to(outputTopic);
+
+    final Properties props = new Properties();
+    props.putAll(properties);
+    final Topology topology = builder.build(props);
+
+    final KafkaProducer<String, String> producer = new KafkaProducer<>(properties);
+
+    final List<KeyValueTimestamp<String, String>> tableInput = new LinkedList<>();
+    tableInput.add(new KeyValueTimestamp<>("A", "a", 0L));
+    tableInput.add(new KeyValueTimestamp<>("B", "b", 0L));
+    tableInput.add(new KeyValueTimestamp<>("C", "c", 0L));
+    pipeTimestampedRecords(producer, inputTableTopic, tableInput);
+
+    final List<KeyValueTimestamp<String, String>> streamInput = new LinkedList<>();
+    streamInput.add(new KeyValueTimestamp<>("A", "a-joined", 0L));
+    streamInput.add(new KeyValueTimestamp<>("B", "b-joined", 0L));
+    streamInput.add(new KeyValueTimestamp<>("C", "c-joined", 0L));
+    pipeTimestampedRecords(producer, inputTopic, streamInput);
+
+    try (final var streams = new ResponsiveKafkaStreams(topology, properties)) {
+      startAppAndAwaitRunning(Duration.ofSeconds(300), streams);
+
+      final List<KeyValue<String, String>> kvs = readOutput(
+          outputTopic, 0, 3, numOutputPartitions, false, properties
+      );
+
+      final List<KeyValue<String, String>> expectedOutput = new LinkedList<>();
+      expectedOutput.add(new KeyValue<>("A", "a-joined-a"));
+      expectedOutput.add(new KeyValue<>("B", "b-joined-b"));
+      expectedOutput.add(new KeyValue<>("C", "c-joined-c"));
+
+      assertThat(kvs.containsAll(expectedOutput), is(true));
+    }
+  }
+
 
   @Test
   public void shouldExecuteMultipleMixedAsyncProcessorsNoCaching() throws Exception {

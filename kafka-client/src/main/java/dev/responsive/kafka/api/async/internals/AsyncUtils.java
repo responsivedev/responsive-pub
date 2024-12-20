@@ -13,6 +13,7 @@
 package dev.responsive.kafka.api.async.internals;
 
 import static dev.responsive.kafka.api.async.internals.AsyncThreadPool.ASYNC_THREAD_NAME;
+import static dev.responsive.kafka.internal.utils.Utils.isExecutingOnStreamThread;
 
 import dev.responsive.kafka.api.async.internals.stores.AbstractAsyncStoreBuilder;
 import java.util.Collections;

@@ -14,6 +14,7 @@ package dev.responsive.kafka.api.async;
 
 import static dev.responsive.kafka.api.async.internals.AsyncProcessor.createAsyncFixedKeyProcessor;
 import static dev.responsive.kafka.api.async.internals.AsyncUtils.initializeAsyncBuilders;
+import static dev.responsive.kafka.internal.utils.Utils.isExecutingOnStreamThread;
 
 import dev.responsive.kafka.api.async.internals.AsyncProcessor;
 import dev.responsive.kafka.api.async.internals.stores.AbstractAsyncStoreBuilder;
@@ -63,21 +64,35 @@ public class AsyncFixedKeyProcessorSupplier<KIn, VIn, VOut>
   }
 
   @Override
-  public AsyncProcessor<KIn, VIn, KIn, VOut> get() {
-    maybeInitializeAsyncStoreBuilders();
-
-    return createAsyncFixedKeyProcessor(userProcessorSupplier.get(), asyncStoreBuilders);
+  public FixedKeyProcessor<KIn, VIn, VOut> get() {
+    if (maybeInitializeAsyncStoreBuilders()) {
+      return createAsyncFixedKeyProcessor(userProcessorSupplier.get(), asyncStoreBuilders);
+    } else {
+      return userProcessorSupplier.get();
+    }
   }
 
   @Override
   public Set<StoreBuilder<?>> stores() {
-    maybeInitializeAsyncStoreBuilders();
-    return new HashSet<>(asyncStoreBuilders.values());
+    if (maybeInitializeAsyncStoreBuilders()) {
+      return new HashSet<>(asyncStoreBuilders.values());
+    } else {
+      return userProcessorSupplier.stores();
+    }
   }
 
-  private void maybeInitializeAsyncStoreBuilders() {
+  private boolean maybeInitializeAsyncStoreBuilders() {
+    if (!isExecutingOnStreamThread()) {
+      // short circuit and delay the actual initialization until we detect that an actual
+      // StreamThread is calling this, since the application will actually run through the
+      // entire topology and build everything once when it first starts up, then throws it away
+      return false;
+    }
+
     if (asyncStoreBuilders == null) {
       asyncStoreBuilders = initializeAsyncBuilders(userProcessorSupplier.stores());
     }
+
+    return true;
   }
 }

@@ -46,6 +46,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessorContext;
@@ -241,8 +242,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    * connected stores via the {@link ProcessingContext#getStateStore(String)} API during #init
    */
   private void completeInitialization() {
-    final Map<String, AsyncKeyValueStore<?, ?>> accessedStores =
-        streamThreadContext.getAllAsyncStores();
+    final Map<String, StateStore> accessedStores = streamThreadContext.getAllAsyncStores();
 
     verifyConnectedStateStores(accessedStores, connectedStoreBuilders);
 
@@ -381,7 +381,12 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
       final AsyncFlushListener flushPendingEvents
   ) {
     for (final AbstractAsyncStoreBuilder<?> builder : asyncStoreBuilders) {
-      builder.registerFlushListenerWithAsyncStore(streamThreadName, partition, flushPendingEvents);
+      builder.registerFlushListenerWithAsyncStore(
+          builder.name(),
+          streamThreadName,
+          partition,
+          flushPendingEvents
+      );
     }
   }
 
@@ -737,7 +742,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    * in the javadocs for {@link AsyncProcessorSupplier}.
    */
   private void verifyConnectedStateStores(
-      final Map<String, AsyncKeyValueStore<?, ?>> accessedStores,
+      final Map<String, StateStore> accessedStores,
       final Map<String, AbstractAsyncStoreBuilder<?>> connectedStores
   ) {
     if (!accessedStores.keySet().equals(connectedStores.keySet())) {

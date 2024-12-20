@@ -117,4 +117,11 @@ public final class Utils {
     LOG.warn("Unable to parse the stream thread id, falling back to thread name {}", threadName);
     return threadName;
   }
+
+  /**
+   * @return whether the current thread is one of the Kafka Streams application's StreamThreads
+   */
+  public static boolean isExecutingOnStreamThread() {
+    return STREAM_THREAD_ID_REGEX.matcher(Thread.currentThread().getName()).matches();
+  }
 }

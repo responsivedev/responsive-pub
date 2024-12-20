@@ -19,6 +19,12 @@ import org.apache.kafka.streams.processor.api.WrappedFixedKeyProcessorSupplier;
 import org.apache.kafka.streams.processor.api.WrappedProcessorSupplier;
 
 // TODO(sophie): only wrap when stores are Responsive (rather than eg rocksdb or in-memory)
+//  note: how to account for processors that access state via ValueGetters but don't actually own
+//  the store themselves?
+//  -- do they still implement #stores?
+//  -- does the async framework need to account for reads from external processors?
+//  also: test with not-directly connected stores (eg value getters or table joins which connect
+//  to the upstream Ktable) where there is a repartition upstream as well
 public class AsyncProcessorWrapper implements ProcessorWrapper {
 
   @Override

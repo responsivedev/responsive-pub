@@ -23,18 +23,41 @@ package dev.responsive.kafka.api.async.internals.events;
  */
 public class DelayedWrite<KS, VS> {
 
-  private final KS recordKey;
-  private final VS recordValue;
   private final String storeName;
 
-  public DelayedWrite(
+  private final KS recordKey;
+  private final VS recordValue;
+
+  // only for window stores
+  private final long windowStartMs;
+
+  public static <KS, VS> DelayedWrite<KS, VS> newKVWrite(
+      final String storeName,
+      final KS recordKey,
+      final VS recordValue
+  ) {
+    return new DelayedWrite<>(storeName, recordKey, recordValue, 0L);
+  }
+
+  public static <KS, VS> DelayedWrite<KS, VS> newWindowWrite(
+      final String storeName,
       final KS recordKey,
       final VS recordValue,
-      final String storeName
+      final long windowStartMs
+  ) {
+    return new DelayedWrite<>(storeName, recordKey, recordValue, windowStartMs);
+  }
+
+  private DelayedWrite(
+      final String storeName,
+      final KS recordKey,
+      final VS recordValue,
+      final long windowStartMs
   ) {
     this.recordKey = recordKey;
     this.recordValue = recordValue;
     this.storeName = storeName;
+    this.windowStartMs = windowStartMs;
   }
 
   public String storeName() {
@@ -47,6 +70,10 @@ public class DelayedWrite<KS, VS> {
 
   public VS value() {
     return recordValue;
+  }
+
+  public long windowStartMs() {
+    return windowStartMs;
   }
 
   @Override

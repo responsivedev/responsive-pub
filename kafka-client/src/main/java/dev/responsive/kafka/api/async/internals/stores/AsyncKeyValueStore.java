@@ -41,7 +41,7 @@ import org.slf4j.Logger;
  */
 public class AsyncKeyValueStore<KS, VS>
     extends WrappedStateStore<KeyValueStore<?, ?>, KS, VS>
-    implements KeyValueStore<KS, VS> {
+    implements KeyValueStore<KS, VS>, AsyncStateStore<KS, VS> {
 
   private final Logger log;
 
@@ -62,6 +62,7 @@ public class AsyncKeyValueStore<KS, VS>
     this.delayedWriter = delayedWriter;
   }
 
+  @Override
   public void executeDelayedWrite(final DelayedWrite<KS, VS> delayedWrite) {
     userDelegate.put(delayedWrite.key(), delayedWrite.value());
   }
@@ -77,7 +78,7 @@ public class AsyncKeyValueStore<KS, VS>
    */
   @Override
   public void put(KS key, VS value) {
-    delayedWriter.acceptDelayedWriteToAsyncStore(new DelayedWrite<>(key, value, name()));
+    delayedWriter.acceptDelayedWriteToAsyncStore(DelayedWrite.newKVWrite(name(), key, value));
   }
 
   @Override

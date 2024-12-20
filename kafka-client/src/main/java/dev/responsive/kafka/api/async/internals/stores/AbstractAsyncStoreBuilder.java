@@ -40,7 +40,7 @@ public abstract class AbstractAsyncStoreBuilder<T extends StateStore>
   // Since there is only one StoreBuilder instance for each store, it is used by all of the
   // StreamThreads in an app, and so we must account for which StreamThread is building
   // or accessing which stores
-  private final Map<String, StreamThreadFlushListeners> streamThreadToFlushListeners =
+  private static final Map<String, Map<String, StreamThreadFlushListeners>> storeToThreadToListeners =
       new ConcurrentHashMap<>();
 
   public AbstractAsyncStoreBuilder(
@@ -62,7 +62,7 @@ public abstract class AbstractAsyncStoreBuilder<T extends StateStore>
       final KeyValueStore<Bytes, byte[]> inner
   ) {
     final StreamThreadFlushListeners threadFlushListeners =
-        getOrCreateFlushListeners(Thread.currentThread().getName());
+        getOrCreateFlushListeners(inner.name(), Thread.currentThread().getName());
 
     return new AsyncFlushingKeyValueStore(inner, threadFlushListeners);
   }
@@ -79,7 +79,7 @@ public abstract class AbstractAsyncStoreBuilder<T extends StateStore>
       final WindowStore<Bytes, byte[]> inner
   ) {
     final StreamThreadFlushListeners threadFlushListeners =
-        getOrCreateFlushListeners(Thread.currentThread().getName());
+        getOrCreateFlushListeners(inner.name(), Thread.currentThread().getName());
 
     return new AsyncFlushingWindowStore(inner, threadFlushListeners);
   }
@@ -96,7 +96,7 @@ public abstract class AbstractAsyncStoreBuilder<T extends StateStore>
       final SessionStore<Bytes, byte[]> inner
   ) {
     final StreamThreadFlushListeners threadFlushListeners =
-        getOrCreateFlushListeners(Thread.currentThread().getName());
+        getOrCreateFlushListeners(inner.name(), Thread.currentThread().getName());
 
     return new AsyncFlushingSessionStore(inner, threadFlushListeners);
   }
@@ -106,15 +106,22 @@ public abstract class AbstractAsyncStoreBuilder<T extends StateStore>
    * given StreamThread.
    */
   public void registerFlushListenerWithAsyncStore(
+      final String storeName,
       final String streamThreadName,
       final int partition,
       final AsyncFlushListener processorFlushListener
   ) {
+    final var storeListeners = storeToThreadToListeners.get(storeName);
+    if (storeListeners == null) {
+      throw new IllegalStateException("Unable to locate flush listener metadata "
+                                          + "for the current store: " + storeName);
+    }
+
     final StreamThreadFlushListeners threadListeners =
-        streamThreadToFlushListeners.get(streamThreadName);
+        storeListeners.get(streamThreadName);
     if (threadListeners == null) {
       throw new IllegalStateException("Unable to locate flush listener metadata "
-                                          + "for the current StreamThread");
+                                          + "for the current StreamThread: " + streamThreadName);
     }
     threadListeners.registerListenerForPartition(partition, processorFlushListener);
   }
@@ -126,11 +133,14 @@ public abstract class AbstractAsyncStoreBuilder<T extends StateStore>
    * This should be a no-op if the builder has already registered this thread.
    */
   protected StreamThreadFlushListeners getOrCreateFlushListeners(
+      final String storeName,
       final String streamThreadName
   ) {
-    return streamThreadToFlushListeners.computeIfAbsent(
-        streamThreadName,
-        k -> new StreamThreadFlushListeners(streamThreadName, name)
+    return storeToThreadToListeners
+        .computeIfAbsent(storeName,
+                         s -> new HashMap<>())
+        .computeIfAbsent(streamThreadName,
+                         k -> new StreamThreadFlushListeners(streamThreadName, name)
     );
   }
 

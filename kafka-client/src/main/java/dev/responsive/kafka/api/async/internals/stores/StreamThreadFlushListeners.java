@@ -86,7 +86,8 @@ public class StreamThreadFlushListeners {
 
   private final Logger log;
   private final String streamThreadName;
-  private final Map<Integer, FlushListenerConnector> partitionToStoreConnector = new HashMap<>();
+  private final Map<String, Map<Integer, FlushListenerConnector>> processorToPartitionToConnector =
+      new HashMap<>();
 
   public StreamThreadFlushListeners(
       final String streamThreadName,
@@ -109,7 +110,7 @@ public class StreamThreadFlushListeners {
       final int partition,
       final AsyncFlushListener listener
   ) {
-    final FlushListenerConnector storeConnector = partitionToStoreConnector.remove(partition);
+    final FlushListenerConnector storeConnector = processorToPartitionToConnector.remove(partition);
     if (storeConnector == null) {
       log.error("Tried to register the flush listener for this processor with"
                     + "the corresponding async store, but no store for this partition "
@@ -139,7 +140,7 @@ public class StreamThreadFlushListeners {
   public void unregisterListenerForPartition(
       final int partition
   ) {
-    partitionToStoreConnector.remove(partition);
+    processorToPartitionToConnector.remove(partition);
   }
 
   /**
@@ -150,13 +151,13 @@ public class StreamThreadFlushListeners {
       final int partition,
       final FlushListenerConnector storeConnector
   ) {
-    if (partitionToStoreConnector.containsKey(partition)) {
+    if (processorToPartitionToConnector.containsKey(partition)) {
       log.error("Tried to register a new connector for partition {} but one already exists.",
                 partition);
       throw new IllegalStateException("Failed to register new store connector for partition "
                                           + partition + " because a connector already exists");
     }
-    partitionToStoreConnector.put(partition, storeConnector);
+    processorToPartitionToConnector.put(partition, storeConnector);
   }
 
   public String streamThreadName() {
@@ -175,6 +176,7 @@ public class StreamThreadFlushListeners {
 
   @FunctionalInterface
   public interface AsyncFlushListener {
+    // TODO: sophie this needs to account for/wrap/flush multiple processors if accessing the same store
 
     /**
      * A simple runnable that, when executed, will flush all async buffers

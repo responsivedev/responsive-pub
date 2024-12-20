@@ -17,7 +17,10 @@ import dev.responsive.kafka.api.async.internals.events.AsyncEvent.State;
 import dev.responsive.kafka.api.async.internals.events.DelayedForward;
 import dev.responsive.kafka.api.async.internals.events.DelayedWrite;
 import dev.responsive.kafka.api.async.internals.stores.AsyncKeyValueStore;
+import dev.responsive.kafka.api.async.internals.stores.AsyncStateStore;
 import dev.responsive.kafka.api.async.internals.stores.AsyncTimestampedKeyValueStore;
+import dev.responsive.kafka.api.async.internals.stores.AsyncTimestampedWindowStore;
+import dev.responsive.kafka.api.async.internals.stores.AsyncWindowStore;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -28,6 +31,8 @@ import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.TimestampedWindowStore;
+import org.apache.kafka.streams.state.WindowStore;
 import org.slf4j.Logger;
 
 /**
@@ -48,7 +53,10 @@ public class StreamThreadProcessorContext<KOut, VOut>
 
   private final Logger log;
 
-  private final Map<String, AsyncKeyValueStore<?, ?>> storeNameToAsyncStore = new HashMap<>();
+  private final Map<String, AsyncStateStore<?, ?>> allStoreNameToAsyncStore = new HashMap<>();
+  private final Map<String, AsyncKeyValueStore<?, ?>> kvStoreNameToAsyncStore = new HashMap<>();
+  private final Map<String, AsyncWindowStore<?, ?>> windowStoreNameToAsyncStore = new HashMap<>();
+
   private final ProcessorNode<?, ?, ?, ?> asyncProcessorNode;
   private final InternalProcessorContext<KOut, VOut> originalContext;
   private final DelayedAsyncStoreWriter delayedStoreWriter;
@@ -69,8 +77,8 @@ public class StreamThreadProcessorContext<KOut, VOut>
   @Override
   @SuppressWarnings("unchecked")
   public <S extends StateStore> S getStateStore(final String name) {
-    if (storeNameToAsyncStore.containsKey(name)) {
-      return (S) storeNameToAsyncStore.get(name);
+    if (allStoreNameToAsyncStore.containsKey(name)) {
+      return (S) allStoreNameToAsyncStore.get(name);
     }
 
     final S userDelegate = super.getStateStore(name);
@@ -81,7 +89,8 @@ public class StreamThreadProcessorContext<KOut, VOut>
           (KeyValueStore<?, ?>) userDelegate,
           delayedStoreWriter
       );
-      storeNameToAsyncStore.put(name, asyncStore);
+      allStoreNameToAsyncStore.put(name, asyncStore);
+      kvStoreNameToAsyncStore.put(name, asyncStore);
       return (S) asyncStore;
     } else if (userDelegate instanceof KeyValueStore) {
       final var asyncStore = new AsyncKeyValueStore<>(
@@ -90,12 +99,33 @@ public class StreamThreadProcessorContext<KOut, VOut>
           (KeyValueStore<?, ?>) userDelegate,
           delayedStoreWriter
       );
-      storeNameToAsyncStore.put(name, asyncStore);
+      allStoreNameToAsyncStore.put(name, asyncStore);
+      kvStoreNameToAsyncStore.put(name, asyncStore);
+      return (S) asyncStore;
+    } else if (userDelegate instanceof TimestampedWindowStore) {
+      final var asyncStore = new AsyncTimestampedWindowStore<>(
+          name,
+          taskId().partition(),
+          (WindowStore<?, ?>) userDelegate,
+          delayedStoreWriter
+      );
+      allStoreNameToAsyncStore.put(name, asyncStore);
+      windowStoreNameToAsyncStore.put(name, asyncStore);
+      return (S) asyncStore;
+    } else if (userDelegate instanceof WindowStore) {
+      final var asyncStore = new AsyncWindowStore<>(
+          name,
+          originalContext.partition(),
+          (WindowStore<?, ?>) userDelegate,
+          delayedStoreWriter
+      );
+      allStoreNameToAsyncStore.put(name, asyncStore);
+      windowStoreNameToAsyncStore.put(name, asyncStore);
       return (S) asyncStore;
     } else {
-      log.error("Attempted to connect window/session store with async processor");
+      log.error("Attempted to connect session store with async processor");
       throw new UnsupportedOperationException(
-          "Window and Session stores are not yet supported with async processing");
+          "Session stores are not yet supported with async processing");
     }
   }
 
@@ -133,8 +163,7 @@ public class StreamThreadProcessorContext<KOut, VOut>
   public <KS, VS> void executeDelayedWrite(
       final DelayedWrite<KS, VS> delayedWrite
   ) {
-    final AsyncKeyValueStore<KS, VS> asyncStore =
-        getAsyncStore(delayedWrite.storeName());
+    final AsyncStateStore<KS, VS> asyncStore = getAsyncStore(delayedWrite.storeName());
 
     asyncStore.executeDelayedWrite(delayedWrite);
   }
@@ -155,12 +184,14 @@ public class StreamThreadProcessorContext<KOut, VOut>
   }
 
   @SuppressWarnings("unchecked")
-  public <KS, VS> AsyncKeyValueStore<KS, VS> getAsyncStore(final String storeName) {
-    return (AsyncKeyValueStore<KS, VS>) storeNameToAsyncStore.get(storeName);
+  public <KS, VS> AsyncStateStore<KS, VS> getAsyncStore(final String storeName) {
+    return (AsyncKeyValueStore<KS, VS>) kvStoreNameToAsyncStore.get(storeName);
   }
 
-  public Map<String, AsyncKeyValueStore<?, ?>> getAllAsyncStores() {
-    return storeNameToAsyncStore;
+  public Map<String, StateStore> getAllAsyncStores() {
+    final Map<String, StateStore> allStores = new HashMap<>(kvStoreNameToAsyncStore);
+    allStores.putAll(windowStoreNameToAsyncStore);
+    return allStores;
   }
 
   public static class PreviousRecordContextAndNode implements AutoCloseable {
