@@ -18,6 +18,8 @@ import dev.responsive.kafka.internal.db.rs3.client.LssId;
 import dev.responsive.kafka.internal.db.rs3.client.Put;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Client;
 import dev.responsive.kafka.internal.db.rs3.client.WalEntry;
+import dev.responsive.kafka.internal.db.rs3.metrics.RS3TableMetricsRecorder;
+import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration;
 import java.util.HashMap;
 import java.util.Objects;
@@ -38,18 +40,25 @@ public class RS3KVTable implements RemoteKVTable<WalEntry> {
   private final PssPartitioner pssPartitioner;
   private LssId lssId;
   private Long fetchOffset = ResponsiveStoreRegistration.NO_COMMITTED_OFFSET;
+  private final RS3TableMetricsRecorder metricsRecorder;
   private RS3KVFlushManager flushManager;
 
   public RS3KVTable(
       final String name,
       final UUID storeId,
       final RS3Client rs3Client,
-      final PssPartitioner pssPartitioner
+      final PssPartitioner pssPartitioner,
+      final ResponsiveMetrics responsiveMetrics,
+      final ResponsiveMetrics.MetricScopeBuilder scopeBuilder
   ) {
     this.name = Objects.requireNonNull(name);
     this.storeId = Objects.requireNonNull(storeId);
     this.rs3Client = Objects.requireNonNull(rs3Client);
     this.pssPartitioner = Objects.requireNonNull(pssPartitioner);
+    this.metricsRecorder = new RS3TableMetricsRecorder(
+        Objects.requireNonNull(responsiveMetrics),
+        Objects.requireNonNull(scopeBuilder)
+    );
   }
 
   @Override

@@ -28,6 +28,7 @@ import io.grpc.Grpc;
 import io.grpc.InsecureChannelCredentials;
 import io.grpc.ManagedChannel;
 import io.grpc.StatusRuntimeException;
+import io.grpc.TlsChannelCredentials;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -65,9 +66,16 @@ public class GrpcRS3Client implements RS3Client {
   }
 
   public static GrpcRS3Client connect(
-      final String target
+      final String target,
+      final boolean useTls
   ) {
-    final ChannelCredentials channelCredentials = InsecureChannelCredentials.create();
+
+    final ChannelCredentials channelCredentials;
+    if (useTls) {
+      channelCredentials = TlsChannelCredentials.create();
+    } else {
+      channelCredentials = InsecureChannelCredentials.create();
+    }
     final ManagedChannel channel = Grpc.newChannelBuilder(target, channelCredentials)
         .build();
     final RS3Grpc.RS3BlockingStub stub = RS3Grpc.newBlockingStub(channel);

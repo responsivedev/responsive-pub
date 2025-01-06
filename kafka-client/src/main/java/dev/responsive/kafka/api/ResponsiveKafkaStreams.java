@@ -20,6 +20,7 @@ import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_USERNAME_CO
 import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RS3_HOSTNAME_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RS3_PORT_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.RS3_TLS_ENABLED_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.TASK_ASSIGNOR_CLASS_OVERRIDE;
 import static dev.responsive.kafka.internal.metrics.ResponsiveMetrics.RESPONSIVE_METRICS_NAMESPACE;
 import static org.apache.kafka.streams.StreamsConfig.APPLICATION_ID_CONFIG;
@@ -588,10 +589,11 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
           LOG.info("using rs3 responsive store");
           final var rs3Host = responsiveConfig.getString(RS3_HOSTNAME_CONFIG);
           final var rs3Port = responsiveConfig.getInt(RS3_PORT_CONFIG);
+          final var useTls = responsiveConfig.getBoolean(RS3_TLS_ENABLED_CONFIG);
           sessionClients = new SessionClients(
               Optional.empty(),
               Optional.empty(),
-              Optional.of(new RS3TableFactory(rs3Host, rs3Port)),
+              Optional.of(new RS3TableFactory(rs3Host, rs3Port, useTls)),
               false,
               admin
           );

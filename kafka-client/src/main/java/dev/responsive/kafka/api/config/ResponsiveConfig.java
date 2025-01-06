@@ -119,6 +119,9 @@ public class ResponsiveConfig extends AbstractConfig {
   public static final String RS3_PORT_CONFIG = "responsive.rs3.port";
   private static final String RS3_PORT_DOC = "The port to use when connecting to RS3.";
 
+  public static final String RS3_TLS_ENABLED_CONFIG = "responsive.rs3.tls.enabled";
+  private static final String RS3_TLS_ENABLED_DOC = "Enables/disable tls for rs3 connection";
+
   // ------------------ ScyllaDB specific configurations ----------------------
 
   public static final String CASSANDRA_USERNAME_CONFIG = "responsive.cassandra.username";
@@ -604,6 +607,12 @@ public class ResponsiveConfig extends AbstractConfig {
           50051,
           Importance.MEDIUM,
           RS3_PORT_DOC
+      ).define(
+          RS3_TLS_ENABLED_CONFIG,
+          Type.BOOLEAN,
+          true,
+          Importance.MEDIUM,
+          RS3_TLS_ENABLED_DOC
       );
 
   /**

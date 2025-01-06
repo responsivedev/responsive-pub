@@ -22,6 +22,8 @@ import dev.responsive.kafka.internal.db.rs3.client.LssId;
 import dev.responsive.kafka.internal.db.rs3.client.Put;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Client;
 import dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRS3Client;
+import dev.responsive.kafka.internal.metrics.ClientVersionMetadata;
+import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
@@ -29,11 +31,14 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import junit.framework.AssertionFailedError;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Bytes;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -48,6 +53,7 @@ public class RS3KVTableTest {
   private String testName;
   private RS3Client pocketClient;
   private final PssPartitioner pssPartitioner = new PssDirectPartitioner();
+  private final Metrics metrics = new Metrics();
 
   @RegisterExtension
   public static final ResponsiveExtension EXT = new ResponsiveExtension(StorageBackend.RS3);
@@ -64,12 +70,32 @@ public class RS3KVTableTest {
     testName = info.getTestMethod().orElseThrow().getName();
     final int port = rs3Container.getMappedPort(50051);
     this.rs3Container = rs3Container;
-    pocketClient = GrpcRS3Client.connect(String.format("localhost:%d", port));
+    pocketClient = GrpcRS3Client.connect(String.format("localhost:%d", port), false);
+    final ResponsiveMetrics responsiveMetrics = new ResponsiveMetrics(metrics);
+    responsiveMetrics.initializeTags(
+        "application-id",
+        "streams-client-id",
+        new ClientVersionMetadata(
+            "responsive-client-version",
+            "responsive-client-commit-id",
+            "streams-client-version",
+            "streams-client-commit-id"
+        ),
+        Map.of()
+    );
+    final ResponsiveMetrics.MetricScopeBuilder scopeBuilder
+        = responsiveMetrics.storeLevelMetricScopeBuilder(
+            "thread-id",
+            new TopicPartition("foo", 0),
+            "store-name"
+    );
     this.table = new RS3KVTable(
         testName,
         STORE_ID,
         pocketClient,
-        pssPartitioner
+        pssPartitioner,
+        responsiveMetrics,
+        scopeBuilder
     );
   }
 
