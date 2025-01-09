@@ -175,6 +175,16 @@ rules:
        type: gauge
        desc: the total time waiting for reads from kafka
        unit: '{nanoseconds}'
+     time-between-poll-avg:
+       metric: kafka.consumer.time.between.poll.avg
+       type: gauge
+       desc: The average delay between invocations of poll()
+       unit: '{milliseconds}'
+     time-between-poll-max:
+       metric: kafka.consumer.time.between.poll.max
+       type: gauge
+       desc: The maximum delay between invocations of poll()
+       unit: '{milliseconds}'
 
  - bean: kafka.producer:type=producer-metrics,client-id=*
    metricAttribute:
