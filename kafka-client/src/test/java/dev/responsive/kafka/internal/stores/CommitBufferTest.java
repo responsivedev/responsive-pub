@@ -189,7 +189,7 @@ public class CommitBufferTest {
 
     sessionClients.initialize(responsiveMetrics, null);
     table = (CassandraKeyValueTable) client.kvFactory().create(
-        new DefaultTableSpec(name, partitioner, NO_TTL));
+        new DefaultTableSpec(name, partitioner, NO_TTL, config));
     changelog = new TopicPartition(name + "-changelog", KAFKA_PARTITION);
 
     when(admin.deleteRecords(Mockito.any())).thenReturn(new DeleteRecordsResult(Map.of(

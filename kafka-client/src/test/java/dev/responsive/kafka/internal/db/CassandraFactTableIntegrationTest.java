@@ -59,6 +59,7 @@ class CassandraFactTableIntegrationTest {
   private ResponsiveKeyValueParams params;
   private CassandraClient client;
   private CqlSession session;
+  private ResponsiveConfig config;
 
   @BeforeEach
   public void before(
@@ -75,6 +76,7 @@ class CassandraFactTableIntegrationTest {
         .withKeyspace("responsive_itests") // NOTE: this keyspace is expected to exist
         .build();
     client = new CassandraClient(session, ResponsiveConfig.responsiveConfig(responsiveProps));
+    config = ResponsiveConfig.responsiveConfig(responsiveProps);
   }
 
   @Test
@@ -84,7 +86,7 @@ class CassandraFactTableIntegrationTest {
     final String tableName = params.name().tableName();
     final CassandraFactTable schema = (CassandraFactTable) client
         .factFactory()
-        .create(RemoteTableSpecFactory.fromKVParams(params, defaultPartitioner(), NO_TTL));
+        .create(RemoteTableSpecFactory.fromKVParams(params, defaultPartitioner(), NO_TTL, config));
 
     // When:
     final var token = schema.init(1);
@@ -112,7 +114,7 @@ class CassandraFactTableIntegrationTest {
     params = ResponsiveKeyValueParams.fact(storeName);
     final RemoteKVTable<BoundStatement> table = client
         .factFactory()
-        .create(RemoteTableSpecFactory.fromKVParams(params, defaultPartitioner(), NO_TTL));
+        .create(RemoteTableSpecFactory.fromKVParams(params, defaultPartitioner(), NO_TTL, config));
 
     table.init(1);
 
@@ -144,7 +146,8 @@ class CassandraFactTableIntegrationTest {
     client.factFactory().create(RemoteTableSpecFactory.fromKVParams(
         params,
         defaultPartitioner(),
-        defaultOnlyTtl(Duration.ofMillis(ttlMs))
+        defaultOnlyTtl(Duration.ofMillis(ttlMs)),
+        config
     ));
 
     // Then:
@@ -170,7 +173,8 @@ class CassandraFactTableIntegrationTest {
     final var table = client.factFactory().create(RemoteTableSpecFactory.fromKVParams(
         params,
         defaultPartitioner(),
-        defaultOnlyTtl(Duration.ofMillis(ttlMs))
+        defaultOnlyTtl(Duration.ofMillis(ttlMs)),
+        config
     ));
 
     final long insertTimeMs = 0L;
@@ -213,7 +217,8 @@ class CassandraFactTableIntegrationTest {
         defaultPartitioner(),
         Optional.of(new TtlResolver<>(
             new StateDeserializer<>("ignored", new StringDeserializer(), new StringDeserializer()),
-            ttlProvider))
+            ttlProvider)),
+        config
     ));
 
     table.init(1);
@@ -280,7 +285,8 @@ class CassandraFactTableIntegrationTest {
         defaultPartitioner(),
         Optional.of(new TtlResolver<>(
             new StateDeserializer<>("ignored", new StringDeserializer(), new StringDeserializer()),
-            ttlProvider))
+            ttlProvider)),
+        config
     ));
 
     table.init(1);
@@ -361,7 +367,8 @@ class CassandraFactTableIntegrationTest {
         Optional.of(new TtlResolver<>(
             new StateDeserializer<>("ignored", new StringDeserializer(), new StringDeserializer()),
             ttlProvider)
-    )));
+    ), config
+    ));
 
     table.init(1);
 

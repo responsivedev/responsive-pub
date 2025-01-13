@@ -31,11 +31,11 @@ import com.mongodb.client.model.UpdateOptions;
 import com.mongodb.client.model.Updates;
 import com.mongodb.client.model.WriteModel;
 import com.mongodb.client.result.UpdateResult;
+import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.db.MongoKVFlushManager;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.stores.TtlResolver;
 import dev.responsive.kafka.internal.utils.Iterators;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
 import java.util.Optional;
@@ -70,7 +70,8 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
       final MongoClient client,
       final String name,
       final CollectionCreationOptions collectionCreationOptions,
-      final Optional<TtlResolver<?, ?>> ttlResolver
+      final Optional<TtlResolver<?, ?>> ttlResolver,
+      final ResponsiveConfig config
   ) {
     this.name = name;
     this.keyCodec = new StringKeyCodec();
@@ -96,11 +97,12 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
     }
     metadata = database.getCollection(METADATA_COLLECTION_NAME, KVMetadataDoc.class);
 
-    // TODO(agavra): make the tombstone retention configurable
     // this is idempotent
+    final long tombstoneRetentionMs =
+        config.getLong(ResponsiveConfig.MONGO_TOMBSTONE_RETENTION_MS_CONFIG);
     docs.createIndex(
         Indexes.descending(KVDoc.TOMBSTONE_TS),
-        new IndexOptions().expireAfter(12L, TimeUnit.HOURS)
+        new IndexOptions().expireAfter(tombstoneRetentionMs, TimeUnit.MILLISECONDS)
     );
 
     if (ttlResolver.isPresent()) {
@@ -110,7 +112,7 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
       }
 
       this.defaultTtlMs = ttlResolver.get().defaultTtl().toMillis();
-      final long expireAfterMs = defaultTtlMs + Duration.ofHours(12).toMillis();
+      final long expireAfterMs = defaultTtlMs + tombstoneRetentionMs;
 
       docs.createIndex(
           Indexes.descending(KVDoc.TIMESTAMP),

@@ -13,6 +13,7 @@
 package dev.responsive.kafka.internal.db.spec;
 
 import com.datastax.oss.driver.api.querybuilder.schema.CreateTableWithOptions;
+import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.db.RemoteTable;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.stores.TtlResolver;
@@ -31,5 +32,7 @@ public interface RemoteTableSpec {
   Optional<TtlResolver<?, ?>> ttlResolver();
 
   CreateTableWithOptions applyDefaultOptions(final CreateTableWithOptions base);
+
+  ResponsiveConfig config();
 
 }

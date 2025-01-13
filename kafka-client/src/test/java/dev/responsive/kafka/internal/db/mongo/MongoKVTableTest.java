@@ -13,6 +13,7 @@
 package dev.responsive.kafka.internal.db.mongo;
 
 import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_ENDPOINT_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_TOMBSTONE_RETENTION_MS_CONFIG;
 import static dev.responsive.kafka.internal.stores.TtlResolver.NO_TTL;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.defaultOnlyTtl;
 import static dev.responsive.kafka.testutils.Matchers.sameKeyValue;
@@ -22,9 +23,11 @@ import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.nullValue;
 
 import com.mongodb.client.MongoClient;
+import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
 import dev.responsive.kafka.internal.utils.SessionUtil;
+import dev.responsive.kafka.testutils.IntegrationTestUtils;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
 import java.time.Duration;
@@ -33,9 +36,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
+import java.util.function.BooleanSupplier;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -49,8 +54,10 @@ class MongoKVTableTest {
       0
   );
 
+  private Map<String, Object> props;
   private String name;
   private MongoClient client;
+  private ResponsiveConfig config;
 
   @BeforeEach
   public void before(
@@ -60,13 +67,15 @@ class MongoKVTableTest {
     name = info.getDisplayName().replace("()", "");
 
     final String mongoConnection = (String) props.get(MONGO_ENDPOINT_CONFIG);
+    this.props = props;
     client = SessionUtil.connect(mongoConnection, null, null, "", null);
+    config = ResponsiveConfig.responsiveConfig(props);
   }
 
   @Test
   public void shouldSucceedWriterWithSameEpoch() throws ExecutionException, InterruptedException {
     // Given:
-    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, NO_TTL);
+    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, NO_TTL, config);
 
     var writerFactory = table.init(0);
     var writer = writerFactory.createWriter(0, 0);
@@ -85,7 +94,7 @@ class MongoKVTableTest {
   @Test
   public void shouldSucceedWriterWithLargerEpoch() throws ExecutionException, InterruptedException {
     // Given:
-    var table = new MongoKVTable(client, name, UNSHARDED, NO_TTL);
+    var table = new MongoKVTable(client, name, UNSHARDED, NO_TTL, config);
     var writerFactory = table.init(0);
     var writer = writerFactory.createWriter(0, 0);
     writer.insert(bytes(1), byteArray(1), 100);
@@ -93,7 +102,7 @@ class MongoKVTableTest {
 
     // When:
     // initialize new writer with higher epoch
-    table = new MongoKVTable(client, name, UNSHARDED, NO_TTL);
+    table = new MongoKVTable(client, name, UNSHARDED, NO_TTL, config);
     writerFactory = table.init(0);
     writer = writerFactory.createWriter(0, 0);
     writer.insert(bytes(1), byteArray(1), 101);
@@ -106,11 +115,11 @@ class MongoKVTableTest {
   @Test
   public void shouldFenceWriterSmallerEpoch() throws ExecutionException, InterruptedException {
     // Given:
-    var table0 = new MongoKVTable(client, name, UNSHARDED, NO_TTL);
+    var table0 = new MongoKVTable(client, name, UNSHARDED, NO_TTL, config);
     var writerFactory0 = table0.init(0);
     var writer0 = writerFactory0.createWriter(0, 0);
 
-    var table1 = new MongoKVTable(client, name, UNSHARDED, NO_TTL);
+    var table1 = new MongoKVTable(client, name, UNSHARDED, NO_TTL, config);
     var writerFactory1 = table1.init(0);
     var writer1 = writerFactory1.createWriter(0, 0);
 
@@ -129,7 +138,7 @@ class MongoKVTableTest {
   @Test
   public void shouldReturnNullForNotInserted() {
     // given:
-    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, NO_TTL);
+    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, NO_TTL, config);
     table.init(0);
 
     // when:
@@ -142,7 +151,7 @@ class MongoKVTableTest {
   @Test
   public void shouldReturnNullForDeletedRecord() {
     // given:
-    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, NO_TTL);
+    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, NO_TTL, config);
     var writerFactory = table.init(0);
     var writer = writerFactory.createWriter(0, 0);
     writer.insert(bytes(1), byteArray(1), 100);
@@ -161,7 +170,7 @@ class MongoKVTableTest {
   @Test
   public void shouldGetInsertedRecord() {
     // given:
-    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, NO_TTL);
+    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, NO_TTL, config);
     var writerFactory = table.init(0);
     var writer = writerFactory.createWriter(0, 0);
     writer.insert(bytes(1), byteArray(1), 100);
@@ -179,7 +188,8 @@ class MongoKVTableTest {
   public void shouldFilterResultsWithOldTimestamp() {
     // given:
     final Duration ttl = Duration.ofMillis(100);
-    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, defaultOnlyTtl(ttl));
+    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, defaultOnlyTtl(ttl),
+        config);
     var writerFactory = table.init(0);
     var writer = writerFactory.createWriter(0, 0);
     writer.insert(bytes(1), byteArray(1), 0);
@@ -196,7 +206,8 @@ class MongoKVTableTest {
   public void shouldIncludeResultsWithNewerTimestamp() {
     // given:
     final Duration ttl = Duration.ofMillis(100);
-    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, defaultOnlyTtl(ttl));
+    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, defaultOnlyTtl(ttl),
+        config);
     var writerFactory = table.init(0);
     var writer = writerFactory.createWriter(0, 0);
     writer.insert(bytes(1), byteArray(1), 0);
@@ -213,7 +224,7 @@ class MongoKVTableTest {
   @Test
   public void shouldHandlePartitionedRangeScansCorrectly() {
     // Given:
-    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, NO_TTL);
+    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, NO_TTL, config);
 
     final var writerFactory0 = table.init(0);
     final var writer0 = writerFactory0.createWriter(0, 0);
@@ -248,7 +259,7 @@ class MongoKVTableTest {
 
   @Test
   public void shouldFilterTombstonesFromRangeScans() {
-    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, NO_TTL);
+    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, NO_TTL, config);
     var writerFactory = table.init(0);
     var writer = writerFactory.createWriter(0, 0);
     writer.insert(bytes(10, 11, 12, 13), byteArray(2), 100);
@@ -277,7 +288,8 @@ class MongoKVTableTest {
   @Test
   public void shouldFilterExpiredItemsFromRangeScans() {
     final Duration ttl = Duration.ofMillis(100);
-    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, defaultOnlyTtl(ttl));
+    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, defaultOnlyTtl(ttl),
+        config);
     var writerFactory = table.init(0);
     var writer = writerFactory.createWriter(0, 0);
     writer.insert(bytes(10, 11, 12, 13), byteArray(2), 100);
@@ -302,7 +314,7 @@ class MongoKVTableTest {
 
   @Test
   public void shouldHandleFullScansCorrectly() {
-    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, NO_TTL);
+    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, NO_TTL, config);
 
     final var writerFactory0 = table.init(0);
     final var writer0 = writerFactory0.createWriter(0, 0);
@@ -335,7 +347,7 @@ class MongoKVTableTest {
 
   @Test
   public void shouldFilterTombstonesFromFullScans() {
-    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, NO_TTL);
+    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, NO_TTL, config);
     var writerFactory = table.init(0);
     var writer = writerFactory.createWriter(0, 0);
     writer.insert(bytes(10, 11, 12, 13), byteArray(2), 100);
@@ -364,7 +376,8 @@ class MongoKVTableTest {
   @Test
   public void shouldFilterExpiredFromFullScans() {
     final Duration ttl = Duration.ofMillis(100);
-    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, defaultOnlyTtl(ttl));
+    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, defaultOnlyTtl(ttl),
+        config);
 
     var writerFactory = table.init(0);
     var writer = writerFactory.createWriter(0, 0);
@@ -386,6 +399,32 @@ class MongoKVTableTest {
         sameKeyValue(new KeyValue<>(bytes(10, 11, 13, 14), byteArray(4)))
     ));
     iter.close();
+  }
+
+  @Test
+  @Disabled("fix this when we fix https://github.com/slatedb/slatedb/issues/442")
+  public void shouldExpireRecords() {
+    props.put(MONGO_TOMBSTONE_RETENTION_MS_CONFIG, 1000);
+    final ResponsiveConfig config = ResponsiveConfig.responsiveConfig(props);
+    final Duration ttl = Duration.ofMillis(100);
+    final MongoKVTable table = new MongoKVTable(
+        client, name, UNSHARDED, defaultOnlyTtl(ttl), config
+    );
+
+    var writerFactory = table.init(0);
+    var writer = writerFactory.createWriter(0, 0);
+    writer.insert(bytes(10, 11, 12, 13), byteArray(2), 100);
+    writer.flush();
+
+    // When:
+    final BooleanSupplier isExpired = () -> {
+      final byte[] bytes = table.get(0, bytes(10, 11, 12, 13), 100);
+      System.out.println(bytes == null);
+      return bytes == null;
+    };
+
+    // Then:
+    IntegrationTestUtils.awaitCondition(isExpired, Duration.ofSeconds(30), Duration.ofSeconds(1));
   }
 
   private byte[] byteArray(int... bytes) {
