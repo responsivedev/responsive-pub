@@ -271,7 +271,7 @@ class MongoKVTableTest {
   @Test
   public void shouldHandlePartitionedPrefixScansCorrectly() {
     // Given:
-    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, NO_TTL);
+    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, NO_TTL, config);
 
     final var writerFactory0 = table.init(0);
     final var writer0 = writerFactory0.createWriter(0, 0);
