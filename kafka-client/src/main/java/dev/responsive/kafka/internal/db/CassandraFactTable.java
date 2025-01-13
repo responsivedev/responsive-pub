@@ -38,6 +38,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import javax.annotation.CheckReturnValue;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.slf4j.Logger;
@@ -427,6 +428,16 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
       long streamTimeMs
   ) {
     throw new UnsupportedOperationException("all is not supported on fact tables");
+  }
+
+  @Override
+  public <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefix(
+      final P prefix,
+      final PS prefixKeySerializer,
+      final int kafkaPartition,
+      final long streamTimeMs
+  ) {
+    throw new UnsupportedOperationException("prefix scans are not supported on fact tables.");
   }
 
   private static String metadataTable(final String tableName) {

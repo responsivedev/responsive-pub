@@ -27,6 +27,7 @@ import java.util.Optional;
 import java.util.concurrent.TimeoutException;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.GlobalProcessorContextImpl;
@@ -160,6 +161,14 @@ public class GlobalOperations implements KeyValueOperations {
   @Override
   public void close() {
     restoreListener.onStoreClosed(changelog, storeName);
+  }
+
+  @Override
+  public <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefix(
+      final P prefix,
+      final PS prefixKeySerializer
+  ) {
+    throw new UnsupportedOperationException("Prefix scans on global tables is not yet supported.");
   }
 
   @Override

@@ -44,6 +44,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.StateStoreContext;
@@ -368,6 +369,14 @@ public class PartitionedOperations implements KeyValueOperations {
   public KeyValueIterator<Bytes, byte[]> reverseRange(final Bytes from, final Bytes to) {
     // TODO: add a reverseRange API to RemoteKVTable (or add an iteration order param to #range)
     throw new UnsupportedOperationException("Not yet implemented.");
+  }
+
+  @Override
+  public <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefix(
+      final P prefix,
+      final PS prefixKeySerializer
+  ) {
+    return table.prefix(prefix, prefixKeySerializer, changelog.partition(), streamTimeMs);
   }
 
   @Override

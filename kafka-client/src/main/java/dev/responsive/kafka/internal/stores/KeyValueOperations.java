@@ -13,6 +13,7 @@
 package dev.responsive.kafka.internal.stores;
 
 import java.io.Closeable;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -37,4 +38,9 @@ public interface KeyValueOperations extends Closeable, RecordBatchingStateRestor
 
   @Override
   void close();
+
+  <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefix(
+      P prefix,
+      PS prefixKeySerializer
+  );
 }

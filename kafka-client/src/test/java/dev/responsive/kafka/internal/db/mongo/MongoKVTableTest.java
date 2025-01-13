@@ -44,6 +44,7 @@ import java.util.Map;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
 import java.util.function.BooleanSupplier;
+import org.apache.kafka.common.serialization.BytesSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.bson.codecs.configuration.CodecProvider;
@@ -253,6 +254,42 @@ class MongoKVTableTest {
 
     // When:
     final var iter = table.range(0, bytes(10, 11, 12, 13), bytes(10, 11, 13, 14), -1);
+
+    // Then:
+    final List<KeyValue<Bytes, byte[]>> returned = new LinkedList<>();
+    while (iter.hasNext()) {
+      returned.add(iter.next());
+    }
+    assertThat(returned, contains(
+        sameKeyValue(new KeyValue<>(bytes(10, 11, 12, 13), byteArray(2))),
+        sameKeyValue(new KeyValue<>(bytes(10, 11, 13), byteArray(3))),
+        sameKeyValue(new KeyValue<>(bytes(10, 11, 13, 14), byteArray(4)))
+    ));
+    iter.close();
+  }
+
+  @Test
+  public void shouldHandlePartitionedPrefixScansCorrectly() {
+    // Given:
+    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, NO_TTL);
+
+    final var writerFactory0 = table.init(0);
+    final var writer0 = writerFactory0.createWriter(0, 0);
+    final var writerFactory1 = table.init(1);
+    final var writer1 = writerFactory1.createWriter(1, 0);
+
+    writer0.insert(bytes(9, 11, 12, 12, 13), byteArray(1), 100);
+    writer0.insert(bytes(10, 11, 12, 13), byteArray(2), 100);
+    writer0.insert(bytes(10, 11, 13), byteArray(3), 100);
+    writer1.insert(bytes(10, 11, 13, 13), byteArray(3), 100); // in prefix, excluded by partition
+    writer0.insert(bytes(10, 11, 13, 14), byteArray(4), 100);
+    writer0.insert(bytes(10, 12), byteArray(5), 100); // excluded by prefix
+
+    writer0.flush();
+    writer1.flush();
+
+    // When:
+    final var iter = table.prefix(bytes(10, 11), new BytesSerializer(), 0, -1);
 
     // Then:
     final List<KeyValue<Bytes, byte[]>> returned = new LinkedList<>();

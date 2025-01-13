@@ -36,18 +36,21 @@ import dev.responsive.kafka.internal.db.MongoKVFlushManager;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.stores.TtlResolver;
 import dev.responsive.kafka.internal.utils.Iterators;
+import dev.responsive.kafka.internal.utils.Utils;
 import java.time.Duration;
 import java.util.Date;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.bson.codecs.configuration.CodecProvider;
 import org.bson.codecs.configuration.CodecRegistry;
 import org.bson.codecs.pojo.PojoCodecProvider;
+import org.bson.conversions.Bson;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -172,12 +175,35 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
       final Bytes to,
       final long streamTimeMs
   ) {
+    return doRange(kafkaPartition, from, Filters.lte(KVDoc.ID, keyCodec.encode(to)), streamTimeMs);
+  }
+
+
+  @Override
+  public <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefix(
+      final P prefix,
+      final PS prefixKeySerializer,
+      final int kafkaPartition,
+      final long streamTimeMs
+  ) {
+    final Bytes from = Bytes.wrap(prefixKeySerializer.serialize(null, prefix));
+    final Bytes to = Utils.incrementWithoutOverflow(from);
+
+    return doRange(kafkaPartition, from, Filters.lt(KVDoc.ID, keyCodec.encode(to)), streamTimeMs);
+  }
+
+  private KeyValueIterator<Bytes, byte[]> doRange(
+      final int kafkaPartition,
+      final Bytes from,
+      final Bson toFilter,
+      final long streamTimeMs
+  ) {
     final Date minValidTs = new Date(ttlResolver.isEmpty() ? -1L : streamTimeMs - defaultTtlMs);
 
     final FindIterable<KVDoc> result = docs.find(
         Filters.and(
             Filters.gte(KVDoc.ID, keyCodec.encode(from)),
-            Filters.lte(KVDoc.ID, keyCodec.encode(to)),
+            toFilter,
             Filters.not(Filters.exists(KVDoc.TOMBSTONE_TS)),
             Filters.gte(KVDoc.TIMESTAMP, minValidTs),
             Filters.eq(KVDoc.KAFKA_PARTITION, kafkaPartition)

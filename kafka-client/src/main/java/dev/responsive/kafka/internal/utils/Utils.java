@@ -13,6 +13,7 @@
 package dev.responsive.kafka.internal.utils;
 
 import java.util.regex.Pattern;
+import org.apache.kafka.common.utils.Bytes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -116,5 +117,13 @@ public final class Utils {
 
     LOG.warn("Unable to parse the stream thread id, falling back to thread name {}", threadName);
     return threadName;
+  }
+
+  public static Bytes incrementWithoutOverflow(final Bytes input) {
+    try {
+      return Bytes.increment(input);
+    } catch (final IndexOutOfBoundsException e) {
+      return null;
+    }
   }
 }
