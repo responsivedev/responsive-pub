@@ -13,7 +13,7 @@
 package dev.responsive.kafka.internal.db.mongo;
 
 import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_ENDPOINT_CONFIG;
-import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_TOMBSTONE_RETENTION_MS_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_TOMBSTONE_RETENTION_SEC_CONFIG;
 import static dev.responsive.kafka.internal.stores.TtlResolver.NO_TTL;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.defaultOnlyTtl;
 import static dev.responsive.kafka.testutils.Matchers.sameKeyValue;
@@ -404,7 +404,7 @@ class MongoKVTableTest {
   @Test
   @Disabled("fix this when we fix https://github.com/slatedb/slatedb/issues/442")
   public void shouldExpireRecords() {
-    props.put(MONGO_TOMBSTONE_RETENTION_MS_CONFIG, 1000);
+    props.put(MONGO_TOMBSTONE_RETENTION_SEC_CONFIG, 1);
     final ResponsiveConfig config = ResponsiveConfig.responsiveConfig(props);
     final Duration ttl = Duration.ofMillis(100);
     final MongoKVTable table = new MongoKVTable(
@@ -419,12 +419,14 @@ class MongoKVTableTest {
     // When:
     final BooleanSupplier isExpired = () -> {
       final byte[] bytes = table.get(0, bytes(10, 11, 12, 13), 100);
-      System.out.println(bytes == null);
       return bytes == null;
     };
 
     // Then:
-    IntegrationTestUtils.awaitCondition(isExpired, Duration.ofSeconds(30), Duration.ofSeconds(1));
+    // TODO(agavra): we need to wait up to at least one minute to make sure that the ttl
+    // background job kicks in. Unfortunately I don't see a better way to do this so we
+    // may want to consider leaving this test disabled for CI/CD
+    IntegrationTestUtils.awaitCondition(isExpired, Duration.ofMinutes(2), Duration.ofSeconds(1));
   }
 
   private byte[] byteArray(int... bytes) {

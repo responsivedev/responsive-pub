@@ -36,6 +36,7 @@ import dev.responsive.kafka.internal.db.MongoKVFlushManager;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.stores.TtlResolver;
 import dev.responsive.kafka.internal.utils.Iterators;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
 import java.util.Optional;
@@ -98,11 +99,11 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
     metadata = database.getCollection(METADATA_COLLECTION_NAME, KVMetadataDoc.class);
 
     // this is idempotent
-    final long tombstoneRetentionMs =
-        config.getLong(ResponsiveConfig.MONGO_TOMBSTONE_RETENTION_MS_CONFIG);
+    final long tombstoneRetentionSeconds =
+        config.getLong(ResponsiveConfig.MONGO_TOMBSTONE_RETENTION_SEC_CONFIG);
     docs.createIndex(
         Indexes.descending(KVDoc.TOMBSTONE_TS),
-        new IndexOptions().expireAfter(tombstoneRetentionMs, TimeUnit.MILLISECONDS)
+        new IndexOptions().expireAfter(tombstoneRetentionSeconds, TimeUnit.SECONDS)
     );
 
     if (ttlResolver.isPresent()) {
@@ -112,7 +113,8 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
       }
 
       this.defaultTtlMs = ttlResolver.get().defaultTtl().toMillis();
-      final long expireAfterMs = defaultTtlMs + tombstoneRetentionMs;
+      final long expireAfterMs =
+          defaultTtlMs + Duration.ofSeconds(tombstoneRetentionSeconds).toMillis();
 
       docs.createIndex(
           Indexes.descending(KVDoc.TIMESTAMP),
