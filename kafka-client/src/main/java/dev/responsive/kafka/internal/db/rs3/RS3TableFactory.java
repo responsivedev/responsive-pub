@@ -12,6 +12,7 @@
 
 package dev.responsive.kafka.internal.db.rs3;
 
+import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.rs3.client.WalEntry;
 import dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRS3Client;
@@ -30,7 +31,7 @@ public class RS3TableFactory {
     this.rs3Port = rs3Port;
   }
 
-  public RemoteKVTable<WalEntry> kvTable(final String name) {
+  public RemoteKVTable<WalEntry> kvTable(final String name, final ResponsiveConfig config) {
     final UUID storeId = new UUID(0, 0);
     final PssPartitioner pssPartitioner = new PssDirectPartitioner();
     final var rs3Client = GrpcRS3Client.connect(

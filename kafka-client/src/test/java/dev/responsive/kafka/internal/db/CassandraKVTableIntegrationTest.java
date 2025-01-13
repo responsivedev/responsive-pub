@@ -116,7 +116,7 @@ public class CassandraKVTableIntegrationTest {
 
     try {
       return CassandraKeyValueTable.create(
-          new DefaultTableSpec(tableName, partitioner, ttlResolver), client);
+          new DefaultTableSpec(tableName, partitioner, ttlResolver, config), client);
     } catch (final Exception e) {
       throw new AssertionError("Failed to create table", e);
     }

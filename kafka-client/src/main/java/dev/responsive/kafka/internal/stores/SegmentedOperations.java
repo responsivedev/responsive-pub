@@ -97,10 +97,10 @@ public class SegmentedOperations implements WindowOperations {
     final RemoteWindowTable<?> table;
     switch (sessionClients.storageBackend()) {
       case CASSANDRA:
-        table = createCassandra(params, sessionClients, partitioner);
+        table = createCassandra(params, sessionClients, partitioner, responsiveConfig);
         break;
       case MONGO_DB:
-        table = createMongo(params, sessionClients, partitioner);
+        table = createMongo(params, sessionClients, partitioner, responsiveConfig);
         break;
       default:
         throw new IllegalStateException("Unexpected value: " + sessionClients.storageBackend());
@@ -168,11 +168,12 @@ public class SegmentedOperations implements WindowOperations {
   private static RemoteWindowTable<?> createCassandra(
       final ResponsiveWindowParams params,
       final SessionClients clients,
-      final WindowSegmentPartitioner partitioner
+      final WindowSegmentPartitioner partitioner,
+      final ResponsiveConfig config
   ) throws InterruptedException, TimeoutException {
     final CassandraClient client = clients.cassandraClient();
 
-    final var spec = RemoteTableSpecFactory.fromWindowParams(params, partitioner);
+    final var spec = RemoteTableSpecFactory.fromWindowParams(params, partitioner, config);
 
     switch (params.schemaType()) {
       case WINDOW:
@@ -187,13 +188,14 @@ public class SegmentedOperations implements WindowOperations {
   private static RemoteWindowTable<?> createMongo(
       final ResponsiveWindowParams params,
       final SessionClients clients,
-      final WindowSegmentPartitioner partitioner
+      final WindowSegmentPartitioner partitioner,
+      final ResponsiveConfig config
   ) throws InterruptedException, TimeoutException {
     final ResponsiveMongoClient client = clients.mongoClient();
 
     switch (params.schemaType()) {
       case WINDOW:
-        return client.windowedTable(params.name().tableName(), partitioner);
+        return client.windowedTable(params.name().tableName(), partitioner, config);
       case STREAM:
         throw new UnsupportedOperationException("Not yet implemented");
       default:

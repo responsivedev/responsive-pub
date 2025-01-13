@@ -112,6 +112,7 @@ public class TablePartitionerIntegrationTest {
   private String storeName;
   private Admin admin;
   private CassandraClient client;
+  private ResponsiveConfig config;
 
   @BeforeEach
   public void before(
@@ -124,6 +125,7 @@ public class TablePartitionerIntegrationTest {
     storeName = name + "store";
 
     this.responsiveProps.putAll(responsiveProps);
+    config = ResponsiveConfig.responsiveConfig(responsiveProps);
 
     this.admin = admin;
     admin.createTopics(
@@ -195,7 +197,7 @@ public class TablePartitionerIntegrationTest {
       );
 
       final CassandraKeyValueTable table = CassandraKeyValueTable.create(
-          new DefaultTableSpec(cassandraName, partitioner, TtlResolver.NO_TTL), client);
+          new DefaultTableSpec(cassandraName, partitioner, TtlResolver.NO_TTL, config), client);
 
       assertThat(client.numPartitions(cassandraName), is(OptionalInt.of(32)));
       assertThat(client.count(cassandraName, 0), is(2L));
@@ -253,7 +255,7 @@ public class TablePartitionerIntegrationTest {
       final String cassandraName = new TableName(storeName).tableName();
       final var partitioner = TablePartitioner.defaultPartitioner();
       final CassandraFactTable table = CassandraFactTable.create(
-          new DefaultTableSpec(cassandraName, partitioner, TtlResolver.NO_TTL), client);
+          new DefaultTableSpec(cassandraName, partitioner, TtlResolver.NO_TTL, config), client);
 
       final var offset0 = table.fetchOffset(0);
       final var offset1 = table.fetchOffset(1);
@@ -333,7 +335,7 @@ public class TablePartitionerIntegrationTest {
           storeName + "-changelog"
       );
       final CassandraKeyValueTable table = CassandraKeyValueTable.create(
-          new DefaultTableSpec(cassandraName, partitioner, TtlResolver.NO_TTL), client);
+          new DefaultTableSpec(cassandraName, partitioner, TtlResolver.NO_TTL, config), client);
 
       assertThat(client.numPartitions(cassandraName), is(OptionalInt.of(32)));
       assertThat(client.count(cassandraName, 0), is(2L));

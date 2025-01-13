@@ -15,6 +15,7 @@ package dev.responsive.kafka.internal.stores;
 import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadSessionClients;
 import static dev.responsive.kafka.internal.db.partitioning.TablePartitioner.defaultPartitioner;
 
+import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.CassandraFactTable;
@@ -65,7 +66,8 @@ public class GlobalOperations implements KeyValueOperations {
     final var spec = RemoteTableSpecFactory.fromKVParams(
         params,
         defaultPartitioner(),
-        ttlResolver
+        ttlResolver,
+        ResponsiveConfig.responsiveConfig(appConfigs)
     );
 
     final var table = client.globalFactory().create(spec);

@@ -51,6 +51,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -75,6 +76,7 @@ import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KafkaStreams.StateListener;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.Topology;
+import org.junit.Assert;
 import org.junit.jupiter.api.TestInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -614,6 +616,35 @@ public final class IntegrationTestUtils {
       Thread.sleep(1000);
     }
     throw new TimeoutException("timed out waiting for app to fully consume input");
+  }
+
+
+  /**
+   * Waits for a specific condition to become true within the given timeout period.
+   * Uses a linear backoff strategy to retry the condition check.
+   *
+   * @param condition  the condition to check
+   * @param timeout    the maximum time to wait for the condition
+   * @param backoff    the backoff duration between retries
+   * @throws AssertionError if the timeout is reached and the condition is not met
+   */
+  public static void awaitCondition(BooleanSupplier condition, Duration timeout, Duration backoff) {
+    Instant startTime = Instant.now();
+    Instant deadline = startTime.plus(timeout);
+
+    while (Instant.now().isBefore(deadline)) {
+      if (condition.getAsBoolean()) {
+        return;
+      }
+      try {
+        Thread.sleep(backoff.toMillis());
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new AssertionError("Await operation was interrupted", e);
+      }
+    }
+
+    Assert.fail("Condition was not met within the timeout of " + timeout);
   }
 
   private IntegrationTestUtils() {

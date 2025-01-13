@@ -93,7 +93,7 @@ public class SessionOperationsImpl implements SessionOperations {
     );
 
     final RemoteSessionTable<?> table =
-        createRemoteSessionTable(params, sessionClients, partitioner);
+        createRemoteSessionTable(params, sessionClients, partitioner, responsiveConfig);
 
     final SessionFlushManager flushManager = table.init(changelog.partition());
 
@@ -151,13 +151,14 @@ public class SessionOperationsImpl implements SessionOperations {
   private static RemoteSessionTable<?> createMongo(
       final ResponsiveSessionParams params,
       final SessionClients clients,
-      final SessionSegmentPartitioner partitioner
+      final SessionSegmentPartitioner partitioner,
+      final ResponsiveConfig config
   ) throws InterruptedException, TimeoutException {
     final ResponsiveMongoClient client = clients.mongoClient();
 
     switch (params.schemaType()) {
       case SESSION:
-        return client.sessionTable(params.name().tableName(), partitioner);
+        return client.sessionTable(params.name().tableName(), partitioner, config);
       default:
         throw new IllegalArgumentException(params.schemaType().name());
     }
@@ -166,13 +167,14 @@ public class SessionOperationsImpl implements SessionOperations {
   private static RemoteSessionTable<?> createRemoteSessionTable(
       final ResponsiveSessionParams params,
       final SessionClients sessionClients,
-      final SessionSegmentPartitioner partitioner
+      final SessionSegmentPartitioner partitioner,
+      final ResponsiveConfig config
   ) throws InterruptedException, TimeoutException {
     switch (sessionClients.storageBackend()) {
       case CASSANDRA:
         return createCassandra(params, sessionClients, partitioner);
       case MONGO_DB:
-        return createMongo(params, sessionClients, partitioner);
+        return createMongo(params, sessionClients, partitioner, config);
       default:
         throw new IllegalStateException("Unexpected value: " + sessionClients.storageBackend());
     }

@@ -100,13 +100,13 @@ public class PartitionedOperations implements KeyValueOperations {
         table = createCassandra(params, config, sessionClients, changelog.topic(), ttlResolver);
         break;
       case MONGO_DB:
-        table = createMongo(params, sessionClients, ttlResolver);
+        table = createMongo(params, sessionClients, ttlResolver, config);
         break;
       case IN_MEMORY:
-        table = createInMemory(params, ttlResolver);
+        table = createInMemory(params, ttlResolver, config);
         break;
       case RS3:
-        table = createRS3(params, sessionClients);
+        table = createRS3(params, sessionClients, config);
         break;
       default:
         throw new IllegalStateException("Unexpected value: " + sessionClients.storageBackend());
@@ -187,7 +187,8 @@ public class PartitionedOperations implements KeyValueOperations {
 
   private static RemoteKVTable<?> createInMemory(
       final ResponsiveKeyValueParams params,
-      final Optional<TtlResolver<?, ?>> ttlResolver
+      final Optional<TtlResolver<?, ?>> ttlResolver,
+      final ResponsiveConfig config
   ) {
     if (ttlResolver.isPresent() && !ttlResolver.get().hasDefaultOnly()) {
       throw new UnsupportedOperationException("Row-level ttl is not yet supported "
@@ -221,7 +222,7 @@ public class PartitionedOperations implements KeyValueOperations {
             changelogTopicName
         );
     final var client = sessionClients.cassandraClient();
-    final var spec = RemoteTableSpecFactory.fromKVParams(params, partitioner, ttlResolver);
+    final var spec = RemoteTableSpecFactory.fromKVParams(params, partitioner, ttlResolver, config);
     switch (params.schemaType()) {
       case KEY_VALUE:
         return client.kvFactory().create(spec);
@@ -235,16 +236,18 @@ public class PartitionedOperations implements KeyValueOperations {
   private static RemoteKVTable<?> createMongo(
       final ResponsiveKeyValueParams params,
       final SessionClients sessionClients,
-      final Optional<TtlResolver<?, ?>> ttlResolver
+      final Optional<TtlResolver<?, ?>> ttlResolver,
+      final ResponsiveConfig config
   ) throws InterruptedException, TimeoutException {
-    return sessionClients.mongoClient().kvTable(params.name().tableName(), ttlResolver);
+    return sessionClients.mongoClient().kvTable(params.name().tableName(), ttlResolver, config);
   }
 
   private static RemoteKVTable<?> createRS3(
       final ResponsiveKeyValueParams params,
-      final SessionClients sessionClients
+      final SessionClients sessionClients,
+      final ResponsiveConfig config
   ) {
-    return sessionClients.rs3TableFactory().kvTable(params.name().tableName());
+    return sessionClients.rs3TableFactory().kvTable(params.name().tableName(), config);
   }
 
   @SuppressWarnings("rawtypes")

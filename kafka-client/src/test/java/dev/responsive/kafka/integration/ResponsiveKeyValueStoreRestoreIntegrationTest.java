@@ -363,7 +363,8 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
           .create(new DefaultTableSpec(
               aggName(),
               TablePartitioner.defaultPartitioner(),
-              TtlResolver.NO_TTL
+              TtlResolver.NO_TTL,
+              config
           ));
 
     } else if (type == KVSchema.KEY_VALUE) {
@@ -381,7 +382,8 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
           mongoClient,
           aggName(),
           CollectionCreationOptions.fromConfig(config),
-          TtlResolver.NO_TTL
+          TtlResolver.NO_TTL,
+          config
       );
       table.init(0);
     } else {

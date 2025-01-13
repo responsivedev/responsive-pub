@@ -12,6 +12,7 @@
 
 package dev.responsive.kafka.internal.db;
 
+import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.stores.ResponsiveKeyValueParams;
 import dev.responsive.kafka.api.stores.ResponsiveWindowParams;
 import dev.responsive.kafka.internal.db.partitioning.Segmenter.SegmentPartition;
@@ -37,20 +38,23 @@ public class RemoteTableSpecFactory {
   public static RemoteTableSpec fromKVParams(
       final ResponsiveKeyValueParams params,
       final TablePartitioner<Bytes, Integer> partitioner,
-      final Optional<TtlResolver<?, ?>> ttlResolver
+      final Optional<TtlResolver<?, ?>> ttlResolver,
+      final ResponsiveConfig config
   ) {
     return new DefaultTableSpec(
         params.name().tableName(),
         partitioner,
-        ttlResolver
+        ttlResolver,
+        config
     );
   }
 
   public static RemoteTableSpec fromWindowParams(
       final ResponsiveWindowParams params,
-      final TablePartitioner<WindowedKey, SegmentPartition> partitioner
+      final TablePartitioner<WindowedKey, SegmentPartition> partitioner,
+      final ResponsiveConfig config
   ) {
-    return new DefaultTableSpec(params.name().tableName(), partitioner, Optional.empty());
+    return new DefaultTableSpec(params.name().tableName(), partitioner, Optional.empty(), config);
   }
 
 }

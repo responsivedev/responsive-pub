@@ -111,6 +111,15 @@ public class ResponsiveConfig extends AbstractConfig {
       + "with for best results. However it is important to note that this cannot be changed for "
       + "an active application. Messing with this can corrupt existing state!";
 
+  public static final String MONGO_TOMBSTONE_RETENTION_SEC_CONFIG = "responsive.mongo.tombstone.retention.seconds";
+  private static final long MONGO_TOMBSTONE_RETENTION_SEC_DEFAULT = Duration.ofHours(12).toSeconds();
+  private static final String MONGO_TOMBSTONE_RETENTION_SEC_DOC =
+      "The duration, in milliseconds, to retain deleted records in MongoDB after they are "
+          + "deleted or their TTL expires. This retention period ensures that zombie instances of "
+          + "Kafka Streams are fenced from overwriting deleted or expired records. Configure this "
+          + "based on your application's tolerance for potential write errors by zombie instances. "
+          + "Default: 12 hours (43,200s).";
+
   // ------------------ RS3 specific configurations ----------------------
 
   public static final String RS3_HOSTNAME_CONFIG = "responsive.rs3.hostname";
@@ -536,6 +545,12 @@ public class ResponsiveConfig extends AbstractConfig {
           "",
           Importance.LOW,
           MONGO_ADDITIONAL_CONNECTION_STRING_PARAMS_DOC
+      ).define(
+          MONGO_TOMBSTONE_RETENTION_SEC_CONFIG,
+          Type.LONG,
+          MONGO_TOMBSTONE_RETENTION_SEC_DEFAULT,
+          Importance.LOW,
+          MONGO_TOMBSTONE_RETENTION_SEC_DOC
       ).define(
           WINDOW_BLOOM_FILTER_COUNT_CONFIG,
           Type.INT,
