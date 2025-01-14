@@ -27,8 +27,8 @@ public class TTDWriter<K, P> implements RemoteWriter<K, P> {
 
   @SuppressWarnings("ResultOfMethodCallIgnored")
   @Override
-  public void insert(final K key, final byte[] value, long epochMillis) {
-    table.insert(0, key, value, epochMillis);
+  public void insert(final K key, final byte[] value, long timestampMs) {
+    table.insert(0, key, value, timestampMs);
   }
 
   @SuppressWarnings("ResultOfMethodCallIgnored")

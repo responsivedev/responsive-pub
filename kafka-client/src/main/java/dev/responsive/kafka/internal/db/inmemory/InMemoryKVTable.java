@@ -195,8 +195,8 @@ public class InMemoryKVTable implements RemoteKVTable<BoundStatement> {
     ) {
       return new RemoteWriter<>() {
         @Override
-        public void insert(Bytes key, byte[] value, long epochMillis) {
-          InMemoryKVTable.this.insert(tablePartition, key, value, epochMillis);
+        public void insert(Bytes key, byte[] value, long timestampMs) {
+          InMemoryKVTable.this.insert(tablePartition, key, value, timestampMs);
         }
 
         @Override

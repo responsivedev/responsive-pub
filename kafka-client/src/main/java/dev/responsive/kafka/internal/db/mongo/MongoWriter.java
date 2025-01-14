@@ -50,8 +50,8 @@ public class MongoWriter<K, P, D> implements RemoteWriter<K, P> {
   }
 
   @Override
-  public void insert(final K key, final byte[] value, final long epochMillis) {
-    accumulatedWrites.add(table.insert(kafkaPartition, key, value, epochMillis));
+  public void insert(final K key, final byte[] value, final long timestampMs) {
+    accumulatedWrites.add(table.insert(kafkaPartition, key, value, timestampMs));
   }
 
   @Override

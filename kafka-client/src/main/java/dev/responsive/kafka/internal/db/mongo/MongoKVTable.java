@@ -246,7 +246,7 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
         Updates.combine(
             Updates.unset(KVDoc.VALUE),
             Updates.unset(KVDoc.TIMESTAMP),
-            Updates.set(KVDoc.TOMBSTONE_TS, Date.from(Instant.now())),
+            Updates.set(KVDoc.TOMBSTONE_TS, new Date()),
             Updates.set(KVDoc.EPOCH, epoch)
         ),
         new UpdateOptions().upsert(true)
