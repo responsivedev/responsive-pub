@@ -37,7 +37,6 @@ import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.stores.TtlResolver;
 import dev.responsive.kafka.internal.utils.Iterators;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.Date;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;

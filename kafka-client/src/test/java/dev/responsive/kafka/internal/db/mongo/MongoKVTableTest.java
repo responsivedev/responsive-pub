@@ -28,7 +28,6 @@ import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
 
 import com.mongodb.client.MongoClient;
-import com.mongodb.client.MongoDatabase;
 import com.mongodb.client.model.Filters;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.StorageBackend;
@@ -460,7 +459,7 @@ class MongoKVTableTest {
       throw new AssertionError("Could not find tombstone record in database");
     } else {
       assertThat(deletedRecord.getTimestamp(), nullValue());
-      assertThat(deletedRecord.getTombstoneTs(), notNullValue()); // gets set to current time during delete
+      assertThat(deletedRecord.getTombstoneTs(), notNullValue()); // set to current time of delete
     }
   }
 
