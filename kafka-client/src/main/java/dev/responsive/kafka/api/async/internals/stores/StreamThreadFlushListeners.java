@@ -86,7 +86,7 @@ public class StreamThreadFlushListeners {
 
   private final Logger log;
   private final String streamThreadName;
-  private final Map<String, Map<Integer, FlushListenerConnector>> processorToPartitionToConnector =
+  private final Map<Integer, FlushListenerConnector> partitionToConnector =
       new HashMap<>();
 
   public StreamThreadFlushListeners(
@@ -110,7 +110,7 @@ public class StreamThreadFlushListeners {
       final int partition,
       final AsyncFlushListener listener
   ) {
-    final FlushListenerConnector storeConnector = processorToPartitionToConnector.remove(partition);
+    final FlushListenerConnector storeConnector = partitionToConnector.remove(partition);
     if (storeConnector == null) {
       log.error("Tried to register the flush listener for this processor with"
                     + "the corresponding async store, but no store for this partition "
@@ -140,7 +140,7 @@ public class StreamThreadFlushListeners {
   public void unregisterListenerForPartition(
       final int partition
   ) {
-    processorToPartitionToConnector.remove(partition);
+    partitionToConnector.remove(partition);
   }
 
   /**
@@ -151,13 +151,13 @@ public class StreamThreadFlushListeners {
       final int partition,
       final FlushListenerConnector storeConnector
   ) {
-    if (processorToPartitionToConnector.containsKey(partition)) {
+    if (partitionToConnector.containsKey(partition)) {
       log.error("Tried to register a new connector for partition {} but one already exists.",
                 partition);
       throw new IllegalStateException("Failed to register new store connector for partition "
                                           + partition + " because a connector already exists");
     }
-    processorToPartitionToConnector.put(partition, storeConnector);
+    partitionToConnector.put(partition, storeConnector);
   }
 
   public String streamThreadName() {

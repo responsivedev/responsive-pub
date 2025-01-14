@@ -23,7 +23,7 @@ public class AsyncThreadPoolRegistration {
   private final AsyncThreadPool threadPool;
 
   // Processors are maintained in topological order for each partition/task
-  private final Map<TaskId, List<Runnable>> taskToAsyncProcessorFlushers = new HashMap<>();
+  private final Map<TaskId, List<ProcessorFlusher>> taskToAsyncProcessorFlushers = new HashMap<>();
 
   public AsyncThreadPoolRegistration(
       final AsyncThreadPool threadPool
@@ -36,10 +36,10 @@ public class AsyncThreadPoolRegistration {
   }
 
   // Called during processor initialization, which is done in topological order by Streams
-  public void registerAsyncProcessor(final TaskId id, final Runnable flushProcessor) {
+  public void registerAsyncProcessor(final TaskId id, final ProcessorFlusher processorFlusher) {
     taskToAsyncProcessorFlushers
         .computeIfAbsent(id, (n) -> new ArrayList<>())
-        .add(flushProcessor);
+        .add(processorFlusher);
   }
 
   public void unregisterAsyncProcessor(final AsyncProcessorId id) {
@@ -47,18 +47,42 @@ public class AsyncThreadPoolRegistration {
     threadPool.removeProcessor(id);
   }
 
+  public void flushAsyncEventsForTask(final TaskId task) {
+    final var flushers = taskToAsyncProcessorFlushers.get(task);
+    if (flushers == null) {
+      throw new IllegalStateException("Could not find task " + task + " to flush");
+    }
+
+    while (true) {
+      boolean recordsFlushed = false;
+
+      for (final var flusher : flushers) {
+
+        // flusher returns true if any records were still buffering and had to be flushed
+        if (flusher.flush()) {
+          recordsFlushed = true;
+        }
+
+      }
+
+      if (!recordsFlushed) {
+        break;
+      }
+    }
+  }
+
   public void flushAllAsyncEvents() {
     // TODO: this can be optimized by executing the tasks in parallel (while respecting
     //  the iteration order of flushes within a task which are topologically sorted)
-    taskToAsyncProcessorFlushers.values().forEach(flushers -> {
-      // These must be executed in order
-      for (final var flush : flushers) {
-        flush.run();
-      }
-    });
+    taskToAsyncProcessorFlushers.keySet().forEach(this::flushAsyncEventsForTask);
   }
 
   public void close() {
     threadPool.shutdown();
+  }
+
+  @FunctionalInterface
+  public interface ProcessorFlusher {
+    boolean flush();
   }
 }

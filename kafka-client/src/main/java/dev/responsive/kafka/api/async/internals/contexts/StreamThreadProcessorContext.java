@@ -53,7 +53,7 @@ public class StreamThreadProcessorContext<KOut, VOut>
 
   private final Logger log;
 
-  private final Map<String, AsyncStateStore<?, ?>> allStoreNameToAsyncStore = new HashMap<>();
+  private final Map<String, AsyncStateStore<?, ?>> allStoreNamesToAsyncStore = new HashMap<>();
   private final Map<String, AsyncKeyValueStore<?, ?>> kvStoreNameToAsyncStore = new HashMap<>();
   private final Map<String, AsyncWindowStore<?, ?>> windowStoreNameToAsyncStore = new HashMap<>();
 
@@ -77,8 +77,8 @@ public class StreamThreadProcessorContext<KOut, VOut>
   @Override
   @SuppressWarnings("unchecked")
   public <S extends StateStore> S getStateStore(final String name) {
-    if (allStoreNameToAsyncStore.containsKey(name)) {
-      return (S) allStoreNameToAsyncStore.get(name);
+    if (allStoreNamesToAsyncStore.containsKey(name)) {
+      return (S) allStoreNamesToAsyncStore.get(name);
     }
 
     final S userDelegate = super.getStateStore(name);
@@ -89,7 +89,7 @@ public class StreamThreadProcessorContext<KOut, VOut>
           (KeyValueStore<?, ?>) userDelegate,
           delayedStoreWriter
       );
-      allStoreNameToAsyncStore.put(name, asyncStore);
+      allStoreNamesToAsyncStore.put(name, asyncStore);
       kvStoreNameToAsyncStore.put(name, asyncStore);
       return (S) asyncStore;
     } else if (userDelegate instanceof KeyValueStore) {
@@ -99,7 +99,7 @@ public class StreamThreadProcessorContext<KOut, VOut>
           (KeyValueStore<?, ?>) userDelegate,
           delayedStoreWriter
       );
-      allStoreNameToAsyncStore.put(name, asyncStore);
+      allStoreNamesToAsyncStore.put(name, asyncStore);
       kvStoreNameToAsyncStore.put(name, asyncStore);
       return (S) asyncStore;
     } else if (userDelegate instanceof TimestampedWindowStore) {
@@ -109,7 +109,7 @@ public class StreamThreadProcessorContext<KOut, VOut>
           (WindowStore<?, ?>) userDelegate,
           delayedStoreWriter
       );
-      allStoreNameToAsyncStore.put(name, asyncStore);
+      allStoreNamesToAsyncStore.put(name, asyncStore);
       windowStoreNameToAsyncStore.put(name, asyncStore);
       return (S) asyncStore;
     } else if (userDelegate instanceof WindowStore) {
@@ -119,7 +119,7 @@ public class StreamThreadProcessorContext<KOut, VOut>
           (WindowStore<?, ?>) userDelegate,
           delayedStoreWriter
       );
-      allStoreNameToAsyncStore.put(name, asyncStore);
+      allStoreNamesToAsyncStore.put(name, asyncStore);
       windowStoreNameToAsyncStore.put(name, asyncStore);
       return (S) asyncStore;
     } else {
@@ -185,13 +185,11 @@ public class StreamThreadProcessorContext<KOut, VOut>
 
   @SuppressWarnings("unchecked")
   public <KS, VS> AsyncStateStore<KS, VS> getAsyncStore(final String storeName) {
-    return (AsyncKeyValueStore<KS, VS>) kvStoreNameToAsyncStore.get(storeName);
+    return (AsyncStateStore<KS, VS>) allStoreNamesToAsyncStore.get(storeName);
   }
 
-  public Map<String, StateStore> getAllAsyncStores() {
-    final Map<String, StateStore> allStores = new HashMap<>(kvStoreNameToAsyncStore);
-    allStores.putAll(windowStoreNameToAsyncStore);
-    return allStores;
+  public Map<String, AsyncStateStore<?, ?>> getAllAsyncStores() {
+    return allStoreNamesToAsyncStore;
   }
 
   public static class PreviousRecordContextAndNode implements AutoCloseable {

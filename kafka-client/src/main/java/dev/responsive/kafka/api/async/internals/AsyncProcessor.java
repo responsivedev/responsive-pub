@@ -12,6 +12,7 @@
 
 package dev.responsive.kafka.api.async.internals;
 
+import static dev.responsive.kafka.api.async.internals.AsyncUtils.getAsyncThreadPool;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.ASYNC_FLUSH_INTERVAL_MS_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.ASYNC_MAX_EVENTS_QUEUED_PER_KEY_CONFIG;
 import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadAsyncThreadPoolRegistry;
@@ -29,6 +30,7 @@ import dev.responsive.kafka.api.async.internals.queues.MeteredSchedulingQueue;
 import dev.responsive.kafka.api.async.internals.queues.SchedulingQueue;
 import dev.responsive.kafka.api.async.internals.stores.AbstractAsyncStoreBuilder;
 import dev.responsive.kafka.api.async.internals.stores.AsyncKeyValueStore;
+import dev.responsive.kafka.api.async.internals.stores.AsyncStateStore;
 import dev.responsive.kafka.api.async.internals.stores.StreamThreadFlushListeners.AsyncFlushListener;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.config.InternalSessionConfigs;
@@ -219,7 +221,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     final long punctuationInterval = configs.getLong(ASYNC_FLUSH_INTERVAL_MS_CONFIG);
     final int maxEventsPerKey = configs.getInt(ASYNC_MAX_EVENTS_QUEUED_PER_KEY_CONFIG);
 
-    this.asyncThreadPoolRegistration = getAsyncThreadPool(taskContext, streamThreadName);
+    this.asyncThreadPoolRegistration = getAsyncThreadPool(appConfigs, streamThreadName);
     asyncThreadPoolRegistration.registerAsyncProcessor(taskId, this::flushPendingEventsForCommit);
     asyncThreadPoolRegistration.threadPool().maybeInitThreadPoolMetrics();
 
@@ -242,16 +244,11 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    * connected stores via the {@link ProcessingContext#getStateStore(String)} API during #init
    */
   private void completeInitialization() {
-    final Map<String, StateStore> accessedStores = streamThreadContext.getAllAsyncStores();
+    final Map<String, AsyncStateStore<?, ?>> accessedStores = streamThreadContext.getAllAsyncStores();
 
     verifyConnectedStateStores(accessedStores, connectedStoreBuilders);
 
-    registerFlushListenerForStoreBuilders(
-        streamThreadName,
-        taskId.partition(),
-        connectedStoreBuilders.values(),
-        asyncThreadPoolRegistration::flushAllAsyncEvents
-    );
+    asyncThreadPoolRegistration.registerAsyncProcessor(taskId, this::flushPendingEventsForCommit);
   }
 
   void assertQueuesEmptyOnFirstProcess() {
@@ -374,29 +371,15 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     }
   }
 
-  private static void registerFlushListenerForStoreBuilders(
-      final String streamThreadName,
-      final int partition,
-      final Collection<AbstractAsyncStoreBuilder<?>> asyncStoreBuilders,
-      final AsyncFlushListener flushPendingEvents
-  ) {
-    for (final AbstractAsyncStoreBuilder<?> builder : asyncStoreBuilders) {
-      builder.registerFlushListenerWithAsyncStore(
-          builder.name(),
-          streamThreadName,
-          partition,
-          flushPendingEvents
-      );
-    }
-  }
-
   /**
    * Block on all pending records to be scheduled, executed, and fully complete processing through
    * the topology, as well as all state store operations to be applied. Called at the beginning of
    * each commit to make sure we've finished up any records we're committing offsets for
+   *
+   * @return true if there were any buffered records that got flushed
    * TODO: add a timeout in case we get stuck somewhere
    */
-  public void flushPendingEventsForCommit() {
+  public boolean flushPendingEventsForCommit() {
     if (fatalException != null) {
       // if there was a fatal exception, just throw right away so that we exit right
       // away and minimize the risk of causing further problems. Additionally, processing for
@@ -404,6 +387,10 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
       // loop below that tries to drain queues, as the queue for that key will never drain.
       log.error("exit flush early due to previous fatal exception", fatalException);
       throw fatalException;
+    }
+
+    if (isCleared()) {
+      return false;
     }
 
     try {
@@ -438,6 +425,8 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
       fatalException = e;
       throw fatalException;
     }
+
+    return true;
   }
 
   /**
@@ -742,7 +731,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    * in the javadocs for {@link AsyncProcessorSupplier}.
    */
   private void verifyConnectedStateStores(
-      final Map<String, StateStore> accessedStores,
+      final Map<String, AsyncStateStore<?, ?>> accessedStores,
       final Map<String, AbstractAsyncStoreBuilder<?>> connectedStores
   ) {
     if (!accessedStores.keySet().equals(connectedStores.keySet())) {
@@ -761,17 +750,4 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     }
   }
 
-  private static AsyncThreadPoolRegistration getAsyncThreadPool(
-      final ProcessingContext context,
-      final String streamThreadName
-  ) {
-    try {
-      final AsyncThreadPoolRegistry registry = loadAsyncThreadPoolRegistry(context.appConfigs());
-      return registry.asyncThreadPoolForStreamThread(streamThreadName);
-    } catch (final Exception e) {
-      throw new ConfigException(
-          "Unable to locate async thread pool registry. Make sure to configure "
-              + ResponsiveConfig.ASYNC_THREAD_POOL_SIZE_CONFIG, e);
-    }
-  }
 }

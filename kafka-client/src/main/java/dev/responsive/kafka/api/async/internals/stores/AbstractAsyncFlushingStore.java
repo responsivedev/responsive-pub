@@ -12,10 +12,13 @@
 
 package dev.responsive.kafka.api.async.internals.stores;
 
-import dev.responsive.kafka.api.async.internals.stores.StreamThreadFlushListeners.AsyncFlushListener;
+import static dev.responsive.kafka.api.async.internals.AsyncUtils.getAsyncThreadPool;
+
+import dev.responsive.kafka.api.async.internals.AsyncThreadPoolRegistration;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.CacheFlushListener;
 import org.apache.kafka.streams.state.internals.CachedStateStore;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
@@ -30,10 +33,8 @@ public abstract class AbstractAsyncFlushingStore<S extends StateStore>
   private final StreamThreadFlushListeners flushListeners;
 
   // Effectively final but can't be initialized until the store's #init
-  private int partition;
-
-  // Effectively final but can't be initialized until the corresponding processor's #init
-  private AsyncFlushListener flushAsyncProcessor;
+  private TaskId taskId;
+  private AsyncThreadPoolRegistration asyncThreadPoolRegistration;
 
   public AbstractAsyncFlushingStore(
       final S inner,
@@ -51,37 +52,24 @@ public abstract class AbstractAsyncFlushingStore<S extends StateStore>
   @Override
   public void init(final StateStoreContext context,
                    final StateStore root) {
-    this.partition = context.taskId().partition();
+    final String streamThreadName = Thread.currentThread().getName();
+    this.asyncThreadPoolRegistration = getAsyncThreadPool(context.appConfigs(), streamThreadName);
+    this.taskId = context.taskId();
 
-    flushListeners.registerStoreConnectorForPartition(
-        partition,
-        flushListener -> flushAsyncProcessor = flushListener
-    );
-
-    try {
-      super.init(context, root);
-    } catch (final RuntimeException e) {
-      log.error("failed to initialize the wrapped store. Deregistering the store connector as "
-                    + "its likely that this store was not registered with streams and close will "
-                    + "not be called");
-      flushListeners.unregisterListenerForPartition(partition);
-      throw e;
-    }
+    super.init(context, root);
   }
 
   @Override
   public void flushCache() {
-    if (flushAsyncProcessor != null) {
+    if (asyncThreadPoolRegistration != null) {
       // We wait on/clear out the async processor buffers first so that any pending async events
       // that write to the state store are guaranteed to be inserted in the cache before we
-      // proceed with flushing the cache. This is the reason we hook into the commit to block
-      // on pending async results via this #flushCache API, and not, for example, the consumer's
-      // commit or producer's commitTxn -- because #flushCache is the first call in a commit, and
-      // if we waited until #commit/#commitTxn we would have to flush the cache a second time in
-      // case any pending async events issued new writes to the state store/cache
-      flushAsyncProcessor.flushBuffers();
+      // proceed with flushing the cache. We also do one final flush after clearing all the
+      // store caches by hooking into the producer's #flush, for any async processors that are
+      // downstream of the last cache or part of a completely stateless task
+      asyncThreadPoolRegistration.flushAsyncEventsForTask(taskId);
     } else {
-      log.warn("A flush was triggered on the async state store but the flush listener was "
+      log.warn("A flush was triggered on the async state store but the async thread pool was "
                    + "not yet initialized. This can happen when a task is closed before "
                    + "it can be initialized.");
     }
@@ -102,12 +90,6 @@ public abstract class AbstractAsyncFlushingStore<S extends StateStore>
     throw new IllegalStateException(
         "Attempted to clear cache of async store, this implies the task is "
             + "transitioning to standby which should not happen");
-  }
-
-  @Override
-  public void close() {
-    flushListeners.unregisterListenerForPartition(partition);
-    super.close();
   }
 
   /**

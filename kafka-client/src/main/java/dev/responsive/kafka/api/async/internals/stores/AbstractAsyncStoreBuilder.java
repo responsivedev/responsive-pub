@@ -104,6 +104,10 @@ public abstract class AbstractAsyncStoreBuilder<T extends StateStore>
   /**
    * Register a flush listener and the partition it's associated with for the
    * given StreamThread.
+   * <p>
+   * Invoked from the async processor's #init which is called after the store has already
+   * been built and initialized, so we expect this thread to already have registered a flush
+   * listener for the store
    */
   public void registerFlushListenerWithAsyncStore(
       final String storeName,

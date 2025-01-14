@@ -23,7 +23,9 @@ import java.lang.reflect.Field;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.ConfigurableStore;
 import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.processor.internals.StoreFactory.FactoryWrappingStoreBuilder;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
@@ -36,7 +38,7 @@ import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 
 public class DelayedAsyncStoreBuilder<K, V, T extends StateStore>
-    extends AbstractAsyncStoreBuilder<T> {
+    extends AbstractAsyncStoreBuilder<T> implements ConfigurableStore {
 
   private final StoreBuilder<T> inner;
   private StoreBuilder<T> innerResolved;
@@ -44,6 +46,13 @@ public class DelayedAsyncStoreBuilder<K, V, T extends StateStore>
   public DelayedAsyncStoreBuilder(final StoreBuilder<T> inner) {
     super(inner.name());
     this.inner = inner;
+  }
+
+  @Override
+  public void configure(final StreamsConfig config) {
+    if (inner instanceof ConfigurableStore) {
+      ((ConfigurableStore) inner).configure(config);
+    }
   }
 
   // We need to implement equals to handle the case of stores shared by multiple processors
@@ -59,6 +68,7 @@ public class DelayedAsyncStoreBuilder<K, V, T extends StateStore>
 
     final DelayedAsyncStoreBuilder<?, ?, ?> that = (DelayedAsyncStoreBuilder<?, ?, ?>) o;
 
+    // TODO: should we check against innerResolved?
     return inner.equals(that.inner);
   }
 
@@ -70,14 +80,7 @@ public class DelayedAsyncStoreBuilder<K, V, T extends StateStore>
   @SuppressWarnings({"unchecked", "rawtypes"})
   @Override
   public T build() {
-
-    if (innerResolved == null) {
-      if (inner instanceof FactoryWrappingStoreBuilder) {
-        innerResolved = (StoreBuilder<T>) ((FactoryWrappingStoreBuilder) inner).storeFactory().builder();
-      } else {
-        innerResolved = inner;
-      }
-    }
+   maybeResolve();
 
     if (innerResolved instanceof KeyValueStoreBuilder) {
       return (T) getKeyValueStore((KeyValueStoreBuilder) innerResolved);
@@ -91,6 +94,17 @@ public class DelayedAsyncStoreBuilder<K, V, T extends StateStore>
       return (T) getSessionStore((SessionStoreBuilder) innerResolved);
     } else {
       throw new UnsupportedOperationException("Other store types not yet supported");
+    }
+  }
+
+  @SuppressWarnings({"unchecked", "rawtypes"})
+  private void maybeResolve() {
+    if (innerResolved == null) {
+      if (inner instanceof FactoryWrappingStoreBuilder) {
+        innerResolved = (StoreBuilder<T>) ((FactoryWrappingStoreBuilder) inner).storeFactory().builder();
+      } else {
+        innerResolved = inner;
+      }
     }
   }
 

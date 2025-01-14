@@ -13,14 +13,19 @@
 package dev.responsive.kafka.api.async.internals;
 
 import static dev.responsive.kafka.api.async.internals.AsyncThreadPool.ASYNC_THREAD_NAME;
+import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadAsyncThreadPoolRegistry;
 import static dev.responsive.kafka.internal.utils.Utils.isExecutingOnStreamThread;
 
 import dev.responsive.kafka.api.async.internals.stores.AbstractAsyncStoreBuilder;
+import dev.responsive.kafka.api.config.ResponsiveConfig;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.streams.processor.api.ProcessingContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.DelayedAsyncStoreBuilder;
@@ -78,6 +83,20 @@ public class AsyncUtils {
     return asyncStoreBuilders;
   }
 
+  public static AsyncThreadPoolRegistration getAsyncThreadPool(
+      final Map<String, Object> configs,
+      final String streamThreadName
+  ) {
+    try {
+      final AsyncThreadPoolRegistry registry = loadAsyncThreadPoolRegistry(configs);
+      return registry.asyncThreadPoolForStreamThread(streamThreadName);
+    } catch (final Exception e) {
+      throw new ConfigException(
+          "Unable to locate async thread pool registry. Make sure to configure "
+              + ResponsiveConfig.ASYNC_THREAD_POOL_SIZE_CONFIG, e);
+    }
+  }
+
   /**
    * Generates a consistent hashCode for the given {@link ProcessorRecordContext} by
    * This workaround is required due to the actual ProcessorRecordContext class throwing
@@ -106,5 +125,7 @@ public class AsyncUtils {
 
     return result;
   }
+
+
 
 }
