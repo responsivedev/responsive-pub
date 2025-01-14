@@ -38,6 +38,7 @@ import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.db.spec.RemoteTableSpec;
 import dev.responsive.kafka.internal.stores.TtlResolver;
 import dev.responsive.kafka.internal.utils.Iterators;
+import dev.responsive.kafka.internal.utils.Utils;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.time.Instant;
@@ -46,6 +47,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.TimeoutException;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.TaskMigratedException;
@@ -74,6 +76,7 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
   private final PreparedStatement fetchEpoch;
   private final PreparedStatement reserveEpoch;
   private final PreparedStatement ensureEpoch;
+  private final PreparedStatement prefix;
 
   public static CassandraKeyValueTable create(
       final RemoteTableSpec spec,
@@ -121,8 +124,21 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
             .where(DATA_KEY.relation().isGreaterThanOrEqualTo(bindMarker(FROM_BIND)))
             .where(DATA_KEY.relation().isLessThanOrEqualTo(bindMarker(TO_BIND)))
             .where(TIMESTAMP.relation().isGreaterThanOrEqualTo(bindMarker(TIMESTAMP.bind())))
-            // ALLOW FILTERING is OK b/c the query only scans one partition
-            .allowFiltering()
+            .allowFiltering() // required for range
+            .build(),
+        QueryOp.READ
+    );
+
+    final var prefix = client.prepare(
+        QueryBuilder
+            .selectFrom(name)
+            .columns(DATA_KEY.column(), DATA_VALUE.column(), TIMESTAMP.column())
+            .where(ROW_TYPE.relation().isEqualTo(DATA_ROW.literal()))
+            .where(PARTITION_KEY.relation().isEqualTo(bindMarker(PARTITION_KEY.bind())))
+            .where(DATA_KEY.relation().isGreaterThanOrEqualTo(bindMarker(FROM_BIND)))
+            .where(DATA_KEY.relation().isLessThan(bindMarker(TO_BIND)))
+            .where(TIMESTAMP.relation().isGreaterThanOrEqualTo(bindMarker(TIMESTAMP.bind())))
+            .allowFiltering() // required for prefix
             .build(),
         QueryOp.READ
     );
@@ -214,6 +230,7 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
         ttlResolver,
         get,
         range,
+        prefix,
         all,
         insert,
         delete,
@@ -256,6 +273,7 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
       final Optional<TtlResolver<?, ?>> ttlResolver,
       final PreparedStatement get,
       final PreparedStatement range,
+      final PreparedStatement prefix,
       final PreparedStatement all,
       final PreparedStatement insert,
       final PreparedStatement delete,
@@ -271,6 +289,7 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
     this.ttlResolver = ttlResolver;
     this.get = get;
     this.range = range;
+    this.prefix = prefix;
     this.all = all;
     this.insert = insert;
     this.delete = delete;
@@ -383,6 +402,36 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
       final Bytes to,
       final long streamTimeMs
   ) {
+    return doRange(kafkaPartition, from, to, streamTimeMs, this.range);
+  }
+
+  @Override
+  public <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefix(
+      final P prefix,
+      final PS prefixKeySerializer,
+      final int kafkaPartition,
+      final long streamTimeMs
+  ) {
+    final Bytes from = Bytes.wrap(prefixKeySerializer.serialize(null, prefix));
+    final Bytes to = Utils.incrementWithoutOverflow(from);
+    if (to == null) {
+      throw new UnsupportedOperationException("Overflow in from key " + from
+          + " when issuing prefix scans. Cassandra tables do not yet support open-ended scans.");
+    }
+    return doRange(kafkaPartition, from, to, streamTimeMs, this.prefix);
+  }
+
+  private KeyValueIterator<Bytes, byte[]> doRange(
+      final int kafkaPartition,
+      final Bytes from,
+      final Bytes to,
+      final long streamTimeMs,
+      final PreparedStatement rangeStatement
+  ) {
+    if (from == null || to == null) {
+      throw new UnsupportedOperationException(
+          "Open ended range scans are not yet supported in Cassandra tables.");
+    }
     final long minValidTs = ttlResolver.isEmpty()
         ? -1L
         : streamTimeMs - ttlResolver.get().defaultTtl().toMillis();
@@ -394,7 +443,7 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
     //  for range queries with a Comparator-aware key-->subpartition mapping strategy.
     final List<KeyValueIterator<Bytes, byte[]>> resultsPerPartition = new LinkedList<>();
     for (final int partition : partitioner.allTablePartitions(kafkaPartition)) {
-      final BoundStatement range = this.range
+      final BoundStatement range = rangeStatement
           .bind()
           .setInt(PARTITION_KEY.bind(), partition)
           .setByteBuffer(FROM_BIND, ByteBuffer.wrap(from.get()))

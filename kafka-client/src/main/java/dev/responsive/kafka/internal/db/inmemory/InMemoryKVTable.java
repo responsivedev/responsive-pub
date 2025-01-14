@@ -22,6 +22,7 @@ import dev.responsive.kafka.internal.stores.RemoteWriteResult;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration;
 import dev.responsive.kafka.internal.stores.TtlResolver;
 import dev.responsive.kafka.internal.utils.Iterators;
+import dev.responsive.kafka.internal.utils.Utils;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
@@ -30,6 +31,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -86,18 +88,45 @@ public class InMemoryKVTable implements RemoteKVTable<BoundStatement> {
       final Bytes to,
       final long streamTimeMs
   ) {
+    return doRange(kafkaPartition, from, to, streamTimeMs, true);
+  }
+
+  @Override
+  public <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefix(
+      final P prefix,
+      final PS prefixKeySerializer,
+      final int kafkaPartition,
+      final long streamTimeMs
+  ) {
+    final Bytes from = Bytes.wrap(prefixKeySerializer.serialize(null, prefix));
+    final Bytes to = Utils.incrementWithoutOverflow(from);
+
+    return doRange(kafkaPartition, from, to, streamTimeMs, false);
+  }
+
+  private KeyValueIterator<Bytes, byte[]> doRange(
+      final int kafkaPartition,
+      final Bytes from,
+      final Bytes to,
+      final long streamTimeMs,
+      final boolean endInclusive
+  ) {
     if (ttlResolver.isPresent() && !ttlResolver.get().hasDefaultOnly()) {
       throw new UnsupportedOperationException("Row-level ttl is not yet supported for range "
-                                                  + "queries on in-memory tables or TTD");
+          + "queries or prefix scans on in-memory tables or TTD");
     }
 
     checkKafkaPartition(kafkaPartition);
 
-    final var iter = store
-        .tailMap(from, true)
-        .headMap(to, true)
-        .entrySet()
-        .iterator();
+    var view = store;
+    if (from != null) {
+      view = view.tailMap(from, true);
+    }
+    if (to != null) {
+      view = view.headMap(to, endInclusive);
+    }
+
+    final var iter = view.entrySet().iterator();
 
     final long minValidTs = ttlResolver.isEmpty()
         ? -1L

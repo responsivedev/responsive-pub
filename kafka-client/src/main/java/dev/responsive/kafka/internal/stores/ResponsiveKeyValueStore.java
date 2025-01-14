@@ -19,6 +19,7 @@ import dev.responsive.kafka.internal.utils.TableName;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.TimeoutException;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
@@ -195,6 +196,14 @@ public class ResponsiveKeyValueStore
   @Override
   public KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
     return operations.range(from, to);
+  }
+
+  @Override
+  public <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefixScan(
+      final P prefix,
+      final PS prefixKeySerializer
+  ) {
+    return operations.prefix(prefix, prefixKeySerializer);
   }
 
   @Override

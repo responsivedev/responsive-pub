@@ -150,6 +150,7 @@ class LwtWriterTest {
           null,
           null,
           null,
+          null,
           null
       );
     }

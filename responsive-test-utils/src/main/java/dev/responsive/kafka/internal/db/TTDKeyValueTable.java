@@ -15,6 +15,8 @@ package dev.responsive.kafka.internal.db;
 import dev.responsive.kafka.internal.clients.TTDCassandraClient;
 import dev.responsive.kafka.internal.db.inmemory.InMemoryKVTable;
 import dev.responsive.kafka.internal.db.spec.RemoteTableSpec;
+import dev.responsive.kafka.internal.utils.Utils;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
@@ -52,6 +54,18 @@ public class TTDKeyValueTable extends InMemoryKVTable {
     final long currentTimeMs = Math.max(streamTimeMs, client.currentWallClockTimeMs());
 
     return super.range(kafkaPartition, from, to, currentTimeMs);
+  }
+
+  @Override
+  public <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefix(
+      final P prefix,
+      final PS prefixKeySerializer,
+      final int kafkaPartition,
+      final long streamTimeMs
+  ) {
+    final Bytes from = Bytes.wrap(prefixKeySerializer.serialize(null, prefix));
+    final Bytes to = Utils.incrementWithoutOverflow(from);
+    return range(kafkaPartition, from, to, streamTimeMs);
   }
 
   @Override

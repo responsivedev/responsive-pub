@@ -40,6 +40,7 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import org.apache.kafka.common.serialization.BytesSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.hamcrest.Matchers;
@@ -196,6 +197,40 @@ public class CassandraKVTableIntegrationTest {
     }
   }
 
+  @Test
+  public void shouldReturnPrefixScanAcrossMultipleSubPartitions() {
+    // Given:
+    final RemoteKVTable<BoundStatement> table = createTable();
+
+    final List<BoundStatement> inserts = List.of(
+        table.insert(0, bytes(1, 2), new byte[]{0x1}, 0L), // excluded by prefix
+        table.insert(0, bytes(2), new byte[]{0x1}, 0L),
+        table.insert(0, bytes(2, 1), new byte[]{0x1}, 0L),
+        table.insert(1, bytes(2, 2), new byte[]{0x1}, 0L), // excluded by partition
+        table.insert(0, bytes(2, 2, 3), new byte[]{0x1}, 0L),
+        table.insert(0, bytes(3), new byte[]{0x1}, 0L) // excluded by prefix
+    );
+    inserts.forEach(client::execute);
+
+    try (
+        final KeyValueIterator<Bytes, byte[]> range = table.prefix(
+            bytes(2),
+            new BytesSerializer(),
+            0,
+            0L
+        )
+    ) {
+
+      // Then:
+      final List<Bytes> keys = new ArrayList<>();
+      range.forEachRemaining(kv -> keys.add(kv.key));
+      assertThat(keys.toString(), keys, hasSize(3));
+      assertThat(keys.get(0), equalTo(bytes(2)));
+      assertThat(keys.get(1), equalTo(bytes(2, 1)));
+      assertThat(keys.get(2), equalTo(bytes(2, 2, 3)));
+    }
+  }
+
   @SuppressWarnings("OptionalGetWithoutIsPresent")
   @Test
   public void shouldConfigureDefaultTtl()  {
@@ -325,4 +360,15 @@ public class CassandraKVTableIntegrationTest {
     assertThat(val, Matchers.is(valBytes));
   }
 
+  private byte[] byteArray(int... bytes) {
+    byte[] byteArray = new byte[bytes.length];
+    for (int i = 0; i < bytes.length; i++) {
+      byteArray[i] = (byte) bytes[i];
+    }
+    return byteArray;
+  }
+
+  private Bytes bytes(int... bytes) {
+    return Bytes.wrap(byteArray(bytes));
+  }
 }

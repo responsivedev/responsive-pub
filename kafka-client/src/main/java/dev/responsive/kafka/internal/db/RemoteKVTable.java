@@ -12,6 +12,7 @@
 
 package dev.responsive.kafka.internal.db;
 
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
@@ -77,6 +78,13 @@ public interface RemoteKVTable<S> extends RemoteTable<Bytes, S> {
    * @return an iterator of all key-value pairs
    */
   KeyValueIterator<Bytes, byte[]> all(int kafkaPartition, long streamTimeMs);
+
+  <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefix(
+      P prefix,
+      PS prefixKeySerializer,
+      int kafkaPartition,
+      long streamTimeMs
+  );
 
   /**
    *  An approximate count of the total number of entries across all sub-partitions

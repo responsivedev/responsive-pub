@@ -24,6 +24,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.slf4j.Logger;
@@ -117,7 +118,17 @@ public class RS3KVTable implements RemoteKVTable<WalEntry> {
       final int kafkaPartition,
       final Bytes from,
       final Bytes to,
-      final long minValidTs
+      final long streamTimeMs
+  ) {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefix(
+      final P prefix,
+      final PS prefixKeySerializer,
+      final int kafkaPartition,
+      final long streamTimeMs
   ) {
     throw new UnsupportedOperationException();
   }
