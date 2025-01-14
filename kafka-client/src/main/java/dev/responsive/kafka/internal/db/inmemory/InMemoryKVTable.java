@@ -123,7 +123,7 @@ public class InMemoryKVTable implements RemoteKVTable<BoundStatement> {
       view = view.tailMap(from, true);
     }
     if (to != null) {
-      view = view .headMap(to, endInclusive);
+      view = view.headMap(to, endInclusive);
     }
 
     final var iter = view.entrySet().iterator();
