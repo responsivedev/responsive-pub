@@ -65,7 +65,7 @@ public class TTDWindowTable extends TTDTable<WindowedKey>
       final int kafkaPartition,
       final WindowedKey key,
       final byte[] value,
-      final long epochMillis
+      final long timestampMs
   ) {
     stub.put(key, value);
     return null;

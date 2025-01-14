@@ -157,7 +157,7 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
 
   @Override
   public byte[] get(final int kafkaPartition, final Bytes key, final long streamTimeMs) {
-    final long minValidTs = ttlResolver.isEmpty() ? -1L : streamTimeMs - defaultTtlMs;
+    final Date minValidTs = new Date(ttlResolver.isEmpty() ? -1L : streamTimeMs - defaultTtlMs);
 
     final KVDoc v = docs.find(Filters.and(
         Filters.eq(KVDoc.ID, keyCodec.encode(key)),
@@ -173,7 +173,7 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
       final Bytes to,
       final long streamTimeMs
   ) {
-    final long minValidTs = ttlResolver.isEmpty() ? -1L : streamTimeMs - defaultTtlMs;
+    final Date minValidTs = new Date(ttlResolver.isEmpty() ? -1L : streamTimeMs - defaultTtlMs);
 
     final FindIterable<KVDoc> result = docs.find(
         Filters.and(
@@ -194,7 +194,7 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
 
   @Override
   public KeyValueIterator<Bytes, byte[]> all(final int kafkaPartition, final long streamTimeMs) {
-    final long minValidTs = ttlResolver.isEmpty() ? -1L : streamTimeMs - defaultTtlMs;
+    final Date minValidTs = new Date(ttlResolver.isEmpty() ? -1L : streamTimeMs - defaultTtlMs);
 
     final FindIterable<KVDoc> result = docs.find(Filters.and(
         Filters.not(Filters.exists(KVDoc.TOMBSTONE_TS)),
@@ -215,9 +215,10 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
       final int kafkaPartition,
       final Bytes key,
       final byte[] value,
-      final long epochMillis
+      final long timestampMs
   ) {
     final long epoch = kafkaPartitionToEpoch.get(kafkaPartition);
+    final Date timestamp = new Date(timestampMs);
     return new UpdateOneModel<>(
         Filters.and(
             Filters.eq(KVDoc.ID, keyCodec.encode(key)),
@@ -226,7 +227,7 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
         Updates.combine(
             Updates.set(KVDoc.VALUE, value),
             Updates.set(KVDoc.EPOCH, epoch),
-            Updates.set(KVDoc.TIMESTAMP, epochMillis),
+            Updates.set(KVDoc.TIMESTAMP, timestamp),
             Updates.set(KVDoc.KAFKA_PARTITION, kafkaPartition),
             Updates.unset(KVDoc.TOMBSTONE_TS)
         ),

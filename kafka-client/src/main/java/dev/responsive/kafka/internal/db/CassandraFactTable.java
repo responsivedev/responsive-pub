@@ -301,7 +301,7 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
       final int kafkaPartition,
       final Bytes key,
       final byte[] value,
-      final long epochMillis
+      final long timestampMs
   ) {
     if (ttlResolver.isPresent()) {
       final Optional<TtlDuration> rowTtl = ttlResolver.get().computeTtl(key, value);
@@ -319,7 +319,7 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
             .bind()
             .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
             .setByteBuffer(DATA_VALUE.bind(), ByteBuffer.wrap(value))
-            .setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(epochMillis))
+            .setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(timestampMs))
             .setInt(TTL_SECONDS.bind(), rowTtlOverrideSeconds);
       }
     }
@@ -328,7 +328,7 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
         .bind()
         .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
         .setByteBuffer(DATA_VALUE.bind(), ByteBuffer.wrap(value))
-        .setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(epochMillis));
+        .setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(timestampMs));
   }
 
   @Override

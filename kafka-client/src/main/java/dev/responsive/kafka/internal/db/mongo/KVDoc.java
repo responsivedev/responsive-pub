@@ -34,7 +34,7 @@ public class KVDoc {
   String id;
   byte[] value;
   long epoch;
-  long timestamp;
+  Date timestamp;
   int kafkaPartition;
   Date tombstoneTs;
 
@@ -52,7 +52,7 @@ public class KVDoc {
     this.id = id;
     this.value = value;
     this.epoch = epoch;
-    this.timestamp = timestamp;
+    this.timestamp = new Date(timestamp);
     this.kafkaPartition = kafkaPartition;
   }
 
@@ -72,7 +72,7 @@ public class KVDoc {
     this.epoch = epoch;
   }
 
-  public void setTimestamp(final long timestamp) {
+  public void setTimestamp(final Date timestamp) {
     this.timestamp = timestamp;
   }
 
@@ -84,7 +84,7 @@ public class KVDoc {
     return epoch;
   }
 
-  public long getTimestamp() {
+  public Date getTimestamp() {
     return timestamp;
   }
 

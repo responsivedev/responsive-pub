@@ -31,8 +31,8 @@ public interface RemoteTable<K, S> {
    * @param kafkaPartition  the kafka partition
    * @param key             the data key
    * @param value           the data value
-   * @param epochMillis     the event time with which this event
-   *                      was inserted in epochMillis
+   * @param timestampMs     the timestamp of the event being processed that
+   *                        triggered this write
    *
    * @return a statement that, when executed, will insert the entry
    *         corresponding to the given {@code kafkaPartition} and
@@ -43,7 +43,7 @@ public interface RemoteTable<K, S> {
       final int kafkaPartition,
       final K key,
       final byte[] value,
-      final long epochMillis
+      final long timestampMs
   );
 
   /**

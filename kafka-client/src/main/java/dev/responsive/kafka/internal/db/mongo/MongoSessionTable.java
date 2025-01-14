@@ -277,7 +277,7 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
    * @param kafkaPartition the kafka partition
    * @param sessionKey     the windowed data key
    * @param value          the data value
-   * @param epochMillis    the timestamp of the event
+   * @param timestampMs    the timestamp of the event
    * @return a statement that, when executed, will insert the value
    * for this key and partition into the table.
    * Note that the key in this case is a "session" key, where
@@ -289,7 +289,7 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
       final int kafkaPartition,
       final SessionKey sessionKey,
       final byte[] value,
-      final long epochMillis
+      final long timestampMs
   ) {
     final var partitionSegments = kafkaPartitionToSegments.get(kafkaPartition);
 
