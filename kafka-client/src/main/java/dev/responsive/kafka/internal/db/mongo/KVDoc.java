@@ -46,13 +46,13 @@ public class KVDoc {
       @BsonProperty(ID) String id,
       @BsonProperty(VALUE) byte[] value,
       @BsonProperty(EPOCH) long epoch,
-      @BsonProperty(TIMESTAMP) long timestamp,
+      @BsonProperty(TIMESTAMP) Date timestamp,
       @BsonProperty(KAFKA_PARTITION) int kafkaPartition
   ) {
     this.id = id;
     this.value = value;
     this.epoch = epoch;
-    this.timestamp = new Date(timestamp);
+    this.timestamp = timestamp;
     this.kafkaPartition = kafkaPartition;
   }
 
