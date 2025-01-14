@@ -12,17 +12,23 @@
 
 package dev.responsive.kafka.internal.db.mongo;
 
+import static com.mongodb.MongoClientSettings.getDefaultCodecRegistry;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_ENDPOINT_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_TOMBSTONE_RETENTION_SEC_CONFIG;
 import static dev.responsive.kafka.internal.stores.TtlResolver.NO_TTL;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.defaultOnlyTtl;
 import static dev.responsive.kafka.testutils.Matchers.sameKeyValue;
+import static org.bson.codecs.configuration.CodecRegistries.fromProviders;
+import static org.bson.codecs.configuration.CodecRegistries.fromRegistries;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
 
 import com.mongodb.client.MongoClient;
+import com.mongodb.client.model.Filters;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
@@ -31,6 +37,7 @@ import dev.responsive.kafka.testutils.IntegrationTestUtils;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
 import dev.responsive.kafka.testutils.ResponsiveExtension;
 import java.time.Duration;
+import java.util.Date;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -39,6 +46,9 @@ import java.util.concurrent.ExecutionException;
 import java.util.function.BooleanSupplier;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.bson.codecs.configuration.CodecProvider;
+import org.bson.codecs.configuration.CodecRegistry;
+import org.bson.codecs.pojo.PojoCodecProvider;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
@@ -402,7 +412,66 @@ class MongoKVTableTest {
   }
 
   @Test
-  @Disabled("fix this when we fix https://github.com/slatedb/slatedb/issues/442")
+  public void shouldUseDateFormatForTtlFields() {
+    final var keyCodec = new StringKeyCodec();
+    final CodecProvider pojoCodecProvider = PojoCodecProvider.builder().automatic(true).build();
+    final CodecRegistry pojoCodecRegistry = fromRegistries(
+        getDefaultCodecRegistry(),
+        fromProviders(pojoCodecProvider)
+    );
+
+    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, NO_TTL, config);
+    final var writerFactory = table.init(0);
+    final var writer = writerFactory.createWriter(0, 0);
+
+    final Bytes key = bytes(1);
+    final byte[] value = byteArray(1);
+    final long timestampMs = 100L;
+
+    writer.insert(key, value, timestampMs);
+    writer.flush();
+
+    final var database = client
+        .getDatabase(name)
+        .withCodecRegistry(pojoCodecRegistry)
+        .getCollection("kv_data", KVDoc.class);
+
+    final Date minValidTs = new Date(0L);
+
+    final KVDoc record = database.find(Filters.and(
+        Filters.eq(KVDoc.ID, keyCodec.encode(key)),
+        Filters.gte(KVDoc.TIMESTAMP, minValidTs)
+    )).first();
+
+    if (record == null) {
+      throw new AssertionError("Could not find record in database");
+    } else {
+      assertThat(record.getTimestamp(), equalTo(new Date(timestampMs)));
+      assertThat(record.getTombstoneTs(), nullValue());
+    }
+
+    writer.delete(key);
+    writer.flush();
+
+    final KVDoc deletedRecord = database.find(Filters.eq(KVDoc.ID, keyCodec.encode(key))).first();
+
+    if (deletedRecord == null) {
+      throw new AssertionError("Could not find tombstone record in database");
+    } else {
+      assertThat(deletedRecord.getTimestamp(), nullValue());
+      assertThat(deletedRecord.getTombstoneTs(), notNullValue()); // set to current time of delete
+    }
+  }
+
+  /**
+   * Leave this disabled since it takes about a full minute to run, and only really
+   * verifies that Mongo's internal TTL mechanism works on timestamps in the Date
+   * format, which is unlikely to change/break over time.
+   * Note that the above test #shouldUseDateFormatForTtlFields ensures that our
+   * Mongo implementation uses the Date format, and this test does run regularly.
+   */
+  @Disabled
+  @Test
   public void shouldExpireRecords() {
     props.put(MONGO_TOMBSTONE_RETENTION_SEC_CONFIG, 1);
     final ResponsiveConfig config = ResponsiveConfig.responsiveConfig(props);
@@ -423,9 +492,6 @@ class MongoKVTableTest {
     };
 
     // Then:
-    // TODO(agavra): we need to wait up to at least one minute to make sure that the ttl
-    // background job kicks in. Unfortunately I don't see a better way to do this so we
-    // may want to consider leaving this test disabled for CI/CD
     IntegrationTestUtils.awaitCondition(isExpired, Duration.ofMinutes(2), Duration.ofSeconds(1));
   }
 

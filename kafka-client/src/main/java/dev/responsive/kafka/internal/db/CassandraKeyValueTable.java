@@ -434,14 +434,14 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
       final int kafkaPartition,
       final Bytes key,
       final byte[] value,
-      final long epochMillis
+      final long timestampMs
   ) {
     final int tablePartition = partitioner.tablePartition(kafkaPartition, key);
     return insert
         .bind()
         .setInt(PARTITION_KEY.bind(), tablePartition)
         .setByteBuffer(DATA_KEY.bind(), ByteBuffer.wrap(key.get()))
-        .setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(epochMillis))
+        .setInstant(TIMESTAMP.bind(), Instant.ofEpochMilli(timestampMs))
         .setByteBuffer(DATA_VALUE.bind(), ByteBuffer.wrap(value));
   }
 

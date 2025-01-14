@@ -748,7 +748,7 @@ public class CassandraWindowTable implements RemoteWindowTable<BoundStatement> {
    * @param kafkaPartition the kafka partition
    * @param key            the data key
    * @param value          the data value
-   * @param epochMillis    the timestamp of the event
+   * @param timestampMs    the timestamp of the event
    * @return a statement that, when executed, will insert the row
    *         matching {@code partitionKey} and {@code key} in the
    *         {@code table} with value {@code value}. Note that the
@@ -761,7 +761,7 @@ public class CassandraWindowTable implements RemoteWindowTable<BoundStatement> {
       final int kafkaPartition,
       final WindowedKey key,
       final byte[] value,
-      final long epochMillis
+      final long timestampMs
   ) {
     final Segmenter.SegmentPartition
         remotePartition = partitioner.tablePartition(kafkaPartition, key);

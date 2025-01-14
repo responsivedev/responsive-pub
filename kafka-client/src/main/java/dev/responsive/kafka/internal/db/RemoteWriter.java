@@ -23,7 +23,7 @@ import java.util.concurrent.CompletionStage;
  */
 public interface RemoteWriter<K, P> {
 
-  void insert(final K key, final byte[] value, long epochMillis);
+  void insert(final K key, final byte[] value, long timestampMs);
 
   void delete(final K key);
 

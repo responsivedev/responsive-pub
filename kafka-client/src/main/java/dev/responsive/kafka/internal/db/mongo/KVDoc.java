@@ -34,7 +34,7 @@ public class KVDoc {
   String id;
   byte[] value;
   long epoch;
-  long timestamp;
+  Date timestamp;
   int kafkaPartition;
   Date tombstoneTs;
 
@@ -46,7 +46,7 @@ public class KVDoc {
       @BsonProperty(ID) String id,
       @BsonProperty(VALUE) byte[] value,
       @BsonProperty(EPOCH) long epoch,
-      @BsonProperty(TIMESTAMP) long timestamp,
+      @BsonProperty(TIMESTAMP) Date timestamp,
       @BsonProperty(KAFKA_PARTITION) int kafkaPartition
   ) {
     this.id = id;
@@ -72,7 +72,7 @@ public class KVDoc {
     this.epoch = epoch;
   }
 
-  public void setTimestamp(final long timestamp) {
+  public void setTimestamp(final Date timestamp) {
     this.timestamp = timestamp;
   }
 
@@ -84,7 +84,7 @@ public class KVDoc {
     return epoch;
   }
 
-  public long getTimestamp() {
+  public Date getTimestamp() {
     return timestamp;
   }
 

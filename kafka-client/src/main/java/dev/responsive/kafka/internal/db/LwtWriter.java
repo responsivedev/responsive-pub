@@ -74,8 +74,8 @@ public class LwtWriter<K, P> implements RemoteWriter<K, P> {
   }
 
   @Override
-  public void insert(final K key, final byte[] value, long epochMillis) {
-    statements.add(table.insert(kafkaPartition, key, value, epochMillis));
+  public void insert(final K key, final byte[] value, long timestampMs) {
+    statements.add(table.insert(kafkaPartition, key, value, timestampMs));
   }
 
   @Override

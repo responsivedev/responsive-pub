@@ -135,10 +135,10 @@ public class InMemoryKVTable implements RemoteKVTable<BoundStatement> {
   }
 
   @Override
-  public BoundStatement insert(int kafkaPartition, Bytes key, byte[] value, long epochMillis) {
+  public BoundStatement insert(int kafkaPartition, Bytes key, byte[] value, long timestampMs) {
     checkKafkaPartition(kafkaPartition);
 
-    store.put(key, new Value(epochMillis, value));
+    store.put(key, new Value(timestampMs, value));
     return null;
   }
 
@@ -195,8 +195,8 @@ public class InMemoryKVTable implements RemoteKVTable<BoundStatement> {
     ) {
       return new RemoteWriter<>() {
         @Override
-        public void insert(Bytes key, byte[] value, long epochMillis) {
-          InMemoryKVTable.this.insert(tablePartition, key, value, epochMillis);
+        public void insert(Bytes key, byte[] value, long timestampMs) {
+          InMemoryKVTable.this.insert(tablePartition, key, value, timestampMs);
         }
 
         @Override

@@ -106,6 +106,7 @@ import org.slf4j.LoggerFactory;
 public class AsyncProcessorIntegrationTest {
   private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
+  // TODO: consider running a mix of mongo and cassandra for the async tests
   @RegisterExtension
   static ResponsiveExtension EXTENSION = new ResponsiveExtension(StorageBackend.CASSANDRA);
 
@@ -139,6 +140,9 @@ public class AsyncProcessorIntegrationTest {
   private static final int ASYNC_THREADS_PER_STREAMTHREAD = 5;
   private static final int TASKS_PER_STREAMTHREAD = 3; // approximate/assumes balanced partitioning
   private static final int INPUT_RECORDS_PER_KEY = 10;
+  // test shouldn't ever actually apply this ttl since its duration is longer than the test,
+  // we just enable it here to flush out any weird interactions between ttl and async
+  private static final Duration TTL = Duration.ofDays(1);
 
   private String inputTopic;
   private String outputTopic;
@@ -261,7 +265,7 @@ public class AsyncProcessorIntegrationTest {
                       sleepForMs(1L);
                       return new SimpleProcessorOutput<>(val.getValue() + "-S1:" + newSum, newSum);
                     },
-                    ResponsiveKeyValueParams.fact(asyncStore1),
+                    ResponsiveKeyValueParams.fact(asyncStore1).withTimeToLive(TTL),
                     Serdes.Integer()
                 )),
             Named.as("S1"),
@@ -293,7 +297,7 @@ public class AsyncProcessorIntegrationTest {
                       sleepForMs(1L);
                       return new SimpleProcessorOutput<>(r.value() + "-S2:" + newSum, newSum);
                     },
-                    ResponsiveKeyValueParams.fact(asyncStore2),
+                    ResponsiveKeyValueParams.fact(asyncStore2).withTimeToLive(TTL),
                     Serdes.Integer()
                 )),
             Named.as("S2"),
@@ -383,7 +387,7 @@ public class AsyncProcessorIntegrationTest {
         .processValues(
             new SimpleStatefulProcessorSupplier<>(
                 this::computeNewValueForSourceProcessor,
-                ResponsiveKeyValueParams.fact(inKVStore),
+                ResponsiveKeyValueParams.fact(inKVStore).withTimeToLive(TTL),
                 Serdes.String()),
             inKVStore)
         .processValues(
@@ -394,7 +398,7 @@ public class AsyncProcessorIntegrationTest {
         .processValues(
             new SimpleStatefulProcessorSupplier<>(
                 this::computeNewValueForSinkProcessor,
-                ResponsiveKeyValueParams.fact(outKVStore),
+                ResponsiveKeyValueParams.fact(outKVStore).withTimeToLive(TTL),
                 Serdes.String(),
                 latestValues,
                 inputRecordsLatch),
@@ -502,14 +506,14 @@ public class AsyncProcessorIntegrationTest {
         .processValues(
             new SimpleStatefulProcessorSupplier<>(
                 this::computeNewValueForSourceProcessor,
-                ResponsiveKeyValueParams.fact(inKVStore),
+                ResponsiveKeyValueParams.fact(inKVStore).withTimeToLive(TTL),
                 Serdes.String()),
             inKVStore)
         .processValues(
             createAsyncProcessorSupplier(
                 new SimpleStatefulProcessorSupplier<>(
                     this::computeNewValueForSingleStatefulAsyncProcessor,
-                    ResponsiveKeyValueParams.fact(asyncStore1),
+                    ResponsiveKeyValueParams.fact(asyncStore1).withTimeToLive(TTL),
                     Serdes.String(),
                     processed
                 )),
@@ -518,7 +522,7 @@ public class AsyncProcessorIntegrationTest {
         .processValues(
             new SimpleStatefulProcessorSupplier<>(
                 this::computeNewValueForSinkProcessor,
-                ResponsiveKeyValueParams.fact(outKVStore),
+                ResponsiveKeyValueParams.fact(outKVStore).withTimeToLive(TTL),
                 Serdes.String(),
                 latestValues,
                 inputRecordsLatch),
@@ -578,7 +582,9 @@ public class AsyncProcessorIntegrationTest {
 
     // this is the old way of connecting StoreBuilders to a topology, which async does not support
     builder.addStateStore(ResponsiveStores.timestampedKeyValueStoreBuilder(
-        ResponsiveStores.keyValueStore(ResponsiveKeyValueParams.fact(asyncStore1)),
+        ResponsiveStores.keyValueStore(
+            ResponsiveKeyValueParams.fact(asyncStore1).withTimeToLive(TTL)
+        ),
         Serdes.String(),
         Serdes.String()));
 

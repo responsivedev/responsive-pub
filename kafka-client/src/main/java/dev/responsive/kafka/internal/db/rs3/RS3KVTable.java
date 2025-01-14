@@ -143,7 +143,7 @@ public class RS3KVTable implements RemoteKVTable<WalEntry> {
       final int kafkaPartition,
       final Bytes key,
       final byte[] value,
-      final long epochMillis
+      final long timestampMs
   ) {
     return new Put(
         key.get(),

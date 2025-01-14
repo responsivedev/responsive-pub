@@ -159,7 +159,8 @@ class LwtWriterTest {
         final int kafkaPartition,
         final Bytes key,
         final byte[] value,
-        long epochMillis) {
+        long timestampMs
+    ) {
       return capturingStatement("insertData", new Object[]{name(), kafkaPartition, key, value});
     }
 

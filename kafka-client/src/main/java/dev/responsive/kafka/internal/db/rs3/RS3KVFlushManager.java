@@ -143,7 +143,7 @@ class RS3KVFlushManager extends KVFlushManager {
     }
 
     @Override
-    public void insert(final Bytes key, final byte[] value, final long epochMillis) {
+    public void insert(final Bytes key, final byte[] value, final long timestampMs) {
     }
 
     @Override
@@ -196,8 +196,8 @@ class RS3KVFlushManager extends KVFlushManager {
     }
 
     @Override
-    public void insert(final Bytes key, final byte[] value, final long epochMillis) {
-      streamSender.sendNext(table.insert(kafkaPartition, key, value, epochMillis));
+    public void insert(final Bytes key, final byte[] value, final long timestampMs) {
+      streamSender.sendNext(table.insert(kafkaPartition, key, value, timestampMs));
     }
 
     @Override
