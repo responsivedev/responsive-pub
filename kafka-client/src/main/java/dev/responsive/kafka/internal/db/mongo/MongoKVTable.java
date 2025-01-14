@@ -38,7 +38,9 @@ import dev.responsive.kafka.internal.stores.TtlResolver;
 import dev.responsive.kafka.internal.utils.Iterators;
 import dev.responsive.kafka.internal.utils.Utils;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -175,9 +177,9 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
       final Bytes to,
       final long streamTimeMs
   ) {
-    return doRange(kafkaPartition, from, Filters.lte(KVDoc.ID, keyCodec.encode(to)), streamTimeMs);
+    final var toFilter = to == null ? null : Filters.lte(KVDoc.ID, keyCodec.encode(to));
+    return doRange(kafkaPartition, from, toFilter, streamTimeMs);
   }
-
 
   @Override
   public <PS extends Serializer<P>, P> KeyValueIterator<Bytes, byte[]> prefix(
@@ -189,7 +191,8 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
     final Bytes from = Bytes.wrap(prefixKeySerializer.serialize(null, prefix));
     final Bytes to = Utils.incrementWithoutOverflow(from);
 
-    return doRange(kafkaPartition, from, Filters.lt(KVDoc.ID, keyCodec.encode(to)), streamTimeMs);
+    final var toFilter = to == null ? null : Filters.lt(KVDoc.ID, keyCodec.encode(to));
+    return doRange(kafkaPartition, from, toFilter, streamTimeMs);
   }
 
   private KeyValueIterator<Bytes, byte[]> doRange(
@@ -200,15 +203,21 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
   ) {
     final Date minValidTs = new Date(ttlResolver.isEmpty() ? -1L : streamTimeMs - defaultTtlMs);
 
-    final FindIterable<KVDoc> result = docs.find(
-        Filters.and(
-            Filters.gte(KVDoc.ID, keyCodec.encode(from)),
-            toFilter,
-            Filters.not(Filters.exists(KVDoc.TOMBSTONE_TS)),
-            Filters.gte(KVDoc.TIMESTAMP, minValidTs),
-            Filters.eq(KVDoc.KAFKA_PARTITION, kafkaPartition)
-        )
-    );
+    final var filters = new ArrayList<>(List.of(
+        Filters.not(Filters.exists(KVDoc.TOMBSTONE_TS)),
+        Filters.gte(KVDoc.TIMESTAMP, minValidTs),
+        Filters.eq(KVDoc.KAFKA_PARTITION, kafkaPartition)
+    ));
+
+    if (from != null) {
+      filters.add(Filters.gte(KVDoc.ID, keyCodec.encode(from)));
+    }
+
+    if (toFilter != null) {
+      filters.add(toFilter);
+    }
+
+    final FindIterable<KVDoc> result = docs.find(Filters.and(filters));
     return Iterators.kv(
         result.iterator(),
         doc -> new KeyValue<>(

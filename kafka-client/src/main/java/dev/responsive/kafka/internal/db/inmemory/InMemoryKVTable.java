@@ -118,11 +118,15 @@ public class InMemoryKVTable implements RemoteKVTable<BoundStatement> {
 
     checkKafkaPartition(kafkaPartition);
 
-    final var iter = store
-        .tailMap(from, true)
-        .headMap(to, endInclusive)
-        .entrySet()
-        .iterator();
+    var view = store;
+    if (from != null) {
+      view = view.tailMap(from, true);
+    }
+    if (to != null) {
+      view = view .headMap(to, endInclusive);
+    }
+
+    final var iter = view.entrySet().iterator();
 
     final long minValidTs = ttlResolver.isEmpty()
         ? -1L

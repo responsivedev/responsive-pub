@@ -269,6 +269,67 @@ class MongoKVTableTest {
   }
 
   @Test
+  public void shouldHandleRangeScansCorrectlyWithNullFromKey() {
+    // Given:
+    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, NO_TTL, config);
+
+    final var writerFactory0 = table.init(0);
+    final var writer0 = writerFactory0.createWriter(0, 0);
+
+    writer0.insert(bytes(10, 11), byteArray(1), 100);
+    writer0.insert(bytes(10, 11, 12), byteArray(2), 100);
+    writer0.insert(bytes(11, 12, 13), byteArray(3), 100);
+
+    writer0.flush();
+
+    // When:
+    final var iter = table.range(0, null, bytes(11, 12, 14), -1);
+
+    // Then:
+    final List<KeyValue<Bytes, byte[]>> returned = new LinkedList<>();
+    while (iter.hasNext()) {
+      returned.add(iter.next());
+    }
+    assertThat(returned, contains(
+        sameKeyValue(new KeyValue<>(bytes(10, 11), byteArray(1))),
+        sameKeyValue(new KeyValue<>(bytes(10, 11, 12), byteArray(2))),
+        sameKeyValue(new KeyValue<>(bytes(11, 12, 13), byteArray(3)))
+    ));
+    iter.close();
+  }
+
+  @Test
+  public void shouldHandleRangeScansCorrectlyWithNullToKey() {
+    // Given:
+    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, NO_TTL, config);
+
+    final var writerFactory0 = table.init(0);
+    final var writer0 = writerFactory0.createWriter(0, 0);
+
+    writer0.insert(bytes(10, 11), byteArray(1), 100);
+    writer0.insert(bytes(10, 11, 12), byteArray(2), 100);
+    writer0.insert(bytes(11, 12, 13), byteArray(3), 100);
+    writer0.insert(bytes(11, 13, 14), byteArray(4), 100);
+
+    writer0.flush();
+
+    // When:
+    final var iter = table.range(0, bytes(10, 11, 12), null, -1);
+
+    // Then:
+    final List<KeyValue<Bytes, byte[]>> returned = new LinkedList<>();
+    while (iter.hasNext()) {
+      returned.add(iter.next());
+    }
+    assertThat(returned, contains(
+        sameKeyValue(new KeyValue<>(bytes(10, 11, 12), byteArray(2))),
+        sameKeyValue(new KeyValue<>(bytes(11, 12, 13), byteArray(3))),
+        sameKeyValue(new KeyValue<>(bytes(11, 13, 14), byteArray(4)))
+    ));
+    iter.close();
+  }
+
+  @Test
   public void shouldHandlePartitionedPrefixScansCorrectly() {
     // Given:
     final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, NO_TTL, config);
@@ -300,6 +361,37 @@ class MongoKVTableTest {
         sameKeyValue(new KeyValue<>(bytes(10, 11, 12, 13), byteArray(2))),
         sameKeyValue(new KeyValue<>(bytes(10, 11, 13), byteArray(3))),
         sameKeyValue(new KeyValue<>(bytes(10, 11, 13, 14), byteArray(4)))
+    ));
+    iter.close();
+  }
+
+  @Test
+  public void shouldHandlePartitionedPrefixScansCorrectlyWithNullUpperBound() {
+    // Given:
+    final MongoKVTable table = new MongoKVTable(client, name, UNSHARDED, NO_TTL, config);
+
+    final var writerFactory0 = table.init(0);
+    final var writer0 = writerFactory0.createWriter(0, 0);
+    final var writerFactory1 = table.init(1);
+    final var writer1 = writerFactory1.createWriter(1, 0);
+
+    writer0.insert(bytes(-1, -1, -1), byteArray(1), 100);
+    writer0.insert(bytes(-1, -1, -1, -1), byteArray(2), 100);
+
+    writer0.flush();
+    writer1.flush();
+
+    // When:
+    final var iter = table.prefix(bytes(-1, -1, -1), new BytesSerializer(), 0, -1);
+
+    // Then:
+    final List<KeyValue<Bytes, byte[]>> returned = new LinkedList<>();
+    while (iter.hasNext()) {
+      returned.add(iter.next());
+    }
+    assertThat(returned, contains(
+        sameKeyValue(new KeyValue<>(bytes(-1, -1, -1), byteArray(1))),
+        sameKeyValue(new KeyValue<>(bytes(-1, -1, -1, -1), byteArray(2)))
     ));
     iter.close();
   }

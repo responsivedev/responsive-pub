@@ -78,6 +78,84 @@ class InMemoryKVTableTest {
   }
 
   @Test
+  public void shouldDoRangeScanWithNullFrom() {
+    // given:
+    writer.insert(Bytes.wrap("aa".getBytes()), "val0".getBytes(), 100);
+    writer.insert(Bytes.wrap("aaa".getBytes()), "val1".getBytes(), 100);
+    writer.insert(Bytes.wrap("bbbb".getBytes()), "val2".getBytes(), 100);
+    writer.insert(Bytes.wrap("cc".getBytes()), "val3".getBytes(), 100);
+    writer.insert(Bytes.wrap("ccddd".getBytes()), "val4".getBytes(), 100);
+    writer.flush();
+
+    // when:
+    final var iter = table.range(
+        0,
+        null,
+        Bytes.wrap("cc".getBytes()),
+        0
+    );
+
+    // then:
+    assertThat(
+        iter.next(),
+        sameKeyValue(new KeyValue<>(Bytes.wrap("aa".getBytes()), "val0".getBytes()))
+    );
+    assertThat(
+        iter.next(),
+        sameKeyValue(new KeyValue<>(Bytes.wrap("aaa".getBytes()), "val1".getBytes()))
+    );
+    assertThat(
+        iter.next(),
+        sameKeyValue(new KeyValue<>(Bytes.wrap("bbbb".getBytes()), "val2".getBytes()))
+    );
+    assertThat(
+        iter.next(),
+        sameKeyValue(new KeyValue<>(Bytes.wrap("cc".getBytes()), "val3".getBytes()))
+    );
+    assertThat(iter.hasNext(), is(false));
+    iter.close();
+  }
+
+  @Test
+  public void shouldDoRangeScanWithNullTo() {
+    // given:
+    writer.insert(Bytes.wrap("aa".getBytes()), "val0".getBytes(), 100);
+    writer.insert(Bytes.wrap("aaa".getBytes()), "val1".getBytes(), 100);
+    writer.insert(Bytes.wrap("bbbb".getBytes()), "val2".getBytes(), 100);
+    writer.insert(Bytes.wrap("cc".getBytes()), "val3".getBytes(), 100);
+    writer.insert(Bytes.wrap("ccddd".getBytes()), "val4".getBytes(), 100);
+    writer.flush();
+
+    // when:
+    final var iter = table.range(
+        0,
+        Bytes.wrap("aaa".getBytes()),
+        null,
+        0
+    );
+
+    // then:
+    assertThat(
+        iter.next(),
+        sameKeyValue(new KeyValue<>(Bytes.wrap("aaa".getBytes()), "val1".getBytes()))
+    );
+    assertThat(
+        iter.next(),
+        sameKeyValue(new KeyValue<>(Bytes.wrap("bbbb".getBytes()), "val2".getBytes()))
+    );
+    assertThat(
+        iter.next(),
+        sameKeyValue(new KeyValue<>(Bytes.wrap("cc".getBytes()), "val3".getBytes()))
+    );
+    assertThat(
+        iter.next(),
+        sameKeyValue(new KeyValue<>(Bytes.wrap("ccddd".getBytes()), "val4".getBytes()))
+    );
+    assertThat(iter.hasNext(), is(false));
+    iter.close();
+  }
+
+  @Test
   public void shouldDoPrefixScan() {
     // given:
     writer.insert(bytes(1, 2), new byte[]{0x1}, 100);
@@ -94,6 +172,23 @@ class InMemoryKVTableTest {
     assertThat(iter.next(), sameKeyValue(new KeyValue<>(bytes(2), new byte[] {0x1})));
     assertThat(iter.next(), sameKeyValue(new KeyValue<>(bytes(2, 2), new byte[] {0x1})));
     assertThat(iter.next(), sameKeyValue(new KeyValue<>(bytes(2, 2, 3), new byte[] {0x1})));
+    assertThat(iter.hasNext(), is(false));
+    iter.close();
+  }
+
+  @Test
+  public void shouldDoPrefixScanWithOverflow() {
+    // given:
+    writer.insert(bytes(-1, -1, -1), new byte[]{0x1}, 100);
+    writer.insert(bytes(-1), new byte[]{0x1}, 100);
+    writer.flush();
+
+    // when:
+    final var iter = table.prefix(bytes(-1), new BytesSerializer(), 0, 0);
+
+    // then:
+    assertThat(iter.next(), sameKeyValue(new KeyValue<>(bytes(-1), new byte[] {0x1})));
+    assertThat(iter.next(), sameKeyValue(new KeyValue<>(bytes(-1, -1, -1), new byte[] {0x1})));
     assertThat(iter.hasNext(), is(false));
     iter.close();
   }

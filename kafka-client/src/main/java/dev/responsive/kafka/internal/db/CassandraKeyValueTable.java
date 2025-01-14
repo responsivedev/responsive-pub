@@ -402,7 +402,7 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
       final Bytes to,
       final long streamTimeMs
   ) {
-    return doRange(kafkaPartition, from, to, streamTimeMs, range);
+    return doRange(kafkaPartition, from, to, streamTimeMs, this.range);
   }
 
   @Override
@@ -414,6 +414,10 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
   ) {
     final Bytes from = Bytes.wrap(prefixKeySerializer.serialize(null, prefix));
     final Bytes to = Utils.incrementWithoutOverflow(from);
+    if (to == null) {
+      throw new UnsupportedOperationException("Overflow in from key " + from
+          + " when issuing prefix scans. Cassandra tables do not yet support open-ended scans.");
+    }
     return doRange(kafkaPartition, from, to, streamTimeMs, this.prefix);
   }
 
@@ -422,7 +426,12 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
       final Bytes from,
       final Bytes to,
       final long streamTimeMs,
-      final PreparedStatement rangeStatement) {
+      final PreparedStatement rangeStatement
+  ) {
+    if (from == null || to == null) {
+      throw new UnsupportedOperationException(
+          "Open ended range scans are not yet supported in Cassandra tables.");
+    }
     final long minValidTs = ttlResolver.isEmpty()
         ? -1L
         : streamTimeMs - ttlResolver.get().defaultTtl().toMillis();
