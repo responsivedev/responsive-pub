@@ -12,6 +12,7 @@
 
 package dev.responsive.kafka.internal.stores;
 
+import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_BACKEND_TYPE_CONFIG;
 import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadSessionClients;
 import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadStoreRegistry;
 import static dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration.NO_COMMITTED_OFFSET;
@@ -109,8 +110,13 @@ public class PartitionedOperations implements KeyValueOperations {
       case RS3:
         table = createRS3(params, sessionClients, config);
         break;
+      case NONE:
+        log.error("Must configure a storage backend type using the config {}",
+                  STORAGE_BACKEND_TYPE_CONFIG);
+        throw new IllegalStateException("Responsive stores require a storage backend to be"
+                                            + " configured, got 'NONE'");
       default:
-        throw new IllegalStateException("Unexpected value: " + sessionClients.storageBackend());
+        throw new IllegalStateException("Unrecognized value: " + sessionClients.storageBackend());
     }
 
     final FlushManager<Bytes, ?> flushManager = table.init(changelog.partition());

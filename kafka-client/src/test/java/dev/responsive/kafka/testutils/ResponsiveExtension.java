@@ -24,10 +24,8 @@ import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_ORG_CO
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RS3_HOSTNAME_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RS3_PORT_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_BACKEND_TYPE_CONFIG;
-import static dev.responsive.kafka.api.config.ResponsiveConfig.TASK_ASSIGNOR_CLASS_OVERRIDE;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.loggedConfig;
 import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
-import static org.apache.kafka.streams.StreamsConfig.InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS;
 
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.StorageBackend;
@@ -158,7 +156,6 @@ public class ResponsiveExtension
       final Map<String, Object> map = new HashMap<>(Map.of(
           RESPONSIVE_ORG_CONFIG, "responsive",
           RESPONSIVE_ENV_CONFIG, "itests",
-          INTERNAL_TASK_ASSIGNOR_CLASS, TASK_ASSIGNOR_CLASS_OVERRIDE,
           BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers(),
           CASSANDRA_DESIRED_NUM_PARTITION_CONFIG, -1,
           CASSANDRA_CHECK_INTERVAL_MS, 100,

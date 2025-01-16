@@ -12,6 +12,7 @@
 
 package dev.responsive.kafka.api;
 
+import static dev.responsive.kafka.api.config.ResponsiveConfig.COMPATIBILITY_MODE_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.PLATFORM_API_KEY_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_ENV_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_LICENSE_CONFIG;
@@ -33,6 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.when;
 
 import com.datastax.oss.driver.api.core.CqlSession;
+import dev.responsive.kafka.api.config.CompatibilityMode;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.api.stores.ResponsiveDslStoreSuppliers;
@@ -174,6 +176,24 @@ class ResponsiveKafkaStreamsTest {
   public void shouldCreateResponsiveKafkaStreamsInNonResponsiveStorageModeWithUnverifiedConfigs() {
     // Given:
     properties.put(STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.NONE.name());
+    properties.put(NUM_STANDBY_REPLICAS_CONFIG, 2); // a config that would cause failure
+
+    // When:
+    final StreamsBuilder builder = new StreamsBuilder();
+    builder.stream("foo").to("bar");
+
+    final var ks = new ResponsiveKafkaStreams(builder.build(), properties, supplier);
+
+    // Then:
+    // no error is thrown
+    ks.close();
+  }
+
+  @SuppressWarnings("deprecation")
+  @Test
+  public void shouldCreateResponsiveKafkaStreamsInMetricsCompatibilityModeWithUnverifiedConfigs() {
+    // Given:
+    properties.put(COMPATIBILITY_MODE_CONFIG, CompatibilityMode.METRICS_ONLY.name());
     properties.put(NUM_STANDBY_REPLICAS_CONFIG, 2); // a config that would cause failure
 
     // When:

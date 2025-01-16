@@ -388,7 +388,8 @@ public class AsyncProcessorIntegrationTest {
         .processValues(
             new SimpleStatefulProcessorSupplier<>(
                 this::computeNewValueForSourceProcessor,
-                ResponsiveStores.keyValueStore(ResponsiveKeyValueParams.fact(inKVStore).withTimeToLive(TTL)),
+                ResponsiveStores.keyValueStore(
+                    ResponsiveKeyValueParams.fact(inKVStore).withTimeToLive(TTL)),
                 Serdes.String()),
             inKVStore)
         .processValues(
@@ -769,18 +770,18 @@ public class AsyncProcessorIntegrationTest {
     properties.put(PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_V2);
     properties.put(producerPrefix(TRANSACTION_TIMEOUT_CONFIG), (int) COMMIT_INTERVAL_MS * 2);
 
-    properties.put(ASYNC_THREAD_POOL_SIZE_CONFIG, ASYNC_THREADS_PER_STREAMTHREAD);
-    properties.put(NUM_STREAM_THREADS_CONFIG, STREAMTHREADS_PER_APP);
-
     properties.put(COMMIT_INTERVAL_MS_CONFIG, COMMIT_INTERVAL_MS);
     properties.put(STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
 
-    properties.put(STORE_FLUSH_RECORDS_TRIGGER_CONFIG, COMMIT_BUFFER_FLUSH_RECORDS);
-    properties.put(STORE_FLUSH_INTERVAL_TRIGGER_MS_CONFIG, COMMIT_BUFFER_FLUSH_INTERVAL_MS);
+    properties.put(NUM_STREAM_THREADS_CONFIG, STREAMTHREADS_PER_APP);
 
+    properties.put(ASYNC_THREAD_POOL_SIZE_CONFIG, ASYNC_THREADS_PER_STREAMTHREAD);
     properties.put(ASYNC_MAX_EVENTS_QUEUED_PER_ASYNC_THREAD_CONFIG, MAX_EVENTS_QUEUED_PER_ASYNC_THREAD);
     properties.put(ASYNC_MAX_EVENTS_QUEUED_PER_KEY_CONFIG, MAX_EVENTS_QUEUED_PER_KEY);
     properties.put(ASYNC_FLUSH_INTERVAL_MS_CONFIG, ASYNC_FLUSH_INTERVAL_MS);
+
+    properties.put(STORE_FLUSH_RECORDS_TRIGGER_CONFIG, COMMIT_BUFFER_FLUSH_RECORDS);
+    properties.put(STORE_FLUSH_INTERVAL_TRIGGER_MS_CONFIG, COMMIT_BUFFER_FLUSH_INTERVAL_MS);
 
     properties.put(consumerPrefix(ConsumerConfig.METADATA_MAX_AGE_CONFIG), "1000");
     properties.put(consumerPrefix(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG), "earliest");
