@@ -20,7 +20,9 @@ import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_USERNAME_CO
 import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RS3_HOSTNAME_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RS3_PORT_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_BACKEND_TYPE_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.TASK_ASSIGNOR_CLASS_OVERRIDE;
+import static dev.responsive.kafka.internal.config.ResponsiveStreamsConfig.validateNoStorageStreamsConfig;
 import static dev.responsive.kafka.internal.metrics.ResponsiveMetrics.RESPONSIVE_METRICS_NAMESPACE;
 import static org.apache.kafka.streams.StreamsConfig.APPLICATION_ID_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.METRICS_NUM_SAMPLES_CONFIG;
@@ -31,6 +33,7 @@ import static org.apache.kafka.streams.StreamsConfig.NUM_STREAM_THREADS_CONFIG;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.responsive.kafka.api.async.internals.AsyncThreadPoolRegistry;
 import dev.responsive.kafka.api.async.internals.AsyncUtils;
+import dev.responsive.kafka.api.config.CompatibilityMode;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.api.stores.ResponsiveDslStoreSuppliers;
@@ -339,13 +342,12 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     propsWithOverrides.putAll(configs.originals());
     propsWithOverrides.putAll(internalConfBuilder.build());
 
-    final var backend = ConfigUtils.storageBackend(configs);
-
-    ResponsiveStreamsConfig.validateStreamsConfig(propsWithOverrides, backend);
-
-    if (backend == StorageBackend.NONE) {
+    if (ConfigUtils.storageBackend(configs) == StorageBackend.NONE) {
+      validateNoStorageStreamsConfig(propsWithOverrides);
       return propsWithOverrides;
     }
+
+    ResponsiveStreamsConfig.validateStreamsConfig(propsWithOverrides);
 
     final Object o = configs.originals().get(StreamsConfig.TASK_ASSIGNOR_CLASS_CONFIG);
     if (o == null) {

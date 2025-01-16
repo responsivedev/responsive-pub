@@ -37,18 +37,23 @@ public class ResponsiveStreamsConfig extends StreamsConfig {
     return new ResponsiveStreamsConfig(props, false);
   }
 
-  public static void validateStreamsConfig(final Map<?, ?> props, final StorageBackend backend) {
+  public static void validateStreamsConfig(final Map<?, ?> props) {
     final StreamsConfig streamsConfig = streamsConfig(props);
 
-    if (backend == StorageBackend.NONE) {
-      verifyNoResponsiveDslStoreSuppliers(streamsConfig);
-    } else {
       verifyNoStandbys(streamsConfig);
       verifyNotEosV1(streamsConfig);
-    }
   }
 
-  static void verifyNoResponsiveDslStoreSuppliers(final StreamsConfig config)
+  /**
+   * Validate the config for apps in "compatibility mode" ie without Responsive storage backends
+   */
+  public static void validateNoStorageStreamsConfig(final Map<?, ?> props) {
+    final StreamsConfig streamsConfig = streamsConfig(props);
+
+    verifyNoResponsiveDslStoreSuppliers(streamsConfig);
+  }
+
+  private static void verifyNoResponsiveDslStoreSuppliers(final StreamsConfig config)
       throws ConfigException {
     final Class<?> dslStoreSuppliers =
         config.getClass(StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG);

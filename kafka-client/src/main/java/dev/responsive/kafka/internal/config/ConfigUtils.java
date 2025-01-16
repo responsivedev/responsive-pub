@@ -17,6 +17,7 @@ import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_ENV_CO
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_ORG_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.AT_LEAST_ONCE;
 
+import dev.responsive.kafka.api.config.CompatibilityMode;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.ResponsiveMode;
 import dev.responsive.kafka.api.config.StorageBackend;
@@ -40,11 +41,24 @@ public class ConfigUtils {
   }
 
   public static StorageBackend storageBackend(final ResponsiveConfig config) {
+    if (ConfigUtils.usesDeprecatedCompatibilityMode(config)) {
+      return StorageBackend.NONE;
+    }
+    
     final var backend = config
         .getString(ResponsiveConfig.STORAGE_BACKEND_TYPE_CONFIG)
         .toUpperCase(Locale.ROOT);
 
     return StorageBackend.valueOf(backend);
+  }
+
+  @SuppressWarnings("deprecation")
+  public static boolean usesDeprecatedCompatibilityMode(final ResponsiveConfig config) {
+    final var backend = config
+        .getString(ResponsiveConfig.COMPATIBILITY_MODE_CONFIG)
+        .toUpperCase(Locale.ROOT);
+
+    return CompatibilityMode.valueOf(backend) == CompatibilityMode.METRICS_ONLY;
   }
 
   public static ResponsiveMode responsiveMode(final ResponsiveConfig config) {
