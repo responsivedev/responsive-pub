@@ -52,6 +52,10 @@ public class ResponsiveConfig extends AbstractConfig {
   private static final String RESPONSIVE_LICENSE_FILE_DOC
       = "A path to a file containing your license.";
 
+  /**
+   * @deprecated use the responsive.storage.backend.type config with {@link StorageBackend#NONE}
+   */
+  @Deprecated
   public static final String COMPATIBILITY_MODE_CONFIG = "responsive.compatibility.mode";
   private static final String COMPATIBILITY_MODE_DOC = "This configuration enables running Responsive "
       + "in compatibility mode, disabling certain features.";

@@ -19,6 +19,7 @@ import static dev.responsive.kafka.internal.stores.TTDRestoreListener.mockRestor
 import dev.responsive.kafka.api.async.internals.AsyncThreadPoolRegistration;
 import dev.responsive.kafka.api.async.internals.AsyncUtils;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
+import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.internal.clients.TTDCassandraClient;
 import dev.responsive.kafka.internal.clients.TTDMockAdmin;
 import dev.responsive.kafka.internal.config.InternalSessionConfigs;
@@ -166,7 +167,11 @@ public class ResponsiveTopologyTestDriver extends TopologyTestDriverAccessor {
       final TTDCassandraClient client
   ) {
     final SessionClients sessionClients = new SessionClients(
-        Optional.empty(), Optional.of(client), Optional.empty(), false, client.mockAdmin()
+        Optional.empty(),
+        Optional.of(client),
+        Optional.empty(),
+        StorageBackend.CASSANDRA,
+        client.mockAdmin()
     );
     final var restoreListener = mockRestoreListener(baseProps);
     sessionClients.initialize(restoreListener.metrics(), restoreListener);

@@ -21,6 +21,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
@@ -109,11 +110,11 @@ public final class ResponsiveStores {
    * @param storeSupplier the key-value store supplier
    * @param keySerde the key serde. If null, the default.key.serde config will be used
    * @param valueSerde the value serde. If null, the default.value.serde config will be used
-   * @return a store builder that can be used to build a key-value store with the given options
-   *         that uses Responsive's storage for its backend
+   * @return a store builder that can be used to build a key-value store that is compatible
+   *        with the Responsive framework
    */
   public static <K, V> StoreBuilder<KeyValueStore<K, V>> keyValueStoreBuilder(
-      final ResponsiveKeyValueBytesStoreSupplier storeSupplier,
+      final KeyValueBytesStoreSupplier storeSupplier,
       final Serde<K> keySerde,
       final Serde<V> valueSerde
   ) {
@@ -141,15 +142,18 @@ public final class ResponsiveStores {
    * @param storeSupplier the key-value store supplier
    * @param keySerde the key serde. If null, the default.key.serde config will be used
    * @param valueSerde the value serde. If null, the default.value.serde config will be used
-   * @return a store builder that can be used to build a key-value store with the given options
-   *         that uses Responsive's storage for its backend
+   * @return a store builder that can be used to build a key-value store that is compatible
+   *         with the Responsive framework
    */
   public static <K, V> StoreBuilder<TimestampedKeyValueStore<K, V>> timestampedKeyValueStoreBuilder(
-      final ResponsiveKeyValueBytesStoreSupplier storeSupplier,
+      final KeyValueBytesStoreSupplier storeSupplier,
       final Serde<K> keySerde,
       final Serde<V> valueSerde
   ) {
-    storeSupplier.asTimestamped();
+
+    if (storeSupplier instanceof ResponsiveKeyValueBytesStoreSupplier) {
+      ((ResponsiveKeyValueBytesStoreSupplier) storeSupplier).asTimestamped();
+    }
 
     return new ResponsiveStoreBuilder<>(
         StoreType.TIMESTAMPED_KEY_VALUE,
@@ -251,11 +255,11 @@ public final class ResponsiveStores {
    * @param storeSupplier a window store supplier
    * @param keySerde the key serde. If null, the default.key.serde config will be used
    * @param valueSerde the value serde. If null, the default.value.serde config will be used
-   * @return a store builder that can be used to build a window store with the given options
-   *         that uses Responsive's storage for its backend
+   * @return a store builder that can be used to build a window store that is compatible
+   *         with the Responsive framework
    */
   public static <K, V> StoreBuilder<WindowStore<K, V>> windowStoreBuilder(
-      final ResponsiveWindowBytesStoreSupplier storeSupplier,
+      final WindowBytesStoreSupplier storeSupplier,
       final Serde<K> keySerde,
       final Serde<V> valueSerde
   ) {
@@ -278,11 +282,11 @@ public final class ResponsiveStores {
    * @param storeSupplier a timestamped window store supplier
    * @param keySerde the key serde. If null, the default.key.serde config will be used
    * @param valueSerde the value serde. If null, the default.value.serde config will be used
-   * @return a store builder that can be used to build a window store with the given options
-   *         that uses Responsive's storage for its backend
+   * @return a store builder that can be used to build a window store that is compatible
+   *         with the Responsive framework
    */
   public static <K, V> StoreBuilder<TimestampedWindowStore<K, V>> timestampedWindowStoreBuilder(
-      final ResponsiveWindowBytesStoreSupplier storeSupplier,
+      final WindowBytesStoreSupplier storeSupplier,
       final Serde<K> keySerde,
       final Serde<V> valueSerde
   ) {
@@ -337,11 +341,11 @@ public final class ResponsiveStores {
    * @param storeSupplier a session store supplier
    * @param keySerde      the key serde. If null, the default.key.serde config will be used
    * @param valueSerde    the value serde. If null, the default.value.serde config will be used
-   * @return a store builder that can be used to build a session store with the given options
-   * that uses Responsive's storage for its backend
+   * @return a store builder that can be used to build a session store that is compatible
+   *         with the Responsive framework
    */
   public static <K, V> StoreBuilder<SessionStore<K, V>> sessionStoreBuilder(
-      final ResponsiveSessionBytesStoreSupplier storeSupplier,
+      final SessionBytesStoreSupplier storeSupplier,
       final Serde<K> keySerde,
       final Serde<V> valueSerde
   ) {

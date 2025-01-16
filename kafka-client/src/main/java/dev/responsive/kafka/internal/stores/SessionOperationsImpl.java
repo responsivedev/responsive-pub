@@ -12,6 +12,7 @@
 
 package dev.responsive.kafka.internal.stores;
 
+import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_BACKEND_TYPE_CONFIG;
 import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadSessionClients;
 import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadStoreRegistry;
 import static dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration.NO_COMMITTED_OFFSET;
@@ -48,8 +49,11 @@ import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.slf4j.Logger;
 
 public class SessionOperationsImpl implements SessionOperations {
+
+  private final Logger log;
 
   @SuppressWarnings("rawtypes")
   private final InternalProcessorContext context;
@@ -78,7 +82,6 @@ public class SessionOperationsImpl implements SessionOperations {
     ).logger(SessionOperationsImpl.class);
     final var context = asInternalProcessorContext(storeContext);
 
-
     final SessionClients sessionClients = loadSessionClients(appConfigs);
     final ResponsiveStoreRegistry storeRegistry = loadStoreRegistry(appConfigs);
 
@@ -93,7 +96,7 @@ public class SessionOperationsImpl implements SessionOperations {
     );
 
     final RemoteSessionTable<?> table =
-        createRemoteSessionTable(params, sessionClients, partitioner, responsiveConfig);
+        createRemoteSessionTable(params, sessionClients, partitioner, responsiveConfig, log);
 
     final SessionFlushManager flushManager = table.init(changelog.partition());
 
@@ -127,6 +130,7 @@ public class SessionOperationsImpl implements SessionOperations {
     storeRegistry.registerStore(registration);
 
     return new SessionOperationsImpl(
+        log,
         context,
         params,
         table,
@@ -168,13 +172,19 @@ public class SessionOperationsImpl implements SessionOperations {
       final ResponsiveSessionParams params,
       final SessionClients sessionClients,
       final SessionSegmentPartitioner partitioner,
-      final ResponsiveConfig config
+      final ResponsiveConfig config,
+      final Logger log
   ) throws InterruptedException, TimeoutException {
     switch (sessionClients.storageBackend()) {
       case CASSANDRA:
         return createCassandra(params, sessionClients, partitioner);
       case MONGO_DB:
         return createMongo(params, sessionClients, partitioner, config);
+      case NONE:
+        log.error("Must configure a storage backend type using the config {}",
+                  STORAGE_BACKEND_TYPE_CONFIG);
+        throw new IllegalStateException("Responsive stores require a storage backend to be"
+                                            + " configured, got 'NONE'");
       default:
         throw new IllegalStateException("Unexpected value: " + sessionClients.storageBackend());
     }
@@ -182,6 +192,7 @@ public class SessionOperationsImpl implements SessionOperations {
 
   @SuppressWarnings("rawtypes")
   public SessionOperationsImpl(
+      final Logger log,
       final InternalProcessorContext context,
       final ResponsiveSessionParams params,
       final RemoteSessionTable table,
@@ -192,6 +203,7 @@ public class SessionOperationsImpl implements SessionOperations {
       final ResponsiveRestoreListener restoreListener,
       final long initialStreamTime
   ) {
+    this.log = log;
     this.context = context;
     this.params = params;
     this.table = table;

@@ -24,7 +24,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import dev.responsive.kafka.api.async.internals.AsyncThreadPoolRegistry;
-import dev.responsive.kafka.api.config.CompatibilityMode;
+import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.internal.clients.ResponsiveKafkaClientSupplier.Factories;
 import dev.responsive.kafka.internal.metrics.EndOffsetsPoller;
 import dev.responsive.kafka.internal.metrics.MetricPublishingCommitListener;
@@ -128,7 +128,7 @@ class ResponsiveKafkaClientSupplierTest {
         .thenReturn(commitMetricListener);
     lenient().when(factories.createOffsetRecorder(anyBoolean(), any())).thenReturn(offsetRecorder);
 
-    supplier = supplier(CONFIGS, CompatibilityMode.FULL);
+    supplier = supplier(CONFIGS, StorageBackend.MONGO_DB);
   }
 
   @Test
@@ -137,7 +137,7 @@ class ResponsiveKafkaClientSupplierTest {
     final var config = configsWithOverrides(
         PRODUCER_CONFIGS,
         Map.of(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.AT_LEAST_ONCE));
-    final var supplier = supplier(config, CompatibilityMode.FULL);
+    final var supplier = supplier(config, StorageBackend.MONGO_DB);
 
     // when:
     final var producer = supplier.getProducer(config);
@@ -152,7 +152,7 @@ class ResponsiveKafkaClientSupplierTest {
     final var config = configsWithOverrides(
         CONSUMER_CONFIGS,
         Map.of(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.AT_LEAST_ONCE));
-    final var supplier = supplier(config, CompatibilityMode.FULL);
+    final var supplier = supplier(config, StorageBackend.MONGO_DB);
 
     // when:
     final var consumer = supplier.getConsumer(config);
@@ -246,9 +246,9 @@ class ResponsiveKafkaClientSupplierTest {
   }
 
   @Test
-  public void shouldCreateGlobalAndRestoreConsumerInFullCompatibilityMode() {
+  public void shouldCreateGlobalAndRestoreConsumerInResponsiveStorageMode() {
     // given:
-    supplier = supplier(CONFIGS, CompatibilityMode.FULL);
+    supplier = supplier(CONFIGS, StorageBackend.MONGO_DB);
 
     // when:
     supplier.getRestoreConsumer(new HashMap<>(RESTORE_CONSUMER_CONFIGS));
@@ -265,9 +265,9 @@ class ResponsiveKafkaClientSupplierTest {
   }
 
   @Test
-  public void shouldNotCreateGlobalOrRestoreConsumerInMetricsCompatibilityMode() {
+  public void shouldNotCreateGlobalOrRestoreConsumerNotInResponsiveStorageMode() {
     // given:
-    supplier = supplier(CONFIGS, CompatibilityMode.METRICS_ONLY);
+    supplier = supplier(CONFIGS, StorageBackend.NONE);
 
     // when:
     supplier.getRestoreConsumer(new HashMap<>(CONSUMER_CONFIGS));
@@ -281,7 +281,7 @@ class ResponsiveKafkaClientSupplierTest {
   @NotNull
   private ResponsiveKafkaClientSupplier supplier(
       final Map<String, Object> configs,
-      final CompatibilityMode compat
+      final StorageBackend storageBackend
   ) {
     return new ResponsiveKafkaClientSupplier(
         factories,
@@ -289,7 +289,7 @@ class ResponsiveKafkaClientSupplierTest {
         new StreamsConfig(configs),
         storeRegistry,
         metrics,
-        compat,
+        storageBackend,
         false
     );
   }

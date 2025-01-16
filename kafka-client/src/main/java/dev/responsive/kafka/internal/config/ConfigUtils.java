@@ -41,6 +41,10 @@ public class ConfigUtils {
   }
 
   public static StorageBackend storageBackend(final ResponsiveConfig config) {
+    if (ConfigUtils.usesDeprecatedCompatibilityMode(config)) {
+      return StorageBackend.NONE;
+    }
+    
     final var backend = config
         .getString(ResponsiveConfig.STORAGE_BACKEND_TYPE_CONFIG)
         .toUpperCase(Locale.ROOT);
@@ -48,12 +52,13 @@ public class ConfigUtils {
     return StorageBackend.valueOf(backend);
   }
 
-  public static CompatibilityMode compatibilityMode(final ResponsiveConfig config) {
+  @SuppressWarnings("deprecation")
+  public static boolean usesDeprecatedCompatibilityMode(final ResponsiveConfig config) {
     final var backend = config
         .getString(ResponsiveConfig.COMPATIBILITY_MODE_CONFIG)
         .toUpperCase(Locale.ROOT);
 
-    return CompatibilityMode.valueOf(backend);
+    return CompatibilityMode.valueOf(backend) == CompatibilityMode.METRICS_ONLY;
   }
 
   public static ResponsiveMode responsiveMode(final ResponsiveConfig config) {

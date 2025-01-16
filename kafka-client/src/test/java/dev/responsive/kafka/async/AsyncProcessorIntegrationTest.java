@@ -265,7 +265,8 @@ public class AsyncProcessorIntegrationTest {
                       sleepForMs(1L);
                       return new SimpleProcessorOutput<>(val.getValue() + "-S1:" + newSum, newSum);
                     },
-                    ResponsiveKeyValueParams.fact(asyncStore1).withTimeToLive(TTL),
+                    ResponsiveStores.keyValueStore(
+                        ResponsiveKeyValueParams.fact(asyncStore1).withTimeToLive(TTL)),
                     Serdes.Integer()
                 )),
             Named.as("S1"),
@@ -276,7 +277,6 @@ public class AsyncProcessorIntegrationTest {
                     (ComputeStatelessOutput<String, String, InputRecord>) (r, c) -> {
                       sleepForMs(5L);
                       return new InputRecord(r.value() + "-L1");
-
                     }
                 )),
             Named.as("L1"))
@@ -297,7 +297,8 @@ public class AsyncProcessorIntegrationTest {
                       sleepForMs(1L);
                       return new SimpleProcessorOutput<>(r.value() + "-S2:" + newSum, newSum);
                     },
-                    ResponsiveKeyValueParams.fact(asyncStore2).withTimeToLive(TTL),
+                    ResponsiveStores.keyValueStore(
+                        ResponsiveKeyValueParams.fact(asyncStore2).withTimeToLive(TTL)),
                     Serdes.Integer()
                 )),
             Named.as("S2"),
@@ -387,7 +388,8 @@ public class AsyncProcessorIntegrationTest {
         .processValues(
             new SimpleStatefulProcessorSupplier<>(
                 this::computeNewValueForSourceProcessor,
-                ResponsiveKeyValueParams.fact(inKVStore).withTimeToLive(TTL),
+                ResponsiveStores.keyValueStore(
+                    ResponsiveKeyValueParams.fact(inKVStore).withTimeToLive(TTL)),
                 Serdes.String()),
             inKVStore)
         .processValues(
@@ -398,7 +400,8 @@ public class AsyncProcessorIntegrationTest {
         .processValues(
             new SimpleStatefulProcessorSupplier<>(
                 this::computeNewValueForSinkProcessor,
-                ResponsiveKeyValueParams.fact(outKVStore).withTimeToLive(TTL),
+                ResponsiveStores.keyValueStore(
+                    ResponsiveKeyValueParams.fact(outKVStore).withTimeToLive(TTL)),
                 Serdes.String(),
                 latestValues,
                 inputRecordsLatch),
@@ -506,14 +509,16 @@ public class AsyncProcessorIntegrationTest {
         .processValues(
             new SimpleStatefulProcessorSupplier<>(
                 this::computeNewValueForSourceProcessor,
-                ResponsiveKeyValueParams.fact(inKVStore).withTimeToLive(TTL),
+                ResponsiveStores.keyValueStore(
+                    ResponsiveKeyValueParams.fact(inKVStore).withTimeToLive(TTL)),
                 Serdes.String()),
             inKVStore)
         .processValues(
             createAsyncProcessorSupplier(
                 new SimpleStatefulProcessorSupplier<>(
                     this::computeNewValueForSingleStatefulAsyncProcessor,
-                    ResponsiveKeyValueParams.fact(asyncStore1).withTimeToLive(TTL),
+                    ResponsiveStores.keyValueStore(
+                        ResponsiveKeyValueParams.fact(asyncStore1).withTimeToLive(TTL)),
                     Serdes.String(),
                     processed
                 )),
@@ -522,7 +527,8 @@ public class AsyncProcessorIntegrationTest {
         .processValues(
             new SimpleStatefulProcessorSupplier<>(
                 this::computeNewValueForSinkProcessor,
-                ResponsiveKeyValueParams.fact(outKVStore).withTimeToLive(TTL),
+                ResponsiveStores.keyValueStore(
+                    ResponsiveKeyValueParams.fact(outKVStore).withTimeToLive(TTL)),
                 Serdes.String(),
                 latestValues,
                 inputRecordsLatch),
@@ -583,8 +589,7 @@ public class AsyncProcessorIntegrationTest {
     // this is the old way of connecting StoreBuilders to a topology, which async does not support
     builder.addStateStore(ResponsiveStores.timestampedKeyValueStoreBuilder(
         ResponsiveStores.keyValueStore(
-            ResponsiveKeyValueParams.fact(asyncStore1).withTimeToLive(TTL)
-        ),
+            ResponsiveKeyValueParams.fact(asyncStore1).withTimeToLive(TTL)),
         Serdes.String(),
         Serdes.String()));
 
@@ -765,18 +770,18 @@ public class AsyncProcessorIntegrationTest {
     properties.put(PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_V2);
     properties.put(producerPrefix(TRANSACTION_TIMEOUT_CONFIG), (int) COMMIT_INTERVAL_MS * 2);
 
-    properties.put(ASYNC_THREAD_POOL_SIZE_CONFIG, ASYNC_THREADS_PER_STREAMTHREAD);
-    properties.put(NUM_STREAM_THREADS_CONFIG, STREAMTHREADS_PER_APP);
-
     properties.put(COMMIT_INTERVAL_MS_CONFIG, COMMIT_INTERVAL_MS);
     properties.put(STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
 
-    properties.put(STORE_FLUSH_RECORDS_TRIGGER_CONFIG, COMMIT_BUFFER_FLUSH_RECORDS);
-    properties.put(STORE_FLUSH_INTERVAL_TRIGGER_MS_CONFIG, COMMIT_BUFFER_FLUSH_INTERVAL_MS);
+    properties.put(NUM_STREAM_THREADS_CONFIG, STREAMTHREADS_PER_APP);
 
+    properties.put(ASYNC_THREAD_POOL_SIZE_CONFIG, ASYNC_THREADS_PER_STREAMTHREAD);
     properties.put(ASYNC_MAX_EVENTS_QUEUED_PER_ASYNC_THREAD_CONFIG, MAX_EVENTS_QUEUED_PER_ASYNC_THREAD);
     properties.put(ASYNC_MAX_EVENTS_QUEUED_PER_KEY_CONFIG, MAX_EVENTS_QUEUED_PER_KEY);
     properties.put(ASYNC_FLUSH_INTERVAL_MS_CONFIG, ASYNC_FLUSH_INTERVAL_MS);
+
+    properties.put(STORE_FLUSH_RECORDS_TRIGGER_CONFIG, COMMIT_BUFFER_FLUSH_RECORDS);
+    properties.put(STORE_FLUSH_INTERVAL_TRIGGER_MS_CONFIG, COMMIT_BUFFER_FLUSH_INTERVAL_MS);
 
     properties.put(consumerPrefix(ConsumerConfig.METADATA_MAX_AGE_CONFIG), "1000");
     properties.put(consumerPrefix(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG), "earliest");

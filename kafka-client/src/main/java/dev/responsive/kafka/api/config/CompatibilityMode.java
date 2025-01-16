@@ -17,6 +17,7 @@ import java.util.Arrays;
 public enum CompatibilityMode {
 
   FULL,
+  @Deprecated // replaced by responsive.storage.backend.type config with value StorageBackend.NONE
   METRICS_ONLY;
 
   public static String[] names() {

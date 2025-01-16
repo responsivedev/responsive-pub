@@ -12,6 +12,7 @@
 
 package dev.responsive.kafka.internal.stores;
 
+import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_BACKEND_TYPE_CONFIG;
 import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadSessionClients;
 import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadStoreRegistry;
 import static dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration.NO_COMMITTED_OFFSET;
@@ -50,8 +51,11 @@ import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStoreIterator;
+import org.slf4j.Logger;
 
 public class SegmentedOperations implements WindowOperations {
+
+  private final Logger log;
 
   @SuppressWarnings("rawtypes")
   private final InternalProcessorContext context;
@@ -102,8 +106,13 @@ public class SegmentedOperations implements WindowOperations {
       case MONGO_DB:
         table = createMongo(params, sessionClients, partitioner, responsiveConfig);
         break;
+      case NONE:
+        log.error("Must configure a storage backend type using the config {}",
+                  STORAGE_BACKEND_TYPE_CONFIG);
+        throw new IllegalStateException("Responsive stores require a storage backend to be"
+                                            + " configured, got 'NONE'");
       default:
-        throw new IllegalStateException("Unexpected value: " + sessionClients.storageBackend());
+        throw new IllegalStateException("Unrecognized value: " + sessionClients.storageBackend());
     }
 
     final WindowFlushManager flushManager = table.init(changelog.partition());
@@ -144,6 +153,7 @@ public class SegmentedOperations implements WindowOperations {
       storeRegistry.registerStore(registration);
 
       return new SegmentedOperations(
+          log,
           context,
           params,
           table,
@@ -205,6 +215,7 @@ public class SegmentedOperations implements WindowOperations {
 
   @SuppressWarnings("rawtypes")
   public SegmentedOperations(
+      final Logger log,
       final InternalProcessorContext context,
       final ResponsiveWindowParams params,
       final RemoteWindowTable table,
@@ -215,6 +226,7 @@ public class SegmentedOperations implements WindowOperations {
       final ResponsiveRestoreListener restoreListener,
       final long initialStreamTime
   ) {
+    this.log = log;
     this.context = context;
     this.params = params;
     this.table = table;

@@ -18,6 +18,7 @@ import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_ENV_CO
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_LICENSE_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_LICENSE_FILE_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_ORG_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_BACKEND_TYPE_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
@@ -26,6 +27,7 @@ import static org.apache.kafka.streams.StreamsConfig.APPLICATION_ID_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -34,6 +36,8 @@ import static org.mockito.Mockito.when;
 import com.datastax.oss.driver.api.core.CqlSession;
 import dev.responsive.kafka.api.config.CompatibilityMode;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
+import dev.responsive.kafka.api.config.StorageBackend;
+import dev.responsive.kafka.api.stores.ResponsiveDslStoreSuppliers;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.CassandraClientFactory;
 import dev.responsive.kafka.internal.license.exception.LicenseAuthenticationException;
@@ -56,7 +60,6 @@ import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
@@ -154,8 +157,8 @@ class ResponsiveKafkaStreamsTest {
     builder.stream("foo").to("bar");
 
     // Then:
-    final StreamsException e = assertThrows(
-        StreamsException.class,
+    final ConfigException e = assertThrows(
+        ConfigException.class,
         () -> new IntegrationTestUtils.MockResponsiveKafkaStreams(
             builder.build(),
             properties,
@@ -164,13 +167,31 @@ class ResponsiveKafkaStreamsTest {
         )
     );
     assertThat(
-        e.getCause().getMessage(),
+        e.getMessage(),
         Matchers.containsString("Invalid Streams configuration value for 'num.standby.replicas'")
     );
   }
 
   @Test
-  public void shouldCreateResponsiveKafkaStreamsInMetricsOnlyModeWithUnverifiedConfigs() {
+  public void shouldCreateResponsiveKafkaStreamsInNonResponsiveStorageModeWithUnverifiedConfigs() {
+    // Given:
+    properties.put(STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.NONE.name());
+    properties.put(NUM_STANDBY_REPLICAS_CONFIG, 2); // a config that would cause failure
+
+    // When:
+    final StreamsBuilder builder = new StreamsBuilder();
+    builder.stream("foo").to("bar");
+
+    final var ks = new ResponsiveKafkaStreams(builder.build(), properties, supplier);
+
+    // Then:
+    // no error is thrown
+    ks.close();
+  }
+
+  @SuppressWarnings("deprecation")
+  @Test
+  public void shouldCreateResponsiveKafkaStreamsInMetricsCompatibilityModeWithUnverifiedConfigs() {
     // Given:
     properties.put(COMPATIBILITY_MODE_CONFIG, CompatibilityMode.METRICS_ONLY.name());
     properties.put(NUM_STANDBY_REPLICAS_CONFIG, 2); // a config that would cause failure
@@ -187,12 +208,40 @@ class ResponsiveKafkaStreamsTest {
   }
 
   @Test
+  public void shouldThrowWhenUsingResponsiveDslStoreSuppliersInNonResponsiveStorageMode() {
+    // Given:
+    properties.put(STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.NONE.name());
+    properties.put(DSL_STORE_SUPPLIERS_CLASS_CONFIG, ResponsiveDslStoreSuppliers.class.getName());
+
+    // When:
+    final StreamsBuilder builder = new StreamsBuilder();
+    builder.stream("foo").to("bar");
+
+    // then:
+    final ConfigException e = assertThrows(
+        ConfigException.class,
+        () -> {
+          final var ks = new ResponsiveKafkaStreams(builder.build(), properties, supplier);
+          ks.close();
+        }
+    );
+    assertThat(
+        e.getMessage(),
+        Matchers.containsString(
+            "Invalid Streams configuration value for 'dsl.store.suppliers.class': "
+                + "got class dev.responsive.kafka.api.stores.ResponsiveDslStoreSuppliers,"
+                + " incompatible with setting 'responsive.storage.backend.type' to NONE"
+        )
+    );
+  }
+
+  @Test
   public void shouldAcceptLicenseInLicenseFile() {
     // given:
     final File licenseFile = writeLicenseFile(LicenseUtils.getLicense());
     properties.put(RESPONSIVE_LICENSE_CONFIG, "");
     properties.put(ResponsiveConfig.RESPONSIVE_LICENSE_FILE_CONFIG, licenseFile.getAbsolutePath());
-    properties.put(COMPATIBILITY_MODE_CONFIG, CompatibilityMode.METRICS_ONLY.name());
+    properties.put(STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.NONE.name());
     final StreamsBuilder builder = new StreamsBuilder();
     builder.stream("foo").to("bar");
 
@@ -208,7 +257,7 @@ class ResponsiveKafkaStreamsTest {
         RESPONSIVE_LICENSE_CONFIG,
         LicenseUtils.getEncodedLicense(DECODED_INVALID_LICENSE_FILE)
     );
-    properties.put(COMPATIBILITY_MODE_CONFIG, CompatibilityMode.METRICS_ONLY.name());
+    properties.put(STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.NONE.name());
     final StreamsBuilder builder = new StreamsBuilder();
     builder.stream("foo").to("bar");
 
@@ -229,7 +278,7 @@ class ResponsiveKafkaStreamsTest {
         RESPONSIVE_LICENSE_CONFIG,
         LicenseUtils.getEncodedLicense(DECODED_TRIAL_EXPIRED_LICENSE_FILE)
     );
-    properties.put(COMPATIBILITY_MODE_CONFIG, CompatibilityMode.METRICS_ONLY.name());
+    properties.put(STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.NONE.name());
     final StreamsBuilder builder = new StreamsBuilder();
     builder.stream("foo").to("bar");
 
@@ -249,7 +298,7 @@ class ResponsiveKafkaStreamsTest {
     properties.put(PLATFORM_API_KEY_CONFIG, "");
     properties.put(RESPONSIVE_LICENSE_CONFIG, "");
     properties.put(RESPONSIVE_LICENSE_FILE_CONFIG, "");
-    properties.put(COMPATIBILITY_MODE_CONFIG, CompatibilityMode.METRICS_ONLY.name());
+    properties.put(STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.NONE.name());
     final StreamsBuilder builder = new StreamsBuilder();
     builder.stream("foo").to("bar");
 
@@ -269,7 +318,7 @@ class ResponsiveKafkaStreamsTest {
     properties.put(PLATFORM_API_KEY_CONFIG, "some-api-key");
     properties.put(RESPONSIVE_LICENSE_CONFIG, "");
     properties.put(RESPONSIVE_LICENSE_FILE_CONFIG, "");
-    properties.put(COMPATIBILITY_MODE_CONFIG, CompatibilityMode.METRICS_ONLY.name());
+    properties.put(STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.NONE.name());
     final StreamsBuilder builder = new StreamsBuilder();
     builder.stream("foo").to("bar");
 
