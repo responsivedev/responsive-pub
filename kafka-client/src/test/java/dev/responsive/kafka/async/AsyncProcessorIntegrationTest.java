@@ -95,6 +95,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -111,9 +112,11 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.kstream.TableJoined;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessorContext;
 import org.apache.kafka.streams.processor.api.FixedKeyRecord;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -328,7 +331,6 @@ public class AsyncProcessorIntegrationTest {
     properties.put(PROCESSOR_WRAPPER_CLASS_CONFIG, AsyncProcessorWrapper.class);
     properties.put(DSL_STORE_SUPPLIERS_CLASS_CONFIG, ResponsiveDslStoreSuppliers.class);
     properties.put(COMMIT_INTERVAL_MS_CONFIG, 0L);
-    properties.put(NUM_STREAM_THREADS_CONFIG, 1);
     properties.put(VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
 
     final StreamsBuilder builder = new StreamsBuilder(
@@ -337,7 +339,6 @@ public class AsyncProcessorIntegrationTest {
 
     final KStream<String, String> stream1 = builder.stream(inputTopic1);
     final KStream<String, String> stream2 = builder.stream(inputTopic2);
-
 
     final long ttlMs = 100_000L;
     stream1
@@ -389,7 +390,6 @@ public class AsyncProcessorIntegrationTest {
     properties.put(PROCESSOR_WRAPPER_CLASS_CONFIG, AsyncProcessorWrapper.class);
     properties.put(DSL_STORE_SUPPLIERS_CLASS_CONFIG, ResponsiveDslStoreSuppliers.class);
     properties.put(COMMIT_INTERVAL_MS_CONFIG, 0L);
-    properties.put(NUM_STREAM_THREADS_CONFIG, 1);
     properties.put(VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
 
     final StreamsBuilder builder = new StreamsBuilder(
@@ -442,6 +442,68 @@ public class AsyncProcessorIntegrationTest {
           new KeyValue<>("B", null),
           new KeyValue<>("B", "b-l-b-r"),
           new KeyValue<>("C", "c-l-c-r")
+      ));
+    }
+  }
+
+  @Test
+  public void doFKJAsync() throws Exception {
+    final Map<String, Object> properties = getMutableProperties();
+
+    final ProcessorWrapperContext wrapperContext = new ProcessorWrapperContext();
+    properties.put(ASYNC_PROCESSOR_WRAPPER_CONTEXT_CONFIG, wrapperContext);
+    properties.put(PROCESSOR_WRAPPER_CLASS_CONFIG, AsyncProcessorWrapper.class);
+    properties.put(DSL_STORE_SUPPLIERS_CLASS_CONFIG, ResponsiveDslStoreSuppliers.class);
+    properties.put(COMMIT_INTERVAL_MS_CONFIG, 0L);
+    properties.put(NUM_STREAM_THREADS_CONFIG, 1);
+    properties.put(VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+
+    final StreamsBuilder builder = new StreamsBuilder(
+        new TopologyConfig(new StreamsConfig(properties))
+    );
+
+    final KTable<String, String> leftTable = builder.table(inputTopic1);
+    final KTable<String, String> rightTable = builder.table(inputTopic2);
+
+    leftTable
+        .join(rightTable,
+              v -> v.substring(0, 1), // key is first char of value on left
+              (l, r) -> l + "-" + r,
+              Materialized.as("result"))
+        .toStream()
+        .to(outputTopic);
+
+    final Properties props = new Properties();
+    props.putAll(properties);
+    final Topology topology = builder.build(props);
+    verifyStateStoreWrappings(topology, wrapperContext);
+
+    final KafkaProducer<String, String> producer = new KafkaProducer<>(properties);
+
+    final List<KeyValueTimestamp<String, String>> leftInput = new LinkedList<>();
+    leftInput.add(new KeyValueTimestamp<>("A", "a-l", 0L)); // foreign key a
+    leftInput.add(new KeyValueTimestamp<>("B", "b-l", 0L)); // foreign key b
+    leftInput.add(new KeyValueTimestamp<>("C", "c-l", 0L)); // foreign key c
+    pipeTimestampedRecords(producer, inputTopic1, leftInput);
+
+    final List<KeyValueTimestamp<String, String>> rightInput = new LinkedList<>();
+    rightInput.add(new KeyValueTimestamp<>("a", "a-r", 0L));
+    rightInput.add(new KeyValueTimestamp<>("b", "b-r", 0L));
+    rightInput.add(new KeyValueTimestamp<>("c", "c-r", 0L));
+
+    pipeTimestampedRecords(producer, inputTopic2, rightInput);
+
+    try (final var streams = new ResponsiveKafkaStreams(topology, properties)) {
+      startAppAndAwaitRunning(Duration.ofSeconds(300), streams);
+      final List<KeyValue<String, String>> kvs = readOutput(
+          outputTopic, 0, 3, numOutputPartitions, false, properties
+      );
+
+      assertThat(kvs, containsInAnyOrder(
+          new KeyValue<>("A", "a-l-a-r"),
+          new KeyValue<>("B", "b-l-b-r"),
+          new KeyValue<>("C", "c-l-c-r")
+
       ));
     }
   }

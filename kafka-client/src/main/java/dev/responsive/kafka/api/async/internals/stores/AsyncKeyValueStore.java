@@ -126,7 +126,8 @@ public class AsyncKeyValueStore<KS, VS>
 
   @Override
   public KeyValueIterator<KS, VS> range(final KS from, final KS to) {
-    throw new UnsupportedOperationException("#range is not yet supported with async processing");
+    // TODO: is this safe for multiple keys?
+    return userDelegate.range(from, to);
   }
 
   @Override
