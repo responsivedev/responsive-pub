@@ -28,6 +28,7 @@ import com.datastax.oss.driver.api.querybuilder.SchemaBuilder;
 import com.datastax.oss.driver.api.querybuilder.schema.CreateKeyspace;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.StorageBackend;
 import java.net.InetSocketAddress;
 import java.time.Duration;
@@ -208,6 +209,8 @@ public class E2ETestUtils {
     props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
     props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
     props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+    props.put(ResponsiveConfig.PLATFORM_API_KEY_CONFIG, "test");
+    props.put(ResponsiveConfig.PLATFORM_API_SECRET_CONFIG, "test");
 
     props.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 10);
     props.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 60000);
