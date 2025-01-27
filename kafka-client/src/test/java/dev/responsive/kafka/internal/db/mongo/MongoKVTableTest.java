@@ -13,7 +13,7 @@
 package dev.responsive.kafka.internal.db.mongo;
 
 import static com.mongodb.MongoClientSettings.getDefaultCodecRegistry;
-import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_ENDPOINT_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_CONNECTION_STRING_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_TOMBSTONE_RETENTION_SEC_CONFIG;
 import static dev.responsive.kafka.internal.stores.TtlResolver.NO_TTL;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.defaultOnlyTtl;
@@ -77,9 +77,9 @@ class MongoKVTableTest {
   ) {
     name = info.getDisplayName().replace("()", "");
 
-    final String mongoConnection = (String) props.get(MONGO_ENDPOINT_CONFIG);
+    final String mongoConnection = (String) props.get(MONGO_CONNECTION_STRING_CONFIG);
     this.props = props;
-    client = SessionUtil.connect(mongoConnection, null, null, "", null);
+    client = SessionUtil.connect(mongoConnection, "", null);
     config = ResponsiveConfig.responsiveConfig(props);
   }
 

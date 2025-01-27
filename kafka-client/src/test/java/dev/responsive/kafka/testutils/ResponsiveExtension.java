@@ -17,7 +17,7 @@ import static dev.responsive.kafka.api.config.ResponsiveConfig.CASSANDRA_DATACEN
 import static dev.responsive.kafka.api.config.ResponsiveConfig.CASSANDRA_DESIRED_NUM_PARTITION_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.CASSANDRA_HOSTNAME_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.CASSANDRA_PORT_CONFIG;
-import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_ENDPOINT_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_CONNECTION_STRING_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_ENV_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_LICENSE_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_ORG_CONFIG;
@@ -177,7 +177,8 @@ public class ResponsiveExtension
       map.put(CASSANDRA_HOSTNAME_CONFIG, cassandra.getContactPoint().getHostName());
       map.put(CASSANDRA_PORT_CONFIG, cassandra.getContactPoint().getPort());
       map.put(CASSANDRA_DATACENTER_CONFIG, cassandra.getLocalDatacenter());
-      map.put(MONGO_ENDPOINT_CONFIG, mongo.getConnectionString());
+
+      map.put(MONGO_CONNECTION_STRING_CONFIG, mongo.getConnectionString());
 
       if (parameterContext.getParameter().getType().equals(Map.class)) {
         return map;

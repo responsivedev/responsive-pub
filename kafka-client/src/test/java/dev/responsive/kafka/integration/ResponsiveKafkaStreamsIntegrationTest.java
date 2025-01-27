@@ -143,13 +143,7 @@ public class ResponsiveKafkaStreamsIntegrationTest {
 
     // Then:
     try (
-        final var mongoClient = SessionUtil.connect(
-            mongo.getConnectionString(),
-            null,
-            null,
-            "",
-            null
-        );
+        final var mongoClient = SessionUtil.connect(mongo.getConnectionString(), "", null);
         final var deserializer = new StringDeserializer();
     ) {
       final List<String> dbs = new ArrayList<>();

@@ -29,8 +29,6 @@ import com.mongodb.ConnectionString;
 import com.mongodb.MongoClientSettings;
 import com.mongodb.MongoException;
 import com.mongodb.ReadConcern;
-import com.mongodb.ServerApi;
-import com.mongodb.ServerApiVersion;
 import com.mongodb.WriteConcern;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
@@ -40,8 +38,6 @@ import dev.responsive.kafka.internal.db.mongo.MongoTelemetryListener;
 import dev.responsive.kafka.internal.metrics.CassandraMetricsFactory;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import java.net.InetSocketAddress;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import javax.annotation.Nullable;
 import org.bson.Document;
 
@@ -99,45 +95,18 @@ public final class SessionUtil {
   }
 
   public static MongoClient connect(
-      final String hostname,
-      @Nullable final String clientId,
-      @Nullable final String clientSecret,
+      final String connectionString,
       final String additionalParams,
       @Nullable final ResponsiveMetrics metrics
   ) {
-    final String connectionString;
-    if (clientId != null && clientSecret != null) {
-      // TODO(agavra): consider allowing configuration of the read consideration
-      // some situations (such as non-EOS) could benefit from performance of non-majority
-      // reads if they're ok with the risks
-      connectionString = String.format(
-          "mongodb+srv://%s:%s@%s/?retryWrites=true&w=majority&r=majority",
-          URLEncoder.encode(clientId, StandardCharsets.UTF_8),
-          URLEncoder.encode(clientSecret, StandardCharsets.UTF_8),
-          hostname
-      );
-    } else if (clientId == null ^ clientSecret == null) {
-      throw new IllegalArgumentException(
-          "Must specify both or neither Mongo username and password.");
-    } else {
-      // TODO(agavra): TestContainers uses a different connection string, for now
-      // we just assume that all non authenticated usage is via test containers
-      connectionString = hostname;
-    }
-
     final String connectionStringWithParams = additionalParams.equals("")
         ? connectionString
         : connectionString + "/?" + additionalParams;
 
-    ServerApi serverApi = ServerApi.builder()
-        .version(ServerApiVersion.V1)
-        .build();
-
     final MongoClientSettings.Builder settingsBuilder = MongoClientSettings.builder()
-        .applyConnectionString(new ConnectionString(connectionStringWithParams))
+        .applyConnectionString(new ConnectionString(connectionString))
         .readConcern(ReadConcern.MAJORITY)
-        .writeConcern(WriteConcern.MAJORITY)
-        .serverApi(serverApi);
+        .writeConcern(WriteConcern.MAJORITY);
 
     if (metrics != null) {
       settingsBuilder.addCommandListener(new MongoTelemetryListener(metrics));

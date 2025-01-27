@@ -14,9 +14,7 @@ package dev.responsive.kafka.api;
 
 import static dev.responsive.kafka.api.config.ResponsiveConfig.METRICS_ENABLED_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_ADDITIONAL_CONNECTION_STRING_PARAMS_CONFIG;
-import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_ENDPOINT_CONFIG;
-import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_PASSWORD_CONFIG;
-import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_USERNAME_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_CONNECTION_STRING_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RS3_HOSTNAME_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RS3_PORT_CONFIG;
@@ -75,7 +73,6 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -543,14 +540,9 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
           break;
         case MONGO_DB:
           LOG.info("Using MongoDB responsive store");
-
-          final var hostname = responsiveConfig.getString(MONGO_ENDPOINT_CONFIG);
-          final String clientId = responsiveConfig.getString(MONGO_USERNAME_CONFIG);
-          final Password clientSecret = responsiveConfig.getPassword(MONGO_PASSWORD_CONFIG);
+          final var connectionString = responsiveConfig.getPassword(MONGO_CONNECTION_STRING_CONFIG);
           final var mongoClient = SessionUtil.connect(
-              hostname,
-              clientId,
-              clientSecret == null ? null : clientSecret.value(),
+              connectionString.value(),
               responsiveConfig.getString(MONGO_ADDITIONAL_CONNECTION_STRING_PARAMS_CONFIG),
               metrics
           );

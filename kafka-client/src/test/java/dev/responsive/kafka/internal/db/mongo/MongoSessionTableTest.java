@@ -12,7 +12,7 @@
 
 package dev.responsive.kafka.internal.db.mongo;
 
-import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_ENDPOINT_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_CONNECTION_STRING_CONFIG;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.nullValue;
@@ -56,8 +56,8 @@ class MongoSessionTableTest {
   ) {
     name = info.getDisplayName().replace("()", "");
 
-    final String mongoConnection = (String) props.get(MONGO_ENDPOINT_CONFIG);
-    client = SessionUtil.connect(mongoConnection, null, null, "", null);
+    final String mongoConnection = (String) props.get(MONGO_CONNECTION_STRING_CONFIG);
+    client = SessionUtil.connect(mongoConnection, "", null);
   }
 
   /*

@@ -83,14 +83,8 @@ public class ResponsiveConfig extends AbstractConfig {
 
   // ------------------ MongoDB specific configurations -----------------------
 
-  public static final String MONGO_USERNAME_CONFIG = "responsive.mongo.username";
-  private static final String MONGO_USERNAME_DOC = "The username to use when connecting to MongoDB.";
-
-  public static final String MONGO_PASSWORD_CONFIG = "responsive.mongo.password";
-  private static final String MONGO_PASSWORD_DOC = "The password to use when connecting to MongoDB.";
-
-  public static final String MONGO_ENDPOINT_CONFIG = "responsive.mongo.endpoint";
-  private static final String MONGO_ENDPOINT_DOC = "The MongoDB endpoint to connect to.";
+  public static final String MONGO_CONNECTION_STRING_CONFIG = "responsive.mongo.connection.string";
+  private static final String MONGO_CONNECTION_STRING_DOC = "The full connection string for a MongoDB compatible server.";
 
   public static final String MONGO_ADDITIONAL_CONNECTION_STRING_PARAMS_CONFIG = "responsive.mongo.additional.connection.string.params";
   private static final String MONGO_ADDITIONAL_CONNECTION_STRING_PARAMS_DOC = "Additional MongoDB config options to be appended to the "
@@ -361,26 +355,12 @@ public class ResponsiveConfig extends AbstractConfig {
 
       // mongo connection configurations
       .define(
-          MONGO_USERNAME_CONFIG,
-          Type.STRING,
-          null,
-          new ConfigDef.NonEmptyString(),
-          Importance.HIGH,
-          MONGO_USERNAME_DOC
-      ).define(
-          MONGO_PASSWORD_CONFIG,
+          MONGO_CONNECTION_STRING_CONFIG,
           Type.PASSWORD,
           null,
-          new NonEmptyPassword(MONGO_PASSWORD_CONFIG),
+          new NonEmptyPassword(MONGO_CONNECTION_STRING_CONFIG),
           Importance.HIGH,
-          MONGO_PASSWORD_DOC
-      ).define(
-          MONGO_ENDPOINT_CONFIG,
-          Type.STRING,
-          null,
-          new ConfigDef.NonEmptyString(),
-          Importance.HIGH,
-          MONGO_ENDPOINT_DOC
+          MONGO_CONNECTION_STRING_DOC
       )
 
       // cassandra connection configurations
@@ -395,7 +375,7 @@ public class ResponsiveConfig extends AbstractConfig {
           CASSANDRA_PASSWORD_CONFIG,
           Type.PASSWORD,
           null,
-          new NonEmptyPassword(MONGO_PASSWORD_CONFIG),
+          new NonEmptyPassword(CASSANDRA_PASSWORD_CONFIG),
           Importance.HIGH,
           CASSANDRA_PASSWORD_DOC
       ).define(
