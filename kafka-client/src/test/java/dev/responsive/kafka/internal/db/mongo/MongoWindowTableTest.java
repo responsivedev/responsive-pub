@@ -12,7 +12,7 @@
 
 package dev.responsive.kafka.internal.db.mongo;
 
-import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_ENDPOINT_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_CONNECTION_STRING_CONFIG;
 import static dev.responsive.kafka.testutils.Matchers.sameKeyValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
@@ -65,8 +65,8 @@ class MongoWindowTableTest {
   ) {
     name = info.getDisplayName().replace("()", "");
 
-    final String mongoConnection = (String) props.get(MONGO_ENDPOINT_CONFIG);
-    client = SessionUtil.connect(mongoConnection, null, null, "", null);
+    final String mongoConnection = (String) props.get(MONGO_CONNECTION_STRING_CONFIG);
+    client = SessionUtil.connect(mongoConnection, "", null);
 
     partitioner = new WindowSegmentPartitioner(10_000L, 1_000L, false);
     segment = partitioner.segmenter().activeSegments(0, 100).get(0);

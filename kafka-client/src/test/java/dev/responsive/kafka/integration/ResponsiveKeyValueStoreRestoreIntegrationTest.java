@@ -12,9 +12,7 @@
 
 package dev.responsive.kafka.integration;
 
-import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_ENDPOINT_CONFIG;
-import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_PASSWORD_CONFIG;
-import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_USERNAME_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_CONNECTION_STRING_CONFIG;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.getCassandraValidName;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.pipeInput;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.slurpPartition;
@@ -98,7 +96,6 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
-import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
@@ -368,16 +365,8 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
           ));
 
     } else if (type == KVSchema.KEY_VALUE) {
-      final var hostname = config.getString(MONGO_ENDPOINT_CONFIG);
-      final String user = config.getString(MONGO_USERNAME_CONFIG);
-      final Password pass = config.getPassword(MONGO_PASSWORD_CONFIG);
-      final var mongoClient = SessionUtil.connect(
-          hostname,
-          user,
-          pass == null ? null : pass.value(),
-          "",
-          null
-      );
+      final var connectionString = config.getPassword(MONGO_CONNECTION_STRING_CONFIG).value();
+      final var mongoClient = SessionUtil.connect(connectionString, "", null);
       table = new MongoKVTable(
           mongoClient,
           aggName(),
