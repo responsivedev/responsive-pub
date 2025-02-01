@@ -43,8 +43,8 @@ import static org.apache.kafka.streams.StreamsConfig.PROCESSOR_WRAPPER_CLASS_CON
 import static org.apache.kafka.streams.StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
 import static org.apache.kafka.streams.StreamsConfig.producerPrefix;
+import static org.apache.kafka.streams.state.Stores.timestampedKeyValueStoreBuilder;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
@@ -75,6 +75,7 @@ import dev.responsive.kafka.testutils.SimpleStatelessProcessorSupplier.ComputeSt
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -82,6 +83,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
@@ -95,7 +97,6 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -112,11 +113,14 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.Produced;
-import org.apache.kafka.streams.kstream.TableJoined;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessorContext;
 import org.apache.kafka.streams.processor.api.FixedKeyRecord;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -215,6 +219,115 @@ public class AsyncProcessorIntegrationTest {
   public void after() {
     admin.deleteTopics(List.of(inputTopic1, inputTopic2, outputTopic));
   }
+
+  @Test
+  public void doDSLProcessWithProcessorWrappingAsync() throws Exception {
+    final Map<String, Object> properties = getMutableProperties();
+    final ProcessorWrapperContext wrapperContext = new ProcessorWrapperContext();
+    properties.put(ASYNC_PROCESSOR_WRAPPER_CONTEXT_CONFIG, wrapperContext);
+    properties.put(PROCESSOR_WRAPPER_CLASS_CONFIG, AsyncProcessorWrapper.class);
+    properties.put(DSL_STORE_SUPPLIERS_CLASS_CONFIG, ResponsiveDslStoreSuppliers.class);
+    properties.put(COMMIT_INTERVAL_MS_CONFIG, 0L);
+    properties.put(VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+
+    final StreamsBuilder builder = new StreamsBuilder(
+        new TopologyConfig(new StreamsConfig(properties))
+    );
+
+    final Random random = new Random();
+
+    final StoreBuilder<?> store = timestampedKeyValueStoreBuilder(ResponsiveStores.keyValueStore("store"), Serdes.String(), Serdes.String());
+    builder.stream(inputTopic1, Consumed.as("source"))
+        .process(
+            new ProcessorSupplier<>() {
+              @Override
+              public org.apache.kafka.streams.processor.api.Processor<Object, Object, Object, Object> get() {
+                return new org.apache.kafka.streams.processor.api.Processor<Object, Object, Object, Object>() {
+                  KeyValueStore<Object, Object> store;
+                  @Override
+                  public void init(final ProcessorContext<Object, Object> context) {
+                    store = context.getStateStore("store");
+                  }
+
+                  @Override
+                  public void process(final Record<Object, Object> record) {
+                    final Object val = store.get(record.key());
+                    System.out.println("Previous val = " + val);
+                    store.put(record.key(), record.value());
+                  }
+                };
+              }
+
+              @Override
+              public Set<StoreBuilder<?>> stores() {
+                return Collections.singleton(store);
+              }
+            },
+            Named.as("stateful-process-1"))
+        .process(
+            new ProcessorSupplier<>() {
+              @Override
+              public org.apache.kafka.streams.processor.api.Processor<Object, Object, Object, Object> get() {
+                return new org.apache.kafka.streams.processor.api.Processor<>() {
+                  KeyValueStore<Object, Object> store;
+
+                  @Override
+                  public void init(final ProcessorContext<Object, Object> context) {
+                    store = context.getStateStore("store");
+                  }
+
+                  @Override
+                  public void process(final Record<Object, Object> record) {
+                    final Object val = store.get(record.key());
+                    System.out.println("Previous val = " + val);
+                    store.put(record.key(), record.value());
+                  }
+                };
+              }
+
+              @Override
+              public Set<StoreBuilder<?>> stores() {
+                return Collections.singleton(store);
+              }
+            },
+            Named.as("stateful-process-2"))
+        .processValues(
+            () -> record -> System.out.println("Processing values: " + random.nextInt()),
+            Named.as("stateless-processValues"))
+        .to(outputTopic, Produced.as("sink"));
+
+
+    final Properties props = new Properties();
+    props.putAll(properties);
+    final Topology topology = builder.build(props);
+    verifyStateStoreWrappings(topology, wrapperContext);
+
+    final KafkaProducer<String, String> producer = new KafkaProducer<>(properties);
+
+    final List<KeyValue<String, String>> streamInput = new LinkedList<>();
+    streamInput.add(new KeyValue<>("A", "a1"));
+    streamInput.add(new KeyValue<>("B", "b1"));
+    streamInput.add(new KeyValue<>("A", "a2"));
+    pipeRecords(producer, inputTopic1, streamInput);
+
+    try (final var streams = new ResponsiveKafkaStreams(topology, properties)) {
+      startAppAndAwaitRunning(Duration.ofSeconds(30), streams);
+
+      /*
+      final List<KeyValue<String, String>> kvs = readOutput(
+          outputTopic, 0, 3, numOutputPartitions, false, properties
+      );
+
+      assertThat(kvs, containsInAnyOrder(
+          new KeyValue<>("A", "1"),
+          new KeyValue<>("B", "1"),
+          new KeyValue<>("A", "2"))
+      );
+
+       */
+    }
+  }
+
 
   @Test
   public void doAggregateAsync() throws Exception {
