@@ -12,7 +12,8 @@
 
 package dev.responsive.examples.regression;
 
-import static dev.responsive.examples.regression.RegConstants.CUSTOMERS;
+import static dev.responsive.examples.regression.RegConstants.CUSTOMER_IDS_TO_LOCATION;
+import static dev.responsive.examples.regression.RegConstants.CUSTOMER_NAMES_TO_ID;
 import static dev.responsive.examples.regression.RegConstants.ORDERS;
 import static dev.responsive.examples.regression.RegConstants.resultsTopic;
 
@@ -45,7 +46,7 @@ public class OrderAndCustomerDriver extends AbstractExecutionThreadService {
   private final Map<String, Object> props;
 
   private final KafkaProducer<String, Order> orderProducer;
-  private final KafkaProducer<String, Customer> customerProducer;
+  private final KafkaProducer<String, String> customerProducer;
   private final RateLimiter rateLimiter = RateLimiter.create(RECORDS_PER_SECOND);
   private final CustomerGen customerGen = new CustomerGen(random);
   private final OrderGen orderGen = new OrderGen(random, customerGen);
@@ -53,7 +54,7 @@ public class OrderAndCustomerDriver extends AbstractExecutionThreadService {
   public OrderAndCustomerDriver(final Map<String, Object> props) {
     this.props = new HashMap<>(props);
     this.orderProducer = getProducer(props, RegressionSchema.OrderSerializer.class);
-    this.customerProducer = getProducer(props, RegressionSchema.CustomerSerializer.class);
+    this.customerProducer = getProducer(props, StringSerializer.class);
   }
 
   private static <V> KafkaProducer<String, V> getProducer(
@@ -76,7 +77,12 @@ public class OrderAndCustomerDriver extends AbstractExecutionThreadService {
     E2ETestUtils.maybeCreateTopics(
         props,
         RegConstants.NUM_PARTITIONS,
-        List.of(ORDERS, CUSTOMERS, resultsTopic(true), resultsTopic(false))
+        List.of(ORDERS,
+                CUSTOMER_IDS_TO_LOCATION,
+                CUSTOMER_NAMES_TO_ID,
+                resultsTopic(true),
+                resultsTopic(false)
+        )
     );
     LOG.info("Created topics.");
   }
@@ -89,7 +95,7 @@ public class OrderAndCustomerDriver extends AbstractExecutionThreadService {
   protected void run() throws ExecutionException, InterruptedException {
     LOG.info("Running OrderAndCustomerDriver...");
     // create the first customer so that orders will have a valid customer id
-    customerProducer.send(newCustomer()).get();
+    sendNewCustomer();
 
     int orders = 0;
     int customers = 1;
@@ -100,10 +106,10 @@ public class OrderAndCustomerDriver extends AbstractExecutionThreadService {
       final boolean isOrder = random.nextByte() % 8 != 0; // 8:1 ratio of orders to customers
       if (isOrder) {
         orders++;
-        orderProducer.send(newOrder()).get();
+        sendNewOrder();
       } else {
         customers++;
-        customerProducer.send(newCustomer()).get();
+        sendNewCustomer();
       }
 
       if ((orders + customers) % 1000 == 0) {
@@ -112,25 +118,44 @@ public class OrderAndCustomerDriver extends AbstractExecutionThreadService {
     }
   }
 
-  private ProducerRecord<String, Customer> newCustomer() {
+  // 1 customer is actually two records/topics -- one for name-id info and one for id-location
+  // we send both at the same time and with the same timestamp to ensure these get joined
+  private void sendNewCustomer() throws ExecutionException, InterruptedException {
+
     final Customer customer = customerGen.next();
+    final long timestamp = System.currentTimeMillis();
+
     final boolean isTombstone = random.nextByte() % 5 == 0; // 5% chance of a tombstone
 
-    return new ProducerRecord<>(
-        CUSTOMERS,
-        customer.customerId(),
-        isTombstone ? null : customer
+    final var nameToIdRecord = new ProducerRecord<>(
+        CUSTOMER_NAMES_TO_ID,
+        null,
+        timestamp,
+        customer.customerName(),
+        isTombstone ? null : customer.customerId()
     );
+    final var idToLocationRecord = new ProducerRecord<>(
+        CUSTOMER_IDS_TO_LOCATION,
+        null,
+        timestamp,
+        customer.customerId(),
+        isTombstone ? null : customer.location()
+    );
+
+    customerProducer.send(nameToIdRecord).get();
+    customerProducer.send(idToLocationRecord).get();
   }
 
-  private ProducerRecord<String, Order> newOrder() {
+  private void sendNewOrder() throws ExecutionException, InterruptedException {
     // key on customer id so that the order can be joined with the customer
     // without a repartition (which would introduce indeterminate results)
     final Order order = orderGen.next();
-    return new ProducerRecord<>(
-        ORDERS,
-        order.customerId(),
-        order
-    );
+    orderProducer.send(
+        new ProducerRecord<>(
+            ORDERS,
+            order.customerId(),
+            order
+        )
+    ).get();
   }
 }

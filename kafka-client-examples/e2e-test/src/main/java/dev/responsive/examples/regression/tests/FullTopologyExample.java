@@ -12,7 +12,8 @@
 
 package dev.responsive.examples.regression.tests;
 
-import static dev.responsive.examples.regression.RegConstants.CUSTOMERS;
+import static dev.responsive.examples.regression.RegConstants.CUSTOMER_IDS_TO_LOCATION;
+import static dev.responsive.examples.regression.RegConstants.CUSTOMER_NAMES_TO_ID;
 import static dev.responsive.examples.regression.RegConstants.ORDERS;
 
 import dev.responsive.examples.common.InjectedE2ETestException;
@@ -20,6 +21,7 @@ import dev.responsive.examples.e2etest.Params;
 import dev.responsive.examples.e2etest.UrandomGenerator;
 import dev.responsive.examples.regression.RegressionSchema;
 import dev.responsive.examples.regression.model.Customer;
+import dev.responsive.examples.regression.model.CustomerInfo;
 import dev.responsive.examples.regression.model.EnrichedOrder;
 import dev.responsive.examples.regression.model.Order;
 import java.time.Duration;
@@ -59,17 +61,29 @@ public class FullTopologyExample extends AbstractKSExampleService {
   protected Topology buildTopology() {
     final StreamsBuilder builder = new StreamsBuilder();
 
-    // Read orders from the orders topic
+    // Read orders keyed by customer id
     final KStream<String, Order> orders =
         builder.stream(ORDERS, Consumed.with(Serdes.String(), RegressionSchema.orderSerde()));
 
+    // Read customer ids keyed by customer name
+    final KTable<String, String> customerNameToId =
+        builder.table(CUSTOMER_NAMES_TO_ID, Consumed.with(Serdes.String(), Serdes.String()));
 
-    // Read customers from the customers topic
-    final KTable<String, Customer> customers =
-        builder.table(CUSTOMERS, Consumed.with(Serdes.String(), RegressionSchema.customerSerde()));
+    // Read customer location keyed by customer id
+    final KTable<String, String> customerIdToLocation =
+        builder.table(CUSTOMER_IDS_TO_LOCATION, Consumed.with(Serdes.String(), Serdes.String()));
+
+    // Join customer tables to get full Customer metadata keyed by customer id
+    final KTable<String, Customer> customers = customerNameToId
+        .join(customerIdToLocation,
+              id -> id, // join key is customer id --> extract value from customerIdsByName
+              (location, name) -> new CustomerInfo(name, location),
+              Materialized.with(Serdes.String(), RegressionSchema.customerInfoSerde()))
+        .mapValues((k, v) -> new Customer(k, v.customerName(), v.location()));
+
 
     // Enrich orders with customer information by joining the orders
-    // stream with the customers table
+    // stream with the customers table, keyed by customer id
     KStream<String, EnrichedOrder> enrichedOrders = orders
         .join(
             customers,

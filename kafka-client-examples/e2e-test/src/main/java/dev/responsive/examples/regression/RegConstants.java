@@ -14,7 +14,8 @@ package dev.responsive.examples.regression;
 
 public class RegConstants {
   public static final String ORDERS = "orders";
-  public static final String CUSTOMERS = "customers";
+  public static final String CUSTOMER_NAMES_TO_ID = "customer-names-to-id";
+  public static final String CUSTOMER_IDS_TO_LOCATION = "customer-ids-to-location";
   public static final int NUM_PARTITIONS = 8;
   private static final String RESULTS = "enriched-orders";
 
