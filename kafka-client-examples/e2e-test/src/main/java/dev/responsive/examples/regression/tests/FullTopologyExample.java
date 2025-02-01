@@ -35,11 +35,16 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.TimeWindows;
 
-public class STJoinExample extends AbstractKSExampleService {
+/**
+ * Slightly-more-complex example application featuring multiple types of joins (ST and FKJ) and
+ * a windowed aggregation. As we add more features it would be good to expand this
+ * topology further with more kinds of operators
+ */
+public class FullTopologyExample extends AbstractKSExampleService {
 
   private final UrandomGenerator randomGenerator = new UrandomGenerator();
 
-  public STJoinExample(final Map<String, Object> props, final boolean responsive) {
+  public FullTopologyExample(final Map<String, Object> props, final boolean responsive) {
     super(
         "stream-table-join",
         props,
@@ -87,7 +92,7 @@ public class STJoinExample extends AbstractKSExampleService {
           }
         })
         .groupByKey()
-        .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofDays(1), Duration.ofHours(12)))
+        .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofHours(1), Duration.ofHours(12)))
         .reduce(EnrichedOrder::combineWith,
                 Materialized.with(Serdes.String(), RegressionSchema.enrichedOrderSerde()))
         .toStream()

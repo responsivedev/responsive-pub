@@ -19,7 +19,7 @@ import dev.responsive.examples.regression.RegressionSchema;
 import dev.responsive.examples.regression.ResultsComparatorService;
 import dev.responsive.examples.regression.tests.AbstractKSExampleService;
 import dev.responsive.examples.regression.tests.KeyBatchExample;
-import dev.responsive.examples.regression.tests.STJoinExample;
+import dev.responsive.examples.regression.tests.FullTopologyExample;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -55,10 +55,10 @@ public class Main {
         startRegressionDriver(rawCfg, RegressionSchema.EnrichedOrderDeserializer.class);
         break;
       case REGRESSION_ST_JOIN:
-        startRegressionTest(new STJoinExample(rawCfg, true));
+        startRegressionTest(new FullTopologyExample(rawCfg, true));
         break;
       case REGRESSION_ST_BASELINE:
-        startRegressionTest(new STJoinExample(rawCfg, false));
+        startRegressionTest(new FullTopologyExample(rawCfg, false));
         break;
 
       case REGRESSION_BATCH_DRIVER:
