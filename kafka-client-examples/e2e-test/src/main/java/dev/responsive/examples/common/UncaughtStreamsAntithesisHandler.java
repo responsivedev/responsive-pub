@@ -23,6 +23,7 @@ import com.datastax.oss.driver.api.core.servererrors.WriteFailureException;
 import com.datastax.oss.driver.api.core.servererrors.WriteTimeoutException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.mongodb.MongoNodeIsRecoveringException;
 import com.mongodb.MongoNotPrimaryException;
 import com.mongodb.MongoQueryException;
 import com.mongodb.MongoSocketReadException;
@@ -30,6 +31,7 @@ import com.mongodb.MongoTimeoutException;
 import java.net.ConnectException;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Optional;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.ProducerFencedException;
@@ -45,17 +47,30 @@ public class UncaughtStreamsAntithesisHandler implements StreamsUncaughtExceptio
 
   @Override
   public StreamThreadExceptionResponse handle(final Throwable exception) {
-    if (shouldLogError(exception, new LinkedList<>())) {
-      LOG.error("uncaught exception on test app stream thread {}({}) {}",
-          exception.getClass().getName(),
-          exception.getMessage(),
-          causalSummary(exception, new LinkedList<>()),
-          exception
-      );
+    final Optional<Throwable> realErrorCause = rootCauseForRealError(exception, new LinkedList<>());
+    if (realErrorCause.isPresent()) {
+      LOG.error(
+          String.format("uncaught exception on test app stream thread %s(%s), caused by %s(%s): %s",
+                        exception.getClass().getName(),
+                        exception.getMessage(),
+                        realErrorCause.get().getClass().getName(),
+                        realErrorCause.get().getMessage(),
+                        causalSummary(exception, new LinkedList<>())
+          ), exception);
 
       final ObjectNode assertNode = new ObjectMapper().createObjectNode();
       assertNode.put("exceptionClass", exception.getClass().getName());
       assertNode.put("exceptionMessage", exception.getMessage());
+
+      // may or may not be different than the "root cause", sometimes both are useful
+      if (exception.getCause() != null) {
+        assertNode.put("causeClass", exception.getCause().getClass().getName());
+        assertNode.put("causeMessage", exception.getCause().getMessage());
+      }
+
+      assertNode.put("rootCauseClass", realErrorCause.get().getClass().getName());
+      assertNode.put("rootCauseMessage", realErrorCause.get().getMessage());
+
       assertNode.put("summary", causalSummary(exception, new LinkedList<>()));
       Assert.unreachable("Uncaught exception on test app stream thread", assertNode);
 
@@ -66,18 +81,25 @@ public class UncaughtStreamsAntithesisHandler implements StreamsUncaughtExceptio
   private String causalSummary(final Throwable t, final List<Throwable> seen) {
     final String summary = t.getClass().getName() + "->";
     seen.add(t);
-    if (t.getCause() == null || seen.contains(t.getCause())) {
+    if (t.getCause() != null && !seen.contains(t.getCause())) {
       return summary + causalSummary(t.getCause(), seen);
     }
     return summary;
   }
 
-  private boolean shouldLogError(final Throwable throwable, List<Throwable> seen) {
+  /**
+   * @return the root cause error if this is a "real" error that should be logged,
+   *         and Optional.empty if this is an expected exception type
+   */
+  private Optional<Throwable> rootCauseForRealError(
+      final Throwable throwable,
+      List<Throwable> seen
+  ) {
     if (throwable instanceof InjectedE2ETestException) {
       final ObjectNode assertNode = new ObjectMapper().createObjectNode();
       assertNode.put("seenExceptions", seen.toString());
       Assert.reachable("Caught injected e2e test exception", assertNode);
-      return false;
+      return Optional.empty();
     }
 
     final List<Class<? extends Throwable>> dontcare = List.of(
@@ -88,6 +110,7 @@ public class UncaughtStreamsAntithesisHandler implements StreamsUncaughtExceptio
         DriverTimeoutException.class,
         InjectedE2ETestException.class,
         InvalidProducerEpochException.class,
+        MongoNodeIsRecoveringException.class,
         MongoNotPrimaryException.class,
         MongoSocketReadException.class,
         MongoTimeoutException.class,
@@ -103,20 +126,21 @@ public class UncaughtStreamsAntithesisHandler implements StreamsUncaughtExceptio
     );
     for (final var c : dontcare) {
       if (c.isInstance(throwable)) {
-        return false;
+        return Optional.empty();
       }
     }
 
     if (throwable instanceof MongoQueryException && throwable.getMessage().contains(
             "Command failed with error 13436 (NotPrimaryOrSecondary)")
     ) {
-      return false;
+      return Optional.empty();
     }
 
     seen.add(throwable);
     if (throwable.getCause() != null && !seen.contains(throwable.getCause())) {
-      return shouldLogError(throwable.getCause(), seen);
+      return rootCauseForRealError(throwable.getCause(), seen);
     }
-    return true;
+
+    return Optional.of(throwable);
   }
 }
