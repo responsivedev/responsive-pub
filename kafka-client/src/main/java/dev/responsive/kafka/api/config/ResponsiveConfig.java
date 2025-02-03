@@ -674,7 +674,7 @@ public class ResponsiveConfig extends AbstractConfig {
     Map<String, String> map = new HashMap<>();
     for (String mapping : configValue.split("\\s*,\\s*")) {
       int lio = mapping.lastIndexOf(":");
-      String key = mapping.substring(0,lio).trim();
+      String key = mapping.substring(0, lio).trim();
       String value = mapping.substring(lio + 1).trim();
       map.put(key, value);
     }

@@ -34,7 +34,8 @@ public class RS3TableFactory {
   }
 
   public RemoteKVTable<WalEntry> kvTable(final String name, final ResponsiveConfig config) {
-    Map<String, String> storeIdMapping = config.getMap(ResponsiveConfig.RS3_LOGICAL_STORE_MAPPING_CONFIG);
+    Map<String, String> storeIdMapping = config.getMap(
+        ResponsiveConfig.RS3_LOGICAL_STORE_MAPPING_CONFIG);
     final String storeIdHex = storeIdMapping.get(name);
     if (storeIdHex == null) {
       throw new ConfigException("Failed to find store ID mapping for table " + name);
