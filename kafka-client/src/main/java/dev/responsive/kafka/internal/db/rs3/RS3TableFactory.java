@@ -16,6 +16,7 @@ import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.rs3.client.WalEntry;
 import dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRS3Client;
+import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -24,16 +25,24 @@ import org.apache.kafka.common.config.ConfigException;
 public class RS3TableFactory {
   private final String rs3Host;
   private final int rs3Port;
+  private final boolean useTls;
 
   public RS3TableFactory(
       final String rs3Host,
-      final int rs3Port
+      final int rs3Port,
+      final boolean useTls
   ) {
     this.rs3Host = Objects.requireNonNull(rs3Host);
     this.rs3Port = rs3Port;
+    this.useTls = useTls;
   }
 
-  public RemoteKVTable<WalEntry> kvTable(final String name, final ResponsiveConfig config) {
+  public RemoteKVTable<WalEntry> kvTable(
+      final String name,
+      final ResponsiveConfig config,
+      final ResponsiveMetrics responsiveMetrics,
+      final ResponsiveMetrics.MetricScopeBuilder scopeBuilder
+  ) {
     Map<String, String> storeIdMapping = config.getMap(
         ResponsiveConfig.RS3_LOGICAL_STORE_MAPPING_CONFIG);
     final String storeIdHex = storeIdMapping.get(name);
@@ -44,13 +53,16 @@ public class RS3TableFactory {
     final UUID storeId = UUID.fromString(storeIdHex);
     final PssPartitioner pssPartitioner = new PssDirectPartitioner();
     final var rs3Client = GrpcRS3Client.connect(
-        String.format("%s:%d", rs3Host, rs3Port)
+        String.format("%s:%d", rs3Host, rs3Port),
+        useTls
     );
     return new RS3KVTable(
         name,
         storeId,
         rs3Client,
-        pssPartitioner
+        pssPartitioner,
+        responsiveMetrics,
+        scopeBuilder
     );
   }
 

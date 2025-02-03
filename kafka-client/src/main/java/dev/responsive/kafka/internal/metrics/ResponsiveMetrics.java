@@ -17,6 +17,7 @@ import dev.responsive.kafka.internal.metrics.exporter.NoopMetricsExporterService
 import java.io.Closeable;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
@@ -78,6 +79,18 @@ public class ResponsiveMetrics implements Closeable {
         streamsClientId,
         userTags
     );
+  }
+
+  public static class MetricScopeBuilder {
+    private final LinkedHashMap<String, String> tags;
+
+    private MetricScopeBuilder(final LinkedHashMap<String, String> tags) {
+      this.tags = Objects.requireNonNull(tags);
+    }
+
+    public MetricScope build(final String groupName) {
+      return new MetricScope(groupName, tags);
+    }
   }
 
   public static class MetricScope {
@@ -153,16 +166,24 @@ public class ResponsiveMetrics implements Closeable {
     );
   }
 
+  public MetricScopeBuilder storeLevelMetricScopeBuilder(
+      final String threadId,
+      final TopicPartition changelog,
+      final String storeName
+  ) {
+    return new MetricScopeBuilder(
+        orderedTagsSupplier.storeGroupTags(threadId, changelog, storeName)
+    );
+  }
+
   public MetricScope storeLevelMetric(
       final String group,
       final String threadId,
       final TopicPartition changelog,
       final String storeName
   ) {
-    return new MetricScope(
-        group,
-        orderedTagsSupplier.storeGroupTags(threadId, changelog, storeName)
-    );
+    return storeLevelMetricScopeBuilder(threadId, changelog, storeName)
+        .build(group);
   }
 
   /**

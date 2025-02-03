@@ -13,6 +13,7 @@
 package dev.responsive.kafka.internal.stores;
 
 import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_BACKEND_TYPE_CONFIG;
+import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadMetrics;
 import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadSessionClients;
 import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadStoreRegistry;
 import static dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration.NO_COMMITTED_OFFSET;
@@ -33,10 +34,12 @@ import dev.responsive.kafka.internal.db.RemoteTableSpecFactory;
 import dev.responsive.kafka.internal.db.inmemory.InMemoryKVTable;
 import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
+import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
 import dev.responsive.kafka.internal.utils.Result;
 import dev.responsive.kafka.internal.utils.SessionClients;
 import dev.responsive.kafka.internal.utils.TableName;
+import dev.responsive.kafka.internal.utils.Utils;
 import java.util.Collection;
 import java.util.Optional;
 import java.util.OptionalInt;
@@ -90,6 +93,7 @@ public class PartitionedOperations implements KeyValueOperations {
     final ResponsiveConfig config = ResponsiveConfig.responsiveConfig(appConfigs);
     final SessionClients sessionClients = loadSessionClients(appConfigs);
     final ResponsiveStoreRegistry storeRegistry = loadStoreRegistry(appConfigs);
+    final ResponsiveMetrics responsiveMetrics = loadMetrics(appConfigs);
 
     final TopicPartition changelog = new TopicPartition(
         changelogFor(storeContext, name.kafkaName(), false),
@@ -108,7 +112,13 @@ public class PartitionedOperations implements KeyValueOperations {
         table = createInMemory(params, ttlResolver, config);
         break;
       case RS3:
-        table = createRS3(params, sessionClients, config);
+        final ResponsiveMetrics.MetricScopeBuilder scopeBuilder;
+        scopeBuilder = responsiveMetrics.storeLevelMetricScopeBuilder(
+            Utils.extractThreadIdFromThreadName(Thread.currentThread().getName()),
+            changelog,
+            params.name().tableName()
+        );
+        table = createRS3(params, sessionClients, config, responsiveMetrics, scopeBuilder);
         break;
       case NONE:
         log.error("Must configure a storage backend type using the config {}",
@@ -252,9 +262,16 @@ public class PartitionedOperations implements KeyValueOperations {
   private static RemoteKVTable<?> createRS3(
       final ResponsiveKeyValueParams params,
       final SessionClients sessionClients,
-      final ResponsiveConfig config
+      final ResponsiveConfig config,
+      final ResponsiveMetrics responsiveMetrics,
+      final ResponsiveMetrics.MetricScopeBuilder scopeBuilder
   ) {
-    return sessionClients.rs3TableFactory().kvTable(params.name().tableName(), config);
+    return sessionClients.rs3TableFactory().kvTable(
+        params.name().tableName(),
+        config,
+        responsiveMetrics,
+        scopeBuilder
+    );
   }
 
   @SuppressWarnings("rawtypes")

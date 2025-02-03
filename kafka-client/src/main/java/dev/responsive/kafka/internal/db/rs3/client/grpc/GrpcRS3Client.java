@@ -23,12 +23,7 @@ import dev.responsive.kafka.internal.db.rs3.client.StreamSenderMessageReceiver;
 import dev.responsive.kafka.internal.db.rs3.client.WalEntry;
 import dev.responsive.rs3.RS3Grpc;
 import dev.responsive.rs3.Rs3;
-import io.grpc.ChannelCredentials;
-import io.grpc.Grpc;
-import io.grpc.InsecureChannelCredentials;
-import io.grpc.ManagedChannel;
 import io.grpc.StatusRuntimeException;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
@@ -36,48 +31,32 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Supplier;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class GrpcRS3Client implements RS3Client {
-  static final Logger LOG = LoggerFactory.getLogger(GrpcRS3Client.class);
-
   static final long WAL_OFFSET_NONE = Long.MAX_VALUE;
 
-  private final ManagedChannel channel;
-  private final RS3Grpc.RS3BlockingStub stub;
-  private final RS3Grpc.RS3Stub asyncStub;
-  private final Stats stats = new Stats();
+  private final PssStubsProvider stubs;
 
   @VisibleForTesting
-  GrpcRS3Client(
-      final ManagedChannel channel,
-      final RS3Grpc.RS3BlockingStub stub,
-      final RS3Grpc.RS3Stub asyncStub
-  ) {
-    this.channel = Objects.requireNonNull(channel);
-    this.stub = Objects.requireNonNull(stub);
-    this.asyncStub = Objects.requireNonNull(asyncStub);
+  GrpcRS3Client(final PssStubsProvider stubs) {
+    this.stubs = Objects.requireNonNull(stubs);
   }
 
   public void close() {
-    channel.shutdownNow();
+    stubs.close();
   }
 
-  public static GrpcRS3Client connect(
-      final String target
+  public static RS3Client connect(
+      final String target,
+      final boolean useTls
   ) {
-    final ChannelCredentials channelCredentials = InsecureChannelCredentials.create();
-    final ManagedChannel channel = Grpc.newChannelBuilder(target, channelCredentials)
-        .build();
-    final RS3Grpc.RS3BlockingStub stub = RS3Grpc.newBlockingStub(channel);
-    final RS3Grpc.RS3Stub asyncStub = RS3Grpc.newStub(channel);
-    return new GrpcRS3Client(channel, stub, asyncStub);
+    return new GrpcRS3Client(PssStubsProvider.connect(target, useTls));
   }
 
   @Override
   public CurrentOffsets getCurrentOffsets(final UUID storeId, final LssId lssId, final int pssId) {
     final Rs3.GetOffsetsResult result;
+    final RS3Grpc.RS3BlockingStub stub = stubs.stubs(storeId, pssId).syncStub();
     try {
       result = stub.getOffsets(Rs3.GetOffsetsRequest.newBuilder()
           .setStoreId(uuidProto(storeId))
@@ -107,6 +86,7 @@ public class GrpcRS3Client implements RS3Client {
   ) {
     final GrpcMessageReceiver<Rs3.WriteWALSegmentResult> resultObserver
         = new GrpcMessageReceiver<>();
+    final RS3Grpc.RS3Stub asyncStub = stubs.stubs(storeId, pssId).asyncStub();
     final var streamObserver = asyncStub.writeWALSegmentStream(resultObserver);
     final var streamSender = new GrpcStreamSender<WalEntry, Rs3.WriteWALSegmentRequest>(
         entry -> {
@@ -182,13 +162,12 @@ public class GrpcRS3Client implements RS3Client {
     expectedWrittenOffset.ifPresent(requestBuilder::setExpectedWrittenOffset);
     final var request = requestBuilder.build();
     final Rs3.GetResult result;
+    final RS3Grpc.RS3BlockingStub stub = stubs.stubs(storeId, pssId).syncStub();
     try {
       result = stub.get(request);
     } catch (final StatusRuntimeException e) {
       throw new RS3Exception(e);
     }
-    stats.recordRead(Duration.between(start, Instant.now()));
-    stats.log();
     if (!result.hasResult()) {
       return Optional.empty();
     }
@@ -221,6 +200,7 @@ public class GrpcRS3Client implements RS3Client {
       if (put.value().isPresent()) {
         putBuilder.setValue(ByteString.copyFrom(put.value().get()));
       }
+      putBuilder.setTtl(Rs3.Ttl.newBuilder().setTtlType(Rs3.Ttl.TtlType.DEFAULT).build());
       builder.setPut(putBuilder.build());
     }
   }
@@ -228,26 +208,6 @@ public class GrpcRS3Client implements RS3Client {
   private void checkField(final Supplier<Boolean> check, final String field) {
     if (!check.get()) {
       throw new RuntimeException("rs3 resp proto missing field " + field);
-    }
-  }
-
-  private static class Stats {
-    private long totalReads = 0;
-    private long totalReadsElapsedUs = 0;
-    private Instant lastLog = Instant.EPOCH;
-
-    public synchronized void recordRead(final Duration elapsed) {
-      totalReads += 1;
-      totalReadsElapsedUs += elapsed.toNanos() / 1_000;
-    }
-
-    public synchronized void log() {
-      final var now = Instant.now();
-      if (now.isBefore(lastLog.plus(Duration.ofSeconds(10)))) {
-        return;
-      }
-      lastLog = now;
-      LOG.info("rs3 client read statistics: {} {}", totalReads, totalReadsElapsedUs);
     }
   }
 }

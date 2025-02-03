@@ -45,7 +45,7 @@ dependencyResolutionManagement {
             version("kafka", "3.8.1")
             version("scylla", "4.15.0.0")
             version("javaoperatorsdk", "4.9.6")
-            version("grpc", "1.52.1")
+            version("grpc", "1.69.1")
             version("protobuf-java", "3.22.3")
             version("slf4j", "1.7.5")
             version("log4j2", "2.20.0")

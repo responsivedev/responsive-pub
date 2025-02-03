@@ -17,6 +17,8 @@ import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -25,7 +27,6 @@ import dev.responsive.kafka.internal.db.rs3.client.LssId;
 import dev.responsive.kafka.internal.db.rs3.client.Put;
 import dev.responsive.rs3.RS3Grpc;
 import dev.responsive.rs3.Rs3;
-import io.grpc.ManagedChannel;
 import io.grpc.stub.StreamObserver;
 import java.util.Optional;
 import java.util.UUID;
@@ -49,7 +50,7 @@ class GrpcRS3ClientTest {
   @Mock
   private RS3Grpc.RS3Stub asyncStub;
   @Mock
-  private ManagedChannel channel;
+  private PssStubsProvider stubs;
   @Mock
   private StreamObserver<Rs3.WriteWALSegmentRequest> writeWALSegmentRequestObserver;
   @Captor
@@ -60,7 +61,11 @@ class GrpcRS3ClientTest {
 
   @BeforeEach
   public void setup() {
-    client = new GrpcRS3Client(channel, stub, asyncStub);
+    lenient().when(stubs.stubs(any(), anyInt())).thenReturn(new PssStubsProvider.Stubs(
+        stub,
+        asyncStub
+    ));
+    client = new GrpcRS3Client(stubs);
   }
 
   @Test
@@ -380,6 +385,9 @@ class GrpcRS3ClientTest {
         .setKey(ByteString.copyFrom(put.key()));
     if (put.value().isPresent()) {
       builder.setValue(ByteString.copyFrom(put.value().get()));
+      builder.setTtl(Rs3.Ttl.newBuilder()
+          .setTtlType(Rs3.Ttl.TtlType.DEFAULT)
+          .build());
     }
     return builder.build();
   }

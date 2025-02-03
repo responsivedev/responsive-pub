@@ -15,9 +15,11 @@ package dev.responsive.kafka.internal.db.rs3;
 import dev.responsive.kafka.internal.db.KVFlushManager;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.rs3.client.LssId;
+import dev.responsive.kafka.internal.db.rs3.client.MeteredRS3Client;
 import dev.responsive.kafka.internal.db.rs3.client.Put;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Client;
 import dev.responsive.kafka.internal.db.rs3.client.WalEntry;
+import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration;
 import java.util.HashMap;
 import java.util.Objects;
@@ -45,11 +47,17 @@ public class RS3KVTable implements RemoteKVTable<WalEntry> {
       final String name,
       final UUID storeId,
       final RS3Client rs3Client,
-      final PssPartitioner pssPartitioner
+      final PssPartitioner pssPartitioner,
+      final ResponsiveMetrics responsiveMetrics,
+      final ResponsiveMetrics.MetricScopeBuilder scopeBuilder
   ) {
     this.name = Objects.requireNonNull(name);
     this.storeId = Objects.requireNonNull(storeId);
-    this.rs3Client = Objects.requireNonNull(rs3Client);
+    this.rs3Client = new MeteredRS3Client(
+        Objects.requireNonNull(rs3Client),
+        Objects.requireNonNull(responsiveMetrics),
+        Objects.requireNonNull(scopeBuilder)
+    );
     this.pssPartitioner = Objects.requireNonNull(pssPartitioner);
   }
 
@@ -109,8 +117,13 @@ public class RS3KVTable implements RemoteKVTable<WalEntry> {
   @Override
   public byte[] get(final int kafkaPartition, final Bytes key, final long minValidTs) {
     final int pssId = pssPartitioner.pss(key.get(), this.lssId);
-    return rs3Client.get(storeId, lssId, pssId, flushManager.writtenOffset(pssId), key.get())
-        .orElse(null);
+    return rs3Client.get(
+        storeId,
+        lssId,
+        pssId,
+        flushManager.writtenOffset(pssId),
+        key.get()
+    ).orElse(null);
   }
 
   @Override
