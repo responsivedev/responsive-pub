@@ -21,6 +21,8 @@ import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.internal.db.partitioning.Murmur3Hasher;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -125,6 +127,9 @@ public class ResponsiveConfig extends AbstractConfig {
 
   public static final String RS3_PORT_CONFIG = "responsive.rs3.port";
   private static final String RS3_PORT_DOC = "The port to use when connecting to RS3.";
+
+  public static final String RS3_LOGICAL_STORE_MAPPING_CONFIG = "responsive.rs3.logical.store.mapping";
+  public static final String RS3_LOGICAL_STORE_MAPPING_DOC = "Mapping from table name to RS3 logical store ID";
 
   // ------------------ ScyllaDB specific configurations ----------------------
 
@@ -603,6 +608,12 @@ public class ResponsiveConfig extends AbstractConfig {
           50051,
           Importance.MEDIUM,
           RS3_PORT_DOC
+      ).define(
+          RS3_LOGICAL_STORE_MAPPING_CONFIG,
+          Type.STRING,
+          "",
+          Importance.HIGH,
+          RS3_LOGICAL_STORE_MAPPING_DOC
       );
 
   /**
@@ -649,4 +660,24 @@ public class ResponsiveConfig extends AbstractConfig {
     }
   }
 
+
+  public Map<String, String> getMap(String config) {
+    String configValue = getString(config);
+    if (configValue == null) {
+      throw new ConfigException("No value found for config " + config);
+    }
+
+    if (configValue.isEmpty()) {
+      return Collections.emptyMap();
+    }
+
+    Map<String, String> map = new HashMap<>();
+    for (String mapping : configValue.split("\\s*,\\s*")) {
+      int lio = mapping.lastIndexOf(":");
+      String key = mapping.substring(0,lio).trim();
+      String value = mapping.substring(lio + 1).trim();
+      map.put(key, value);
+    }
+    return map;
+  }
 }

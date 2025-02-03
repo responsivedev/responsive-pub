@@ -149,6 +149,10 @@ public class RS3KVTable implements RemoteKVTable<WalEntry> {
     return name;
   }
 
+  public UUID storedId() {
+    return storeId;
+  }
+
   @Override
   public WalEntry insert(
       final int kafkaPartition,
