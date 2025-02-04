@@ -45,8 +45,8 @@ dependencyResolutionManagement {
             version("kafka", "3.8.1")
             version("scylla", "4.15.0.0")
             version("javaoperatorsdk", "4.9.6")
-            version("grpc", "1.52.1")
-            version("protobuf-java", "3.22.3")
+            version("grpc", "1.69.1")
+            version("protobuf-java", "3.25.5")
             version("slf4j", "1.7.5")
             version("log4j2", "2.20.0")
             version("mongoDB", "4.10.2")
@@ -115,6 +115,7 @@ dependencyResolutionManagement {
 
         create("testlibs") {
             version("testcontainers", "1.17.6")
+            version("grpc", "1.69.1")
 
             library("junit", "org.junit.jupiter:junit-jupiter:5.9.1")
             library("hamcrest", "org.hamcrest:hamcrest:2.2")
@@ -143,6 +144,11 @@ dependencyResolutionManagement {
                     ))
 
             bundle("base", listOf("junit", "slf4j", "log4j-core", "hamcrest", "mockito", "mockito-jupiter"))
+
+            library("grpc-inprocess", "io.grpc", "grpc-inprocess").versionRef("grpc")
+            library("grpc-testing", "io.grpc", "grpc-testing").versionRef("grpc")
+            library("grpc-testing-proto", "io.grpc", "grpc-testing-proto").versionRef("grpc")
+            bundle("grpctesting", listOf("grpc-inprocess", "grpc-testing", "grpc-testing-proto"))
         }
     }
 }

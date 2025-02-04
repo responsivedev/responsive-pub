@@ -14,13 +14,13 @@ import com.google.protobuf.gradle.id
 
 buildscript {
     dependencies {
-        classpath("com.google.protobuf:protobuf-gradle-plugin:0.8.8")
+        classpath("com.google.protobuf:protobuf-gradle-plugin:0.9.4")
     }
 }
 
 plugins {
     id("responsive.java-library-conventions")
-    id("com.google.protobuf").version("0.9.2")
+    id("com.google.protobuf").version("0.9.4")
 }
 
 sourceSets {
@@ -33,7 +33,7 @@ sourceSets {
 
 protobuf {
     protoc {
-        artifact = "com.google.protobuf:protoc:3.22.3"
+        artifact = "com.google.protobuf:protoc:3.25.5"
     }
 
     plugins {

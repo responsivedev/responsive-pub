@@ -384,6 +384,26 @@ rules:
          desc: cumulative commands failed latency
          unit: '{milliseconds}'
 
+ - bean: dev.responsive:type=rs3-table-metrics,responsive-version=*,responsive-commit-id=*,streams-version=*,streams-commit-id=*,consumer-group=*,streams-application-id=*,streams-client-id=*,thread-id=*,topic=*,partition=*,store=*
+   metricAttribute:
+     responsiveVersion: param(responsive-version)
+     responsiveCommitId: param(responsive-commit-id)
+     streamsVersion: param(streams-version)
+     streamsCommitId: param(streams-commit-id)
+     consumerGroup: param(consumer-group)
+     streamsApplicationId: param(streams-application-id)
+     streamsClientId: param(streams-client-id)
+     thread: param(thread-id)
+     partition: param(partition)
+     topic: param(topic)
+     store: param(store)
+   mapping:
+     get-latency-ns-avg:
+       metric: rs3.client.get.latency.ns.avg
+       type: gauge
+       desc: avg rs3 get latency
+       unit: '{nanoseconds}'
+
   # Cassandra Client Metrics
  - bean: dev.responsive:type=cassandra-client
    mapping:

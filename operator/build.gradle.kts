@@ -37,8 +37,7 @@ dependencies {
 
     testImplementation(testlibs.bundles.base)
     testImplementation(testlibs.bundles.testcontainers)
-    testImplementation("io.grpc:grpc-testing:1.53.0")
-    testImplementation("io.grpc:grpc-examples:0.15.0")
+    testImplementation(testlibs.bundles.grpctesting)
 
     testImplementation("org.bouncycastle:bcprov-jdk15on:1.70")
     testImplementation("org.bouncycastle:bcpkix-jdk15on:1.70")

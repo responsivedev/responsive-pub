@@ -4,12 +4,41 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import dev.responsive.kafka.api.config.ResponsiveConfig;
+import dev.responsive.kafka.internal.metrics.ClientVersionMetadata;
+import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import java.util.Collections;
+import java.util.Map;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.metrics.Metrics;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 class RS3TableFactoryTest {
+  private final ResponsiveMetrics metrics = new ResponsiveMetrics(new Metrics());
+  private ResponsiveMetrics.MetricScopeBuilder scopeBuilder;
+
+
+  @BeforeEach
+  public void setup() {
+    metrics.initializeTags(
+        "applicationId",
+        "streamsClientId",
+        new ClientVersionMetadata(
+            "responsiveClientVersion",
+            "responsiveClientCommitId",
+            "streamsClientVersion",
+            "streamsClientCommitId"
+        ),
+        Map.of()
+    );
+    scopeBuilder = metrics.storeLevelMetricScopeBuilder(
+        "thread",
+        new TopicPartition("t", 0),
+        "store"
+    );
+  }
 
   @Test
   public void testTableMapping() {
@@ -20,8 +49,13 @@ class RS3TableFactoryTest {
     Mockito.when(config.getMap(ResponsiveConfig.RS3_LOGICAL_STORE_MAPPING_CONFIG))
         .thenReturn(Collections.singletonMap(table, uuid));
 
-    final RS3TableFactory factory = new RS3TableFactory("localhost", 9888);
-    final RS3KVTable rs3Table = (RS3KVTable) factory.kvTable(table, config);
+    final RS3TableFactory factory = new RS3TableFactory("localhost", 9888, true);
+    final RS3KVTable rs3Table = (RS3KVTable) factory.kvTable(
+        table,
+        config,
+        metrics,
+        scopeBuilder
+    );
     assertEquals(uuid, rs3Table.storedId().toString());
   }
 
@@ -32,8 +66,11 @@ class RS3TableFactoryTest {
     Mockito.when(config.getMap(ResponsiveConfig.RS3_LOGICAL_STORE_MAPPING_CONFIG))
         .thenReturn(Collections.emptyMap());
 
-    final RS3TableFactory factory = new RS3TableFactory("localhost", 9888);
-    assertThrows(ConfigException.class, () -> factory.kvTable(table, config));
+    final RS3TableFactory factory = new RS3TableFactory("localhost", 9888, true);
+    assertThrows(
+        ConfigException.class,
+        () -> factory.kvTable(table, config, metrics, scopeBuilder)
+    );
   }
 
 }
