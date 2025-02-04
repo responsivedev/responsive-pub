@@ -1,9 +1,11 @@
-from scratch
+FROM scratch
 
 COPY base/config/docker-compose-base.yml /docker-compose-base.yml
 COPY base/config/docker-compose-scylla.yml /docker-compose-scylla.yml
 COPY base/config/docker-compose-mongo.yml /docker-compose-mongo.yml
+COPY base/config/docker-compose-rs3.yml /docker-compose-rs3.yml
 COPY base/config/volumes/scylla.yaml volumes/scylla.yaml
+COPY base/config/volumes/rs3.toml volumes/rs3.toml
 ADD base/config/volumes/zookeeper /volumes/zookeeper
 ADD base/config/volumes/scylla /volumes/scylla
 ADD base/config/volumes/scylla2 /volumes/scylla2
