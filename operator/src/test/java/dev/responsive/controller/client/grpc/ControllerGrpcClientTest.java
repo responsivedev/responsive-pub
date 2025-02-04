@@ -36,12 +36,12 @@ import io.grpc.ServerInterceptor;
 import io.grpc.ServerInterceptors;
 import io.grpc.StatusRuntimeException;
 import io.grpc.TlsChannelCredentials;
-import io.grpc.examples.helloworld.GreeterGrpc;
-import io.grpc.examples.helloworld.HelloReply;
-import io.grpc.examples.helloworld.HelloRequest;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
 import io.grpc.testing.GrpcCleanupRule;
+import io.grpc.testing.protobuf.SimpleRequest;
+import io.grpc.testing.protobuf.SimpleResponse;
+import io.grpc.testing.protobuf.SimpleServiceGrpc;
 import org.junit.Rule;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -120,29 +120,29 @@ class ControllerGrpcClientTest {
     String serverName = InProcessServerBuilder.generateName();
     // Create a server, add service, start, and register for automatic graceful shutdown.
     grpcCleanup.register(InProcessServerBuilder.forName(serverName).directExecutor()
-        .addService(ServerInterceptors.intercept(new GreeterGrpc.GreeterImplBase() {
+        .addService(ServerInterceptors.intercept(new SimpleServiceGrpc.SimpleServiceImplBase() {
         }, mockServerInterceptor))
         .build().start());
     // Create a client channel and register for automatic graceful shutdown.
     ManagedChannel channel = grpcCleanup.register(
         InProcessChannelBuilder.forName(serverName).directExecutor().build());
 
-    GreeterGrpc.GreeterBlockingStub blockingStub = GreeterGrpc.newBlockingStub(
+    SimpleServiceGrpc.SimpleServiceBlockingStub blockingStub = SimpleServiceGrpc.newBlockingStub(
         ClientInterceptors.intercept(channel, clientInterceptorArgumentCaptor.getValue()));
 
     ArgumentCaptor<Metadata> metadataCaptor = ArgumentCaptor.forClass(Metadata.class);
 
     try {
-      blockingStub.sayHello(HelloRequest.getDefaultInstance());
+      blockingStub.unaryRpc(SimpleRequest.getDefaultInstance());
       fail();
     } catch (StatusRuntimeException expected) {
       // expected because the method is not implemented at server side
     }
 
     verify(mockServerInterceptor).interceptCall(
-        ArgumentMatchers.<ServerCall<HelloRequest, HelloReply>>any(),
+        ArgumentMatchers.<ServerCall<SimpleRequest, SimpleResponse>>any(),
         metadataCaptor.capture(),
-        ArgumentMatchers.<ServerCallHandler<HelloRequest, HelloReply>>any());
+        ArgumentMatchers.<ServerCallHandler<SimpleRequest, SimpleResponse>>any());
 
     final String receivedApiKey = metadataCaptor.getValue().get(Metadata.Key.of(
         ApiKeyHeaders.API_KEY_METADATA_KEY,

@@ -115,6 +115,7 @@ dependencyResolutionManagement {
 
         create("testlibs") {
             version("testcontainers", "1.17.6")
+            version("grpc", "1.69.1")
 
             library("junit", "org.junit.jupiter:junit-jupiter:5.9.1")
             library("hamcrest", "org.hamcrest:hamcrest:2.2")
@@ -143,6 +144,11 @@ dependencyResolutionManagement {
                     ))
 
             bundle("base", listOf("junit", "slf4j", "log4j-core", "hamcrest", "mockito", "mockito-jupiter"))
+
+            library("grpc-inprocess", "io.grpc", "grpc-inprocess").versionRef("grpc")
+            library("grpc-testing", "io.grpc", "grpc-testing").versionRef("grpc")
+            library("grpc-testing-proto", "io.grpc", "grpc-testing-proto").versionRef("grpc")
+            bundle("grpctesting", listOf("grpc-inprocess", "grpc-testing", "grpc-testing-proto"))
         }
     }
 }
