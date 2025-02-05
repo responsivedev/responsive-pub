@@ -82,7 +82,9 @@ public abstract class AbstractKSExampleService extends AbstractIdleService {
     E2ETestUtils.awaitKeyspace(properties);
     LOG.info("Created keyspace...");
 
-    LOG.info("Starting Kafka Streams...");
+    Topology topology = buildTopology();
+    LOG.info("Starting Kafka Streams with topology {}", topology.describe());
+
     kafkaStreams = responsive
         ? new ResponsiveKafkaStreams(buildTopology(), properties)
         : new KafkaStreams(buildTopology(), new StreamsConfig(properties));
