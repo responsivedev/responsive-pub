@@ -14,4 +14,4 @@ services:
       - ./volumes/rs3.toml:/etc/rs3/rs3.toml
     networks:
       backend:
-        ipv4_address: 10.0.0.50
+        ipv4_address: 10.0.0.60
