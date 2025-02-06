@@ -16,6 +16,7 @@ import dev.responsive.examples.common.JsonDeserializer;
 import dev.responsive.examples.common.JsonSerde;
 import dev.responsive.examples.common.JsonSerializer;
 import dev.responsive.examples.regression.model.Customer;
+import dev.responsive.examples.regression.model.CustomerInfo;
 import dev.responsive.examples.regression.model.EnrichedOrder;
 import dev.responsive.examples.regression.model.GroupedOrder;
 import dev.responsive.examples.regression.model.Order;
@@ -30,6 +31,10 @@ public class RegressionSchema {
 
   public static Serde<Customer> customerSerde() {
     return new JsonSerde<>(Customer.class);
+  }
+
+  public static Serde<CustomerInfo> customerInfoSerde() {
+    return new JsonSerde<>(CustomerInfo.class);
   }
 
   public static Serde<EnrichedOrder> enrichedOrderSerde() {
@@ -47,6 +52,18 @@ public class RegressionSchema {
   public static class CustomerSerializer extends JsonSerializer<Customer> {
     public CustomerSerializer() {
       super(Customer.class);
+    }
+  }
+
+  public static class CustomerInfoSerializer extends JsonSerializer<CustomerInfo> {
+    public CustomerInfoSerializer() {
+      super(CustomerInfo.class);
+    }
+  }
+
+  public static class CustomerInfoDeserializer extends JsonDeserializer<CustomerInfo> {
+    public CustomerInfoDeserializer() {
+      super(CustomerInfo.class);
     }
   }
 
