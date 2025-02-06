@@ -17,4 +17,4 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 public record CustomerInfo(
     @JsonProperty("customerName") String customerName,
     @JsonProperty("location") String location
-) { }
+) {}

@@ -12,8 +12,8 @@
 
 package dev.responsive.examples.regression.tests;
 
-import static dev.responsive.examples.regression.RegConstants.CUSTOMER_IDS_TO_LOCATION;
-import static dev.responsive.examples.regression.RegConstants.CUSTOMER_NAMES_TO_ID;
+import static dev.responsive.examples.regression.RegConstants.CUSTOMER_NAME_TO_LOCATION;
+import static dev.responsive.examples.regression.RegConstants.CUSTOMER_ID_TO_NAME;
 import static dev.responsive.examples.regression.RegConstants.NUM_PARTITIONS;
 import static dev.responsive.examples.regression.RegConstants.ORDERS;
 
@@ -73,8 +73,8 @@ public abstract class AbstractKSExampleService extends AbstractIdleService {
         NUM_PARTITIONS,
         List.of(
             ORDERS,
-            CUSTOMER_IDS_TO_LOCATION,
-            CUSTOMER_NAMES_TO_ID,
+            CUSTOMER_NAME_TO_LOCATION,
+            CUSTOMER_ID_TO_NAME,
             resultsTopic()
         )
     );

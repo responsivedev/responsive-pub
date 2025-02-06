@@ -12,8 +12,8 @@
 
 package dev.responsive.examples.regression.tests;
 
-import static dev.responsive.examples.regression.RegConstants.CUSTOMER_IDS_TO_LOCATION;
-import static dev.responsive.examples.regression.RegConstants.CUSTOMER_NAMES_TO_ID;
+import static dev.responsive.examples.regression.RegConstants.CUSTOMER_NAME_TO_LOCATION;
+import static dev.responsive.examples.regression.RegConstants.CUSTOMER_ID_TO_NAME;
 import static dev.responsive.examples.regression.RegConstants.ORDERS;
 
 import dev.responsive.examples.common.InjectedE2ETestException;
@@ -30,6 +30,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.Joined;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
@@ -58,25 +59,25 @@ public class FullTopologyExample extends AbstractKSExampleService {
   // we should work on making it more robust and cover more DSL operations (perhaps as
   // individual tests)
   @Override
-  protected Topology buildTopology() {
+  public Topology buildTopology() {
     final StreamsBuilder builder = new StreamsBuilder();
 
     // Read orders keyed by customer id
     final KStream<String, Order> orders =
         builder.stream(ORDERS, Consumed.with(Serdes.String(), RegressionSchema.orderSerde()));
 
-    // Read customer ids keyed by customer name
-    final KTable<String, String> customerNameToId =
-        builder.table(CUSTOMER_NAMES_TO_ID, Consumed.with(Serdes.String(), Serdes.String()));
+    // Read customer names keyed by customer id
+    final KTable<String, String> customerIdToName =
+        builder.table(CUSTOMER_ID_TO_NAME, Consumed.with(Serdes.String(), Serdes.String()));
 
-    // Read customer location keyed by customer id
-    final KTable<String, String> customerIdToLocation =
-        builder.table(CUSTOMER_IDS_TO_LOCATION, Consumed.with(Serdes.String(), Serdes.String()));
+    // Read customer location keyed by customer name
+    final KTable<String, String> customerNameToLocation =
+        builder.table(CUSTOMER_NAME_TO_LOCATION, Consumed.with(Serdes.String(), Serdes.String()));
 
     // Join customer tables to get full Customer metadata keyed by customer id
-    final KTable<String, Customer> customers = customerNameToId
-        .join(customerIdToLocation,
-              id -> id, // join key is customer id --> extract value from customerIdsByName
+    final KTable<String, Customer> customers = customerIdToName
+        .join(customerNameToLocation,
+              id -> id, // join key is customer name --> extract value from customerIdToName
               (location, name) -> new CustomerInfo(name, location),
               Materialized.with(Serdes.String(), RegressionSchema.customerInfoSerde()))
         .mapValues((k, v) -> new Customer(k, v.customerName(), v.location()));

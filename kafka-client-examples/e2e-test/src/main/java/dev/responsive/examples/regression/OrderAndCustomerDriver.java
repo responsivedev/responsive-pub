@@ -12,8 +12,8 @@
 
 package dev.responsive.examples.regression;
 
-import static dev.responsive.examples.regression.RegConstants.CUSTOMER_IDS_TO_LOCATION;
-import static dev.responsive.examples.regression.RegConstants.CUSTOMER_NAMES_TO_ID;
+import static dev.responsive.examples.regression.RegConstants.CUSTOMER_NAME_TO_LOCATION;
+import static dev.responsive.examples.regression.RegConstants.CUSTOMER_ID_TO_NAME;
 import static dev.responsive.examples.regression.RegConstants.ORDERS;
 import static dev.responsive.examples.regression.RegConstants.resultsTopic;
 
@@ -78,8 +78,8 @@ public class OrderAndCustomerDriver extends AbstractExecutionThreadService {
         props,
         RegConstants.NUM_PARTITIONS,
         List.of(ORDERS,
-                CUSTOMER_IDS_TO_LOCATION,
-                CUSTOMER_NAMES_TO_ID,
+                CUSTOMER_NAME_TO_LOCATION,
+                CUSTOMER_ID_TO_NAME,
                 resultsTopic(true),
                 resultsTopic(false)
         )
@@ -127,23 +127,23 @@ public class OrderAndCustomerDriver extends AbstractExecutionThreadService {
 
     final boolean isTombstone = random.nextByte() % 5 == 0; // 5% chance of a tombstone
 
-    final var nameToIdRecord = new ProducerRecord<>(
-        CUSTOMER_NAMES_TO_ID,
-        null,
-        timestamp,
-        customer.customerName(),
-        isTombstone ? null : customer.customerId()
-    );
-    final var idToLocationRecord = new ProducerRecord<>(
-        CUSTOMER_IDS_TO_LOCATION,
+    final var idToNameRecord = new ProducerRecord<>(
+        CUSTOMER_ID_TO_NAME,
         null,
         timestamp,
         customer.customerId(),
+        isTombstone ? null : customer.customerName()
+    );
+    final var nameToLocationRecord = new ProducerRecord<>(
+        CUSTOMER_NAME_TO_LOCATION,
+        null,
+        timestamp,
+        customer.customerName(),
         isTombstone ? null : customer.location()
     );
 
-    customerProducer.send(nameToIdRecord).get();
-    customerProducer.send(idToLocationRecord).get();
+    customerProducer.send(idToNameRecord).get();
+    customerProducer.send(nameToLocationRecord).get();
   }
 
   private void sendNewOrder() throws ExecutionException, InterruptedException {
@@ -153,6 +153,8 @@ public class OrderAndCustomerDriver extends AbstractExecutionThreadService {
     orderProducer.send(
         new ProducerRecord<>(
             ORDERS,
+            null,
+            System.currentTimeMillis(),
             order.customerId(),
             order
         )
