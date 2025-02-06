@@ -12,10 +12,11 @@
 
 package dev.responsive.examples.regression;
 
-import static dev.responsive.examples.regression.RegConstants.CUSTOMER_NAME_TO_LOCATION;
 import static dev.responsive.examples.regression.RegConstants.CUSTOMER_ID_TO_NAME;
+import static dev.responsive.examples.regression.RegConstants.CUSTOMER_NAME_TO_LOCATION;
 import static dev.responsive.examples.regression.RegConstants.ORDERS;
 import static dev.responsive.examples.regression.RegConstants.resultsTopic;
+import static dev.responsive.examples.regression.RegressionSchema.enrichedOrderSerde;
 import static org.apache.kafka.streams.StreamsConfig.COMMIT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG;
 
@@ -52,7 +53,7 @@ public class FullTopologyExampleTest {
           ORDERS, new StringSerializer(), RegressionSchema.orderSerde().serializer());
 
       final TestOutputTopic<String, EnrichedOrder> output = driver.createOutputTopic(
-          resultsTopic(true), new StringDeserializer(), new RegressionSchema.EnrichedOrderDeserializer());
+          resultsTopic(true), new StringDeserializer(), enrichedOrderSerde().deserializer());
 
 
       customerIdToName.pipeInput(CUSTOMER_ID_1, CUSTOMER_NAME_1, 0);

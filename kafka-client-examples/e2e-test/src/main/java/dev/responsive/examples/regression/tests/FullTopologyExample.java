@@ -12,8 +12,8 @@
 
 package dev.responsive.examples.regression.tests;
 
-import static dev.responsive.examples.regression.RegConstants.CUSTOMER_NAME_TO_LOCATION;
 import static dev.responsive.examples.regression.RegConstants.CUSTOMER_ID_TO_NAME;
+import static dev.responsive.examples.regression.RegConstants.CUSTOMER_NAME_TO_LOCATION;
 import static dev.responsive.examples.regression.RegConstants.ORDERS;
 
 import dev.responsive.examples.common.InjectedE2ETestException;
@@ -30,7 +30,6 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.kstream.Consumed;
-import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.Joined;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;

@@ -12,8 +12,8 @@
 
 package dev.responsive.examples.regression;
 
-import static dev.responsive.examples.regression.RegConstants.CUSTOMER_NAME_TO_LOCATION;
 import static dev.responsive.examples.regression.RegConstants.CUSTOMER_ID_TO_NAME;
+import static dev.responsive.examples.regression.RegConstants.CUSTOMER_NAME_TO_LOCATION;
 import static dev.responsive.examples.regression.RegConstants.ORDERS;
 import static dev.responsive.examples.regression.RegConstants.resultsTopic;
 
