@@ -133,6 +133,11 @@ public class ResponsiveConfig extends AbstractConfig {
 
   public static final String RS3_TLS_ENABLED_CONFIG = "responsive.rs3.tls.enabled";
   private static final String RS3_TLS_ENABLED_DOC = "Enables/disable tls for rs3 connection";
+  public static final boolean RS3_TLS_ENABLED_DEFAULT = true;
+
+  public static final String RS3_RETRY_TIMEOUT_CONFIG = "responsive.rs3.retry.timeout.ms";
+  private static final String RS3_RETRY_TIMEOUT_DOC = "Timeout in milliseconds for retries when RS3 endpoint is unavailable";
+  public static final int RS3_RETRY_TIMEOUT_DEFAULT = 30000;
 
   // ------------------ ScyllaDB specific configurations ----------------------
 
@@ -620,9 +625,16 @@ public class ResponsiveConfig extends AbstractConfig {
       ).define(
           RS3_TLS_ENABLED_CONFIG,
           Type.BOOLEAN,
-          true,
+          RS3_TLS_ENABLED_DEFAULT,
           Importance.MEDIUM,
           RS3_TLS_ENABLED_DOC
+      ).define(
+          RS3_RETRY_TIMEOUT_CONFIG,
+          Type.LONG,
+          RS3_RETRY_TIMEOUT_DEFAULT,
+          atLeast(0),
+          Importance.MEDIUM,
+          RS3_RETRY_TIMEOUT_DOC
       );
 
   /**

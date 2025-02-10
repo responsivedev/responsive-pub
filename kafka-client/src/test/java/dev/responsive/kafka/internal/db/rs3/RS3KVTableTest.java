@@ -40,6 +40,7 @@ import junit.framework.AssertionFailedError;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.MockTime;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -70,7 +71,10 @@ public class RS3KVTableTest {
     testName = info.getTestMethod().orElseThrow().getName();
     final int port = rs3Container.getMappedPort(50051);
     this.rs3Container = rs3Container;
-    pocketClient = GrpcRS3Client.connect(String.format("localhost:%d", port), false);
+    final GrpcRS3Client.Connector connector =
+        new GrpcRS3Client.Connector(new MockTime(), "localhost", port);
+    connector.useTls(false);
+    pocketClient = connector.connect();
     final ResponsiveMetrics responsiveMetrics = new ResponsiveMetrics(metrics);
     responsiveMetrics.initializeTags(
         "application-id",

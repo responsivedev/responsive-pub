@@ -18,6 +18,7 @@ import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_CONNECTION_
 import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RS3_HOSTNAME_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RS3_PORT_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.RS3_RETRY_TIMEOUT_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RS3_TLS_ENABLED_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.TASK_ASSIGNOR_CLASS_OVERRIDE;
 import static dev.responsive.kafka.internal.config.ResponsiveStreamsConfig.validateNoStorageStreamsConfig;
@@ -44,6 +45,7 @@ import dev.responsive.kafka.internal.db.DefaultCassandraClientFactory;
 import dev.responsive.kafka.internal.db.mongo.CollectionCreationOptions;
 import dev.responsive.kafka.internal.db.mongo.ResponsiveMongoClient;
 import dev.responsive.kafka.internal.db.rs3.RS3TableFactory;
+import dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRS3Client;
 import dev.responsive.kafka.internal.license.LicenseAuthenticator;
 import dev.responsive.kafka.internal.license.LicenseChecker;
 import dev.responsive.kafka.internal.license.model.LicenseDocument;
@@ -576,11 +578,14 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
           LOG.info("Using rs3 responsive store");
           final var rs3Host = responsiveConfig.getString(RS3_HOSTNAME_CONFIG);
           final var rs3Port = responsiveConfig.getInt(RS3_PORT_CONFIG);
-          final var useTls = responsiveConfig.getBoolean(RS3_TLS_ENABLED_CONFIG);
+          final var rs3Connector = new GrpcRS3Client.Connector(time, rs3Host, rs3Port);
+          rs3Connector.retryTimeoutMs(responsiveConfig.getInt(RS3_RETRY_TIMEOUT_CONFIG));
+          rs3Connector.useTls(responsiveConfig.getBoolean(RS3_TLS_ENABLED_CONFIG));
+
           sessionClients = new SessionClients(
               Optional.empty(),
               Optional.empty(),
-              Optional.of(new RS3TableFactory(rs3Host, rs3Port, useTls)),
+              Optional.of(new RS3TableFactory(rs3Connector)),
               storageBackend,
               admin
           );
