@@ -190,7 +190,7 @@ class GrpcRS3ClientTest {
 
     // then:
     assertThat(exception.getCause(), is(instanceOf(StatusRuntimeException.class)));
-    assertThat(((StatusRuntimeException)exception.getCause()).getStatus(), is(Status.UNKNOWN));
+    assertThat(((StatusRuntimeException) exception.getCause()).getStatus(), is(Status.UNKNOWN));
   }
 
   @Test
@@ -463,7 +463,7 @@ class GrpcRS3ClientTest {
 
     // then:
     assertThat(exception.getCause(), is(instanceOf(StatusRuntimeException.class)));
-    assertThat(((StatusRuntimeException)exception.getCause()).getStatus(), is(Status.UNKNOWN));
+    assertThat(((StatusRuntimeException) exception.getCause()).getStatus(), is(Status.UNKNOWN));
   }
 
   @Test
