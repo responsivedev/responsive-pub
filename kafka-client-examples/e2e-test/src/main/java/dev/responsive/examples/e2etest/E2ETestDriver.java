@@ -271,6 +271,7 @@ public class E2ETestDriver {
   private void maybeFireSetupCompleteSignal() {
     if (!setupCompleteSignalFired && recordsProcessed > 0) {
       LOG.info("Received at least one output record, setup is complete");
+      setupCompleteSignalFired = true;
       Lifecycle.setupComplete(null);
     }
   }
