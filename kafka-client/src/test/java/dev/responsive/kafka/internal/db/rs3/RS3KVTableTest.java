@@ -52,7 +52,7 @@ public class RS3KVTableTest {
   private static final int PARTITION_ID = 8;
 
   private String testName;
-  private RS3Client pocketClient;
+  private RS3Client rs3Client;
   private final PssPartitioner pssPartitioner = new PssDirectPartitioner();
   private final Metrics metrics = new Metrics();
 
@@ -74,7 +74,7 @@ public class RS3KVTableTest {
     final GrpcRS3Client.Connector connector =
         new GrpcRS3Client.Connector(new MockTime(), "localhost", port);
     connector.useTls(false);
-    pocketClient = connector.connect();
+    rs3Client = connector.connect();
     final ResponsiveMetrics responsiveMetrics = new ResponsiveMetrics(metrics);
     responsiveMetrics.initializeTags(
         "application-id",
@@ -96,7 +96,7 @@ public class RS3KVTableTest {
     this.table = new RS3KVTable(
         testName,
         STORE_ID,
-        pocketClient,
+        rs3Client,
         pssPartitioner,
         responsiveMetrics,
         scopeBuilder
@@ -106,7 +106,7 @@ public class RS3KVTableTest {
   @AfterEach
   public void teardown() {
     System.out.println(rs3Container.getLogs());
-    pocketClient.close();
+    rs3Client.close();
   }
 
   @Test
@@ -130,7 +130,7 @@ public class RS3KVTableTest {
   }
 
   @Test
-  public void shouldWriteToPocketStore() throws InterruptedException, ExecutionException {
+  public void shouldWriteToStore() throws InterruptedException, ExecutionException {
     // given:
     final var flushManager = table.init(PARTITION_ID);
     final var tablePartitioner = flushManager.partitioner();
@@ -145,7 +145,7 @@ public class RS3KVTableTest {
     flushManager.postFlush(10);
 
     // then:
-    final var result = pocketClient.get(
+    final var result = rs3Client.get(
         STORE_ID,
         new LssId(PARTITION_ID),
         pss,
@@ -160,7 +160,7 @@ public class RS3KVTableTest {
     // given:
     int endOffset = 100;
     for (final int pssId : pssPartitioner.pssForLss(new LssId(PARTITION_ID))) {
-      pocketClient.writeWalSegment(
+      rs3Client.writeWalSegment(
           STORE_ID,
           new LssId(PARTITION_ID),
           pssId,
@@ -186,7 +186,7 @@ public class RS3KVTableTest {
         pssPartitioner.pssForLss(new LssId(PARTITION_ID)));
     allPssExcept1.remove();
     for (final int pssId : allPssExcept1) {
-      pocketClient.writeWalSegment(
+      rs3Client.writeWalSegment(
           STORE_ID,
           new LssId(PARTITION_ID),
           pssId,
