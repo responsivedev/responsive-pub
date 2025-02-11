@@ -40,6 +40,7 @@ import junit.framework.AssertionFailedError;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.MockTime;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -51,7 +52,7 @@ public class RS3KVTableTest {
   private static final int PARTITION_ID = 8;
 
   private String testName;
-  private RS3Client pocketClient;
+  private RS3Client rs3Client;
   private final PssPartitioner pssPartitioner = new PssDirectPartitioner();
   private final Metrics metrics = new Metrics();
 
@@ -70,7 +71,10 @@ public class RS3KVTableTest {
     testName = info.getTestMethod().orElseThrow().getName();
     final int port = rs3Container.getMappedPort(50051);
     this.rs3Container = rs3Container;
-    pocketClient = GrpcRS3Client.connect(String.format("localhost:%d", port), false);
+    final GrpcRS3Client.Connector connector =
+        new GrpcRS3Client.Connector(new MockTime(), "localhost", port);
+    connector.useTls(false);
+    rs3Client = connector.connect();
     final ResponsiveMetrics responsiveMetrics = new ResponsiveMetrics(metrics);
     responsiveMetrics.initializeTags(
         "application-id",
@@ -92,7 +96,7 @@ public class RS3KVTableTest {
     this.table = new RS3KVTable(
         testName,
         STORE_ID,
-        pocketClient,
+        rs3Client,
         pssPartitioner,
         responsiveMetrics,
         scopeBuilder
@@ -102,7 +106,7 @@ public class RS3KVTableTest {
   @AfterEach
   public void teardown() {
     System.out.println(rs3Container.getLogs());
-    pocketClient.close();
+    rs3Client.close();
   }
 
   @Test
@@ -126,7 +130,7 @@ public class RS3KVTableTest {
   }
 
   @Test
-  public void shouldWriteToPocketStore() throws InterruptedException, ExecutionException {
+  public void shouldWriteToStore() throws InterruptedException, ExecutionException {
     // given:
     final var flushManager = table.init(PARTITION_ID);
     final var tablePartitioner = flushManager.partitioner();
@@ -141,7 +145,7 @@ public class RS3KVTableTest {
     flushManager.postFlush(10);
 
     // then:
-    final var result = pocketClient.get(
+    final var result = rs3Client.get(
         STORE_ID,
         new LssId(PARTITION_ID),
         pss,
@@ -156,7 +160,7 @@ public class RS3KVTableTest {
     // given:
     int endOffset = 100;
     for (final int pssId : pssPartitioner.pssForLss(new LssId(PARTITION_ID))) {
-      pocketClient.writeWalSegment(
+      rs3Client.writeWalSegment(
           STORE_ID,
           new LssId(PARTITION_ID),
           pssId,
@@ -182,7 +186,7 @@ public class RS3KVTableTest {
         pssPartitioner.pssForLss(new LssId(PARTITION_ID)));
     allPssExcept1.remove();
     for (final int pssId : allPssExcept1) {
-      pocketClient.writeWalSegment(
+      rs3Client.writeWalSegment(
           STORE_ID,
           new LssId(PARTITION_ID),
           pssId,
