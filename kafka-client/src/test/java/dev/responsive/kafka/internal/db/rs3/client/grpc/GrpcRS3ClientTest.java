@@ -35,9 +35,6 @@ import io.grpc.stub.StreamObserver;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
 import org.apache.kafka.common.utils.MockTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -194,31 +191,17 @@ class GrpcRS3ClientTest {
   }
 
   @Test
-  public void shouldTimeoutGetOffsets() throws Exception {
+  public void shouldTimeoutGetOffsets() {
     // given:
     when(stub.getOffsets(any()))
         .thenThrow(new StatusRuntimeException(Status.UNAVAILABLE));
 
-    // when:
-    final var executor = Executors.newFixedThreadPool(1);
-    final var future = executor.submit(() -> client.getCurrentOffsets(
+    // then:
+    assertThrows(RS3TimeoutException.class, () -> client.getCurrentOffsets(
         STORE_ID,
         LSS_ID,
         PSS_ID
     ));
-    while (!future.isDone()) {
-      time.sleep(1000);
-    }
-
-    // then:
-    final ExecutionException exception =
-        assertThrows(ExecutionException.class, future::get);
-    assertThat(exception.getCause(), is(instanceOf(RS3TimeoutException.class)));
-
-    executor.shutdown();
-    if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
-      throw new RuntimeException("Timed out waiting for executor to shut down");
-    }
   }
 
   @Test
@@ -467,34 +450,20 @@ class GrpcRS3ClientTest {
   }
 
   @Test
-  public void shouldTimeoutGet() throws Exception {
+  public void shouldTimeoutGet() {
     // given:
     when(stub.get(any()))
         .thenThrow(new StatusRuntimeException(Status.UNAVAILABLE));
 
-    // when:
-    final var executor = Executors.newFixedThreadPool(1);
-    final Future<Optional<byte[]>> future = executor.submit(() -> client.get(
+    // then:
+    assertThrows(RS3TimeoutException.class, () -> client.get(
         STORE_ID,
         LSS_ID,
         PSS_ID,
         Optional.of(123L),
         "foo".getBytes()
     ));
-    while (!future.isDone()) {
-      time.sleep(1000);
-    }
-
-    // then:
-    final var exception = assertThrows(ExecutionException.class, future::get);
-    assertThat(exception.getCause(), is(instanceOf(RS3TimeoutException.class)));
-
-    executor.shutdown();
-    if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
-      throw new RuntimeException("Timed out waiting for executor to shut down");
-    }
   }
-
 
   private StreamObserver<Rs3.WriteWALSegmentResult> verifyWalSegmentResultObserver() {
     verify(asyncStub).writeWALSegmentStream(writeWALSegmentResultObserverCaptor.capture());
