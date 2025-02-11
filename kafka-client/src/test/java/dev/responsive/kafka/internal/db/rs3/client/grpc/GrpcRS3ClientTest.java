@@ -193,15 +193,20 @@ class GrpcRS3ClientTest {
   @Test
   public void shouldTimeoutGetOffsets() {
     // given:
+    var startTimeMs = time.milliseconds();
     when(stub.getOffsets(any()))
         .thenThrow(new StatusRuntimeException(Status.UNAVAILABLE));
 
-    // then:
+    // when:
     assertThrows(RS3TimeoutException.class, () -> client.getCurrentOffsets(
         STORE_ID,
         LSS_ID,
         PSS_ID
     ));
+
+    // then:
+    var endTimeMs = time.milliseconds();
+    assertThat(endTimeMs - startTimeMs, is(retryTimeoutMs));
   }
 
   @Test
@@ -452,10 +457,11 @@ class GrpcRS3ClientTest {
   @Test
   public void shouldTimeoutGet() {
     // given:
+    var startTimeMs = time.milliseconds();
     when(stub.get(any()))
         .thenThrow(new StatusRuntimeException(Status.UNAVAILABLE));
 
-    // then:
+    // when:
     assertThrows(RS3TimeoutException.class, () -> client.get(
         STORE_ID,
         LSS_ID,
@@ -463,6 +469,10 @@ class GrpcRS3ClientTest {
         Optional.of(123L),
         "foo".getBytes()
     ));
+
+    // then:
+    var endTimeMs = time.milliseconds();
+    assertThat(endTimeMs - startTimeMs, is(retryTimeoutMs));
   }
 
   private StreamObserver<Rs3.WriteWALSegmentResult> verifyWalSegmentResultObserver() {

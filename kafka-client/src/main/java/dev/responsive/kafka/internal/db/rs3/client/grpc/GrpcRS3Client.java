@@ -81,24 +81,28 @@ public class GrpcRS3Client implements RS3Client {
   private <T> T withRetry(Supplier<T> supplier, Supplier<String> opDescription) {
     // Using Kafka default backoff settings initially. We can pull them up
     // if there is ever strong reason.
-    final ExponentialBackoff backoff = new ExponentialBackoff(50, 2, 1000, 0.2);
-    final long startTimeMs = time.milliseconds();
+    final var backoff = new ExponentialBackoff(50, 2, 1000, 0.2);
+    final var startTimeMs = time.milliseconds();
+    final var deadlineMs = startTimeMs + retryTimeoutMs;
 
-    long retries = 0;
+    var retries = 0;
     long currentTimeMs;
 
     do {
       try {
         return supplier.get();
       } catch (final StatusRuntimeException e) {
-        if (e.getStatus() == UNAVAILABLE) {
-          retries += 1;
-          time.sleep(backoff.backoff(retries));
-        } else {
+        if (e.getStatus() != UNAVAILABLE) {
           throw new RS3Exception(e);
         }
       }
+
+      retries += 1;
       currentTimeMs = time.milliseconds();
+      time.sleep(Math.min(
+          backoff.backoff(retries),
+          Math.max(0, deadlineMs - currentTimeMs))
+      );
     } while (currentTimeMs - startTimeMs < retryTimeoutMs);
     throw new RS3TimeoutException("Timeout while attempting operation " + opDescription.get());
   }
