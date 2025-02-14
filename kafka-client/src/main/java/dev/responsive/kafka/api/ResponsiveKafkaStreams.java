@@ -579,7 +579,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
           final var rs3Host = responsiveConfig.getString(RS3_HOSTNAME_CONFIG);
           final var rs3Port = responsiveConfig.getInt(RS3_PORT_CONFIG);
           final var rs3Connector = new GrpcRS3Client.Connector(time, rs3Host, rs3Port);
-          rs3Connector.retryTimeoutMs(responsiveConfig.getInt(RS3_RETRY_TIMEOUT_CONFIG));
+          rs3Connector.retryTimeoutMs(responsiveConfig.getLong(RS3_RETRY_TIMEOUT_CONFIG));
           rs3Connector.useTls(responsiveConfig.getBoolean(RS3_TLS_ENABLED_CONFIG));
 
           sessionClients = new SessionClients(
