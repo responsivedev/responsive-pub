@@ -25,12 +25,17 @@ import static org.mockito.Mockito.when;
 import com.google.protobuf.ByteString;
 import dev.responsive.kafka.internal.db.rs3.client.LssId;
 import dev.responsive.kafka.internal.db.rs3.client.Put;
+import dev.responsive.kafka.internal.db.rs3.client.RS3Exception;
+import dev.responsive.kafka.internal.db.rs3.client.RS3TimeoutException;
 import dev.responsive.rs3.RS3Grpc;
 import dev.responsive.rs3.Rs3;
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
+import org.apache.kafka.common.utils.MockTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -56,6 +61,8 @@ class GrpcRS3ClientTest {
   @Captor
   private ArgumentCaptor<StreamObserver<Rs3.WriteWALSegmentResult>>
       writeWALSegmentResultObserverCaptor;
+  private MockTime time = new MockTime();
+  private long retryTimeoutMs = 30000;
 
   private GrpcRS3Client client;
 
@@ -65,7 +72,7 @@ class GrpcRS3ClientTest {
         stub,
         asyncStub
     ));
-    client = new GrpcRS3Client(stubs);
+    client = new GrpcRS3Client(stubs, time, retryTimeoutMs);
   }
 
   @Test
@@ -146,6 +153,60 @@ class GrpcRS3ClientTest {
     // then:
     assertThat(offsets.writtenOffset(), is(Optional.of(13L)));
     assertThat(offsets.flushedOffset(), is(Optional.of(3L)));
+  }
+
+  @Test
+  public void shouldRetryGetOffsets() {
+    // given:
+    when(stub.getOffsets(any()))
+        .thenThrow(new StatusRuntimeException(Status.UNAVAILABLE))
+        .thenThrow(new StatusRuntimeException(Status.UNAVAILABLE))
+        .thenReturn(
+            Rs3.GetOffsetsResult.newBuilder()
+                .setWrittenOffset(13)
+                .setFlushedOffset(3)
+                .build());
+
+    // when:
+    final var offsets = client.getCurrentOffsets(STORE_ID, LSS_ID, PSS_ID);
+
+    // then:
+    assertThat(offsets.writtenOffset(), is(Optional.of(13L)));
+    assertThat(offsets.flushedOffset(), is(Optional.of(3L)));
+  }
+
+  @Test
+  public void shouldPropagateUnexpectedExceptionFromGetOffsets() {
+    // given:
+    when(stub.getOffsets(any()))
+        .thenThrow(new StatusRuntimeException(Status.UNKNOWN));
+
+    // when:
+    final RS3Exception exception =
+        assertThrows(RS3Exception.class, () -> client.getCurrentOffsets(STORE_ID, LSS_ID, PSS_ID));
+
+    // then:
+    assertThat(exception.getCause(), is(instanceOf(StatusRuntimeException.class)));
+    assertThat(((StatusRuntimeException) exception.getCause()).getStatus(), is(Status.UNKNOWN));
+  }
+
+  @Test
+  public void shouldTimeoutGetOffsets() {
+    // given:
+    var startTimeMs = time.milliseconds();
+    when(stub.getOffsets(any()))
+        .thenThrow(new StatusRuntimeException(Status.UNAVAILABLE));
+
+    // when:
+    assertThrows(RS3TimeoutException.class, () -> client.getCurrentOffsets(
+        STORE_ID,
+        LSS_ID,
+        PSS_ID
+    ));
+
+    // then:
+    var endTimeMs = time.milliseconds();
+    assertThat(endTimeMs - startTimeMs, is(retryTimeoutMs));
   }
 
   @Test
@@ -360,6 +421,58 @@ class GrpcRS3ClientTest {
 
     // then:
     assertThat(result.isEmpty(), is(true));
+  }
+
+  @Test
+  public void shouldRetryGet() {
+    // given:
+    when(stub.get(any()))
+        .thenThrow(new StatusRuntimeException(Status.UNAVAILABLE))
+        .thenReturn(Rs3.GetResult.newBuilder().build());
+
+    // when:
+    final var result = client.get(STORE_ID, LSS_ID, PSS_ID, Optional.of(123L), "foo".getBytes());
+
+    // then:
+    assertThat(result.isEmpty(), is(true));
+  }
+
+  @Test
+  public void shouldPropagateUnexpectedExceptionsFromGet() {
+    // given:
+    when(stub.get(any()))
+        .thenThrow(new StatusRuntimeException(Status.UNKNOWN));
+
+    // when:
+    final RS3Exception exception = assertThrows(
+        RS3Exception.class,
+        () -> client.get(STORE_ID, LSS_ID, PSS_ID, Optional.of(123L), "foo".getBytes())
+    );
+
+    // then:
+    assertThat(exception.getCause(), is(instanceOf(StatusRuntimeException.class)));
+    assertThat(((StatusRuntimeException) exception.getCause()).getStatus(), is(Status.UNKNOWN));
+  }
+
+  @Test
+  public void shouldTimeoutGet() {
+    // given:
+    var startTimeMs = time.milliseconds();
+    when(stub.get(any()))
+        .thenThrow(new StatusRuntimeException(Status.UNAVAILABLE));
+
+    // when:
+    assertThrows(RS3TimeoutException.class, () -> client.get(
+        STORE_ID,
+        LSS_ID,
+        PSS_ID,
+        Optional.of(123L),
+        "foo".getBytes()
+    ));
+
+    // then:
+    var endTimeMs = time.milliseconds();
+    assertThat(endTimeMs - startTimeMs, is(retryTimeoutMs));
   }
 
   private StreamObserver<Rs3.WriteWALSegmentResult> verifyWalSegmentResultObserver() {

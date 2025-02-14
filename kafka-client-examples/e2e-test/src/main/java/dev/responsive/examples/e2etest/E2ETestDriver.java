@@ -271,6 +271,7 @@ public class E2ETestDriver {
   private void maybeFireSetupCompleteSignal() {
     if (!setupCompleteSignalFired && recordsProcessed > 0) {
       LOG.info("Received at least one output record, setup is complete");
+      setupCompleteSignalFired = true;
       Lifecycle.setupComplete(null);
     }
   }
@@ -388,7 +389,7 @@ public class E2ETestDriver {
       while (!sent.isEmpty() && sent.get(0).offset() <= upTo) {
         popped.add(sent.remove(0));
       }
-      LOG.warn("removing multiple offsets: {}",
+      LOG.debug("removing multiple offsets: {}",
           String.join(", ", popped.stream().map(Object::toString).toList()));
       return popped;
     }
