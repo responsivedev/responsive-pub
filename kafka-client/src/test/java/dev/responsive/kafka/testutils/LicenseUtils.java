@@ -7,14 +7,20 @@ import java.nio.file.Files;
 import java.util.Base64;
 
 public final class LicenseUtils {
-  private static final String DECODED_LICENSE_FILE
-      = "test-licenses/test-license.json";
+  private static final String DECODED_TRIAL_LICENSE_FILE
+      = "test-licenses/test-trial-license.json";
+  private static final String DECODED_USAGE_LICENSE_FILE
+      = "test-licenses/test-usage-license.json";
 
   private LicenseUtils() {
   }
 
   public static String getLicense() {
-    return getEncodedLicense(DECODED_LICENSE_FILE);
+    return getEncodedLicense(DECODED_TRIAL_LICENSE_FILE);
+  }
+
+  public static String getUsageLicense() {
+    return getEncodedLicense(DECODED_USAGE_LICENSE_FILE);
   }
 
   public static String getEncodedLicense(final String filename) {

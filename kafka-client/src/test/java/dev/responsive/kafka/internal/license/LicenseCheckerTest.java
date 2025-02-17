@@ -17,6 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import dev.responsive.kafka.internal.license.exception.LicenseUseViolationException;
 import dev.responsive.kafka.internal.license.model.LicenseInfo;
 import dev.responsive.kafka.internal.license.model.TimedTrialV1;
+import dev.responsive.kafka.internal.license.model.UsageBasedV1;
 import java.time.Duration;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
@@ -46,6 +47,20 @@ class LicenseCheckerTest {
         "foo@bar.com",
         0,
         Instant.now().plus(Duration.ofHours(1)).getEpochSecond()
+    );
+
+    // when/then (no throw):
+    checker.checkLicense(info);
+  }
+
+  @Test
+  public void shouldAcceptValidUsageBasedLicense() {
+    // given:
+    final LicenseInfo info = new UsageBasedV1(
+        UsageBasedV1.TYPE_NAME,
+        "foo@bar.com",
+        "key",
+        "secret"
     );
 
     // when/then (no throw):

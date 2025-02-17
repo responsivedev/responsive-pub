@@ -15,12 +15,21 @@ package dev.responsive.kafka.internal.license;
 import dev.responsive.kafka.internal.license.exception.LicenseUseViolationException;
 import dev.responsive.kafka.internal.license.model.LicenseInfo;
 import dev.responsive.kafka.internal.license.model.TimedTrialV1;
+import dev.responsive.kafka.internal.license.model.UsageBasedV1;
 import java.time.Instant;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class LicenseChecker {
+
+  private static final Logger LOG = LoggerFactory.getLogger(LicenseChecker.class);
+
   public void checkLicense(final LicenseInfo licenseInfo) {
     if (licenseInfo instanceof TimedTrialV1) {
       verifyTimedTrialV1((TimedTrialV1) licenseInfo);
+      LOG.info("Checked and confirmed valid Time Trial license");
+    } else if (licenseInfo instanceof UsageBasedV1) {
+      LOG.info("Checked and confirmed valid Usage Based license");
     } else {
       throw new IllegalArgumentException(
           "unsupported license type: " + licenseInfo.getClass().getName());
