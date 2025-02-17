@@ -23,7 +23,8 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
     visible = true
 )
 @JsonSubTypes({
-    @JsonSubTypes.Type(value = TimedTrialV1.class, name = "timed_trial_v1")
+    @JsonSubTypes.Type(value = TimedTrialV1.class, name = TimedTrialV1.TYPE_NAME),
+    @JsonSubTypes.Type(value = CloudLicenseV1.class, name = CloudLicenseV1.TYPE_NAME)
 })
 public abstract class LicenseInfo {
   private final String type;

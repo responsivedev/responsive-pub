@@ -17,6 +17,9 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.Objects;
 
 public class TimedTrialV1 extends LicenseInfo {
+
+  public static final String TYPE_NAME = "timed_trial_v1";
+
   private final String email;
   private final long issuedAt;
   private final long expiresAt;
