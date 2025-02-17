@@ -110,6 +110,7 @@ class ResponsiveKafkaClientSupplierTest {
   private ResponsiveKafkaClientSupplier supplier;
 
   private final ResponsiveStoreRegistry storeRegistry = new ResponsiveStoreRegistry();
+  private final OriginEventRecorder originEventRecorder = new OriginEventRecorder("thread");
 
   @BeforeEach
   @SuppressWarnings("unchecked")
@@ -127,6 +128,7 @@ class ResponsiveKafkaClientSupplierTest {
     lenient().when(factories.createMetricsPublishingCommitListener(any(), any(), any()))
         .thenReturn(commitMetricListener);
     lenient().when(factories.createOffsetRecorder(anyBoolean(), any())).thenReturn(offsetRecorder);
+    lenient().when(factories.createOriginEventRecorder(any())).thenReturn(originEventRecorder);
 
     supplier = supplier(CONFIGS, StorageBackend.MONGO_DB);
   }
@@ -227,6 +229,17 @@ class ResponsiveKafkaClientSupplierTest {
     verify(factories).createResponsiveConsumer(
         any(), any(), consumerListenerCaptor.capture());
     assertThat(consumerListenerCaptor.getValue(), Matchers.hasItem(consumerEndOffsetsPollListener));
+  }
+
+  @Test
+  public void shouldAddOriginEventListeners() {
+    // when:
+    supplier.getConsumer(CONSUMER_CONFIGS);
+
+    // then:
+    verify(factories).createResponsiveConsumer(
+        any(), any(), consumerListenerCaptor.capture());
+    assertThat(consumerListenerCaptor.getValue(), Matchers.hasItem(originEventRecorder));
   }
 
   @Test

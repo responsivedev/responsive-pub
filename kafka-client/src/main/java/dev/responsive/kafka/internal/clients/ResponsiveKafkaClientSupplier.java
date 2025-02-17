@@ -19,6 +19,10 @@ import static dev.responsive.kafka.internal.utils.Utils.extractThreadIdFromResto
 
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.StorageBackend;
+import dev.responsive.kafka.internal.license.LicenseUtils;
+import dev.responsive.kafka.internal.license.model.CloudLicenseV1;
+import dev.responsive.kafka.internal.license.model.LicenseDocument;
+import dev.responsive.kafka.internal.license.model.TimedTrialV1;
 import dev.responsive.kafka.internal.metrics.EndOffsetsPoller;
 import dev.responsive.kafka.internal.metrics.MetricPublishingCommitListener;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
@@ -36,6 +40,7 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.TopicPartition;
@@ -77,7 +82,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
       final StorageBackend storageBackend
   ) {
     this(
-        new Factories() {},
+        configuredFactories(responsiveConfig),
         clientSupplier,
         configs,
         storeRegistry,
@@ -170,6 +175,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
             tc.committedOffsetMetricListener,
             tc.offsetRecorder.getConsumerListener(),
             tc.endOffsetsPollerListener,
+            tc.originEventRecorder,
             new CloseListener(threadId)
         )
     );
@@ -245,6 +251,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
         return tl.getVal();
       }
       final var offsetRecorder = factories.createOffsetRecorder(eos, threadId);
+      final var originEventRecorder = factories.createOriginEventRecorder(threadId);
       final var tl = new ReferenceCounted<>(
           String.format("ListenersForThread(%s)", threadId),
           new ListenersForThread(
@@ -256,7 +263,8 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
                   offsetRecorder
               ),
               new StoreCommitListener(storeRegistry, offsetRecorder),
-              endOffsetsPoller.addForThread(threadId)
+              endOffsetsPoller.addForThread(threadId),
+              originEventRecorder
           )
       );
       threadListeners.put(threadId, tl);
@@ -287,19 +295,22 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
     final MetricPublishingCommitListener committedOffsetMetricListener;
     final StoreCommitListener storeCommitListener;
     final EndOffsetsPoller.Listener endOffsetsPollerListener;
+    final ResponsiveConsumer.Listener originEventRecorder;
 
     public ListenersForThread(
         final String threadId,
         final OffsetRecorder offsetRecorder,
         final MetricPublishingCommitListener committedOffsetMetricListener,
         final StoreCommitListener storeCommitListener,
-        final EndOffsetsPoller.Listener endOffsetsPollerListener
+        final EndOffsetsPoller.Listener endOffsetsPollerListener,
+        final ResponsiveConsumer.Listener originEventRecorder
     ) {
       this.threadId = threadId;
       this.offsetRecorder = offsetRecorder;
       this.committedOffsetMetricListener = committedOffsetMetricListener;
       this.storeCommitListener = storeCommitListener;
       this.endOffsetsPollerListener = endOffsetsPollerListener;
+      this.originEventRecorder = originEventRecorder;
     }
 
     @Override
@@ -343,6 +354,25 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
     private T getVal() {
       return val;
     }
+  }
+
+  private static Factories configuredFactories(final ResponsiveConfig responsiveConfig) {
+    return new Factories() {
+      @Override
+      public ResponsiveConsumer.Listener createOriginEventRecorder(final String threadId) {
+        // we should consider caching the license in ResponsiveConfig so that we
+        // don't have to load and authenticate it more than once
+        final var licenseDoc = LicenseUtils.loadLicense(responsiveConfig);
+        switch (licenseDoc.type()) {
+          case CloudLicenseV1.TYPE_NAME:
+          case TimedTrialV1.TYPE_NAME:
+            return new ResponsiveConsumer.Listener() {
+            };
+          default:
+            return new OriginEventRecorder(threadId);
+        }
+      }
+    };
   }
 
   interface Factories {
@@ -410,6 +440,12 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
           getCommittedOffset,
           repairRestoreOffsetOutOfRange
       );
+    }
+
+    default ResponsiveConsumer.Listener createOriginEventRecorder(
+        final String threadId
+    ) {
+      return new OriginEventRecorder(threadId);
     }
   }
 }

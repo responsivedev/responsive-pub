@@ -21,6 +21,8 @@ import java.util.Objects;
 import java.util.regex.Pattern;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.common.TopicPartition;
@@ -82,6 +84,21 @@ public class ResponsiveConsumer<K, V> extends DelegatingConsumer<K, V> {
         String.format("responsive-consumer [%s]", Objects.requireNonNull(clientId))
     ).logger(ResponsiveConsumer.class);
     this.listeners = Objects.requireNonNull(listeners);
+  }
+
+  @Override
+  @Deprecated
+  public ConsumerRecords<K, V> poll(final long timeout) {
+    return poll(Duration.ofMillis(timeout));
+  }
+
+  @Override
+  public ConsumerRecords<K, V> poll(final Duration timeout) {
+    var records = super.poll(timeout);
+    for (final Listener listener : listeners) {
+      records = listener.onPoll(records);
+    }
+    return records;
   }
 
   @Override
@@ -176,6 +193,11 @@ public class ResponsiveConsumer<K, V> extends DelegatingConsumer<K, V> {
   }
 
   public interface Listener {
+
+    default <K, V> ConsumerRecords<K, V> onPoll(ConsumerRecords<K, V> records) {
+      return records;
+    }
+
     default void onPartitionsRevoked(Collection<TopicPartition> partitions) {
     }
 
