@@ -71,12 +71,13 @@ public class OriginEventRecorder implements ResponsiveConsumer.Listener {
 
   @Override
   public void onCommit(final Map<TopicPartition, OffsetAndMetadata> offsets) {
-    final var report = new HashMap<TopicPartition, Long>();
+    final var now = System.currentTimeMillis();
+    final var timeSinceReport = Duration.ofMillis(now - lastCommitTs);
 
-    synchronized (this) {
-      final var now = System.currentTimeMillis();
-      final var timeSinceReport = Duration.ofMillis(now - lastCommitTs);
-      if (timeSinceReport.compareTo(REPORT_INTERVAL) > 0) {
+    if (timeSinceReport.compareTo(REPORT_INTERVAL) > 0) {
+      final var report = new HashMap<TopicPartition, Long>();
+
+      synchronized (this) {
         lastCommitTs = now;
         for (var tp : offsets.keySet()) {
           final var originCount = originEvents.remove(tp);
@@ -85,9 +86,9 @@ public class OriginEventRecorder implements ResponsiveConsumer.Listener {
           }
         }
       }
-    }
 
-    reportOriginEvents.accept(report, threadId);
+      reportOriginEvents.accept(report, threadId);
+    }
   }
 
   private static void reportOriginEvents(

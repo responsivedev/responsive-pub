@@ -159,7 +159,7 @@ public class ResponsiveExtension
           BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers(),
           CASSANDRA_DESIRED_NUM_PARTITION_CONFIG, -1,
           CASSANDRA_CHECK_INTERVAL_MS, 100,
-          RESPONSIVE_LICENSE_CONFIG, LicenseUtils.getLicense()
+          RESPONSIVE_LICENSE_CONFIG, LicenseUtils.getUsageLicense()
       ));
 
       if (backend == StorageBackend.CASSANDRA) {
