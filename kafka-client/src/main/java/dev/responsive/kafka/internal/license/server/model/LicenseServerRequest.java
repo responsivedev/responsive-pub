@@ -23,7 +23,9 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
     visible = true
 )
 @JsonSubTypes({
-    @JsonSubTypes.Type(value = OriginEventsReportRequestV1.class, name = OriginEventsReportRequestV1.TYPE_NAME)
+    @JsonSubTypes.Type(
+        value = OriginEventsReportRequestV1.class,
+        name = OriginEventsReportRequestV1.TYPE_NAME)
 })
 public class LicenseServerRequest {
 
