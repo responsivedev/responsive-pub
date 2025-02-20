@@ -21,19 +21,16 @@ public class UsageBasedV1 extends LicenseInfo {
 
   private final String email;
   private final String key;
-  private final String secret;
 
   @JsonCreator
   public UsageBasedV1(
       @JsonProperty("type") final String type,
       @JsonProperty("email") final String email,
-      @JsonProperty("key") final String key,
-      @JsonProperty("secret") final String secret
+      @JsonProperty("key") final String key
   ) {
     super(type);
     this.email = email;
     this.key = key;
-    this.secret = secret;
   }
 
   public String email() {
@@ -42,9 +39,5 @@ public class UsageBasedV1 extends LicenseInfo {
 
   public String key() {
     return key;
-  }
-
-  public String secret() {
-    return secret;
   }
 }

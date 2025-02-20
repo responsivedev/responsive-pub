@@ -15,7 +15,7 @@ public final class LicenseUtils {
   private LicenseUtils() {
   }
 
-  public static String getLicense() {
+  public static String getTrialLicense() {
     return getEncodedLicense(DECODED_TRIAL_LICENSE_FILE);
   }
 

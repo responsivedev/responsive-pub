@@ -31,9 +31,9 @@ class OriginEventRecorderTest {
   private static final TopicPartition TOPIC_PARTITION = new TopicPartition("topic", 0);
 
   @Test
-  public void shouldReturnInputRecordsWithIncrementeHeaderOnNewOriginEvent() {
+  public void shouldReturnInputRecordsWithIncrementHeaderOnNewOriginEvent() {
     // Given:
-    final var oeRecorder = new OriginEventRecorder("thread");
+    final var oeRecorder = new OriginEventRecorder("thread", (a, b) -> {});
     final var records = new ConsumerRecords<>(Map.of(
         TOPIC_PARTITION, List.of(from(null))
     ));

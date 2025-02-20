@@ -22,6 +22,7 @@ import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.internal.license.LicenseUtils;
 import dev.responsive.kafka.internal.license.model.CloudLicenseV1;
 import dev.responsive.kafka.internal.license.model.TimedTrialV1;
+import dev.responsive.kafka.internal.license.model.UsageBasedV1;
 import dev.responsive.kafka.internal.metrics.EndOffsetsPoller;
 import dev.responsive.kafka.internal.metrics.MetricPublishingCommitListener;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
@@ -355,20 +356,21 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
   }
 
   private static Factories configuredFactories(final ResponsiveConfig responsiveConfig) {
-    return new Factories() {
-      @Override
-      public ResponsiveConsumer.Listener createOriginEventRecorder(final String threadId) {
-        // we should consider caching the license in ResponsiveConfig so that we
-        // don't have to load and authenticate it more than once
-        final var licenseDoc = LicenseUtils.loadLicense(responsiveConfig);
-        switch (licenseDoc.type()) {
-          case CloudLicenseV1.TYPE_NAME:
-          case TimedTrialV1.TYPE_NAME:
-            return new ResponsiveConsumer.Listener() {
-            };
-          default:
-            return new OriginEventRecorder(threadId);
-        }
+    return threadId -> {
+      // we should consider caching the license in ResponsiveConfig so that we
+      // don't have to load and authenticate it more than once
+      final var license = LicenseUtils.loadLicense(responsiveConfig);
+      switch (license.type()) {
+        case CloudLicenseV1.TYPE_NAME:
+        case TimedTrialV1.TYPE_NAME:
+          return new ResponsiveConsumer.Listener() {
+            // we don't report origin events for timed trial
+            // or cloud licenses since we don't want to modify
+            // the headers of records if not necessary
+          };
+        case UsageBasedV1.TYPE_NAME:
+        default:
+          return new OriginEventRecorder(threadId, responsiveConfig, license);
       }
     };
   }
@@ -440,10 +442,6 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
       );
     }
 
-    default ResponsiveConsumer.Listener createOriginEventRecorder(
-        final String threadId
-    ) {
-      return new OriginEventRecorder(threadId);
-    }
+    ResponsiveConsumer.Listener createOriginEventRecorder(final String threadId);
   }
 }

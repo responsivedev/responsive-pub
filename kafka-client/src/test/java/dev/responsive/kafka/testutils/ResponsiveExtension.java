@@ -20,6 +20,7 @@ import static dev.responsive.kafka.api.config.ResponsiveConfig.CASSANDRA_PORT_CO
 import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_CONNECTION_STRING_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_ENV_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_LICENSE_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_LICENSE_SERVER_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RESPONSIVE_ORG_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RS3_HOSTNAME_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RS3_PORT_CONFIG;
@@ -65,6 +66,7 @@ public class ResponsiveExtension
       .withEnv("KAFKA_GROUP_MAX_SESSION_TIMEOUT_MS", "60000")
       .withReuse(true);
   public static MongoDBContainer mongo = new MongoDBContainer(TestConstants.MONGODB);
+  public static TestLicenseServer licenseServer = new TestLicenseServer();
 
   public static Admin admin;
 
@@ -98,6 +100,7 @@ public class ResponsiveExtension
     final var kafkaFuture = Startables.deepStart(kafka);
     final var storageFuture = Startables.deepStart(cassandra, mongo);
     try {
+      licenseServer.start();
       kafkaFuture.get();
       admin = Admin.create(Map.of(BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers()));
       storageFuture.get();
@@ -115,6 +118,7 @@ public class ResponsiveExtension
     mongo.stop();
     kafka.stop();
     admin.close();
+    licenseServer.close();
   }
 
   public ResponsiveExtension() {
@@ -134,6 +138,7 @@ public class ResponsiveExtension
         || parameterContext.getParameter().getType().equals(MongoDBContainer.class)
         || parameterContext.getParameter().getType().equals(RS3Container.class)
         || parameterContext.getParameter().getType().equals(Admin.class)
+        || parameterContext.getParameter().getType().equals(TestLicenseServer.class)
         || isContainerConfig(parameterContext);
   }
 
@@ -152,6 +157,8 @@ public class ResponsiveExtension
       return rs3;
     } else if (parameterContext.getParameter().getType() == Admin.class) {
       return admin;
+    } else if (parameterContext.getParameter().getType() == TestLicenseServer.class) {
+      return licenseServer;
     } else if (isContainerConfig(parameterContext)) {
       final Map<String, Object> map = new HashMap<>(Map.of(
           RESPONSIVE_ORG_CONFIG, "responsive",
@@ -159,7 +166,8 @@ public class ResponsiveExtension
           BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers(),
           CASSANDRA_DESIRED_NUM_PARTITION_CONFIG, -1,
           CASSANDRA_CHECK_INTERVAL_MS, 100,
-          RESPONSIVE_LICENSE_CONFIG, LicenseUtils.getUsageLicense()
+          RESPONSIVE_LICENSE_CONFIG, LicenseUtils.getUsageLicense(),
+          RESPONSIVE_LICENSE_SERVER_CONFIG, "http://localhost:" + licenseServer.port()
       ));
 
       if (backend == StorageBackend.CASSANDRA) {

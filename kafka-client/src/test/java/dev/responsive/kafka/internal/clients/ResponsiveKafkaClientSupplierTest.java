@@ -110,7 +110,9 @@ class ResponsiveKafkaClientSupplierTest {
   private ResponsiveKafkaClientSupplier supplier;
 
   private final ResponsiveStoreRegistry storeRegistry = new ResponsiveStoreRegistry();
-  private final OriginEventRecorder originEventRecorder = new OriginEventRecorder("thread");
+  private final OriginEventRecorder originEventRecorder =
+      new OriginEventRecorder("thread", (a, b) -> {
+      });
 
   @BeforeEach
   @SuppressWarnings("unchecked")
