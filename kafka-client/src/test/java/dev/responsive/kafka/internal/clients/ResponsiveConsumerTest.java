@@ -171,8 +171,8 @@ class ResponsiveConsumerTest {
     consumer.close();
 
     // then:
-    verify(listener1).onClose();
-    verify(listener2).onClose();
+    verify(listener1).onConsumerClose();
+    verify(listener2).onConsumerClose();
   }
 
   @Test
@@ -184,8 +184,8 @@ class ResponsiveConsumerTest {
     consumer.commitSync(commits);
 
     // then:
-    verify(listener1).onCommit(commits);
-    verify(listener2).onCommit(commits);
+    verify(listener1).onConsumerCommit(commits);
+    verify(listener2).onConsumerCommit(commits);
   }
 
   @Test
@@ -197,8 +197,8 @@ class ResponsiveConsumerTest {
     consumer.commitSync(commits, Duration.ofSeconds(30));
 
     // then:
-    verify(listener1).onCommit(commits);
-    verify(listener2).onCommit(commits);
+    verify(listener1).onConsumerCommit(commits);
+    verify(listener2).onConsumerCommit(commits);
   }
 
   @Test
@@ -214,14 +214,14 @@ class ResponsiveConsumerTest {
   @Test
   public void shouldIgnoreErrorsOnCloseCallback() {
     // given:
-    doThrow(new RuntimeException("oops")).when(listener1).onClose();
+    doThrow(new RuntimeException("oops")).when(listener1).onConsumerClose();
 
     // when:
     consumer.close();
 
     // then:
-    verify(listener1).onClose();
-    verify(listener2).onClose();
+    verify(listener1).onConsumerClose();
+    verify(listener2).onConsumerClose();
   }
 
   @SuppressWarnings("unchecked")

@@ -165,6 +165,11 @@ public final class IntegrationTestUtils {
   }
 
   public static String getCassandraValidName(final TestInfo info) {
+    // parameterized tests use `[x]` to indicate the parameterization number
+    if (!info.getDisplayName().contains("[")) {
+      return info.getTestMethod().orElseThrow().getName().toLowerCase(Locale.ROOT);
+    }
+
     // add displayName to name to account for parameterized tests
     return info.getTestMethod().orElseThrow().getName().toLowerCase(Locale.ROOT)
         + info.getDisplayName().substring("[X] ".length()).toLowerCase(Locale.ROOT)

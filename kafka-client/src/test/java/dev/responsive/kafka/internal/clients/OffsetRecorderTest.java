@@ -61,7 +61,7 @@ class OffsetRecorderTest {
     );
 
     // when:
-    eosRecorder.getProducerListener().onCommit();
+    eosRecorder.getProducerListener().onProducerCommit();
 
     // then:
     assertThat(getCommittedOffsetsSentToCallback(), is(Map.of(
@@ -82,7 +82,7 @@ class OffsetRecorderTest {
     );
 
     // when:
-    eosRecorder.getProducerListener().onCommit();
+    eosRecorder.getProducerListener().onProducerCommit();
 
     // then:
     assertThat(getWrittenOffsetsSentToCallback(), is(Map.of(
@@ -111,7 +111,7 @@ class OffsetRecorderTest {
 
     // when:
     eosRecorder.getProducerListener().onAbort();
-    eosRecorder.getProducerListener().onCommit();
+    eosRecorder.getProducerListener().onProducerCommit();
 
     // then:
     assertThat(getWrittenOffsetsSentToCallback().entrySet(), is(empty()));
@@ -121,7 +121,7 @@ class OffsetRecorderTest {
   @Test
   public void shouldRecordOffsetsCommittedByConsumer() {
     // when:
-    alosRecorder.getConsumerListener().onCommit(
+    alosRecorder.getConsumerListener().onConsumerCommit(
         Map.of(
             TOPIC_PARTITION1, new OffsetAndMetadata(123L),
             TOPIC_PARTITION2, new OffsetAndMetadata(456L)
@@ -140,7 +140,7 @@ class OffsetRecorderTest {
   public void shouldThrowIfCommitFromConsumerOnEos() {
     assertThrows(
         IllegalStateException.class,
-        () -> eosRecorder.getConsumerListener().onCommit(Map.of())
+        () -> eosRecorder.getConsumerListener().onConsumerCommit(Map.of())
     );
   }
 

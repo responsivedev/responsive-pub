@@ -111,8 +111,7 @@ class ResponsiveKafkaClientSupplierTest {
 
   private final ResponsiveStoreRegistry storeRegistry = new ResponsiveStoreRegistry();
   private final OriginEventRecorder originEventRecorder =
-      new OriginEventRecorder("thread", (a, b) -> {
-      });
+      new OriginEventRecorderImpl("thread", (a, b) -> { }, false);
 
   @BeforeEach
   @SuppressWarnings("unchecked")
@@ -253,10 +252,10 @@ class ResponsiveKafkaClientSupplierTest {
     // then:
     verify(factories).createResponsiveConsumer(
         any(), any(), consumerListenerCaptor.capture());
-    consumerListenerCaptor.getValue().forEach(ResponsiveConsumer.Listener::onClose);
+    consumerListenerCaptor.getValue().forEach(ResponsiveConsumer.Listener::onConsumerClose);
     verify(commitMetricListener, times(0)).close();
     verify(factories).createResponsiveProducer(any(), any(), producerListenerCaptor.capture());
-    producerListenerCaptor.getValue().forEach(ResponsiveProducer.Listener::onClose);
+    producerListenerCaptor.getValue().forEach(ResponsiveProducer.Listener::onProducerClose);
     verify(commitMetricListener).close();
   }
 

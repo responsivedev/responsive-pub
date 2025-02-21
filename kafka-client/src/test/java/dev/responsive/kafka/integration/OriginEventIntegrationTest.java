@@ -36,6 +36,7 @@ import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.apache.kafka.clients.admin.Admin;
@@ -56,6 +57,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 public class OriginEventIntegrationTest {
 
@@ -77,7 +80,7 @@ public class OriginEventIntegrationTest {
       @ResponsiveConfigParam final Map<String, Object> responsiveProps,
       final TestLicenseServer licenseServer
   ) throws ExecutionException, InterruptedException {
-    name = info.getTestMethod().orElseThrow().getName();
+    name = IntegrationTestUtils.getCassandraValidName(info);
     this.licenseServer = licenseServer;
     this.responsiveProps.putAll(responsiveProps);
 
@@ -106,9 +109,15 @@ public class OriginEventIntegrationTest {
     return name + "." + OUTPUT_TOPIC;
   }
 
-  @Test
-  public void shouldCountOriginEventsSimpleTopology() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void shouldCountOriginEventsSimpleTopology(final boolean eos) throws Exception {
     // Given:
+    responsiveProps.put(
+        StreamsConfig.PROCESSING_GUARANTEE_CONFIG,
+        eos ? StreamsConfig.EXACTLY_ONCE_V2 : StreamsConfig.AT_LEAST_ONCE
+    );
+
     final int numEvents = 100;
     final CountDownLatch latch = new CountDownLatch(numEvents);
     final StreamsBuilder builder = new StreamsBuilder();
@@ -145,9 +154,15 @@ public class OriginEventIntegrationTest {
     );
   }
 
-  @Test
-  public void shouldNotDoubleCountRepartitionedEvents() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void shouldNotDoubleCountRepartitionedEvents(final boolean eos) throws Exception {
     // Given:
+    responsiveProps.put(
+        StreamsConfig.PROCESSING_GUARANTEE_CONFIG,
+        eos ? StreamsConfig.EXACTLY_ONCE_V2 : StreamsConfig.AT_LEAST_ONCE
+    );
+
     final int numEvents = 100;
     final CountDownLatch latch = new CountDownLatch(numEvents);
     final StreamsBuilder builder = new StreamsBuilder();
@@ -298,7 +313,8 @@ public class OriginEventIntegrationTest {
         builder.table(inputTopicTable(), Materialized.as("table1"));
     final KStream<String, String> stream = builder.stream(inputTopic());
     stream
-        .join(table, (v1, v2) -> v1 + v2)
+        // use left join to avoid races populating the table
+        .leftJoin(table, (v1, v2) -> v1 + (v2 == null ? "-none" : "-joined"))
         // we want a sub-topology downstream of join
         .repartition(Repartitioned.numberOfPartitions(4))
         .peek((k, v) -> latch.countDown())
@@ -307,8 +323,9 @@ public class OriginEventIntegrationTest {
     final List<KeyValueTimestamp<String, String>> inputsLeft = IntStream.range(0, numEvents)
         .mapToObj(i -> new KeyValueTimestamp<>("key" + i, String.valueOf(i), numEvents + i))
         .collect(Collectors.toList());
+
     final List<KeyValueTimestamp<String, String>> inputsRight = IntStream.range(0, numEvents)
-        .mapToObj(i -> new KeyValueTimestamp<>("key" + i, "here", i))
+        .mapToObj(i -> new KeyValueTimestamp<>("key" + i, "val", i))
         .collect(Collectors.toList());
 
     // When:

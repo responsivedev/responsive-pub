@@ -19,30 +19,37 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 
-public interface OriginEventRecorder
-    extends ResponsiveConsumer.Listener, ResponsiveProducer.Listener {
+public class NoopOriginEventRecorder implements OriginEventRecorder {
+  @Override
+  public <K, V> ConsumerRecords<K, V> onPoll(final ConsumerRecords<K, V> records) {
+    return records;
+  }
 
   @Override
-  <K, V> ConsumerRecords<K, V> onPoll(ConsumerRecords<K, V> records);
+  public <K, V> ProducerRecord<K, V> onSend(final ProducerRecord<K, V> record) {
+    return record;
+  }
 
   @Override
-  <K, V> ProducerRecord<K, V> onSend(ProducerRecord<K, V> record);
+  public void onConsumerCommit(final Map<TopicPartition, OffsetAndMetadata> offsets) {
+  }
 
   @Override
-  void onConsumerCommit(Map<TopicPartition, OffsetAndMetadata> offsets);
+  public void onProducerCommit() {
+  }
 
   @Override
-  void onProducerCommit();
-
-  @Override
-  void onSendOffsetsToTransaction(
+  public void onSendOffsetsToTransaction(
       final Map<TopicPartition, OffsetAndMetadata> offsets,
       final String consumerGroupId
-  );
+  ) {
+  }
 
   @Override
-  void onPartitionsLost(Collection<TopicPartition> partitions);
+  public void onPartitionsLost(final Collection<TopicPartition> partitions) {
+  }
 
   @Override
-  void onUnsubscribe();
+  public void onUnsubscribe() {
+  }
 }

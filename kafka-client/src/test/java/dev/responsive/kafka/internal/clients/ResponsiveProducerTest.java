@@ -23,7 +23,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import dev.responsive.kafka.internal.clients.ResponsiveProducer;
 import dev.responsive.kafka.internal.clients.ResponsiveProducer.Listener;
 import java.util.List;
 import java.util.Map;
@@ -70,8 +69,8 @@ public class ResponsiveProducerTest {
     producer.commitTransaction();
 
     // then:
-    verify(listener1).onCommit();
-    verify(listener2).onCommit();
+    verify(listener1).onProducerCommit();
+    verify(listener2).onProducerCommit();
   }
 
   @Test
@@ -159,7 +158,7 @@ public class ResponsiveProducerTest {
   public void shouldThrowExceptionFromCommitCallback() {
     // given:
     producer.sendOffsetsToTransaction(Map.of(PARTITION1, new OffsetAndMetadata(10)), "foo");
-    doThrow(new RuntimeException("oops")).when(listener1).onCommit();
+    doThrow(new RuntimeException("oops")).when(listener1).onProducerCommit();
 
     // when/then:
     assertThrows(RuntimeException.class, () -> producer.commitTransaction());
@@ -171,20 +170,20 @@ public class ResponsiveProducerTest {
     producer.close();
 
     // then:
-    verify(listener1).onClose();
-    verify(listener2).onClose();
+    verify(listener1).onProducerClose();
+    verify(listener2).onProducerClose();
   }
 
   @Test
   public void shouldIgnoreExceptionFromCloseCallback() {
     // given:
-    doThrow(new RuntimeException("oops")).when(listener1).onClose();
+    doThrow(new RuntimeException("oops")).when(listener1).onProducerClose();
 
     // when:
     producer.close();
 
     // then:
-    verify(listener1).onClose();
-    verify(listener2).onClose();
+    verify(listener1).onProducerClose();
+    verify(listener2).onProducerClose();
   }
 }

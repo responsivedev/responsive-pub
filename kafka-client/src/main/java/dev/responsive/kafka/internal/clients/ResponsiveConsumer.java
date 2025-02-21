@@ -131,13 +131,13 @@ public class ResponsiveConsumer<K, V> extends DelegatingConsumer<K, V> {
   @Override
   public void close() {
     super.close();
-    listeners.forEach(l -> ignoreException(l::onClose));
+    listeners.forEach(l -> ignoreException(l::onConsumerClose));
   }
 
   @Override
   public void close(final Duration timeout) {
     super.close(timeout);
-    listeners.forEach(l -> ignoreException(l::onClose));
+    listeners.forEach(l -> ignoreException(l::onConsumerClose));
   }
 
   @Override
@@ -153,14 +153,14 @@ public class ResponsiveConsumer<K, V> extends DelegatingConsumer<K, V> {
   @Override
   public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets) {
     super.commitSync(offsets);
-    listeners.forEach(l -> l.onCommit(offsets));
+    listeners.forEach(l -> l.onConsumerCommit(offsets));
   }
 
   @Override
   public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets,
                          Duration timeout) {
     super.commitSync(offsets, timeout);
-    listeners.forEach(l -> l.onCommit(offsets));
+    listeners.forEach(l -> l.onConsumerCommit(offsets));
   }
 
   @Override
@@ -206,13 +206,13 @@ public class ResponsiveConsumer<K, V> extends DelegatingConsumer<K, V> {
     default void onPartitionsLost(Collection<TopicPartition> partitions) {
     }
 
-    default void onCommit(final Map<TopicPartition, OffsetAndMetadata> offsets) {
+    default void onConsumerCommit(final Map<TopicPartition, OffsetAndMetadata> offsets) {
     }
 
     default void onUnsubscribe() {
     }
 
-    default void onClose() {
+    default void onConsumerClose() {
     }
   }
 }
