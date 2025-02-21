@@ -324,7 +324,7 @@ public class ResponsiveConfig extends AbstractConfig {
   public static final String ORIGIN_EVENT_REPORT_INTERVAL_MS_CONFIG = "responsive.origin.event.report.interval.ms";
   private static final long ORIGIN_EVENT_REPORT_INTERVAL_MS_DEFAULT = 10_000L;
   private static final String ORIGIN_EVENT_REPORT_INTERVAL_MS_DOC =
-      "How often to report origin event usage information. This shoudl generally not be changed in production environments";
+      "How often to report origin event usage information. This should generally not be changed in production environments";
 
   // ------------------ StreamsConfig overrides ----------------------
 

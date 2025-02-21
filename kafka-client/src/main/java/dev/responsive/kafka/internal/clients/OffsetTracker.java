@@ -43,7 +43,8 @@ public class OffsetTracker {
 
   public int countAndShift(final long commitOffset) {
     if (commitOffset < baseOffset) {
-      throw new IllegalArgumentException("Commit offset " + commitOffset + " cannot be less than baseOffset " + baseOffset);
+      throw new IllegalArgumentException(
+          "Commit offset " + commitOffset + " cannot be less than baseOffset " + baseOffset);
     }
 
     final int shift = Math.toIntExact(commitOffset - baseOffset);
