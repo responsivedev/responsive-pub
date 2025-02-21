@@ -357,7 +357,7 @@ public class ResponsiveConfig extends AbstractConfig {
           RESPONSIVE_ENV_DOC
       ).define(
           RESPONSIVE_LICENSE_CONFIG,
-          Type.STRING,
+          Type.PASSWORD,
           "",
           Importance.HIGH,
           RESPONSIVE_LICENSE_DOC

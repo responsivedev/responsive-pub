@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.util.Base64;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.types.Password;
 
 public final class LicenseUtils {
 
@@ -51,7 +52,8 @@ public final class LicenseUtils {
   }
 
   private static LicenseDocument loadLicenseDocument(final ResponsiveConfig configs) {
-    final String license = configs.getString(ResponsiveConfig.RESPONSIVE_LICENSE_CONFIG);
+    final Password licensePass = configs.getPassword(ResponsiveConfig.RESPONSIVE_LICENSE_CONFIG);
+    final String license = licensePass == null ? "" : licensePass.value();
     final String licenseFile = configs.getString(ResponsiveConfig.RESPONSIVE_LICENSE_FILE_CONFIG);
     if (license.isEmpty() == licenseFile.isEmpty()) {
       throw new ConfigException(String.format(
