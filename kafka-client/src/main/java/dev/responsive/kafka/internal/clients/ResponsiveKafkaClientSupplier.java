@@ -229,6 +229,11 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
     public void onProducerClose() {
       sharedListeners.derefListenersForThread(threadId);
     }
+
+    @Override
+    public void onConsumerClose() {
+      sharedListeners.derefListenersForThread(threadId);
+    }
   }
 
   private static class SharedListeners {

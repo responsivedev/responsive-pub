@@ -17,8 +17,10 @@ import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.nullValue;
 import static org.junit.Assert.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -61,6 +63,8 @@ public class ResponsiveProducerTest {
   @BeforeEach
   public void setup() {
     producer = new ResponsiveProducer<>("clientid", wrapped, List.of(listener1, listener2));
+    lenient().when(listener1.onSend(any())).thenAnswer(iom -> iom.getArguments()[0]);
+    lenient().when(listener2.onSend(any())).thenAnswer(iom -> iom.getArguments()[0]);
   }
 
   @Test
@@ -132,6 +136,20 @@ public class ResponsiveProducerTest {
     assertThat(returnedMetadata, is(recordMetadata));
     verify(listener1).onSendCompleted(recordMetadata);
     verify(listener2).onSendCompleted(recordMetadata);
+  }
+
+  @Test
+  public void shouldAllowRecordModificationOnSend() {
+    // Given:
+    final var rec1 = new ProducerRecord<String, String>(PARTITION1.topic(), "val");
+    final var rec2 = new ProducerRecord<String, String>(PARTITION1.topic(), "val");
+    when(listener1.onSend(any())).thenAnswer(iom -> rec2);
+
+    // When:
+    producer.send(rec1, (rm, e) -> { });
+
+    // Then:
+    verify(wrapped).send(same(rec2), any());
   }
 
   @Test
