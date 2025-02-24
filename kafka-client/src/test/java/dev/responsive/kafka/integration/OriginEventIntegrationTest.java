@@ -18,6 +18,7 @@ import static dev.responsive.kafka.testutils.IntegrationTestUtils.getDefaultMuta
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.pipeTimestampedRecords;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.startAppAndAwaitRunning;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.is;
 
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
@@ -51,7 +52,6 @@ import org.apache.kafka.streams.kstream.Repartitioned;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.WindowedSerdes;
-import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
@@ -135,22 +135,12 @@ public class OriginEventIntegrationTest {
     try (final var kafkaStreams = new ResponsiveKafkaStreams(builder.build(), props)) {
       startAppAndAwaitRunning(Duration.ofSeconds(15), kafkaStreams);
       pipeTimestampedRecords(producer, inputTopic(), inputs);
-      assertThat(latch.await(30, TimeUnit.SECONDS), Matchers.is(true));
+      assertThat(latch.await(30, TimeUnit.SECONDS), is(true));
     }
 
     // Then:
     final String appId = (String) props.get(StreamsConfig.APPLICATION_ID_CONFIG);
-    IntegrationTestUtils.awaitCondition(
-        () -> {
-          final var eventCount = licenseServer.eventCounts().get(appId);
-          if (eventCount == null) {
-            return false;
-          }
-          return eventCount == numEvents;
-        },
-        Duration.ofSeconds(30),
-        Duration.ofMillis(500)
-    );
+    assertThat(licenseServer.eventCounts().get(appId), is((long) numEvents));
   }
 
   @ParameterizedTest
@@ -181,22 +171,12 @@ public class OriginEventIntegrationTest {
     try (final var kafkaStreams = new ResponsiveKafkaStreams(builder.build(), props)) {
       startAppAndAwaitRunning(Duration.ofSeconds(15), kafkaStreams);
       pipeTimestampedRecords(producer, inputTopic(), inputs);
-      assertThat(latch.await(30, TimeUnit.SECONDS), Matchers.is(true));
+      assertThat(latch.await(30, TimeUnit.SECONDS), is(true));
     }
 
     // Then:
     final String appId = (String) props.get(StreamsConfig.APPLICATION_ID_CONFIG);
-    IntegrationTestUtils.awaitCondition(
-        () -> {
-          final var eventCount = licenseServer.eventCounts().get(appId);
-          if (eventCount == null) {
-            return false;
-          }
-          return eventCount == numEvents;
-        },
-        Duration.ofSeconds(30),
-        Duration.ofMillis(500)
-    );
+    assertThat(licenseServer.eventCounts().get(appId), is((long) numEvents));
   }
 
   @Test
@@ -229,22 +209,12 @@ public class OriginEventIntegrationTest {
     try (final var kafkaStreams = new ResponsiveKafkaStreams(builder.build(), props)) {
       startAppAndAwaitRunning(Duration.ofSeconds(15), kafkaStreams);
       pipeTimestampedRecords(producer, inputTopic(), inputs);
-      assertThat(latch.await(30, TimeUnit.SECONDS), Matchers.is(true));
+      assertThat(latch.await(30, TimeUnit.SECONDS), is(true));
     }
 
     // Then:
     final String appId = (String) props.get(StreamsConfig.APPLICATION_ID_CONFIG);
-    IntegrationTestUtils.awaitCondition(
-        () -> {
-          final var eventCount = licenseServer.eventCounts().get(appId);
-          if (eventCount == null) {
-            return false;
-          }
-          return eventCount == numEvents;
-        },
-        Duration.ofSeconds(30),
-        Duration.ofMillis(500)
-    );
+    assertThat(licenseServer.eventCounts().get(appId), is((long) numEvents));
   }
 
   @Test
@@ -283,30 +253,19 @@ public class OriginEventIntegrationTest {
     try (final var kafkaStreams = new ResponsiveKafkaStreams(builder.build(), props)) {
       startAppAndAwaitRunning(Duration.ofSeconds(15), kafkaStreams);
       pipeTimestampedRecords(producer, inputTopic(), inputs);
-      assertThat(latch.await(30, TimeUnit.SECONDS), Matchers.is(true));
+      assertThat(latch.await(30, TimeUnit.SECONDS), is(true));
     }
 
     // Then:
     final String appId = (String) props.get(StreamsConfig.APPLICATION_ID_CONFIG);
-    IntegrationTestUtils.awaitCondition(
-        () -> {
-          final var eventCount = licenseServer.eventCounts().get(appId);
-          if (eventCount == null) {
-            return false;
-          }
-          return eventCount == numEvents;
-        },
-        Duration.ofSeconds(30),
-        Duration.ofMillis(500)
-    );
+    assertThat(licenseServer.eventCounts().get(appId), is((long) numEvents));
   }
-
 
   @Test
   public void shouldNotDoubleCountJoinedEvents() throws Exception {
     // Given:
-    final int numEvents = 100;
-    final CountDownLatch latch = new CountDownLatch(numEvents);
+    final int eventsPerTopic = 100;
+    final CountDownLatch latch = new CountDownLatch(eventsPerTopic);
     final StreamsBuilder builder = new StreamsBuilder();
     final KTable<String, String> table =
         builder.table(inputTopicTable(), Materialized.as("table1"));
@@ -319,11 +278,11 @@ public class OriginEventIntegrationTest {
         .peek((k, v) -> latch.countDown())
         .to(outputTopic());
 
-    final List<KeyValueTimestamp<String, String>> inputsLeft = IntStream.range(0, numEvents)
-        .mapToObj(i -> new KeyValueTimestamp<>("key" + i, String.valueOf(i), numEvents + i))
+    final List<KeyValueTimestamp<String, String>> inputsLeft = IntStream.range(0, eventsPerTopic)
+        .mapToObj(i -> new KeyValueTimestamp<>("key" + i, String.valueOf(i), eventsPerTopic + i))
         .collect(Collectors.toList());
 
-    final List<KeyValueTimestamp<String, String>> inputsRight = IntStream.range(0, numEvents)
+    final List<KeyValueTimestamp<String, String>> inputsRight = IntStream.range(0, eventsPerTopic)
         .mapToObj(i -> new KeyValueTimestamp<>("key" + i, "val", i))
         .collect(Collectors.toList());
 
@@ -334,22 +293,12 @@ public class OriginEventIntegrationTest {
       startAppAndAwaitRunning(Duration.ofSeconds(15), kafkaStreams);
       pipeTimestampedRecords(producer, inputTopicTable(), inputsRight);
       pipeTimestampedRecords(producer, inputTopic(), inputsLeft);
-      assertThat(latch.await(30, TimeUnit.SECONDS), Matchers.is(true));
+      assertThat(latch.await(30, TimeUnit.SECONDS), is(true));
     }
 
     // Then:
     final String appId = (String) props.get(StreamsConfig.APPLICATION_ID_CONFIG);
-    IntegrationTestUtils.awaitCondition(
-        () -> {
-          final var eventCount = licenseServer.eventCounts().get(appId);
-          if (eventCount == null) {
-            return false;
-          }
-          return eventCount == numEvents * 2;
-        },
-        Duration.ofSeconds(30),
-        Duration.ofMillis(500)
-    );
+    assertThat(licenseServer.eventCounts().get(appId), is(2L * eventsPerTopic));
   }
 
   @Test
@@ -376,7 +325,7 @@ public class OriginEventIntegrationTest {
     try (final var kafkaStreams = new ResponsiveKafkaStreams(builder.build(), props)) {
       startAppAndAwaitRunning(Duration.ofSeconds(15), kafkaStreams);
       pipeTimestampedRecords(producer, inputTopic(), inputs);
-      assertThat(latch.await(30, TimeUnit.SECONDS), Matchers.is(true));
+      assertThat(latch.await(30, TimeUnit.SECONDS), is(true));
     }
   }
 
@@ -406,7 +355,7 @@ public class OriginEventIntegrationTest {
     try (final var kafkaStreams = new ResponsiveKafkaStreams(builder.build(), props)) {
       startAppAndAwaitRunning(Duration.ofSeconds(15), kafkaStreams);
       pipeTimestampedRecords(producer, inputTopic(), inputs);
-      assertThat(latch.await(30, TimeUnit.SECONDS), Matchers.is(true));
+      assertThat(latch.await(30, TimeUnit.SECONDS), is(true));
     }
   }
 

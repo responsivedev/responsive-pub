@@ -69,10 +69,12 @@ public class OffsetTracker {
 
     // shift the bitset so that commitOffset is the new base offset
     // for which we track marked entries
-    final var old = this.offsets;
-    this.offsets = new BitSet();
-    for (int i = old.nextSetBit(shift); i != -1; i = old.nextSetBit(i + 1)) {
-      this.offsets.set(i - shift);
+    if (shift < offsets.length()) {
+      offsets = offsets.get(shift, offsets.length());
+    } else {
+      // if the shift is beyond the last entry in the bitset, we can
+      // just create a new empty bitset
+      offsets = new BitSet();
     }
 
     baseOffset = commitOffset;
