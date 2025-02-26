@@ -54,6 +54,11 @@ public class ResponsiveConfig extends AbstractConfig {
   private static final String RESPONSIVE_LICENSE_FILE_DOC
       = "A path to a file containing your license.";
 
+  public static final String RESPONSIVE_LICENSE_SERVER_CONFIG = "responsive.license.server";
+  private static final String RESPONSIVE_LICENSE_SERVER_DEFAULT = "https://api.responsive.dev";
+  private static final String RESPONSIVE_LICENSE_SERVER_DOC =
+      "A URI for your Responsive license server.";
+
   /**
    * @deprecated use the responsive.storage.backend.type config with {@link StorageBackend#NONE}
    */
@@ -307,14 +312,19 @@ public class ResponsiveConfig extends AbstractConfig {
       + "lookups but requires more heap memory";
 
 
-  // ------------------ Misc functional overrides ----------------------
+  // ------------------ Misc configs ----------------------
   public static final String RESTORE_OFFSET_REPAIR_ENABLED_CONFIG = "responsive.restore.offset.repair.enabled";
-  public static final boolean RESTORE_OFFSET_REPAIR_ENABLED_DEFAULT = false;
-  public static final String RESTORE_OFFSET_REPAIR_ENABLED_DOC = "When set to 'true', " + RESTORE_OFFSET_REPAIR_ENABLED_CONFIG
+  private static final boolean RESTORE_OFFSET_REPAIR_ENABLED_DEFAULT = false;
+  private static final String RESTORE_OFFSET_REPAIR_ENABLED_DOC = "When set to 'true', " + RESTORE_OFFSET_REPAIR_ENABLED_CONFIG
       + " will ignore OffsetOutOfRangeException and instead seek to the earliest available offset. This exception "
       + "should only happen in situations where there is truncation/retention on the changelog topic and restoring from the latest "
       + "committed offset in the remote store is no longer possible. Note that in some situations this may cause data "
       + "loss, use this configuration with caution";
+
+  public static final String ORIGIN_EVENT_REPORT_INTERVAL_MS_CONFIG = "responsive.origin.event.report.interval.ms";
+  private static final long ORIGIN_EVENT_REPORT_INTERVAL_MS_DEFAULT = 10_000L;
+  private static final String ORIGIN_EVENT_REPORT_INTERVAL_MS_DOC =
+      "How often to report origin event usage information. This should generally not be changed in production environments";
 
   // ------------------ StreamsConfig overrides ----------------------
 
@@ -347,7 +357,7 @@ public class ResponsiveConfig extends AbstractConfig {
           RESPONSIVE_ENV_DOC
       ).define(
           RESPONSIVE_LICENSE_CONFIG,
-          Type.STRING,
+          Type.PASSWORD,
           "",
           Importance.HIGH,
           RESPONSIVE_LICENSE_DOC
@@ -357,6 +367,12 @@ public class ResponsiveConfig extends AbstractConfig {
           "",
           Importance.HIGH,
           RESPONSIVE_LICENSE_FILE_DOC
+      ).define(
+          RESPONSIVE_LICENSE_SERVER_CONFIG,
+          Type.STRING,
+          RESPONSIVE_LICENSE_SERVER_DEFAULT,
+          Importance.LOW,
+          RESPONSIVE_LICENSE_SERVER_DOC
       ).define(
           STORAGE_BACKEND_TYPE_CONFIG,
           Type.STRING,
@@ -635,6 +651,12 @@ public class ResponsiveConfig extends AbstractConfig {
           atLeast(0),
           Importance.MEDIUM,
           RS3_RETRY_TIMEOUT_DOC
+      ).define(
+          ORIGIN_EVENT_REPORT_INTERVAL_MS_CONFIG,
+          Type.LONG,
+          ORIGIN_EVENT_REPORT_INTERVAL_MS_DEFAULT,
+          Importance.LOW,
+          ORIGIN_EVENT_REPORT_INTERVAL_MS_DOC
       );
 
   /**

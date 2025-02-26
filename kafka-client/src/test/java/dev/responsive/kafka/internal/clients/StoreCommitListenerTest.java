@@ -15,8 +15,6 @@ package dev.responsive.kafka.internal.clients;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
-import dev.responsive.kafka.internal.clients.OffsetRecorder;
-import dev.responsive.kafka.internal.clients.StoreCommitListener;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistry;
 import java.util.Map;
@@ -91,7 +89,7 @@ class StoreCommitListenerTest {
             .collect(Collectors.toMap(Entry::getKey, e -> new OffsetAndMetadata(e.getValue()))),
         "group"
     );
-    offsetRecorder.getProducerListener().onCommit();
+    offsetRecorder.getProducerListener().onProducerCommit();
   }
 
   private void sendWrittenOffsets(final Map<TopicPartition, Long> offsets) {
@@ -105,6 +103,6 @@ class StoreCommitListenerTest {
           0
       ));
     }
-    offsetRecorder.getProducerListener().onCommit();
+    offsetRecorder.getProducerListener().onProducerCommit();
   }
 }

@@ -142,7 +142,7 @@ class ResponsiveKafkaStreamsTest {
 
     properties.put(
         RESPONSIVE_LICENSE_CONFIG,
-        LicenseUtils.getLicense()
+        LicenseUtils.getTrialLicense()
     );
   }
 
@@ -238,7 +238,7 @@ class ResponsiveKafkaStreamsTest {
   @Test
   public void shouldAcceptLicenseInLicenseFile() {
     // given:
-    final File licenseFile = writeLicenseFile(LicenseUtils.getLicense());
+    final File licenseFile = writeLicenseFile(LicenseUtils.getTrialLicense());
     properties.put(RESPONSIVE_LICENSE_CONFIG, "");
     properties.put(ResponsiveConfig.RESPONSIVE_LICENSE_FILE_CONFIG, licenseFile.getAbsolutePath());
     properties.put(STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.NONE.name());

@@ -41,7 +41,7 @@ public class ResponsiveProducer<K, V> implements Producer<K, V> {
   private final Logger logger;
 
   public interface Listener {
-    default void onCommit() {
+    default void onProducerCommit() {
     }
 
     default void onAbort() {
@@ -56,7 +56,11 @@ public class ResponsiveProducer<K, V> implements Producer<K, V> {
     ) {
     }
 
-    default void onClose() {
+    default void onProducerClose() {
+    }
+
+    default <K, V> ProducerRecord<K, V> onSend(final ProducerRecord<K, V> record) {
+      return record;
     }
   }
 
@@ -107,7 +111,7 @@ public class ResponsiveProducer<K, V> implements Producer<K, V> {
   @Override
   public void commitTransaction() throws ProducerFencedException {
     wrapped.commitTransaction();
-    listeners.forEach(Listener::onCommit);
+    listeners.forEach(Listener::onProducerCommit);
   }
 
   @Override
@@ -117,12 +121,18 @@ public class ResponsiveProducer<K, V> implements Producer<K, V> {
   }
 
   @Override
-  public Future<RecordMetadata> send(final ProducerRecord<K, V> record) {
+  public Future<RecordMetadata> send(ProducerRecord<K, V> record) {
+    for (final Listener listener : listeners) {
+      record = listener.onSend(record);
+    }
     return new RecordingFuture(wrapped.send(record), listeners);
   }
 
   @Override
-  public Future<RecordMetadata> send(final ProducerRecord<K, V> record, final Callback callback) {
+  public Future<RecordMetadata> send(ProducerRecord<K, V> record, final Callback callback) {
+    for (final Listener listener : listeners) {
+      record = listener.onSend(record);
+    }
     return new RecordingFuture(
         wrapped.send(record, new RecordingCallback(callback, listeners)), listeners
     );
@@ -164,7 +174,7 @@ public class ResponsiveProducer<K, V> implements Producer<K, V> {
     // TODO(rohan): use consistent error behaviour on all callbacks - just throw up
     for (final var l : listeners) {
       try {
-        l.onClose();
+        l.onProducerClose();
       } catch (final Throwable t) {
         logger.error("error during producer listener close", t);
       }

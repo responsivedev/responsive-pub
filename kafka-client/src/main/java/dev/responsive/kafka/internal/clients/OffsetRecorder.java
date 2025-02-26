@@ -121,7 +121,7 @@ public class OffsetRecorder {
 
   private class ConsumerListener implements ResponsiveConsumer.Listener {
     @Override
-    public void onCommit(final Map<TopicPartition, OffsetAndMetadata> offsets) {
+    public void onConsumerCommit(final Map<TopicPartition, OffsetAndMetadata> offsets) {
       if (eos) {
         throw new IllegalStateException("consumer commit is not expected with EOS");
       }
@@ -151,7 +151,7 @@ public class OffsetRecorder {
     }
 
     @Override
-    public void onCommit() {
+    public void onProducerCommit() {
       if (!eos) {
         throw new IllegalStateException("producer commit is not expected with alos");
       }

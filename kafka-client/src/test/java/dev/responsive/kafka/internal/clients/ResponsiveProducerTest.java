@@ -19,11 +19,11 @@ import static org.junit.Assert.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import dev.responsive.kafka.internal.clients.ResponsiveProducer;
 import dev.responsive.kafka.internal.clients.ResponsiveProducer.Listener;
 import java.util.List;
 import java.util.Map;
@@ -62,6 +62,8 @@ public class ResponsiveProducerTest {
   @BeforeEach
   public void setup() {
     producer = new ResponsiveProducer<>("clientid", wrapped, List.of(listener1, listener2));
+    lenient().when(listener1.onSend(any())).thenAnswer(iom -> iom.getArguments()[0]);
+    lenient().when(listener2.onSend(any())).thenAnswer(iom -> iom.getArguments()[0]);
   }
 
   @Test
@@ -70,8 +72,8 @@ public class ResponsiveProducerTest {
     producer.commitTransaction();
 
     // then:
-    verify(listener1).onCommit();
-    verify(listener2).onCommit();
+    verify(listener1).onProducerCommit();
+    verify(listener2).onProducerCommit();
   }
 
   @Test
@@ -136,6 +138,20 @@ public class ResponsiveProducerTest {
   }
 
   @Test
+  public void shouldAllowRecordModificationOnSend() {
+    // Given:
+    final var rec1 = new ProducerRecord<String, String>(PARTITION1.topic(), "val");
+    final var rec2 = new ProducerRecord<String, String>(PARTITION1.topic(), "val");
+    when(listener1.onSend(any())).thenAnswer(iom -> rec2);
+
+    // When:
+    producer.send(rec1, (rm, e) -> { });
+
+    // Then:
+    verify(wrapped).send(same(rec2), any());
+  }
+
+  @Test
   public void shouldNotifyOnSendOffsetsToTransaction() {
     // when:
     producer.sendOffsetsToTransaction(
@@ -159,7 +175,7 @@ public class ResponsiveProducerTest {
   public void shouldThrowExceptionFromCommitCallback() {
     // given:
     producer.sendOffsetsToTransaction(Map.of(PARTITION1, new OffsetAndMetadata(10)), "foo");
-    doThrow(new RuntimeException("oops")).when(listener1).onCommit();
+    doThrow(new RuntimeException("oops")).when(listener1).onProducerCommit();
 
     // when/then:
     assertThrows(RuntimeException.class, () -> producer.commitTransaction());
@@ -171,20 +187,20 @@ public class ResponsiveProducerTest {
     producer.close();
 
     // then:
-    verify(listener1).onClose();
-    verify(listener2).onClose();
+    verify(listener1).onProducerClose();
+    verify(listener2).onProducerClose();
   }
 
   @Test
   public void shouldIgnoreExceptionFromCloseCallback() {
     // given:
-    doThrow(new RuntimeException("oops")).when(listener1).onClose();
+    doThrow(new RuntimeException("oops")).when(listener1).onProducerClose();
 
     // when:
     producer.close();
 
     // then:
-    verify(listener1).onClose();
-    verify(listener2).onClose();
+    verify(listener1).onProducerClose();
+    verify(listener2).onProducerClose();
   }
 }

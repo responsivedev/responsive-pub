@@ -14,41 +14,30 @@ package dev.responsive.kafka.internal.license.model;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import java.util.Objects;
 
-public class TimedTrialV1 extends LicenseInfo {
+public class UsageBasedV1 extends LicenseInfo {
 
-  public static final String TYPE_NAME = "timed_trial_v1";
+  public static final String TYPE_NAME = "usage_based_v1";
 
   private final String email;
-  private final long issuedAt;
-  private final long expiresAt;
+  private final String key;
 
   @JsonCreator
-  public TimedTrialV1(
+  public UsageBasedV1(
       @JsonProperty("type") final String type,
       @JsonProperty("email") final String email,
-      @JsonProperty("issuedAt") final long issuedAt,
-      @JsonProperty("expiresAt") final long expiresAt
+      @JsonProperty("key") final String key
   ) {
     super(type);
-    this.email = Objects.requireNonNull(email);
-    this.issuedAt = issuedAt;
-    this.expiresAt = expiresAt;
+    this.email = email;
+    this.key = key;
   }
 
-  @JsonProperty("email")
   public String email() {
     return email;
   }
 
-  @JsonProperty("expiresAt")
-  public long expiresAt() {
-    return expiresAt;
-  }
-
-  @JsonProperty("issuedAt")
-  public long issuedAt() {
-    return issuedAt;
+  public String key() {
+    return key;
   }
 }

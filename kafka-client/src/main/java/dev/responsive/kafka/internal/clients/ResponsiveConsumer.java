@@ -21,6 +21,7 @@ import java.util.Objects;
 import java.util.regex.Pattern;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.common.TopicPartition;
@@ -85,6 +86,21 @@ public class ResponsiveConsumer<K, V> extends DelegatingConsumer<K, V> {
   }
 
   @Override
+  @Deprecated
+  public ConsumerRecords<K, V> poll(final long timeout) {
+    return poll(Duration.ofMillis(timeout));
+  }
+
+  @Override
+  public ConsumerRecords<K, V> poll(final Duration timeout) {
+    var records = super.poll(timeout);
+    for (final Listener listener : listeners) {
+      records = listener.onPoll(records);
+    }
+    return records;
+  }
+
+  @Override
   public void subscribe(final Collection<String> topics) {
     throw new IllegalStateException("Unexpected call to subscribe(Collection) on main consumer"
                                         + " without a rebalance listener");
@@ -115,13 +131,13 @@ public class ResponsiveConsumer<K, V> extends DelegatingConsumer<K, V> {
   @Override
   public void close() {
     super.close();
-    listeners.forEach(l -> ignoreException(l::onClose));
+    listeners.forEach(l -> ignoreException(l::onConsumerClose));
   }
 
   @Override
   public void close(final Duration timeout) {
     super.close(timeout);
-    listeners.forEach(l -> ignoreException(l::onClose));
+    listeners.forEach(l -> ignoreException(l::onConsumerClose));
   }
 
   @Override
@@ -137,14 +153,14 @@ public class ResponsiveConsumer<K, V> extends DelegatingConsumer<K, V> {
   @Override
   public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets) {
     super.commitSync(offsets);
-    listeners.forEach(l -> l.onCommit(offsets));
+    listeners.forEach(l -> l.onConsumerCommit(offsets));
   }
 
   @Override
   public void commitSync(Map<TopicPartition, OffsetAndMetadata> offsets,
                          Duration timeout) {
     super.commitSync(offsets, timeout);
-    listeners.forEach(l -> l.onCommit(offsets));
+    listeners.forEach(l -> l.onConsumerCommit(offsets));
   }
 
   @Override
@@ -176,6 +192,11 @@ public class ResponsiveConsumer<K, V> extends DelegatingConsumer<K, V> {
   }
 
   public interface Listener {
+
+    default <K, V> ConsumerRecords<K, V> onPoll(ConsumerRecords<K, V> records) {
+      return records;
+    }
+
     default void onPartitionsRevoked(Collection<TopicPartition> partitions) {
     }
 
@@ -185,13 +206,13 @@ public class ResponsiveConsumer<K, V> extends DelegatingConsumer<K, V> {
     default void onPartitionsLost(Collection<TopicPartition> partitions) {
     }
 
-    default void onCommit(final Map<TopicPartition, OffsetAndMetadata> offsets) {
+    default void onConsumerCommit(final Map<TopicPartition, OffsetAndMetadata> offsets) {
     }
 
     default void onUnsubscribe() {
     }
 
-    default void onClose() {
+    default void onConsumerClose() {
     }
   }
 }

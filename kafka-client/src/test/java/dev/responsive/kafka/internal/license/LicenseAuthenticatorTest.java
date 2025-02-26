@@ -29,7 +29,7 @@ class LicenseAuthenticatorTest {
   @Test
   public void shouldVerifyLicense() {
     // given:
-    final LicenseDocument license = loadLicense("test-license.json");
+    final LicenseDocument license = loadLicense("test-trial-license.json");
 
     // when/then (no throw):
     verifier.authenticate(license);

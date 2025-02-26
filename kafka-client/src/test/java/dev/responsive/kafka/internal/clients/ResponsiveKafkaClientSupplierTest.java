@@ -110,6 +110,8 @@ class ResponsiveKafkaClientSupplierTest {
   private ResponsiveKafkaClientSupplier supplier;
 
   private final ResponsiveStoreRegistry storeRegistry = new ResponsiveStoreRegistry();
+  private final OriginEventRecorder originEventRecorder =
+      new OriginEventRecorderImpl("thread", (a, b) -> { }, false);
 
   @BeforeEach
   @SuppressWarnings("unchecked")
@@ -127,6 +129,7 @@ class ResponsiveKafkaClientSupplierTest {
     lenient().when(factories.createMetricsPublishingCommitListener(any(), any(), any()))
         .thenReturn(commitMetricListener);
     lenient().when(factories.createOffsetRecorder(anyBoolean(), any())).thenReturn(offsetRecorder);
+    lenient().when(factories.createOriginEventRecorder(any())).thenReturn(originEventRecorder);
 
     supplier = supplier(CONFIGS, StorageBackend.MONGO_DB);
   }
@@ -230,6 +233,17 @@ class ResponsiveKafkaClientSupplierTest {
   }
 
   @Test
+  public void shouldAddOriginEventListeners() {
+    // when:
+    supplier.getConsumer(CONSUMER_CONFIGS);
+
+    // then:
+    verify(factories).createResponsiveConsumer(
+        any(), any(), consumerListenerCaptor.capture());
+    assertThat(consumerListenerCaptor.getValue(), Matchers.hasItem(originEventRecorder));
+  }
+
+  @Test
   public void shouldCloseMetricPublishingCommitListenerWhenNoRefs() {
     // given:
     supplier.getConsumer(CONSUMER_CONFIGS);
@@ -238,10 +252,10 @@ class ResponsiveKafkaClientSupplierTest {
     // then:
     verify(factories).createResponsiveConsumer(
         any(), any(), consumerListenerCaptor.capture());
-    consumerListenerCaptor.getValue().forEach(ResponsiveConsumer.Listener::onClose);
+    consumerListenerCaptor.getValue().forEach(ResponsiveConsumer.Listener::onConsumerClose);
     verify(commitMetricListener, times(0)).close();
     verify(factories).createResponsiveProducer(any(), any(), producerListenerCaptor.capture());
-    producerListenerCaptor.getValue().forEach(ResponsiveProducer.Listener::onClose);
+    producerListenerCaptor.getValue().forEach(ResponsiveProducer.Listener::onProducerClose);
     verify(commitMetricListener).close();
   }
 

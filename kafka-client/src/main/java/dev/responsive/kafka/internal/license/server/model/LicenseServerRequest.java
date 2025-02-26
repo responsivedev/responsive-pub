@@ -10,7 +10,7 @@
  * licenses can be obtained at https://www.responsive.dev
  */
 
-package dev.responsive.kafka.internal.license.model;
+package dev.responsive.kafka.internal.license.server.model;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
@@ -23,19 +23,30 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
     visible = true
 )
 @JsonSubTypes({
-    @JsonSubTypes.Type(value = TimedTrialV1.class, name = TimedTrialV1.TYPE_NAME),
-    @JsonSubTypes.Type(value = CloudLicenseV1.class, name = CloudLicenseV1.TYPE_NAME),
-    @JsonSubTypes.Type(value = UsageBasedV1.class, name = UsageBasedV1.TYPE_NAME)
+    @JsonSubTypes.Type(
+        value = OriginEventsReportRequestV1.class,
+        name = OriginEventsReportRequestV1.TYPE_NAME)
 })
-public abstract class LicenseInfo {
-  private final String type;
+public class LicenseServerRequest {
 
-  LicenseInfo(@JsonProperty("type") final String type) {
+  private final String type;
+  private final long timestamp;
+
+  public LicenseServerRequest(
+      @JsonProperty("type") final String type,
+      @JsonProperty("timestamp") final long timestamp
+  ) {
     this.type = type;
+    this.timestamp = timestamp;
   }
 
   @JsonProperty("type")
   public String type() {
     return type;
+  }
+
+  @JsonProperty("timestamp")
+  public long timestamp() {
+    return timestamp;
   }
 }

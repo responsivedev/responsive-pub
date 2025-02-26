@@ -77,7 +77,7 @@ class MetricPublishingCommitListenerTest {
     );
 
     // when:
-    recorderProducerListener.onCommit();
+    recorderProducerListener.onProducerCommit();
 
     // then:
     verify(metrics, times(2)).addMetric(
@@ -117,7 +117,7 @@ class MetricPublishingCommitListenerTest {
         Map.of(PARTITION1, new OffsetAndMetadata(123L), PARTITION2, new OffsetAndMetadata(345L)),
         GROUP
     );
-    recorderProducerListener.onCommit();
+    recorderProducerListener.onProducerCommit();
 
     // when:
     listener.onPartitionsRevoked(List.of(PARTITION1));
@@ -138,7 +138,7 @@ class MetricPublishingCommitListenerTest {
     );
 
     // when:
-    recorderProducerListener.onCommit();
+    recorderProducerListener.onProducerCommit();
 
     // then:
     verify(metrics, times(2))
@@ -158,7 +158,7 @@ class MetricPublishingCommitListenerTest {
         Map.of(PARTITION1, new OffsetAndMetadata(123L), PARTITION2, new OffsetAndMetadata(345L)),
         GROUP
     );
-    recorderProducerListener.onCommit();
+    recorderProducerListener.onProducerCommit();
 
     // when:
     listener.close();
