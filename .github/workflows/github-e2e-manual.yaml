@@ -10,6 +10,7 @@ on:
         options:
           - scylla
           - mongo
+          - rs3
       test-type:
         description: 'Which test variant to run'
         type: choice

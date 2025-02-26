@@ -34,6 +34,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Named;
@@ -140,10 +141,11 @@ public class E2ETestApplication {
     builderProperties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG,
         StreamsConfig.EXACTLY_ONCE_V2);
     builderProperties.put(ResponsiveConfig.ASYNC_THREAD_POOL_SIZE_CONFIG, 2);
-    final var streams = new ResponsiveKafkaStreams(
-        builder.build(builderProperties),
-        builderProperties
-    );
+
+    Topology topology = builder.build(builderProperties);
+    LOG.info("Starting Kafka Streams with topology \n{}", topology.describe());
+
+    final var streams = new ResponsiveKafkaStreams(topology, builderProperties);
     streams.setUncaughtExceptionHandler(new UncaughtStreamsAntithesisHandler());
     return streams;
   }
