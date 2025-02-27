@@ -29,13 +29,14 @@ dependencies {
     implementation("org.apache.commons:commons-text:1.10.0")
 
     implementation(libs.guava)
-    implementation(libs.slf4j.log4j2)
     implementation(libs.bundles.scylla)
     implementation(libs.jackson)
     implementation(libs.mongodb.driver.core)
 
+    testImplementation(project(":responsive-test-utils"))
     testImplementation(testlibs.bundles.base)
     testImplementation(testlibs.bundles.testcontainers)
+
 }
 
 java {

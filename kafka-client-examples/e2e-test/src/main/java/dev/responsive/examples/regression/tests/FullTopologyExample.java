@@ -12,7 +12,8 @@
 
 package dev.responsive.examples.regression.tests;
 
-import static dev.responsive.examples.regression.RegConstants.CUSTOMERS;
+import static dev.responsive.examples.regression.RegConstants.CUSTOMER_ID_TO_NAME;
+import static dev.responsive.examples.regression.RegConstants.CUSTOMER_NAME_TO_LOCATION;
 import static dev.responsive.examples.regression.RegConstants.ORDERS;
 
 import dev.responsive.examples.common.InjectedE2ETestException;
@@ -20,6 +21,7 @@ import dev.responsive.examples.e2etest.Params;
 import dev.responsive.examples.e2etest.UrandomGenerator;
 import dev.responsive.examples.regression.RegressionSchema;
 import dev.responsive.examples.regression.model.Customer;
+import dev.responsive.examples.regression.model.CustomerInfo;
 import dev.responsive.examples.regression.model.EnrichedOrder;
 import dev.responsive.examples.regression.model.Order;
 import java.time.Duration;
@@ -35,11 +37,16 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.TimeWindows;
 
-public class STJoinExample extends AbstractKSExampleService {
+/**
+ * Slightly-more-complex example application featuring multiple types of joins (ST and FKJ) and
+ * a windowed aggregation. As we add more features it would be good to expand this
+ * topology further with more kinds of operators
+ */
+public class FullTopologyExample extends AbstractKSExampleService {
 
   private final UrandomGenerator randomGenerator = new UrandomGenerator();
 
-  public STJoinExample(final Map<String, Object> props, final boolean responsive) {
+  public FullTopologyExample(final Map<String, Object> props, final boolean responsive) {
     super(
         "stream-table-join",
         props,
@@ -51,20 +58,32 @@ public class STJoinExample extends AbstractKSExampleService {
   // we should work on making it more robust and cover more DSL operations (perhaps as
   // individual tests)
   @Override
-  protected Topology buildTopology() {
+  public Topology buildTopology() {
     final StreamsBuilder builder = new StreamsBuilder();
 
-    // Read orders from the orders topic
+    // Read orders keyed by customer id
     final KStream<String, Order> orders =
         builder.stream(ORDERS, Consumed.with(Serdes.String(), RegressionSchema.orderSerde()));
 
+    // Read customer names keyed by customer id
+    final KTable<String, String> customerIdToName =
+        builder.table(CUSTOMER_ID_TO_NAME, Consumed.with(Serdes.String(), Serdes.String()));
 
-    // Read customers from the customers topic
-    final KTable<String, Customer> customers =
-        builder.table(CUSTOMERS, Consumed.with(Serdes.String(), RegressionSchema.customerSerde()));
+    // Read customer location keyed by customer name
+    final KTable<String, String> customerNameToLocation =
+        builder.table(CUSTOMER_NAME_TO_LOCATION, Consumed.with(Serdes.String(), Serdes.String()));
+
+    // Join customer tables to get full Customer metadata keyed by customer id
+    final KTable<String, Customer> customers = customerIdToName
+        .join(customerNameToLocation,
+              id -> id, // join key is customer name --> extract value from customerIdToName
+              (location, name) -> new CustomerInfo(name, location),
+              Materialized.with(Serdes.String(), RegressionSchema.customerInfoSerde()))
+        .mapValues((k, v) -> new Customer(k, v.customerName(), v.location()));
+
 
     // Enrich orders with customer information by joining the orders
-    // stream with the customers table
+    // stream with the customers table, keyed by customer id
     KStream<String, EnrichedOrder> enrichedOrders = orders
         .join(
             customers,
@@ -87,7 +106,7 @@ public class STJoinExample extends AbstractKSExampleService {
           }
         })
         .groupByKey()
-        .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofDays(1), Duration.ofHours(12)))
+        .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofHours(1), Duration.ofHours(12)))
         .reduce(EnrichedOrder::combineWith,
                 Materialized.with(Serdes.String(), RegressionSchema.enrichedOrderSerde()))
         .toStream()
