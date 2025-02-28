@@ -19,22 +19,15 @@ public class UsageBasedV1 extends LicenseInfo {
 
   public static final String TYPE_NAME = "usage_based_v1";
 
-  private final String email;
   private final String key;
 
   @JsonCreator
   public UsageBasedV1(
       @JsonProperty("type") final String type,
-      @JsonProperty("email") final String email,
       @JsonProperty("key") final String key
   ) {
     super(type);
-    this.email = email;
     this.key = key;
-  }
-
-  public String email() {
-    return email;
   }
 
   public String key() {
