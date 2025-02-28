@@ -58,7 +58,6 @@ class LicenseCheckerTest {
     // given:
     final LicenseInfo info = new UsageBasedV1(
         UsageBasedV1.TYPE_NAME,
-        "foo@bar.com",
         "key"
     );
 
