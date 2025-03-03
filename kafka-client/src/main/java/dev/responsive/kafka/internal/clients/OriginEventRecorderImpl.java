@@ -235,7 +235,8 @@ public class OriginEventRecorderImpl implements OriginEventRecorder {
 
       try {
         final HttpRequest request = HttpRequest.newBuilder()
-            .uri(new URI(licenseServer + "/usage"))
+            .version(HttpClient.Version.HTTP_1_1)
+            .uri(new URI(licenseServer + "/v1/usage"))
             .header("Content-Type", "application/json")
             .header("Authorization", "Bearer " + apiKey)
             .POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(body)))
