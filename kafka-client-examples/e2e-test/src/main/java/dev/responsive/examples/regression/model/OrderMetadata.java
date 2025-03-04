@@ -13,17 +13,11 @@
 package dev.responsive.examples.regression.model;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import java.util.Optional;
 
-public record StoredOrder(
-    @JsonProperty("order") Optional<Order> order,
-    @JsonProperty("meta") Optional<Meta> meta
+public record OrderMetadata(
+    @JsonProperty("timestamp") long timestamp,
+    @JsonProperty("count") long count,
+    @JsonProperty("size") long size
 ) {
 
-  public record Meta(
-      @JsonProperty("timestamp") long timestamp,
-      @JsonProperty("count") long count,
-      @JsonProperty("size") long size
-  ) {
-  }
 }

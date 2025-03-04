@@ -14,6 +14,9 @@ package dev.responsive.examples.regression.model;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+/**
+ * An instance of a single purchase order
+ */
 public record Order(
     @JsonProperty("orderId") String orderId,
     @JsonProperty("customerId") String customerId,
