@@ -18,6 +18,9 @@ import java.util.List;
 import java.util.function.ToIntFunction;
 import java.util.stream.Collectors;
 
+/**
+ * A batch of one or more purchases grouped into a single order
+ */
 public record GroupedOrder(
     @JsonProperty("orders") List<Order> orders
 ) implements Comparable<GroupedOrder> {
