@@ -164,21 +164,21 @@ public class KeyBatchExample extends AbstractKSExampleService {
 
       // check if the key's purchases are ready to be batched and flushed,
       // otherwise just overwrite the metadata row with the new info
-      if (shouldFlush(newOrderMetadata, newPurchaseTimestamp)) {
+      if (shouldFlush(newOrderMetadata, context.currentStreamTimeMs())) {
         doFlush(key, newOrderMetadata.timestamp());
       } else {
         metadataStore.put(key, newOrderMetadata);
       }
     }
 
-    private void flushReadyOrders(long ts) {
+    private void flushReadyOrders(final long now) {
       // iterate through all the metadata rows and check whether the purchases
       // for each key are ready to be batched and flushed
       try (KeyValueIterator<String, OrderMetadata> range = metadataStore.all()) {
         while (range.hasNext()) {
           final KeyValue<String, OrderMetadata> kv = range.next();
           final OrderMetadata orderMetadata = kv.value;
-          if (shouldFlush(orderMetadata, ts)) {
+          if (shouldFlush(orderMetadata, now)) {
             doFlush(kv.key, orderMetadata.timestamp());
           }
         }
