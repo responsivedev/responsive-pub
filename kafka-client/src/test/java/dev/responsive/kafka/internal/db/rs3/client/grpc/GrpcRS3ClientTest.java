@@ -27,6 +27,7 @@ import dev.responsive.kafka.internal.db.rs3.client.LssId;
 import dev.responsive.kafka.internal.db.rs3.client.Put;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Exception;
 import dev.responsive.kafka.internal.db.rs3.client.RS3TimeoutException;
+import dev.responsive.kafka.internal.db.rs3.client.RS3TransientException;
 import dev.responsive.kafka.internal.db.rs3.client.WalEntry;
 import dev.responsive.rs3.RS3Grpc;
 import dev.responsive.rs3.Rs3;
@@ -602,7 +603,7 @@ class GrpcRS3ClientTest {
     );
 
     // then:
-    assertThat(exception.getCause(), is(instanceOf(StatusRuntimeException.class)));
+    assertThat(exception.getCause(), instanceOf(StatusRuntimeException.class));
     assertThat(((StatusRuntimeException) exception.getCause()).getStatus(), is(Status.UNKNOWN));
   }
 

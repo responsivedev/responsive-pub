@@ -91,7 +91,7 @@ public class GrpcRS3Client implements RS3Client {
       } catch (final Throwable t) {
         var wrappedException = GrpcRs3Util.wrapThrowable(t);
         if (!(wrappedException instanceof RS3TransientException)) {
-          throw t;
+          throw wrappedException;
         }
       }
 
