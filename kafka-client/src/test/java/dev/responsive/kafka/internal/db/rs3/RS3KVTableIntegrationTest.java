@@ -21,7 +21,6 @@ import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.internal.db.rs3.client.LssId;
 import dev.responsive.kafka.internal.db.rs3.client.Put;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Client;
-import dev.responsive.kafka.internal.db.rs3.client.RS3RetryUtil;
 import dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRS3Client;
 import dev.responsive.kafka.internal.metrics.ClientVersionMetadata;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
@@ -75,7 +74,7 @@ public class RS3KVTableIntegrationTest {
     final int port = rs3Container.getMappedPort(50051);
     this.rs3Container = rs3Container;
     final GrpcRS3Client.Connector connector =
-        new GrpcRS3Client.Connector("localhost", port);
+        new GrpcRS3Client.Connector(time, "localhost", port);
     connector.useTls(false);
     rs3Client = connector.connect();
     final ResponsiveMetrics responsiveMetrics = new ResponsiveMetrics(metrics);
@@ -96,12 +95,10 @@ public class RS3KVTableIntegrationTest {
             new TopicPartition("foo", 0),
             "store-name"
     );
-    final RS3RetryUtil rs3RetryUtil = new RS3RetryUtil(retryTimeoutMs, time);
     this.table = new RS3KVTable(
         testName,
         STORE_ID,
         rs3Client,
-        rs3RetryUtil,
         pssPartitioner,
         responsiveMetrics,
         scopeBuilder

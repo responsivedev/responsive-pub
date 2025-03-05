@@ -17,12 +17,11 @@ import dev.responsive.kafka.internal.db.RemoteWriter;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.db.rs3.client.LssId;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Client;
-import dev.responsive.kafka.internal.db.rs3.client.RS3RetryUtil;
+import dev.responsive.kafka.internal.db.rs3.client.RS3TransientException;
 import dev.responsive.kafka.internal.db.rs3.client.StreamSender;
 import dev.responsive.kafka.internal.db.rs3.client.StreamSenderMessageReceiver;
 import dev.responsive.kafka.internal.db.rs3.client.WalEntry;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
-import io.grpc.StatusRuntimeException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -40,7 +39,6 @@ class RS3KVFlushManager extends KVFlushManager {
 
   private final UUID storeId;
   private final RS3Client rs3Client;
-  private final RS3RetryUtil clientUtil;
   private final LssId lssId;
   private final RS3KVTable table;
   private final HashMap<Integer, Optional<Long>> writtenOffsets;
@@ -51,7 +49,6 @@ class RS3KVFlushManager extends KVFlushManager {
   public RS3KVFlushManager(
       final UUID storeId,
       final RS3Client rs3Client,
-      final RS3RetryUtil clientUtil,
       final LssId lssId,
       final RS3KVTable table,
       final HashMap<Integer, Optional<Long>> writtenOffsets,
@@ -60,7 +57,6 @@ class RS3KVFlushManager extends KVFlushManager {
   ) {
     this.storeId = Objects.requireNonNull(storeId);
     this.rs3Client = Objects.requireNonNull(rs3Client);
-    this.clientUtil = Objects.requireNonNull(clientUtil);
     this.lssId = Objects.requireNonNull(lssId);
     this.table = Objects.requireNonNull(table);
     this.writtenOffsets = Objects.requireNonNull(writtenOffsets);
@@ -102,7 +98,6 @@ class RS3KVFlushManager extends KVFlushManager {
     final var writer = new RS3KVWriter(
         storeId,
         rs3Client,
-        clientUtil,
         table,
         pssId,
         lssId,
@@ -199,25 +194,32 @@ class RS3KVFlushManager extends KVFlushManager {
       );
     }
 
-    String describeOperation() {
-      return "WriteWalSegment(storeId=" + storeId + ", lssId=" + lssId + ", pssId=" + pssId + ")";
+    Optional<Long> writeWalSegmentSync(List<WalEntry> entries) {
+      return rs3Client.writeWalSegment(
+          storeId,
+          lssId,
+          pssId,
+          expectedWrittenOffset,
+          endOffset,
+          entries
+      );
     }
+
   }
 
   private static final class RS3KVWriter implements RemoteWriter<Bytes, Integer> {
     private final RS3StreamFactory streamFactory;
     private final RS3KVTable table;
     private final int kafkaPartition;
-
     private final List<WalEntry> retryBuffer = new ArrayList<>();
-    private final RS3RetryUtil clientUtil;
-    private StreamSender<WalEntry> streamSender;
-    private CompletionStage<Optional<Long>> resultFuture;
+    private final StreamSender<WalEntry> streamSender;
+    private final CompletionStage<Optional<Long>> resultFuture;
+
+    private boolean isStreamActive = true;
 
     private RS3KVWriter(
         final UUID storeId,
         final RS3Client rs3Client,
-        final RS3RetryUtil clientUtil,
         final RS3KVTable table,
         final int pssId,
         final LssId lssId,
@@ -225,7 +227,6 @@ class RS3KVFlushManager extends KVFlushManager {
         final Optional<Long> expectedWrittenOffset,
         final int kafkaPartition
     ) {
-      this.clientUtil = clientUtil;
       this.table = Objects.requireNonNull(table);
       this.streamFactory = new RS3StreamFactory(
           storeId,
@@ -236,10 +237,7 @@ class RS3KVFlushManager extends KVFlushManager {
           expectedWrittenOffset
       );
       this.kafkaPartition = kafkaPartition;
-      reinitializeStream();
-    }
 
-    public void reinitializeStream() {
       final var sendRecv = streamFactory.writeWalSegmentAsync();
       this.streamSender = sendRecv.sender();
       this.resultFuture = sendRecv.receiver();
@@ -251,59 +249,47 @@ class RS3KVFlushManager extends KVFlushManager {
 
     @Override
     public void insert(final Bytes key, final byte[] value, final long timestampMs) {
-      sendNext(table.insert(kafkaPartition, key, value, timestampMs));
+      maybeSendNext(table.insert(kafkaPartition, key, value, timestampMs));
     }
 
     @Override
     public void delete(final Bytes key) {
-      sendNext(table.delete(kafkaPartition, key));
+      maybeSendNext(table.delete(kafkaPartition, key));
     }
 
-    private void sendNext(WalEntry entry) {
+    private void maybeSendNext(WalEntry entry) {
       retryBuffer.add(entry);
-      clientUtil.withRetryFallback(
-          () -> {
-            streamSender.sendNext(entry);
-            return null;
-          },
-          () -> {
-            reinitializeStream();
-            resendBufferedWalEntries();
-            return null;
-          },
-          streamFactory::describeOperation
-      );
-    }
 
-    void resendBufferedWalEntries() {
-      for (WalEntry bufferedEntry : retryBuffer) {
-        streamSender.sendNext(bufferedEntry);
+      if (isStreamActive) {
+        try {
+          streamSender.sendNext(entry);
+        } catch (IllegalStateException e) {
+          isStreamActive = false;
+        }
       }
     }
 
     @Override
     public CompletionStage<RemoteWriteResult<Integer>> flush() {
-      clientUtil.withRetryFallback(
-          () -> {
-            streamSender.finish();
-            return null;
-          },
-          () -> {
-            reinitializeStream();
-            resendBufferedWalEntries();
-            streamSender.finish();
-            return null;
-          },
-          streamFactory::describeOperation
-      );
+      if (isStreamActive) {
+        try {
+          streamSender.finish();
+        } catch (IllegalStateException e) {
+          isStreamActive = false;
+        }
+      }
 
-      return resultFuture.thenApply(
-          flushedOffset -> {
-            LOG.debug("last flushed offset for pss/lss {}/{} is {}",
-                      streamFactory.pssId, streamFactory.lssId, flushedOffset);
-            return RemoteWriteResult.success(kafkaPartition);
-          }
-      );
+      return resultFuture.handle((result, throwable) -> {
+        Optional<Long> flushedOffset = result;
+        if (throwable instanceof RS3TransientException) {
+          flushedOffset = streamFactory.writeWalSegmentSync(retryBuffer);
+        }
+
+        LOG.debug("last flushed offset for pss/lss {}/{} is {}",
+                  streamFactory.pssId, streamFactory.lssId, flushedOffset);
+        return RemoteWriteResult.success(kafkaPartition);
+      });
     }
   }
+
 }
