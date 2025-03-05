@@ -72,7 +72,7 @@ class GrpcRS3ClientTest {
         stub,
         asyncStub
     ));
-    client = new GrpcRS3Client(stubs, time, retryTimeoutMs);
+    client = new GrpcRS3Client(stubs);
   }
 
   @Test

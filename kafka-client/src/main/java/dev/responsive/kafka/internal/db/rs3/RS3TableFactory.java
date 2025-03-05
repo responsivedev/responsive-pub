@@ -14,20 +14,25 @@ package dev.responsive.kafka.internal.db.rs3;
 
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
+import dev.responsive.kafka.internal.db.rs3.client.RS3RetryUtil;
 import dev.responsive.kafka.internal.db.rs3.client.WalEntry;
 import dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRS3Client;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import java.util.Map;
 import java.util.UUID;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.Time;
 
 public class RS3TableFactory {
   private final GrpcRS3Client.Connector connector;
+  private final Time time;
 
   public RS3TableFactory(
-      GrpcRS3Client.Connector connector
+      GrpcRS3Client.Connector connector,
+      Time time
   ) {
     this.connector = connector;
+    this.time = time;
   }
 
   public RemoteKVTable<WalEntry> kvTable(
@@ -46,10 +51,13 @@ public class RS3TableFactory {
     final UUID storeId = UUID.fromString(storeIdHex);
     final PssPartitioner pssPartitioner = new PssDirectPartitioner();
     final var rs3Client = connector.connect();
+    final var retryTimeoutMs = config.getLong(ResponsiveConfig.RS3_RETRY_TIMEOUT_CONFIG);
+    final var rs3RetryUtil = new RS3RetryUtil(retryTimeoutMs, time);
     return new RS3KVTable(
         name,
         storeId,
         rs3Client,
+        rs3RetryUtil,
         pssPartitioner,
         responsiveMetrics,
         scopeBuilder

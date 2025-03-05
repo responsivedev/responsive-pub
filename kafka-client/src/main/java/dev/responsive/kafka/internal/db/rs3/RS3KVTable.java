@@ -14,10 +14,12 @@ package dev.responsive.kafka.internal.db.rs3;
 
 import dev.responsive.kafka.internal.db.KVFlushManager;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
+import dev.responsive.kafka.internal.db.rs3.client.CurrentOffsets;
 import dev.responsive.kafka.internal.db.rs3.client.LssId;
 import dev.responsive.kafka.internal.db.rs3.client.MeteredRS3Client;
 import dev.responsive.kafka.internal.db.rs3.client.Put;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Client;
+import dev.responsive.kafka.internal.db.rs3.client.RS3RetryUtil;
 import dev.responsive.kafka.internal.db.rs3.client.WalEntry;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration;
@@ -38,6 +40,7 @@ public class RS3KVTable implements RemoteKVTable<WalEntry> {
   private final String name;
   private final UUID storeId;
   private final RS3Client rs3Client;
+  private final RS3RetryUtil rs3RetryUtil;
   private final PssPartitioner pssPartitioner;
   private LssId lssId;
   private Long fetchOffset = ResponsiveStoreRegistration.NO_COMMITTED_OFFSET;
@@ -47,6 +50,7 @@ public class RS3KVTable implements RemoteKVTable<WalEntry> {
       final String name,
       final UUID storeId,
       final RS3Client rs3Client,
+      final RS3RetryUtil rs3RetryUtil,
       final PssPartitioner pssPartitioner,
       final ResponsiveMetrics responsiveMetrics,
       final ResponsiveMetrics.MetricScopeBuilder scopeBuilder
@@ -59,6 +63,7 @@ public class RS3KVTable implements RemoteKVTable<WalEntry> {
         Objects.requireNonNull(scopeBuilder)
     );
     this.pssPartitioner = Objects.requireNonNull(pssPartitioner);
+    this.rs3RetryUtil = rs3RetryUtil;
   }
 
   @Override
@@ -78,7 +83,7 @@ public class RS3KVTable implements RemoteKVTable<WalEntry> {
     //       written to to bump the written offset
     final HashMap<Integer, Optional<Long>> lastWrittenOffset = new HashMap<>();
     for (final int pss : pssPartitioner.pssForLss(this.lssId)) {
-      final var offsets = rs3Client.getCurrentOffsets(storeId, lssId, pss);
+      final var offsets = getCurrentOffsets(pss);
       lastWrittenOffset.put(pss, offsets.writtenOffset());
     }
     final var fetchOffsetOrMinusOne = lastWrittenOffset.values().stream()
@@ -105,6 +110,7 @@ public class RS3KVTable implements RemoteKVTable<WalEntry> {
     flushManager = new RS3KVFlushManager(
         storeId,
         rs3Client,
+        rs3RetryUtil,
         lssId,
         this,
         lastWrittenOffset,
@@ -114,16 +120,30 @@ public class RS3KVTable implements RemoteKVTable<WalEntry> {
     return flushManager;
   }
 
+  private CurrentOffsets getCurrentOffsets(int pssId) {
+    return this.rs3RetryUtil.withRetry(
+        () -> rs3Client.getCurrentOffsets(
+            storeId,
+            lssId,
+            pssId
+        ),
+        () -> "GetOffsets(storeId=" + storeId + ", lssId=" + lssId + ", pssId=" + pssId + ")"
+    );
+  }
+
   @Override
   public byte[] get(final int kafkaPartition, final Bytes key, final long minValidTs) {
     final int pssId = pssPartitioner.pss(key.get(), this.lssId);
-    return rs3Client.get(
-        storeId,
-        lssId,
-        pssId,
-        flushManager.writtenOffset(pssId),
-        key.get()
-    ).orElse(null);
+    return this.rs3RetryUtil.withRetry(
+        () -> rs3Client.get(
+            storeId,
+            lssId,
+            pssId,
+            flushManager.writtenOffset(pssId),
+            key.get()
+        ).orElse(null),
+        () -> "Get(storeId=" + storeId + ", lssId=" + lssId + ", pssId=" + pssId + ")"
+    );
   }
 
   @Override

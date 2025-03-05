@@ -12,8 +12,6 @@
 
 package dev.responsive.kafka.internal.db.rs3.client.grpc;
 
-import static io.grpc.Status.UNAVAILABLE;
-
 import com.google.common.annotations.VisibleForTesting;
 import com.google.protobuf.ByteString;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
@@ -21,34 +19,25 @@ import dev.responsive.kafka.internal.db.rs3.client.CurrentOffsets;
 import dev.responsive.kafka.internal.db.rs3.client.LssId;
 import dev.responsive.kafka.internal.db.rs3.client.Put;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Client;
-import dev.responsive.kafka.internal.db.rs3.client.RS3Exception;
-import dev.responsive.kafka.internal.db.rs3.client.RS3TimeoutException;
 import dev.responsive.kafka.internal.db.rs3.client.StreamSenderMessageReceiver;
 import dev.responsive.kafka.internal.db.rs3.client.WalEntry;
 import dev.responsive.rs3.RS3Grpc;
 import dev.responsive.rs3.Rs3;
-import io.grpc.StatusRuntimeException;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Supplier;
-import org.apache.kafka.common.utils.ExponentialBackoff;
-import org.apache.kafka.common.utils.Time;
 
 public class GrpcRS3Client implements RS3Client {
   static final long WAL_OFFSET_NONE = Long.MAX_VALUE;
 
   private final PssStubsProvider stubs;
-  private final Time time;
-  private final long retryTimeoutMs;
 
   @VisibleForTesting
-  GrpcRS3Client(final PssStubsProvider stubs, final Time time, final long retryTimeoutMs) {
+  GrpcRS3Client(final PssStubsProvider stubs) {
     this.stubs = Objects.requireNonNull(stubs);
-    this.time = Objects.requireNonNull(time);
-    this.retryTimeoutMs = retryTimeoutMs;
   }
 
   public void close() {
@@ -64,10 +53,7 @@ public class GrpcRS3Client implements RS3Client {
         .setLssId(lssIdProto(lssId))
         .setPssId(pssId)
         .build();
-    final Rs3.GetOffsetsResult result = withRetry(
-        () -> stub.getOffsets(request),
-        () -> "GetOffsets(storeId=" + storeId + ", lssId=" + lssId + ", pssId=" + pssId + ")"
-    );
+    final var result = stub.getOffsets(request);
     checkField(result::hasWrittenOffset, "writtenOffset");
     checkField(result::hasFlushedOffset, "flushedOffset");
     return new CurrentOffsets(
@@ -76,35 +62,6 @@ public class GrpcRS3Client implements RS3Client {
         result.getFlushedOffset() == WAL_OFFSET_NONE
             ? Optional.empty() : Optional.of(result.getFlushedOffset())
     );
-  }
-
-  private <T> T withRetry(Supplier<T> supplier, Supplier<String> opDescription) {
-    // Using Kafka default backoff settings initially. We can pull them up
-    // if there is ever strong reason.
-    final var backoff = new ExponentialBackoff(50, 2, 1000, 0.2);
-    final var startTimeMs = time.milliseconds();
-    final var deadlineMs = startTimeMs + retryTimeoutMs;
-
-    var retries = 0;
-    long currentTimeMs;
-
-    do {
-      try {
-        return supplier.get();
-      } catch (final StatusRuntimeException e) {
-        if (e.getStatus() != UNAVAILABLE) {
-          throw new RS3Exception(e);
-        }
-      }
-
-      retries += 1;
-      currentTimeMs = time.milliseconds();
-      time.sleep(Math.min(
-          backoff.backoff(retries),
-          Math.max(0, deadlineMs - currentTimeMs))
-      );
-    } while (currentTimeMs - startTimeMs < retryTimeoutMs);
-    throw new RS3TimeoutException("Timeout while attempting operation " + opDescription.get());
   }
 
   @Override
@@ -193,10 +150,7 @@ public class GrpcRS3Client implements RS3Client {
     final var request = requestBuilder.build();
     final RS3Grpc.RS3BlockingStub stub = stubs.stubs(storeId, pssId).syncStub();
 
-    final Rs3.GetResult result = withRetry(
-        () -> stub.get(request),
-        () -> "Get(storeId=" + storeId + ", lssId=" + lssId + ", pssId=" + pssId + ")"
-    );
+    final var result = stub.get(request);
     if (!result.hasResult()) {
       return Optional.empty();
     }
@@ -241,19 +195,14 @@ public class GrpcRS3Client implements RS3Client {
   }
 
   public static class Connector {
-    private final Time time;
     private final String host;
     private final int port;
-
     private boolean useTls = ResponsiveConfig.RS3_TLS_ENABLED_DEFAULT;
-    private long retryTimeoutMs = ResponsiveConfig.RS3_RETRY_TIMEOUT_DEFAULT;
 
     public Connector(
-        final Time time,
         final String host,
         final int port
     ) {
-      this.time = Objects.requireNonNull(time);
       this.host = Objects.requireNonNull(host);
       this.port = port;
     }
@@ -262,17 +211,9 @@ public class GrpcRS3Client implements RS3Client {
       this.useTls = useTls;
     }
 
-    public void retryTimeoutMs(long retryTimeoutMs) {
-      this.retryTimeoutMs = retryTimeoutMs;
-    }
-
     public RS3Client connect() {
       String target = String.format("%s:%d", host, port);
-      return new GrpcRS3Client(
-          PssStubsProvider.connect(target, useTls),
-          time,
-          retryTimeoutMs
-      );
+      return new GrpcRS3Client(PssStubsProvider.connect(target, useTls));
     }
   }
 

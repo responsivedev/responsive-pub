@@ -76,8 +76,8 @@ class RS3TableFactoryTest {
   }
 
   private RS3TableFactory newTestFactory() {
-    final var connector = new GrpcRS3Client.Connector(new MockTime(), "localhost", 50051);
-    return new RS3TableFactory(connector);
+    final var connector = new GrpcRS3Client.Connector("localhost", 50051);
+    return new RS3TableFactory(connector, new MockTime());
   }
 
 }
