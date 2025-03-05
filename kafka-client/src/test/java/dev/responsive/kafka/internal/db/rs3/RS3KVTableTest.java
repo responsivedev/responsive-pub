@@ -268,7 +268,7 @@ class RS3KVTableTest {
         CompletionException.class,
         () -> writer.flush().toCompletableFuture().join()
     );
-    assertThat(exception.getCause(), is(instanceOf(RS3TimeoutException.class)));
+    assertThat(exception.getCause(), instanceOf(RS3TimeoutException.class));
   }
 
 }
