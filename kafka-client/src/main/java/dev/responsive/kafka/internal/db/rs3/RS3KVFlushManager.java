@@ -283,6 +283,10 @@ class RS3KVFlushManager extends KVFlushManager {
         Optional<Long> flushedOffset = result;
         if (throwable instanceof RS3TransientException) {
           flushedOffset = streamFactory.writeWalSegmentSync(retryBuffer);
+        } else if (throwable instanceof RuntimeException) {
+          throw (RuntimeException) throwable;
+        } else if (throwable != null) {
+          throw new RuntimeException(throwable);
         }
 
         LOG.debug("last flushed offset for pss/lss {}/{} is {}",

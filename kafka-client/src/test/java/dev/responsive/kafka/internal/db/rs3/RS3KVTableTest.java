@@ -13,6 +13,7 @@ import static org.mockito.Mockito.when;
 import dev.responsive.kafka.internal.db.rs3.client.CurrentOffsets;
 import dev.responsive.kafka.internal.db.rs3.client.LssId;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Client;
+import dev.responsive.kafka.internal.db.rs3.client.RS3Exception;
 import dev.responsive.kafka.internal.db.rs3.client.RS3TimeoutException;
 import dev.responsive.kafka.internal.db.rs3.client.RS3TransientException;
 import dev.responsive.kafka.internal.db.rs3.client.StreamSender;
@@ -269,6 +270,75 @@ class RS3KVTableTest {
         () -> writer.flush().toCompletableFuture().join()
     );
     assertThat(exception.getCause(), instanceOf(RS3TimeoutException.class));
+  }
+
+  @Test
+  public void shouldPropagateUnexpectedExceptionFromRetry() {
+    // Given:
+    var storeId = UUID.randomUUID();
+    var kafkaPartition = 0;
+    var lssId = new LssId(kafkaPartition);
+    var pssId = kafkaPartition;
+    var consumedOffset = 3L;
+
+    @SuppressWarnings("unchecked")
+    StreamSender<WalEntry> streamSender = Mockito.mock(StreamSender.class);
+    CompletableFuture<Optional<Long>> receiveCompletion = new CompletableFuture<>();
+
+    when(partitioner.pssForLss(lssId))
+        .thenReturn(Collections.singletonList(pssId));
+    when(client.getCurrentOffsets(storeId, lssId, pssId))
+        .thenReturn(new CurrentOffsets(Optional.empty(), Optional.empty()));
+    when(client.writeWalSegmentAsync(
+        storeId,
+        lssId,
+        pssId,
+        Optional.empty(),
+        consumedOffset))
+        .thenReturn(new StreamSenderMessageReceiver<>(streamSender, receiveCompletion));
+    when(metrics.addSensor(any()))
+        .thenReturn(Mockito.mock(Sensor.class));
+
+    // When:
+    receiveCompletion.completeExceptionally(new RS3TransientException(
+        new StatusRuntimeException(Status.UNAVAILABLE)));
+    Mockito.doThrow(new IllegalStateException())
+        .when(streamSender)
+        .sendNext(any());
+    when(client.writeWalSegment(
+        eq(storeId),
+        eq(lssId),
+        eq(pssId),
+        eq(Optional.empty()),
+        eq(consumedOffset),
+        anyList()))
+        .thenThrow(new RS3Exception(new StatusRuntimeException(Status.UNKNOWN)));
+
+    // Then:
+    var table = new RS3KVTable(
+        "store",
+        storeId,
+        client,
+        partitioner,
+        metrics,
+        metricsScopeBuilder
+    );
+
+    var flushManager = (RS3KVFlushManager) table.init(kafkaPartition);
+    var writer = flushManager.createWriter(pssId, consumedOffset);
+    var key = Bytes.wrap(new byte[] { 0 });
+    var value = new byte[] { 0 };
+    writer.insert(key, value, time.milliseconds());
+    var exception = assertThrows(
+        CompletionException.class,
+        () -> writer.flush().toCompletableFuture().join()
+    );
+    assertThat(exception.getCause(), instanceOf(RS3Exception.class));
+    RS3Exception rs3Exception = (RS3Exception) exception.getCause();
+    assertThat(rs3Exception.getCause(), instanceOf(StatusRuntimeException.class));
+    StatusRuntimeException statusRuntimeException =
+        (StatusRuntimeException) rs3Exception.getCause();
+    assertThat(statusRuntimeException.getStatus(), is(Status.UNKNOWN));
   }
 
 }
