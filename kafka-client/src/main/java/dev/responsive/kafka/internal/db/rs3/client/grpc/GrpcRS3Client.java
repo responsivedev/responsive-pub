@@ -35,7 +35,7 @@ import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.Time;
 
 public class GrpcRS3Client implements RS3Client {
-  static final long WAL_OFFSET_NONE = Long.MAX_VALUE;
+  public static final long WAL_OFFSET_NONE = Long.MAX_VALUE;
 
   private final PssStubsProvider stubs;
   private final Time time;
