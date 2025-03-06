@@ -17,23 +17,33 @@ import dev.responsive.kafka.internal.db.rs3.client.RS3TransientException;
 import io.grpc.Status;
 import io.grpc.StatusException;
 import io.grpc.StatusRuntimeException;
+import java.util.Optional;
 
 public class GrpcRs3Util {
 
   public static RuntimeException wrapThrowable(Throwable t) {
-    if (t instanceof StatusRuntimeException) {
-      var statusRuntimeException = (StatusRuntimeException) t;
-      if (statusRuntimeException.getStatus() == Status.UNAVAILABLE) {
-        return new RS3TransientException(statusRuntimeException);
+    final var statusOpt = getGrpcStatus(t);
+    if (statusOpt.isPresent()) {
+      final var status = statusOpt.get();
+      if (status == Status.UNAVAILABLE || status == Status.RESOURCE_EXHAUSTED) {
+        return new RS3TransientException(t);
       } else {
-        return new RS3Exception(statusRuntimeException);
+        return new RS3Exception(t);
       }
-    } else if (t instanceof StatusException) {
-      return new RS3Exception(t);
     } else if (t instanceof RuntimeException) {
       return (RuntimeException) t;
     } else {
       return new RuntimeException(t);
+    }
+  }
+
+  private static Optional<Status> getGrpcStatus(Throwable t) {
+    if (t instanceof StatusException) {
+      return Optional.of(((StatusException) t).getStatus());
+    } else if (t instanceof StatusRuntimeException) {
+      return Optional.of(((StatusRuntimeException) t).getStatus());
+    } else {
+      return Optional.empty();
     }
   }
 }

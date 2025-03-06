@@ -30,6 +30,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.function.Consumer;
 import org.apache.kafka.common.utils.Bytes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -212,10 +213,7 @@ class RS3KVFlushManager extends KVFlushManager {
     private final RS3KVTable table;
     private final int kafkaPartition;
     private final List<WalEntry> retryBuffer = new ArrayList<>();
-    private final StreamSender<WalEntry> streamSender;
-    private final CompletionStage<Optional<Long>> resultFuture;
-
-    private boolean isStreamActive = true;
+    private final StreamSenderMessageReceiver<WalEntry, Optional<Long>> sendRecv;
 
     private RS3KVWriter(
         final UUID storeId,
@@ -237,10 +235,7 @@ class RS3KVFlushManager extends KVFlushManager {
           expectedWrittenOffset
       );
       this.kafkaPartition = kafkaPartition;
-
-      final var sendRecv = streamFactory.writeWalSegmentAsync();
-      this.streamSender = sendRecv.sender();
-      this.resultFuture = sendRecv.receiver();
+      this.sendRecv = streamFactory.writeWalSegmentAsync();
     }
 
     long endOffset() {
@@ -259,27 +254,24 @@ class RS3KVFlushManager extends KVFlushManager {
 
     private void maybeSendNext(WalEntry entry) {
       retryBuffer.add(entry);
+      ifActiveStream(sender -> sender.sendNext(entry));
+    }
 
-      if (isStreamActive) {
+    private void ifActiveStream(Consumer<StreamSender<WalEntry>> streamConsumer) {
+      if (sendRecv.isActive()) {
         try {
-          streamSender.sendNext(entry);
-        } catch (IllegalStateException e) {
-          isStreamActive = false;
+          streamConsumer.accept(sendRecv.sender());
+        } catch (final RS3TransientException e) {
+          // Retry the stream in flush()
         }
       }
     }
 
     @Override
     public CompletionStage<RemoteWriteResult<Integer>> flush() {
-      if (isStreamActive) {
-        try {
-          streamSender.finish();
-        } catch (IllegalStateException e) {
-          isStreamActive = false;
-        }
-      }
+      ifActiveStream(StreamSender::finish);
 
-      return resultFuture.handle((result, throwable) -> {
+      return sendRecv.receiver().handle((result, throwable) -> {
         Optional<Long> flushedOffset = result;
         if (throwable instanceof RS3TransientException) {
           flushedOffset = streamFactory.writeWalSegmentSync(retryBuffer);

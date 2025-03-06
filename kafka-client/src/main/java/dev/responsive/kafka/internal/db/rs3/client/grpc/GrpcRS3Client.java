@@ -76,11 +76,18 @@ public class GrpcRS3Client implements RS3Client {
   }
 
   private <T> T withRetry(Supplier<T> grpcOperation, Supplier<String> opDescription) {
+    final var deadlineMs = time.milliseconds() + retryTimeoutMs;
+    return withRetryDeadline(grpcOperation, deadlineMs, opDescription);
+  }
+
+  private <T> T withRetryDeadline(
+      Supplier<T> grpcOperation,
+      long deadlineMs,
+      Supplier<String> opDescription
+  ) {
     // Using Kafka default backoff settings initially. We can pull them up
     // if there is ever strong reason.
     final var backoff = new ExponentialBackoff(50, 2, 1000, 0.2);
-    final var startTimeMs = time.milliseconds();
-    final var deadlineMs = startTimeMs + retryTimeoutMs;
 
     var retries = 0;
     long currentTimeMs;
@@ -101,10 +108,9 @@ public class GrpcRS3Client implements RS3Client {
           backoff.backoff(retries),
           Math.max(0, deadlineMs - currentTimeMs))
       );
-    } while (currentTimeMs - startTimeMs < retryTimeoutMs);
+    } while (currentTimeMs < deadlineMs);
     throw new RS3TimeoutException("Timeout while attempting operation " + opDescription.get());
   }
-
 
   @Override
   public StreamSenderMessageReceiver<WalEntry, Optional<Long>> writeWalSegmentAsync(
@@ -117,7 +123,10 @@ public class GrpcRS3Client implements RS3Client {
     final GrpcMessageReceiver<Rs3.WriteWALSegmentResult> resultObserver
         = new GrpcMessageReceiver<>();
     final RS3Grpc.RS3Stub asyncStub = stubs.stubs(storeId, pssId).asyncStub();
-    final var streamObserver = asyncStub.writeWALSegmentStream(resultObserver);
+    final var streamObserver = withRetry(
+        () -> asyncStub.writeWALSegmentStream(resultObserver),
+        () -> "OpenWriteWalSegmentStream()"
+    );
     final var streamSender = new GrpcStreamSender<WalEntry, Rs3.WriteWALSegmentRequest>(
         entry -> {
           final var entryBuilder = Rs3.WriteWALSegmentRequest.newBuilder()
@@ -290,6 +299,5 @@ public class GrpcRS3Client implements RS3Client {
       );
     }
   }
-
 
 }

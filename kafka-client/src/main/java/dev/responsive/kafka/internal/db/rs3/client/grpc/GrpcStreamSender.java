@@ -15,11 +15,13 @@ package dev.responsive.kafka.internal.db.rs3.client.grpc;
 import dev.responsive.kafka.internal.db.rs3.client.StreamSender;
 import io.grpc.stub.StreamObserver;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 
 class GrpcStreamSender<M, P> implements StreamSender<M> {
   private final Function<M, P> protoFactory;
   private final StreamObserver<P> grpcObserver;
+  private final AtomicBoolean active = new AtomicBoolean(true);
 
   GrpcStreamSender(
       final Function<M, P> protoFactory,
@@ -30,16 +32,34 @@ class GrpcStreamSender<M, P> implements StreamSender<M> {
 
   @Override
   public void sendNext(M msg) {
-    grpcObserver.onNext(protoFactory.apply(msg));
+    try {
+      grpcObserver.onNext(protoFactory.apply(msg));
+    } catch (Exception e) {
+      grpcObserver.onError(e);
+      active.set(false);
+      throw GrpcRs3Util.wrapThrowable(e);
+    }
   }
 
   @Override
   public void finish() {
-    grpcObserver.onCompleted();
+    try {
+      grpcObserver.onCompleted();
+    } catch (Exception e) {
+      grpcObserver.onError(e);
+      active.set(false);
+      throw GrpcRs3Util.wrapThrowable(e);
+    }
   }
 
   @Override
   public void cancel() {
     grpcObserver.onError(new RuntimeException("message stream cancelled"));
+    active.set(false);
+  }
+
+  @Override
+  public boolean isActive() {
+    return active.get();
   }
 }

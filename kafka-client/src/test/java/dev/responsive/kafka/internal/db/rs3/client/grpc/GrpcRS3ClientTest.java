@@ -18,7 +18,9 @@ import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -27,7 +29,6 @@ import dev.responsive.kafka.internal.db.rs3.client.LssId;
 import dev.responsive.kafka.internal.db.rs3.client.Put;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Exception;
 import dev.responsive.kafka.internal.db.rs3.client.RS3TimeoutException;
-import dev.responsive.kafka.internal.db.rs3.client.RS3TransientException;
 import dev.responsive.kafka.internal.db.rs3.client.WalEntry;
 import dev.responsive.rs3.RS3Grpc;
 import dev.responsive.rs3.Rs3;
@@ -35,6 +36,7 @@ import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -46,7 +48,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
@@ -438,7 +439,7 @@ class GrpcRS3ClientTest {
                               .setFlushedOffset(flushedOffset)
                               .build());
           responseObserver.onCompleted();
-          Mockito.reset(writeWALSegmentRequestObserver);
+          reset(writeWALSegmentRequestObserver);
           return writeWALSegmentRequestObserver;
         });
 
@@ -472,6 +473,107 @@ class GrpcRS3ClientTest {
             .setExpectedWrittenOffset(15L)
             .setEndOffset(20)
             .setPut(putProto((Put) entries.get(1)))
+            .build()
+    );
+    assertThat(result, is(Optional.of(flushedOffset)));
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  public void shouldRetryWriteWalSegmentSyncWithErrorInOnNext() {
+    // given:
+    var flushedOffset = 123L;
+    List<WalEntry> entries = Collections.singletonList(
+        new Put("foo".getBytes(), "bar".getBytes())
+    );
+
+    doThrow(new StatusRuntimeException(Status.UNAVAILABLE))
+        .when(writeWALSegmentRequestObserver)
+        .onNext(any());
+
+    when(asyncStub.writeWALSegmentStream(any()))
+        .thenAnswer(invocation -> writeWALSegmentRequestObserver)
+        .thenAnswer(invocation -> {
+          StreamObserver<dev.responsive.rs3.Rs3.WriteWALSegmentResult> responseObserver =
+              invocation.getArgument(0);
+          responseObserver.onNext(Rs3.WriteWALSegmentResult.newBuilder()
+                                      .setFlushedOffset(flushedOffset)
+                                      .build());
+          responseObserver.onCompleted();
+          reset(writeWALSegmentRequestObserver);
+          return writeWALSegmentRequestObserver;
+        });
+
+
+    // when:
+    final var result = client.writeWalSegment(
+        STORE_ID,
+        LSS_ID,
+        PSS_ID,
+        Optional.of(15L),
+        20,
+        entries
+    );
+
+    // then:
+    verify(writeWALSegmentRequestObserver).onNext(
+        Rs3.WriteWALSegmentRequest.newBuilder()
+            .setLssId(lssIdProto(LSS_ID))
+            .setPssId(PSS_ID)
+            .setStoreId(uuidProto(STORE_ID))
+            .setExpectedWrittenOffset(15L)
+            .setEndOffset(20)
+            .setPut(putProto((Put) entries.get(0)))
+            .build()
+    );
+    assertThat(result, is(Optional.of(flushedOffset)));
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  public void shouldRetryWriteWalSegmentSyncWithErrorInFinish() {
+    // given:
+    var flushedOffset = 123L;
+    List<WalEntry> entries = Collections.singletonList(
+        new Put("foo".getBytes(), "bar".getBytes())
+    );
+
+    doThrow(new StatusRuntimeException(Status.UNAVAILABLE))
+        .when(writeWALSegmentRequestObserver)
+        .onCompleted();
+
+    when(asyncStub.writeWALSegmentStream(any()))
+        .thenAnswer(invocation -> writeWALSegmentRequestObserver)
+        .thenAnswer(invocation -> {
+          StreamObserver<dev.responsive.rs3.Rs3.WriteWALSegmentResult> responseObserver =
+              invocation.getArgument(0);
+          responseObserver.onNext(Rs3.WriteWALSegmentResult.newBuilder()
+                                      .setFlushedOffset(flushedOffset)
+                                      .build());
+          responseObserver.onCompleted();
+          reset(writeWALSegmentRequestObserver);
+          return writeWALSegmentRequestObserver;
+        });
+
+    // when:
+    final var result = client.writeWalSegment(
+        STORE_ID,
+        LSS_ID,
+        PSS_ID,
+        Optional.of(15L),
+        20,
+        entries
+    );
+
+    // then:
+    verify(writeWALSegmentRequestObserver).onNext(
+        Rs3.WriteWALSegmentRequest.newBuilder()
+            .setLssId(lssIdProto(LSS_ID))
+            .setPssId(PSS_ID)
+            .setStoreId(uuidProto(STORE_ID))
+            .setExpectedWrittenOffset(15L)
+            .setEndOffset(20)
+            .setPut(putProto((Put) entries.get(0)))
             .build()
     );
     assertThat(result, is(Optional.of(flushedOffset)));
