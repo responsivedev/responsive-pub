@@ -41,7 +41,7 @@ public class TestLicenseServer implements Closeable {
     LOG.info("Starting test license server...");
     // Create a server on a random available port (port 0 means OS-assigned)
     server = HttpServer.create(new InetSocketAddress(0), 0);
-    server.createContext("/usage", exchange -> {
+    server.createContext("/v1/usage", exchange -> {
       final var body = exchange.getRequestBody();
       final var req = MAPPER.readValue(body, OriginEventsReportRequestV1.class);
 

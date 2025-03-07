@@ -322,7 +322,7 @@ public class ResponsiveConfig extends AbstractConfig {
       + "loss, use this configuration with caution";
 
   public static final String ORIGIN_EVENT_REPORT_INTERVAL_MS_CONFIG = "responsive.origin.event.report.interval.ms";
-  private static final long ORIGIN_EVENT_REPORT_INTERVAL_MS_DEFAULT = 10_000L;
+  private static final long ORIGIN_EVENT_REPORT_INTERVAL_MS_DEFAULT = 60_000L;
   private static final String ORIGIN_EVENT_REPORT_INTERVAL_MS_DOC =
       "How often to report origin event usage information. This should generally not be changed in production environments";
 
