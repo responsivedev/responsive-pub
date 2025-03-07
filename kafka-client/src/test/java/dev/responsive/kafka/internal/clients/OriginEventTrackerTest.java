@@ -12,12 +12,10 @@
 
 package dev.responsive.kafka.internal.clients;
 
-import static dev.responsive.kafka.internal.clients.OriginEventRecorderImpl.ORIGIN_EVENT_HEADER_KEY;
-import static dev.responsive.kafka.internal.clients.OriginEventRecorderImpl.ORIGIN_EVENT_MARK;
-import static org.hamcrest.CoreMatchers.hasItem;
+import static dev.responsive.kafka.internal.clients.OriginEventTracker.ORIGIN_EVENT_HEADER_KEY;
+import static dev.responsive.kafka.internal.clients.OriginEventTracker.ORIGIN_EVENT_MARK;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.hasSize;
 
 import java.util.ArrayList;
@@ -33,17 +31,17 @@ import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-class OriginEventRecorderTest {
+class OriginEventTrackerTest {
 
   private static final TopicPartition TP = new TopicPartition("topic", 0);
 
-  private OriginEventRecorderImpl recorder;
+  private OriginEventTracker recorder;
   private TestReporter reporter;
 
   @BeforeEach
   public void setup() {
     reporter = new TestReporter();
-    recorder = new OriginEventRecorderImpl("test-thread", reporter, false);
+    recorder = new OriginEventTracker(reporter, false);
   }
 
   @Test
@@ -62,9 +60,8 @@ class OriginEventRecorderTest {
     assertThat("A report should have been triggered", calls, hasSize(1));
 
     ReportCall call = calls.get(0);
-    assertThat("Report thread id should be 'test-thread'", call.threadId, is("test-thread"));
-    assertThat("Report should contain the TopicPartition", call.report.keySet(), hasItem(TP));
-    assertThat("Count for the partition should be 1", call.report.get(TP), is(1));
+    assertThat("Report should contain the TopicPartition", call.tp, is(TP));
+    assertThat("Count for the partition should be 1", call.count, is(1));
   }
 
   @Test
@@ -87,9 +84,8 @@ class OriginEventRecorderTest {
     assertThat("A report should have been triggered", calls, hasSize(1));
 
     ReportCall call = calls.get(0);
-    assertThat("Report thread id should be 'test-thread'", call.threadId, is("test-thread"));
-    assertThat("Report should contain the TopicPartition", call.report.keySet(), hasItem(TP));
-    assertThat("Count for the partition should only count 1", call.report.get(TP), is(1));
+    assertThat("Report should contain the TopicPartition", call.tp, is(TP));
+    assertThat("Count for the partition should only count 1", call.count, is(1));
   }
 
   @Test
@@ -112,7 +108,7 @@ class OriginEventRecorderTest {
   @Test
   public void shouldReportOnProducerCommitWithEos() {
     // Given:
-    recorder = new OriginEventRecorderImpl("test-thread", reporter, true);
+    recorder = new OriginEventTracker(reporter, true);
 
     long offset = 1000L;
     final ConsumerRecords<String, String> records = records(record(offset, false));
@@ -126,7 +122,7 @@ class OriginEventRecorderTest {
     List<ReportCall> calls = reporter.getCalls();
     assertThat("A report should be triggered on producer commit", calls, hasSize(1));
     ReportCall call = calls.get(0);
-    assertThat("Reported count for the partition should be 1", call.report.get(TP), is(1));
+    assertThat("Reported count for the partition should be 1", call.count, is(1));
   }
 
   @Test
@@ -146,7 +142,7 @@ class OriginEventRecorderTest {
     assertThat("A report should be triggered", calls, hasSize(1));
     assertThat(
         "Reported count for the partition should be 1 (only offset 1000 counted)",
-        calls.get(0).report.get(TP),
+        calls.get(0).count,
         is(1)
     );
   }
@@ -169,9 +165,9 @@ class OriginEventRecorderTest {
     List<ReportCall> calls = reporter.getCalls();
     assertThat("A report should have been triggered", calls, hasSize(1));
     ReportCall call = calls.get(0);
-    assertThat("Report should only contain the committed TopicPartition",
-        call.report.keySet(), contains(tp1));
-    assertThat("Reported count for tp1 should be 1", call.report.get(tp1), is(1));
+    assertThat("Report should contain tp1",
+        call.tp, is(tp1));
+    assertThat("Reported count for tp1 should be 1", call.count, is(1));
   }
 
 
@@ -200,23 +196,22 @@ class OriginEventRecorderTest {
   }
 
   private static class ReportCall {
-    final Map<TopicPartition, Integer> report;
-    final String threadId;
+    final TopicPartition tp;
+    final Integer count;
 
-    ReportCall(Map<TopicPartition, Integer> report, String threadId) {
-      this.report = report;
-      this.threadId = threadId;
+    ReportCall(final TopicPartition tp, final int count) {
+      this.tp = tp;
+      this.count = count;
     }
   }
 
-  private static class TestReporter
-      implements java.util.function.BiConsumer<Map<TopicPartition, Integer>, String> {
+  private static class TestReporter implements OriginEventReporter {
 
     private final List<ReportCall> calls = new ArrayList<>();
 
     @Override
-    public void accept(Map<TopicPartition, Integer> report, String threadId) {
-      calls.add(new ReportCall(report, threadId));
+    public void report(TopicPartition tp, Integer count) {
+      calls.add(new ReportCall(tp, count));
     }
 
     public List<ReportCall> getCalls() {
