@@ -84,7 +84,7 @@ public class ResponsiveMetrics implements Closeable {
   public static class MetricScopeBuilder {
     private final LinkedHashMap<String, String> tags;
 
-    private MetricScopeBuilder(final LinkedHashMap<String, String> tags) {
+    public MetricScopeBuilder(final LinkedHashMap<String, String> tags) {
       this.tags = Objects.requireNonNull(tags);
     }
 

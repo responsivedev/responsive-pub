@@ -12,9 +12,6 @@
 
 package dev.responsive.kafka.internal.db.rs3.client.grpc;
 
-import dev.responsive.kafka.internal.db.rs3.client.RS3Exception;
-import io.grpc.StatusException;
-import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -35,13 +32,7 @@ public class GrpcMessageReceiver<T> implements StreamObserver<T> {
 
   @Override
   public synchronized void onError(final Throwable throwable) {
-    if (throwable instanceof StatusRuntimeException || throwable instanceof StatusException) {
-      error = new RS3Exception(throwable);
-    } else if (throwable instanceof RuntimeException) {
-      error = (RuntimeException) throwable;
-    } else {
-      error = new RuntimeException(throwable);
-    }
+    error = GrpcRs3Util.wrapThrowable(throwable);
     complete();
   }
 

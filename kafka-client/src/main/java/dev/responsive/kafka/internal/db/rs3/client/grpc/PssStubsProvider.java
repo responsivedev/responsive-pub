@@ -22,7 +22,8 @@ class PssStubsProvider {
   private final ManagedChannel channel;
   private final ConcurrentMap<StubsKey, Stubs> stubs = new ConcurrentHashMap<>();
 
-  private PssStubsProvider(final ManagedChannel channel) {
+  @VisibleForTesting
+  PssStubsProvider(final ManagedChannel channel) {
     this.channel = channel;
   }
 
