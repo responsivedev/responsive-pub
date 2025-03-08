@@ -36,7 +36,6 @@ public class OriginEventsReportRequestV1 extends LicenseServerRequest {
   private final String applicationId;
 
   // the thread that reported the usage
-  private final String threadId;
 
   public OriginEventsReportRequestV1(
       @JsonProperty("type") final String type,
@@ -44,15 +43,13 @@ public class OriginEventsReportRequestV1 extends LicenseServerRequest {
       @JsonProperty("transactionId") final String transactionId,
       @JsonProperty("eventCount") final long eventCount,
       @JsonProperty("env") final String env,
-      @JsonProperty("applicationId") final String applicationId,
-      @JsonProperty("threadId") final String threadId
+      @JsonProperty("applicationId") final String applicationId
   ) {
     super(type, timestamp);
     this.transactionId = transactionId;
     this.eventCount = eventCount;
     this.env = env;
     this.applicationId = applicationId;
-    this.threadId = threadId;
   }
 
   @JsonProperty("transactionId")
@@ -75,11 +72,6 @@ public class OriginEventsReportRequestV1 extends LicenseServerRequest {
     return applicationId;
   }
 
-  @JsonProperty("threadId")
-  public String threadId() {
-    return threadId;
-  }
-
   public static Builder builder() {
     return new Builder();
   }
@@ -90,7 +82,6 @@ public class OriginEventsReportRequestV1 extends LicenseServerRequest {
     private long eventCount;
     private String env;
     private String applicationId;
-    private String threadId;
 
     public Builder setTimestamp(final long timestamp) {
       this.timestamp = timestamp;
@@ -117,11 +108,6 @@ public class OriginEventsReportRequestV1 extends LicenseServerRequest {
       return this;
     }
 
-    public Builder setThreadId(final String threadId) {
-      this.threadId = threadId;
-      return this;
-    }
-
     public OriginEventsReportRequestV1 build() {
       return new OriginEventsReportRequestV1(
           TYPE_NAME,
@@ -129,8 +115,7 @@ public class OriginEventsReportRequestV1 extends LicenseServerRequest {
           transactionId,
           eventCount,
           env,
-          applicationId,
-          threadId
+          applicationId
       );
     }
   }

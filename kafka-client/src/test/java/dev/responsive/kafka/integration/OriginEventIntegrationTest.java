@@ -83,9 +83,6 @@ public class OriginEventIntegrationTest {
     this.licenseServer = licenseServer;
     this.responsiveProps.putAll(responsiveProps);
 
-    // report every commit, so we don't potentially miss origin events
-    this.responsiveProps.put(ResponsiveConfig.ORIGIN_EVENT_REPORT_INTERVAL_MS_CONFIG, 0);
-
     final var result = admin.createTopics(
         List.of(
             new NewTopic(inputTopic(), Optional.of(2), Optional.empty()),

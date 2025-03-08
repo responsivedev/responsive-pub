@@ -36,6 +36,8 @@ import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.api.stores.ResponsiveDslStoreSuppliers;
 import dev.responsive.kafka.internal.clients.AsyncStreamsKafkaClientSupplier;
+import dev.responsive.kafka.internal.clients.OriginEventReporter;
+import dev.responsive.kafka.internal.clients.OriginEventReporterImpl;
 import dev.responsive.kafka.internal.clients.ResponsiveKafkaClientSupplier;
 import dev.responsive.kafka.internal.config.ConfigUtils;
 import dev.responsive.kafka.internal.config.InternalSessionConfigs;
@@ -46,6 +48,10 @@ import dev.responsive.kafka.internal.db.mongo.CollectionCreationOptions;
 import dev.responsive.kafka.internal.db.mongo.ResponsiveMongoClient;
 import dev.responsive.kafka.internal.db.rs3.RS3TableFactory;
 import dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRS3Client;
+import dev.responsive.kafka.internal.license.model.CloudLicenseV1;
+import dev.responsive.kafka.internal.license.model.LicenseInfo;
+import dev.responsive.kafka.internal.license.model.TimedTrialV1;
+import dev.responsive.kafka.internal.license.model.UsageBasedV1;
 import dev.responsive.kafka.internal.metrics.ClientVersionMetadata;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
@@ -94,6 +100,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
   private final ResponsiveStateListener responsiveStateListener;
   private final ResponsiveRestoreListener responsiveRestoreListener;
   private final SessionClients sessionClients;
+  private final OriginEventReporter originEventReporter;
 
   /**
    * Create a {@code ResponsiveKafkaStreams} instance.
@@ -200,10 +207,9 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
         params.time
     );
 
-    loadLicense(params.responsiveConfig);
-
     this.responsiveMetrics = params.metrics;
     this.sessionClients = params.sessionClients;
+    this.originEventReporter = params.oeReporter;
 
     final ClientVersionMetadata versionMetadata = ClientVersionMetadata.loadVersionMetadata();
     // Only log the version metadata for Responsive since Kafka Streams will log its own
@@ -369,8 +375,15 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
   }
 
   private void closeInternal() {
+    originEventReporter.close();
     responsiveStateListener.close();
     sessionClients.closeAll();
+  }
+
+  @Override
+  public synchronized void start() throws IllegalStateException, StreamsException {
+    originEventReporter.start();
+    super.start();
   }
 
   @Override
@@ -411,6 +424,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     private SessionClients sessionClients;
     private Optional<AsyncThreadPoolRegistry> asyncThreadPoolRegistry;
     private ResponsiveKafkaClientSupplier responsiveKafkaClientSupplier;
+    private OriginEventReporter oeReporter;
 
     public Params(final Topology topology, final Map<?, ?> configs) {
       this.topology = topology;
@@ -443,6 +457,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
     // that it's impossible to use a Params instance that hasn't called build(),
     // but that felt a little extra
     public Params build() {
+      var license = loadLicense(responsiveConfig);
       this.asyncThreadPoolRegistry = AsyncUtils.configuredAsyncThreadPool(
           responsiveConfig,
           streamsConfig.getInt(NUM_STREAM_THREADS_CONFIG),
@@ -454,12 +469,14 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
               asyncThreadPoolRegistry.get()
           ) : innerClientSupplier;
 
+      this.oeReporter = reporter(responsiveConfig, license);
       this.responsiveKafkaClientSupplier = new ResponsiveKafkaClientSupplier(
           delegateKafkaClientSupplier,
           responsiveConfig,
           streamsConfig,
           storeRegistry,
           metrics,
+          oeReporter,
           storageBackend
       );
 
@@ -543,6 +560,24 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
       }
 
       return this;
+    }
+
+    private static OriginEventReporter reporter(
+        final ResponsiveConfig responsiveConfig,
+        final LicenseInfo license
+    ) {
+      switch (license.type()) {
+        case CloudLicenseV1.TYPE_NAME:
+        case TimedTrialV1.TYPE_NAME:
+          // don't report counts for cloud/timed trial licenses
+          return (tp, count) -> { };
+        case UsageBasedV1.TYPE_NAME:
+        default:
+          return new OriginEventReporterImpl(
+              responsiveConfig,
+              license
+          );
+      }
     }
   }
 }
