@@ -1,0 +1,41 @@
+name: Download Antithesis Logs
+on:
+  workflow_dispatch:
+    inputs:
+      # See here for details on finding these parameters:
+      # https://antithesis.com/docs/reports/triage/#copy-moment
+      session-id:
+        description: 'The session ID of the test run'
+        type: string
+        required: true
+      debug-input-hash:
+        description: 'The debugging input hash (e.g. "-9067336385060865277")'
+        type: string
+        required: true
+      debug-vtime:
+        description: 'The debugging vtime (e.g. "45.334635781589895")'
+        type: string
+        required: true
+
+jobs:
+  callApi:
+    runs-on: ubuntu-latest
+
+    steps:
+      # See here for the webhook documentation:
+      # https://antithesis.com/docs/webhook/get_logs_webhook/?sid=be099.0&sterm=logs
+      - name: "Call Antithesis GetLogs Webhook"
+        env:
+          TENANT: responsive
+          USERNAME: ${{ secrets.ANTITHESIS_USERNAME }}
+          PASSWORD: ${{ secrets.ANTITHESIS_PASSWORD }}
+          EMAIL_RECIPIENT: "antithesis-responsive-aaaamurlsqy6e3hxnx6ksnec5y@antithesisgroup.slack.com"
+        run: |
+          curl --fail -u "$USERNAME:$PASSWORD" \
+          -X POST "https://$TENANT.antithesis.com/api/v1/launch/get_logs" \
+          -d "{\"params\": { 
+            \"antithesis.debugging.session_id\":\"${{ inputs.session-id }}\",  
+            \"antithesis.debugging.input_hash\":\"${{ inputs.debug-input-hash }}\" , 
+            \"antithesis.debugging.vtime\":\"${{ inputs.debug-vtime }}\", 
+            \"antithesis.report.recipients\":\"$EMAIL_RECIPIENT\" 
+          }}"
