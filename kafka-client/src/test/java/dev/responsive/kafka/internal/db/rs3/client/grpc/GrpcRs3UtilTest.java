@@ -12,7 +12,7 @@ class GrpcRs3UtilTest {
 
   @Test
   public void shouldReturnTransientExceptionForUnavailableErrors() {
-    final var exception = new StatusRuntimeException(Status.UNAVAILABLE);
+    final var exception = new StatusRuntimeException(Status.UNAVAILABLE.withDescription("io error"));
     final var wrapped = GrpcRs3Util.wrapThrowable(exception);
     assertThat(wrapped, instanceOf(RS3TransientException.class));
   }
