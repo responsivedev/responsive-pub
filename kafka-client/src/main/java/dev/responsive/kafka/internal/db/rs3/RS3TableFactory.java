@@ -24,9 +24,7 @@ import org.apache.kafka.common.config.ConfigException;
 public class RS3TableFactory {
   private final GrpcRS3Client.Connector connector;
 
-  public RS3TableFactory(
-      GrpcRS3Client.Connector connector
-  ) {
+  public RS3TableFactory(GrpcRS3Client.Connector connector) {
     this.connector = connector;
   }
 

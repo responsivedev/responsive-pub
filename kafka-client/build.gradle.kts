@@ -151,6 +151,7 @@ dependencies {
     testImplementation(testlibs.bundles.base)
     testImplementation(testlibs.bundles.testcontainers)
     testImplementation(libs.kafka.streams.test.utils)
+    testImplementation("io.grpc:grpc-inprocess:${libs.versions.grpc.orNull}")
     testImplementation("software.amazon.awssdk:kms:2.20.0")
     testImplementation("software.amazon.awssdk:sso:2.20.0")
 }
