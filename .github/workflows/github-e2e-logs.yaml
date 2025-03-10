@@ -29,7 +29,6 @@ jobs:
           TENANT: responsive
           USERNAME: ${{ secrets.ANTITHESIS_USERNAME }}
           PASSWORD: ${{ secrets.ANTITHESIS_PASSWORD }}
-          TOKEN: ${{ secrets.ANTITHESIS_GH_PAT }}
           EMAIL_RECIPIENT: "antithesis-responsive-aaaamurlsqy6e3hxnx6ksnec5y@antithesisgroup.slack.com"
         run: |
           curl --fail -u "$USERNAME:$PASSWORD" \
