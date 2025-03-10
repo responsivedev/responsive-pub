@@ -25,7 +25,8 @@ public class GrpcRs3Util {
     final var statusOpt = getGrpcStatus(t);
     if (statusOpt.isPresent()) {
       final var status = statusOpt.get();
-      if (status.getCode() == Status.Code.UNAVAILABLE || status.getCode() == Status.Code.RESOURCE_EXHAUSTED) {
+      if (status.getCode() == Status.Code.UNAVAILABLE
+          || status.getCode() == Status.Code.RESOURCE_EXHAUSTED) {
         return new RS3TransientException(t);
       } else {
         return new RS3Exception(t);
