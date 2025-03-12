@@ -17,6 +17,7 @@ import dev.responsive.kafka.internal.db.RemoteWriter;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.db.rs3.client.LssId;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Client;
+import dev.responsive.kafka.internal.db.rs3.client.RS3Exception;
 import dev.responsive.kafka.internal.db.rs3.client.RS3TransientException;
 import dev.responsive.kafka.internal.db.rs3.client.StreamSender;
 import dev.responsive.kafka.internal.db.rs3.client.StreamSenderMessageReceiver;
@@ -269,16 +270,25 @@ class RS3KVFlushManager extends KVFlushManager {
 
     @Override
     public CompletionStage<RemoteWriteResult<Integer>> flush() {
-      ifActiveStream(StreamSender::finish);
+      try {
+        ifActiveStream(StreamSender::finish);
+      } catch (RuntimeException e) {
+        throw new RS3Exception("Raising from stream finish", e);
+      }
 
       return sendRecv.receiver().handle((result, throwable) -> {
         Optional<Long> flushedOffset = result;
-        if (throwable instanceof RS3TransientException) {
-          flushedOffset = streamFactory.writeWalSegmentSync(retryBuffer);
-        } else if (throwable instanceof RuntimeException) {
-          throw (RuntimeException) throwable;
-        } else if (throwable != null) {
-          throw new RuntimeException(throwable);
+
+        try {
+          if (throwable instanceof RS3TransientException) {
+            flushedOffset = streamFactory.writeWalSegmentSync(retryBuffer);
+          } else if (throwable instanceof RuntimeException) {
+            throw (RuntimeException) throwable;
+          } else if (throwable != null) {
+            throw new RuntimeException(throwable);
+          }
+        } catch (RuntimeException e) {
+          throw new RS3Exception(e);
         }
 
         LOG.debug("last flushed offset for pss/lss {}/{} is {}",

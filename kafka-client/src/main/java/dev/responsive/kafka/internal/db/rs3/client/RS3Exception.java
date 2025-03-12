@@ -23,4 +23,8 @@ public class RS3Exception extends RuntimeException {
   public RS3Exception(final Throwable cause) {
     super(cause);
   }
+
+  public RS3Exception(final String message, final Throwable cause) {
+    super(message, cause);
+  }
 }
