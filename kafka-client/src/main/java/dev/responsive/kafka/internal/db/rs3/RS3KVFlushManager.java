@@ -30,6 +30,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Consumer;
 import org.apache.kafka.common.utils.Bytes;
@@ -280,11 +281,16 @@ class RS3KVFlushManager extends KVFlushManager {
         Optional<Long> flushedOffset = result;
 
         try {
-          if (throwable instanceof RS3TransientException) {
+          var cause = throwable;
+          if (throwable instanceof CompletionException) {
+            cause = throwable.getCause();
+          }
+
+          if (cause instanceof RS3TransientException) {
             flushedOffset = streamFactory.writeWalSegmentSync(retryBuffer);
-          } else if (throwable instanceof RuntimeException) {
+          } else if (cause instanceof RuntimeException) {
             throw (RuntimeException) throwable;
-          } else if (throwable != null) {
+          } else if (cause != null) {
             throw new RuntimeException(throwable);
           }
         } catch (RuntimeException e) {
