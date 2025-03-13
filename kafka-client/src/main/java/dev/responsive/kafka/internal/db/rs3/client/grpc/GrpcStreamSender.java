@@ -47,8 +47,9 @@ class GrpcStreamSender<M, P> implements StreamSender<M> {
       grpcObserver.onCompleted();
     } catch (Exception e) {
       grpcObserver.onError(e);
-      active.set(false);
       throw GrpcRs3Util.wrapThrowable(e);
+    } finally {
+      active.set(false);
     }
   }
 
