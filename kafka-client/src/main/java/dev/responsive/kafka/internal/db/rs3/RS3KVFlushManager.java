@@ -17,7 +17,6 @@ import dev.responsive.kafka.internal.db.RemoteWriter;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.db.rs3.client.LssId;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Client;
-import dev.responsive.kafka.internal.db.rs3.client.RS3Exception;
 import dev.responsive.kafka.internal.db.rs3.client.RS3TransientException;
 import dev.responsive.kafka.internal.db.rs3.client.StreamSender;
 import dev.responsive.kafka.internal.db.rs3.client.StreamSenderMessageReceiver;
@@ -271,30 +270,22 @@ class RS3KVFlushManager extends KVFlushManager {
 
     @Override
     public CompletionStage<RemoteWriteResult<Integer>> flush() {
-      try {
-        ifActiveStream(StreamSender::finish);
-      } catch (RuntimeException e) {
-        throw new RS3Exception("Raising from stream finish", e);
-      }
+      ifActiveStream(StreamSender::finish);
 
       return sendRecv.receiver().handle((result, throwable) -> {
         Optional<Long> flushedOffset = result;
 
-        try {
-          var cause = throwable;
-          if (throwable instanceof CompletionException) {
-            cause = throwable.getCause();
-          }
+        var cause = throwable;
+        if (throwable instanceof CompletionException) {
+          cause = throwable.getCause();
+        }
 
-          if (cause instanceof RS3TransientException) {
-            flushedOffset = streamFactory.writeWalSegmentSync(retryBuffer);
-          } else if (cause instanceof RuntimeException) {
-            throw (RuntimeException) throwable;
-          } else if (cause != null) {
-            throw new RuntimeException(throwable);
-          }
-        } catch (RuntimeException e) {
-          throw new RS3Exception(e);
+        if (cause instanceof RS3TransientException) {
+          flushedOffset = streamFactory.writeWalSegmentSync(retryBuffer);
+        } else if (cause instanceof RuntimeException) {
+          throw (RuntimeException) throwable;
+        } else if (cause != null) {
+          throw new RuntimeException(throwable);
         }
 
         LOG.debug("last flushed offset for pss/lss {}/{} is {}",
