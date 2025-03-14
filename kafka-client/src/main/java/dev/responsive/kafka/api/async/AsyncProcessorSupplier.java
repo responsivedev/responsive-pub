@@ -12,12 +12,9 @@
 
 package dev.responsive.kafka.api.async;
 
-import static dev.responsive.kafka.api.async.internals.AsyncProcessor.createAsyncFixedKeyProcessor;
 import static dev.responsive.kafka.api.async.internals.AsyncProcessor.createAsyncProcessor;
 import static dev.responsive.kafka.api.async.internals.AsyncUtils.initializeAsyncBuilders;
-import static dev.responsive.kafka.internal.utils.Utils.isExecutingOnStreamThread;
 
-import dev.responsive.kafka.api.async.internals.AsyncProcessor;
 import dev.responsive.kafka.api.async.internals.stores.AbstractAsyncStoreBuilder;
 import java.util.HashSet;
 import java.util.Map;

@@ -117,8 +117,8 @@ public class ResponsiveConsumer<K, V> extends DelegatingConsumer<K, V> {
 
   @Override
   public void subscribe(final SubscriptionPattern pattern) {
-    throw new IllegalStateException("Unexpected call to subscribe(SubscriptionPattern) on main consumer"
-                                        + " without a rebalance listener");
+    throw new IllegalStateException("Unexpected call to subscribe(SubscriptionPattern) on main"
+                                        + " consumer without a rebalance listener");
   }
 
   @Override

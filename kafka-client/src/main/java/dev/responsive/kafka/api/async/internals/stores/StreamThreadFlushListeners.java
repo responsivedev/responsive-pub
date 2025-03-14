@@ -176,7 +176,8 @@ public class StreamThreadFlushListeners {
 
   @FunctionalInterface
   public interface AsyncFlushListener {
-    // TODO: sophie this needs to account for/wrap/flush multiple processors if accessing the same store
+    // TODO: sophie this needs to account for/wrap/flush multiple processors if
+    //  accessing the same store
 
     /**
      * A simple runnable that, when executed, will flush all async buffers

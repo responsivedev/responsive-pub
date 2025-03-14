@@ -55,6 +55,7 @@ public class AsyncProcessorWrapper implements ProcessorWrapper {
   }
 
   @Override
+  @SuppressWarnings("checkstyle:linelength")
   public <KIn, VIn, KOut, VOut> WrappedProcessorSupplier<KIn, VIn, KOut, VOut> wrapProcessorSupplier(
       final String processorName,
       final ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier
@@ -71,6 +72,7 @@ public class AsyncProcessorWrapper implements ProcessorWrapper {
   }
 
   @Override
+  @SuppressWarnings("checkstyle:linelength")
   public <KIn, VIn, VOut> WrappedFixedKeyProcessorSupplier<KIn, VIn, VOut> wrapFixedKeyProcessorSupplier(
       final String processorName,
       final FixedKeyProcessorSupplier<KIn, VIn, VOut> processorSupplier
@@ -91,7 +93,10 @@ public class AsyncProcessorWrapper implements ProcessorWrapper {
     private final Map<String, StoreBuilder<?>> wrappedStoreBuilders = new HashMap<>();
     private final Map<String, Set<String>> processorToWrappedStores = new HashMap<>();
 
-    public void registerWrappedProcessor(final String processorName, final Set<StoreBuilder<?>> stores) {
+    public void registerWrappedProcessor(
+        final String processorName,
+        final Set<StoreBuilder<?>> stores
+    ) {
       final Set<String> processorStores =
           processorToWrappedStores.computeIfAbsent(processorName, p -> new HashSet<>());
 

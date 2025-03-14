@@ -14,18 +14,15 @@ package dev.responsive.kafka.api.async.internals;
 
 import static dev.responsive.kafka.api.async.internals.AsyncThreadPool.ASYNC_THREAD_NAME;
 import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadAsyncThreadPoolRegistry;
-import static dev.responsive.kafka.internal.utils.Utils.isExecutingOnStreamThread;
 
 import dev.responsive.kafka.api.async.internals.stores.AbstractAsyncStoreBuilder;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.streams.processor.api.ProcessingContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.DelayedAsyncStoreBuilder;

@@ -65,7 +65,7 @@ public class ResponsiveExtension implements ParameterResolver {
   static {
     startAll();
 
-   Runtime.getRuntime().addShutdownHook(new Thread(ResponsiveExtension::stopAll));
+    Runtime.getRuntime().addShutdownHook(new Thread(ResponsiveExtension::stopAll));
   }
 
   public static void startAll() {

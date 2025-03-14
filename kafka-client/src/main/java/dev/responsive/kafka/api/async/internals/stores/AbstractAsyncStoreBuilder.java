@@ -40,6 +40,7 @@ public abstract class AbstractAsyncStoreBuilder<T extends StateStore>
   // Since there is only one StoreBuilder instance for each store, it is used by all of the
   // StreamThreads in an app, and so we must account for which StreamThread is building
   // or accessing which stores
+  @SuppressWarnings("checkstyle:linelength")
   private static final Map<String, Map<String, StreamThreadFlushListeners>> storeToThreadToListeners =
       new ConcurrentHashMap<>();
 

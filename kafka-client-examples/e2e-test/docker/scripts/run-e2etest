@@ -7,4 +7,6 @@ JMX_OPTS="-Dcom.sun.management.jmxremote=true
 -Djava.rmi.server.hostname=${POD_IP}
 "
 
+
+cp
 java ${JAVA_OPTS} ${EXPORTER_OPTS} ${JMX_OPTS}  -cp "/usr/share/java/responsive-e2etest/*" dev.responsive.examples.e2etest.Main ${CONFIG_PATH}

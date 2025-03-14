@@ -236,14 +236,20 @@ public class AsyncProcessorIntegrationTest {
 
     final Random random = new Random();
 
-    final StoreBuilder<?> store = timestampedKeyValueStoreBuilder(ResponsiveStores.keyValueStore("store"), Serdes.String(), Serdes.String());
+    final StoreBuilder<?> store = timestampedKeyValueStoreBuilder(
+        ResponsiveStores.keyValueStore("store"),
+        Serdes.String(),
+        Serdes.String()
+    );
     builder.stream(inputTopic1, Consumed.as("source"))
         .process(
             new ProcessorSupplier<>() {
+              @SuppressWarnings("checkstyle:linelength")
               @Override
               public org.apache.kafka.streams.processor.api.Processor<Object, Object, Object, Object> get() {
-                return new org.apache.kafka.streams.processor.api.Processor<Object, Object, Object, Object>() {
+                return new org.apache.kafka.streams.processor.api.Processor<>() {
                   KeyValueStore<Object, Object> store;
+
                   @Override
                   public void init(final ProcessorContext<Object, Object> context) {
                     store = context.getStateStore("store");
@@ -266,6 +272,7 @@ public class AsyncProcessorIntegrationTest {
             Named.as("stateful-process-1"))
         .process(
             new ProcessorSupplier<>() {
+              @SuppressWarnings("checkstyle:linelength")
               @Override
               public org.apache.kafka.streams.processor.api.Processor<Object, Object, Object, Object> get() {
                 return new org.apache.kafka.streams.processor.api.Processor<>() {

@@ -16,7 +16,6 @@ import static dev.responsive.kafka.api.async.internals.AsyncProcessor.createAsyn
 import static dev.responsive.kafka.api.async.internals.AsyncUtils.initializeAsyncBuilders;
 import static dev.responsive.kafka.internal.utils.Utils.isExecutingOnStreamThread;
 
-import dev.responsive.kafka.api.async.internals.AsyncProcessor;
 import dev.responsive.kafka.api.async.internals.stores.AbstractAsyncStoreBuilder;
 import java.util.HashSet;
 import java.util.Map;

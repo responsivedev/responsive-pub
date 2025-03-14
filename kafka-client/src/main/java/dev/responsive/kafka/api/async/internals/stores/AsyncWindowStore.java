@@ -39,6 +39,11 @@ public class AsyncWindowStore<KS, VS> extends WrappedStateStore<WindowStore<?, ?
   }
 
   @Override
+  public VS fetch(final KS key, final long windowStartMs) {
+    return userDelegate.fetch(key, windowStartMs);
+  }
+
+  @Override
   public WindowStoreIterator<VS> fetch(final KS key, final long timeFrom, final long timeTo) {
     return userDelegate.fetch(key, timeFrom, timeTo);
   }
@@ -68,6 +73,7 @@ public class AsyncWindowStore<KS, VS> extends WrappedStateStore<WindowStore<?, ?
   }
 
   @Override
+  @SuppressWarnings("checkstyle:overloadmethodsdeclarationorder")
   public KeyValueIterator<Windowed<KS>, VS> fetch(
       final KS keyFrom,
       final KS keyTo,
@@ -88,6 +94,7 @@ public class AsyncWindowStore<KS, VS> extends WrappedStateStore<WindowStore<?, ?
   }
 
   @Override
+  @SuppressWarnings("checkstyle:overloadmethodsdeclarationorder")
   public KeyValueIterator<Windowed<KS>, VS> backwardFetch(
       final KS keyFrom,
       final KS keyTo,
@@ -129,11 +136,6 @@ public class AsyncWindowStore<KS, VS> extends WrappedStateStore<WindowStore<?, ?
       final Instant timeTo
   ) throws IllegalArgumentException {
     return userDelegate.backwardFetchAll(timeFrom, timeTo);
-  }
-
-  @Override
-  public VS fetch(final KS key, final long windowStartMs) {
-    return userDelegate.fetch(key, windowStartMs);
   }
 
   @Override

@@ -15,7 +15,6 @@ package dev.responsive.kafka.api.async.internals;
 import static dev.responsive.kafka.api.async.internals.AsyncUtils.getAsyncThreadPool;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.ASYNC_FLUSH_INTERVAL_MS_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.ASYNC_MAX_EVENTS_QUEUED_PER_KEY_CONFIG;
-import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadAsyncThreadPoolRegistry;
 
 import dev.responsive.kafka.api.async.AsyncProcessorSupplier;
 import dev.responsive.kafka.api.async.internals.contexts.AsyncUserProcessorContext;
@@ -29,26 +28,21 @@ import dev.responsive.kafka.api.async.internals.queues.KeyOrderPreservingQueue;
 import dev.responsive.kafka.api.async.internals.queues.MeteredSchedulingQueue;
 import dev.responsive.kafka.api.async.internals.queues.SchedulingQueue;
 import dev.responsive.kafka.api.async.internals.stores.AbstractAsyncStoreBuilder;
-import dev.responsive.kafka.api.async.internals.stores.AsyncKeyValueStore;
 import dev.responsive.kafka.api.async.internals.stores.AsyncStateStore;
-import dev.responsive.kafka.api.async.internals.stores.StreamThreadFlushListeners.AsyncFlushListener;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.config.InternalSessionConfigs;
 import java.time.Duration;
-import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
-import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessorContext;
@@ -244,7 +238,8 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    * connected stores via the {@link ProcessingContext#getStateStore(String)} API during #init
    */
   private void completeInitialization() {
-    final Map<String, AsyncStateStore<?, ?>> accessedStores = streamThreadContext.getAllAsyncStores();
+    final Map<String, AsyncStateStore<?, ?>> accessedStores =
+        streamThreadContext.getAllAsyncStores();
 
     verifyConnectedStateStores(accessedStores, connectedStoreBuilders);
 
