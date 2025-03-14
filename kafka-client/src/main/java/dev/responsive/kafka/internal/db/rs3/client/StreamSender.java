@@ -12,6 +12,8 @@
 
 package dev.responsive.kafka.internal.db.rs3.client;
 
+import java.util.concurrent.CompletionStage;
+
 public interface StreamSender<S> {
   /**
    * Send the next message to the stream. If an exception is raised
@@ -46,9 +48,18 @@ public interface StreamSender<S> {
   void cancel();
 
   /**
-   * Check whether the stream is active and available for sending or finishing.
+   * Get a completion stage tied to this stream sender. The stage is completed
+   * upon an explicit call to {@link #finish()}, {@link #cancel()}, or if an error
+   * is raised while sending or finishing.
    *
-   * @return true if the stream is available, false otherwise
+   * @return a completion stage for this sender
    */
-  boolean isActive();
+  CompletionStage<Void> completion();
+
+  /**
+   * Check whether the stream is complete (either finished or failed).
+   *
+   * @return true if the stream has finished or failed
+   */
+  boolean isDone();
 }

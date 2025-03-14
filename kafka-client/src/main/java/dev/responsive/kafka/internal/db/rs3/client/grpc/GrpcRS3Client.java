@@ -188,7 +188,7 @@ public class GrpcRS3Client implements RS3Client {
     final Optional<Long> result;
 
     try {
-      result = senderReceiver.receiver().toCompletableFuture().get();
+      result = senderReceiver.completion().toCompletableFuture().get();
     } catch (final ExecutionException e) {
       if (e.getCause() instanceof RuntimeException) {
         throw (RuntimeException) e.getCause();

@@ -298,7 +298,7 @@ class GrpcRS3ClientTest {
         Optional.empty(),
         20
     );
-    final var receiveFuture = senderReceiver.receiver().toCompletableFuture();
+    final var receiveFuture = senderReceiver.completion().toCompletableFuture();
     final var observer = verifyWalSegmentResultObserver();
     observer.onNext(Rs3.WriteWALSegmentResult.newBuilder()
         .setFlushedOffset(123)
@@ -323,7 +323,7 @@ class GrpcRS3ClientTest {
         Optional.empty(),
         20
     );
-    final var receiveFuture = senderReceiver.receiver().toCompletableFuture();
+    final var receiveFuture = senderReceiver.completion().toCompletableFuture();
     final var observer = verifyWalSegmentResultObserver();
     observer.onError(new TestException());
 
@@ -345,7 +345,7 @@ class GrpcRS3ClientTest {
         Optional.empty(),
         20
     );
-    final var receiveFuture = senderReceiver.receiver().toCompletableFuture();
+    final var receiveFuture = senderReceiver.completion().toCompletableFuture();
     final var observer = verifyWalSegmentResultObserver();
     observer.onNext(Rs3.WriteWALSegmentResult.newBuilder()
         .setFlushedOffset(123)

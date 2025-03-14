@@ -85,7 +85,7 @@ class GrpcRS3ClientEndToEndTest {
     sendRecv.sender().finish();
 
     final var flushedOffset = sendRecv
-        .receiver()
+        .completion()
         .toCompletableFuture()
         .join();
     assertThat(flushedOffset, is(Optional.of(5L)));

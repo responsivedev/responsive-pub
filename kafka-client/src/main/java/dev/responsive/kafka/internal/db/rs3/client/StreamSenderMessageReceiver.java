@@ -31,11 +31,24 @@ public class StreamSenderMessageReceiver<S, R> {
     return sender;
   }
 
-  public CompletionStage<R> receiver() {
-    return message;
+  public boolean isActive() {
+    return !sender.isDone() && !message.isDone();
   }
 
-  public boolean isActive() {
-    return sender.isActive() && !message.isDone();
+  public CompletionStage<R> completion() {
+    final var future = new CompletableFuture<R>();
+    sender.completion().whenComplete((voidValue, sendException) -> {
+      if (sendException != null) {
+        future.completeExceptionally(sendException);
+      }
+    });
+    message.whenComplete((result, recvException) -> {
+      if (recvException != null) {
+        future.completeExceptionally(recvException);
+      } else {
+        future.complete(result);
+      }
+    });
+    return future;
   }
 }

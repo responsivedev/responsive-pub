@@ -19,7 +19,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import dev.responsive.kafka.internal.db.rs3.client.CurrentOffsets;
@@ -62,10 +61,14 @@ class RS3KVTableTest {
   @Mock
   private ResponsiveMetrics metrics;
 
+  @Mock
+  private StreamSender<WalEntry> streamSender;
+
+  @Mock
+  private StreamSenderMessageReceiver<WalEntry, Optional<Long>> sendRecv;
 
   private final ResponsiveMetrics.MetricScopeBuilder metricsScopeBuilder =
       new ResponsiveMetrics.MetricScopeBuilder(new LinkedHashMap<>());
-
 
   @Test
   public void shouldInitializeWrittenOffset() {
@@ -96,7 +99,7 @@ class RS3KVTableTest {
   }
 
   @Test
-  public void shouldRetryAfterTransientErrorInResponseObserver() {
+  public void shouldRetryAfterTransientErrorInFinish() {
     // Given:
     var storeId = UUID.randomUUID();
     var kafkaPartition = 0;
@@ -104,27 +107,37 @@ class RS3KVTableTest {
     var pssId = kafkaPartition;
     var consumedOffset = 3L;
 
-    @SuppressWarnings("unchecked")
-    StreamSender<WalEntry> streamSender = Mockito.mock(StreamSender.class);
-    CompletableFuture<Optional<Long>> receiveCompletion = new CompletableFuture<>();
-
+    final var sendRecvCompletion = new CompletableFuture<Optional<Long>>();
+    when(sendRecv.completion()).thenReturn(sendRecvCompletion);
+    when(sendRecv.sender()).thenReturn(streamSender);
+    when(sendRecv.isActive()).thenAnswer(invocation -> !sendRecvCompletion.isDone());
     when(partitioner.pssForLss(lssId))
         .thenReturn(Collections.singletonList(pssId));
     when(client.getCurrentOffsets(storeId, lssId, pssId))
         .thenReturn(new CurrentOffsets(Optional.empty(), Optional.empty()));
-    when(client.writeWalSegmentAsync(
-        storeId,
-        lssId,
-        pssId,
-        Optional.empty(),
-        consumedOffset))
-        .thenReturn(new StreamSenderMessageReceiver<>(streamSender, receiveCompletion));
+    when(client.writeWalSegmentAsync(storeId, lssId, pssId, Optional.empty(), consumedOffset))
+        .thenReturn(sendRecv);
     when(metrics.addSensor(any()))
         .thenReturn(Mockito.mock(Sensor.class));
 
+    var table = new RS3KVTable(
+        "store",
+        storeId,
+        client,
+        partitioner,
+        metrics,
+        metricsScopeBuilder
+    );
+    var flushManager = (RS3KVFlushManager) table.init(kafkaPartition);
+
     // When:
-    receiveCompletion.completeExceptionally(new RS3TransientException(
-        new StatusRuntimeException(Status.UNAVAILABLE)));
+    Mockito.doAnswer(invocation -> {
+      var exception = new RS3TransientException(new StatusRuntimeException(Status.UNAVAILABLE));
+      sendRecvCompletion.completeExceptionally(exception);
+      return null;
+    })
+        .when(streamSender)
+        .finish();
     when(client.writeWalSegment(
         eq(storeId),
         eq(lssId),
@@ -135,21 +148,10 @@ class RS3KVTableTest {
         .thenReturn(Optional.of(consumedOffset));
 
     // Then:
-    var table = new RS3KVTable(
-        "store",
-        storeId,
-        client,
-        partitioner,
-        metrics,
-        metricsScopeBuilder
-    );
-    var flushManager = (RS3KVFlushManager) table.init(kafkaPartition);
     var writer = flushManager.createWriter(pssId, consumedOffset);
     var key = Bytes.wrap(new byte[] { 0 });
     var value = new byte[] { 0 };
     writer.insert(key, value, time.milliseconds());
-
-    // Then:
     var result = writer.flush().toCompletableFuture().join();
     assertThat(result.wasApplied(), is(true));
     assertThat(result.tablePartition(), is(pssId));
@@ -164,30 +166,33 @@ class RS3KVTableTest {
     var pssId = kafkaPartition;
     var consumedOffset = 3L;
 
-    @SuppressWarnings("unchecked")
-    StreamSender<WalEntry> streamSender = Mockito.mock(StreamSender.class);
-    CompletableFuture<Optional<Long>> receiveCompletion = new CompletableFuture<>();
-
-    when(streamSender.isActive()).thenReturn(true);
+    final var sendRecvCompletion = new CompletableFuture<Optional<Long>>();
+    when(sendRecv.completion()).thenReturn(sendRecvCompletion);
+    when(sendRecv.sender()).thenReturn(streamSender);
+    when(sendRecv.isActive()).thenAnswer(invocation -> !sendRecvCompletion.isDone());
     when(partitioner.pssForLss(lssId))
         .thenReturn(Collections.singletonList(pssId));
     when(client.getCurrentOffsets(storeId, lssId, pssId))
         .thenReturn(new CurrentOffsets(Optional.empty(), Optional.empty()));
-    when(client.writeWalSegmentAsync(
-        storeId,
-        lssId,
-        pssId,
-        Optional.empty(),
-        consumedOffset))
-        .thenReturn(new StreamSenderMessageReceiver<>(streamSender, receiveCompletion));
+    when(client.writeWalSegmentAsync(storeId, lssId, pssId, Optional.empty(), consumedOffset))
+        .thenReturn(sendRecv);
     when(metrics.addSensor(any()))
         .thenReturn(Mockito.mock(Sensor.class));
+    var table = new RS3KVTable(
+        "store",
+        storeId,
+        client,
+        partitioner,
+        metrics,
+        metricsScopeBuilder
+    );
+    var flushManager = (RS3KVFlushManager) table.init(kafkaPartition);
 
     // When:
     Mockito.doAnswer(invocation -> {
       var exception = new RS3TransientException(new StatusRuntimeException(Status.UNAVAILABLE));
-      receiveCompletion.completeExceptionally(exception);
-      throw exception;
+      sendRecvCompletion.completeExceptionally(exception);
+      return null;
     })
         .when(streamSender)
         .sendNext(any());
@@ -201,20 +206,10 @@ class RS3KVTableTest {
         .thenReturn(Optional.of(consumedOffset));
 
     // Then:
-    var table = new RS3KVTable(
-        "store",
-        storeId,
-        client,
-        partitioner,
-        metrics,
-        metricsScopeBuilder
-    );
-    var flushManager = (RS3KVFlushManager) table.init(kafkaPartition);
     var writer = flushManager.createWriter(pssId, consumedOffset);
     var key = Bytes.wrap(new byte[] { 0 });
     var value = new byte[] { 0 };
     writer.insert(key, value, time.milliseconds());
-    verify(streamSender).sendNext(any());
     var result = writer.flush().toCompletableFuture().join();
     assertThat(result.wasApplied(), is(true));
     assertThat(result.tablePartition(), is(pssId));
@@ -229,27 +224,20 @@ class RS3KVTableTest {
     var pssId = kafkaPartition;
     var consumedOffset = 3L;
 
-    @SuppressWarnings("unchecked")
-    StreamSender<WalEntry> streamSender = Mockito.mock(StreamSender.class);
-    CompletableFuture<Optional<Long>> receiveCompletion = new CompletableFuture<>();
-
-    when(streamSender.isActive()).thenReturn(false);
+    final var sendRecvCompletion = new CompletableFuture<Optional<Long>>();
+    when(sendRecv.completion()).thenReturn(sendRecvCompletion);
+    when(sendRecv.isActive()).thenAnswer(invocation -> !sendRecvCompletion.isDone());
     when(partitioner.pssForLss(lssId))
         .thenReturn(Collections.singletonList(pssId));
     when(client.getCurrentOffsets(storeId, lssId, pssId))
         .thenReturn(new CurrentOffsets(Optional.empty(), Optional.empty()));
-    when(client.writeWalSegmentAsync(
-        storeId,
-        lssId,
-        pssId,
-        Optional.empty(),
-        consumedOffset))
-        .thenReturn(new StreamSenderMessageReceiver<>(streamSender, receiveCompletion));
+    when(client.writeWalSegmentAsync(storeId, lssId, pssId, Optional.empty(), consumedOffset))
+        .thenReturn(sendRecv);
     when(metrics.addSensor(any()))
         .thenReturn(Mockito.mock(Sensor.class));
 
     // When:
-    receiveCompletion.completeExceptionally(new RS3TransientException(
+    sendRecvCompletion.completeExceptionally(new RS3TransientException(
         new StatusRuntimeException(Status.UNAVAILABLE)));
     when(client.writeWalSegment(
         eq(storeId),
@@ -290,27 +278,31 @@ class RS3KVTableTest {
     var pssId = kafkaPartition;
     var consumedOffset = 3L;
 
-    @SuppressWarnings("unchecked")
-    StreamSender<WalEntry> streamSender = Mockito.mock(StreamSender.class);
-    CompletableFuture<Optional<Long>> receiveCompletion = new CompletableFuture<>();
-
-    when(streamSender.isActive()).thenReturn(false);
+    final var sendRecvCompletion = new CompletableFuture<Optional<Long>>();
+    when(sendRecv.completion()).thenReturn(sendRecvCompletion);
+    when(sendRecv.isActive()).thenAnswer(invocation -> !sendRecvCompletion.isDone());
     when(partitioner.pssForLss(lssId))
         .thenReturn(Collections.singletonList(pssId));
     when(client.getCurrentOffsets(storeId, lssId, pssId))
         .thenReturn(new CurrentOffsets(Optional.empty(), Optional.empty()));
-    when(client.writeWalSegmentAsync(
-        storeId,
-        lssId,
-        pssId,
-        Optional.empty(),
-        consumedOffset))
-        .thenReturn(new StreamSenderMessageReceiver<>(streamSender, receiveCompletion));
+    when(client.writeWalSegmentAsync(storeId, lssId, pssId, Optional.empty(), consumedOffset))
+        .thenReturn(sendRecv);
     when(metrics.addSensor(any()))
         .thenReturn(Mockito.mock(Sensor.class));
 
+    var table = new RS3KVTable(
+        "store",
+        storeId,
+        client,
+        partitioner,
+        metrics,
+        metricsScopeBuilder
+    );
+
+    var flushManager = (RS3KVFlushManager) table.init(kafkaPartition);
+
     // When:
-    receiveCompletion.completeExceptionally(new RS3TransientException(
+    sendRecvCompletion.completeExceptionally(new RS3TransientException(
         new StatusRuntimeException(Status.UNAVAILABLE)));
     when(client.writeWalSegment(
         eq(storeId),
@@ -322,16 +314,6 @@ class RS3KVTableTest {
         .thenThrow(new RS3Exception(new StatusRuntimeException(Status.UNKNOWN)));
 
     // Then:
-    var table = new RS3KVTable(
-        "store",
-        storeId,
-        client,
-        partitioner,
-        metrics,
-        metricsScopeBuilder
-    );
-
-    var flushManager = (RS3KVFlushManager) table.init(kafkaPartition);
     var writer = flushManager.createWriter(pssId, consumedOffset);
     var key = Bytes.wrap(new byte[] { 0 });
     var value = new byte[] { 0 };
@@ -356,11 +338,10 @@ class RS3KVTableTest {
     var pssId = kafkaPartition;
     var consumedOffset = 3L;
 
-    @SuppressWarnings("unchecked")
-    StreamSender<WalEntry> streamSender = Mockito.mock(StreamSender.class);
-    CompletableFuture<Optional<Long>> receiveCompletion = new CompletableFuture<>();
-
-    when(streamSender.isActive()).thenReturn(true);
+    final var sendRecvCompletion = new CompletableFuture<Optional<Long>>();
+    when(sendRecv.completion()).thenReturn(sendRecvCompletion);
+    when(sendRecv.sender()).thenReturn(streamSender);
+    when(sendRecv.isActive()).thenAnswer(invocation -> !sendRecvCompletion.isDone());
     when(partitioner.pssForLss(lssId))
         .thenReturn(Collections.singletonList(pssId));
     when(client.getCurrentOffsets(storeId, lssId, pssId))
@@ -371,16 +352,10 @@ class RS3KVTableTest {
         pssId,
         Optional.empty(),
         consumedOffset))
-        .thenReturn(new StreamSenderMessageReceiver<>(streamSender, receiveCompletion));
+        .thenReturn(sendRecv);
     when(metrics.addSensor(any()))
         .thenReturn(Mockito.mock(Sensor.class));
 
-    // When:
-    Mockito.doThrow(new RS3Exception(new StatusRuntimeException(Status.UNKNOWN)))
-        .when(streamSender)
-        .sendNext(any());
-
-    // Then:
     var table = new RS3KVTable(
         "store",
         storeId,
@@ -391,12 +366,29 @@ class RS3KVTableTest {
     );
 
     var flushManager = (RS3KVFlushManager) table.init(kafkaPartition);
+
+    // When:
+    Mockito.doAnswer(invocation -> {
+      var exception = new RS3Exception(new StatusRuntimeException(Status.UNKNOWN));
+      sendRecvCompletion.completeExceptionally(exception);
+      return null;
+    })
+        .when(streamSender)
+        .sendNext(any());
+
+    // Then:
     var writer = flushManager.createWriter(pssId, consumedOffset);
     var key = Bytes.wrap(new byte[] { 0 });
     var value = new byte[] { 0 };
-    var rs3Exception = assertThrows(RS3Exception.class,
-        () -> writer.insert(key, value, time.milliseconds())
+    writer.insert(key, value, time.milliseconds());
+    final var completion = writer.flush();
+
+    var completionException = assertThrows(
+        CompletionException.class,
+        () -> completion.toCompletableFuture().join()
     );
+    assertThat(completionException.getCause(), instanceOf(RS3Exception.class));
+    var rs3Exception = (RS3Exception) completionException.getCause();
     assertThat(rs3Exception.getCause(), instanceOf(StatusRuntimeException.class));
     StatusRuntimeException statusRuntimeException =
         (StatusRuntimeException) rs3Exception.getCause();

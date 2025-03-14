@@ -15,13 +15,14 @@ package dev.responsive.kafka.internal.db.rs3.client.grpc;
 import dev.responsive.kafka.internal.db.rs3.client.StreamSender;
 import io.grpc.stub.StreamObserver;
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.function.Function;
 
 class GrpcStreamSender<M, P> implements StreamSender<M> {
   private final Function<M, P> protoFactory;
   private final StreamObserver<P> grpcObserver;
-  private final AtomicBoolean active = new AtomicBoolean(true);
+  private final CompletableFuture<Void> future = new CompletableFuture<>();
 
   GrpcStreamSender(
       final Function<M, P> protoFactory,
@@ -33,34 +34,49 @@ class GrpcStreamSender<M, P> implements StreamSender<M> {
   @Override
   public void sendNext(M msg) {
     try {
-      grpcObserver.onNext(protoFactory.apply(msg));
+      if (isActive()) {
+        grpcObserver.onNext(protoFactory.apply(msg));
+      }
     } catch (Exception e) {
-      grpcObserver.onError(e);
-      active.set(false);
-      throw GrpcRs3Util.wrapThrowable(e);
+      fail(e);
     }
   }
 
   @Override
   public void finish() {
     try {
-      grpcObserver.onCompleted();
+      if (isActive()) {
+        grpcObserver.onCompleted();
+        future.complete(null);
+      }
     } catch (Exception e) {
-      grpcObserver.onError(e);
-      throw GrpcRs3Util.wrapThrowable(e);
-    } finally {
-      active.set(false);
+      fail(e);
     }
   }
 
   @Override
   public void cancel() {
-    grpcObserver.onError(new RuntimeException("message stream cancelled"));
-    active.set(false);
+    fail(new RuntimeException("message stream cancelled"));
+  }
+
+  private void fail(Exception e) {
+    grpcObserver.onError(e);
+    final var publicError = GrpcRs3Util.wrapThrowable(e);
+    future.completeExceptionally(publicError);
+  }
+
+  public boolean isActive() {
+    return !future.isDone();
   }
 
   @Override
-  public boolean isActive() {
-    return active.get();
+  public CompletionStage<Void> completion() {
+    return future;
   }
+
+  @Override
+  public boolean isDone() {
+    return future.isDone();
+  }
+
 }

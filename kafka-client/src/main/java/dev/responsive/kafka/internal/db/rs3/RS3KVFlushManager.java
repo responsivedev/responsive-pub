@@ -272,7 +272,7 @@ class RS3KVFlushManager extends KVFlushManager {
     public CompletionStage<RemoteWriteResult<Integer>> flush() {
       ifActiveStream(StreamSender::finish);
 
-      return sendRecv.receiver().handle((result, throwable) -> {
+      return sendRecv.completion().handle((result, throwable) -> {
         Optional<Long> flushedOffset = result;
 
         var cause = throwable;
