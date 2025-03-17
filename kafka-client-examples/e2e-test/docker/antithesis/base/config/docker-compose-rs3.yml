@@ -11,8 +11,49 @@ services:
       - 50051:50051
     environment:
       CONFIG_FILE: /etc/rs3/rs3.toml
+    depends_on:
+      - createbucket
     volumes:
       - ./volumes/rs3.toml:/etc/rs3/rs3.toml
     networks:
       backend:
         ipv4_address: 10.0.0.60
+  createbucket:
+    image: minio/mc:RELEASE.2025-03-12T17-29-24Z
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc config host add minio http://minio:9000 antithesis antithesis;
+      /usr/bin/mc rm -r --force minio/rs3-antithesis;
+      /usr/bin/mc mb minio/rs3-antithesis;
+      exit 0;
+      "
+    networks:
+      backend:
+        ipv4_address: 10.0.0.61
+  minio:
+    container_name: minio
+    hostname: minio
+    image: minio/minio:RELEASE.2025-03-12T18-04-18Z
+    command: server /minio --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - ./volumes/minio/data:/minio:rw
+      - ./volumes/minio/etc:/etc/minio:r
+    environment:
+      - MINIO_ACCESS_KEY_FILE=/etc/minio/insecure.access.key
+      - MINIO_SECRET_KEY_FILE=/etc/minio/insecure.secret.key
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 1s
+      timeout: 10s
+      retries: 100
+    networks:
+      backend:
+        ipv4_address: 10.0.0.62
+
+
