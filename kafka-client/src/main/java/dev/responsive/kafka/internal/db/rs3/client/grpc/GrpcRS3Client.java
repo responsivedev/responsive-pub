@@ -12,24 +12,20 @@
 
 package dev.responsive.kafka.internal.db.rs3.client.grpc;
 
-import static io.grpc.Status.UNAVAILABLE;
-
 import com.google.common.annotations.VisibleForTesting;
 import com.google.protobuf.ByteString;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.db.rs3.client.CurrentOffsets;
-import dev.responsive.kafka.internal.db.rs3.client.RangeIterator;
 import dev.responsive.kafka.internal.db.rs3.client.LssId;
 import dev.responsive.kafka.internal.db.rs3.client.Put;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Client;
-import dev.responsive.kafka.internal.db.rs3.client.RS3Exception;
 import dev.responsive.kafka.internal.db.rs3.client.RS3TimeoutException;
 import dev.responsive.kafka.internal.db.rs3.client.RangeBound;
+import dev.responsive.kafka.internal.db.rs3.client.RS3TransientException;
 import dev.responsive.kafka.internal.db.rs3.client.StreamSenderMessageReceiver;
 import dev.responsive.kafka.internal.db.rs3.client.WalEntry;
 import dev.responsive.rs3.RS3Grpc;
 import dev.responsive.rs3.Rs3;
-import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 import java.util.List;
 import java.util.Objects;
@@ -43,7 +39,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
 public class GrpcRS3Client implements RS3Client {
-  static final long WAL_OFFSET_NONE = Long.MAX_VALUE;
+  public static final long WAL_OFFSET_NONE = Long.MAX_VALUE;
 
   private final PssStubsProvider stubs;
   private final Time time;
@@ -83,30 +79,38 @@ public class GrpcRS3Client implements RS3Client {
     );
   }
 
-  private void withRetry(Runnable runner, Supplier<String> opDescription) {
+  private void withRetry(Runnable grpcOperation, Supplier<String> opDescription) {
     final Supplier<Void> voidSupplier = () -> {
-      runner.run();
+      grpcOperation.run();
       return null;
     };
     withRetry(voidSupplier, opDescription);
   }
 
-  private <T> T withRetry(Supplier<T> supplier, Supplier<String> opDescription) {
+  private <T> T withRetry(Supplier<T> grpcOperation, Supplier<String> opDescription) {
+    final var deadlineMs = time.milliseconds() + retryTimeoutMs;
+    return withRetryDeadline(grpcOperation, deadlineMs, opDescription);
+  }
+
+  private <T> T withRetryDeadline(
+      Supplier<T> grpcOperation,
+      long deadlineMs,
+      Supplier<String> opDescription
+  ) {
     // Using Kafka default backoff settings initially. We can pull them up
     // if there is ever strong reason.
     final var backoff = new ExponentialBackoff(50, 2, 1000, 0.2);
-    final var startTimeMs = time.milliseconds();
-    final var deadlineMs = startTimeMs + retryTimeoutMs;
 
     var retries = 0;
     long currentTimeMs;
 
     do {
       try {
-        return supplier.get();
-      } catch (final StatusRuntimeException e) {
-        if (e.getStatus() != UNAVAILABLE) {
-          throw new RS3Exception(e);
+        return grpcOperation.get();
+      } catch (final Throwable t) {
+        var wrappedException = GrpcRs3Util.wrapThrowable(t);
+        if (!(wrappedException instanceof RS3TransientException)) {
+          throw wrappedException;
         }
       }
 
@@ -116,7 +120,7 @@ public class GrpcRS3Client implements RS3Client {
           backoff.backoff(retries),
           Math.max(0, deadlineMs - currentTimeMs))
       );
-    } while (currentTimeMs - startTimeMs < retryTimeoutMs);
+    } while (currentTimeMs < deadlineMs);
     throw new RS3TimeoutException("Timeout while attempting operation " + opDescription.get());
   }
 
@@ -131,7 +135,10 @@ public class GrpcRS3Client implements RS3Client {
     final GrpcMessageReceiver<Rs3.WriteWALSegmentResult> resultObserver
         = new GrpcMessageReceiver<>();
     final RS3Grpc.RS3Stub asyncStub = stubs.stubs(storeId, pssId).asyncStub();
-    final var streamObserver = asyncStub.writeWALSegmentStream(resultObserver);
+    final var streamObserver = withRetry(
+        () -> asyncStub.writeWALSegmentStream(resultObserver),
+        () -> "OpenWriteWalSegmentStream()"
+    );
     final var streamSender = new GrpcStreamSender<WalEntry, Rs3.WriteWALSegmentRequest>(
         entry -> {
           final var entryBuilder = Rs3.WriteWALSegmentRequest.newBuilder()
@@ -163,7 +170,22 @@ public class GrpcRS3Client implements RS3Client {
       final int pssId,
       final Optional<Long> expectedWrittenOffset,
       final long endOffset,
-      final List<WalEntry> entries) {
+      final List<WalEntry> entries
+  ) {
+    return withRetry(
+        () -> tryWriteWalSegment(storeId, lssId, pssId, expectedWrittenOffset, endOffset, entries),
+        () -> "WriteWalSegment(storeId=" + storeId + ", lssId=" + lssId + ", pssId=" + pssId + ")"
+    );
+  }
+
+  private Optional<Long> tryWriteWalSegment(
+      final UUID storeId,
+      final LssId lssId,
+      final int pssId,
+      final Optional<Long> expectedWrittenOffset,
+      final long endOffset,
+      final List<WalEntry> entries
+  ) {
     final var senderReceiver = writeWalSegmentAsync(
         storeId,
         lssId,
@@ -176,8 +198,9 @@ public class GrpcRS3Client implements RS3Client {
     }
     senderReceiver.sender().finish();
     final Optional<Long> result;
+
     try {
-      result = senderReceiver.receiver().toCompletableFuture().get();
+      result = senderReceiver.completion().toCompletableFuture().get();
     } catch (final ExecutionException e) {
       if (e.getCause() instanceof RuntimeException) {
         throw (RuntimeException) e.getCause();
