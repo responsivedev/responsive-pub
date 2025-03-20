@@ -15,11 +15,14 @@ package dev.responsive.kafka.internal.db.rs3.client.grpc;
 import dev.responsive.kafka.internal.db.rs3.client.StreamSender;
 import io.grpc.stub.StreamObserver;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.function.Function;
 
 class GrpcStreamSender<M, P> implements StreamSender<M> {
   private final Function<M, P> protoFactory;
   private final StreamObserver<P> grpcObserver;
+  private final CompletableFuture<Void> future = new CompletableFuture<>();
 
   GrpcStreamSender(
       final Function<M, P> protoFactory,
@@ -30,16 +33,50 @@ class GrpcStreamSender<M, P> implements StreamSender<M> {
 
   @Override
   public void sendNext(M msg) {
-    grpcObserver.onNext(protoFactory.apply(msg));
+    try {
+      if (isActive()) {
+        grpcObserver.onNext(protoFactory.apply(msg));
+      }
+    } catch (Exception e) {
+      fail(e);
+    }
   }
 
   @Override
   public void finish() {
-    grpcObserver.onCompleted();
+    try {
+      if (isActive()) {
+        grpcObserver.onCompleted();
+        future.complete(null);
+      }
+    } catch (Exception e) {
+      fail(e);
+    }
   }
 
   @Override
   public void cancel() {
-    grpcObserver.onError(new RuntimeException("message stream cancelled"));
+    fail(new RuntimeException("message stream cancelled"));
   }
+
+  private void fail(Exception e) {
+    grpcObserver.onError(e);
+    final var publicError = GrpcRs3Util.wrapThrowable(e);
+    future.completeExceptionally(publicError);
+  }
+
+  public boolean isActive() {
+    return !future.isDone();
+  }
+
+  @Override
+  public CompletionStage<Void> completion() {
+    return future;
+  }
+
+  @Override
+  public boolean isDone() {
+    return future.isDone();
+  }
+
 }

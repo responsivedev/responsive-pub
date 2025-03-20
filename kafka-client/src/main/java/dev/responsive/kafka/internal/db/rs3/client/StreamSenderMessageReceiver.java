@@ -13,24 +13,42 @@
 package dev.responsive.kafka.internal.db.rs3.client;
 
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
 public class StreamSenderMessageReceiver<S, R> {
   private final StreamSender<S> sender;
-  private final CompletionStage<R> message;
+  private final CompletableFuture<R> message;
 
   public StreamSenderMessageReceiver(
       final StreamSender<S> sender,
       final CompletionStage<R> message) {
     this.sender = Objects.requireNonNull(sender);
-    this.message = Objects.requireNonNull(message);
+    this.message = Objects.requireNonNull(message).toCompletableFuture();
   }
 
   public StreamSender<S> sender() {
     return sender;
   }
 
-  public CompletionStage<R> receiver() {
-    return message;
+  public boolean isActive() {
+    return !sender.isDone() && !message.isDone();
+  }
+
+  public CompletionStage<R> completion() {
+    final var future = new CompletableFuture<R>();
+    sender.completion().whenComplete((voidValue, sendException) -> {
+      if (sendException != null) {
+        future.completeExceptionally(sendException);
+      }
+    });
+    message.whenComplete((result, recvException) -> {
+      if (recvException != null) {
+        future.completeExceptionally(recvException);
+      } else {
+        future.complete(result);
+      }
+    });
+    return future;
   }
 }
