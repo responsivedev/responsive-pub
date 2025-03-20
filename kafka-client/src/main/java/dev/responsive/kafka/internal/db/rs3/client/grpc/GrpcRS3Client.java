@@ -18,11 +18,13 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.protobuf.ByteString;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.db.rs3.client.CurrentOffsets;
+import dev.responsive.kafka.internal.db.rs3.client.RangeIterator;
 import dev.responsive.kafka.internal.db.rs3.client.LssId;
 import dev.responsive.kafka.internal.db.rs3.client.Put;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Client;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Exception;
 import dev.responsive.kafka.internal.db.rs3.client.RS3TimeoutException;
+import dev.responsive.kafka.internal.db.rs3.client.RangeBound;
 import dev.responsive.kafka.internal.db.rs3.client.StreamSenderMessageReceiver;
 import dev.responsive.kafka.internal.db.rs3.client.WalEntry;
 import dev.responsive.rs3.RS3Grpc;
@@ -34,8 +36,10 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Supplier;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.state.KeyValueIterator;
 
 public class GrpcRS3Client implements RS3Client {
   static final long WAL_OFFSET_NONE = Long.MAX_VALUE;
@@ -174,6 +178,57 @@ public class GrpcRS3Client implements RS3Client {
       throw new RuntimeException(e);
     }
     return result;
+  }
+
+  @Override
+  public KeyValueIterator<Bytes, byte[]> range(
+      final UUID storeId,
+      final LssId lssId,
+      final int pssId,
+      final Optional<Long> expectedWrittenOffset,
+      RangeBound from,
+      RangeBound to
+  ) {
+    final var requestBuilder = Rs3.RangeRequest.newBuilder()
+        .setStoreId(uuidProto(storeId))
+        .setLssId(lssIdProto(lssId))
+        .setPssId(pssId)
+        .setFrom(protoBound(from))
+        .setTo(protoBound(to));
+    expectedWrittenOffset.ifPresent(requestBuilder::setExpectedWrittenOffset);
+    final var asyncStub = stubs.stubs(storeId, pssId).asyncStub();
+    final var request = requestBuilder.build();
+
+
+    asyncStub.range(request, );
+
+  }
+
+  private Rs3.Bound protoBound(RangeBound bound) {
+    bound.map(new RangeBound.Mapper<Rs3.Bound>() {
+      @Override
+      public Rs3.Bound map(final RangeBound.InclusiveBound b) {
+        return Rs3.Bound.newBuilder()
+            .setType(Rs3.Bound.Type.INCLUSIVE)
+            .setKey(ByteString.copyFrom(b.key()))
+            .build();
+      }
+
+      @Override
+      public Rs3.Bound map(final RangeBound.ExclusiveBound b) {
+        return Rs3.Bound.newBuilder()
+            .setType(Rs3.Bound.Type.EXCLUSIVE)
+            .setKey(ByteString.copyFrom(b.key()))
+            .build();
+      }
+
+      @Override
+      public Rs3.Bound map(final RangeBound.Unbounded b) {
+        return Rs3.Bound.newBuilder()
+            .setType(Rs3.Bound.Type.UNBOUNDED)
+            .build();
+      }
+    });
   }
 
   @Override
