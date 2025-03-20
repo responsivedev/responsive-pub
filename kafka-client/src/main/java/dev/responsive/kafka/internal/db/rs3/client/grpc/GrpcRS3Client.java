@@ -30,6 +30,7 @@ import dev.responsive.kafka.internal.db.rs3.client.WalEntry;
 import dev.responsive.rs3.RS3Grpc;
 import dev.responsive.rs3.Rs3;
 import io.grpc.StatusRuntimeException;
+import io.grpc.stub.StreamObserver;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -80,6 +81,14 @@ public class GrpcRS3Client implements RS3Client {
         result.getFlushedOffset() == WAL_OFFSET_NONE
             ? Optional.empty() : Optional.of(result.getFlushedOffset())
     );
+  }
+
+  private void withRetry(Runnable runner, Supplier<String> opDescription) {
+    final Supplier<Void> voidSupplier = () -> {
+      runner.run();
+      return null;
+    };
+    withRetry(voidSupplier, opDescription);
   }
 
   private <T> T withRetry(Supplier<T> supplier, Supplier<String> opDescription) {
@@ -197,38 +206,8 @@ public class GrpcRS3Client implements RS3Client {
         .setTo(protoBound(to));
     expectedWrittenOffset.ifPresent(requestBuilder::setExpectedWrittenOffset);
     final var asyncStub = stubs.stubs(storeId, pssId).asyncStub();
-    final var request = requestBuilder.build();
-
-
-    asyncStub.range(request, );
-
-  }
-
-  private Rs3.Bound protoBound(RangeBound bound) {
-    bound.map(new RangeBound.Mapper<Rs3.Bound>() {
-      @Override
-      public Rs3.Bound map(final RangeBound.InclusiveBound b) {
-        return Rs3.Bound.newBuilder()
-            .setType(Rs3.Bound.Type.INCLUSIVE)
-            .setKey(ByteString.copyFrom(b.key()))
-            .build();
-      }
-
-      @Override
-      public Rs3.Bound map(final RangeBound.ExclusiveBound b) {
-        return Rs3.Bound.newBuilder()
-            .setType(Rs3.Bound.Type.EXCLUSIVE)
-            .setKey(ByteString.copyFrom(b.key()))
-            .build();
-      }
-
-      @Override
-      public Rs3.Bound map(final RangeBound.Unbounded b) {
-        return Rs3.Bound.newBuilder()
-            .setType(Rs3.Bound.Type.UNBOUNDED)
-            .build();
-      }
-    });
+    final var rangeProxy = new RangeProxy(requestBuilder, asyncStub);
+    return new GrpcKeyValueIterator(rangeProxy);
   }
 
   @Override
@@ -292,6 +271,55 @@ public class GrpcRS3Client implements RS3Client {
   private void checkField(final Supplier<Boolean> check, final String field) {
     if (!check.get()) {
       throw new RuntimeException("rs3 resp proto missing field " + field);
+    }
+  }
+
+  private Rs3.Bound protoBound(RangeBound bound) {
+    return bound.map(new RangeBound.Mapper<>() {
+      @Override
+      public Rs3.Bound map(final RangeBound.InclusiveBound b) {
+        return Rs3.Bound.newBuilder()
+            .setType(Rs3.Bound.Type.INCLUSIVE)
+            .setKey(ByteString.copyFrom(b.key()))
+            .build();
+      }
+
+      @Override
+      public Rs3.Bound map(final RangeBound.ExclusiveBound b) {
+        return Rs3.Bound.newBuilder()
+            .setType(Rs3.Bound.Type.EXCLUSIVE)
+            .setKey(ByteString.copyFrom(b.key()))
+            .build();
+      }
+
+      @Override
+      public Rs3.Bound map(final RangeBound.Unbounded b) {
+        return Rs3.Bound.newBuilder()
+            .setType(Rs3.Bound.Type.UNBOUNDED)
+            .build();
+      }
+    });
+  }
+
+  private class RangeProxy implements GrpcRangeRequestProxy {
+    private final Rs3.RangeRequest.Builder requestBuilder;
+    private final RS3Grpc.RS3Stub stub;
+
+    private RangeProxy(
+        final Rs3.RangeRequest.Builder requestBuilder,
+        final RS3Grpc.RS3Stub stub
+    ) {
+      this.requestBuilder = requestBuilder;
+      this.stub = stub;
+    }
+
+    @Override
+    public void send(final RangeBound start, final StreamObserver<Rs3.RangeResult> resultObserver) {
+      requestBuilder.setFrom(protoBound(start));
+      withRetry(
+          () -> stub.range(requestBuilder.build(), resultObserver),
+          () -> "Range()"
+      );
     }
   }
 
