@@ -142,7 +142,7 @@ public class ResponsiveConfig extends AbstractConfig {
 
   public static final String RS3_RETRY_TIMEOUT_CONFIG = "responsive.rs3.retry.timeout.ms";
   private static final String RS3_RETRY_TIMEOUT_DOC = "Timeout in milliseconds for retries when RS3 endpoint is unavailable";
-  public static final long RS3_RETRY_TIMEOUT_DEFAULT = 30000;
+  public static final long RS3_RETRY_TIMEOUT_DEFAULT = 120000;
 
   // ------------------ ScyllaDB specific configurations ----------------------
 

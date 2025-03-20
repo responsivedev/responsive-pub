@@ -18,7 +18,9 @@ import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -27,11 +29,15 @@ import dev.responsive.kafka.internal.db.rs3.client.LssId;
 import dev.responsive.kafka.internal.db.rs3.client.Put;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Exception;
 import dev.responsive.kafka.internal.db.rs3.client.RS3TimeoutException;
+import dev.responsive.kafka.internal.db.rs3.client.WalEntry;
 import dev.responsive.rs3.RS3Grpc;
 import dev.responsive.rs3.Rs3;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
@@ -292,7 +298,7 @@ class GrpcRS3ClientTest {
         Optional.empty(),
         20
     );
-    final var receiveFuture = senderReceiver.receiver().toCompletableFuture();
+    final var receiveFuture = senderReceiver.completion().toCompletableFuture();
     final var observer = verifyWalSegmentResultObserver();
     observer.onNext(Rs3.WriteWALSegmentResult.newBuilder()
         .setFlushedOffset(123)
@@ -317,7 +323,7 @@ class GrpcRS3ClientTest {
         Optional.empty(),
         20
     );
-    final var receiveFuture = senderReceiver.receiver().toCompletableFuture();
+    final var receiveFuture = senderReceiver.completion().toCompletableFuture();
     final var observer = verifyWalSegmentResultObserver();
     observer.onError(new TestException());
 
@@ -339,7 +345,7 @@ class GrpcRS3ClientTest {
         Optional.empty(),
         20
     );
-    final var receiveFuture = senderReceiver.receiver().toCompletableFuture();
+    final var receiveFuture = senderReceiver.completion().toCompletableFuture();
     final var observer = verifyWalSegmentResultObserver();
     observer.onNext(Rs3.WriteWALSegmentResult.newBuilder()
         .setFlushedOffset(123)
@@ -354,6 +360,255 @@ class GrpcRS3ClientTest {
 
     // then:
     assertThat(thrown.getCause(), instanceOf(IllegalStateException.class));
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  public void shouldWriteWalSegmentSync() {
+    // given:
+    var flushedOffset = 123L;
+    List<WalEntry> entries = Arrays.asList(
+        new Put("foo".getBytes(), "bar".getBytes()),
+        new Put("bar".getBytes(), "baz".getBytes())
+    );
+    when(asyncStub.writeWALSegmentStream(any())).thenAnswer(invocation -> {
+      StreamObserver<dev.responsive.rs3.Rs3.WriteWALSegmentResult> responseObserver =
+          invocation.getArgument(0);
+      responseObserver.onNext(Rs3.WriteWALSegmentResult.newBuilder()
+                          .setFlushedOffset(flushedOffset)
+                          .build());
+      responseObserver.onCompleted();
+      return writeWALSegmentRequestObserver;
+    });
+
+    // when:
+    final var result = client.writeWalSegment(
+        STORE_ID,
+        LSS_ID,
+        PSS_ID,
+        Optional.of(15L),
+        20,
+        entries
+    );
+
+    // then:
+    verify(writeWALSegmentRequestObserver).onNext(
+        Rs3.WriteWALSegmentRequest.newBuilder()
+            .setLssId(lssIdProto(LSS_ID))
+            .setPssId(PSS_ID)
+            .setStoreId(uuidProto(STORE_ID))
+            .setExpectedWrittenOffset(15L)
+            .setEndOffset(20)
+            .setPut(putProto((Put) entries.get(0)))
+            .build()
+    );
+    verify(writeWALSegmentRequestObserver).onNext(
+        Rs3.WriteWALSegmentRequest.newBuilder()
+            .setLssId(lssIdProto(LSS_ID))
+            .setPssId(PSS_ID)
+            .setStoreId(uuidProto(STORE_ID))
+            .setExpectedWrittenOffset(15L)
+            .setEndOffset(20)
+            .setPut(putProto((Put) entries.get(1)))
+            .build()
+    );
+
+    assertThat(result, is(Optional.of(flushedOffset)));
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  public void shouldRetryWriteWalSegmentSync() {
+    // given:
+    var flushedOffset = 123L;
+    List<WalEntry> entries = Arrays.asList(
+        new Put("foo".getBytes(), "bar".getBytes()),
+        new Put("bar".getBytes(), "baz".getBytes())
+    );
+    when(asyncStub.writeWALSegmentStream(any()))
+        .thenAnswer(invocation -> {
+          StreamObserver<dev.responsive.rs3.Rs3.WriteWALSegmentResult> responseObserver =
+              invocation.getArgument(0);
+          responseObserver.onError(new StatusRuntimeException(Status.UNAVAILABLE));
+          return writeWALSegmentRequestObserver;
+        })
+        .thenAnswer(invocation -> {
+          StreamObserver<dev.responsive.rs3.Rs3.WriteWALSegmentResult> responseObserver =
+              invocation.getArgument(0);
+          responseObserver.onNext(Rs3.WriteWALSegmentResult.newBuilder()
+                              .setFlushedOffset(flushedOffset)
+                              .build());
+          responseObserver.onCompleted();
+          reset(writeWALSegmentRequestObserver);
+          return writeWALSegmentRequestObserver;
+        });
+
+
+    // when:
+    final var result = client.writeWalSegment(
+        STORE_ID,
+        LSS_ID,
+        PSS_ID,
+        Optional.of(15L),
+        20,
+        entries
+    );
+
+    // then:
+    verify(writeWALSegmentRequestObserver).onNext(
+        Rs3.WriteWALSegmentRequest.newBuilder()
+            .setLssId(lssIdProto(LSS_ID))
+            .setPssId(PSS_ID)
+            .setStoreId(uuidProto(STORE_ID))
+            .setExpectedWrittenOffset(15L)
+            .setEndOffset(20)
+            .setPut(putProto((Put) entries.get(0)))
+            .build()
+    );
+    verify(writeWALSegmentRequestObserver).onNext(
+        Rs3.WriteWALSegmentRequest.newBuilder()
+            .setLssId(lssIdProto(LSS_ID))
+            .setPssId(PSS_ID)
+            .setStoreId(uuidProto(STORE_ID))
+            .setExpectedWrittenOffset(15L)
+            .setEndOffset(20)
+            .setPut(putProto((Put) entries.get(1)))
+            .build()
+    );
+    assertThat(result, is(Optional.of(flushedOffset)));
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  public void shouldRetryWriteWalSegmentSyncWithErrorInOnNext() {
+    // given:
+    var flushedOffset = 123L;
+    List<WalEntry> entries = Collections.singletonList(
+        new Put("foo".getBytes(), "bar".getBytes())
+    );
+
+    doThrow(new StatusRuntimeException(Status.UNAVAILABLE))
+        .when(writeWALSegmentRequestObserver)
+        .onNext(any());
+
+    when(asyncStub.writeWALSegmentStream(any()))
+        .thenAnswer(invocation -> writeWALSegmentRequestObserver)
+        .thenAnswer(invocation -> {
+          StreamObserver<dev.responsive.rs3.Rs3.WriteWALSegmentResult> responseObserver =
+              invocation.getArgument(0);
+          responseObserver.onNext(Rs3.WriteWALSegmentResult.newBuilder()
+                                      .setFlushedOffset(flushedOffset)
+                                      .build());
+          responseObserver.onCompleted();
+          reset(writeWALSegmentRequestObserver);
+          return writeWALSegmentRequestObserver;
+        });
+
+
+    // when:
+    final var result = client.writeWalSegment(
+        STORE_ID,
+        LSS_ID,
+        PSS_ID,
+        Optional.of(15L),
+        20,
+        entries
+    );
+
+    // then:
+    verify(writeWALSegmentRequestObserver).onNext(
+        Rs3.WriteWALSegmentRequest.newBuilder()
+            .setLssId(lssIdProto(LSS_ID))
+            .setPssId(PSS_ID)
+            .setStoreId(uuidProto(STORE_ID))
+            .setExpectedWrittenOffset(15L)
+            .setEndOffset(20)
+            .setPut(putProto((Put) entries.get(0)))
+            .build()
+    );
+    assertThat(result, is(Optional.of(flushedOffset)));
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  public void shouldRetryWriteWalSegmentSyncWithErrorInFinish() {
+    // given:
+    var flushedOffset = 123L;
+    List<WalEntry> entries = Collections.singletonList(
+        new Put("foo".getBytes(), "bar".getBytes())
+    );
+
+    doThrow(new StatusRuntimeException(Status.UNAVAILABLE))
+        .when(writeWALSegmentRequestObserver)
+        .onCompleted();
+
+    when(asyncStub.writeWALSegmentStream(any()))
+        .thenAnswer(invocation -> writeWALSegmentRequestObserver)
+        .thenAnswer(invocation -> {
+          StreamObserver<dev.responsive.rs3.Rs3.WriteWALSegmentResult> responseObserver =
+              invocation.getArgument(0);
+          responseObserver.onNext(Rs3.WriteWALSegmentResult.newBuilder()
+                                      .setFlushedOffset(flushedOffset)
+                                      .build());
+          responseObserver.onCompleted();
+          reset(writeWALSegmentRequestObserver);
+          return writeWALSegmentRequestObserver;
+        });
+
+    // when:
+    final var result = client.writeWalSegment(
+        STORE_ID,
+        LSS_ID,
+        PSS_ID,
+        Optional.of(15L),
+        20,
+        entries
+    );
+
+    // then:
+    verify(writeWALSegmentRequestObserver).onNext(
+        Rs3.WriteWALSegmentRequest.newBuilder()
+            .setLssId(lssIdProto(LSS_ID))
+            .setPssId(PSS_ID)
+            .setStoreId(uuidProto(STORE_ID))
+            .setExpectedWrittenOffset(15L)
+            .setEndOffset(20)
+            .setPut(putProto((Put) entries.get(0)))
+            .build()
+    );
+    assertThat(result, is(Optional.of(flushedOffset)));
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  public void shouldTimeoutWriteWalSegmentSync() {
+    // given:
+    List<WalEntry> entries = Arrays.asList(
+        new Put("foo".getBytes(), "bar".getBytes()),
+        new Put("bar".getBytes(), "baz".getBytes())
+    );
+    when(asyncStub.writeWALSegmentStream(any()))
+        .thenAnswer(invocation -> {
+          StreamObserver<dev.responsive.rs3.Rs3.WriteWALSegmentResult> responseObserver =
+              invocation.getArgument(0);
+          responseObserver.onError(new StatusRuntimeException(Status.UNAVAILABLE));
+          return writeWALSegmentRequestObserver;
+        });
+
+
+    // when:
+    var startTimeMs = time.milliseconds();
+    assertThrows(RS3TimeoutException.class, () -> client.writeWalSegment(
+        STORE_ID,
+        LSS_ID,
+        PSS_ID,
+        Optional.of(15L),
+        20,
+        entries
+    ));
+
+    // then:
+    assertThat(time.milliseconds() - startTimeMs, is(retryTimeoutMs));
   }
 
   @Test
@@ -450,7 +705,7 @@ class GrpcRS3ClientTest {
     );
 
     // then:
-    assertThat(exception.getCause(), is(instanceOf(StatusRuntimeException.class)));
+    assertThat(exception.getCause(), instanceOf(StatusRuntimeException.class));
     assertThat(((StatusRuntimeException) exception.getCause()).getStatus(), is(Status.UNKNOWN));
   }
 
