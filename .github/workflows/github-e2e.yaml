@@ -102,12 +102,7 @@ jobs:
           password: ${{ secrets.ANTITHESIS_PASSWORD }}
           github_token: ${{ secrets.ANTITHESIS_GH_PAT }}
           config_image: us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test-config-${{ inputs.test-type }}:${{ steps.kafka_client_version.outputs.KAFKA_CLIENT_VERSION }}
-          images: >
-            us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test:${{ steps.kafka_client_version.outputs.KAFKA_CLIENT_VERSION }};
-            docker.io/mongo:5.0;
-            public.ecr.aws/j8q9y0n6/responsiveinc/rs3-antithesis:0.1.0-main.34.0;
-            minio/minio:RELEASE.2025-03-12T18-04-18Z;
-            minio/mc:RELEASE.2025-03-12T17-29-24Z
+          images: us-central1-docker.pkg.dev/molten-verve-216720/responsive-repository/e2e-test:${{ steps.kafka_client_version.outputs.KAFKA_CLIENT_VERSION }};docker.io/mongo:5.0;public.ecr.aws/j8q9y0n6/responsiveinc/rs3-antithesis:0.1.0-main.34.0;minio/minio:RELEASE.2025-03-12T18-04-18Z;minio/mc:RELEASE.2025-03-12T17-29-24Z
           description: "responsive antithesis test run"
           email_recipients: "antithesis-responsive-aaaamurlsqy6e3hxnx6ksnec5y@antithesisgroup.slack.com"
           additional_parameters: |-
