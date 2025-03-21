@@ -19,4 +19,9 @@ id = "013a57c3-16b3-44be-8de4-0d1083671cc6"
 pss = [{ id = 0 }, { id = 1 }, { id = 2 }, { id = 3 }, { id = 4 }, { id = 5 }, { id = 6 }, { id = 7 }]
 
 [cloud_provider]
-provider = "InMemory"
+provider = "Aws"
+
+[cloud_provider.aws]
+region = ""
+bucket = "rs3-antithesis"
+s3_endpoint = "http://minio:9000"
