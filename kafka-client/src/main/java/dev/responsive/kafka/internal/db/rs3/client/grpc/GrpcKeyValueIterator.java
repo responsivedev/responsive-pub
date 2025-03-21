@@ -2,6 +2,7 @@ package dev.responsive.kafka.internal.db.rs3.client.grpc;
 
 import com.google.protobuf.ByteString;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Exception;
+import dev.responsive.kafka.internal.db.rs3.client.RS3TransientException;
 import dev.responsive.kafka.internal.db.rs3.client.RangeBound;
 import dev.responsive.rs3.Rs3;
 import io.grpc.stub.StreamObserver;
@@ -55,6 +56,11 @@ public class GrpcKeyValueIterator implements KeyValueIterator<Bytes, byte[]> {
 
       @Override
       public Optional<KeyValue<Bytes, byte[]>> map(final StreamError error) {
+        if (error.exception instanceof RS3TransientException) {
+          
+        }
+
+
         // TODO: Retry on transient failures
         throw new RS3Exception(error.exception);
       }

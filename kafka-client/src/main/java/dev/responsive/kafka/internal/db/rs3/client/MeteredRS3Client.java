@@ -9,6 +9,8 @@ import java.util.Optional;
 import java.util.UUID;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
+import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.state.KeyValueIterator;
 
 public class MeteredRS3Client implements RS3Client {
   public static final String GROUP_NAME = "rs3-table-metrics";
@@ -88,6 +90,18 @@ public class MeteredRS3Client implements RS3Client {
     final Optional<byte[]> result = delegate.get(storeId, lssId, pssId, expectedWrittenOffset, key);
     getSensor.record(Duration.between(start, Instant.now()).toNanos());
     return result;
+  }
+
+  @Override
+  public KeyValueIterator<Bytes, byte[]> range(
+      final UUID storeId,
+      final LssId lssId,
+      final int pssId,
+      final Optional<Long> expectedWrittenOffset,
+      final RangeBound from,
+      final RangeBound to
+  ) {
+    return null;
   }
 
   public void close() {
