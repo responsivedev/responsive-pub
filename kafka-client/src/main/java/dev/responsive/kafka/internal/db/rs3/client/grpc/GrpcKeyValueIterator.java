@@ -8,19 +8,35 @@ import dev.responsive.rs3.Rs3;
 import io.grpc.stub.StreamObserver;
 import java.util.NoSuchElementException;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
+/**
+ * Internal iterator implementation which supports retries using RS3's asynchronous
+ * Range API.
+ */
 public class GrpcKeyValueIterator implements KeyValueIterator<Bytes, byte[]> {
   private final GrpcRangeRequestProxy requestProxy;
   private final GrpcMessageQueue<Message> queue;
   private RangeBound startBound;
+  private RangeResultObserver resultObserver;
 
-  public GrpcKeyValueIterator(GrpcRangeRequestProxy requestProxy) {
+  public GrpcKeyValueIterator(
+      RangeBound initialStartBound,
+      GrpcRangeRequestProxy requestProxy
+  ) {
     this.requestProxy = requestProxy;
     this.queue = new GrpcMessageQueue<>();
-    requestProxy.send(startBound, new ScanObserver());
+    this.startBound = initialStartBound;
+    sendRangeRequest();
+  }
+
+  private void sendRangeRequest() {
+    // Note that backoff on retry is handled internally by the request proxy
+    resultObserver = new RangeResultObserver();
+    requestProxy.send(startBound, resultObserver);
   }
 
   @Override
@@ -43,11 +59,28 @@ public class GrpcKeyValueIterator implements KeyValueIterator<Bytes, byte[]> {
 
   @Override
   public void close() {
-    // TODO:
+    if (resultObserver != null) {
+      resultObserver.cancel();
+    }
   }
 
   Optional<KeyValue<Bytes, byte[]>> peekNextKeyValue() {
-    final var message = queue.peek();
+    while (true) {
+      try {
+        final var message = queue.peek();
+        return tryUnwrapKeyValue(message);
+      } catch (RS3TransientException e) {
+        queue.poll();
+        sendRangeRequest();
+      } catch (RuntimeException e) {
+        // Leave unexpected errors in the queue so that they will continue
+        // to be propagated.
+        throw e;
+      }
+    }
+  }
+
+  private Optional<KeyValue<Bytes, byte[]>> tryUnwrapKeyValue(final Message message) {
     return message.map(new Mapper<>() {
       @Override
       public Optional<KeyValue<Bytes, byte[]>> map(final EndOfStream endOfStream) {
@@ -56,13 +89,7 @@ public class GrpcKeyValueIterator implements KeyValueIterator<Bytes, byte[]> {
 
       @Override
       public Optional<KeyValue<Bytes, byte[]>> map(final StreamError error) {
-        if (error.exception instanceof RS3TransientException) {
-          
-        }
-
-
-        // TODO: Retry on transient failures
-        throw new RS3Exception(error.exception);
+        throw GrpcRs3Util.wrapThrowable(error.exception);
       }
 
       @Override
@@ -81,10 +108,17 @@ public class GrpcKeyValueIterator implements KeyValueIterator<Bytes, byte[]> {
         .orElse(null);
   }
 
-  private class ScanObserver implements StreamObserver<Rs3.RangeResult> {
+  private class RangeResultObserver implements StreamObserver<Rs3.RangeResult> {
+    private final AtomicReference<Throwable> error = new AtomicReference<>();
+
     @Override
     public void onNext(final Rs3.RangeResult rangeResult) {
-      if (rangeResult.getType() == Rs3.RangeResult.Type.END_OF_STREAM) {
+      if (error.get() != null) {
+        throw new IllegalStateException(
+            "Failed to enqueue result since observer has already failed",
+            error.get()
+        );
+      } else if (rangeResult.getType() == Rs3.RangeResult.Type.END_OF_STREAM) {
         queue.put(new EndOfStream());
       } else {
         final var result = rangeResult.getResult();
@@ -94,12 +128,25 @@ public class GrpcKeyValueIterator implements KeyValueIterator<Bytes, byte[]> {
 
     @Override
     public void onError(final Throwable throwable) {
-      queue.put(new StreamError(throwable));
+      if (this.error.compareAndSet(null, throwable)) {
+        queue.put(new StreamError(throwable));
+      } else {
+        throw new IllegalStateException(
+            "Cannot set new exception since observer has already failed",
+            throwable
+        );
+      }
     }
 
     @Override
     public void onCompleted() {
-      queue.put(new StreamError(new StreamCompletedException("onCompleted fired")));
+      // We treat this as a transient error because we are looking for the explicit
+      // END_OF_STREAM result that is sent by the server.
+      onError(new StreamCompletedException("onCompleted fired"));
+    }
+
+    public void cancel() {
+      this.error.compareAndSet(null, new RS3Exception("Range result observer cancelled"));
     }
   }
 
@@ -131,6 +178,7 @@ public class GrpcKeyValueIterator implements KeyValueIterator<Bytes, byte[]> {
 
   private static class StreamError implements Message {
     private final Throwable exception;
+
     StreamError(final Throwable error) {
       this.exception = error;
     }
@@ -141,7 +189,9 @@ public class GrpcKeyValueIterator implements KeyValueIterator<Bytes, byte[]> {
     }
   }
 
-  private static class StreamCompletedException extends RS3Exception {
+  private static class StreamCompletedException extends RS3TransientException {
+    private static final long serialVersionUID = 0L;
+
     public StreamCompletedException(final String message) {
       super(message);
     }
@@ -149,7 +199,9 @@ public class GrpcKeyValueIterator implements KeyValueIterator<Bytes, byte[]> {
 
   private interface Mapper<T> {
     T map(EndOfStream endOfStream);
+
     T map(StreamError error);
+
     T map(Result result);
   }
 

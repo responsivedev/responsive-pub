@@ -9,21 +9,34 @@ import org.junit.jupiter.api.Test;
 class GrpcMessageQueueTest {
 
   @Test
-  public void test() {
+  public void shouldPropagateAllValuesInOrder() throws Exception {
     final var queue = new GrpcMessageQueue<Integer>();
     final var executor = Executors.newFixedThreadPool(2);
-    executor.submit(() -> {
+    final var producer = executor.submit(() -> {
       for (int i = 0; i < 100; i++) {
         queue.put(i);
       }
+      return true;
     });
-    executor.submit(() -> {
+    final var consumer = executor.submit(() -> {
       for (int i = 0; i < 100; i++) {
         assertThat(queue.poll(), is(i));
       }
+      return true;
     });
-
     executor.shutdown();
+    assertThat(producer.get(), is(true));
+    assertThat(consumer.get(), is(true));
+  }
+
+  @Test
+  public void shouldBlockPollWhileWaitingValue() throws Exception {
+    final var queue = new GrpcMessageQueue<Integer>();
+    final var executor = Executors.newFixedThreadPool(1);
+    final var consumer = executor.submit(queue::poll);
+    assertThat(consumer.isDone(), is(false));
+    queue.put(5);
+    assertThat(consumer.get(), is(5));
   }
 
 }

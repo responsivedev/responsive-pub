@@ -101,8 +101,15 @@ public class MeteredRS3Client implements RS3Client {
       final RangeBound from,
       final RangeBound to
   ) {
-    return null;
-  }
+    return delegate.range(
+        storeId,
+        lssId,
+        pssId,
+        expectedWrittenOffset,
+        from,
+        to
+    );
+g  }
 
   public void close() {
     this.metrics.removeSensor(GET_SENSOR_NAME);

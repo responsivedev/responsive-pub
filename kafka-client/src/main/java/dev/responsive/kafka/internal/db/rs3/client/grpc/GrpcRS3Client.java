@@ -20,8 +20,8 @@ import dev.responsive.kafka.internal.db.rs3.client.LssId;
 import dev.responsive.kafka.internal.db.rs3.client.Put;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Client;
 import dev.responsive.kafka.internal.db.rs3.client.RS3TimeoutException;
-import dev.responsive.kafka.internal.db.rs3.client.RangeBound;
 import dev.responsive.kafka.internal.db.rs3.client.RS3TransientException;
+import dev.responsive.kafka.internal.db.rs3.client.RangeBound;
 import dev.responsive.kafka.internal.db.rs3.client.StreamSenderMessageReceiver;
 import dev.responsive.kafka.internal.db.rs3.client.WalEntry;
 import dev.responsive.rs3.RS3Grpc;
@@ -44,6 +44,10 @@ public class GrpcRS3Client implements RS3Client {
   private final PssStubsProvider stubs;
   private final Time time;
   private final long retryTimeoutMs;
+
+  // Using Kafka default backoff settings initially. We can pull them up
+  // if there is ever strong reason.
+  private final ExponentialBackoff backoff = new ExponentialBackoff(50, 2, 1000, 0.2);
 
   @VisibleForTesting
   GrpcRS3Client(final PssStubsProvider stubs, final Time time, final long retryTimeoutMs) {
@@ -97,10 +101,6 @@ public class GrpcRS3Client implements RS3Client {
       long deadlineMs,
       Supplier<String> opDescription
   ) {
-    // Using Kafka default backoff settings initially. We can pull them up
-    // if there is ever strong reason.
-    final var backoff = new ExponentialBackoff(50, 2, 1000, 0.2);
-
     var retries = 0;
     long currentTimeMs;
 
@@ -225,12 +225,12 @@ public class GrpcRS3Client implements RS3Client {
         .setStoreId(uuidProto(storeId))
         .setLssId(lssIdProto(lssId))
         .setPssId(pssId)
-        .setFrom(protoBound(from))
         .setTo(protoBound(to));
     expectedWrittenOffset.ifPresent(requestBuilder::setExpectedWrittenOffset);
+    final Supplier<String> rangeDescription = () -> "Range(storeId=" + storeId + ", lssId=" + lssId + ", pssId=" + pssId + ")";
     final var asyncStub = stubs.stubs(storeId, pssId).asyncStub();
-    final var rangeProxy = new RangeProxy(requestBuilder, asyncStub);
-    return new GrpcKeyValueIterator(rangeProxy);
+    final var rangeProxy = new RangeProxy(requestBuilder, asyncStub, rangeDescription);
+    return new GrpcKeyValueIterator(from, rangeProxy);
   }
 
   @Override
@@ -327,22 +327,49 @@ public class GrpcRS3Client implements RS3Client {
   private class RangeProxy implements GrpcRangeRequestProxy {
     private final Rs3.RangeRequest.Builder requestBuilder;
     private final RS3Grpc.RS3Stub stub;
+    private final Supplier<String> opDescription;
+    private int attempts = 0;
+    private long deadlineMs = Long.MAX_VALUE; // Set upon the first retry
 
     private RangeProxy(
         final Rs3.RangeRequest.Builder requestBuilder,
-        final RS3Grpc.RS3Stub stub
+        final RS3Grpc.RS3Stub stub,
+        final Supplier<String> opDescription
     ) {
       this.requestBuilder = requestBuilder;
       this.stub = stub;
+      this.opDescription = opDescription;
     }
 
     @Override
     public void send(final RangeBound start, final StreamObserver<Rs3.RangeResult> resultObserver) {
       requestBuilder.setFrom(protoBound(start));
-      withRetry(
-          () -> stub.range(requestBuilder.build(), resultObserver),
-          () -> "Range()"
-      );
+
+      while (true) {
+        try {
+          final var currentTimeMs = time.milliseconds();
+          if (currentTimeMs >= deadlineMs) {
+            throw new RS3TimeoutException("Timeout while attempting operation " + opDescription.get());
+          }
+
+          if (attempts > 0) {
+            deadlineMs = Math.min(deadlineMs, currentTimeMs + retryTimeoutMs);
+            time.sleep(Math.min(
+                backoff.backoff(attempts),
+                Math.max(0, deadlineMs - currentTimeMs))
+            );
+          }
+
+          attempts += 1;
+          stub.range(requestBuilder.build(), resultObserver);
+          return;
+        } catch (final Throwable t) {
+          var wrappedException = GrpcRs3Util.wrapThrowable(t);
+          if (!(wrappedException instanceof RS3TransientException)) {
+            throw wrappedException;
+          }
+        }
+      }
     }
   }
 

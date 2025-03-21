@@ -7,7 +7,8 @@ import java.util.concurrent.atomic.AtomicReference;
 public class GrpcMessageQueue<T> {
   private final ConcurrentLinkedQueue<T> queue = new ConcurrentLinkedQueue<>();
   private final Semaphore semaphore = new Semaphore(0);
-  private final AtomicReference<Sync> sync = new AtomicReference<>(new Sync(ReaderState.IDLE, 0, 0));
+  private final AtomicReference<Sync> sync =
+      new AtomicReference<>(new Sync(ReaderState.IDLE, 0, 0));
 
   void put(T message) {
     queue.offer(message);
