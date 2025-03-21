@@ -109,7 +109,7 @@ public class MeteredRS3Client implements RS3Client {
         from,
         to
     );
-g  }
+  }
 
   public void close() {
     this.metrics.removeSensor(GET_SENSOR_NAME);
