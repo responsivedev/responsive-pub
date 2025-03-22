@@ -15,6 +15,8 @@ package dev.responsive.kafka.internal.db.rs3.client;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.state.KeyValueIterator;
 
 public interface RS3Client {
   CurrentOffsets getCurrentOffsets(UUID storeId, LssId lssId, int pssId);
@@ -42,6 +44,15 @@ public interface RS3Client {
       int pssId,
       Optional<Long> expectedWrittenOffset,
       byte[] key
+  );
+
+  KeyValueIterator<Bytes, byte[]> range(
+      UUID storeId,
+      LssId lssId,
+      int pssId,
+      Optional<Long> expectedWrittenOffset,
+      RangeBound from,
+      RangeBound to
   );
 
   void close();
