@@ -227,7 +227,8 @@ public class GrpcRS3Client implements RS3Client {
         .setPssId(pssId)
         .setTo(protoBound(to));
     expectedWrittenOffset.ifPresent(requestBuilder::setExpectedWrittenOffset);
-    final Supplier<String> rangeDescription = () -> "Range(storeId=" + storeId + ", lssId=" + lssId + ", pssId=" + pssId + ")";
+    final Supplier<String> rangeDescription =
+        () -> "Range(storeId=" + storeId + ", lssId=" + lssId + ", pssId=" + pssId + ")";
     final var asyncStub = stubs.stubs(storeId, pssId).asyncStub();
     final var rangeProxy = new RangeProxy(requestBuilder, asyncStub, rangeDescription);
     return new GrpcKeyValueIterator(from, rangeProxy);
@@ -349,7 +350,8 @@ public class GrpcRS3Client implements RS3Client {
         try {
           final var currentTimeMs = time.milliseconds();
           if (currentTimeMs >= deadlineMs) {
-            throw new RS3TimeoutException("Timeout while attempting operation " + opDescription.get());
+            throw new RS3TimeoutException("Timeout while attempting operation "
+                                              + opDescription.get());
           }
 
           if (attempts > 0) {
