@@ -22,22 +22,6 @@ services:
       retries: 100
     networks:
       backend:
-        ipv4_address: 10.0.0.62
-  createbucket:
-    image: docker.io/minio/mc:RELEASE.2025-03-12T17-29-24Z
-    depends_on:
-      minio:
-        condition: service_healthy
-    entrypoint: >
-      /bin/sh -c "
-      sleep 5 # give time for minio to start (antithesis does not support dependencies) 
-      /usr/bin/mc config host add minio http://minio:9000 antithesis antithesis;
-      /usr/bin/mc rm -r --force minio/rs3-antithesis;
-      /usr/bin/mc mb minio/rs3-antithesis;
-      exit 0;
-      "
-    networks:
-      backend:
         ipv4_address: 10.0.0.61
   rs3:
     # Remember to update the image in github-e2e.yaml as well
@@ -49,8 +33,8 @@ services:
       - 50051:50051
     environment:
       CONFIG_FILE: /etc/rs3/rs3.toml
-    depends_on:
-      - createbucket
+      AWS_ACCESS_KEY_ID: antithesis
+      AWS_SECRET_ACCESS_KEY: antithesis
     volumes:
       - ./volumes/rs3.toml:/etc/rs3/rs3.toml
     networks:
