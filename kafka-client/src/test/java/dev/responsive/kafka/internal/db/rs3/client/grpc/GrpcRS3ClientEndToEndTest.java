@@ -314,7 +314,8 @@ class GrpcRS3ClientEndToEndTest {
       final var keyValueResult = Rs3.KeyValue
           .newBuilder()
           .setKey(req.getKey());
-      final var value = table.get(req.getKey());
+      final var key = Bytes.wrap(req.getKey().toByteArray());
+      final var value = table.get(key);
       if (value != null) {
         keyValueResult.setValue(ByteString.copyFrom(value.get()));
       }
