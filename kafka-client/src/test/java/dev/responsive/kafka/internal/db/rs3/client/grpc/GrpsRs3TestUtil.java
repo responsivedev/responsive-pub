@@ -13,6 +13,8 @@
 package dev.responsive.kafka.internal.db.rs3.client.grpc;
 
 import com.google.protobuf.ByteString;
+import dev.responsive.kafka.internal.db.rs3.client.Range;
+import dev.responsive.kafka.internal.db.rs3.client.RangeBound;
 import dev.responsive.rs3.Rs3;
 
 public class GrpsRs3TestUtil {
@@ -33,6 +35,25 @@ public class GrpsRs3TestUtil {
     return Rs3.RangeResult.newBuilder()
         .setType(Rs3.RangeResult.Type.END_OF_STREAM)
         .build();
+  }
+
+  public static Range newRangeFromProto(Rs3.RangeRequest req) {
+    final var startBound = newRangeBoundFromProto(req.getFrom());
+    final var endBound = newRangeBoundFromProto(req.getTo());
+    return new Range(startBound, endBound);
+  }
+
+  private static RangeBound newRangeBoundFromProto(Rs3.Bound bound) {
+    switch (bound.getType()) {
+      case EXCLUSIVE:
+        return RangeBound.exclusive(bound.getKey().toByteArray());
+      case INCLUSIVE:
+        return RangeBound.inclusive(bound.getKey().toByteArray());
+      case UNBOUNDED:
+        return RangeBound.unbounded();
+      default:
+        throw new IllegalArgumentException(String.format("Unknown range type %s", bound.getType()));
+    }
   }
 
 }

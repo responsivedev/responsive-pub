@@ -24,12 +24,16 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Internal iterator implementation which supports retries using RS3's asynchronous
  * Range API.
  */
 public class GrpcKeyValueIterator implements KeyValueIterator<Bytes, byte[]> {
+  private static final Logger LOG = LoggerFactory.getLogger(GrpcKeyValueIterator.class);
+
   private final GrpcRangeRequestProxy requestProxy;
   private final GrpcMessageQueue<Message> queue;
   private RangeBound startBound;
@@ -126,10 +130,7 @@ public class GrpcKeyValueIterator implements KeyValueIterator<Bytes, byte[]> {
     @Override
     public void onNext(final Rs3.RangeResult rangeResult) {
       if (error.get() != null) {
-        throw new IllegalStateException(
-            "Failed to enqueue result since observer has already failed",
-            error.get()
-        );
+        LOG.debug("Failed to send range result since the observer has already failed");
       } else if (rangeResult.getType() == Rs3.RangeResult.Type.END_OF_STREAM) {
         queue.put(new EndOfStream());
       } else {
@@ -143,10 +144,7 @@ public class GrpcKeyValueIterator implements KeyValueIterator<Bytes, byte[]> {
       if (this.error.compareAndSet(null, throwable)) {
         queue.put(new StreamError(throwable));
       } else {
-        throw new IllegalStateException(
-            "Cannot set new exception since observer has already failed",
-            throwable
-        );
+        LOG.debug("Failed to record error since the observer has already failed", throwable);
       }
     }
 
