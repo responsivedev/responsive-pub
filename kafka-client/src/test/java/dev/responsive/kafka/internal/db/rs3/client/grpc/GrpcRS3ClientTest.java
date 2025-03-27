@@ -33,6 +33,7 @@ import dev.responsive.kafka.internal.db.rs3.client.LssId;
 import dev.responsive.kafka.internal.db.rs3.client.Put;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Exception;
 import dev.responsive.kafka.internal.db.rs3.client.RS3TimeoutException;
+import dev.responsive.kafka.internal.db.rs3.client.Store;
 import dev.responsive.kafka.internal.db.rs3.client.WalEntry;
 import dev.responsive.rs3.RS3Grpc;
 import dev.responsive.rs3.Rs3;
@@ -754,10 +755,10 @@ class GrpcRS3ClientTest {
     );
 
     // when:
-    final var result = client.listTables();
+    final var result = client.listStores();
 
     // then:
-    final var expected = new dev.responsive.kafka.internal.db.rs3.client.Table(
+    final var expected = new Store(
         STORE_ID, List.of(PSS_ID, PSS_ID_2)
     );
     assertThat(result.size(), is(1));
@@ -772,7 +773,7 @@ class GrpcRS3ClientTest {
         .thenReturn(ListTablesResult.newBuilder().build());
 
     // when:
-    final var result = client.listTables();
+    final var result = client.listStores();
 
     // then:
     assertThat(result.size(), is(0));
@@ -787,7 +788,7 @@ class GrpcRS3ClientTest {
         .thenReturn(ListTablesResult.newBuilder().build());
 
     // when:
-    final var result = client.listTables();
+    final var result = client.listStores();
 
     // then:
     assertThat(result.size(), is(0));
@@ -803,7 +804,7 @@ class GrpcRS3ClientTest {
     // when:
     final RS3Exception exception = assertThrows(
         RS3Exception.class,
-        () -> client.listTables()
+        () -> client.listStores()
     );
 
     // then:
@@ -819,7 +820,7 @@ class GrpcRS3ClientTest {
         .thenThrow(new StatusRuntimeException(Status.UNAVAILABLE));
 
     // when:
-    assertThrows(RS3TimeoutException.class, () -> client.listTables());
+    assertThrows(RS3TimeoutException.class, () -> client.listStores());
 
     // then:
     var endTimeMs = time.milliseconds();

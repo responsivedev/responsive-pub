@@ -26,7 +26,7 @@ import dev.responsive.kafka.internal.db.rs3.client.RS3Client;
 import dev.responsive.kafka.internal.db.rs3.client.RS3TimeoutException;
 import dev.responsive.kafka.internal.db.rs3.client.RS3TransientException;
 import dev.responsive.kafka.internal.db.rs3.client.StreamSenderMessageReceiver;
-import dev.responsive.kafka.internal.db.rs3.client.Table;
+import dev.responsive.kafka.internal.db.rs3.client.Store;
 import dev.responsive.kafka.internal.db.rs3.client.WalEntry;
 import dev.responsive.rs3.RS3Grpc;
 import dev.responsive.rs3.Rs3;
@@ -236,7 +236,7 @@ public class GrpcRS3Client implements RS3Client {
   }
 
   @Override
-  public List<Table> listTables() {
+  public List<Store> listStores() {
     final var request = Rs3.ListTablesRequest.newBuilder().build();
     final RS3Grpc.RS3BlockingStub stub = stubs.globalStubs().syncStub();
 
@@ -247,7 +247,7 @@ public class GrpcRS3Client implements RS3Client {
 
     return result.getTablesList()
         .stream()
-        .map(t -> new Table(uuidProtoToUuid(t.getStoreId()), t.getPssIdsList()))
+        .map(t -> new Store(uuidProtoToUuid(t.getStoreId()), t.getPssIdsList()))
         .collect(Collectors.toList());
   }
 

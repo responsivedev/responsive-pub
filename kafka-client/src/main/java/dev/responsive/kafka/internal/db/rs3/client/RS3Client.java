@@ -44,7 +44,7 @@ public interface RS3Client {
       byte[] key
   );
 
-  List<Table> listTables();
+  List<Store> listStores();
 
   void close();
 }

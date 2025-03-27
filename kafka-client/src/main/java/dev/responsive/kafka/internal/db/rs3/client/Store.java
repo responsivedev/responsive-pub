@@ -3,12 +3,12 @@ package dev.responsive.kafka.internal.db.rs3.client;
 import java.util.List;
 import java.util.UUID;
 
-public class Table {
+public class Store {
 
   private final UUID storeId;
   private final List<Integer> pssIds;
 
-  public Table(final UUID storeId, final List<Integer> pssIds) {
+  public Store(final UUID storeId, final List<Integer> pssIds) {
     this.storeId = storeId;
     this.pssIds = pssIds;
   }
@@ -26,12 +26,12 @@ public class Table {
       return false;
     }
 
-    final Table table = (Table) o;
+    final Store store = (Store) o;
 
-    if (!storeId.equals(table.storeId)) {
+    if (!storeId.equals(store.storeId)) {
       return false;
     }
-    return pssIds.equals(table.pssIds);
+    return pssIds.equals(store.pssIds);
   }
 
   @Override
