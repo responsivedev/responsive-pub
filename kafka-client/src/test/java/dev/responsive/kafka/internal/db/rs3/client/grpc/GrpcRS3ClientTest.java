@@ -33,12 +33,11 @@ import dev.responsive.kafka.internal.db.rs3.client.LssId;
 import dev.responsive.kafka.internal.db.rs3.client.Put;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Exception;
 import dev.responsive.kafka.internal.db.rs3.client.RS3TimeoutException;
-import dev.responsive.kafka.internal.db.rs3.client.Store;
 import dev.responsive.kafka.internal.db.rs3.client.WalEntry;
 import dev.responsive.rs3.RS3Grpc;
 import dev.responsive.rs3.Rs3;
-import dev.responsive.rs3.Rs3.ListTablesResult;
-import dev.responsive.rs3.Rs3.Table;
+import dev.responsive.rs3.Rs3.ListStoresResult;
+import dev.responsive.rs3.Rs3.Store;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
@@ -743,11 +742,11 @@ class GrpcRS3ClientTest {
   }
 
   @Test
-  public void shouldListTables() {
+  public void shouldListStores() {
     // given:
-    when(stub.listTables(any())).thenReturn(
-        ListTablesResult.newBuilder()
-            .addTables(Table.newBuilder()
+    when(stub.listStores(any())).thenReturn(
+        ListStoresResult.newBuilder()
+            .addStores(Store.newBuilder()
                            .setStoreId(uuidToUuidProto(STORE_ID))
                            .addAllPssIds(List.of(PSS_ID, PSS_ID_2))
                            .build()
@@ -758,47 +757,47 @@ class GrpcRS3ClientTest {
     final var result = client.listStores();
 
     // then:
-    final var expected = new Store(
+    final var expected = new dev.responsive.kafka.internal.db.rs3.client.Store(
         STORE_ID, List.of(PSS_ID, PSS_ID_2)
     );
     assertThat(result.size(), is(1));
     assertThat(result.get(0), equalTo(expected));
-    verify(stub).listTables(Rs3.ListTablesRequest.newBuilder().build());
+    verify(stub).listStores(Rs3.ListStoresRequest.newBuilder().build());
   }
 
   @Test
-  public void shouldHandleEmptyTablesList() {
+  public void shouldHandleEmptyStoresList() {
     // given:
-    when(stub.listTables(any()))
-        .thenReturn(ListTablesResult.newBuilder().build());
+    when(stub.listStores(any()))
+        .thenReturn(ListStoresResult.newBuilder().build());
 
     // when:
     final var result = client.listStores();
 
     // then:
     assertThat(result.size(), is(0));
-    verify(stub).listTables(Rs3.ListTablesRequest.newBuilder().build());
+    verify(stub).listStores(Rs3.ListStoresRequest.newBuilder().build());
   }
 
   @Test
-  public void shouldRetryListTables() {
+  public void shouldRetryListStores() {
     // given:
-    when(stub.listTables(any()))
+    when(stub.listStores(any()))
         .thenThrow(new StatusRuntimeException(Status.UNAVAILABLE))
-        .thenReturn(ListTablesResult.newBuilder().build());
+        .thenReturn(ListStoresResult.newBuilder().build());
 
     // when:
     final var result = client.listStores();
 
     // then:
     assertThat(result.size(), is(0));
-    verify(stub, times(2)).listTables(Rs3.ListTablesRequest.newBuilder().build());
+    verify(stub, times(2)).listStores(Rs3.ListStoresRequest.newBuilder().build());
   }
 
   @Test
-  public void shouldPropagateUnexpectedExceptionsFromListTables() {
+  public void shouldPropagateUnexpectedExceptionsFromListStores() {
     // given:
-    when(stub.listTables(any()))
+    when(stub.listStores(any()))
         .thenThrow(new StatusRuntimeException(Status.UNKNOWN));
 
     // when:
@@ -813,10 +812,10 @@ class GrpcRS3ClientTest {
   }
 
   @Test
-  public void shouldTimeoutListTables() {
+  public void shouldTimeoutListStores() {
     // given:
     var startTimeMs = time.milliseconds();
-    when(stub.listTables(any()))
+    when(stub.listStores(any()))
         .thenThrow(new StatusRuntimeException(Status.UNAVAILABLE));
 
     // when:
