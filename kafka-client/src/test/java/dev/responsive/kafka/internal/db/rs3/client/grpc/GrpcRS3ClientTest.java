@@ -36,8 +36,6 @@ import dev.responsive.kafka.internal.db.rs3.client.RS3TimeoutException;
 import dev.responsive.kafka.internal.db.rs3.client.WalEntry;
 import dev.responsive.rs3.RS3Grpc;
 import dev.responsive.rs3.Rs3;
-import dev.responsive.rs3.Rs3.KeyValue;
-import dev.responsive.rs3.Rs3.ListTablesRequest;
 import dev.responsive.rs3.Rs3.ListTablesResult;
 import dev.responsive.rs3.Rs3.Table;
 import io.grpc.Status;
