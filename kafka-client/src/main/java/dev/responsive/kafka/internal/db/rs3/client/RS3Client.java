@@ -55,5 +55,7 @@ public interface RS3Client {
       RangeBound to
   );
 
+  List<Store> listStores();
+
   void close();
 }

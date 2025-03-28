@@ -20,11 +20,16 @@ class PssStubsProvider {
   private static final Logger LOG = LoggerFactory.getLogger(PssStubsProvider.class);
 
   private final ManagedChannel channel;
+  private final Stubs globalStubs;
   private final ConcurrentMap<StubsKey, Stubs> stubs = new ConcurrentHashMap<>();
 
   @VisibleForTesting
   PssStubsProvider(final ManagedChannel channel) {
     this.channel = channel;
+    this.globalStubs = new Stubs(
+        RS3Grpc.newBlockingStub(channel),
+        RS3Grpc.newStub(channel)
+    );
   }
 
   static PssStubsProvider connect(
@@ -58,6 +63,10 @@ class PssStubsProvider {
           .withInterceptors(new PssHeadersInterceptor(storeId, pssId));
       return new Stubs(syncStub, asyncStub);
     });
+  }
+
+  Stubs globalStubs() {
+    return globalStubs;
   }
 
   @VisibleForTesting
