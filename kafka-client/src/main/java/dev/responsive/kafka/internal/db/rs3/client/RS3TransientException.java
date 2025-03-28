@@ -18,4 +18,8 @@ public class RS3TransientException extends RS3Exception {
   public RS3TransientException(final Throwable cause) {
     super(cause);
   }
+
+  public RS3TransientException(final String message) {
+    super(message);
+  }
 }

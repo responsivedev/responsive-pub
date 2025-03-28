@@ -25,11 +25,13 @@ import dev.responsive.kafka.internal.db.rs3.client.Put;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Client;
 import dev.responsive.kafka.internal.db.rs3.client.RS3TimeoutException;
 import dev.responsive.kafka.internal.db.rs3.client.RS3TransientException;
+import dev.responsive.kafka.internal.db.rs3.client.RangeBound;
 import dev.responsive.kafka.internal.db.rs3.client.Store;
 import dev.responsive.kafka.internal.db.rs3.client.StreamSenderMessageReceiver;
 import dev.responsive.kafka.internal.db.rs3.client.WalEntry;
 import dev.responsive.rs3.RS3Grpc;
 import dev.responsive.rs3.Rs3;
+import io.grpc.stub.StreamObserver;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -37,8 +39,10 @@ import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.state.KeyValueIterator;
 
 public class GrpcRS3Client implements RS3Client {
   public static final long WAL_OFFSET_NONE = Long.MAX_VALUE;
@@ -46,6 +50,10 @@ public class GrpcRS3Client implements RS3Client {
   private final PssStubsProvider stubs;
   private final Time time;
   private final long retryTimeoutMs;
+
+  // Using Kafka default backoff settings initially. We can pull them up
+  // if there is ever strong reason.
+  private final ExponentialBackoff backoff = new ExponentialBackoff(50, 2, 1000, 0.2);
 
   @VisibleForTesting
   GrpcRS3Client(final PssStubsProvider stubs, final Time time, final long retryTimeoutMs) {
@@ -81,6 +89,14 @@ public class GrpcRS3Client implements RS3Client {
     );
   }
 
+  private void withRetry(Runnable grpcOperation, Supplier<String> opDescription) {
+    final Supplier<Void> voidSupplier = () -> {
+      grpcOperation.run();
+      return null;
+    };
+    withRetry(voidSupplier, opDescription);
+  }
+
   private <T> T withRetry(Supplier<T> grpcOperation, Supplier<String> opDescription) {
     final var deadlineMs = time.milliseconds() + retryTimeoutMs;
     return withRetryDeadline(grpcOperation, deadlineMs, opDescription);
@@ -91,10 +107,6 @@ public class GrpcRS3Client implements RS3Client {
       long deadlineMs,
       Supplier<String> opDescription
   ) {
-    // Using Kafka default backoff settings initially. We can pull them up
-    // if there is ever strong reason.
-    final var backoff = new ExponentialBackoff(50, 2, 1000, 0.2);
-
     var retries = 0;
     long currentTimeMs;
 
@@ -207,6 +219,28 @@ public class GrpcRS3Client implements RS3Client {
   }
 
   @Override
+  public KeyValueIterator<Bytes, byte[]> range(
+      final UUID storeId,
+      final LssId lssId,
+      final int pssId,
+      final Optional<Long> expectedWrittenOffset,
+      RangeBound from,
+      RangeBound to
+  ) {
+    final var requestBuilder = Rs3.RangeRequest.newBuilder()
+        .setStoreId(uuidToUuidProto(storeId))
+        .setLssId(lssIdProto(lssId))
+        .setPssId(pssId)
+        .setTo(protoBound(to));
+    expectedWrittenOffset.ifPresent(requestBuilder::setExpectedWrittenOffset);
+    final Supplier<String> rangeDescription =
+        () -> "Range(storeId=" + storeId + ", lssId=" + lssId + ", pssId=" + pssId + ")";
+    final var asyncStub = stubs.stubs(storeId, pssId).asyncStub();
+    final var rangeProxy = new RangeProxy(requestBuilder, asyncStub, rangeDescription);
+    return new GrpcKeyValueIterator(from, rangeProxy);
+  }
+
+  @Override
   public Optional<byte[]> get(
       final UUID storeId,
       final LssId lssId,
@@ -270,6 +304,83 @@ public class GrpcRS3Client implements RS3Client {
   private void checkField(final Supplier<Boolean> check, final String field) {
     if (!check.get()) {
       throw new RuntimeException("rs3 resp proto missing field " + field);
+    }
+  }
+
+  private Rs3.Bound protoBound(RangeBound bound) {
+    return bound.map(new RangeBound.Mapper<>() {
+      @Override
+      public Rs3.Bound map(final RangeBound.InclusiveBound b) {
+        return Rs3.Bound.newBuilder()
+            .setType(Rs3.Bound.Type.INCLUSIVE)
+            .setKey(ByteString.copyFrom(b.key()))
+            .build();
+      }
+
+      @Override
+      public Rs3.Bound map(final RangeBound.ExclusiveBound b) {
+        return Rs3.Bound.newBuilder()
+            .setType(Rs3.Bound.Type.EXCLUSIVE)
+            .setKey(ByteString.copyFrom(b.key()))
+            .build();
+      }
+
+      @Override
+      public Rs3.Bound map(final RangeBound.Unbounded b) {
+        return Rs3.Bound.newBuilder()
+            .setType(Rs3.Bound.Type.UNBOUNDED)
+            .build();
+      }
+    });
+  }
+
+  private class RangeProxy implements GrpcRangeRequestProxy {
+    private final Rs3.RangeRequest.Builder requestBuilder;
+    private final RS3Grpc.RS3Stub stub;
+    private final Supplier<String> opDescription;
+    private int attempts = 0;
+    private long deadlineMs = Long.MAX_VALUE; // Set upon the first retry
+
+    private RangeProxy(
+        final Rs3.RangeRequest.Builder requestBuilder,
+        final RS3Grpc.RS3Stub stub,
+        final Supplier<String> opDescription
+    ) {
+      this.requestBuilder = requestBuilder;
+      this.stub = stub;
+      this.opDescription = opDescription;
+    }
+
+    @Override
+    public void send(final RangeBound start, final StreamObserver<Rs3.RangeResult> resultObserver) {
+      requestBuilder.setFrom(protoBound(start));
+
+      while (true) {
+        try {
+          final var currentTimeMs = time.milliseconds();
+          if (currentTimeMs >= deadlineMs) {
+            throw new RS3TimeoutException("Timeout while attempting operation "
+                                              + opDescription.get());
+          }
+
+          if (attempts > 0) {
+            deadlineMs = Math.min(deadlineMs, currentTimeMs + retryTimeoutMs);
+            time.sleep(Math.min(
+                backoff.backoff(attempts),
+                Math.max(0, deadlineMs - currentTimeMs))
+            );
+          }
+
+          attempts += 1;
+          stub.range(requestBuilder.build(), resultObserver);
+          return;
+        } catch (final Throwable t) {
+          var wrappedException = GrpcRs3Util.wrapThrowable(t);
+          if (!(wrappedException instanceof RS3TransientException)) {
+            throw wrappedException;
+          }
+        }
+      }
     }
   }
 

@@ -21,12 +21,12 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 //  basically the same exact thing but with one remote partition iterator and
 //  one local commit buffer iterator, assuming we can extract all the commit buffer
 //  specific implementation details (which should probably be done anyways)
-public class MultiPartitionRangeIterator<K extends Comparable<K>, V>
+public class MergeKeyValueIterator<K extends Comparable<K>, V>
     implements KeyValueIterator<K, V> {
 
   private final PriorityQueue<NextResult> nextResults = new PriorityQueue<>();
 
-  public MultiPartitionRangeIterator(final List<KeyValueIterator<K, V>> delegates) {
+  public MergeKeyValueIterator(final List<KeyValueIterator<K, V>> delegates) {
     for (final var iter : delegates) {
       if (iter.hasNext()) {
         final NextResult next = new NextResult(iter.next(), iter);
