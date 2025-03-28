@@ -12,6 +12,10 @@
 
 package dev.responsive.kafka.internal.db.rs3.client.grpc;
 
+import static dev.responsive.kafka.internal.utils.Utils.lssIdProto;
+import static dev.responsive.kafka.internal.utils.Utils.uuidProtoToUuid;
+import static dev.responsive.kafka.internal.utils.Utils.uuidToUuidProto;
+
 import com.google.common.annotations.VisibleForTesting;
 import com.google.protobuf.ByteString;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
@@ -21,6 +25,7 @@ import dev.responsive.kafka.internal.db.rs3.client.Put;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Client;
 import dev.responsive.kafka.internal.db.rs3.client.RS3TimeoutException;
 import dev.responsive.kafka.internal.db.rs3.client.RS3TransientException;
+import dev.responsive.kafka.internal.db.rs3.client.Store;
 import dev.responsive.kafka.internal.db.rs3.client.StreamSenderMessageReceiver;
 import dev.responsive.kafka.internal.db.rs3.client.WalEntry;
 import dev.responsive.rs3.RS3Grpc;
@@ -31,6 +36,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.Time;
 
@@ -57,7 +63,7 @@ public class GrpcRS3Client implements RS3Client {
     final RS3Grpc.RS3BlockingStub stub = stubs.stubs(storeId, pssId).syncStub();
 
     final Rs3.GetOffsetsRequest request = Rs3.GetOffsetsRequest.newBuilder()
-        .setStoreId(uuidProto(storeId))
+        .setStoreId(uuidToUuidProto(storeId))
         .setLssId(lssIdProto(lssId))
         .setPssId(pssId)
         .build();
@@ -130,7 +136,7 @@ public class GrpcRS3Client implements RS3Client {
     final var streamSender = new GrpcStreamSender<WalEntry, Rs3.WriteWALSegmentRequest>(
         entry -> {
           final var entryBuilder = Rs3.WriteWALSegmentRequest.newBuilder()
-              .setStoreId(uuidProto(storeId))
+              .setStoreId(uuidToUuidProto(storeId))
               .setLssId(lssIdProto(lssId))
               .setPssId(pssId)
               .setEndOffset(endOffset)
@@ -209,7 +215,7 @@ public class GrpcRS3Client implements RS3Client {
       final byte[] key
   ) {
     final var requestBuilder = Rs3.GetRequest.newBuilder()
-        .setStoreId(uuidProto(storeId))
+        .setStoreId(uuidToUuidProto(storeId))
         .setLssId(lssIdProto(lssId))
         .setPssId(pssId)
         .setKey(ByteString.copyFrom(key));
@@ -229,17 +235,20 @@ public class GrpcRS3Client implements RS3Client {
     return Optional.of(keyValue.getValue().toByteArray());
   }
 
-  private Rs3.UUID uuidProto(final UUID uuid) {
-    return Rs3.UUID.newBuilder()
-        .setHigh(uuid.getMostSignificantBits())
-        .setLow(uuid.getLeastSignificantBits())
-        .build();
-  }
+  @Override
+  public List<Store> listStores() {
+    final var request = Rs3.ListStoresRequest.newBuilder().build();
+    final RS3Grpc.RS3BlockingStub stub = stubs.globalStubs().syncStub();
 
-  private Rs3.LSSId lssIdProto(final LssId lssId) {
-    return Rs3.LSSId.newBuilder()
-        .setId(lssId.id())
-        .build();
+    final Rs3.ListStoresResult result = withRetry(
+        () -> stub.listStores(request),
+        () -> "ListStores()"
+    );
+
+    return result.getStoresList()
+        .stream()
+        .map(t -> new Store(uuidProtoToUuid(t.getStoreId()), t.getPssIdsList()))
+        .collect(Collectors.toList());
   }
 
   private void addWalEntryToSegment(

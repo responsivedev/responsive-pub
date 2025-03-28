@@ -12,6 +12,9 @@
 
 package dev.responsive.kafka.internal.utils;
 
+import dev.responsive.kafka.internal.db.rs3.client.LssId;
+import dev.responsive.rs3.Rs3;
+import java.util.UUID;
 import java.util.regex.Pattern;
 import org.apache.kafka.common.utils.Bytes;
 import org.slf4j.Logger;
@@ -125,5 +128,22 @@ public final class Utils {
     } catch (final IndexOutOfBoundsException e) {
       return null;
     }
+  }
+
+  public static UUID uuidProtoToUuid(final Rs3.UUID uuid) {
+    return new UUID(uuid.getHigh(), uuid.getLow());
+  }
+
+  public static Rs3.UUID uuidToUuidProto(final UUID uuid) {
+    return Rs3.UUID.newBuilder()
+        .setHigh(uuid.getMostSignificantBits())
+        .setLow(uuid.getLeastSignificantBits())
+        .build();
+  }
+
+  public static Rs3.LSSId lssIdProto(final LssId lssId) {
+    return Rs3.LSSId.newBuilder()
+        .setId(lssId.id())
+        .build();
   }
 }
