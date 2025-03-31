@@ -56,7 +56,7 @@ public class TTDWindowTable extends TTDTable<WindowedKey>
   }
 
   @Override
-  public WindowFlushManager init(final int kafkaPartition) {
+  public SegmentedWindowFlushManager init(final int kafkaPartition) {
     return new TTDWindowFlushManager(this, kafkaPartition, partitioner);
   }
 
@@ -154,7 +154,7 @@ public class TTDWindowTable extends TTDTable<WindowedKey>
     return 0;
   }
 
-  private static class TTDWindowFlushManager extends WindowFlushManager {
+  private static class TTDWindowFlushManager extends SegmentedWindowFlushManager {
 
     private final String logPrefix;
     private final TTDWindowTable table;

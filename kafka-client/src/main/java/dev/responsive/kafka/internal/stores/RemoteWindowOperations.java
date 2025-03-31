@@ -13,6 +13,7 @@
 package dev.responsive.kafka.internal.stores;
 
 import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_BACKEND_TYPE_CONFIG;
+import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadMetrics;
 import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadSessionClients;
 import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadStoreRegistry;
 import static dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration.NO_COMMITTED_OFFSET;
@@ -30,12 +31,14 @@ import dev.responsive.kafka.internal.db.WindowFlushManager;
 import dev.responsive.kafka.internal.db.WindowedKeySpec;
 import dev.responsive.kafka.internal.db.mongo.ResponsiveMongoClient;
 import dev.responsive.kafka.internal.db.partitioning.WindowSegmentPartitioner;
+import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
 import dev.responsive.kafka.internal.utils.Iterators;
 import dev.responsive.kafka.internal.utils.Result;
 import dev.responsive.kafka.internal.utils.SessionClients;
 import dev.responsive.kafka.internal.utils.StoreUtil;
 import dev.responsive.kafka.internal.utils.TableName;
+import dev.responsive.kafka.internal.utils.Utils;
 import dev.responsive.kafka.internal.utils.WindowedKey;
 import java.util.Collection;
 import java.util.Map;
@@ -53,7 +56,7 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.slf4j.Logger;
 
-public class SegmentedOperations implements WindowOperations {
+public class RemoteWindowOperations implements WindowOperations {
 
   private final Logger log;
 
@@ -70,7 +73,7 @@ public class SegmentedOperations implements WindowOperations {
 
   private final long initialStreamTime;
 
-  public static SegmentedOperations create(
+  public static RemoteWindowOperations create(
       final TableName name,
       final StateStoreContext storeContext,
       final ResponsiveWindowParams params,
@@ -81,7 +84,7 @@ public class SegmentedOperations implements WindowOperations {
 
     final var log = new LogContext(
         String.format("window-store [%s] ", name.kafkaName())
-    ).logger(SegmentedOperations.class);
+    ).logger(RemoteWindowOperations.class);
     final var context = asInternalProcessorContext(storeContext);
 
     final SessionClients sessionClients = loadSessionClients(appConfigs);
@@ -106,6 +109,22 @@ public class SegmentedOperations implements WindowOperations {
       case MONGO_DB:
         table = createMongo(params, sessionClients, partitioner, responsiveConfig);
         break;
+      case RS3:
+        final var responsiveMetrics = loadMetrics(appConfigs);
+        final var scopeBuilder = responsiveMetrics.storeLevelMetricScopeBuilder(
+            Utils.extractThreadIdFromThreadName(Thread.currentThread().getName()),
+            changelog,
+            params.name().tableName()
+        );
+
+        table = createRs3(
+            params,
+            sessionClients,
+            responsiveConfig,
+            responsiveMetrics,
+            scopeBuilder
+        );
+        break;
       case NONE:
         log.error("Must configure a storage backend type using the config {}",
                   STORAGE_BACKEND_TYPE_CONFIG);
@@ -115,7 +134,7 @@ public class SegmentedOperations implements WindowOperations {
         throw new IllegalStateException("Unrecognized value: " + sessionClients.storageBackend());
     }
 
-    final WindowFlushManager flushManager = table.init(changelog.partition());
+    final WindowFlushManager<?> flushManager = table.init(changelog.partition());
 
     log.info("Remote table {} is available for querying.", name.tableName());
 
@@ -152,7 +171,7 @@ public class SegmentedOperations implements WindowOperations {
       );
       storeRegistry.registerStore(registration);
 
-      return new SegmentedOperations(
+      return new RemoteWindowOperations(
           log,
           context,
           params,
@@ -213,8 +232,28 @@ public class SegmentedOperations implements WindowOperations {
     }
   }
 
+  private static RemoteWindowTable<?> createRs3(
+      final ResponsiveWindowParams params,
+      final SessionClients sessionClients,
+      final ResponsiveConfig config,
+      final ResponsiveMetrics responsiveMetrics,
+      final ResponsiveMetrics.MetricScopeBuilder scopeBuilder
+  ) {
+    if (params.schemaType() == SchemaTypes.WindowSchema.STREAM || params.retainDuplicates()) {
+      throw new UnsupportedOperationException("Duplicate retention is not yet supported in RS3");
+    }
+
+    // TODO: Pass through retention period once we have support for TTL
+    return sessionClients.rs3TableFactory().windowTable(
+        params.name().tableName(),
+        config,
+        responsiveMetrics,
+        scopeBuilder
+    );
+  }
+
   @SuppressWarnings("rawtypes")
-  public SegmentedOperations(
+  public RemoteWindowOperations(
       final Logger log,
       final InternalProcessorContext context,
       final ResponsiveWindowParams params,
