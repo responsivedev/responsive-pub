@@ -26,6 +26,7 @@ import dev.responsive.kafka.internal.db.BatchFlusher;
 import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.RemoteTableSpecFactory;
 import dev.responsive.kafka.internal.db.RemoteWindowTable;
+import dev.responsive.kafka.internal.db.SegmentedWindowFlushManager;
 import dev.responsive.kafka.internal.db.WindowFlushManager;
 import dev.responsive.kafka.internal.db.WindowedKeySpec;
 import dev.responsive.kafka.internal.db.mongo.ResponsiveMongoClient;
@@ -53,7 +54,7 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.slf4j.Logger;
 
-public class SegmentedOperations implements WindowOperations {
+public class RemoteWindowOperations implements WindowOperations {
 
   private final Logger log;
 
@@ -70,7 +71,7 @@ public class SegmentedOperations implements WindowOperations {
 
   private final long initialStreamTime;
 
-  public static SegmentedOperations create(
+  public static RemoteWindowOperations create(
       final TableName name,
       final StateStoreContext storeContext,
       final ResponsiveWindowParams params,
@@ -81,7 +82,7 @@ public class SegmentedOperations implements WindowOperations {
 
     final var log = new LogContext(
         String.format("window-store [%s] ", name.kafkaName())
-    ).logger(SegmentedOperations.class);
+    ).logger(RemoteWindowOperations.class);
     final var context = asInternalProcessorContext(storeContext);
 
     final SessionClients sessionClients = loadSessionClients(appConfigs);
@@ -115,7 +116,7 @@ public class SegmentedOperations implements WindowOperations {
         throw new IllegalStateException("Unrecognized value: " + sessionClients.storageBackend());
     }
 
-    final WindowFlushManager flushManager = table.init(changelog.partition());
+    final WindowFlushManager<?> flushManager = table.init(changelog.partition());
 
     log.info("Remote table {} is available for querying.", name.tableName());
 
@@ -152,7 +153,7 @@ public class SegmentedOperations implements WindowOperations {
       );
       storeRegistry.registerStore(registration);
 
-      return new SegmentedOperations(
+      return new RemoteWindowOperations(
           log,
           context,
           params,
@@ -214,7 +215,7 @@ public class SegmentedOperations implements WindowOperations {
   }
 
   @SuppressWarnings("rawtypes")
-  public SegmentedOperations(
+  public RemoteWindowOperations(
       final Logger log,
       final InternalProcessorContext context,
       final ResponsiveWindowParams params,

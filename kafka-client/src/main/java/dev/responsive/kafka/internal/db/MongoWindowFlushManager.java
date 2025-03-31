@@ -28,7 +28,7 @@ import java.util.function.Function;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
-public class MongoWindowFlushManager extends WindowFlushManager {
+public class MongoWindowFlushManager extends SegmentedWindowFlushManager {
 
   private final String logPrefix;
   private final Logger log;
