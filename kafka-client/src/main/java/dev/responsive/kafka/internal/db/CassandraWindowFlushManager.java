@@ -22,7 +22,7 @@ import dev.responsive.kafka.internal.utils.WindowedKey;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
-public class CassandraWindowFlushManager extends WindowFlushManager {
+public class CassandraWindowFlushManager extends SegmentedWindowFlushManager {
 
   private final String logPrefix;
   private final Logger log;

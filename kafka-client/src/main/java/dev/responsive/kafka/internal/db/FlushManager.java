@@ -15,6 +15,11 @@ package dev.responsive.kafka.internal.db;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.stores.RemoteWriteResult;
 
+/**
+ *
+ * @param <K> Key type
+ * @param <P> Table partition type
+ */
 public interface FlushManager<K, P> {
 
   String tableName();

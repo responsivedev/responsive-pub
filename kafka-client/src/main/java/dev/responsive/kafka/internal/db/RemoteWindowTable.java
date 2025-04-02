@@ -25,7 +25,7 @@ public interface RemoteWindowTable<S> extends RemoteTable<WindowedKey, S> {
    * @return a {@link WindowFlushManager} that gives the callee access
    * to run statements on {@code table}
    */
-  WindowFlushManager init(
+  WindowFlushManager<?> init(
       final int kafkaPartition
   );
 

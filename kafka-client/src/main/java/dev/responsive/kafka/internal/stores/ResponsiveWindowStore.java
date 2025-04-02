@@ -109,7 +109,7 @@ public class ResponsiveWindowStore
         throw new IllegalStateException("Store " + name() + " was opened as a standby");
       }
 
-      windowOperations = SegmentedOperations.create(
+      windowOperations = RemoteWindowOperations.create(
           name,
           storeContext,
           params,
