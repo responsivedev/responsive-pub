@@ -20,6 +20,7 @@ class GrpcMessageQueueTest {
     });
     final var consumer = executor.submit(() -> {
       for (int i = 0; i < 100; i++) {
+        assertThat(queue.peek(), is(i));
         assertThat(queue.poll(), is(i));
       }
       return true;
