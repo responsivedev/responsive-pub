@@ -128,7 +128,7 @@ class RS3WindowFlushManager implements WindowFlushManager<Integer> {
 
   @Override
   public long streamTime() {
-    return 0;
+    return streamTime;
   }
 
   public Optional<Long> writtenOffset(final int pssId) {
