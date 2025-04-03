@@ -412,6 +412,7 @@ public class GrpcRS3Client implements RS3Client {
     private final Time time;
     private final String host;
     private final int port;
+    private final Supplier<String> apiKeySupplier;
 
     private boolean useTls = ResponsiveConfig.RS3_TLS_ENABLED_DEFAULT;
     private long retryTimeoutMs = ResponsiveConfig.RS3_RETRY_TIMEOUT_DEFAULT;
@@ -419,11 +420,13 @@ public class GrpcRS3Client implements RS3Client {
     public Connector(
         final Time time,
         final String host,
-        final int port
+        final int port,
+        final Supplier<String> apiKeySupplier
     ) {
       this.time = Objects.requireNonNull(time);
       this.host = Objects.requireNonNull(host);
       this.port = port;
+      this.apiKeySupplier = Objects.requireNonNull(apiKeySupplier);
     }
 
     public void useTls(boolean useTls) {
@@ -437,7 +440,7 @@ public class GrpcRS3Client implements RS3Client {
     public RS3Client connect() {
       String target = String.format("%s:%d", host, port);
       return new GrpcRS3Client(
-          PssStubsProvider.connect(target, useTls),
+          PssStubsProvider.connect(target, useTls, apiKeySupplier.get()),
           time,
           retryTimeoutMs
       );
