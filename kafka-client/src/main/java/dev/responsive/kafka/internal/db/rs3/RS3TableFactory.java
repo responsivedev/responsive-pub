@@ -20,11 +20,11 @@ import dev.responsive.kafka.internal.db.rs3.client.WalEntry;
 import dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRS3Client;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.stores.TtlResolver;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.function.Supplier;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -36,7 +36,7 @@ public class RS3TableFactory {
   private final GrpcRS3Client.Connector connector;
 
   // kafka store names to track which stores we've created in RS3
-  private final Set<String> createdStores = new HashSet<>();
+  private final Set<String> createdStores = new ConcurrentSkipListSet<>();
 
   public RS3TableFactory(GrpcRS3Client.Connector connector) {
     this.connector = connector;
