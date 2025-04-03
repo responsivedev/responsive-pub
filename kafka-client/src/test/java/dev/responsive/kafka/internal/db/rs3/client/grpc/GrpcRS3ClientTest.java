@@ -850,7 +850,7 @@ class GrpcRS3ClientTest {
     assertThat(result.isPresent(), is(false));
     verify(stub).createStore(Rs3.CreateStoreRequest.newBuilder()
                                  .setStoreId(uuidToUuidProto(STORE_ID))
-                                 .setLogicalShards(5)
+                                 .setLogicalShards(logicalShards)
                                  .setOptions(options.toProto()).build());
   }
 
@@ -899,7 +899,7 @@ class GrpcRS3ClientTest {
 
     // then:
     assertThat(result.isEmpty(), is(true));
-    verify(stub).createStore(Rs3.CreateStoreRequest.newBuilder()
+    verify(stub, times(2)).createStore(Rs3.CreateStoreRequest.newBuilder()
                                  .setStoreId(uuidToUuidProto(STORE_ID))
                                  .setLogicalShards(logicalShards)
                                  .setOptions(options.toProto()).build());

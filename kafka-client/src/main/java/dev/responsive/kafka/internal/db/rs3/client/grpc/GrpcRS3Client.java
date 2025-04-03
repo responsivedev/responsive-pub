@@ -259,7 +259,11 @@ public class GrpcRS3Client implements RS3Client {
       final int logicalShards,
       final CreateStoreOptions options
   ) {
-    final var request = Rs3.CreateStoreRequest.newBuilder().build();
+    final var request = Rs3.CreateStoreRequest.newBuilder()
+        .setStoreId(uuidToUuidProto(storeId))
+        .setLogicalShards(logicalShards)
+        .setOptions(options.toProto())
+        .build();
     final RS3Grpc.RS3BlockingStub stub = stubs.globalStubs().syncStub();
 
     final Rs3.CreateStoreResult result = withRetry(
