@@ -177,15 +177,14 @@ public class ResponsiveGlobalConsumer extends DelegatingConsumer<byte[], byte[]>
     static SingletonConsumerRecords of(final ConsumerRecords<byte[], byte[]> records) {
       Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> map = new HashMap<>();
       records.partitions().forEach(p -> map.put(p, records.records(p)));
-      return new SingletonConsumerRecords(map);
+      return new SingletonConsumerRecords(map, records.nextOffsets());
     }
 
     public SingletonConsumerRecords(
-        final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> records
+        final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> records,
+        final Map<TopicPartition, OffsetAndMetadata> nextOffsets
     ) {
-      super(records, Collections.emptyMap());
-      throw new RuntimeException("fixme");
-      // TODO(sophie): need to pass in the actual next offsets here?
+      super(records, nextOffsets);
     }
 
     @Override

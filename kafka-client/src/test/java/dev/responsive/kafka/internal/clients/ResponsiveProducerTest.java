@@ -168,8 +168,8 @@ public class ResponsiveProducerTest {
         PARTITION1, new OffsetAndMetadata(10L),
         PARTITION2, new OffsetAndMetadata(11L)
     );
-    verify(listener1).onSendOffsetsToTransaction(expected, "foo");
-    verify(listener2).onSendOffsetsToTransaction(expected, "foo");
+    verify(listener1).onSendOffsetsToTransaction(expected, "groupId");
+    verify(listener2).onSendOffsetsToTransaction(expected, "groupId");
   }
 
   @Test

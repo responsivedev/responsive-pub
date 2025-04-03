@@ -12,6 +12,7 @@
 
 package org.apache.kafka.streams.processor.internals;
 
+import static java.util.Collections.singleton;
 import static org.apache.kafka.streams.StreamsConfig.BOOTSTRAP_SERVERS_CONFIG;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
@@ -24,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -48,12 +50,16 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
+import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.StreamThread.StateListener;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -260,7 +266,8 @@ public class GlobalStreamThreadIntegrationTest {
   private GlobalStreamThread getThread(
       final TestStoreSupplier storeSupplier,
       final StateRestoreListener restoreListener,
-      final File tempDir) {
+      final File tempDir
+  ) {
     final Time time = Time.SYSTEM;
     final InternalTopologyBuilder builder = new InternalTopologyBuilder();
     builder.addGlobalStore(
@@ -270,17 +277,32 @@ public class GlobalStreamThreadIntegrationTest {
         null,
         globalTopic,
         "global-processor",
-        () -> new ContextualProcessor<>() {
-          private KeyValueStore<Object, Object> global;
-
+        new ProcessorSupplier<>() {
           @Override
-          public void init(final ProcessorContext<Void, Void> context) {
-            global = context.getStateStore("global");
+          public Set<StoreBuilder<?>> stores() {
+            return singleton(Stores.keyValueStoreBuilder(
+                storeSupplier,
+                new ByteArraySerde(),
+                new ByteArraySerde()).withLoggingDisabled()
+            );
           }
 
           @Override
-          public void process(final Record<Object, Object> record) {
-            global.put(record.key(), record.value());
+          public Processor<Object, Object, Void, Void> get() {
+            return new ContextualProcessor<>() {
+              private KeyValueStore<Object, Object> global;
+
+              @Override
+              public void init(final ProcessorContext<Void, Void> context) {
+                global = context.getStateStore("global");
+              }
+
+              @Override
+              public void process(final Record<Object, Object> record) {
+                global.put(record.key(), record.value());
+              }
+
+            };
           }
         },
         false
