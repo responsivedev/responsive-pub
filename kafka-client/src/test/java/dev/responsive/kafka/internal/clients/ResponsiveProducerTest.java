@@ -30,6 +30,7 @@ import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicReference;
+import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.Producer;
@@ -159,7 +160,7 @@ public class ResponsiveProducerTest {
             PARTITION1, new OffsetAndMetadata(10),
             PARTITION2, new OffsetAndMetadata(11)
         ),
-        "foo"
+        new ConsumerGroupMetadata("groupId")
     );
 
     // then:
@@ -167,14 +168,17 @@ public class ResponsiveProducerTest {
         PARTITION1, new OffsetAndMetadata(10L),
         PARTITION2, new OffsetAndMetadata(11L)
     );
-    verify(listener1).onSendOffsetsToTransaction(expected, "foo");
-    verify(listener2).onSendOffsetsToTransaction(expected, "foo");
+    verify(listener1).onSendOffsetsToTransaction(expected, "groupId");
+    verify(listener2).onSendOffsetsToTransaction(expected, "groupId");
   }
 
   @Test
   public void shouldThrowExceptionFromCommitCallback() {
     // given:
-    producer.sendOffsetsToTransaction(Map.of(PARTITION1, new OffsetAndMetadata(10)), "foo");
+    producer.sendOffsetsToTransaction(
+        Map.of(PARTITION1, new OffsetAndMetadata(10)),
+        new ConsumerGroupMetadata("groupId")
+    );
     doThrow(new RuntimeException("oops")).when(listener1).onProducerCommit();
 
     // when/then:

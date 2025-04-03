@@ -24,6 +24,7 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
+import org.apache.kafka.clients.consumer.SubscriptionPattern;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
@@ -86,12 +87,6 @@ public class ResponsiveConsumer<K, V> extends DelegatingConsumer<K, V> {
   }
 
   @Override
-  @Deprecated
-  public ConsumerRecords<K, V> poll(final long timeout) {
-    return poll(Duration.ofMillis(timeout));
-  }
-
-  @Override
   public ConsumerRecords<K, V> poll(final Duration timeout) {
     var records = super.poll(timeout);
     for (final Listener listener : listeners) {
@@ -120,6 +115,20 @@ public class ResponsiveConsumer<K, V> extends DelegatingConsumer<K, V> {
   public void subscribe(final Pattern pattern) {
     throw new IllegalStateException("Unexpected call to subscribe(Pattern) on main consumer"
                                         + " without a rebalance listener");
+  }
+
+  @Override
+  public void subscribe(
+      final SubscriptionPattern pattern,
+      final ConsumerRebalanceListener callback
+  ) {
+    super.subscribe(pattern, callback);
+  }
+
+  @Override
+  public void subscribe(final SubscriptionPattern pattern) {
+    throw new IllegalStateException("Unexpected call to subscribe(SubscriptionPattern) on main"
+                                        + " consumer without a rebalance listener");
   }
 
   @Override

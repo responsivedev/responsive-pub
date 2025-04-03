@@ -26,17 +26,12 @@ import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.common.Metric;
-import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class ResponsiveProducer<K, V> implements Producer<K, V> {
-  private final Producer<K, V> wrapped;
+public class ResponsiveProducer<K, V> extends DelegatingProducer<K, V> {
   private final List<Listener> listeners;
   private final Logger logger;
 
@@ -69,40 +64,18 @@ public class ResponsiveProducer<K, V> implements Producer<K, V> {
       final Producer<K, V> wrapped,
       final List<Listener> listeners
   ) {
+    super(wrapped);
     this.logger = LoggerFactory.getLogger(
         ResponsiveProducer.class.getName() + "." + Objects.requireNonNull(clientid));
-    this.wrapped = Objects.requireNonNull(wrapped);
     this.listeners = Objects.requireNonNull(listeners);
   }
-
-  @Override
-  public void initTransactions() {
-    wrapped.initTransactions();
-  }
-
-  @Override
-  public void beginTransaction() throws ProducerFencedException {
-    wrapped.beginTransaction();
-  }
-
-  @Override
-  @SuppressWarnings("deprecation")
-  public void sendOffsetsToTransaction(
-      final Map<TopicPartition, OffsetAndMetadata> offsets,
-      final String consumerGroupId
-  ) throws ProducerFencedException {
-    wrapped.sendOffsetsToTransaction(offsets, consumerGroupId);
-    for (final var l : listeners) {
-      l.onSendOffsetsToTransaction(offsets, consumerGroupId);
-    }
-  }
-
+  
   @Override
   public void sendOffsetsToTransaction(
       final Map<TopicPartition, OffsetAndMetadata> offsets,
       final ConsumerGroupMetadata groupMetadata
   ) throws ProducerFencedException {
-    wrapped.sendOffsetsToTransaction(offsets, groupMetadata);
+    super.sendOffsetsToTransaction(offsets, groupMetadata);
     for (final var l : listeners) {
       l.onSendOffsetsToTransaction(offsets, groupMetadata.groupId());
     }
@@ -110,13 +83,13 @@ public class ResponsiveProducer<K, V> implements Producer<K, V> {
 
   @Override
   public void commitTransaction() throws ProducerFencedException {
-    wrapped.commitTransaction();
+    super.commitTransaction();
     listeners.forEach(Listener::onProducerCommit);
   }
 
   @Override
   public void abortTransaction() throws ProducerFencedException {
-    wrapped.abortTransaction();
+    super.abortTransaction();
     listeners.forEach(Listener::onAbort);
   }
 
@@ -125,7 +98,7 @@ public class ResponsiveProducer<K, V> implements Producer<K, V> {
     for (final Listener listener : listeners) {
       record = listener.onSend(record);
     }
-    return new RecordingFuture(wrapped.send(record), listeners);
+    return new RecordingFuture(super.send(record), listeners);
   }
 
   @Override
@@ -134,39 +107,19 @@ public class ResponsiveProducer<K, V> implements Producer<K, V> {
       record = listener.onSend(record);
     }
     return new RecordingFuture(
-        wrapped.send(record, new RecordingCallback(callback, listeners)), listeners
+        super.send(record, new RecordingCallback(callback, listeners)), listeners
     );
   }
 
   @Override
-  public void flush() {
-    wrapped.flush();
-  }
-
-  @Override
-  public List<PartitionInfo> partitionsFor(final String topic) {
-    return wrapped.partitionsFor(topic);
-  }
-
-  @Override
-  public Map<MetricName, ? extends Metric> metrics() {
-    return wrapped.metrics();
-  }
-
-  @Override
-  public Uuid clientInstanceId(final Duration duration) {
-    return wrapped.clientInstanceId(duration);
-  }
-
-  @Override
   public void close() {
-    wrapped.close();
+    super.close();
     closeListeners();
   }
 
   @Override
   public void close(final Duration timeout) {
-    wrapped.close();
+    super.close();
     closeListeners();
   }
 

@@ -522,12 +522,6 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
     }
 
     @Override
-    @SuppressWarnings("deprecation")
-    public ConsumerRecords<byte[], byte[]> poll(long timeoutMs) {
-      return record(super.poll(timeoutMs));
-    }
-
-    @Override
     public ConsumerRecords<byte[], byte[]> poll(Duration timeout) {
       return record(super.poll(timeout));
     }

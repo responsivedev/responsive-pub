@@ -13,7 +13,6 @@
 package dev.responsive.kafka.internal.config;
 
 import static dev.responsive.kafka.internal.config.ResponsiveStreamsConfig.verifyNoStandbys;
-import static dev.responsive.kafka.internal.config.ResponsiveStreamsConfig.verifyNotEosV1;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.Map;
@@ -56,16 +55,4 @@ class ResponsiveStreamsConfigTest {
     )));
   }
 
-  @SuppressWarnings("deprecation")
-  @Test
-  public void shouldThrowOnEOSV1() {
-    assertThrows(
-        ConfigException.class,
-        () -> verifyNotEosV1(new StreamsConfig(Map.of(
-            StreamsConfig.APPLICATION_ID_CONFIG, "foo",
-            CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "foo.bar",
-            StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE
-        )))
-    );
-  }
 }
