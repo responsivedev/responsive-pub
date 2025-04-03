@@ -48,6 +48,7 @@ import dev.responsive.kafka.internal.db.mongo.CollectionCreationOptions;
 import dev.responsive.kafka.internal.db.mongo.ResponsiveMongoClient;
 import dev.responsive.kafka.internal.db.rs3.RS3TableFactory;
 import dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRS3Client;
+import dev.responsive.kafka.internal.license.exception.LicenseUseViolationException;
 import dev.responsive.kafka.internal.license.model.CloudLicenseV1;
 import dev.responsive.kafka.internal.license.model.LicenseInfo;
 import dev.responsive.kafka.internal.license.model.TimedTrialV1;
@@ -531,9 +532,17 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
           break;
         case RS3:
           LOG.info("Using rs3 responsive store");
+          if (!(license instanceof UsageBasedV1)) {
+            throw new LicenseUseViolationException("rs3 can only be used with usage based license");
+          }
           final var rs3Host = responsiveConfig.getString(RS3_HOSTNAME_CONFIG);
           final var rs3Port = responsiveConfig.getInt(RS3_PORT_CONFIG);
-          final var rs3Connector = new GrpcRS3Client.Connector(time, rs3Host, rs3Port);
+          final var rs3Connector = new GrpcRS3Client.Connector(
+              time,
+              rs3Host,
+              rs3Port,
+              () -> ((UsageBasedV1) license).key()
+          );
           rs3Connector.retryTimeoutMs(responsiveConfig.getLong(RS3_RETRY_TIMEOUT_CONFIG));
           rs3Connector.useTls(responsiveConfig.getBoolean(RS3_TLS_ENABLED_CONFIG));
 

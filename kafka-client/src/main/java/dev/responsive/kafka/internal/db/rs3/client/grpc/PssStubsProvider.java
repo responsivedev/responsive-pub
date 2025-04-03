@@ -1,12 +1,14 @@
 package dev.responsive.kafka.internal.db.rs3.client.grpc;
 
 import com.google.common.annotations.VisibleForTesting;
+import dev.responsive.kafka.internal.db.rs3.client.grpc.middleware.ApiKeyInterceptor;
 import dev.responsive.kafka.internal.db.rs3.client.grpc.middleware.PssHeadersInterceptor;
 import dev.responsive.rs3.RS3Grpc;
 import io.grpc.ChannelCredentials;
 import io.grpc.Grpc;
 import io.grpc.InsecureChannelCredentials;
 import io.grpc.ManagedChannel;
+import io.grpc.ManagedChannelBuilder;
 import io.grpc.TlsChannelCredentials;
 import java.util.Objects;
 import java.util.UUID;
@@ -34,7 +36,8 @@ class PssStubsProvider {
 
   static PssStubsProvider connect(
       final String target,
-      final boolean useTls
+      final boolean useTls,
+      final String apiKey
   ) {
     final ChannelCredentials channelCredentials;
     if (useTls) {
@@ -43,9 +46,12 @@ class PssStubsProvider {
       channelCredentials = InsecureChannelCredentials.create();
     }
     LOG.info("Connecting to {}...", target);
-    final ManagedChannel channel = Grpc.newChannelBuilder(target, channelCredentials)
-        .keepAliveTime(5, TimeUnit.SECONDS)
-        .build();
+    ManagedChannelBuilder<?> channelBuilder = Grpc.newChannelBuilder(target, channelCredentials)
+        .keepAliveTime(5, TimeUnit.SECONDS);
+    if (apiKey != null) {
+      channelBuilder = channelBuilder.intercept(new ApiKeyInterceptor(apiKey));
+    }
+    final ManagedChannel channel = channelBuilder.build();
     LOG.info("build grpc client with retries");
     return new PssStubsProvider(channel);
   }
