@@ -4,13 +4,6 @@ import dev.responsive.kafka.internal.utils.WindowedKey;
 import java.nio.ByteBuffer;
 import org.apache.kafka.common.utils.Bytes;
 
-/**
- * 1: key-timestamp
- * 2. prefix-timestamp-suffix
- * 3.
- *
- * range scans not possible with any kind of hash
- */
 public class RS3WindowedKeySerde {
 
   public byte[] serialize(WindowedKey key) {
