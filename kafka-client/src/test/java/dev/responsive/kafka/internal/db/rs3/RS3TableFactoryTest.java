@@ -1,5 +1,6 @@
 package dev.responsive.kafka.internal.db.rs3;
 
+import static dev.responsive.kafka.internal.stores.TtlResolver.NO_TTL;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -55,8 +56,10 @@ class RS3TableFactoryTest {
     final RS3KVTable rs3Table = (RS3KVTable) factory.kvTable(
         table,
         config,
+        NO_TTL,
         metrics,
-        scopeBuilder
+        scopeBuilder,
+        () -> 5
     );
     assertEquals(uuid, rs3Table.storedId().toString());
   }
@@ -71,7 +74,7 @@ class RS3TableFactoryTest {
     final RS3TableFactory factory = newTestFactory();
     assertThrows(
         ConfigException.class,
-        () -> factory.kvTable(table, config, metrics, scopeBuilder)
+        () -> factory.kvTable(table, config, NO_TTL, metrics, scopeBuilder, () -> 5)
     );
   }
 
