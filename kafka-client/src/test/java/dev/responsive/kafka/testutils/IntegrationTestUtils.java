@@ -421,7 +421,7 @@ public final class IntegrationTestUtils {
         if (System.nanoTime() > end) {
           throw new TimeoutException(
               "Timed out trying to read " + numEvents + " events from " + partitions
-                  + ". Read " + result);
+                  + ". Read " + result.size() + " events: " + result);
         }
       }
       return result;

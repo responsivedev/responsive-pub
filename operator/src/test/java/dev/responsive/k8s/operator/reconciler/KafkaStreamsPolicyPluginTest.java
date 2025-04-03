@@ -220,7 +220,7 @@ class KafkaStreamsPolicyPluginTest {
     final Optional<InformerEventSource<Deployment, ResponsivePolicy>> src
         = maybePullSrc(sources, Deployment.class);
     assert src.isPresent();
-    final var s2pMapper = src.get().getConfiguration()
+    final var s2pMapper = src.get().configuration()
         .getSecondaryToPrimaryMapper();
     final var ids = s2pMapper.toPrimaryResourceIDs(deployment);
     assertThat(ids, contains(new ResourceID("bar", "foo")));
@@ -235,7 +235,7 @@ class KafkaStreamsPolicyPluginTest {
     final Optional<InformerEventSource<Deployment, ResponsivePolicy>> src
         = maybePullSrc(sources, Deployment.class);
     assert src.isPresent();
-    final var s2pMapper = src.get().getConfiguration()
+    final var s2pMapper = src.get().configuration()
         .getPrimaryToSecondaryMapper();
     final var ids = s2pMapper.toSecondaryResourceIDs(policy);
     assertThat(ids, contains(new ResourceID("baz", "biz")));
@@ -469,7 +469,7 @@ class KafkaStreamsPolicyPluginTest {
     final Optional<InformerEventSource<StatefulSet, ResponsivePolicy>> src
         = maybePullSrc(sources, StatefulSet.class);
     assert src.isPresent();
-    final var s2pMapper = src.get().getConfiguration()
+    final var s2pMapper = src.get().configuration()
         .getSecondaryToPrimaryMapper();
     final var ids = s2pMapper.toPrimaryResourceIDs(statefulSet);
     assertThat(ids, contains(new ResourceID("bar", "foo")));
@@ -484,7 +484,7 @@ class KafkaStreamsPolicyPluginTest {
     final Optional<InformerEventSource<StatefulSet, ResponsivePolicy>> src
         = maybePullSrc(sources, StatefulSet.class);
     assert src.isPresent();
-    final var s2pMapper = src.get().getConfiguration()
+    final var s2pMapper = src.get().configuration()
         .getPrimaryToSecondaryMapper();
     final var ids = s2pMapper.toSecondaryResourceIDs(policy);
     assertThat(ids, contains(new ResourceID("baz", "biz")));
@@ -634,7 +634,7 @@ class KafkaStreamsPolicyPluginTest {
   ) {
     for (final EventSource source : sources.values()) {
       if (source instanceof InformerEventSource<?, ?>) {
-        if (((InformerEventSource<?, ?>) source).getConfiguration().getResourceClass()
+        if (((InformerEventSource<?, ?>) source).configuration().getResourceClass()
             .equals(clazz)) {
           return Optional.of((InformerEventSource<R, ResponsivePolicy>) source);
         }

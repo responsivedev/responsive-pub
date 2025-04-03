@@ -44,7 +44,6 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Serdes.ByteArraySerde;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.StateRestoreListener;
@@ -56,7 +55,6 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
-import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -263,23 +261,16 @@ public class GlobalStreamThreadIntegrationTest {
       final TestStoreSupplier storeSupplier,
       final StateRestoreListener restoreListener,
       final File tempDir) {
-    final Time time = new SystemTime();
+    final Time time = Time.SYSTEM;
     final InternalTopologyBuilder builder = new InternalTopologyBuilder();
     builder.addGlobalStore(
-        new StoreBuilderWrapper(
-          new KeyValueStoreBuilder<>(
-              storeSupplier,
-              new ByteArraySerde(),
-              new ByteArraySerde(),
-              time).withLoggingDisabled()
-        ),
         "global",
         null,
         null,
         null,
         globalTopic,
         "global-processor",
-        () -> new ContextualProcessor<Object, Object, Void, Void>() {
+        () -> new ContextualProcessor<>() {
           private KeyValueStore<Object, Object> global;
 
           @Override

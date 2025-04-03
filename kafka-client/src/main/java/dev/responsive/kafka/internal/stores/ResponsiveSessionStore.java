@@ -28,7 +28,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
@@ -59,18 +58,6 @@ public class ResponsiveSessionStore implements SessionStore<Bytes, byte[]> {
     this.log = new LogContext(
         String.format("session-store [%s] ", this.name.kafkaName())
     ).logger(ResponsiveSessionStore.class);
-  }
-
-  @Override
-  @Deprecated
-  public void init(final ProcessorContext context, final StateStore root) {
-    if (context instanceof StateStoreContext) {
-      init((StateStoreContext) context, root);
-    } else {
-      throw new UnsupportedOperationException(
-          "Use ResponsiveSessionStore#init(StateStoreContext, StateStore) instead."
-      );
-    }
   }
 
   @Override

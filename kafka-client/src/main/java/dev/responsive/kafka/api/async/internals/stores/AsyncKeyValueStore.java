@@ -116,16 +116,6 @@ public class AsyncKeyValueStore<KS, VS>
   }
 
   @Override
-  @Deprecated
-  public void init(
-      final org.apache.kafka.streams.processor.ProcessorContext context,
-      final StateStore root
-  ) {
-    throw new UnsupportedOperationException("This init method is deprecated, please implement"
-                                                + "init(StateStoreContext, StateStore) instead");
-  }
-
-  @Override
   public <R> QueryResult<R> query(
       final Query<R> query,
       final PositionBound positionBound,
