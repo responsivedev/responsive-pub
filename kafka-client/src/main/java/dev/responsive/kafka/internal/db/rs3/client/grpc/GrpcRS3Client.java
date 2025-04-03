@@ -266,7 +266,7 @@ public class GrpcRS3Client implements RS3Client {
         () -> stub.createStore(request),
         () -> "CreateStore(storeId=" + storeId
             + ", logicalShards=" + logicalShards
-            + ", createStoreOptions=" + options+ ")"
+            + ", createStoreOptions=" + options + ")"
     );
 
     if (result.hasErr()) {

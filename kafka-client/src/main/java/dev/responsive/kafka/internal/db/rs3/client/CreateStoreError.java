@@ -7,7 +7,7 @@ public enum CreateStoreError {
 
   public static CreateStoreError fromCode(final int errorCode) {
     final CreateStoreError[] values = CreateStoreError.values();
-    if (errorCode< 0 || errorCode >= values.length) {
+    if (errorCode < 0 || errorCode >= values.length) {
       throw new IllegalArgumentException("Invalid error code for CreateStoreError: " + errorCode);
     }
     return values[errorCode];

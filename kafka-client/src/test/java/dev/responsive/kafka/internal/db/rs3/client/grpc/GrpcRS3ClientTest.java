@@ -838,9 +838,9 @@ class GrpcRS3ClientTest {
 
     final int logicalShards = 5;
     final CreateStoreOptions options = new CreateStoreOptions(
-      Optional.of(ClockType.STREAM_TIME),
-      Optional.of(10_000L),
-      Optional.empty()
+        Optional.of(ClockType.STREAM_TIME),
+        Optional.of(10_000L),
+        Optional.empty()
     );
 
     // when:

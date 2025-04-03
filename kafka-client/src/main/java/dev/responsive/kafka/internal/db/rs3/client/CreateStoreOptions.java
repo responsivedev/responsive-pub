@@ -49,11 +49,11 @@ public class CreateStoreOptions {
 
   @Override
   public String toString() {
-    return "CreateStoreOptions{" +
-        "clockType=" + clockType +
-        ", defaultTtl=" + defaultTtl +
-        ", filterBitsPerKey=" + filterBitsPerKey +
-        '}';
+    return "CreateStoreOptions{"
+        + "clockType=" + clockType
+        + ", defaultTtl=" + defaultTtl
+        + ", filterBitsPerKey=" + filterBitsPerKey
+        + '}';
   }
 
   @Override
