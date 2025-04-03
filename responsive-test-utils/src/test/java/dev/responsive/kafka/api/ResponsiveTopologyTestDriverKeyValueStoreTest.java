@@ -14,6 +14,8 @@ package dev.responsive.kafka.api;
 
 import static dev.responsive.kafka.api.async.AsyncFixedKeyProcessorSupplier.createAsyncProcessorSupplier;
 import static dev.responsive.kafka.testutils.processors.Deduplicator.deduplicatorApp;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.equalTo;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
@@ -24,6 +26,9 @@ import dev.responsive.kafka.api.stores.TtlProvider;
 import dev.responsive.kafka.api.stores.TtlProvider.TtlDuration;
 import dev.responsive.kafka.internal.stores.SchemaTypes;
 import dev.responsive.kafka.internal.stores.SchemaTypes.KVSchema;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -47,6 +52,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.hamcrest.MatcherAssert;
 import org.hamcrest.Matchers;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
@@ -87,7 +93,7 @@ public class ResponsiveTopologyTestDriverKeyValueStoreTest {
 
       // Then:
       final List<String> outputs = output.readValuesToList();
-      MatcherAssert.assertThat(outputs, Matchers.contains(
+      assertThat(outputs, Matchers.contains(
           "a,100,1,1,alice,CA",
           "c,102,1,1,alice,CA",
           "d,103,3,3,carol,CA"
@@ -145,7 +151,7 @@ public class ResponsiveTopologyTestDriverKeyValueStoreTest {
 
       // Then:
       final List<String> outputs = output.readValuesToList();
-      MatcherAssert.assertThat(outputs, Matchers.contains(
+      assertThat(outputs, Matchers.contains(
           "a,100,1,1,alice,CA",
           "d,103,3,3,carol,CA",
           "e,104,1,1,alex,CA",
@@ -157,8 +163,7 @@ public class ResponsiveTopologyTestDriverKeyValueStoreTest {
 
   @ParameterizedTest
   @EnumSource(SchemaTypes.KVSchema.class)
-  public void shouldEnforceKeyBasedTtlByAdvancingWallclockTime(final KVSchema type)
-      throws InterruptedException {
+  public void shouldEnforceKeyBasedTtlByAdvancingWallclockTime(final KVSchema type) {
     // Given:
     final Duration defaultTtl = Duration.ofMillis(15);
 
@@ -206,7 +211,7 @@ public class ResponsiveTopologyTestDriverKeyValueStoreTest {
 
       // Then:
       final List<String> outputs = output.readValuesToList();
-      MatcherAssert.assertThat(outputs, Matchers.containsInAnyOrder(
+      assertThat(outputs, Matchers.containsInAnyOrder(
           "a,100,1,1,alice,CA",
           "d,103,3,3,carol,CA",
           "e,104,1,1,alex,CA",
@@ -263,10 +268,51 @@ public class ResponsiveTopologyTestDriverKeyValueStoreTest {
     }
   }
 
+  @Test
+  public void shouldLoadPropertiesFromFile() throws Exception {
+    final String propsPath = "ttd-app.properties";
+    final InputStream inputStream = getClass().getClassLoader().getResourceAsStream(propsPath);
+
+    if (inputStream == null) {
+      throw new RuntimeException("ttd-app.properties not found under test/resources/");
+    }
+
+    final Properties properties = new Properties();
+    properties.load(inputStream);
+
+    final var params = ResponsiveKeyValueParams.keyValue("store");
+    final Topology topology = deduplicatorApp("input", "output", params);
+    try (final var driver = new ResponsiveTopologyTestDriver(topology, properties, STARTING_TIME)) {
+      final TestInputTopic<String, String> inputTopic = driver.createInputTopic(
+          "input",
+          new StringSerializer(),
+          new StringSerializer(),
+          STARTING_TIME,
+          Duration.ZERO
+      );
+
+      final TestOutputTopic<String, String> output = driver.createOutputTopic(
+          "output", new StringDeserializer(), new StringDeserializer());
+
+      inputTopic.pipeInput("A", "A1");
+      inputTopic.pipeInput("A", "A2");
+      inputTopic.pipeInput("B", "B1");
+      inputTopic.pipeInput("A", "A3");
+
+      final List<String> outputs = output.readValuesToList();
+      assertThat(outputs.size(), equalTo(2));
+      assertThat(outputs, Matchers.containsInAnyOrder(
+          "A1",
+          "B1"
+      ));
+    }
+
+  }
+
   private ResponsiveTopologyTestDriver setupDriver(final Topology topology) {
     final Properties props = new Properties();
-    props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
-    props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
+    props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class.getName());
+    props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class.getName());
     props.put(ResponsiveConfig.ASYNC_THREAD_POOL_SIZE_CONFIG, 2);
 
     return new ResponsiveTopologyTestDriver(topology, props, STARTING_TIME);
