@@ -14,6 +14,7 @@ package dev.responsive.kafka.api;
 
 import static dev.responsive.kafka.api.async.internals.AsyncUtils.getAsyncThreadPool;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.ASYNC_THREAD_POOL_SIZE_CONFIG;
+import static dev.responsive.kafka.api.config.ResponsiveConfig.responsiveConfig;
 import static dev.responsive.kafka.internal.stores.TTDRestoreListener.mockRestoreListener;
 
 import dev.responsive.kafka.api.async.internals.AsyncThreadPoolRegistration;
@@ -191,7 +192,7 @@ public class ResponsiveTopologyTestDriver extends TopologyTestDriverAccessor {
         .withMetrics(metrics)
         .withTopologyDescription(topologyDescription);
 
-    AsyncUtils.configuredAsyncThreadPool(ResponsiveConfig.responsiveConfig(baseProps), 1, metrics)
+    AsyncUtils.configuredAsyncThreadPool(responsiveConfig(baseProps), 1, metrics)
         .ifPresent(threadPoolRegistry -> {
           threadPoolRegistry.startNewAsyncThreadPool(Thread.currentThread().getName());
           sessionConfig.withAsyncThreadPoolRegistry(threadPoolRegistry);
@@ -231,7 +232,7 @@ public class ResponsiveTopologyTestDriver extends TopologyTestDriverAccessor {
   private static Optional<AsyncThreadPoolRegistration> getAsyncThreadPoolRegistration(
       final Properties props
   ) {
-    final int asyncThreadPoolSize = (int) props.getOrDefault(ASYNC_THREAD_POOL_SIZE_CONFIG, 0);
+    final int asyncThreadPoolSize = responsiveConfig(props).getInt(ASYNC_THREAD_POOL_SIZE_CONFIG);
 
     if (asyncThreadPoolSize > 0) {
       final Map<String, Object> configMap = new HashMap<>();
