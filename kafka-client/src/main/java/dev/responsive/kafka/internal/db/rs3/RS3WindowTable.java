@@ -53,7 +53,8 @@ public class RS3WindowTable implements RemoteWindowTable<WalEntry> {
     );
   }
 
-  public RS3WindowTable(
+  // Visible for testing
+  RS3WindowTable(
       final String name,
       final UUID storeId,
       final RS3Client rs3Client,
@@ -61,7 +62,7 @@ public class RS3WindowTable implements RemoteWindowTable<WalEntry> {
   ) {
     this.name = Objects.requireNonNull(name);
     this.storeId = Objects.requireNonNull(storeId);
-    this.rs3Client = Objects.requireNonNull(rs3Client); // TODO: Use metered client
+    this.rs3Client = Objects.requireNonNull(rs3Client);
     this.rs3ClientUtil = new RS3ClientUtil(storeId, rs3Client, pssPartitioner);
     this.pssPartitioner = Objects.requireNonNull(pssPartitioner);
   }
