@@ -10,6 +10,7 @@ ADD base/config/volumes/scylla /volumes/scylla
 ADD base/config/volumes/scylla2 /volumes/scylla2
 ADD base/config/volumes/scylla3 /volumes/scylla3
 ADD base/config/volumes/kafka /volumes/kafka
+ADD base/config/volumes/minio /volumes/minio
 
 COPY async/config/rs3.toml volumes/rs3.toml
 COPY async/config/docker-compose.yml /docker-compose.yml

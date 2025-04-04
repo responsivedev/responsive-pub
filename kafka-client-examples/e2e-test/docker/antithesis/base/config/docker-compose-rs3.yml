@@ -1,9 +1,31 @@
 include:
   - docker-compose-base.yml
 services:
+  minio:
+    container_name: minio
+    hostname: minio
+    image: docker.io/minio/minio:RELEASE.2025-03-12T18-04-18Z
+    command: server /minio --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - ./volumes/minio/data:/minio:rw
+      - ./volumes/minio/etc:/etc/minio:ro
+    environment:
+      - MINIO_ACCESS_KEY_FILE=/etc/minio/insecure.access.key
+      - MINIO_SECRET_KEY_FILE=/etc/minio/insecure.secret.key
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 1s
+      timeout: 10s
+      retries: 100
+    networks:
+      backend:
+        ipv4_address: 10.0.0.61
   rs3:
     # Remember to update the image in github-e2e.yaml as well
-    image: public.ecr.aws/j8q9y0n6/responsiveinc/rs3-antithesis:0.1.0-main.30.0
+    image: public.ecr.aws/j8q9y0n6/responsiveinc/rs3-antithesis:0.1.0-main.37.0
     platform: linux/amd64
     container_name: rs3
     hostname: rs3
@@ -11,6 +33,8 @@ services:
       - 50051:50051
     environment:
       CONFIG_FILE: /etc/rs3/rs3.toml
+      AWS_ACCESS_KEY_ID: antithesis
+      AWS_SECRET_ACCESS_KEY: antithesis
     volumes:
       - ./volumes/rs3.toml:/etc/rs3/rs3.toml
     networks:
