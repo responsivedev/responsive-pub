@@ -81,7 +81,7 @@ public class RS3WindowTable implements RemoteWindowTable<WalEntry> {
     LssMetadata lssMetadata = rs3ClientUtil.fetchLssMetadata(lssId);
     this.fetchOffset = lssMetadata.lastWrittenOffset();
 
-    long initialStreamTime = -1; // TODO: Initialize from RS3 metadata?
+    final var initialStreamTime = -1L; // TODO: Initialize from RS3 metadata?
     this.flushManager = new RS3WindowFlushManager(
         storeId,
         rs3Client,

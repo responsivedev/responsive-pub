@@ -127,8 +127,9 @@ class RS3KVFlushManager extends KVFlushManager {
 
   @Override
   public String failedFlushInfo(final long batchOffset, final Integer failedTablePartition) {
-    // TODO: fill me in with info about last written offsets
-    return "";
+    return String.format("<batchOffset=%d, persistedOffset=%d, storeId=%s, lssId=%d>>",
+                         batchOffset, table.fetchOffset(kafkaPartition),
+                         storeId, lssId.id());
   }
 
   @Override

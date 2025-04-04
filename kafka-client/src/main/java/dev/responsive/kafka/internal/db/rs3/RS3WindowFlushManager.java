@@ -118,7 +118,9 @@ class RS3WindowFlushManager implements WindowFlushManager<Integer> {
       final long batchOffset,
       final Integer failedTablePartition
   ) {
-    return String.format("");
+    return String.format("<batchOffset=%d, persistedOffset=%d, storeId=%s, lssId=%d>>",
+                         batchOffset, table.fetchOffset(kafkaPartition),
+                         storeId, lssId.id());
   }
 
   @Override

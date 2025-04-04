@@ -68,10 +68,13 @@ public class RS3TableFactory {
     );
   }
 
-  private UUID lookupStoreId(ResponsiveConfig config, String name) {
-    Map<String, String> storeIdMapping = config.getMap(
+  private UUID lookupStoreId(
+      final ResponsiveConfig config,
+      final String name
+  ) {
+    final var storeIdMapping = config.getMap(
         ResponsiveConfig.RS3_LOGICAL_STORE_MAPPING_CONFIG);
-    final String storeIdHex = storeIdMapping.get(name);
+    final var storeIdHex = storeIdMapping.get(name);
     if (storeIdHex == null) {
       throw new ConfigException("Failed to find store ID mapping for table " + name);
     }
