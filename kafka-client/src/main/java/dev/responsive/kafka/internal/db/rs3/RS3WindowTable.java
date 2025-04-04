@@ -97,7 +97,7 @@ public class RS3WindowTable implements RemoteWindowTable<WalEntry> {
     return flushManager;
   }
 
-  private void throwIfPartitionNotInitialized(int kafkaPartition) {
+  private void throwIfPartitionNotInitialized(final int kafkaPartition) {
     if (flushManager == null) {
       throw new IllegalStateException(String.format(
           "Cannot complete operation on store %s is not yet initialized",
