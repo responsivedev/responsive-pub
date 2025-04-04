@@ -92,10 +92,16 @@ public class MeteredRS3Client implements RS3Client {
 
   @Override
   public List<Store> listStores() {
-    final Instant start = Instant.now();
-    final List<Store> result = delegate.listStores();
-    getSensor.record(Duration.between(start, Instant.now()).toNanos());
-    return result;
+    return delegate.listStores();
+  }
+
+  @Override
+  public Optional<CreateStoreError> createStore(
+      final UUID storeId,
+      final int logicalShards,
+      final CreateStoreOptions options
+  ) {
+    return delegate.createStore(storeId, logicalShards, options);
   }
 
   public void close() {

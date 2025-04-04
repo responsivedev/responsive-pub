@@ -118,7 +118,15 @@ public class PartitionedOperations implements KeyValueOperations {
             changelog,
             params.name().tableName()
         );
-        table = createRS3(params, sessionClients, config, responsiveMetrics, scopeBuilder);
+        table = createRS3(
+            params,
+            sessionClients,
+            changelog.topic(),
+            ttlResolver,
+            config,
+            responsiveMetrics,
+            scopeBuilder
+        );
         break;
       case NONE:
         log.error("Must configure a storage backend type using the config {}",
@@ -262,6 +270,8 @@ public class PartitionedOperations implements KeyValueOperations {
   private static RemoteKVTable<?> createRS3(
       final ResponsiveKeyValueParams params,
       final SessionClients sessionClients,
+      final String changelogTopicName,
+      final Optional<TtlResolver<?, ?>> ttlResolver,
       final ResponsiveConfig config,
       final ResponsiveMetrics responsiveMetrics,
       final ResponsiveMetrics.MetricScopeBuilder scopeBuilder
@@ -269,8 +279,10 @@ public class PartitionedOperations implements KeyValueOperations {
     return sessionClients.rs3TableFactory().kvTable(
         params.name().tableName(),
         config,
+        ttlResolver,
         responsiveMetrics,
-        scopeBuilder
+        scopeBuilder,
+        () -> numPartitionsForKafkaTopic(sessionClients.admin(), changelogTopicName)
     );
   }
 
