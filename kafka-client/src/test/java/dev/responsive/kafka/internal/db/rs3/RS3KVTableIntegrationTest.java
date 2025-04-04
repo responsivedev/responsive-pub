@@ -177,7 +177,7 @@ public class RS3KVTableIntegrationTest {
     table.init(PARTITION_ID);
 
     // when:
-    final var restorePartition = table.fetchOffset(PARTITION_ID);
+    final var restorePartition = table.lastWrittenOffset(PARTITION_ID);
     assertThat(restorePartition, is(100L));
   }
 
@@ -203,7 +203,7 @@ public class RS3KVTableIntegrationTest {
     table.init(PARTITION_ID);
 
     // when:
-    final var restorePartition = table.fetchOffset(PARTITION_ID);
+    final var restorePartition = table.lastWrittenOffset(PARTITION_ID);
     assertThat(restorePartition, is(ResponsiveStoreRegistration.NO_COMMITTED_OFFSET));
   }
 

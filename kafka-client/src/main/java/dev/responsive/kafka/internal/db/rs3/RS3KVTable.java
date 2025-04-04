@@ -188,7 +188,7 @@ public class RS3KVTable implements RemoteKVTable<WalEntry> {
   }
 
   @Override
-  public long fetchOffset(final int kafkaPartition) {
+  public long lastWrittenOffset(final int kafkaPartition) {
     return fetchOffset;
   }
 }

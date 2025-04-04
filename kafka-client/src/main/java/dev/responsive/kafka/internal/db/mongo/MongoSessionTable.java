@@ -448,7 +448,7 @@ public class MongoSessionTable implements RemoteSessionTable<WriteModel<SessionD
   }
 
   @Override
-  public long fetchOffset(final int kafkaPartition) {
+  public long lastWrittenOffset(final int kafkaPartition) {
     final SessionMetadataDoc remoteMetadata = metadata.find(
         Filters.eq(SessionMetadataDoc.PARTITION, kafkaPartition)
     ).first();

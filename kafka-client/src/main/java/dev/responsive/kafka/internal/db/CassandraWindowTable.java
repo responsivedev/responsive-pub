@@ -627,7 +627,7 @@ public class CassandraWindowTable implements RemoteWindowTable<BoundStatement> {
   }
 
   @Override
-  public long fetchOffset(final int kafkaPartition) {
+  public long lastWrittenOffset(final int kafkaPartition) {
     final Segmenter.SegmentPartition metadataPartition =
         partitioner.metadataTablePartition(kafkaPartition);
     final List<Row> result = client.execute(

@@ -257,13 +257,13 @@ public class TablePartitionerIntegrationTest {
       final CassandraFactTable table = CassandraFactTable.create(
           new DefaultTableSpec(cassandraName, partitioner, TtlResolver.NO_TTL, config), client);
 
-      final var offset0 = table.fetchOffset(0);
-      final var offset1 = table.fetchOffset(1);
+      final var offset0 = table.lastWrittenOffset(0);
+      final var offset1 = table.lastWrittenOffset(1);
 
       assertThat(offset0, is(notNullValue()));
       assertThat(offset1, is(notNullValue()));
 
-      Assertions.assertEquals(table.fetchOffset(2), NO_COMMITTED_OFFSET);
+      Assertions.assertEquals(table.lastWrittenOffset(2), NO_COMMITTED_OFFSET);
 
       LOG.info("Checking data in remote table");
       // these store ValueAndTimestamp, so we need to just pluck the last 8 bytes
