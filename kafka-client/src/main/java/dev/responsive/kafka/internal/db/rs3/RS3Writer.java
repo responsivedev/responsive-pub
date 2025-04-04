@@ -18,7 +18,7 @@ import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public abstract class RS3Writer<K> implements RemoteWriter<K, Integer> {
+abstract class RS3Writer<K> implements RemoteWriter<K, Integer> {
   private static final Logger LOG = LoggerFactory.getLogger(RS3Writer.class);
 
   private final UUID storeId;
