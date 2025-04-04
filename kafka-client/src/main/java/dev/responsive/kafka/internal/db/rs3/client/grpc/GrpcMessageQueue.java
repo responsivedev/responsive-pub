@@ -15,11 +15,10 @@ package dev.responsive.kafka.internal.db.rs3.client.grpc;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Exception;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.atomic.AtomicReference;
 
 public class GrpcMessageQueue<T> {
   private final BlockingQueue<T> queue = new LinkedBlockingQueue<>();
-  private final AtomicReference<T> next = new AtomicReference<>();
+  private T next = null;
 
   void put(T message) {
     try {
@@ -31,19 +30,20 @@ public class GrpcMessageQueue<T> {
   }
 
   T poll() {
-    var next = this.next.getAndSet(null);
+    var next = this.next;
     if (next == null) {
       next = takeFromQueue();
     }
+    this.next = null;
     return next;
   }
 
   T peek() {
-    var next = this.next.get();
+    var next = this.next;
     if (next == null) {
       next = takeFromQueue();
-      this.next.set(next);
     }
+    this.next = next;
     return next;
   }
 
