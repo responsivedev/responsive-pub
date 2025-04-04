@@ -332,7 +332,7 @@ public class MongoWindowTable implements RemoteWindowTable<WriteModel<WindowDoc>
   }
 
   @Override
-  public long fetchOffset(final int kafkaPartition) {
+  public long lastWrittenOffset(final int kafkaPartition) {
     final WindowMetadataDoc remoteMetadata = metadata.find(
         Filters.eq(WindowMetadataDoc.PARTITION, kafkaPartition)
     ).first();

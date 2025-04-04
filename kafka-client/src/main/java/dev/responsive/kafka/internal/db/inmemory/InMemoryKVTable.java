@@ -180,7 +180,7 @@ public class InMemoryKVTable implements RemoteKVTable<BoundStatement> {
   }
 
   @Override
-  public long fetchOffset(int kafkaPartition) {
+  public long lastWrittenOffset(int kafkaPartition) {
     checkKafkaPartition(kafkaPartition);
     return ResponsiveStoreRegistration.NO_COMMITTED_OFFSET;
   }

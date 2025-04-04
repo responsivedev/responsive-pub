@@ -103,7 +103,7 @@ public class MongoWindowFlushManager extends SegmentedWindowFlushManager {
       final SegmentPartition failedTablePartition
   ) {
     return String.format("<batchOffset=%d, persistedOffset=%d>, <localEpoch=%d, persistedEpoch=%d>",
-                         batchOffset, table.fetchOffset(kafkaPartition),
+                         batchOffset, table.lastWrittenOffset(kafkaPartition),
                          table.localEpoch(kafkaPartition), table.fetchEpoch(kafkaPartition));
   }
 
