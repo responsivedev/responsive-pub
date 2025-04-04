@@ -116,7 +116,7 @@ abstract class RS3Writer<K> implements RemoteWriter<K, Integer> {
       }
 
       LOG.debug("last flushed offset for pss/lss {}/{} is {}", pssId, lssId, flushedOffset);
-      return RemoteWriteResult.success(kafkaPartition);
+      return RemoteWriteResult.success(pssId);
     });
   }
 

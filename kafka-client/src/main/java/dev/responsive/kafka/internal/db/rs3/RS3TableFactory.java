@@ -18,7 +18,6 @@ import dev.responsive.kafka.internal.db.RemoteWindowTable;
 import dev.responsive.kafka.internal.db.rs3.client.WalEntry;
 import dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRS3Client;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
-import java.util.Map;
 import java.util.UUID;
 import org.apache.kafka.common.config.ConfigException;
 
