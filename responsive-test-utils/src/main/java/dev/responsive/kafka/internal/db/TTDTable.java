@@ -31,7 +31,7 @@ public abstract class TTDTable<K> implements RemoteTable<K, BoundStatement> {
   public abstract long count();
 
   @Override
-  public long fetchOffset(final int kafkaPartition) {
+  public long lastWrittenOffset(final int kafkaPartition) {
     return 0;
   }
 

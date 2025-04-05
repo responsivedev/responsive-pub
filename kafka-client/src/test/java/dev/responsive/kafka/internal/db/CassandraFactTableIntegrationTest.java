@@ -92,8 +92,8 @@ class CassandraFactTableIntegrationTest {
     final var token = schema.init(1);
     schema.init(2);
     client.execute(schema.setOffset(2, 10));
-    final long offset1 = schema.fetchOffset(1);
-    final long offset2 = schema.fetchOffset(2);
+    final long offset1 = schema.lastWrittenOffset(1);
+    final long offset2 = schema.lastWrittenOffset(2);
 
     // Then:
     assertThat(offset1, is(-1L));

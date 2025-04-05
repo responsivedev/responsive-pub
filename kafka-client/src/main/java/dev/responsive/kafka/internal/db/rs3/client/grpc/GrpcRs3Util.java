@@ -25,17 +25,26 @@ public class GrpcRs3Util {
     final var statusOpt = getGrpcStatus(t);
     if (statusOpt.isPresent()) {
       final var status = statusOpt.get();
-      if (status.getCode() == Status.Code.UNAVAILABLE
-          || status.getCode() == Status.Code.RESOURCE_EXHAUSTED) {
+      if (isRetriable(status)) {
         return new RS3TransientException(t);
-      } else {
-        return new RS3Exception(t);
+      } else if (status.getCode() == Status.Code.CANCELLED) {
+        final var cause = t.getCause();
+        final var causeStatus = getGrpcStatus(cause);
+        if (causeStatus.map(GrpcRs3Util::isRetriable).orElse(false)) {
+          return new RS3TransientException(t);
+        }
       }
+      return new RS3Exception(t);
     } else if (t instanceof RuntimeException) {
       return (RuntimeException) t;
     } else {
       return new RuntimeException(t);
     }
+  }
+
+  private static boolean isRetriable(Status status) {
+    return status.getCode() == Status.Code.UNAVAILABLE
+        || status.getCode() == Status.Code.RESOURCE_EXHAUSTED;
   }
 
   private static Optional<Status> getGrpcStatus(Throwable t) {

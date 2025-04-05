@@ -507,7 +507,7 @@ public class CassandraKeyValueTable implements RemoteKVTable<BoundStatement> {
   }
 
   @Override
-  public long fetchOffset(final int kafkaPartition) {
+  public long lastWrittenOffset(final int kafkaPartition) {
     final int metadataTablePartition = partitioner.metadataTablePartition(kafkaPartition);
 
     final List<Row> result = client.execute(

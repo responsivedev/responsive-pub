@@ -12,15 +12,18 @@
 
 package dev.responsive.kafka.internal.db.rs3.client.grpc;
 
+import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpsRs3TestUtil.newEndOfStreamResult;
 import static dev.responsive.kafka.internal.utils.Utils.lssIdProto;
 import static dev.responsive.kafka.internal.utils.Utils.uuidToUuidProto;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.reset;
@@ -33,6 +36,7 @@ import dev.responsive.kafka.internal.db.rs3.client.LssId;
 import dev.responsive.kafka.internal.db.rs3.client.Put;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Exception;
 import dev.responsive.kafka.internal.db.rs3.client.RS3TimeoutException;
+import dev.responsive.kafka.internal.db.rs3.client.RangeBound;
 import dev.responsive.kafka.internal.db.rs3.client.WalEntry;
 import dev.responsive.rs3.RS3Grpc;
 import dev.responsive.rs3.Rs3;
@@ -47,6 +51,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.common.utils.MockTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -742,6 +747,126 @@ class GrpcRS3ClientTest {
   }
 
   @Test
+  @SuppressWarnings("unchecked")
+  public void shouldRetryRangeRequest() {
+    final var attemptCount = new AtomicInteger(0);
+    doAnswer(invocation -> {
+      StreamObserver<Rs3.RangeResult> observer = invocation.getArgument(1, StreamObserver.class);
+      if (attemptCount.incrementAndGet() < 3) {
+        throw new StatusRuntimeException(Status.UNAVAILABLE);
+      } else {
+        observer.onNext(newEndOfStreamResult());
+      }
+      return null;
+    }).when(asyncStub).range(any(), any());
+
+    try (final var iter = client.range(
+        STORE_ID,
+        LSS_ID,
+        PSS_ID,
+        Optional.of(123L),
+        RangeBound.unbounded(),
+        RangeBound.unbounded()
+    )) {
+      assertThat(iter.hasNext(), is(false));
+    }
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  public void shouldRetryAfterObserverOnError() {
+    final var attemptCount = new AtomicInteger(0);
+    doAnswer(invocation -> {
+      StreamObserver<Rs3.RangeResult> observer = invocation.getArgument(1, StreamObserver.class);
+      if (attemptCount.getAndIncrement() == 0) {
+        observer.onError(new StatusRuntimeException(Status.UNAVAILABLE));
+      } else {
+        observer.onNext(newEndOfStreamResult());
+      }
+      return null;
+    }).when(asyncStub).range(any(), any());
+
+    final var startTimeMs = time.milliseconds();
+    try (final var iter = client.range(
+        STORE_ID,
+        LSS_ID,
+        PSS_ID,
+        Optional.of(123L),
+        RangeBound.unbounded(),
+        RangeBound.unbounded()
+    )) {
+      assertThat(iter.hasNext(), is(false));
+    }
+    // Expect some backoff after the retry.
+    assertThat(time.milliseconds(), greaterThan(startTimeMs));
+  }
+
+  @Test
+  public void shouldTimeoutRangeRequest() {
+    doThrow(new StatusRuntimeException(Status.UNAVAILABLE))
+        .when(asyncStub)
+        .range(any(), any());
+
+    final var startTimeMs = time.milliseconds();
+    assertThrows(RS3TimeoutException.class, () -> client.range(
+        STORE_ID,
+        LSS_ID,
+        PSS_ID,
+        Optional.of(123L),
+        RangeBound.unbounded(),
+        RangeBound.unbounded()
+    ));
+    var endTimeMs = time.milliseconds();
+    assertThat(endTimeMs - startTimeMs, is(retryTimeoutMs));
+  }
+
+  @Test
+  public void shouldPropagateUnexpectedErrorInRangeRequest() {
+    doThrow(new StatusRuntimeException(Status.UNKNOWN))
+        .when(asyncStub)
+        .range(any(), any());
+
+    final var rs3Exception = assertThrows(RS3Exception.class, () -> client.range(
+        STORE_ID,
+        LSS_ID,
+        PSS_ID,
+        Optional.of(123L),
+        RangeBound.unbounded(),
+        RangeBound.unbounded()
+    ));
+
+    assertThat(rs3Exception.getCause(), is(instanceOf(StatusRuntimeException.class)));
+    assertThat(
+        ((StatusRuntimeException) rs3Exception.getCause()).getStatus().getCode(),
+        is(Status.Code.UNKNOWN)
+    );
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  public void shouldTimeoutAfterObserverOnError() {
+    doAnswer(invocation -> {
+      StreamObserver<Rs3.RangeResult> observer = invocation.getArgument(1, StreamObserver.class);
+      observer.onError(new StatusRuntimeException(Status.UNAVAILABLE));
+      return null;
+    }).when(asyncStub).range(any(), any());
+
+    final var startTimeMs = time.milliseconds();
+    try (
+        final var iter = client.range(
+            STORE_ID,
+            LSS_ID,
+            PSS_ID,
+            Optional.of(123L),
+            RangeBound.unbounded(),
+            RangeBound.unbounded()
+        )
+    ) {
+      assertThrows(RS3TimeoutException.class, iter::hasNext);
+    }
+  }
+
+  @Test
   public void shouldListStores() {
     // given:
     when(stub.listStores(any())).thenReturn(
@@ -824,6 +949,32 @@ class GrpcRS3ClientTest {
     // then:
     var endTimeMs = time.milliseconds();
     assertThat(endTimeMs - startTimeMs, is(retryTimeoutMs));
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  public void shouldPropagateUnexpectedExceptionFromObserverOnError() {
+    doAnswer(invocation -> {
+      StreamObserver<Rs3.RangeResult> observer = invocation.getArgument(1, StreamObserver.class);
+      observer.onError(new StatusRuntimeException(Status.UNKNOWN));
+      return null;
+    }).when(asyncStub).range(any(), any());
+
+    try (final var iter = client.range(
+        STORE_ID,
+        LSS_ID,
+        PSS_ID,
+        Optional.of(123L),
+        RangeBound.unbounded(),
+        RangeBound.unbounded()
+    )) {
+      final var rs3Exception = assertThrows(RS3Exception.class, iter::hasNext);
+      assertThat(rs3Exception.getCause(), is(instanceOf(StatusRuntimeException.class)));
+      assertThat(
+          ((StatusRuntimeException) rs3Exception.getCause()).getStatus().getCode(),
+          is(Status.Code.UNKNOWN)
+      );
+    }
   }
 
   private StreamObserver<Rs3.WriteWALSegmentResult> verifyWalSegmentResultObserver() {

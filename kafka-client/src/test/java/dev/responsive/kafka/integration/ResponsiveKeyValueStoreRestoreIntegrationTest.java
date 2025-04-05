@@ -179,7 +179,7 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
       final ResponsiveConfig config = ResponsiveConfig.responsiveConfig(properties);
       final RemoteKVTable<?> table = remoteKVTable(type, defaultFactory, config, changelog);
 
-      final long cassandraOffset = table.fetchOffset(0);
+      final long cassandraOffset = table.lastWrittenOffset(0);
       assertThat(cassandraOffset, greaterThan(0L));
 
       final List<ConsumerRecord<Long, Long>> changelogRecords
@@ -307,7 +307,7 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
 
     table = remoteKVTable(type, defaultFactory, config, changelog);
 
-    final long remoteOffset = table.fetchOffset(0);
+    final long remoteOffset = table.lastWrittenOffset(0);
     assertThat(remoteOffset, greaterThan(0L));
 
     final long changelogOffset = admin.listOffsets(Map.of(changelog, OffsetSpec.latest())).all()
@@ -519,12 +519,6 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
     ) {
       super(configs, new ByteArrayDeserializer(), new ByteArrayDeserializer());
       this.recorded = recorded;
-    }
-
-    @Override
-    @SuppressWarnings("deprecation")
-    public ConsumerRecords<byte[], byte[]> poll(long timeoutMs) {
-      return record(super.poll(timeoutMs));
     }
 
     @Override

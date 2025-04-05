@@ -24,7 +24,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
@@ -78,18 +77,6 @@ public class ResponsiveKeyValueStore
   @Override
   public String name() {
     return name.kafkaName();
-  }
-
-  @Override
-  @Deprecated
-  public void init(final ProcessorContext context, final StateStore root) {
-    if (context instanceof StateStoreContext) {
-      init((StateStoreContext) context, root);
-    } else {
-      throw new UnsupportedOperationException(
-          "Use ResponsiveStore#init(StateStoreContext, StateStore) instead."
-      );
-    }
   }
 
   @Override

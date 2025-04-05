@@ -248,7 +248,7 @@ public class CassandraFactTable implements RemoteKVTable<BoundStatement> {
   }
 
   @Override
-  public long fetchOffset(final int kafkaPartition) {
+  public long lastWrittenOffset(final int kafkaPartition) {
     final BoundStatement bound = fetchOffset
         .bind()
         .setInt(PARTITION_KEY.bind(), kafkaPartition);

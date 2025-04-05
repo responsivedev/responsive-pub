@@ -347,7 +347,7 @@ public class CommitBufferTest {
       assertThat(table.fetchEpoch(8), is(1L));
       assertThat(table.fetchEpoch(9), is(2L));
       assertThat(table.fetchEpoch(10), is(1L));
-      assertThat(table.fetchOffset(changelog.partition()), is(-1L));
+      assertThat(table.lastWrittenOffset(changelog.partition()), is(-1L));
     }
   }
 
@@ -449,10 +449,10 @@ public class CommitBufferTest {
       buffer.flush(9L);
 
       // Then:
-      assertThat(table.fetchOffset(KAFKA_PARTITION), is(-1L));
+      assertThat(table.lastWrittenOffset(KAFKA_PARTITION), is(-1L));
       buffer.put(Bytes.wrap(new byte[]{10}), VALUE, CURRENT_TS);
       buffer.flush(10L);
-      assertThat(table.fetchOffset(KAFKA_PARTITION), is(10L));
+      assertThat(table.lastWrittenOffset(KAFKA_PARTITION), is(10L));
     }
   }
 
@@ -473,10 +473,10 @@ public class CommitBufferTest {
       buffer.flush(9L);
 
       // Then:
-      assertThat(table.fetchOffset(KAFKA_PARTITION), is(-1L));
+      assertThat(table.lastWrittenOffset(KAFKA_PARTITION), is(-1L));
       buffer.put(Bytes.wrap(new byte[]{10}), value, CURRENT_TS);
       buffer.flush(10L);
-      assertThat(table.fetchOffset(KAFKA_PARTITION), is(10L));
+      assertThat(table.lastWrittenOffset(KAFKA_PARTITION), is(10L));
     }
   }
 
@@ -496,10 +496,10 @@ public class CommitBufferTest {
       buffer.flush(1L);
 
       // Then:
-      assertThat(table.fetchOffset(KAFKA_PARTITION), is(-1L));
+      assertThat(table.lastWrittenOffset(KAFKA_PARTITION), is(-1L));
       clock.set(clock.get().plus(Duration.ofSeconds(35)));
       buffer.flush(5L);
-      assertThat(table.fetchOffset(KAFKA_PARTITION), is(5L));
+      assertThat(table.lastWrittenOffset(KAFKA_PARTITION), is(5L));
     }
   }
 
@@ -518,7 +518,7 @@ public class CommitBufferTest {
       buffer.flush(10L);
 
       // Then:
-      assertThat(table.fetchOffset(KAFKA_PARTITION), is(10L));
+      assertThat(table.lastWrittenOffset(KAFKA_PARTITION), is(10L));
     }
   }
 
@@ -534,7 +534,7 @@ public class CommitBufferTest {
     buffer.put(Bytes.wrap(new byte[]{18}), VALUE, CURRENT_TS);
     while (clock.get().isBefore(to)) {
       buffer.flush(flushOffset);
-      if (table.fetchOffset(KAFKA_PARTITION) == flushOffset) {
+      if (table.lastWrittenOffset(KAFKA_PARTITION) == flushOffset) {
         return Optional.of(clock.get());
       }
       clock.set(clock.get().plus(Duration.ofSeconds(1)));
@@ -613,7 +613,7 @@ public class CommitBufferTest {
       buffer.restoreBatch(List.of(record), -1L);
 
       // Then:
-      assertThat(table.fetchOffset(KAFKA_PARTITION), is(100L));
+      assertThat(table.lastWrittenOffset(KAFKA_PARTITION), is(100L));
       final byte[] value = table.get(KAFKA_PARTITION, KEY, MIN_VALID_TS);
       assertThat(value, is(VALUE));
     }

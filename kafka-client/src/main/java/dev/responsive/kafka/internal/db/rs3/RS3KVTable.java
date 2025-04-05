@@ -20,9 +20,13 @@ import dev.responsive.kafka.internal.db.rs3.client.MeteredRS3Client;
 import dev.responsive.kafka.internal.db.rs3.client.Put;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Client;
 import dev.responsive.kafka.internal.db.rs3.client.RS3ClientUtil;
+import dev.responsive.kafka.internal.db.rs3.client.RangeBound;
 import dev.responsive.kafka.internal.db.rs3.client.WalEntry;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration;
+import dev.responsive.kafka.internal.utils.MergeKeyValueIterator;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import org.apache.kafka.common.serialization.Serializer;
@@ -108,7 +112,21 @@ public class RS3KVTable implements RemoteKVTable<WalEntry> {
       final Bytes to,
       final long streamTimeMs
   ) {
-    throw new UnsupportedOperationException();
+    final RangeBound fromBound = RangeBound.inclusive(from.get());
+    final RangeBound toBound = RangeBound.exclusive(to.get());
+    final List<KeyValueIterator<Bytes, byte[]>> pssIters = new ArrayList<>();
+
+    for (int pssId : pssPartitioner.pssForLss(this.lssId)) {
+      pssIters.add(rs3Client.range(
+          storeId,
+          lssId,
+          pssId,
+          flushManager.writtenOffset(pssId),
+          fromBound,
+          toBound
+      ));
+    }
+    return new MergeKeyValueIterator<>(pssIters);
   }
 
   @Override
@@ -163,7 +181,7 @@ public class RS3KVTable implements RemoteKVTable<WalEntry> {
   }
 
   @Override
-  public long fetchOffset(final int kafkaPartition) {
+  public long lastWrittenOffset(final int kafkaPartition) {
     return fetchOffset;
   }
 }

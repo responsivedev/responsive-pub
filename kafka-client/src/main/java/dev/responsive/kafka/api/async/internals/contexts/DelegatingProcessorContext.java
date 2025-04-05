@@ -259,8 +259,8 @@ public abstract class DelegatingProcessorContext<KOut, VOut, D
   }
 
   @Override
-  public ProcessorMetadata getProcessorMetadata() {
-    return delegate().getProcessorMetadata();
+  public ProcessorMetadata processorMetadata() {
+    return delegate().processorMetadata();
   }
 
   @Override
