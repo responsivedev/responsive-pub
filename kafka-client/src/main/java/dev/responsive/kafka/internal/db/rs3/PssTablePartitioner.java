@@ -15,18 +15,20 @@ package dev.responsive.kafka.internal.db.rs3;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.db.rs3.client.LssId;
 import java.util.Objects;
-import org.apache.kafka.common.utils.Bytes;
 
-public class PssTablePartitioner implements TablePartitioner<Bytes, Integer> {
+public abstract class PssTablePartitioner<K> implements TablePartitioner<K, Integer> {
   private final PssPartitioner pssPartitioner;
 
   public PssTablePartitioner(final PssPartitioner pssPartitioner) {
     this.pssPartitioner = Objects.requireNonNull(pssPartitioner);
   }
 
+  public abstract byte[] serialize(K key);
+
   @Override
-  public Integer tablePartition(int kafkaPartition, Bytes key) {
-    return pssPartitioner.pss(key.get(), new LssId(kafkaPartition));
+  public Integer tablePartition(int kafkaPartition, K key) {
+    final var serializedKey = serialize(key);
+    return pssPartitioner.pss(serializedKey, new LssId(kafkaPartition));
   }
 
   @Override
