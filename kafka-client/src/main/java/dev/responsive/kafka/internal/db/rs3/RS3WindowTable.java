@@ -221,7 +221,9 @@ public class RS3WindowTable implements RemoteWindowTable<WalEntry> {
   }
 
   @Override
-  public long fetchOffset(final int kafkaPartition) {
+  public long lastWrittenOffset(final int kafkaPartition) {
     return fetchOffset;
   }
 }
+
+
