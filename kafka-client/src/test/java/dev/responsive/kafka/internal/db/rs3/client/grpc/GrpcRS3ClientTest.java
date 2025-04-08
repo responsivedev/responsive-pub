@@ -38,6 +38,7 @@ import dev.responsive.kafka.internal.db.rs3.client.RS3Exception;
 import dev.responsive.kafka.internal.db.rs3.client.RS3TimeoutException;
 import dev.responsive.kafka.internal.db.rs3.client.RangeBound;
 import dev.responsive.kafka.internal.db.rs3.client.WalEntry;
+import dev.responsive.kafka.internal.utils.WindowedKey;
 import dev.responsive.rs3.RS3Grpc;
 import dev.responsive.rs3.Rs3;
 import dev.responsive.rs3.Rs3.ListStoresResult;
@@ -650,7 +651,7 @@ class GrpcRS3ClientTest {
     );
 
     // then:
-    assertThat(result.get(), is(Bytes.wrap("bar".getBytes())));
+    assertThat(result.get(), is("bar".getBytes()));
     verify(stub).get(Rs3.GetRequest.newBuilder()
         .setLssId(lssIdProto(LSS_ID))
         .setPssId(PSS_ID)
@@ -772,6 +773,78 @@ class GrpcRS3ClientTest {
     // then:
     var endTimeMs = time.milliseconds();
     assertThat(endTimeMs - startTimeMs, is(retryTimeoutMs));
+  }
+
+  @Test
+  public void shouldWindowedGet() {
+    final var windowTimestamp = 500L;
+    final var key = "foo".getBytes();
+
+    // given:
+    when(stub.get(any()))
+        .thenReturn(Rs3.GetResult.newBuilder().setResult(
+            Rs3.KeyValue.newBuilder()
+                .setKey(ByteString.copyFromUtf8("foo"))
+                .setValue(ByteString.copyFromUtf8("bar"))
+                .setWindowTimestamp(windowTimestamp)
+            ).build());
+
+    // when:
+    final var result = client.windowedGet(
+        STORE_ID,
+        LSS_ID,
+        PSS_ID,
+        Optional.empty(),
+        new WindowedKey(Bytes.wrap(key), windowTimestamp)
+    );
+
+    // then:
+    assertThat(result.get(), is("bar".getBytes()));
+    verify(stub).get(Rs3.GetRequest.newBuilder()
+                         .setLssId(lssIdProto(LSS_ID))
+                         .setPssId(PSS_ID)
+                         .setStoreId(uuidToUuidProto(STORE_ID))
+                         .setKey(ByteString.copyFromUtf8("foo"))
+                         .setWindowTimestamp(windowTimestamp)
+                         .build()
+    );
+  }
+
+  @Test
+  public void shouldRetryWindowedGet() {
+    final var windowTimestamp = 500L;
+    final var key = "foo".getBytes();
+
+    // given:
+    when(stub.get(any()))
+        .thenThrow(new StatusRuntimeException(Status.UNAVAILABLE))
+        .thenReturn(Rs3.GetResult.newBuilder().setResult(
+            Rs3.KeyValue.newBuilder()
+                .setKey(ByteString.copyFromUtf8("foo"))
+                .setValue(ByteString.copyFromUtf8("bar"))
+                .setWindowTimestamp(windowTimestamp)
+        ).build());
+
+    // when:
+    final var result = client.windowedGet(
+        STORE_ID,
+        LSS_ID,
+        PSS_ID,
+        Optional.empty(),
+        new WindowedKey(Bytes.wrap(key), windowTimestamp)
+    );
+
+    // then:
+    assertThat(result.get(), is("bar".getBytes()));
+    verify(stub, times(2))
+        .get(Rs3.GetRequest.newBuilder()
+                 .setLssId(lssIdProto(LSS_ID))
+                 .setPssId(PSS_ID)
+                 .setStoreId(uuidToUuidProto(STORE_ID))
+                 .setKey(ByteString.copyFromUtf8("foo"))
+                 .setWindowTimestamp(windowTimestamp)
+                 .build()
+        );
   }
 
   @Test

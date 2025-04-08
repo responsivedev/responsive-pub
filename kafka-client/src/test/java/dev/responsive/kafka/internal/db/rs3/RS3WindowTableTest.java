@@ -57,13 +57,13 @@ class RS3WindowTableTest {
     when(partitioner.pss(any(), eq(lssId))).thenReturn(pssId);
     when(client.getCurrentOffsets(storeId, lssId, pssId))
         .thenReturn(new CurrentOffsets(Optional.of(5L), Optional.of(5L)));
-    when(client.get(
-        eq(storeId),
-        eq(lssId),
-        eq(pssId),
-        eq(Optional.of(5L)),
-        any())
-    ).thenReturn(Optional.of(value));
+    when(client.windowedGet(
+        storeId,
+        lssId,
+        pssId,
+        Optional.of(5L),
+        new WindowedKey(key, timestamp)
+    )).thenReturn(Optional.of(value));
 
     // Then:
     table.init(kafkaPartition);
@@ -86,12 +86,12 @@ class RS3WindowTableTest {
     when(partitioner.pss(any(), eq(lssId))).thenReturn(pssId);
     when(client.getCurrentOffsets(storeId, lssId, pssId))
         .thenReturn(new CurrentOffsets(Optional.of(5L), Optional.of(5L)));
-    when(client.get(
-        eq(storeId),
-        eq(lssId),
-        eq(pssId),
-        eq(Optional.of(5L)),
-        any())
+    when(client.windowedGet(
+        storeId,
+        lssId,
+        pssId,
+        Optional.of(5L),
+        new WindowedKey(key, timestamp))
     ).thenReturn(Optional.empty());
 
     // Then:
