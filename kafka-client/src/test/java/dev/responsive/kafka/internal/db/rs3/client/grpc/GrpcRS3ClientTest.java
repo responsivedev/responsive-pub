@@ -52,6 +52,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -640,10 +641,16 @@ class GrpcRS3ClientTest {
     );
 
     // when:
-    final var result = client.get(STORE_ID, LSS_ID, PSS_ID, Optional.of(123L), "foo".getBytes());
+    final var result = client.get(
+        STORE_ID,
+        LSS_ID,
+        PSS_ID,
+        Optional.of(123L),
+        Bytes.wrap("foo".getBytes())
+    );
 
     // then:
-    assertThat(result.get(), is("bar".getBytes()));
+    assertThat(result.get(), is(Bytes.wrap("bar".getBytes())));
     verify(stub).get(Rs3.GetRequest.newBuilder()
         .setLssId(lssIdProto(LSS_ID))
         .setPssId(PSS_ID)
@@ -667,7 +674,13 @@ class GrpcRS3ClientTest {
     );
 
     // when:
-    final var result = client.get(STORE_ID, LSS_ID, PSS_ID, Optional.empty(), "foo".getBytes());
+    final var result = client.get(
+        STORE_ID,
+        LSS_ID,
+        PSS_ID,
+        Optional.empty(),
+        Bytes.wrap("foo".getBytes())
+    );
 
     // then:
     assertThat(result.get(), is("bar".getBytes()));
@@ -688,7 +701,13 @@ class GrpcRS3ClientTest {
     );
 
     // when:
-    final var result = client.get(STORE_ID, LSS_ID, PSS_ID, Optional.of(123L), "foo".getBytes());
+    final var result = client.get(
+        STORE_ID,
+        LSS_ID,
+        PSS_ID,
+        Optional.of(123L),
+        Bytes.wrap("foo".getBytes())
+    );
 
     // then:
     assertThat(result.isEmpty(), is(true));
@@ -702,7 +721,13 @@ class GrpcRS3ClientTest {
         .thenReturn(Rs3.GetResult.newBuilder().build());
 
     // when:
-    final var result = client.get(STORE_ID, LSS_ID, PSS_ID, Optional.of(123L), "foo".getBytes());
+    final var result = client.get(
+        STORE_ID,
+        LSS_ID,
+        PSS_ID,
+        Optional.of(123L),
+        Bytes.wrap("foo".getBytes())
+    );
 
     // then:
     assertThat(result.isEmpty(), is(true));
@@ -715,10 +740,13 @@ class GrpcRS3ClientTest {
         .thenThrow(new StatusRuntimeException(Status.UNKNOWN));
 
     // when:
-    final RS3Exception exception = assertThrows(
-        RS3Exception.class,
-        () -> client.get(STORE_ID, LSS_ID, PSS_ID, Optional.of(123L), "foo".getBytes())
-    );
+    final RS3Exception exception = assertThrows(RS3Exception.class, () -> client.get(
+        STORE_ID,
+        LSS_ID,
+        PSS_ID,
+        Optional.of(123L),
+        Bytes.wrap("foo".getBytes())
+    ));
 
     // then:
     assertThat(exception.getCause(), instanceOf(StatusRuntimeException.class));
@@ -738,7 +766,7 @@ class GrpcRS3ClientTest {
         LSS_ID,
         PSS_ID,
         Optional.of(123L),
-        "foo".getBytes()
+        Bytes.wrap("foo".getBytes())
     ));
 
     // then:
@@ -985,12 +1013,10 @@ class GrpcRS3ClientTest {
   private Rs3.WriteWALSegmentRequest.Put putProto(final Put put) {
     final var builder = Rs3.WriteWALSegmentRequest.Put.newBuilder()
         .setKey(ByteString.copyFrom(put.key()));
-    if (put.value().isPresent()) {
-      builder.setValue(ByteString.copyFrom(put.value().get()));
-      builder.setTtl(Rs3.Ttl.newBuilder()
-          .setTtlType(Rs3.Ttl.TtlType.DEFAULT)
-          .build());
-    }
+    builder.setValue(ByteString.copyFrom(put.value()));
+    builder.setTtl(Rs3.Ttl.newBuilder()
+        .setTtlType(Rs3.Ttl.TtlType.DEFAULT)
+        .build());
     return builder.build();
   }
 

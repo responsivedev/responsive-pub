@@ -16,6 +16,7 @@ import com.google.protobuf.ByteString;
 import dev.responsive.kafka.internal.db.rs3.client.Range;
 import dev.responsive.kafka.internal.db.rs3.client.RangeBound;
 import dev.responsive.rs3.Rs3;
+import org.apache.kafka.common.utils.Bytes;
 
 public class GrpsRs3TestUtil {
 
@@ -37,18 +38,18 @@ public class GrpsRs3TestUtil {
         .build();
   }
 
-  public static Range newRangeFromProto(Rs3.RangeRequest req) {
+  public static Range<Bytes> newRangeFromProto(Rs3.RangeRequest req) {
     final var startBound = newRangeBoundFromProto(req.getFrom());
     final var endBound = newRangeBoundFromProto(req.getTo());
-    return new Range(startBound, endBound);
+    return new Range<>(startBound, endBound);
   }
 
-  private static RangeBound newRangeBoundFromProto(Rs3.Bound bound) {
+  private static RangeBound<Bytes> newRangeBoundFromProto(Rs3.Bound bound) {
     switch (bound.getType()) {
       case EXCLUSIVE:
-        return RangeBound.exclusive(bound.getKey().toByteArray());
+        return RangeBound.exclusive(Bytes.wrap(bound.getKey().toByteArray()));
       case INCLUSIVE:
-        return RangeBound.inclusive(bound.getKey().toByteArray());
+        return RangeBound.inclusive(Bytes.wrap(bound.getKey().toByteArray()));
       case UNBOUNDED:
         return RangeBound.unbounded();
       default:

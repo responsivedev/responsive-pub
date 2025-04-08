@@ -32,7 +32,6 @@ class RS3WindowFlushManager implements WindowFlushManager<Integer> {
   private final RS3WindowTable table;
   private final int kafkaPartition;
   private final PssPartitioner pssPartitioner;
-  private final RS3WindowedKeySerde keySerde;
   private final Map<Integer, Optional<Long>> writtenOffsets;
 
   private long streamTime;
@@ -45,7 +44,6 @@ class RS3WindowFlushManager implements WindowFlushManager<Integer> {
       final RS3WindowTable table,
       final int kafkaPartition,
       final PssPartitioner pssPartitioner,
-      final RS3WindowedKeySerde keySerde,
       final Map<Integer, Optional<Long>> writtenOffsets,
       final long initialStreamTime
   ) {
@@ -55,7 +53,6 @@ class RS3WindowFlushManager implements WindowFlushManager<Integer> {
     this.table = table;
     this.kafkaPartition = kafkaPartition;
     this.pssPartitioner = pssPartitioner;
-    this.keySerde = keySerde;
     this.writtenOffsets = writtenOffsets;
     this.streamTime = initialStreamTime;
   }
@@ -70,7 +67,8 @@ class RS3WindowFlushManager implements WindowFlushManager<Integer> {
     return new PssTablePartitioner<>(pssPartitioner) {
       @Override
       public byte[] serialize(final WindowedKey key) {
-        return keySerde.serialize(key);
+        // TODO: Get rid of this
+        return key.key.get();
       }
     };
   }

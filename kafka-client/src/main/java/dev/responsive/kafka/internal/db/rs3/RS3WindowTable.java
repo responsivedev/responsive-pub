@@ -1,3 +1,15 @@
+/*
+ * Copyright 2025 Responsive Computing, Inc.
+ *
+ * This source code is licensed under the Responsive Business Source License Agreement v1.0
+ * available at:
+ *
+ * https://www.responsive.dev/legal/responsive-bsl-10
+ *
+ * This software requires a valid Commercial License Key for production use. Trial and commercial
+ * licenses can be obtained at https://www.responsive.dev
+ */
+
 package dev.responsive.kafka.internal.db.rs3;
 
 import dev.responsive.kafka.internal.db.RemoteWindowTable;
@@ -5,15 +17,22 @@ import dev.responsive.kafka.internal.db.WindowFlushManager;
 import dev.responsive.kafka.internal.db.rs3.client.LssId;
 import dev.responsive.kafka.internal.db.rs3.client.LssMetadata;
 import dev.responsive.kafka.internal.db.rs3.client.MeteredRS3Client;
-import dev.responsive.kafka.internal.db.rs3.client.Put;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Client;
 import dev.responsive.kafka.internal.db.rs3.client.RS3ClientUtil;
+import dev.responsive.kafka.internal.db.rs3.client.Range;
+import dev.responsive.kafka.internal.db.rs3.client.RangeBound;
 import dev.responsive.kafka.internal.db.rs3.client.WalEntry;
+import dev.responsive.kafka.internal.db.rs3.client.WindowedDelete;
+import dev.responsive.kafka.internal.db.rs3.client.WindowedPut;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
+import dev.responsive.kafka.internal.utils.MergeKeyValueIterator;
 import dev.responsive.kafka.internal.utils.WindowedKey;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,7 +45,6 @@ public class RS3WindowTable implements RemoteWindowTable<WalEntry> {
   private final RS3Client rs3Client;
   private final RS3ClientUtil rs3ClientUtil;
   private final PssPartitioner pssPartitioner;
-  private final RS3WindowedKeySerde keySerde = new RS3WindowedKeySerde();
 
   // Initialized in `init()`
   private LssId lssId;
@@ -90,7 +108,6 @@ public class RS3WindowTable implements RemoteWindowTable<WalEntry> {
         this,
         kafkaPartition,
         pssPartitioner,
-        keySerde,
         lssMetadata.writtenOffsets(),
         initialStreamTime
     );
@@ -123,14 +140,12 @@ public class RS3WindowTable implements RemoteWindowTable<WalEntry> {
     throwIfPartitionNotInitialized(kafkaPartition);
     final int pssId = pssPartitioner.pss(key.get(), this.lssId);
     final var windowKey = new WindowedKey(key, windowStart);
-    final var windowKeyBytes = keySerde.serialize(windowKey);
-
-    return rs3Client.get(
+    return rs3Client.windowedGet(
         storeId,
         lssId,
         pssId,
         flushManager.writtenOffset(pssId),
-        windowKeyBytes
+        windowKey
     ).orElse(null);
   }
 
@@ -142,7 +157,17 @@ public class RS3WindowTable implements RemoteWindowTable<WalEntry> {
       final long timeTo
   ) {
     throwIfPartitionNotInitialized(kafkaPartition);
-    throw new UnsupportedOperationException();
+    final int pssId = pssPartitioner.pss(key.get(), this.lssId);
+    final var windowKeyFrom = RangeBound.inclusive(new WindowedKey(key, timeFrom));
+    final var windowKeyTo = RangeBound.exclusive(new WindowedKey(key, timeTo));
+    return rs3Client.windowedRange(
+        storeId,
+        lssId,
+        pssId,
+        flushManager.writtenOffset(pssId),
+        windowKeyFrom,
+        windowKeyTo
+    );
   }
 
   @Override
@@ -165,7 +190,20 @@ public class RS3WindowTable implements RemoteWindowTable<WalEntry> {
       final long timeTo
   ) {
     throwIfPartitionNotInitialized(kafkaPartition);
-    throw new UnsupportedOperationException();
+    final List<KeyValueIterator<WindowedKey, byte[]>> pssIters = new ArrayList<>();
+    final var windowKeyFrom = RangeBound.inclusive(new WindowedKey(fromKey, timeFrom));
+    final var windowKeyTo = RangeBound.exclusive(new WindowedKey(toKey, timeTo));
+    for (int pssId : pssPartitioner.pssForLss(this.lssId)) {
+      pssIters.add(rs3Client.windowedRange(
+          storeId,
+          lssId,
+          pssId,
+          flushManager.writtenOffset(pssId),
+          windowKeyFrom,
+          windowKeyTo
+      ));
+    }
+    return new MergeKeyValueIterator<>(pssIters);
   }
 
   @Override
@@ -187,7 +225,29 @@ public class RS3WindowTable implements RemoteWindowTable<WalEntry> {
       final long timeTo
   ) {
     throwIfPartitionNotInitialized(kafkaPartition);
-    throw new UnsupportedOperationException();
+    final List<KeyValueIterator<WindowedKey, byte[]>> pssIters = new ArrayList<>();
+
+    // TODO: the types break down here. We want to tell the server that we are
+    //  interested in all keys within a given time range, but the schema does
+    //  not support a partially specified bound. For now, we fetch everything and
+    //  filter here.
+    final var timeRange = new Range<>(
+        RangeBound.inclusive(timeFrom),
+        RangeBound.exclusive(timeTo)
+    );
+
+    for (int pssId : pssPartitioner.pssForLss(this.lssId)) {
+      final var rangeIter = rs3Client.windowedRange(
+          storeId,
+          lssId,
+          pssId,
+          flushManager.writtenOffset(pssId),
+          RangeBound.unbounded(),
+          RangeBound.unbounded()
+      );
+      pssIters.add(new TimeRangeFilter(timeRange, rangeIter));
+    }
+    return new MergeKeyValueIterator<>(pssIters);
   }
 
   @Override
@@ -212,18 +272,73 @@ public class RS3WindowTable implements RemoteWindowTable<WalEntry> {
       final byte[] value,
       final long timestampMs
   ) {
-    return new Put(keySerde.serialize(key), value);
+    return new WindowedPut(
+        key.key.get(),
+        value,
+        timestampMs,
+        key.windowStartMs
+    );
   }
 
   @Override
   public WalEntry delete(final int kafkaPartition, final WindowedKey key) {
-    return new Put(keySerde.serialize(key), null);
+    return new WindowedDelete(
+        key.key.get(),
+        key.windowStartMs
+    );
   }
 
   @Override
   public long lastWrittenOffset(final int kafkaPartition) {
     return fetchOffset;
   }
+
+  private static class TimeRangeFilter implements KeyValueIterator<WindowedKey, byte[]> {
+    private final Range<Long> timeRange;
+    private final KeyValueIterator<WindowedKey, byte[]> delegate;
+
+    private TimeRangeFilter(
+        final Range<Long> timeRange,
+        final KeyValueIterator<WindowedKey, byte[]> delegate
+    ) {
+      this.timeRange = timeRange;
+      this.delegate = delegate;
+    }
+
+    @Override
+    public void close() {
+      delegate.close();
+    }
+
+    @Override
+    public WindowedKey peekNextKey() {
+      skipToNextKeyInRange();
+      return delegate.peekNextKey();
+    }
+
+    private void skipToNextKeyInRange() {
+      while (true) {
+        final var nextKey = delegate.peekNextKey();
+        if (nextKey == null) {
+          break;
+        } else if (timeRange.contains(nextKey.windowStartMs)) {
+          return;
+        } else {
+          delegate.next();
+        }
+      }
+    }
+
+    @Override
+    public boolean hasNext() {
+      return peekNextKey() != null;
+    }
+
+    @Override
+    public KeyValue<WindowedKey, byte[]> next() {
+      skipToNextKeyInRange();
+      return delegate.next();
+    }
+  }
+
 }
-
-

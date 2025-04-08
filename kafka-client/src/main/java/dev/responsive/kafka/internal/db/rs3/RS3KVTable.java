@@ -14,6 +14,7 @@ package dev.responsive.kafka.internal.db.rs3;
 
 import dev.responsive.kafka.internal.db.KVFlushManager;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
+import dev.responsive.kafka.internal.db.rs3.client.Delete;
 import dev.responsive.kafka.internal.db.rs3.client.LssId;
 import dev.responsive.kafka.internal.db.rs3.client.LssMetadata;
 import dev.responsive.kafka.internal.db.rs3.client.MeteredRS3Client;
@@ -101,7 +102,7 @@ public class RS3KVTable implements RemoteKVTable<WalEntry> {
         lssId,
         pssId,
         flushManager.writtenOffset(pssId),
-        key.get()
+        key
     ).orElse(null);
   }
 
@@ -112,8 +113,8 @@ public class RS3KVTable implements RemoteKVTable<WalEntry> {
       final Bytes to,
       final long streamTimeMs
   ) {
-    final RangeBound fromBound = RangeBound.inclusive(from.get());
-    final RangeBound toBound = RangeBound.exclusive(to.get());
+    final RangeBound<Bytes> fromBound = RangeBound.inclusive(from);
+    final RangeBound<Bytes> toBound = RangeBound.exclusive(to);
     final List<KeyValueIterator<Bytes, byte[]>> pssIters = new ArrayList<>();
 
     for (int pssId : pssPartitioner.pssForLss(this.lssId)) {
@@ -174,10 +175,7 @@ public class RS3KVTable implements RemoteKVTable<WalEntry> {
 
   @Override
   public WalEntry delete(final int kafkaPartition, final Bytes key) {
-    return new Put(
-        key.get(),
-        null
-    );
+    return new Delete(key.get());
   }
 
   @Override
