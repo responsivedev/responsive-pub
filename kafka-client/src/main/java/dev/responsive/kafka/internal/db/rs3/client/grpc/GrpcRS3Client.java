@@ -19,7 +19,6 @@ import static dev.responsive.kafka.internal.utils.Utils.uuidToUuidProto;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.protobuf.ByteString;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
-import dev.responsive.kafka.internal.db.rs3.client.CreateStoreError;
 import dev.responsive.kafka.internal.db.rs3.client.CreateStoreOptions;
 import dev.responsive.kafka.internal.db.rs3.client.CurrentOffsets;
 import dev.responsive.kafka.internal.db.rs3.client.LssId;
@@ -288,7 +287,7 @@ public class GrpcRS3Client implements RS3Client {
   }
 
   @Override
-  public Optional<CreateStoreError> createStore(
+  public List<Integer> createStore(
       final UUID storeId,
       final int logicalShards,
       final CreateStoreOptions options
@@ -307,11 +306,7 @@ public class GrpcRS3Client implements RS3Client {
             + ", createStoreOptions=" + options + ")"
     );
 
-    if (result.hasErr()) {
-      return Optional.of(CreateStoreError.fromCode(result.getErr().getNumber()));
-    } else {
-      return Optional.empty();
-    }
+    return result.getPssIdsList();
   }
 
   private void addWalEntryToSegment(

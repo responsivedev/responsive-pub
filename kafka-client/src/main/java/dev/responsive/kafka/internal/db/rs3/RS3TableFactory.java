@@ -27,7 +27,6 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.function.Supplier;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.streams.errors.StreamsException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -64,7 +63,8 @@ public class RS3TableFactory {
     if (!createdStores.contains(storeName)) {
       final int kafkaPartitions = computeNumKafkaPartitions.get();
 
-      final Optional<Long> defaultTtl = ttlResolver.isPresent() && ttlResolver.get().defaultTtl().isFinite()
+      final Optional<Long> defaultTtl =
+          ttlResolver.isPresent() && ttlResolver.get().defaultTtl().isFinite()
           ? Optional.of(ttlResolver.get().defaultTtl().duration().toMillis())
           : Optional.empty();
 
@@ -74,12 +74,9 @@ public class RS3TableFactory {
           Optional.empty()
       );
       
-      final var resultErr = rs3Client.createStore(storeId, kafkaPartitions, options);
-      if (resultErr.isPresent()) {
-        LOG.error("RS3 store creation failed with error code '{}' on store {}",
-                  resultErr.get().name(), storeName);
-        throw new StreamsException("Failed to create remote store " + storeName);
-      }
+      final var pss_ids = rs3Client.createStore(storeId, kafkaPartitions, options);
+      LOG.info("Created store {} with {} logical shards and {} physical shards",
+               storeName, kafkaPartitions, pss_ids.size());
 
       createdStores.add(storeName);
     }

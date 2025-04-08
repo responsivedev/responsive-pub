@@ -117,7 +117,7 @@ public class MeteredRS3Client implements RS3Client {
   }
 
   @Override
-  public Optional<CreateStoreError> createStore(
+  public List<Integer> createStore(
       final UUID storeId,
       final int logicalShards,
       final CreateStoreOptions options

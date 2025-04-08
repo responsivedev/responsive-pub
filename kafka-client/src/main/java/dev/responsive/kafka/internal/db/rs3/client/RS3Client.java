@@ -57,7 +57,7 @@ public interface RS3Client {
 
   List<Store> listStores();
 
-  Optional<CreateStoreError> createStore(
+  List<Integer> createStore(
       UUID storeId,
       int logicalShards,
       CreateStoreOptions options

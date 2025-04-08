@@ -43,7 +43,6 @@ import dev.responsive.kafka.internal.db.rs3.client.WalEntry;
 import dev.responsive.rs3.RS3Grpc;
 import dev.responsive.rs3.Rs3;
 import dev.responsive.rs3.Rs3.CreateStoreResult;
-import dev.responsive.rs3.Rs3.CreateStoreResult.CreateStoreError;
 import dev.responsive.rs3.Rs3.ListStoresResult;
 import dev.responsive.rs3.Rs3.Store;
 import io.grpc.Status;
@@ -56,6 +55,8 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import org.apache.kafka.common.utils.MockTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -958,10 +959,15 @@ class GrpcRS3ClientTest {
   @Test
   public void shouldCreateStore() {
     // given:
-    when(stub.createStore(any()))
-        .thenReturn(CreateStoreResult.newBuilder().build());
-
     final int logicalShards = 5;
+    final var pss_ids = IntStream.range(0, logicalShards - 1).boxed().collect(Collectors.toList());
+    when(stub.createStore(any()))
+        .thenReturn(CreateStoreResult
+                        .newBuilder()
+                        .addAllPssIds(pss_ids)
+                        .build()
+        );
+
     final CreateStoreOptions options = new CreateStoreOptions(
         Optional.of(ClockType.STREAM_TIME),
         Optional.of(10_000L),
@@ -972,33 +978,7 @@ class GrpcRS3ClientTest {
     final var result = client.createStore(STORE_ID, logicalShards, options);
 
     // then:
-    assertThat(result.isPresent(), is(false));
-    verify(stub).createStore(Rs3.CreateStoreRequest.newBuilder()
-                                 .setStoreId(uuidToUuidProto(STORE_ID))
-                                 .setLogicalShards(logicalShards)
-                                 .setOptions(options.toProto()).build());
-  }
-
-  @Test
-  public void shouldCreateStoreWithError() {
-    // given:
-    when(stub.createStore(any()))
-        .thenReturn(CreateStoreResult.newBuilder().setErr(CreateStoreError.FATAL).build());
-
-    final int logicalShards = 5;
-    final CreateStoreOptions options = new CreateStoreOptions(
-        Optional.empty(),
-        Optional.of(10_000L),
-        Optional.of(20)
-    );
-
-    // when:
-    final var result = client.createStore(STORE_ID, logicalShards, options);
-
-    // then:
-    assertThat(result.isPresent(), is(true));
-    final var fatalError = dev.responsive.kafka.internal.db.rs3.client.CreateStoreError.FATAL;
-    assertThat(result.get(), equalTo(fatalError));
+    assertThat(result, equalTo(pss_ids));
     verify(stub).createStore(Rs3.CreateStoreRequest.newBuilder()
                                  .setStoreId(uuidToUuidProto(STORE_ID))
                                  .setLogicalShards(logicalShards)
@@ -1008,11 +988,16 @@ class GrpcRS3ClientTest {
   @Test
   public void shouldRetryCreateStore() {
     // given:
+    final int logicalShards = 5;
+    final var pss_ids = IntStream.range(0, logicalShards - 1).boxed().collect(Collectors.toList());
     when(stub.createStore(any()))
         .thenThrow(new StatusRuntimeException(Status.UNAVAILABLE))
-        .thenReturn(CreateStoreResult.newBuilder().build());
+        .thenReturn(CreateStoreResult
+                        .newBuilder()
+                        .addAllPssIds(pss_ids)
+                        .build()
+        );
 
-    final int logicalShards = 5;
     final CreateStoreOptions options = new CreateStoreOptions(
         Optional.empty(),
         Optional.of(10_000L),
@@ -1023,7 +1008,7 @@ class GrpcRS3ClientTest {
     final var result = client.createStore(STORE_ID, logicalShards, options);
 
     // then:
-    assertThat(result.isEmpty(), is(true));
+    assertThat(result, equalTo(pss_ids));
     verify(stub, times(2)).createStore(Rs3.CreateStoreRequest.newBuilder()
                                  .setStoreId(uuidToUuidProto(STORE_ID))
                                  .setLogicalShards(logicalShards)
