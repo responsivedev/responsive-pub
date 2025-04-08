@@ -41,7 +41,6 @@ public class ResponsiveStreamsConfig extends StreamsConfig {
     final StreamsConfig streamsConfig = streamsConfig(props);
 
     verifyNoStandbys(streamsConfig);
-    verifyNotEosV1(streamsConfig);
   }
 
   /**
@@ -84,13 +83,6 @@ public class ResponsiveStreamsConfig extends StreamsConfig {
       );
       LOG.error(errorMsg);
       throw new ConfigException(errorMsg);
-    }
-  }
-
-  @SuppressWarnings("deprecation")
-  static void verifyNotEosV1(final StreamsConfig config) throws ConfigException {
-    if (EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG))) {
-      throw new ConfigException("Responsive driver can only be used with ALOS/EOS-V2");
     }
   }
 

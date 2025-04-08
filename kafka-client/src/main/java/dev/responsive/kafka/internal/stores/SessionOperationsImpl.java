@@ -117,7 +117,7 @@ public class SessionOperationsImpl implements SessionOperations {
         false,
         responsiveConfig
     );
-    final long restoreStartOffset = table.fetchOffset(changelog.partition());
+    final long restoreStartOffset = table.lastWrittenOffset(changelog.partition());
     final var registration = new ResponsiveStoreRegistration(
         name.kafkaName(),
         changelog,

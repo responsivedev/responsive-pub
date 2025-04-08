@@ -28,6 +28,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.metrics.KafkaMetric;
 
 public abstract class DelegatingProducer<K, V> implements Producer<K, V> {
 
@@ -45,15 +46,6 @@ public abstract class DelegatingProducer<K, V> implements Producer<K, V> {
   @Override
   public void beginTransaction() throws ProducerFencedException {
     delegate.beginTransaction();
-  }
-
-  @Override
-  @SuppressWarnings("deprecation")
-  public void sendOffsetsToTransaction(
-      final Map<TopicPartition, OffsetAndMetadata> offsets,
-      final String consumerGroupId
-  ) throws ProducerFencedException {
-    delegate.sendOffsetsToTransaction(offsets, consumerGroupId);
   }
 
   @Override
@@ -102,6 +94,16 @@ public abstract class DelegatingProducer<K, V> implements Producer<K, V> {
   @Override
   public Uuid clientInstanceId(final Duration duration) {
     return delegate.clientInstanceId(duration);
+  }
+
+  @Override
+  public void registerMetricForSubscription(final KafkaMetric metric) {
+    delegate.registerMetricForSubscription(metric);
+  }
+
+  @Override
+  public void unregisterMetricFromSubscription(final KafkaMetric metric) {
+    delegate.unregisterMetricFromSubscription(metric);
   }
 
   @Override

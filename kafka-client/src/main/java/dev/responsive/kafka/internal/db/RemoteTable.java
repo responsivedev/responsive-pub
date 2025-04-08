@@ -61,9 +61,12 @@ public interface RemoteTable<K, S> {
   );
 
   /**
+   * Get the offset corresponding to the last write to the table for a specific
+   * Kafka partition.
+   *
    * @param kafkaPartition the kafka partition
    * @return the current offset fetched from the metadata table
    *         partition for the given kafka partition
    */
-  long fetchOffset(final int kafkaPartition);
+  long lastWrittenOffset(final int kafkaPartition);
 }

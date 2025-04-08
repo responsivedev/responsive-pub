@@ -163,7 +163,7 @@ public class PartitionedOperations implements KeyValueOperations {
           config
       );
 
-      final long restoreStartOffset = table.fetchOffset(changelog.partition());
+      final long restoreStartOffset = table.lastWrittenOffset(changelog.partition());
       registration = new ResponsiveStoreRegistration(
           name.kafkaName(),
           changelog,

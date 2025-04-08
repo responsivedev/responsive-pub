@@ -108,7 +108,7 @@ public final class Iterators {
   public static <K extends Comparable<K>, V> KeyValueIterator<K, V> wrapped(
       final List<KeyValueIterator<K, V>> delegates
   ) {
-    return new MultiPartitionRangeIterator<>(delegates);
+    return new MergeKeyValueIterator<>(delegates);
   }
 
   public static <I, O, V> KeyValueIterator<O, V> mapKeys(

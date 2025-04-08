@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import com.google.protobuf.ByteString;
 import dev.responsive.kafka.internal.db.rs3.client.LssId;
 import dev.responsive.kafka.internal.db.rs3.client.Put;
+import dev.responsive.kafka.internal.db.rs3.client.RangeBound;
 import dev.responsive.rs3.RS3Grpc;
 import dev.responsive.rs3.Rs3;
 import io.grpc.ClientCall;
@@ -20,13 +21,17 @@ import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
 import io.grpc.stub.StreamObserver;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicLong;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -103,6 +108,109 @@ class GrpcRS3ClientEndToEndTest {
   }
 
   @Test
+  public void shouldScanAllKeyValues() {
+    writeWalSegment(5L, Arrays.asList(
+        buildPut("a", "foo"),
+        buildPut("b", "bar"),
+        buildPut("c", "baz")
+    ));
+
+    final var iter = client.range(
+        STORE_ID,
+        LSS_ID,
+        PSS_ID,
+        Optional.of(5L),
+        RangeBound.unbounded(),
+        RangeBound.unbounded()
+    );
+
+    assertNext(iter, "a", "foo");
+    assertNext(iter, "b", "bar");
+    assertNext(iter, "c", "baz");
+    assertThat(iter.hasNext(), is(false));
+  }
+
+  private void writeWalSegment(long endOffset, List<Put> puts) {
+    final var sendRecv = client.writeWalSegmentAsync(
+        STORE_ID,
+        LSS_ID,
+        PSS_ID,
+        Optional.empty(),
+        endOffset
+    );
+
+    puts.forEach(put -> sendRecv.sender().sendNext(put));
+    sendRecv.sender().finish();
+
+    final var flushedOffset = sendRecv
+        .completion()
+        .toCompletableFuture()
+        .join();
+    assertThat(flushedOffset, is(Optional.of(endOffset)));
+  }
+
+  @Test
+  public void shouldScanKeyValuesInBoundedRange() {
+    writeWalSegment(10L, Arrays.asList(
+        buildPut("a", "foo"),
+        buildPut("b", "bar"),
+        buildPut("c", "baz"),
+        buildPut("d", "raz"),
+        buildPut("e", "taz")
+    ));
+
+    final var iter = client.range(
+        STORE_ID,
+        LSS_ID,
+        PSS_ID,
+        Optional.of(10L),
+        RangeBound.inclusive("b".getBytes(StandardCharsets.UTF_8)),
+        RangeBound.exclusive("e".getBytes(StandardCharsets.UTF_8))
+    );
+
+    assertNext(iter, "b", "bar");
+    assertNext(iter, "c", "baz");
+    assertNext(iter, "d", "raz");
+    assertThat(iter.hasNext(), is(false));
+  }
+
+  @Test
+  public void shouldRetryRangeWithNetworkInterruption() {
+    writeWalSegment(5L, Arrays.asList(
+        buildPut("a", "foo"),
+        buildPut("b", "bar"),
+        buildPut("c", "baz")
+    ));
+
+    Mockito.doAnswer(invocation -> {
+      @SuppressWarnings("unchecked")
+      final var call = (ClientCall<Rs3.RangeRequest, Rs3.RangeResult>)
+          invocation.callRealMethod();
+      final var callSpy = Mockito.spy(call);
+      Mockito.doThrow(new StatusRuntimeException(Status.UNAVAILABLE))
+          .when(callSpy)
+          .sendMessage(any());
+      return callSpy;
+    }).doCallRealMethod()
+        .when(channel)
+        .newCall(eq(RS3Grpc.getRangeMethod()), any());
+
+    final var iter = client.range(
+        STORE_ID,
+        LSS_ID,
+        PSS_ID,
+        Optional.of(5L),
+        RangeBound.unbounded(),
+        RangeBound.unbounded()
+    );
+
+    assertNext(iter, "a", "foo");
+    assertNext(iter, "b", "bar");
+    assertNext(iter, "c", "baz");
+    assertThat(iter.hasNext(), is(false));
+  }
+
+  @Test
   public void shouldRetryPutWithNetworkInterruption() {
     Mockito.doAnswer(invocation -> {
       @SuppressWarnings("unchecked")
@@ -129,9 +237,31 @@ class GrpcRS3ClientEndToEndTest {
     assertThat(flushedOffset, is(Optional.of(5L)));
   }
 
+  private void assertNext(
+      KeyValueIterator<Bytes, byte[]> iter,
+      String key,
+      String value
+  ) {
+    assertThat(iter.hasNext(), is(true));
+    final var keyValue = iter.next();
+    assertThat(keyValue.key, is(utf8Bytes(key)));
+    assertThat(Bytes.wrap(keyValue.value), is(utf8Bytes(value)));
+  }
+
+  private Bytes utf8Bytes(String s) {
+    final var bytes = s.getBytes(StandardCharsets.UTF_8);
+    return Bytes.wrap(bytes);
+  }
+
+  private Put buildPut(String key, String value) {
+    final var keyBytes = utf8Bytes(key).get();
+    final var valueBytes = value == null ? null : utf8Bytes(value).get();
+    return new Put(keyBytes, valueBytes);
+  }
+
   static class TestRs3Service extends RS3Grpc.RS3ImplBase {
     private final AtomicLong offset = new AtomicLong(0);
-    private final ConcurrentMap<ByteString, ByteString> table = new ConcurrentHashMap<>();
+    private final ConcurrentSkipListMap<Bytes, Bytes> table = new ConcurrentSkipListMap<>();
 
     @Override
     public void getOffsets(
@@ -183,13 +313,67 @@ class GrpcRS3ClientEndToEndTest {
 
       final var keyValueResult = Rs3.KeyValue
           .newBuilder()
-          .setKey(req.getKey())
-          .setValue(table.get(req.getKey()));
+          .setKey(req.getKey());
+      final var key = Bytes.wrap(req.getKey().toByteArray());
+      final var value = table.get(key);
+      if (value != null) {
+        keyValueResult.setValue(ByteString.copyFrom(value.get()));
+      }
+
       final var result = Rs3.GetResult
           .newBuilder()
           .setResult(keyValueResult)
           .build();
       responseObserver.onNext(result);
+      responseObserver.onCompleted();
+    }
+
+    @Override
+    public void range(
+        final Rs3.RangeRequest req,
+        final StreamObserver<Rs3.RangeResult> responseObserver
+    ) {
+      final var storeId = new UUID(
+          req.getStoreId().getHigh(),
+          req.getStoreId().getLow()
+      );
+      if (req.getPssId() != PSS_ID
+          || req.getLssId().getId() != LSS_ID.id()
+          || !storeId.equals(STORE_ID)) {
+        responseObserver.onError(new StatusRuntimeException(Status.INVALID_ARGUMENT));
+        return;
+      }
+
+      if (req.getExpectedWrittenOffset() != GrpcRS3Client.WAL_OFFSET_NONE) {
+        if (offset.get() < req.getExpectedWrittenOffset()) {
+          responseObserver.onError(new StatusRuntimeException(Status.INVALID_ARGUMENT));
+          return;
+        }
+      }
+
+      final var range = GrpsRs3TestUtil.newRangeFromProto(req);
+      for (final var keyValueEntry : table.entrySet()) {
+        if (!range.contains(keyValueEntry.getKey().get())) {
+          continue;
+        }
+
+        final var keyValue = Rs3.KeyValue
+            .newBuilder()
+            .setKey(ByteString.copyFrom(keyValueEntry.getKey().get()))
+            .setValue(ByteString.copyFrom(keyValueEntry.getValue().get()));
+
+        final var keyValueResult = Rs3.RangeResult.newBuilder()
+            .setType(Rs3.RangeResult.Type.RESULT)
+            .setResult(keyValue)
+            .build();
+
+        responseObserver.onNext(keyValueResult);
+      }
+
+      final var endOfStream = Rs3.RangeResult.newBuilder()
+          .setType(Rs3.RangeResult.Type.END_OF_STREAM)
+          .build();
+      responseObserver.onNext(endOfStream);
       responseObserver.onCompleted();
     }
 
@@ -221,10 +405,13 @@ class GrpcRS3ClientEndToEndTest {
               current -> Math.max(current, req.getEndOffset())
           );
           final var put = req.getPut();
+          final var keyBytes = Bytes.wrap(put.getKey().toByteArray());
+
           if (put.hasValue()) {
-            table.put(put.getKey(), put.getValue());
+            final var valueBytes = Bytes.wrap(put.getValue().toByteArray());
+            table.put(keyBytes, valueBytes);
           } else {
-            table.remove(put.getKey());
+            table.remove(keyBytes);
           }
         }
 

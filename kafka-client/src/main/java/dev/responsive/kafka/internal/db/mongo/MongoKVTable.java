@@ -288,7 +288,7 @@ public class MongoKVTable implements RemoteKVTable<WriteModel<KVDoc>> {
   }
 
   @Override
-  public long fetchOffset(final int kafkaPartition) {
+  public long lastWrittenOffset(final int kafkaPartition) {
     final KVMetadataDoc result = metadata.find(
         Filters.eq(KVMetadataDoc.PARTITION, kafkaPartition)
     ).first();
