@@ -92,9 +92,11 @@ import org.apache.kafka.streams.state.StoreBuilder;
 public class AsyncAPI {
   // TODO:
   //  1) update javadocs:
-  //    -confirm restriction #4
+  //    -evaluate restrictions #1 and #4
   //    -add section on processor wrapper to instructions
   //  2) API to configure or whitelist/blacklist for individual processors when using wrapper?
+  //  3) account for multiple stores (StreamThreadFlushListeners.AsyncFlushListener etc)
+  //  4) other store types (eg versioned stores, any others?) in StreamThreadProcessorContext#getStateStore
 
   /**
    * Create an AsyncProcessorSupplier that wraps a custom {@link ProcessorSupplier}

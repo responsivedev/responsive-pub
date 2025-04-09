@@ -17,25 +17,21 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
-import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.internals.AsyncKeyValueStoreBuilder;
+import org.apache.kafka.streams.state.WindowStore;
 
 /**
  * A copy of the {@link org.apache.kafka.streams.state.internals.AbstractStoreBuilder} class with
  * a few additional methods related to async processing, such as de/registering flush listeners
  */
-public abstract class AbstractAsyncStoreBuilder<K, V, T extends StateStore>
+public abstract class AbstractAsyncStoreBuilder<T extends StateStore>
     implements StoreBuilder<T> {
 
   protected final String name;
-  protected final Serde<K> keySerde;
-  protected final Serde<V> valueSerde;
-  protected final Time time;
   protected final Map<String, String> logConfig = new HashMap<>();
 
   private boolean cachingEnabled = false;
@@ -44,54 +40,93 @@ public abstract class AbstractAsyncStoreBuilder<K, V, T extends StateStore>
   // Since there is only one StoreBuilder instance for each store, it is used by all of the
   // StreamThreads in an app, and so we must account for which StreamThread is building
   // or accessing which stores
-  private final Map<String, StreamThreadFlushListeners> streamThreadToFlushListeners =
+  @SuppressWarnings("checkstyle:linelength")
+  private static final Map<String, Map<String, StreamThreadFlushListeners>> storeToThreadToListeners =
       new ConcurrentHashMap<>();
 
   public AbstractAsyncStoreBuilder(
-      final String name,
-      final Serde<K> keySerde,
-      final Serde<V> valueSerde,
-      final Time time
+      final String name
   ) {
     Objects.requireNonNull(name, "name cannot be null");
-    Objects.requireNonNull(time, "time cannot be null");
     this.name = name;
-    this.keySerde = keySerde;
-    this.valueSerde = valueSerde;
-    this.time = time;
   }
 
   /**
-   * Similar to the #maybeWrapCaching or #maybeWrapLogging methods in the StoreBuilder classes
-   * (eg {@link AsyncKeyValueStoreBuilder}, this method adds an additional layer to the store
+   * Similar to the #maybeWrapCaching or #maybeWrapLogging methods in the
+   * {@link org.apache.kafka.streams.state.internals.DelayedAsyncStoreBuilder},
+   * this method adds an additional layer to the store
    * hierarchy by wrapping it in a {@link AsyncFlushingKeyValueStore}.
    * <p>
    * This specific method is for use with KV stores, whether plain or timestamped.
-   * TODO: add equivalent for window/session stores
    */
   protected KeyValueStore<Bytes, byte[]> wrapAsyncFlushingKV(
       final KeyValueStore<Bytes, byte[]> inner
   ) {
     final StreamThreadFlushListeners threadFlushListeners =
-        getOrCreateFlushListeners(Thread.currentThread().getName());
+        getOrCreateFlushListeners(inner.name(), Thread.currentThread().getName());
 
     return new AsyncFlushingKeyValueStore(inner, threadFlushListeners);
   }
 
   /**
+   * Similar to the #maybeWrapCaching or #maybeWrapLogging methods in the
+   * {@link org.apache.kafka.streams.state.internals.DelayedAsyncStoreBuilder},
+   * this method adds an additional layer to the store
+   * hierarchy by wrapping it in a {@link AsyncFlushingWindowStore}.
+   * <p>
+   * This specific method is for use with window stores, whether plain or timestamped.
+   */
+  protected WindowStore<Bytes, byte[]> wrapAsyncFlushingWindow(
+      final WindowStore<Bytes, byte[]> inner
+  ) {
+    final StreamThreadFlushListeners threadFlushListeners =
+        getOrCreateFlushListeners(inner.name(), Thread.currentThread().getName());
+
+    return new AsyncFlushingWindowStore(inner, threadFlushListeners);
+  }
+
+  /**
+   * Similar to the #maybeWrapCaching or #maybeWrapLogging methods in the
+   * {@link org.apache.kafka.streams.state.internals.DelayedAsyncStoreBuilder},
+   * this method adds an additional layer to the store
+   * hierarchy by wrapping it in a {@link AsyncFlushingSessionStore}.
+   * <p>
+   * This specific method is for use with session stores, whether plain or timestamped.
+   */
+  protected SessionStore<Bytes, byte[]> wrapAsyncFlushingSession(
+      final SessionStore<Bytes, byte[]> inner
+  ) {
+    final StreamThreadFlushListeners threadFlushListeners =
+        getOrCreateFlushListeners(inner.name(), Thread.currentThread().getName());
+
+    return new AsyncFlushingSessionStore(inner, threadFlushListeners);
+  }
+
+  /**
    * Register a flush listener and the partition it's associated with for the
    * given StreamThread.
+   * <p>
+   * Invoked from the async processor's #init which is called after the store has already
+   * been built and initialized, so we expect this thread to already have registered a flush
+   * listener for the store
    */
   public void registerFlushListenerWithAsyncStore(
+      final String storeName,
       final String streamThreadName,
       final int partition,
       final AsyncFlushListener processorFlushListener
   ) {
+    final var storeListeners = storeToThreadToListeners.get(storeName);
+    if (storeListeners == null) {
+      throw new IllegalStateException("Unable to locate flush listener metadata "
+                                          + "for the current store: " + storeName);
+    }
+
     final StreamThreadFlushListeners threadListeners =
-        streamThreadToFlushListeners.get(streamThreadName);
+        storeListeners.get(streamThreadName);
     if (threadListeners == null) {
       throw new IllegalStateException("Unable to locate flush listener metadata "
-                                          + "for the current StreamThread");
+                                          + "for the current StreamThread: " + streamThreadName);
     }
     threadListeners.registerListenerForPartition(partition, processorFlushListener);
   }
@@ -103,12 +138,15 @@ public abstract class AbstractAsyncStoreBuilder<K, V, T extends StateStore>
    * This should be a no-op if the builder has already registered this thread.
    */
   protected StreamThreadFlushListeners getOrCreateFlushListeners(
+      final String storeName,
       final String streamThreadName
   ) {
-    return streamThreadToFlushListeners.computeIfAbsent(
-        streamThreadName,
-        k -> new StreamThreadFlushListeners(streamThreadName, name)
-    );
+    return storeToThreadToListeners
+        .computeIfAbsent(storeName,
+                         s -> new HashMap<>())
+        .computeIfAbsent(streamThreadName,
+                         k -> new StreamThreadFlushListeners(streamThreadName, name)
+        );
   }
 
   @Override

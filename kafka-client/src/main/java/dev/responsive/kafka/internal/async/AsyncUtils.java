@@ -20,8 +20,6 @@ import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadAs
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.async.stores.AbstractAsyncStoreBuilder;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
-import dev.responsive.kafka.internal.stores.ResponsiveStoreBuilder;
-import dev.responsive.kafka.internal.stores.ResponsiveStoreBuilder.StoreType;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -31,8 +29,7 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.internals.AsyncKeyValueStoreBuilder;
-import org.apache.kafka.streams.state.internals.AsyncTimestampedKeyValueStoreBuilder;
+import org.apache.kafka.streams.state.internals.DelayedAsyncStoreBuilder;
 
 public class AsyncUtils {
 
@@ -67,45 +64,58 @@ public class AsyncUtils {
         || isStreamThread(threadName, streamThreadName);
   }
 
-  public static Map<String, AbstractAsyncStoreBuilder<?, ?, ?>> initializeAsyncBuilders(
+  public static Map<String, AbstractAsyncStoreBuilder<?>> initializeAsyncBuilders(
       final Set<StoreBuilder<?>> userConnectedStores
   ) {
     if (userConnectedStores == null || userConnectedStores.isEmpty()) {
       return Collections.emptyMap();
     }
 
-    final Map<String, AbstractAsyncStoreBuilder<?, ?, ?>> asyncStoreBuilders = new HashMap<>();
+    final Map<String, AbstractAsyncStoreBuilder<?>> asyncStoreBuilders = new HashMap<>();
     for (final StoreBuilder<?> builder : userConnectedStores) {
       final String storeName = builder.name();
-      if (builder instanceof ResponsiveStoreBuilder) {
-        final ResponsiveStoreBuilder<?, ?, ?> responsiveBuilder =
-            (ResponsiveStoreBuilder<?, ?, ?>) builder;
 
-        final StoreType storeType = responsiveBuilder.storeType();
+      asyncStoreBuilders.put(
+          storeName,
+          new DelayedAsyncStoreBuilder<>(builder)
+      );
 
-        final AbstractAsyncStoreBuilder<?, ?, ?> storeBuilder;
-        if (storeType.equals(StoreType.TIMESTAMPED_KEY_VALUE)) {
-          storeBuilder = new AsyncTimestampedKeyValueStoreBuilder<>(responsiveBuilder);
-        } else if (storeType.equals(StoreType.KEY_VALUE)) {
-          storeBuilder = new AsyncKeyValueStoreBuilder<>(responsiveBuilder);
-        } else {
-          throw new UnsupportedOperationException(
-              "Only key-value stores are supported by async processors at this time");
-        }
-
-        asyncStoreBuilders.put(
-            storeName,
-            storeBuilder
-        );
-
-      } else {
-        throw new IllegalStateException(String.format(
-            "Detected the StoreBuilder for %s was not created via the ResponsiveStores factory, "
-                + "please ensure that all store builders and suppliers are provided through the "
-                + "appropriate API from ResponsiveStores", storeName));
-      }
     }
     return asyncStoreBuilders;
+  }
+
+  public static AsyncThreadPoolRegistration getAsyncThreadPool(
+      final Map<String, Object> configs,
+      final String streamThreadName
+  ) {
+    try {
+      final AsyncThreadPoolRegistry registry = loadAsyncThreadPoolRegistry(configs);
+      return registry.asyncThreadPoolForStreamThread(streamThreadName);
+    } catch (final Exception e) {
+      throw new ConfigException(
+          "Unable to locate async thread pool registry. Make sure to configure "
+              + ResponsiveConfig.ASYNC_THREAD_POOL_SIZE_CONFIG, e);
+    }
+  }
+
+  public static Optional<AsyncThreadPoolRegistry> configuredAsyncThreadPool(
+      final ResponsiveConfig responsiveConfig,
+      final int numStreamThreads,
+      final ResponsiveMetrics metrics
+  ) {
+    final int asyncThreadPoolSize = responsiveConfig.getInt(ASYNC_THREAD_POOL_SIZE_CONFIG);
+
+    if (asyncThreadPoolSize > 0) {
+      final AsyncThreadPoolRegistry asyncRegistry = new AsyncThreadPoolRegistry(
+          numStreamThreads,
+          asyncThreadPoolSize,
+          responsiveConfig.getInt(ASYNC_MAX_EVENTS_QUEUED_PER_ASYNC_THREAD_CONFIG),
+          metrics
+      );
+      return Optional.of(asyncRegistry);
+    } else {
+      return Optional.empty();
+    }
   }
 
   /**
@@ -135,40 +145,6 @@ public class AsyncUtils {
     }
 
     return result;
-  }
-
-  public static Optional<AsyncThreadPoolRegistry> configuredAsyncThreadPool(
-      final ResponsiveConfig responsiveConfig,
-      final int numStreamThreads,
-      final ResponsiveMetrics metrics
-  ) {
-    final int asyncThreadPoolSize = responsiveConfig.getInt(ASYNC_THREAD_POOL_SIZE_CONFIG);
-
-    if (asyncThreadPoolSize > 0) {
-      final AsyncThreadPoolRegistry asyncRegistry = new AsyncThreadPoolRegistry(
-          numStreamThreads,
-          asyncThreadPoolSize,
-          responsiveConfig.getInt(ASYNC_MAX_EVENTS_QUEUED_PER_ASYNC_THREAD_CONFIG),
-          metrics
-      );
-      return Optional.of(asyncRegistry);
-    } else {
-      return Optional.empty();
-    }
-  }
-
-  public static AsyncThreadPoolRegistration getAsyncThreadPool(
-      final Map<String, Object> appConfigs,
-      final String streamThreadName
-  ) {
-    try {
-      final AsyncThreadPoolRegistry registry = loadAsyncThreadPoolRegistry(appConfigs);
-      return registry.asyncThreadPoolForStreamThread(streamThreadName);
-    } catch (final Exception e) {
-      throw new ConfigException(
-          "Unable to locate async thread pool registry. Make sure to configure "
-              + ResponsiveConfig.ASYNC_THREAD_POOL_SIZE_CONFIG, e);
-    }
   }
 
 }

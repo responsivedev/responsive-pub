@@ -12,6 +12,8 @@
 
 package dev.responsive.kafka.internal.async.events;
 
+import java.util.Objects;
+import org.apache.kafka.streams.kstream.Windowed;
 
 /**
  * A record (or tombstone) that should be written to the given state store.
@@ -23,18 +25,54 @@ package dev.responsive.kafka.internal.async.events;
  */
 public class DelayedWrite<KS, VS> {
 
-  private final KS recordKey;
-  private final VS recordValue;
   private final String storeName;
 
-  public DelayedWrite(
+  private final KS recordKey;
+  private final VS recordValue;
+
+  // window stores only
+  private final long windowStartMs;
+
+  // session stores only
+  private final Windowed<KS> sessionKey;
+
+  public static <KS, VS> DelayedWrite<KS, VS> newKVWrite(
+      final String storeName,
+      final KS recordKey,
+      final VS recordValue
+  ) {
+    return new DelayedWrite<>(storeName, recordKey, recordValue, 0L, null);
+  }
+
+  public static <KS, VS> DelayedWrite<KS, VS> newWindowWrite(
+      final String storeName,
       final KS recordKey,
       final VS recordValue,
-      final String storeName
+      final long windowStartMs
+  ) {
+    return new DelayedWrite<>(storeName, recordKey, recordValue, windowStartMs, null);
+  }
+
+  public static <KS, VS> DelayedWrite<KS, VS> newSessionWrite(
+      final String storeName,
+      final Windowed<KS> sessionKey,
+      final VS recordValue
+  ) {
+    return new DelayedWrite<>(storeName, null, recordValue, 0L, sessionKey);
+  }
+
+  private DelayedWrite(
+      final String storeName,
+      final KS recordKey,
+      final VS recordValue,
+      final long windowStartMs,
+      final Windowed<KS> sessionKey
   ) {
     this.recordKey = recordKey;
     this.recordValue = recordValue;
     this.storeName = storeName;
+    this.windowStartMs = windowStartMs;
+    this.sessionKey = sessionKey;
   }
 
   public String storeName() {
@@ -49,6 +87,25 @@ public class DelayedWrite<KS, VS> {
     return recordValue;
   }
 
+  public long windowStartMs() {
+    return windowStartMs;
+  }
+
+  public Windowed<KS> sessionKey() {
+    return sessionKey;
+  }
+
+  @Override
+  public String toString() {
+    return "DelayedWrite{" +
+        "storeName='" + storeName + '\'' +
+        ", recordKey=" + recordKey +
+        ", recordValue=" + recordValue +
+        ", windowStartMs=" + windowStartMs +
+        ", sessionKey=" + sessionKey +
+        '}';
+  }
+
   @Override
   public boolean equals(final Object o) {
     if (this == o) {
@@ -60,19 +117,28 @@ public class DelayedWrite<KS, VS> {
 
     final DelayedWrite<?, ?> that = (DelayedWrite<?, ?>) o;
 
-    if (!recordKey.equals(that.recordKey)) {
+    if (windowStartMs != that.windowStartMs) {
       return false;
     }
-    return storeName.equals(that.storeName);
+    if (!storeName.equals(that.storeName)) {
+      return false;
+    }
+    if (!Objects.equals(recordKey, that.recordKey)) {
+      return false;
+    }
+    if (!Objects.equals(recordValue, that.recordValue)) {
+      return false;
+    }
+    return Objects.equals(sessionKey, that.sessionKey);
   }
 
   @Override
   public int hashCode() {
-    return 31 * recordKey.hashCode() + storeName.hashCode();
-  }
-
-  @Override
-  public String toString() {
-    return "DelayedWrite<" + recordKey + ", " + recordValue + ">";
+    int result = storeName.hashCode();
+    result = 31 * result + (recordKey != null ? recordKey.hashCode() : 0);
+    result = 31 * result + (recordValue != null ? recordValue.hashCode() : 0);
+    result = 31 * result + (int) (windowStartMs ^ (windowStartMs >>> 32));
+    result = 31 * result + (sessionKey != null ? sessionKey.hashCode() : 0);
+    return result;
   }
 }
