@@ -12,8 +12,8 @@
 
 package org.apache.kafka.streams.state.internals;
 
-import dev.responsive.kafka.api.async.internals.stores.AbstractAsyncStoreBuilder;
-import dev.responsive.kafka.api.async.internals.stores.AsyncFlushingKeyValueStore;
+import dev.responsive.kafka.internal.async.stores.AbstractAsyncStoreBuilder;
+import dev.responsive.kafka.internal.async.stores.AsyncFlushingKeyValueStore;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreBuilder;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;

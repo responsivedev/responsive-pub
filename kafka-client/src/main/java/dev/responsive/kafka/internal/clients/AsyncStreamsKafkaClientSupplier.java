@@ -12,7 +12,7 @@
 
 package dev.responsive.kafka.internal.clients;
 
-import dev.responsive.kafka.api.async.internals.AsyncThreadPoolRegistry;
+import dev.responsive.kafka.internal.async.AsyncThreadPoolRegistry;
 import java.util.Map;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;

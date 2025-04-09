@@ -30,11 +30,11 @@ import static org.apache.kafka.streams.StreamsConfig.METRICS_RECORDING_LEVEL_CON
 import static org.apache.kafka.streams.StreamsConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.NUM_STREAM_THREADS_CONFIG;
 
-import dev.responsive.kafka.api.async.internals.AsyncThreadPoolRegistry;
-import dev.responsive.kafka.api.async.internals.AsyncUtils;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.api.stores.ResponsiveDslStoreSuppliers;
+import dev.responsive.kafka.internal.async.AsyncThreadPoolRegistry;
+import dev.responsive.kafka.internal.async.AsyncUtils;
 import dev.responsive.kafka.internal.clients.AsyncStreamsKafkaClientSupplier;
 import dev.responsive.kafka.internal.clients.OriginEventReporter;
 import dev.responsive.kafka.internal.clients.OriginEventReporterImpl;

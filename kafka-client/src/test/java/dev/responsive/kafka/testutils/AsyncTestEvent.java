@@ -12,7 +12,7 @@
 
 package dev.responsive.kafka.testutils;
 
-import dev.responsive.kafka.api.async.internals.events.AsyncEvent;
+import dev.responsive.kafka.internal.async.events.AsyncEvent;
 import java.util.List;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.streams.processor.TaskId;

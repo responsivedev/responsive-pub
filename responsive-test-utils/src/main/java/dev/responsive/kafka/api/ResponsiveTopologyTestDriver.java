@@ -12,15 +12,15 @@
 
 package dev.responsive.kafka.api;
 
-import static dev.responsive.kafka.api.async.internals.AsyncUtils.getAsyncThreadPool;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.ASYNC_THREAD_POOL_SIZE_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.responsiveConfig;
+import static dev.responsive.kafka.internal.async.AsyncUtils.getAsyncThreadPool;
 import static dev.responsive.kafka.internal.stores.TTDRestoreListener.mockRestoreListener;
 
-import dev.responsive.kafka.api.async.internals.AsyncThreadPoolRegistration;
-import dev.responsive.kafka.api.async.internals.AsyncUtils;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.StorageBackend;
+import dev.responsive.kafka.internal.async.AsyncThreadPoolRegistration;
+import dev.responsive.kafka.internal.async.AsyncUtils;
 import dev.responsive.kafka.internal.clients.TTDCassandraClient;
 import dev.responsive.kafka.internal.clients.TTDMockAdmin;
 import dev.responsive.kafka.internal.config.InternalSessionConfigs;
