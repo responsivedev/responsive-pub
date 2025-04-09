@@ -12,11 +12,12 @@
 
 package dev.responsive.kafka.internal.async;
 
-import static dev.responsive.kafka.internal.async.AsyncUtils.getAsyncThreadPool;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.ASYNC_FLUSH_INTERVAL_MS_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.ASYNC_MAX_EVENTS_QUEUED_PER_KEY_CONFIG;
+import static dev.responsive.kafka.internal.async.AsyncUtils.getAsyncThreadPool;
 
 import dev.responsive.kafka.api.async.AsyncProcessorSupplier;
+import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.async.contexts.AsyncUserProcessorContext;
 import dev.responsive.kafka.internal.async.contexts.StreamThreadProcessorContext;
 import dev.responsive.kafka.internal.async.events.AsyncEvent;
@@ -30,7 +31,6 @@ import dev.responsive.kafka.internal.async.queues.SchedulingQueue;
 import dev.responsive.kafka.internal.async.stores.AbstractAsyncStoreBuilder;
 import dev.responsive.kafka.internal.async.stores.AsyncKeyValueStore;
 import dev.responsive.kafka.internal.async.stores.StreamThreadFlushListeners.AsyncFlushListener;
-import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.config.InternalSessionConfigs;
 import java.time.Duration;
 import java.util.Collection;

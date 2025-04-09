@@ -12,13 +12,13 @@
 
 package dev.responsive.kafka.internal.async;
 
-import static dev.responsive.kafka.internal.async.AsyncThreadPool.ASYNC_THREAD_NAME;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.ASYNC_MAX_EVENTS_QUEUED_PER_ASYNC_THREAD_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.ASYNC_THREAD_POOL_SIZE_CONFIG;
+import static dev.responsive.kafka.internal.async.AsyncThreadPool.ASYNC_THREAD_NAME;
 import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadAsyncThreadPoolRegistry;
 
-import dev.responsive.kafka.internal.async.stores.AbstractAsyncStoreBuilder;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
+import dev.responsive.kafka.internal.async.stores.AbstractAsyncStoreBuilder;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreBuilder;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreBuilder.StoreType;
