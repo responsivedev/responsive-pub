@@ -14,22 +14,22 @@ package dev.responsive.kafka.internal.db.rs3;
 
 import dev.responsive.kafka.internal.db.KVFlushManager;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
+import dev.responsive.kafka.internal.db.rs3.client.Delete;
 import dev.responsive.kafka.internal.db.rs3.client.LssId;
+import dev.responsive.kafka.internal.db.rs3.client.LssMetadata;
 import dev.responsive.kafka.internal.db.rs3.client.MeteredRS3Client;
 import dev.responsive.kafka.internal.db.rs3.client.Put;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Client;
+import dev.responsive.kafka.internal.db.rs3.client.RS3ClientUtil;
 import dev.responsive.kafka.internal.db.rs3.client.RangeBound;
 import dev.responsive.kafka.internal.db.rs3.client.WalEntry;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration;
 import dev.responsive.kafka.internal.utils.MergeKeyValueIterator;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -42,6 +42,7 @@ public class RS3KVTable implements RemoteKVTable<WalEntry> {
   private final String name;
   private final UUID storeId;
   private final RS3Client rs3Client;
+  private final RS3ClientUtil rs3ClientUtil;
   private final PssPartitioner pssPartitioner;
   private LssId lssId;
   private Long fetchOffset = ResponsiveStoreRegistration.NO_COMMITTED_OFFSET;
@@ -62,6 +63,7 @@ public class RS3KVTable implements RemoteKVTable<WalEntry> {
         Objects.requireNonNull(responsiveMetrics),
         Objects.requireNonNull(scopeBuilder)
     );
+    this.rs3ClientUtil = new RS3ClientUtil(storeId, rs3Client, pssPartitioner);
     this.pssPartitioner = Objects.requireNonNull(pssPartitioner);
   }
 
@@ -78,40 +80,14 @@ public class RS3KVTable implements RemoteKVTable<WalEntry> {
 
     this.lssId = new LssId(kafkaPartition);
 
-    // TODO: we should write an empty segment periodically to any PSS that we haven't
-    //       written to to bump the written offset
-    final HashMap<Integer, Optional<Long>> lastWrittenOffset = new HashMap<>();
-    for (final int pss : pssPartitioner.pssForLss(this.lssId)) {
-      final var offsets = rs3Client.getCurrentOffsets(storeId, lssId, pss);
-      lastWrittenOffset.put(pss, offsets.writtenOffset());
-    }
-    final var fetchOffsetOrMinusOne = lastWrittenOffset.values().stream()
-        .map(v -> v.orElse(-1L))
-        .min(Long::compare)
-        .orElse(-1L);
-    if (fetchOffsetOrMinusOne == -1) {
-      this.fetchOffset = ResponsiveStoreRegistration.NO_COMMITTED_OFFSET;
-    } else {
-      this.fetchOffset = fetchOffsetOrMinusOne;
-    }
-
-    final var writtenOffsetsStr = lastWrittenOffset.entrySet().stream()
-        .map(e -> String.format("%s -> %s",
-            e.getKey(),
-            e.getValue().map(Object::toString).orElse("none")))
-        .collect(Collectors.joining(","));
-    LOG.info("restore rs3 kv table from offset {} for {}. recorded written offsets: {}",
-        fetchOffset,
-        kafkaPartition,
-        writtenOffsetsStr
-    );
-
-    flushManager = new RS3KVFlushManager(
+    LssMetadata lssMetadata = rs3ClientUtil.fetchLssMetadata(lssId);
+    this.fetchOffset = lssMetadata.lastWrittenOffset();
+    this.flushManager = new RS3KVFlushManager(
         storeId,
         rs3Client,
         lssId,
         this,
-        lastWrittenOffset,
+        lssMetadata.writtenOffsets(),
         kafkaPartition,
         pssPartitioner
     );
@@ -126,7 +102,7 @@ public class RS3KVTable implements RemoteKVTable<WalEntry> {
         lssId,
         pssId,
         flushManager.writtenOffset(pssId),
-        key.get()
+        key
     ).orElse(null);
   }
 
@@ -137,8 +113,8 @@ public class RS3KVTable implements RemoteKVTable<WalEntry> {
       final Bytes to,
       final long streamTimeMs
   ) {
-    final RangeBound fromBound = RangeBound.inclusive(from.get());
-    final RangeBound toBound = RangeBound.exclusive(to.get());
+    final RangeBound<Bytes> fromBound = RangeBound.inclusive(from);
+    final RangeBound<Bytes> toBound = RangeBound.exclusive(to);
     final List<KeyValueIterator<Bytes, byte[]>> pssIters = new ArrayList<>();
 
     for (int pssId : pssPartitioner.pssForLss(this.lssId)) {
@@ -199,10 +175,7 @@ public class RS3KVTable implements RemoteKVTable<WalEntry> {
 
   @Override
   public WalEntry delete(final int kafkaPartition, final Bytes key) {
-    return new Put(
-        key.get(),
-        null
-    );
+    return new Delete(key.get());
   }
 
   @Override

@@ -12,38 +12,37 @@
 
 package dev.responsive.kafka.internal.db.rs3.client;
 
-import java.util.Arrays;
 import java.util.Objects;
 
-public interface RangeBound {
+public interface RangeBound<K> {
 
-  <T> T map(Mapper<T> mapper);
+  <T> T map(Mapper<K, T> mapper);
 
-  static Unbounded unbounded() {
-    return Unbounded.INSTANCE;
+  static <K> Unbounded<K> unbounded() {
+    return new Unbounded<>();
   }
 
-  static InclusiveBound inclusive(byte[] key) {
-    return new InclusiveBound(key);
+  static <K> InclusiveBound<K> inclusive(K key) {
+    return new InclusiveBound<>(key);
   }
 
-  static ExclusiveBound exclusive(byte[] key) {
-    return new ExclusiveBound(key);
+  static <K> ExclusiveBound<K> exclusive(K key) {
+    return new ExclusiveBound<>(key);
   }
 
-  class InclusiveBound implements RangeBound {
-    private final byte[] key;
+  class InclusiveBound<K> implements RangeBound<K> {
+    private final K key;
 
-    public InclusiveBound(final byte[] key) {
+    public InclusiveBound(final K key) {
       this.key = key;
     }
 
-    public byte[] key() {
+    public K key() {
       return key;
     }
 
     @Override
-    public <T> T map(final Mapper<T> mapper) {
+    public <T> T map(final Mapper<K, T> mapper) {
       return mapper.map(this);
     }
 
@@ -55,29 +54,29 @@ public interface RangeBound {
       if (o == null || getClass() != o.getClass()) {
         return false;
       }
-      final InclusiveBound that = (InclusiveBound) o;
-      return Objects.deepEquals(key, that.key);
+      final InclusiveBound<?> that = (InclusiveBound<?>) o;
+      return Objects.equals(key, that.key);
     }
 
     @Override
     public int hashCode() {
-      return Arrays.hashCode(key);
+      return Objects.hashCode(key);
     }
   }
 
-  class ExclusiveBound implements RangeBound {
-    private final byte[] key;
+  class ExclusiveBound<K> implements RangeBound<K> {
+    private final K key;
 
-    public ExclusiveBound(final byte[] key) {
+    public ExclusiveBound(final K key) {
       this.key = key;
     }
 
-    public byte[] key() {
+    public K key() {
       return key;
     }
 
     @Override
-    public <T> T map(final Mapper<T> mapper) {
+    public <T> T map(final Mapper<K, T> mapper) {
       return mapper.map(this);
     }
 
@@ -89,33 +88,31 @@ public interface RangeBound {
       if (o == null || getClass() != o.getClass()) {
         return false;
       }
-      final ExclusiveBound that = (ExclusiveBound) o;
-      return Objects.deepEquals(key, that.key);
+      final ExclusiveBound<?> that = (ExclusiveBound<?>) o;
+      return Objects.equals(key, that.key);
     }
 
     @Override
     public int hashCode() {
-      return Arrays.hashCode(key);
+      return Objects.hashCode(key);
     }
   }
 
-  class Unbounded implements RangeBound {
-    private static final Unbounded INSTANCE = new Unbounded();
-
+  class Unbounded<K> implements RangeBound<K> {
     private Unbounded() {}
 
     @Override
-    public <T> T map(final Mapper<T> mapper) {
+    public <T> T map(final Mapper<K, T> mapper) {
       return mapper.map(this);
     }
   }
 
-  interface Mapper<T> {
-    T map(InclusiveBound b);
+  interface Mapper<K, T> {
+    T map(InclusiveBound<K> b);
 
-    T map(ExclusiveBound b);
+    T map(ExclusiveBound<K> b);
 
-    T map(Unbounded b);
+    T map(Unbounded<K> b);
   }
 
 }

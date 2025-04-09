@@ -12,10 +12,10 @@
 
 package dev.responsive.kafka.internal.db.rs3.client.grpc;
 
-import com.google.protobuf.ByteString;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Exception;
 import dev.responsive.kafka.internal.db.rs3.client.RS3TransientException;
 import dev.responsive.kafka.internal.db.rs3.client.RangeBound;
+import dev.responsive.kafka.internal.utils.WindowedKey;
 import dev.responsive.rs3.Rs3;
 import io.grpc.stub.StreamObserver;
 import java.util.NoSuchElementException;
@@ -31,22 +31,48 @@ import org.slf4j.LoggerFactory;
  * Internal iterator implementation which supports retries using RS3's asynchronous
  * Range API.
  */
-public class GrpcKeyValueIterator implements KeyValueIterator<Bytes, byte[]> {
+public class GrpcKeyValueIterator<K> implements KeyValueIterator<K, byte[]> {
   private static final Logger LOG = LoggerFactory.getLogger(GrpcKeyValueIterator.class);
 
-  private final GrpcRangeRequestProxy requestProxy;
+  private final GrpcRangeRequestProxy<K> requestProxy;
+  private final GrpcRangeKeyCodec<K> keyCodec;
   private final GrpcMessageQueue<Message> queue;
-  private RangeBound startBound;
+  private RangeBound<K> startBound;
   private RangeResultObserver resultObserver;
 
   public GrpcKeyValueIterator(
-      RangeBound initialStartBound,
-      GrpcRangeRequestProxy requestProxy
+      RangeBound<K> initialStartBound,
+      GrpcRangeRequestProxy<K> requestProxy,
+      GrpcRangeKeyCodec<K> keyCodec
   ) {
     this.requestProxy = requestProxy;
+    this.keyCodec = keyCodec;
     this.queue = new GrpcMessageQueue<>();
     this.startBound = initialStartBound;
     sendRangeRequest();
+  }
+
+  static GrpcKeyValueIterator<Bytes> standard(
+      RangeBound<Bytes> initialStartBound,
+      GrpcRangeRequestProxy<Bytes> requestProxy
+  ) {
+    return new GrpcKeyValueIterator<>(
+        initialStartBound,
+        requestProxy,
+        GrpcRangeKeyCodec.STANDARD_CODEC
+    );
+  }
+
+  static GrpcKeyValueIterator<WindowedKey> windowed(
+      RangeBound<WindowedKey> initialStartBound,
+      GrpcRangeRequestProxy<WindowedKey> requestProxy
+  ) {
+
+    return new GrpcKeyValueIterator<>(
+        initialStartBound,
+        requestProxy,
+        GrpcRangeKeyCodec.WINDOW_CODEC
+    );
   }
 
   private void sendRangeRequest() {
@@ -61,12 +87,12 @@ public class GrpcKeyValueIterator implements KeyValueIterator<Bytes, byte[]> {
   }
 
   @Override
-  public KeyValue<Bytes, byte[]> next() {
+  public KeyValue<K, byte[]> next() {
     final var nextKeyValue = peekNextKeyValue();
     if (nextKeyValue.isPresent()) {
       queue.poll();
       final var keyValue = nextKeyValue.get();
-      this.startBound = RangeBound.exclusive(keyValue.key.get());
+      this.startBound = RangeBound.exclusive(keyValue.key);
       return keyValue;
     } else {
       throw new NoSuchElementException();
@@ -80,7 +106,7 @@ public class GrpcKeyValueIterator implements KeyValueIterator<Bytes, byte[]> {
     }
   }
 
-  Optional<KeyValue<Bytes, byte[]>> peekNextKeyValue() {
+  Optional<KeyValue<K, byte[]>> peekNextKeyValue() {
     while (true) {
       try {
         final var message = queue.peek();
@@ -96,29 +122,29 @@ public class GrpcKeyValueIterator implements KeyValueIterator<Bytes, byte[]> {
     }
   }
 
-  private Optional<KeyValue<Bytes, byte[]>> tryUnwrapKeyValue(final Message message) {
+  private Optional<KeyValue<K, byte[]>> tryUnwrapKeyValue(final Message message) {
     return message.map(new Mapper<>() {
       @Override
-      public Optional<KeyValue<Bytes, byte[]>> map(final EndOfStream endOfStream) {
+      public Optional<KeyValue<K, byte[]>> map(final EndOfStream endOfStream) {
         return Optional.empty();
       }
 
       @Override
-      public Optional<KeyValue<Bytes, byte[]>> map(final StreamError error) {
+      public Optional<KeyValue<K, byte[]>> map(final StreamError error) {
         throw GrpcRs3Util.wrapThrowable(error.exception);
       }
 
       @Override
-      public Optional<KeyValue<Bytes, byte[]>> map(final Result result) {
-        final var key = Bytes.wrap(result.key.toByteArray());
-        final var value = result.value.toByteArray();
+      public Optional<KeyValue<K, byte[]>> map(final Result result) {
+        final var key = keyCodec.decodeRangeResult(result.keyValue);
+        final var value = result.keyValue.getValue().toByteArray();
         return Optional.of(new KeyValue<>(key, value));
       }
     });
   }
 
   @Override
-  public Bytes peekNextKey() {
+  public K peekNextKey() {
     return peekNextKeyValue()
         .map(bytesKeyValue -> bytesKeyValue.key)
         .orElse(null);
@@ -134,8 +160,7 @@ public class GrpcKeyValueIterator implements KeyValueIterator<Bytes, byte[]> {
       } else if (rangeResult.getType() == Rs3.RangeResult.Type.END_OF_STREAM) {
         queue.put(new EndOfStream());
       } else {
-        final var result = rangeResult.getResult();
-        queue.put(new Result(result.getKey(), result.getValue()));
+        queue.put(new Result(rangeResult.getResult()));
       }
     }
 
@@ -172,12 +197,12 @@ public class GrpcKeyValueIterator implements KeyValueIterator<Bytes, byte[]> {
   }
 
   private static class Result implements Message {
-    private final ByteString key;
-    private final ByteString value;
+    private final Rs3.KeyValue keyValue;
 
-    private Result(final ByteString key, final ByteString value) {
-      this.key = key;
-      this.value = value;
+    private Result(
+        final Rs3.KeyValue keyValue
+    ) {
+      this.keyValue = keyValue;
     }
 
     @Override

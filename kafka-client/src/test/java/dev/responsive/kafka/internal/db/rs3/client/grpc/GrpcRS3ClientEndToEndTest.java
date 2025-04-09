@@ -100,7 +100,7 @@ class GrpcRS3ClientEndToEndTest {
         LSS_ID,
         PSS_ID,
         Optional.of(5L),
-        key
+        Bytes.wrap(key)
     );
     assertThat(getResult.isPresent(), is(true));
     final var resultValue = getResult.get();
@@ -164,8 +164,8 @@ class GrpcRS3ClientEndToEndTest {
         LSS_ID,
         PSS_ID,
         Optional.of(10L),
-        RangeBound.inclusive("b".getBytes(StandardCharsets.UTF_8)),
-        RangeBound.exclusive("e".getBytes(StandardCharsets.UTF_8))
+        RangeBound.inclusive(Bytes.wrap("b".getBytes(StandardCharsets.UTF_8))),
+        RangeBound.exclusive(Bytes.wrap("e".getBytes(StandardCharsets.UTF_8)))
     );
 
     assertNext(iter, "b", "bar");
@@ -353,7 +353,7 @@ class GrpcRS3ClientEndToEndTest {
 
       final var range = GrpsRs3TestUtil.newRangeFromProto(req);
       for (final var keyValueEntry : table.entrySet()) {
-        if (!range.contains(keyValueEntry.getKey().get())) {
+        if (!range.contains(keyValueEntry.getKey())) {
           continue;
         }
 

@@ -152,7 +152,7 @@ public class RS3KVTableIntegrationTest {
         new LssId(PARTITION_ID),
         pss,
         Optional.of(10L),
-        key.get()
+        key
     );
     assertThat(result.get(), is("bar".getBytes()));
   }
