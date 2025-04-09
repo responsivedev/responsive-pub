@@ -12,7 +12,7 @@
 
 package dev.responsive.kafka.internal.config;
 
-import dev.responsive.kafka.api.async.internals.AsyncThreadPoolRegistry;
+import dev.responsive.kafka.internal.async.AsyncThreadPoolRegistry;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistry;

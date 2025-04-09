@@ -23,7 +23,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import dev.responsive.kafka.api.async.internals.AsyncThreadPoolRegistry;
+import dev.responsive.kafka.internal.async.AsyncThreadPoolRegistry;
 import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.internal.clients.ResponsiveKafkaClientSupplier.Factories;
 import dev.responsive.kafka.internal.metrics.EndOffsetsPoller;
