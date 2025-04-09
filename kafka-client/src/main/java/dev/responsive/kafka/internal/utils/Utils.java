@@ -122,6 +122,13 @@ public final class Utils {
     return threadName;
   }
 
+  /**
+   * @return whether the current thread is one of the Kafka Streams application's StreamThreads
+   */
+  public static boolean isExecutingOnStreamThread() {
+    return STREAM_THREAD_ID_REGEX.matcher(Thread.currentThread().getName()).matches();
+  }
+
   public static Bytes incrementWithoutOverflow(final Bytes input) {
     try {
       return Bytes.increment(input);

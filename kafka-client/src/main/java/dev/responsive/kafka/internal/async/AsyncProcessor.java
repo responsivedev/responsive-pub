@@ -12,12 +12,11 @@
 
 package dev.responsive.kafka.internal.async;
 
+import static dev.responsive.kafka.internal.async.AsyncUtils.getAsyncThreadPool;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.ASYNC_FLUSH_INTERVAL_MS_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.ASYNC_MAX_EVENTS_QUEUED_PER_KEY_CONFIG;
-import static dev.responsive.kafka.internal.async.AsyncUtils.getAsyncThreadPool;
 
 import dev.responsive.kafka.api.async.AsyncProcessorSupplier;
-import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.async.contexts.AsyncUserProcessorContext;
 import dev.responsive.kafka.internal.async.contexts.StreamThreadProcessorContext;
 import dev.responsive.kafka.internal.async.events.AsyncEvent;
@@ -29,11 +28,10 @@ import dev.responsive.kafka.internal.async.queues.KeyOrderPreservingQueue;
 import dev.responsive.kafka.internal.async.queues.MeteredSchedulingQueue;
 import dev.responsive.kafka.internal.async.queues.SchedulingQueue;
 import dev.responsive.kafka.internal.async.stores.AbstractAsyncStoreBuilder;
-import dev.responsive.kafka.internal.async.stores.AsyncKeyValueStore;
-import dev.responsive.kafka.internal.async.stores.StreamThreadFlushListeners.AsyncFlushListener;
+import dev.responsive.kafka.internal.async.stores.AsyncStateStore;
+import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.config.InternalSessionConfigs;
 import java.time.Duration;
-import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -70,7 +68,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   private final Processor<KIn, VIn, KOut, VOut> userProcessor;
   private final FixedKeyProcessor<KIn, VIn, VOut> userFixedKeyProcessor;
 
-  private final Map<String, AbstractAsyncStoreBuilder<?, ?, ?>> connectedStoreBuilders;
+  private final Map<String, AbstractAsyncStoreBuilder<?>> connectedStoreBuilders;
 
   // Tracks all pending events, ie from moment of creation to end of finalization/transition
   // to "DONE" state. Used to make sure all events are flushed during a commit.
@@ -114,14 +112,14 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
 
   public static <KIn, VIn, KOut, VOut> AsyncProcessor<KIn, VIn, KOut, VOut> createAsyncProcessor(
       final Processor<KIn, VIn, KOut, VOut> userProcessor,
-      final Map<String, AbstractAsyncStoreBuilder<?, ?, ?>> connectedStoreBuilders
+      final Map<String, AbstractAsyncStoreBuilder<?>> connectedStoreBuilders
   ) {
     return new AsyncProcessor<>(userProcessor, null, connectedStoreBuilders);
   }
 
   public static <KIn, VIn, VOut> AsyncProcessor<KIn, VIn, KIn, VOut> createAsyncFixedKeyProcessor(
       final FixedKeyProcessor<KIn, VIn, VOut> userProcessor,
-      final Map<String, AbstractAsyncStoreBuilder<?, ?, ?>> connectedStoreBuilders
+      final Map<String, AbstractAsyncStoreBuilder<?>> connectedStoreBuilders
   ) {
     return new AsyncProcessor<>(null, userProcessor, connectedStoreBuilders);
   }
@@ -134,7 +132,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   private AsyncProcessor(
       final Processor<KIn, VIn, KOut, VOut> userProcessor,
       final FixedKeyProcessor<KIn, VIn, VOut> userFixedKeyProcessor,
-      final Map<String, AbstractAsyncStoreBuilder<?, ?, ?>> connectedStoreBuilders
+      final Map<String, AbstractAsyncStoreBuilder<?>> connectedStoreBuilders
   ) {
     this.userProcessor = userProcessor;
     this.userFixedKeyProcessor = userFixedKeyProcessor;
@@ -240,17 +238,12 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    * connected stores via the {@link ProcessingContext#getStateStore(String)} API during #init
    */
   private void completeInitialization() {
-    final Map<String, AsyncKeyValueStore<?, ?>> accessedStores =
+    final Map<String, AsyncStateStore<?, ?>> accessedStores =
         streamThreadContext.getAllAsyncStores();
 
     verifyConnectedStateStores(accessedStores, connectedStoreBuilders);
 
-    registerFlushListenerForStoreBuilders(
-        streamThreadName,
-        taskId.partition(),
-        connectedStoreBuilders.values(),
-        asyncThreadPoolRegistration::flushAllAsyncEvents
-    );
+    asyncThreadPoolRegistration.registerAsyncProcessor(taskId, this::flushPendingEventsForCommit);
   }
 
   void assertQueuesEmptyOnFirstProcess() {
@@ -373,24 +366,15 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
     }
   }
 
-  private static void registerFlushListenerForStoreBuilders(
-      final String streamThreadName,
-      final int partition,
-      final Collection<AbstractAsyncStoreBuilder<?, ?, ?>> asyncStoreBuilders,
-      final AsyncFlushListener flushPendingEvents
-  ) {
-    for (final AbstractAsyncStoreBuilder<?, ?, ?> builder : asyncStoreBuilders) {
-      builder.registerFlushListenerWithAsyncStore(streamThreadName, partition, flushPendingEvents);
-    }
-  }
-
   /**
    * Block on all pending records to be scheduled, executed, and fully complete processing through
    * the topology, as well as all state store operations to be applied. Called at the beginning of
    * each commit to make sure we've finished up any records we're committing offsets for
+   *
+   * @return true if there were any buffered records that got flushed
    * TODO: add a timeout in case we get stuck somewhere
    */
-  public void flushPendingEventsForCommit() {
+  public boolean flushPendingEventsForCommit() {
     if (fatalException != null) {
       // if there was a fatal exception, just throw right away so that we exit right
       // away and minimize the risk of causing further problems. Additionally, processing for
@@ -398,6 +382,10 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
       // loop below that tries to drain queues, as the queue for that key will never drain.
       log.error("exit flush early due to previous fatal exception", fatalException);
       throw fatalException;
+    }
+
+    if (isCleared()) {
+      return false;
     }
 
     try {
@@ -432,6 +420,8 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
       fatalException = e;
       throw fatalException;
     }
+
+    return true;
   }
 
   /**
@@ -445,7 +435,7 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   private void checkFatalExceptionsFromAsyncThreadPool() {
     final Optional<Throwable> fatal = asyncThreadPoolRegistration.threadPool()
         .checkUncaughtExceptions(asyncProcessorName, taskId);
-    
+
     if (fatal.isPresent()) {
       log.error("Detected uncaught fatal exception from the async thread pool", fatal.get());
       throw new FatalAsyncException("Fatal exception in AsyncThreadPool", fatal.get());
@@ -657,8 +647,8 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
   )  {
     if (!pendingEvents.containsKey(event)) {
       log.error("routed event from {} to the wrong processor for {}",
-          event.partition(),
-          taskId.toString());
+                event.partition(),
+                taskId.toString());
       throw new IllegalStateException(String.format(
           "routed event from %d to the wrong processor for %s",
           event.partition(),
@@ -736,8 +726,8 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
    * in the javadocs for {@link AsyncProcessorSupplier}.
    */
   private void verifyConnectedStateStores(
-      final Map<String, AsyncKeyValueStore<?, ?>> accessedStores,
-      final Map<String, AbstractAsyncStoreBuilder<?, ?, ?>> connectedStores
+      final Map<String, AsyncStateStore<?, ?>> accessedStores,
+      final Map<String, AbstractAsyncStoreBuilder<?>> connectedStores
   ) {
     if (!accessedStores.keySet().equals(connectedStores.keySet())) {
       log.error(
@@ -754,6 +744,5 @@ public class AsyncProcessor<KIn, VIn, KOut, VOut>
               + "ProcessorSupplier#storesNames method");
     }
   }
-
 
 }
