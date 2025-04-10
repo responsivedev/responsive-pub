@@ -19,6 +19,7 @@ import static dev.responsive.kafka.internal.utils.Utils.uuidToUuidProto;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.protobuf.ByteString;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
+import dev.responsive.kafka.internal.db.rs3.client.CreateStoreOptions;
 import dev.responsive.kafka.internal.db.rs3.client.CurrentOffsets;
 import dev.responsive.kafka.internal.db.rs3.client.LssId;
 import dev.responsive.kafka.internal.db.rs3.client.Put;
@@ -283,6 +284,29 @@ public class GrpcRS3Client implements RS3Client {
         .stream()
         .map(t -> new Store(uuidProtoToUuid(t.getStoreId()), t.getPssIdsList()))
         .collect(Collectors.toList());
+  }
+
+  @Override
+  public List<Integer> createStore(
+      final UUID storeId,
+      final int logicalShards,
+      final CreateStoreOptions options
+  ) {
+    final var request = Rs3.CreateStoreRequest.newBuilder()
+        .setStoreId(uuidToUuidProto(storeId))
+        .setLogicalShards(logicalShards)
+        .setOptions(options.toProto())
+        .build();
+    final RS3Grpc.RS3BlockingStub stub = stubs.globalStubs().syncStub();
+
+    final Rs3.CreateStoreResult result = withRetry(
+        () -> stub.createStore(request),
+        () -> "CreateStore(storeId=" + storeId
+            + ", logicalShards=" + logicalShards
+            + ", createStoreOptions=" + options + ")"
+    );
+
+    return result.getPssIdsList();
   }
 
   private void addWalEntryToSegment(

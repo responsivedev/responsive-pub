@@ -32,6 +32,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.google.protobuf.ByteString;
+import dev.responsive.kafka.internal.db.rs3.client.CreateStoreOptions;
+import dev.responsive.kafka.internal.db.rs3.client.CreateStoreOptions.ClockType;
 import dev.responsive.kafka.internal.db.rs3.client.LssId;
 import dev.responsive.kafka.internal.db.rs3.client.Put;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Exception;
@@ -40,6 +42,7 @@ import dev.responsive.kafka.internal.db.rs3.client.RangeBound;
 import dev.responsive.kafka.internal.db.rs3.client.WalEntry;
 import dev.responsive.rs3.RS3Grpc;
 import dev.responsive.rs3.Rs3;
+import dev.responsive.rs3.Rs3.CreateStoreResult;
 import dev.responsive.rs3.Rs3.ListStoresResult;
 import dev.responsive.rs3.Rs3.Store;
 import io.grpc.Status;
@@ -52,6 +55,8 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import org.apache.kafka.common.utils.MockTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -952,7 +957,115 @@ class GrpcRS3ClientTest {
   }
 
   @Test
+  public void shouldCreateStore() {
+    // given:
+    final int logicalShards = 5;
+    final var pss_ids = IntStream.range(0, logicalShards - 1).boxed().collect(Collectors.toList());
+    when(stub.createStore(any()))
+        .thenReturn(CreateStoreResult
+                        .newBuilder()
+                        .addAllPssIds(pss_ids)
+                        .build()
+        );
+
+    final CreateStoreOptions options = new CreateStoreOptions(
+        Optional.of(ClockType.STREAM_TIME),
+        Optional.of(10_000L),
+        Optional.empty()
+    );
+
+    // when:
+    final var result = client.createStore(STORE_ID, logicalShards, options);
+
+    // then:
+    assertThat(result, equalTo(pss_ids));
+    verify(stub).createStore(Rs3.CreateStoreRequest.newBuilder()
+                                 .setStoreId(uuidToUuidProto(STORE_ID))
+                                 .setLogicalShards(logicalShards)
+                                 .setOptions(options.toProto()).build());
+  }
+
+  @Test
+  public void shouldRetryCreateStore() {
+    // given:
+    final int logicalShards = 5;
+    final var pss_ids = IntStream.range(0, logicalShards - 1).boxed().collect(Collectors.toList());
+    when(stub.createStore(any()))
+        .thenThrow(new StatusRuntimeException(Status.UNAVAILABLE))
+        .thenReturn(CreateStoreResult
+                        .newBuilder()
+                        .addAllPssIds(pss_ids)
+                        .build()
+        );
+
+    final CreateStoreOptions options = new CreateStoreOptions(
+        Optional.empty(),
+        Optional.of(10_000L),
+        Optional.of(20)
+    );
+
+    // when:
+    final var result = client.createStore(STORE_ID, logicalShards, options);
+
+    // then:
+    assertThat(result, equalTo(pss_ids));
+    verify(stub, times(2)).createStore(Rs3.CreateStoreRequest.newBuilder()
+                                 .setStoreId(uuidToUuidProto(STORE_ID))
+                                 .setLogicalShards(logicalShards)
+                                 .setOptions(options.toProto()).build());
+  }
+
+  @Test
+  public void shouldPropagateUnexpectedExceptionsFromCreateStore() {
+    // given:
+    when(stub.createStore(any()))
+        .thenThrow(new StatusRuntimeException(Status.UNKNOWN));
+
+    final int logicalShards = 5;
+    final CreateStoreOptions options = new CreateStoreOptions(
+        Optional.empty(),
+        Optional.of(10_000L),
+        Optional.of(20)
+    );
+
+    // when:
+    final RS3Exception exception = assertThrows(
+        RS3Exception.class,
+        () -> client.createStore(STORE_ID, logicalShards, options)
+    );
+
+    // then:
+    assertThat(exception.getCause(), instanceOf(StatusRuntimeException.class));
+    assertThat(((StatusRuntimeException) exception.getCause()).getStatus(), is(Status.UNKNOWN));
+  }
+
+  @Test
+  public void shouldTimeoutCreateStore() {
+    // given:
+    var startTimeMs = time.milliseconds();
+    when(stub.createStore(any()))
+        .thenThrow(new StatusRuntimeException(Status.UNAVAILABLE));
+
+    final int logicalShards = 5;
+    final CreateStoreOptions options = new CreateStoreOptions(
+        Optional.empty(),
+        Optional.of(10_000L),
+        Optional.of(20)
+    );
+
+    // when:
+    assertThrows(
+        RS3TimeoutException.class,
+        () -> client.createStore(STORE_ID, logicalShards, options)
+    );
+
+    // then:
+    var endTimeMs = time.milliseconds();
+    assertThat(endTimeMs - startTimeMs, is(retryTimeoutMs));
+  }
+
   @SuppressWarnings("unchecked")
+  @Test
   public void shouldPropagateUnexpectedExceptionFromObserverOnError() {
     doAnswer(invocation -> {
       StreamObserver<Rs3.RangeResult> observer = invocation.getArgument(1, StreamObserver.class);
