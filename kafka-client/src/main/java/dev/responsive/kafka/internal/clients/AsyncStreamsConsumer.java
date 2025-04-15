@@ -14,8 +14,8 @@ package dev.responsive.kafka.internal.clients;
 
 import static dev.responsive.kafka.internal.utils.Utils.extractThreadNameFromConsumerClientId;
 
-import dev.responsive.kafka.api.async.internals.AsyncThreadPoolRegistration;
-import dev.responsive.kafka.api.async.internals.AsyncThreadPoolRegistry;
+import dev.responsive.kafka.internal.async.AsyncThreadPoolRegistration;
+import dev.responsive.kafka.internal.async.AsyncThreadPoolRegistry;
 import java.time.Duration;
 import org.apache.kafka.clients.consumer.Consumer;
 

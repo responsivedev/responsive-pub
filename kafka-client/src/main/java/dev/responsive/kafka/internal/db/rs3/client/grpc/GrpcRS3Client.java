@@ -19,6 +19,7 @@ import static dev.responsive.kafka.internal.utils.Utils.uuidToUuidProto;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.protobuf.ByteString;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
+import dev.responsive.kafka.internal.db.rs3.client.CreateStoreOptions;
 import dev.responsive.kafka.internal.db.rs3.client.CurrentOffsets;
 import dev.responsive.kafka.internal.db.rs3.client.LssId;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Client;
@@ -366,6 +367,29 @@ public class GrpcRS3Client implements RS3Client {
         .collect(Collectors.toList());
   }
 
+  @Override
+  public List<Integer> createStore(
+      final UUID storeId,
+      final int logicalShards,
+      final CreateStoreOptions options
+  ) {
+    final var request = Rs3.CreateStoreRequest.newBuilder()
+        .setStoreId(uuidToUuidProto(storeId))
+        .setLogicalShards(logicalShards)
+        .setOptions(options.toProto())
+        .build();
+    final RS3Grpc.RS3BlockingStub stub = stubs.globalStubs().syncStub();
+
+    final Rs3.CreateStoreResult result = withRetry(
+        () -> stub.createStore(request),
+        () -> "CreateStore(storeId=" + storeId
+            + ", logicalShards=" + logicalShards
+            + ", createStoreOptions=" + options + ")"
+    );
+
+    return result.getPssIdsList();
+  }
+
   private void addWalEntryToSegment(
       final WalEntry entry,
       final Rs3.WriteWALSegmentRequest.Builder builder
@@ -473,6 +497,7 @@ public class GrpcRS3Client implements RS3Client {
     private final Time time;
     private final String host;
     private final int port;
+    private final Supplier<String> apiKeySupplier;
 
     private boolean useTls = ResponsiveConfig.RS3_TLS_ENABLED_DEFAULT;
     private long retryTimeoutMs = ResponsiveConfig.RS3_RETRY_TIMEOUT_DEFAULT;
@@ -480,11 +505,13 @@ public class GrpcRS3Client implements RS3Client {
     public Connector(
         final Time time,
         final String host,
-        final int port
+        final int port,
+        final Supplier<String> apiKeySupplier
     ) {
       this.time = Objects.requireNonNull(time);
       this.host = Objects.requireNonNull(host);
       this.port = port;
+      this.apiKeySupplier = Objects.requireNonNull(apiKeySupplier);
     }
 
     public void useTls(boolean useTls) {
@@ -498,7 +525,7 @@ public class GrpcRS3Client implements RS3Client {
     public RS3Client connect() {
       String target = String.format("%s:%d", host, port);
       return new GrpcRS3Client(
-          PssStubsProvider.connect(target, useTls),
+          PssStubsProvider.connect(target, useTls, apiKeySupplier.get()),
           time,
           retryTimeoutMs
       );

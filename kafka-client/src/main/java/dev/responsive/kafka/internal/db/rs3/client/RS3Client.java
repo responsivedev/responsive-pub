@@ -75,5 +75,11 @@ public interface RS3Client {
 
   List<Store> listStores();
 
+  List<Integer> createStore(
+      UUID storeId,
+      int logicalShards,
+      CreateStoreOptions options
+  );
+
   void close();
 }

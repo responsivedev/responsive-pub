@@ -14,7 +14,7 @@ package dev.responsive.kafka.internal.clients;
 
 import static dev.responsive.kafka.internal.utils.Utils.extractThreadNameFromProducerClientId;
 
-import dev.responsive.kafka.api.async.internals.AsyncThreadPoolRegistry;
+import dev.responsive.kafka.internal.async.AsyncThreadPoolRegistry;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.errors.ProducerFencedException;
 
