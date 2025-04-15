@@ -74,7 +74,7 @@ public class RS3KVTableIntegrationTest {
     final int port = rs3Container.getMappedPort(50051);
     this.rs3Container = rs3Container;
     final GrpcRS3Client.Connector connector =
-        new GrpcRS3Client.Connector(time, "localhost", port);
+        new GrpcRS3Client.Connector(time, "localhost", port, () -> null);
     connector.useTls(false);
     rs3Client = connector.connect();
     final ResponsiveMetrics responsiveMetrics = new ResponsiveMetrics(metrics);
