@@ -71,7 +71,7 @@ public class TTDCassandraClient extends CassandraClient {
   }
 
   public void flush() {
-    storeRegistry.stores().forEach(s -> s.onCommit().accept(0L));
+    storeRegistry.stores().forEach(s -> s.callbacks().notifyCommit(0L));
   }
 
   @Override

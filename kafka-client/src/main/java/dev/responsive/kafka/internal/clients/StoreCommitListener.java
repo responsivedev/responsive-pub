@@ -41,14 +41,14 @@ public class StoreCommitListener {
       final TopicPartition p = e.getKey().getPartition();
       for (final ResponsiveStoreRegistration storeRegistration
           : storeRegistry.getRegisteredStoresForChangelog(p, threadId)) {
-        storeRegistration.onCommit().accept(e.getValue());
+        storeRegistration.callbacks().notifyCommit(e.getValue());
       }
     }
     for (final var e : writtenOffsets.entrySet()) {
       final TopicPartition p = e.getKey();
       for (final ResponsiveStoreRegistration storeRegistration
           : storeRegistry.getRegisteredStoresForChangelog(p, threadId)) {
-        storeRegistration.onCommit().accept(e.getValue());
+        storeRegistration.callbacks().notifyCommit(e.getValue());
       }
     }
   }

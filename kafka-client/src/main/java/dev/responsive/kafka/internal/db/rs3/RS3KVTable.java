@@ -18,6 +18,7 @@ import dev.responsive.kafka.internal.db.rs3.client.Delete;
 import dev.responsive.kafka.internal.db.rs3.client.LssId;
 import dev.responsive.kafka.internal.db.rs3.client.LssMetadata;
 import dev.responsive.kafka.internal.db.rs3.client.MeteredRS3Client;
+import dev.responsive.kafka.internal.db.rs3.client.PssCheckpoint;
 import dev.responsive.kafka.internal.db.rs3.client.Put;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Client;
 import dev.responsive.kafka.internal.db.rs3.client.RS3ClientUtil;
@@ -30,6 +31,7 @@ import dev.responsive.kafka.internal.utils.MergeKeyValueIterator;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
@@ -97,6 +99,7 @@ public class RS3KVTable implements RemoteKVTable<WalEntry> {
 
   @Override
   public byte[] get(final int kafkaPartition, final Bytes key, final long minValidTs) {
+    checkInitialized();
     final int pssId = pssPartitioner.pss(key.get(), this.lssId);
     return rs3Client.get(
         storeId,
@@ -114,6 +117,7 @@ public class RS3KVTable implements RemoteKVTable<WalEntry> {
       final Bytes to,
       final long streamTimeMs
   ) {
+    checkInitialized();
     final var range = new Range<>(RangeBound.inclusive(from), RangeBound.exclusive(to));
     final List<KeyValueIterator<Bytes, byte[]>> pssIters = new ArrayList<>();
 
@@ -180,5 +184,32 @@ public class RS3KVTable implements RemoteKVTable<WalEntry> {
   @Override
   public long lastWrittenOffset(final int kafkaPartition) {
     return fetchOffset;
+  }
+
+  @Override
+  public byte[] checkpoint() {
+    checkInitialized();
+    final List<TableCheckpoint.TablePssCheckpoint> checkpoints = new ArrayList<>();
+    for (final int pss : pssPartitioner.pssForLss(this.lssId)) {
+      final Optional<Long> writtenOffset = flushManager.writtenOffset(pss);
+      final PssCheckpoint rs3Checkpoint = rs3Client.createCheckpoint(
+          storeId,
+          lssId,
+          pss,
+          writtenOffset
+      );
+      checkpoints.add(new TableCheckpoint.TablePssCheckpoint(
+          writtenOffset,
+          rs3Checkpoint
+      ));
+    }
+    final TableCheckpoint checkpoint = new TableCheckpoint(checkpoints);
+    return TableCheckpoint.serialize(checkpoint);
+  }
+
+  private void checkInitialized() {
+    if (this.lssId == null) {
+      throw new IllegalStateException("table not initialized");
+    }
   }
 }

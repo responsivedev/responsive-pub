@@ -163,13 +163,24 @@ public class PartitionedOperations implements KeyValueOperations {
       );
 
       final long restoreStartOffset = table.lastWrittenOffset(changelog.partition());
+      final CommitBuffer<Bytes, ?> initializedBuffer = buffer;
       registration = new ResponsiveStoreRegistration(
           name.kafkaName(),
           changelog,
           restoreStartOffset == NO_COMMITTED_OFFSET
               ? OptionalLong.empty()
               : OptionalLong.of(restoreStartOffset),
-          buffer::flush,
+          new ResponsiveStoreRegistration.StoreCallbacks() {
+            @Override
+            public void notifyCommit(long committedOffset) {
+              initializedBuffer.flush(committedOffset);
+            }
+
+            @Override
+            public byte[] checkpoint() {
+              return table.checkpoint();
+            }
+          },
           streamThreadId()
       );
       storeRegistry.registerStore(registration);

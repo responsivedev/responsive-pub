@@ -13,6 +13,7 @@
 package dev.responsive.kafka.internal.db.rs3.client.grpc;
 
 import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.basicKeyProto;
+import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.checkField;
 import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.storeStatusFromProto;
 import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.storeTypeFromProto;
 import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.walOffsetFromProto;
@@ -28,6 +29,7 @@ import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes.CreateStoreO
 import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes.CreateStoreResult;
 import dev.responsive.kafka.internal.db.rs3.client.CurrentOffsets;
 import dev.responsive.kafka.internal.db.rs3.client.LssId;
+import dev.responsive.kafka.internal.db.rs3.client.PssCheckpoint;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Client;
 import dev.responsive.kafka.internal.db.rs3.client.RS3TimeoutException;
 import dev.responsive.kafka.internal.db.rs3.client.RS3TransientException;
@@ -84,8 +86,8 @@ public class GrpcRS3Client implements RS3Client {
         () -> stub.getOffsets(request),
         () -> "GetOffsets(storeId=" + storeId + ", lssId=" + lssId + ", pssId=" + pssId + ")"
     );
-    checkField(result::hasWrittenOffset, "writtenOffset");
-    checkField(result::hasFlushedOffset, "flushedOffset");
+    GrpcRs3Util.checkField(result::hasWrittenOffset, "writtenOffset");
+    GrpcRs3Util.checkField(result::hasFlushedOffset, "flushedOffset");
     return new CurrentOffsets(
         walOffsetFromProto(result.getWrittenOffset()),
         walOffsetFromProto(result.getFlushedOffset())
@@ -157,7 +159,7 @@ public class GrpcRS3Client implements RS3Client {
         streamSender,
         resultObserver.message()
             .thenApply(r -> {
-              checkField(r::hasFlushedOffset, "flushedOffset");
+              GrpcRs3Util.checkField(r::hasFlushedOffset, "flushedOffset");
               return walOffsetFromProto(r.getFlushedOffset());
             })
     );
@@ -293,7 +295,7 @@ public class GrpcRS3Client implements RS3Client {
         expectedWrittenOffset
     );
     return kvOpt.map(kv -> {
-      checkField(kv::hasBasicKv, "value");
+      GrpcRs3Util.checkField(kv::hasBasicKv, "value");
       final var value = kv.getBasicKv().getValue().getValue();
       return value.toByteArray();
     });
@@ -319,7 +321,7 @@ public class GrpcRS3Client implements RS3Client {
         expectedWrittenOffset
     );
     return kvOpt.map(kv -> {
-      checkField(kv::hasWindowKv, "value");
+      GrpcRs3Util.checkField(kv::hasWindowKv, "value");
       final var value = kv.getWindowKv().getValue().getValue();
       return value.toByteArray();
     });
@@ -391,10 +393,25 @@ public class GrpcRS3Client implements RS3Client {
     return new CreateStoreResult(uuidFromProto(result.getStoreId()), result.getPssIdsList());
   }
 
-  private void checkField(final Supplier<Boolean> check, final String field) {
-    if (!check.get()) {
-      throw new RuntimeException("rs3 resp proto missing field " + field);
+  @Override
+  public PssCheckpoint createCheckpoint(
+      final UUID storeId,
+      final LssId lssId,
+      final int pssId,
+      final Optional<Long> expectedWrittenOffset) {
+    final var request = Rs3.CreateCheckpointRequest.newBuilder()
+        .setLssId(lssIdProto(lssId))
+        .setExpectedWrittenOffset(walOffsetProto(expectedWrittenOffset))
+        .build();
+    final RS3Grpc.RS3BlockingStub stub = stubs.stubs(storeId, pssId).syncStub();
+    final Rs3.CreateCheckpointResult result;
+    try {
+      result = stub.createCheckpoint(request);
+    } catch (final RuntimeException e) {
+      throw GrpcRs3Util.wrapThrowable(e);
     }
+    checkField(result::hasCheckpoint, "checkpoint");
+    return GrpcRs3Util.pssCheckpointFromProto(storeId, pssId, result.getCheckpoint());
   }
 
   private class RangeProxy<K extends Comparable<K>> implements GrpcRangeRequestProxy<K> {
