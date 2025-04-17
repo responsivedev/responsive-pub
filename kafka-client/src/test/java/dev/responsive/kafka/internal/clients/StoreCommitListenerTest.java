@@ -20,7 +20,6 @@ import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistry;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.OptionalLong;
-import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.RecordMetadata;
@@ -37,9 +36,9 @@ class StoreCommitListenerTest {
   private static final TopicPartition PARTITION2 = new TopicPartition("booboo", 2);
 
   @Mock
-  private Consumer<Long> store1Flush;
+  private ResponsiveStoreRegistration.StoreCallbacks store1Callbacks;
   @Mock
-  private Consumer<Long> store2Flush;
+  private ResponsiveStoreRegistration.StoreCallbacks store2Callbacks;
   private final ResponsiveStoreRegistry registry = new ResponsiveStoreRegistry();
   private final OffsetRecorder offsetRecorder = new OffsetRecorder(true, "thread1");
   private StoreCommitListener commitListener;
@@ -50,14 +49,14 @@ class StoreCommitListenerTest {
         "store1",
         PARTITION1,
         OptionalLong.of(0),
-        store1Flush,
+        store1Callbacks,
         "thread1"
     ));
     registry.registerStore(new ResponsiveStoreRegistration(
         "store2",
         PARTITION2,
         OptionalLong.of(0),
-        store2Flush,
+        store2Callbacks,
         "thread1"
     ));
     commitListener = new StoreCommitListener(registry, offsetRecorder);
@@ -69,8 +68,8 @@ class StoreCommitListenerTest {
     sendCommittedOffsets(Map.of(PARTITION1, 123L));
 
     // then:
-    verify(store1Flush).accept(123L);
-    verifyNoInteractions(store2Flush);
+    verify(store1Callbacks).notifyCommit(123L);
+    verifyNoInteractions(store2Callbacks);
   }
 
   @Test
@@ -79,8 +78,8 @@ class StoreCommitListenerTest {
     sendWrittenOffsets(Map.of(PARTITION2, 456L));
 
     // then:
-    verify(store2Flush).accept(456L);
-    verifyNoInteractions(store1Flush);
+    verify(store2Callbacks).notifyCommit(456L);
+    verifyNoInteractions(store1Callbacks);
   }
 
   private void sendCommittedOffsets(final Map<TopicPartition, Long> offsets) {
