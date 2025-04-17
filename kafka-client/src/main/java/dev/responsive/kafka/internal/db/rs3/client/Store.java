@@ -10,11 +10,15 @@ public class Store {
 
   public Store(final UUID storeId, final List<Integer> pssIds) {
     this.storeId = storeId;
-    this.pssIds = pssIds;
+    this.pssIds = List.copyOf(pssIds);
   }
 
   public UUID storeId() {
     return storeId;
+  }
+
+  public List<Integer> pssIds() {
+    return pssIds;
   }
 
   @Override

@@ -47,6 +47,7 @@ import dev.responsive.kafka.internal.db.DefaultCassandraClientFactory;
 import dev.responsive.kafka.internal.db.mongo.CollectionCreationOptions;
 import dev.responsive.kafka.internal.db.mongo.ResponsiveMongoClient;
 import dev.responsive.kafka.internal.db.rs3.RS3TableFactory;
+import dev.responsive.kafka.internal.db.rs3.client.grpc.ApiCredential;
 import dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRS3Client;
 import dev.responsive.kafka.internal.license.exception.LicenseUseViolationException;
 import dev.responsive.kafka.internal.license.model.CloudLicenseV1;
@@ -541,7 +542,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
               time,
               rs3Host,
               rs3Port,
-              () -> ((UsageBasedV1) license).key()
+              () -> ApiCredential.forApiKey(((UsageBasedV1) license).key())
           );
           rs3Connector.retryTimeoutMs(responsiveConfig.getLong(RS3_RETRY_TIMEOUT_CONFIG));
           rs3Connector.useTls(responsiveConfig.getBoolean(RS3_TLS_ENABLED_CONFIG));
