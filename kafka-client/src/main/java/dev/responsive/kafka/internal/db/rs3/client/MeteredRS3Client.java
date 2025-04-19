@@ -1,12 +1,14 @@
 package dev.responsive.kafka.internal.db.rs3.client;
 
-import dev.responsive.kafka.internal.db.rs3.client.CreateStoreOptions.CreateStoreResult;
+import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes.CreateStoreOptions;
+import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes.CreateStoreResult;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.utils.Bytes;
@@ -41,7 +43,7 @@ public class MeteredRS3Client implements RS3Client {
 
   @Override
   public CurrentOffsets getCurrentOffsets(
-      final String storeId,
+      final UUID storeId,
       final LssId lssId,
       final int pssId
   ) {
@@ -50,7 +52,7 @@ public class MeteredRS3Client implements RS3Client {
 
   @Override
   public StreamSenderMessageReceiver<WalEntry, Optional<Long>> writeWalSegmentAsync(
-      final String storeId,
+      final UUID storeId,
       final LssId lssId,
       final int pssId,
       final Optional<Long> expectedWrittenOffset,
@@ -61,7 +63,7 @@ public class MeteredRS3Client implements RS3Client {
 
   @Override
   public Optional<Long> writeWalSegment(
-      final String storeId,
+      final UUID storeId,
       final LssId lssId,
       final int pssId,
       final Optional<Long> expectedWrittenOffset,
@@ -80,7 +82,7 @@ public class MeteredRS3Client implements RS3Client {
 
   @Override
   public Optional<byte[]> get(
-      final String storeId,
+      final UUID storeId,
       final LssId lssId,
       final int pssId,
       final Optional<Long> expectedWrittenOffset,
@@ -94,7 +96,7 @@ public class MeteredRS3Client implements RS3Client {
 
   @Override
   public KeyValueIterator<Bytes, byte[]> range(
-      final String storeId,
+      final UUID storeId,
       final LssId lssId,
       final int pssId,
       final Optional<Long> expectedWrittenOffset,
@@ -118,11 +120,11 @@ public class MeteredRS3Client implements RS3Client {
 
   @Override
   public CreateStoreResult createStore(
-      final String storeId,
+      final String storeName,
       final int logicalShards,
       final CreateStoreOptions options
   ) {
-    return delegate.createStore(storeId, logicalShards, options);
+    return delegate.createStore(storeName, logicalShards, options);
   }
 
   public void close() {
