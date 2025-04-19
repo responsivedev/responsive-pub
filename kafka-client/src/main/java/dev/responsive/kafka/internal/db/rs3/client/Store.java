@@ -29,11 +29,11 @@ public class Store {
 
   @Override
   public String toString() {
-    return "Store{" +
-        "storeName='" + storeName + '\'' +
-        ", storeId=" + storeId +
-        ", pssIds=" + pssIds +
-        '}';
+    return "Store{"
+        + "storeName='" + storeName + '\''
+        + ", storeId=" + storeId
+        + ", pssIds=" + pssIds
+        + '}';
   }
 
   @Override
