@@ -5,12 +5,18 @@ import java.util.UUID;
 
 public class Store {
 
+  private final String storeName;
   private final UUID storeId;
   private final List<Integer> pssIds;
 
-  public Store(final UUID storeId, final List<Integer> pssIds) {
+  public Store(final String storeName, final UUID storeId, final List<Integer> pssIds) {
+    this.storeName = storeName;
     this.storeId = storeId;
     this.pssIds = List.copyOf(pssIds);
+  }
+
+  public String storeName() {
+    return storeName;
   }
 
   public UUID storeId() {
@@ -19,6 +25,15 @@ public class Store {
 
   public List<Integer> pssIds() {
     return pssIds;
+  }
+
+  @Override
+  public String toString() {
+    return "Store{" +
+        "storeName='" + storeName + '\'' +
+        ", storeId=" + storeId +
+        ", pssIds=" + pssIds +
+        '}';
   }
 
   @Override
@@ -32,6 +47,9 @@ public class Store {
 
     final Store store = (Store) o;
 
+    if (!storeName.equals(store.storeName)) {
+      return false;
+    }
     if (!storeId.equals(store.storeId)) {
       return false;
     }
@@ -40,7 +58,8 @@ public class Store {
 
   @Override
   public int hashCode() {
-    int result = storeId.hashCode();
+    int result = storeName.hashCode();
+    result = 31 * result + storeId.hashCode();
     result = 31 * result + pssIds.hashCode();
     return result;
   }

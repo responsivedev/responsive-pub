@@ -14,7 +14,7 @@ package dev.responsive.kafka.internal.db.rs3.client.grpc;
 
 import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpsRs3TestUtil.newEndOfStreamResult;
 import static dev.responsive.kafka.internal.utils.Utils.lssIdProto;
-import static dev.responsive.kafka.internal.utils.Utils.uuidToUuidProto;
+import static dev.responsive.kafka.internal.utils.Utils.uuidToProto;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThan;
@@ -32,8 +32,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.google.protobuf.ByteString;
-import dev.responsive.kafka.internal.db.rs3.client.CreateStoreOptions;
-import dev.responsive.kafka.internal.db.rs3.client.CreateStoreOptions.ClockType;
+import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes.ClockType;
+import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes.CreateStoreOptions;
 import dev.responsive.kafka.internal.db.rs3.client.LssId;
 import dev.responsive.kafka.internal.db.rs3.client.Put;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Exception;
@@ -68,6 +68,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
 class GrpcRS3ClientTest {
+  private static final String STORE_NAME = "my_store";
   private static final UUID STORE_ID = new UUID(100, 200);
   private static final LssId LSS_ID = new LssId(10);
   private static final int PSS_ID = 1;
@@ -260,7 +261,7 @@ class GrpcRS3ClientTest {
     verify(writeWALSegmentRequestObserver).onNext(Rs3.WriteWALSegmentRequest.newBuilder()
         .setLssId(lssIdProto(LSS_ID))
         .setPssId(PSS_ID)
-        .setStoreId(uuidToUuidProto(STORE_ID))
+        .setStoreId(uuidToProto(STORE_ID))
         .setExpectedWrittenOffset(15L)
         .setEndOffset(20)
         .setPut(putProto(put1))
@@ -269,7 +270,7 @@ class GrpcRS3ClientTest {
     verify(writeWALSegmentRequestObserver).onNext(Rs3.WriteWALSegmentRequest.newBuilder()
         .setLssId(lssIdProto(LSS_ID))
         .setPssId(PSS_ID)
-        .setStoreId(uuidToUuidProto(STORE_ID))
+        .setStoreId(uuidToProto(STORE_ID))
         .setExpectedWrittenOffset(15L)
         .setEndOffset(20)
         .setPut(putProto(put2))
@@ -299,7 +300,7 @@ class GrpcRS3ClientTest {
     verify(writeWALSegmentRequestObserver).onNext(Rs3.WriteWALSegmentRequest.newBuilder()
         .setLssId(lssIdProto(LSS_ID))
         .setPssId(PSS_ID)
-        .setStoreId(uuidToUuidProto(STORE_ID))
+        .setStoreId(uuidToProto(STORE_ID))
         .setExpectedWrittenOffset(GrpcRS3Client.WAL_OFFSET_NONE)
         .setEndOffset(20)
         .setPut(putProto(put1))
@@ -417,7 +418,7 @@ class GrpcRS3ClientTest {
         Rs3.WriteWALSegmentRequest.newBuilder()
             .setLssId(lssIdProto(LSS_ID))
             .setPssId(PSS_ID)
-            .setStoreId(uuidToUuidProto(STORE_ID))
+            .setStoreId(uuidToProto(STORE_ID))
             .setExpectedWrittenOffset(15L)
             .setEndOffset(20)
             .setPut(putProto((Put) entries.get(0)))
@@ -427,7 +428,7 @@ class GrpcRS3ClientTest {
         Rs3.WriteWALSegmentRequest.newBuilder()
             .setLssId(lssIdProto(LSS_ID))
             .setPssId(PSS_ID)
-            .setStoreId(uuidToUuidProto(STORE_ID))
+            .setStoreId(uuidToProto(STORE_ID))
             .setExpectedWrittenOffset(15L)
             .setEndOffset(20)
             .setPut(putProto((Put) entries.get(1)))
@@ -480,7 +481,7 @@ class GrpcRS3ClientTest {
         Rs3.WriteWALSegmentRequest.newBuilder()
             .setLssId(lssIdProto(LSS_ID))
             .setPssId(PSS_ID)
-            .setStoreId(uuidToUuidProto(STORE_ID))
+            .setStoreId(uuidToProto(STORE_ID))
             .setExpectedWrittenOffset(15L)
             .setEndOffset(20)
             .setPut(putProto((Put) entries.get(0)))
@@ -490,7 +491,7 @@ class GrpcRS3ClientTest {
         Rs3.WriteWALSegmentRequest.newBuilder()
             .setLssId(lssIdProto(LSS_ID))
             .setPssId(PSS_ID)
-            .setStoreId(uuidToUuidProto(STORE_ID))
+            .setStoreId(uuidToProto(STORE_ID))
             .setExpectedWrittenOffset(15L)
             .setEndOffset(20)
             .setPut(putProto((Put) entries.get(1)))
@@ -541,7 +542,7 @@ class GrpcRS3ClientTest {
         Rs3.WriteWALSegmentRequest.newBuilder()
             .setLssId(lssIdProto(LSS_ID))
             .setPssId(PSS_ID)
-            .setStoreId(uuidToUuidProto(STORE_ID))
+            .setStoreId(uuidToProto(STORE_ID))
             .setExpectedWrittenOffset(15L)
             .setEndOffset(20)
             .setPut(putProto((Put) entries.get(0)))
@@ -591,7 +592,7 @@ class GrpcRS3ClientTest {
         Rs3.WriteWALSegmentRequest.newBuilder()
             .setLssId(lssIdProto(LSS_ID))
             .setPssId(PSS_ID)
-            .setStoreId(uuidToUuidProto(STORE_ID))
+            .setStoreId(uuidToProto(STORE_ID))
             .setExpectedWrittenOffset(15L)
             .setEndOffset(20)
             .setPut(putProto((Put) entries.get(0)))
@@ -652,7 +653,7 @@ class GrpcRS3ClientTest {
     verify(stub).get(Rs3.GetRequest.newBuilder()
         .setLssId(lssIdProto(LSS_ID))
         .setPssId(PSS_ID)
-        .setStoreId(uuidToUuidProto(STORE_ID))
+        .setStoreId(uuidToProto(STORE_ID))
         .setExpectedWrittenOffset(123L)
         .setKey(ByteString.copyFromUtf8("foo"))
         .build()
@@ -679,7 +680,7 @@ class GrpcRS3ClientTest {
     verify(stub).get(Rs3.GetRequest.newBuilder()
         .setLssId(lssIdProto(LSS_ID))
         .setPssId(PSS_ID)
-        .setStoreId(uuidToUuidProto(STORE_ID))
+        .setStoreId(uuidToProto(STORE_ID))
         .setKey(ByteString.copyFromUtf8("foo"))
         .build()
     );
@@ -877,7 +878,7 @@ class GrpcRS3ClientTest {
     when(stub.listStores(any())).thenReturn(
         ListStoresResult.newBuilder()
             .addStores(Store.newBuilder()
-                           .setStoreId(uuidToUuidProto(STORE_ID))
+                           .setStoreId(uuidToProto(STORE_ID))
                            .addAllPssIds(List.of(PSS_ID, PSS_ID_2))
                            .build()
             ).build()
@@ -888,7 +889,7 @@ class GrpcRS3ClientTest {
 
     // then:
     final var expected = new dev.responsive.kafka.internal.db.rs3.client.Store(
-        STORE_ID, List.of(PSS_ID, PSS_ID_2)
+        STORE_NAME, STORE_ID, List.of(PSS_ID, PSS_ID_2)
     );
     assertThat(result.size(), is(1));
     assertThat(result.get(0), equalTo(expected));
@@ -975,12 +976,12 @@ class GrpcRS3ClientTest {
     );
 
     // when:
-    final var result = client.createStore(STORE_ID, logicalShards, options);
+    final var result = client.createStore(STORE_NAME, logicalShards, options);
 
     // then:
     assertThat(result, equalTo(pss_ids));
     verify(stub).createStore(Rs3.CreateStoreRequest.newBuilder()
-                                 .setStoreId(uuidToUuidProto(STORE_ID))
+                                 .setStoreName(STORE_NAME)
                                  .setLogicalShards(logicalShards)
                                  .setOptions(options.toProto()).build());
   }
@@ -1005,12 +1006,12 @@ class GrpcRS3ClientTest {
     );
 
     // when:
-    final var result = client.createStore(STORE_ID, logicalShards, options);
+    final var result = client.createStore(STORE_NAME, logicalShards, options);
 
     // then:
     assertThat(result, equalTo(pss_ids));
     verify(stub, times(2)).createStore(Rs3.CreateStoreRequest.newBuilder()
-                                 .setStoreId(uuidToUuidProto(STORE_ID))
+                                 .setStoreName(STORE_NAME)
                                  .setLogicalShards(logicalShards)
                                  .setOptions(options.toProto()).build());
   }
@@ -1031,7 +1032,7 @@ class GrpcRS3ClientTest {
     // when:
     final RS3Exception exception = assertThrows(
         RS3Exception.class,
-        () -> client.createStore(STORE_ID, logicalShards, options)
+        () -> client.createStore(STORE_NAME, logicalShards, options)
     );
 
     // then:
@@ -1056,7 +1057,7 @@ class GrpcRS3ClientTest {
     // when:
     assertThrows(
         RS3TimeoutException.class,
-        () -> client.createStore(STORE_ID, logicalShards, options)
+        () -> client.createStore(STORE_NAME, logicalShards, options)
     );
 
     // then:

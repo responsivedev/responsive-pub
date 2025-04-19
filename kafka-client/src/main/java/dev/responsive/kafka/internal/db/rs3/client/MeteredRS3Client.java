@@ -1,12 +1,12 @@
 package dev.responsive.kafka.internal.db.rs3.client;
 
+import dev.responsive.kafka.internal.db.rs3.client.CreateStoreOptions.CreateStoreResult;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.UUID;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.utils.Bytes;
@@ -41,7 +41,7 @@ public class MeteredRS3Client implements RS3Client {
 
   @Override
   public CurrentOffsets getCurrentOffsets(
-      final UUID storeId,
+      final String storeId,
       final LssId lssId,
       final int pssId
   ) {
@@ -50,7 +50,7 @@ public class MeteredRS3Client implements RS3Client {
 
   @Override
   public StreamSenderMessageReceiver<WalEntry, Optional<Long>> writeWalSegmentAsync(
-      final UUID storeId,
+      final String storeId,
       final LssId lssId,
       final int pssId,
       final Optional<Long> expectedWrittenOffset,
@@ -61,7 +61,7 @@ public class MeteredRS3Client implements RS3Client {
 
   @Override
   public Optional<Long> writeWalSegment(
-      final UUID storeId,
+      final String storeId,
       final LssId lssId,
       final int pssId,
       final Optional<Long> expectedWrittenOffset,
@@ -80,7 +80,7 @@ public class MeteredRS3Client implements RS3Client {
 
   @Override
   public Optional<byte[]> get(
-      final UUID storeId,
+      final String storeId,
       final LssId lssId,
       final int pssId,
       final Optional<Long> expectedWrittenOffset,
@@ -94,7 +94,7 @@ public class MeteredRS3Client implements RS3Client {
 
   @Override
   public KeyValueIterator<Bytes, byte[]> range(
-      final UUID storeId,
+      final String storeId,
       final LssId lssId,
       final int pssId,
       final Optional<Long> expectedWrittenOffset,
@@ -117,8 +117,8 @@ public class MeteredRS3Client implements RS3Client {
   }
 
   @Override
-  public List<Integer> createStore(
-      final UUID storeId,
+  public CreateStoreResult createStore(
+      final String storeId,
       final int logicalShards,
       final CreateStoreOptions options
   ) {

@@ -14,27 +14,25 @@ package dev.responsive.kafka.internal.db.rs3;
 
 import static dev.responsive.kafka.internal.stores.TtlResolver.NO_TTL;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import dev.responsive.kafka.api.config.ResponsiveConfig;
-import dev.responsive.kafka.internal.db.rs3.client.CreateStoreOptions;
+import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes.CreateStoreOptions;
+import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes.CreateStoreResult;
 import dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRS3Client;
 import dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRS3Client.Connector;
 import dev.responsive.kafka.internal.metrics.ClientVersionMetadata;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -72,46 +70,27 @@ class RS3TableFactoryTest {
 
   @Test
   public void testTableMapping() {
-    final var table = "test-table";
-    final var uuid = "b1a45157-e2f0-4698-be0e-5bf3a9b8e9d1";
+    final UUID storeId = new UUID(100, 200);
+    final String tableName = "test-table";
     final int partitions = 5;
 
-    final var config = mock(ResponsiveConfig.class);
-    when(config.getMap(ResponsiveConfig.RS3_LOGICAL_STORE_MAPPING_CONFIG))
-        .thenReturn(Collections.singletonMap(table, uuid));
-
-    when(client.createStore(any(UUID.class), anyInt(), any(CreateStoreOptions.class)))
-        .thenReturn(List.of(1, 2, 3, 4, 5));
+    when(client.createStore(anyString(), anyInt(), any(CreateStoreOptions.class)))
+        .thenReturn(new CreateStoreResult(storeId, List.of(1, 2, 3, 4, 5)));
 
     final RS3TableFactory factory = newTestFactory();
     final RS3KVTable rs3Table = (RS3KVTable) factory.kvTable(
-        table,
-        config,
+        tableName,
         NO_TTL,
         metrics,
         scopeBuilder,
         () -> partitions
     );
-    assertEquals(uuid, rs3Table.storedId().toString());
+    assertEquals(tableName, rs3Table.storedId());
 
     verify(client).createStore(
-        UUID.fromString(uuid),
+        tableName,
         partitions,
         new CreateStoreOptions(Optional.empty(), Optional.empty(), Optional.empty())
-    );
-  }
-
-  @Test
-  public void testMissingTableMapping() {
-    final String table = "test-table";
-    final ResponsiveConfig config = mock(ResponsiveConfig.class);
-    when(config.getMap(ResponsiveConfig.RS3_LOGICAL_STORE_MAPPING_CONFIG))
-        .thenReturn(Collections.emptyMap());
-
-    final RS3TableFactory factory = newTestFactory();
-    assertThrows(
-        ConfigException.class,
-        () -> factory.kvTable(table, config, NO_TTL, metrics, scopeBuilder, () -> 5)
     );
   }
 
