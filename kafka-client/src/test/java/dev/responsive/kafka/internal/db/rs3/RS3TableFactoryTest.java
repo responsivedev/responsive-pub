@@ -85,7 +85,8 @@ class RS3TableFactoryTest {
         scopeBuilder,
         () -> partitions
     );
-    assertEquals(tableName, rs3Table.storedId());
+    assertEquals(tableName, rs3Table.name());
+    assertEquals(storeId, rs3Table.storedId());
 
     verify(client).createStore(
         tableName,
