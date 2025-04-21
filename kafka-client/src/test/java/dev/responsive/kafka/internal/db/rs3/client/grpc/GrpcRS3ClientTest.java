@@ -32,6 +32,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.google.protobuf.ByteString;
+import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes;
 import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes.ClockType;
 import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes.CreateStoreOptions;
 import dev.responsive.kafka.internal.db.rs3.client.LssId;
@@ -878,6 +879,7 @@ class GrpcRS3ClientTest {
     when(stub.listStores(any())).thenReturn(
         ListStoresResult.newBuilder()
             .addStores(Store.newBuilder()
+                           .setStoreName(STORE_NAME)
                            .setStoreId(uuidToProto(STORE_ID))
                            .addAllPssIds(List.of(PSS_ID, PSS_ID_2))
                            .build()
@@ -891,6 +893,7 @@ class GrpcRS3ClientTest {
     final var expected = new dev.responsive.kafka.internal.db.rs3.client.Store(
         STORE_NAME, STORE_ID, List.of(PSS_ID, PSS_ID_2)
     );
+
     assertThat(result.size(), is(1));
     assertThat(result.get(0), equalTo(expected));
     verify(stub).listStores(Rs3.ListStoresRequest.newBuilder().build());
@@ -965,6 +968,7 @@ class GrpcRS3ClientTest {
     when(stub.createStore(any()))
         .thenReturn(CreateStoreResult
                         .newBuilder()
+                        .setStoreId(uuidToProto(STORE_ID))
                         .addAllPssIds(pss_ids)
                         .build()
         );
@@ -979,7 +983,7 @@ class GrpcRS3ClientTest {
     final var result = client.createStore(STORE_NAME, logicalShards, options);
 
     // then:
-    assertThat(result, equalTo(pss_ids));
+    assertThat(result, equalTo(new CreateStoreTypes.CreateStoreResult(STORE_ID, pss_ids)));
     verify(stub).createStore(Rs3.CreateStoreRequest.newBuilder()
                                  .setStoreName(STORE_NAME)
                                  .setLogicalShards(logicalShards)
@@ -995,6 +999,7 @@ class GrpcRS3ClientTest {
         .thenThrow(new StatusRuntimeException(Status.UNAVAILABLE))
         .thenReturn(CreateStoreResult
                         .newBuilder()
+                        .setStoreId(uuidToProto(STORE_ID))
                         .addAllPssIds(pss_ids)
                         .build()
         );
@@ -1009,7 +1014,7 @@ class GrpcRS3ClientTest {
     final var result = client.createStore(STORE_NAME, logicalShards, options);
 
     // then:
-    assertThat(result, equalTo(pss_ids));
+    assertThat(result, equalTo(new CreateStoreTypes.CreateStoreResult(STORE_ID, pss_ids)));
     verify(stub, times(2)).createStore(Rs3.CreateStoreRequest.newBuilder()
                                  .setStoreName(STORE_NAME)
                                  .setLogicalShards(logicalShards)

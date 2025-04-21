@@ -105,6 +105,30 @@ public class CreateStoreTypes {
     public List<Integer> pssIds() {
       return pssIds;
     }
+
+    @Override
+    public boolean equals(final Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+
+      final CreateStoreResult that = (CreateStoreResult) o;
+
+      if (!storeId.equals(that.storeId)) {
+        return false;
+      }
+      return pssIds.equals(that.pssIds);
+    }
+
+    @Override
+    public int hashCode() {
+      int result = storeId.hashCode();
+      result = 31 * result + pssIds.hashCode();
+      return result;
+    }
   }
 
 }
