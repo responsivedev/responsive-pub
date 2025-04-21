@@ -13,13 +13,14 @@
 package dev.responsive.kafka.internal.db.rs3.client.grpc;
 
 import static dev.responsive.kafka.internal.utils.Utils.lssIdProto;
-import static dev.responsive.kafka.internal.utils.Utils.uuidProtoToUuid;
-import static dev.responsive.kafka.internal.utils.Utils.uuidToUuidProto;
+import static dev.responsive.kafka.internal.utils.Utils.uuidFromProto;
+import static dev.responsive.kafka.internal.utils.Utils.uuidToProto;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.protobuf.ByteString;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
-import dev.responsive.kafka.internal.db.rs3.client.CreateStoreOptions;
+import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes.CreateStoreOptions;
+import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes.CreateStoreResult;
 import dev.responsive.kafka.internal.db.rs3.client.CurrentOffsets;
 import dev.responsive.kafka.internal.db.rs3.client.LssId;
 import dev.responsive.kafka.internal.db.rs3.client.Put;
@@ -72,7 +73,7 @@ public class GrpcRS3Client implements RS3Client {
     final RS3Grpc.RS3BlockingStub stub = stubs.stubs(storeId, pssId).syncStub();
 
     final Rs3.GetOffsetsRequest request = Rs3.GetOffsetsRequest.newBuilder()
-        .setStoreId(uuidToUuidProto(storeId))
+        .setStoreId(uuidToProto(storeId))
         .setLssId(lssIdProto(lssId))
         .setPssId(pssId)
         .build();
@@ -149,7 +150,7 @@ public class GrpcRS3Client implements RS3Client {
     final var streamSender = new GrpcStreamSender<WalEntry, Rs3.WriteWALSegmentRequest>(
         entry -> {
           final var entryBuilder = Rs3.WriteWALSegmentRequest.newBuilder()
-              .setStoreId(uuidToUuidProto(storeId))
+              .setStoreId(uuidToProto(storeId))
               .setLssId(lssIdProto(lssId))
               .setPssId(pssId)
               .setEndOffset(endOffset)
@@ -229,7 +230,7 @@ public class GrpcRS3Client implements RS3Client {
       RangeBound to
   ) {
     final var requestBuilder = Rs3.RangeRequest.newBuilder()
-        .setStoreId(uuidToUuidProto(storeId))
+        .setStoreId(uuidToProto(storeId))
         .setLssId(lssIdProto(lssId))
         .setPssId(pssId)
         .setTo(protoBound(to));
@@ -250,7 +251,7 @@ public class GrpcRS3Client implements RS3Client {
       final byte[] key
   ) {
     final var requestBuilder = Rs3.GetRequest.newBuilder()
-        .setStoreId(uuidToUuidProto(storeId))
+        .setStoreId(uuidToProto(storeId))
         .setLssId(lssIdProto(lssId))
         .setPssId(pssId)
         .setKey(ByteString.copyFrom(key));
@@ -282,18 +283,18 @@ public class GrpcRS3Client implements RS3Client {
 
     return result.getStoresList()
         .stream()
-        .map(t -> new Store(uuidProtoToUuid(t.getStoreId()), t.getPssIdsList()))
+        .map(t -> new Store(t.getStoreName(), uuidFromProto(t.getStoreId()), t.getPssIdsList()))
         .collect(Collectors.toList());
   }
 
   @Override
-  public List<Integer> createStore(
-      final UUID storeId,
+  public CreateStoreResult createStore(
+      final String storeName,
       final int logicalShards,
       final CreateStoreOptions options
   ) {
     final var request = Rs3.CreateStoreRequest.newBuilder()
-        .setStoreId(uuidToUuidProto(storeId))
+        .setStoreName(storeName)
         .setLogicalShards(logicalShards)
         .setOptions(options.toProto())
         .build();
@@ -301,12 +302,12 @@ public class GrpcRS3Client implements RS3Client {
 
     final Rs3.CreateStoreResult result = withRetry(
         () -> stub.createStore(request),
-        () -> "CreateStore(storeId=" + storeId
+        () -> "CreateStore(storeName=" + storeName
             + ", logicalShards=" + logicalShards
             + ", createStoreOptions=" + options + ")"
     );
 
-    return result.getPssIdsList();
+    return new CreateStoreResult(uuidFromProto(result.getStoreId()), result.getPssIdsList());
   }
 
   private void addWalEntryToSegment(

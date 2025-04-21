@@ -123,7 +123,6 @@ public class PartitionedOperations implements KeyValueOperations {
             sessionClients,
             changelog.topic(),
             ttlResolver,
-            config,
             responsiveMetrics,
             scopeBuilder
         );
@@ -272,13 +271,11 @@ public class PartitionedOperations implements KeyValueOperations {
       final SessionClients sessionClients,
       final String changelogTopicName,
       final Optional<TtlResolver<?, ?>> ttlResolver,
-      final ResponsiveConfig config,
       final ResponsiveMetrics responsiveMetrics,
       final ResponsiveMetrics.MetricScopeBuilder scopeBuilder
   ) {
     return sessionClients.rs3TableFactory().kvTable(
         params.name().tableName(),
-        config,
         ttlResolver,
         responsiveMetrics,
         scopeBuilder,

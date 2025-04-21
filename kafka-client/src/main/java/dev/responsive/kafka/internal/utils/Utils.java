@@ -130,11 +130,11 @@ public final class Utils {
     }
   }
 
-  public static UUID uuidProtoToUuid(final Rs3.UUID uuid) {
+  public static UUID uuidFromProto(final Rs3.UUID uuid) {
     return new UUID(uuid.getHigh(), uuid.getLow());
   }
 
-  public static Rs3.UUID uuidToUuidProto(final UUID uuid) {
+  public static Rs3.UUID uuidToProto(final UUID uuid) {
     return Rs3.UUID.newBuilder()
         .setHigh(uuid.getMostSignificantBits())
         .setLow(uuid.getLeastSignificantBits())

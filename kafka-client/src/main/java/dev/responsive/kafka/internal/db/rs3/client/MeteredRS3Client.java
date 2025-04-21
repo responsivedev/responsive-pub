@@ -1,5 +1,7 @@
 package dev.responsive.kafka.internal.db.rs3.client;
 
+import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes.CreateStoreOptions;
+import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes.CreateStoreResult;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import java.time.Duration;
 import java.time.Instant;
@@ -117,12 +119,12 @@ public class MeteredRS3Client implements RS3Client {
   }
 
   @Override
-  public List<Integer> createStore(
-      final UUID storeId,
+  public CreateStoreResult createStore(
+      final String storeName,
       final int logicalShards,
       final CreateStoreOptions options
   ) {
-    return delegate.createStore(storeId, logicalShards, options);
+    return delegate.createStore(storeName, logicalShards, options);
   }
 
   public void close() {

@@ -12,6 +12,8 @@
 
 package dev.responsive.kafka.internal.db.rs3.client;
 
+import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes.CreateStoreOptions;
+import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes.CreateStoreResult;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -57,8 +59,8 @@ public interface RS3Client {
 
   List<Store> listStores();
 
-  List<Integer> createStore(
-      UUID storeId,
+  CreateStoreResult createStore(
+      String storeId,
       int logicalShards,
       CreateStoreOptions options
   );

@@ -48,14 +48,14 @@ public class RS3KVTable implements RemoteKVTable<WalEntry> {
   private RS3KVFlushManager flushManager;
 
   public RS3KVTable(
-      final String name,
+      final String storeName,
       final UUID storeId,
       final RS3Client rs3Client,
       final PssPartitioner pssPartitioner,
       final ResponsiveMetrics responsiveMetrics,
       final ResponsiveMetrics.MetricScopeBuilder scopeBuilder
   ) {
-    this.name = Objects.requireNonNull(name);
+    this.name = Objects.requireNonNull(storeName);
     this.storeId = Objects.requireNonNull(storeId);
     this.rs3Client = new MeteredRS3Client(
         Objects.requireNonNull(rs3Client),
