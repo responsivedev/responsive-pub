@@ -26,7 +26,7 @@ public class GrpsRs3TestUtil {
     );
     return Rs3.RangeResult.newBuilder()
         .setType(Rs3.RangeResult.Type.RESULT)
-        .setResult(Rs3.KeyValue.newBuilder().setDefaultKv(keyValue))
+        .setResult(Rs3.KeyValue.newBuilder().setBasicKv(keyValue))
         .build();
   }
 
@@ -38,13 +38,13 @@ public class GrpsRs3TestUtil {
   }
 
   public static Range newRangeFromProto(Rs3.RangeRequest req) {
-    final var range = req.getRange().getDefaultRange();
+    final var range = req.getRange().getBasicRange();
     final var startBound = newRangeBoundFromProto(range.getFrom());
     final var endBound = newRangeBoundFromProto(range.getTo());
     return new Range(startBound, endBound);
   }
 
-  private static RangeBound newRangeBoundFromProto(Rs3.DefaultBound bound) {
+  private static RangeBound newRangeBoundFromProto(Rs3.BasicBound bound) {
     switch (bound.getType()) {
       case EXCLUSIVE:
         return RangeBound.exclusive(bound.getKey().getKey().toByteArray());

@@ -1,7 +1,7 @@
 package dev.responsive.kafka.internal.db.rs3.client;
 
-import dev.responsive.rs3.Rs3;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -12,21 +12,39 @@ public class CreateStoreTypes {
     STREAM_TIME
   }
 
+  public enum StoreType {
+    BASIC,
+    WINDOW
+  }
+
   public static class CreateStoreOptions {
 
+    private final int logicalShards;
+    private final StoreType storeType;
     private final Optional<ClockType> clockType;
     private final Optional<Long> defaultTtl;
     private final Optional<Integer> filterBitsPerKey;
 
-
     public CreateStoreOptions(
+        final int logicalShards,
+        final StoreType storeType,
         final Optional<ClockType> clockType,
         final Optional<Long> defaultTtl,
         final Optional<Integer> filterBitsPerKey
     ) {
+      this.logicalShards = logicalShards;
+      this.storeType = storeType;
       this.clockType = clockType;
       this.defaultTtl = defaultTtl;
       this.filterBitsPerKey = filterBitsPerKey;
+    }
+
+    public int logicalShards() {
+      return logicalShards;
+    }
+
+    public StoreType storeType() {
+      return storeType;
     }
 
     public Optional<ClockType> clockType() {
@@ -41,20 +59,12 @@ public class CreateStoreTypes {
       return filterBitsPerKey;
     }
 
-    public Rs3.CreateStoreOptions toProto() {
-      final var builder = Rs3.CreateStoreOptions.newBuilder();
-      clockType.ifPresent(
-          type -> builder.setClockType(Rs3.CreateStoreOptions.ClockType.forNumber(type.ordinal()))
-      );
-      defaultTtl.ifPresent(builder::setDefaultTtl);
-      filterBitsPerKey.ifPresent(builder::setFilterBitsPerKey);
-      return builder.build();
-    }
-
     @Override
     public String toString() {
       return "CreateStoreOptions{"
-          + "clockType=" + clockType
+          + "logicalShards=" + logicalShards
+          + ", storeType=" + storeType
+          + ", clockType=" + clockType
           + ", defaultTtl=" + defaultTtl
           + ", filterBitsPerKey=" + filterBitsPerKey
           + '}';
@@ -68,24 +78,17 @@ public class CreateStoreTypes {
       if (o == null || getClass() != o.getClass()) {
         return false;
       }
-
       final CreateStoreOptions that = (CreateStoreOptions) o;
-
-      if (!clockType.equals(that.clockType)) {
-        return false;
-      }
-      if (!defaultTtl.equals(that.defaultTtl)) {
-        return false;
-      }
-      return filterBitsPerKey.equals(that.filterBitsPerKey);
+      return logicalShards == that.logicalShards && storeType == that.storeType
+          && Objects.equals(clockType, that.clockType) && Objects.equals(
+          defaultTtl,
+          that.defaultTtl
+      ) && Objects.equals(filterBitsPerKey, that.filterBitsPerKey);
     }
 
     @Override
     public int hashCode() {
-      int result = clockType.hashCode();
-      result = 31 * result + defaultTtl.hashCode();
-      result = 31 * result + filterBitsPerKey.hashCode();
-      return result;
+      return Objects.hash(logicalShards, storeType, clockType, defaultTtl, filterBitsPerKey);
     }
   }
 

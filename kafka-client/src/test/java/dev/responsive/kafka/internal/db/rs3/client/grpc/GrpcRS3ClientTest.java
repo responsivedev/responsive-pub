@@ -13,6 +13,7 @@
 package dev.responsive.kafka.internal.db.rs3.client.grpc;
 
 import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.basicPutProto;
+import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.createStoreOptionsProto;
 import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpsRs3TestUtil.newEndOfStreamResult;
 import static dev.responsive.kafka.internal.utils.Utils.lssIdProto;
 import static dev.responsive.kafka.internal.utils.Utils.uuidToProto;
@@ -640,7 +641,7 @@ class GrpcRS3ClientTest {
     // given:
     when(stub.get(any())).thenReturn(
         Rs3.GetResult.newBuilder()
-            .setResult(Rs3.KeyValue.newBuilder().setDefaultKv(
+            .setResult(Rs3.KeyValue.newBuilder().setBasicKv(
                 GrpcRs3Util.basicKeyValueProto(
                     "foo".getBytes(StandardCharsets.UTF_8),
                     "bar".getBytes(StandardCharsets.UTF_8))
@@ -657,7 +658,7 @@ class GrpcRS3ClientTest {
         .setPssId(PSS_ID)
         .setStoreId(uuidToProto(STORE_ID))
         .setExpectedWrittenOffset(123L)
-        .setKey(Rs3.Key.newBuilder().setDefaultKey(
+        .setKey(Rs3.Key.newBuilder().setBasicKey(
             GrpcRs3Util.basicKeyProto("foo".getBytes(StandardCharsets.UTF_8))
         ))
         .build()
@@ -669,7 +670,7 @@ class GrpcRS3ClientTest {
     // given:
     when(stub.get(any())).thenReturn(
         Rs3.GetResult.newBuilder()
-            .setResult(Rs3.KeyValue.newBuilder().setDefaultKv(
+            .setResult(Rs3.KeyValue.newBuilder().setBasicKv(
                 GrpcRs3Util.basicKeyValueProto(
                     "foo".getBytes(StandardCharsets.UTF_8),
                     "bar".getBytes(StandardCharsets.UTF_8)
@@ -687,7 +688,7 @@ class GrpcRS3ClientTest {
         .setLssId(lssIdProto(LSS_ID))
         .setPssId(PSS_ID)
         .setStoreId(uuidToProto(STORE_ID))
-        .setKey(Rs3.Key.newBuilder().setDefaultKey(
+        .setKey(Rs3.Key.newBuilder().setBasicKey(
             GrpcRs3Util.basicKeyProto("foo".getBytes(StandardCharsets.UTF_8))
         ))
         .build()
@@ -975,20 +976,24 @@ class GrpcRS3ClientTest {
         );
 
     final CreateStoreOptions options = new CreateStoreOptions(
+        logicalShards,
+        CreateStoreTypes.StoreType.BASIC,
         Optional.of(ClockType.STREAM_TIME),
         Optional.of(10_000L),
         Optional.empty()
     );
 
     // when:
-    final var result = client.createStore(STORE_NAME, logicalShards, options);
+    final var result = client.createStore(STORE_NAME, options);
 
     // then:
     assertThat(result, equalTo(new CreateStoreTypes.CreateStoreResult(STORE_ID, pss_ids)));
-    verify(stub).createStore(Rs3.CreateStoreRequest.newBuilder()
-                                 .setStoreName(STORE_NAME)
-                                 .setLogicalShards(logicalShards)
-                                 .setOptions(options.toProto()).build());
+    verify(stub).createStore(
+        Rs3.CreateStoreRequest.newBuilder()
+            .setStoreName(STORE_NAME)
+            .setOptions(createStoreOptionsProto(options))
+            .build()
+    );
   }
 
   @Test
@@ -1006,20 +1011,24 @@ class GrpcRS3ClientTest {
         );
 
     final CreateStoreOptions options = new CreateStoreOptions(
+        logicalShards,
+        CreateStoreTypes.StoreType.BASIC,
         Optional.empty(),
         Optional.of(10_000L),
         Optional.of(20)
     );
 
     // when:
-    final var result = client.createStore(STORE_NAME, logicalShards, options);
+    final var result = client.createStore(STORE_NAME, options);
 
     // then:
     assertThat(result, equalTo(new CreateStoreTypes.CreateStoreResult(STORE_ID, pss_ids)));
-    verify(stub, times(2)).createStore(Rs3.CreateStoreRequest.newBuilder()
-                                 .setStoreName(STORE_NAME)
-                                 .setLogicalShards(logicalShards)
-                                 .setOptions(options.toProto()).build());
+    verify(stub, times(2)).createStore(
+        Rs3.CreateStoreRequest.newBuilder()
+            .setStoreName(STORE_NAME)
+            .setOptions(createStoreOptionsProto(options))
+            .build()
+    );
   }
 
   @Test
@@ -1030,6 +1039,8 @@ class GrpcRS3ClientTest {
 
     final int logicalShards = 5;
     final CreateStoreOptions options = new CreateStoreOptions(
+        logicalShards,
+        CreateStoreTypes.StoreType.BASIC,
         Optional.empty(),
         Optional.of(10_000L),
         Optional.of(20)
@@ -1038,7 +1049,7 @@ class GrpcRS3ClientTest {
     // when:
     final RS3Exception exception = assertThrows(
         RS3Exception.class,
-        () -> client.createStore(STORE_NAME, logicalShards, options)
+        () -> client.createStore(STORE_NAME, options)
     );
 
     // then:
@@ -1055,6 +1066,8 @@ class GrpcRS3ClientTest {
 
     final int logicalShards = 5;
     final CreateStoreOptions options = new CreateStoreOptions(
+        logicalShards,
+        CreateStoreTypes.StoreType.BASIC,
         Optional.empty(),
         Optional.of(10_000L),
         Optional.of(20)
@@ -1063,7 +1076,7 @@ class GrpcRS3ClientTest {
     // when:
     assertThrows(
         RS3TimeoutException.class,
-        () -> client.createStore(STORE_NAME, logicalShards, options)
+        () -> client.createStore(STORE_NAME, options)
     );
 
     // then:

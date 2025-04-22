@@ -137,7 +137,7 @@ public class GrpcKeyValueIterator implements KeyValueIterator<Bytes, byte[]> {
       } else if (rangeResult.getType() == Rs3.RangeResult.Type.END_OF_STREAM) {
         queue.put(new EndOfStream());
       } else {
-        final var kv = rangeResult.getResult().getDefaultKv();
+        final var kv = rangeResult.getResult().getBasicKv();
         final var key = kv.getKey().getKey();
         final var value = kv.getValue().getValue();
         queue.put(new Result(key, value));

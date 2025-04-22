@@ -13,6 +13,7 @@
 package dev.responsive.kafka.internal.db.rs3.client.grpc;
 
 import com.google.protobuf.ByteString;
+import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes;
 import dev.responsive.kafka.internal.db.rs3.client.Delete;
 import dev.responsive.kafka.internal.db.rs3.client.Put;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Exception;
@@ -61,23 +62,23 @@ public class GrpcRs3Util {
     }
   }
 
-  public static Rs3.DefaultKey basicKeyProto(final byte[] key) {
-    return Rs3.DefaultKey.newBuilder()
+  public static Rs3.BasicKey basicKeyProto(final byte[] key) {
+    return Rs3.BasicKey.newBuilder()
         .setKey(ByteString.copyFrom(key))
         .build();
   }
 
-  public static Rs3.DefaultKeyValue basicKeyValueProto(
+  public static Rs3.BasicKeyValue basicKeyValueProto(
       final byte[] key,
       final byte[] value
   ) {
-    final var keyBldr = Rs3.DefaultKey.newBuilder();
+    final var keyBldr = Rs3.BasicKey.newBuilder();
     keyBldr.setKey(ByteString.copyFrom(key));
 
-    final var valueBldr = Rs3.DefaultValue.newBuilder();
+    final var valueBldr = Rs3.BasicValue.newBuilder();
     valueBldr.setValue(ByteString.copyFrom(value));
 
-    return Rs3.DefaultKeyValue.newBuilder()
+    return Rs3.BasicKeyValue.newBuilder()
         .setKey(keyBldr)
         .setValue(valueBldr)
         .build();
@@ -86,7 +87,7 @@ public class GrpcRs3Util {
   public static Rs3.WriteWALSegmentRequest.Put basicPutProto(final Put put) {
     final var kv = basicKeyValueProto(put.key(), put.value());
     return Rs3.WriteWALSegmentRequest.Put.newBuilder()
-        .setKv(Rs3.KeyValue.newBuilder().setDefaultKv(kv).build())
+        .setKv(Rs3.KeyValue.newBuilder().setBasicKv(kv).build())
         .setTtl(Rs3.Ttl.newBuilder().setTtlType(Rs3.Ttl.TtlType.DEFAULT))
         .build();
   }
@@ -94,7 +95,37 @@ public class GrpcRs3Util {
   public static Rs3.WriteWALSegmentRequest.Delete basicDeleteProto(final Delete delete) {
     final var key = basicKeyProto(delete.key());
     return Rs3.WriteWALSegmentRequest.Delete.newBuilder()
-        .setKey(Rs3.Key.newBuilder().setDefaultKey(key))
+        .setKey(Rs3.Key.newBuilder().setBasicKey(key))
         .build();
+  }
+
+  public static Rs3.StoreType storeTypeProto(final CreateStoreTypes.StoreType storeType) {
+    switch (storeType) {
+      case BASIC:
+        return Rs3.StoreType.BASIC;
+      case WINDOW:
+        return Rs3.StoreType.WINDOW;
+      default:
+        throw new IllegalArgumentException("Unknown store type: " + storeType);
+    }
+  }
+
+  public static Rs3.CreateStoreOptions createStoreOptionsProto(
+      CreateStoreTypes.CreateStoreOptions options
+  ) {
+    final var builder = Rs3.CreateStoreOptions.newBuilder();
+    builder.setLogicalShards(options.logicalShards());
+    builder.setStoreType(storeTypeProto(options.storeType()));
+    options.clockType().ifPresent(
+        type -> builder.setClockType(Rs3.CreateStoreOptions.ClockType.forNumber(type.ordinal()))
+    );
+    options.defaultTtl().ifPresent(builder::setDefaultTtl);
+    options.filterBitsPerKey().ifPresent(filterBitsPerKey -> {
+      // TODO: Do we want to add `SlateDbOptions` as an explicit class in `CreateOptions`?
+      final var storageOptions = Rs3.SlateDbStorageOptions.newBuilder();
+      storageOptions.setFilterBitsPerKey(filterBitsPerKey);
+      builder.setSlatedbStorageOptions(storageOptions);
+    });
+    return builder.build();
   }
 }

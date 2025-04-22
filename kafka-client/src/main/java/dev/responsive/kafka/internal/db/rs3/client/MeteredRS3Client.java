@@ -119,10 +119,9 @@ public class MeteredRS3Client implements RS3Client {
   @Override
   public CreateStoreResult createStore(
       final String storeName,
-      final int logicalShards,
       final CreateStoreOptions options
   ) {
-    return delegate.createStore(storeName, logicalShards, options);
+    return delegate.createStore(storeName, options);
   }
 
   public void close() {

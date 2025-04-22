@@ -60,7 +60,6 @@ public interface RS3Client {
 
   CreateStoreResult createStore(
       String storeId,
-      int logicalShards,
       CreateStoreOptions options
   );
 

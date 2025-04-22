@@ -256,7 +256,7 @@ public class GrpcRS3Client implements RS3Client {
         .setStoreId(uuidToProto(storeId))
         .setLssId(lssIdProto(lssId))
         .setPssId(pssId)
-        .setKey(Rs3.Key.newBuilder().setDefaultKey(basicKeyProto(key)));
+        .setKey(Rs3.Key.newBuilder().setBasicKey(basicKeyProto(key)));
     expectedWrittenOffset.ifPresent(requestBuilder::setExpectedWrittenOffset);
     final var request = requestBuilder.build();
     final RS3Grpc.RS3BlockingStub stub = stubs.stubs(storeId, pssId).syncStub();
@@ -269,8 +269,8 @@ public class GrpcRS3Client implements RS3Client {
       return Optional.empty();
     }
     final Rs3.KeyValue keyValue = result.getResult();
-    checkField(keyValue::hasDefaultKv, "value");
-    final var value = keyValue.getDefaultKv().getValue().getValue();
+    checkField(keyValue::hasBasicKv, "value");
+    final var value = keyValue.getBasicKv().getValue().getValue();
     return Optional.of(value.toByteArray());
   }
 
@@ -293,21 +293,17 @@ public class GrpcRS3Client implements RS3Client {
   @Override
   public CreateStoreResult createStore(
       final String storeName,
-      final int logicalShards,
       final CreateStoreOptions options
   ) {
     final var request = Rs3.CreateStoreRequest.newBuilder()
         .setStoreName(storeName)
-        .setLogicalShards(logicalShards)
-        .setOptions(options.toProto())
+        .setOptions(GrpcRs3Util.createStoreOptionsProto(options))
         .build();
     final RS3Grpc.RS3BlockingStub stub = stubs.globalStubs().syncStub();
 
     final Rs3.CreateStoreResult result = withRetry(
         () -> stub.createStore(request),
-        () -> "CreateStore(storeName=" + storeName
-            + ", logicalShards=" + logicalShards
-            + ", createStoreOptions=" + options + ")"
+        () -> "CreateStore(storeName=" + storeName  + ", createStoreOptions=" + options + ")"
     );
 
     return new CreateStoreResult(uuidFromProto(result.getStoreId()), result.getPssIdsList());
@@ -331,35 +327,35 @@ public class GrpcRS3Client implements RS3Client {
   }
 
   private Rs3.Range protoRange(Range range) {
-    final var protoRange = Rs3.DefaultRange.newBuilder()
+    final var protoRange = Rs3.BasicRange.newBuilder()
         .setFrom(protoBound(range.start()))
         .setTo(protoBound(range.end()));
     return Rs3.Range.newBuilder()
-        .setDefaultRange(protoRange)
+        .setBasicRange(protoRange)
         .build();
   }
 
-  private Rs3.DefaultBound protoBound(RangeBound bound) {
+  private Rs3.BasicBound protoBound(RangeBound bound) {
     return bound.map(new RangeBound.Mapper<>() {
       @Override
-      public Rs3.DefaultBound map(final RangeBound.InclusiveBound b) {
-        return Rs3.DefaultBound.newBuilder()
+      public Rs3.BasicBound map(final RangeBound.InclusiveBound b) {
+        return Rs3.BasicBound.newBuilder()
             .setType(Rs3.BoundType.INCLUSIVE)
             .setKey(basicKeyProto(b.key()))
             .build();
       }
 
       @Override
-      public Rs3.DefaultBound map(final RangeBound.ExclusiveBound b) {
-        return Rs3.DefaultBound.newBuilder()
+      public Rs3.BasicBound map(final RangeBound.ExclusiveBound b) {
+        return Rs3.BasicBound.newBuilder()
             .setType(Rs3.BoundType.EXCLUSIVE)
             .setKey(basicKeyProto(b.key()))
             .build();
       }
 
       @Override
-      public Rs3.DefaultBound map(final RangeBound.Unbounded b) {
-        return Rs3.DefaultBound.newBuilder()
+      public Rs3.BasicBound map(final RangeBound.Unbounded b) {
+        return Rs3.BasicBound.newBuilder()
             .setType(Rs3.BoundType.UNBOUNDED)
             .build();
       }

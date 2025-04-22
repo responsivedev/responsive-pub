@@ -318,20 +318,20 @@ class GrpcRS3ClientEndToEndTest {
         }
       }
 
-      final var key = req.getKey().getDefaultKey();
-      final var kvBuilder = Rs3.DefaultKeyValue.newBuilder().setKey(key);
+      final var key = req.getKey().getBasicKey();
+      final var kvBuilder = Rs3.BasicKeyValue.newBuilder().setKey(key);
 
       final var keyBytes = Bytes.wrap(key.getKey().toByteArray());
       final var valueBytes = table.get(keyBytes);
       if (valueBytes != null) {
-        final var value = Rs3.DefaultValue.newBuilder()
+        final var value = Rs3.BasicValue.newBuilder()
             .setValue(ByteString.copyFrom(valueBytes.get()));
         kvBuilder.setValue(value);
       }
 
       final var result = Rs3.GetResult
           .newBuilder()
-          .setResult(Rs3.KeyValue.newBuilder().setDefaultKv(kvBuilder))
+          .setResult(Rs3.KeyValue.newBuilder().setBasicKv(kvBuilder))
           .build();
       responseObserver.onNext(result);
       responseObserver.onCompleted();
@@ -373,7 +373,7 @@ class GrpcRS3ClientEndToEndTest {
 
         final var keyValueResult = Rs3.RangeResult.newBuilder()
             .setType(Rs3.RangeResult.Type.RESULT)
-            .setResult(Rs3.KeyValue.newBuilder().setDefaultKv(keyValue))
+            .setResult(Rs3.KeyValue.newBuilder().setBasicKv(keyValue))
             .build();
 
         responseObserver.onNext(keyValueResult);
@@ -414,12 +414,12 @@ class GrpcRS3ClientEndToEndTest {
               current -> Math.max(current, req.getEndOffset())
           );
           if (req.hasPut()) {
-            final var kv = req.getPut().getKv().getDefaultKv();
+            final var kv = req.getPut().getKv().getBasicKv();
             final var keyBytes = Bytes.wrap(kv.getKey().getKey().toByteArray());
             final var valueBytes = Bytes.wrap(kv.getValue().getValue().toByteArray());
             table.put(keyBytes, valueBytes);
           } else if (req.hasDelete()) {
-            final var key = req.getDelete().getKey().getDefaultKey();
+            final var key = req.getDelete().getKey().getBasicKey();
             final var keyBytes = Bytes.wrap(key.getKey().toByteArray());
             table.remove(keyBytes);
           }
