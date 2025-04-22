@@ -100,16 +100,14 @@ public class MeteredRS3Client implements RS3Client {
       final LssId lssId,
       final int pssId,
       final Optional<Long> expectedWrittenOffset,
-      final RangeBound from,
-      final RangeBound to
+      final Range range
   ) {
     return delegate.range(
         storeId,
         lssId,
         pssId,
         expectedWrittenOffset,
-        from,
-        to
+        range
     );
   }
 

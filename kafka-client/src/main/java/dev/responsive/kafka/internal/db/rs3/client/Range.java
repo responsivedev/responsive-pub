@@ -61,4 +61,8 @@ public class Range {
     });
   }
 
+  public static Range unbounded() {
+    return new Range(RangeBound.unbounded(), RangeBound.unbounded());
+  }
+
 }

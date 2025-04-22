@@ -53,8 +53,7 @@ public interface RS3Client {
       LssId lssId,
       int pssId,
       Optional<Long> expectedWrittenOffset,
-      RangeBound from,
-      RangeBound to
+      Range range
   );
 
   List<Store> listStores();

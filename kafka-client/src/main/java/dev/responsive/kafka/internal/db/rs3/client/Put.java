@@ -14,7 +14,6 @@ package dev.responsive.kafka.internal.db.rs3.client;
 
 import java.util.Arrays;
 import java.util.Objects;
-import java.util.Optional;
 
 public class Put extends WalEntry {
   private final byte[] key;
@@ -22,27 +21,30 @@ public class Put extends WalEntry {
 
   public Put(final byte[] key, final byte[] value) {
     this.key = Objects.requireNonNull(key);
-    this.value = value;
+    this.value = Objects.requireNonNull(value);
   }
 
   public byte[] key() {
     return key;
   }
 
-  public Optional<byte[]> value() {
-    return Optional.ofNullable(value);
+  public byte[] value() {
+    return value;
   }
 
   @Override
-  public boolean equals(Object o) {
+  public boolean equals(final Object o) {
     if (this == o) {
       return true;
     }
-    if (!(o instanceof Put)) {
+    if (o == null || getClass() != o.getClass()) {
       return false;
     }
     final Put put = (Put) o;
-    return Objects.deepEquals(key, put.key) && Objects.deepEquals(value, put.value);
+    return Objects.deepEquals(key, put.key) && Objects.deepEquals(
+        value,
+        put.value
+    );
   }
 
   @Override
