@@ -47,9 +47,9 @@ public class GrpsRs3TestUtil {
   private static RangeBound newRangeBoundFromProto(Rs3.DefaultBound bound) {
     switch (bound.getType()) {
       case EXCLUSIVE:
-        return RangeBound.exclusive(bound.getKey().toByteArray());
+        return RangeBound.exclusive(bound.getKey().getKey().toByteArray());
       case INCLUSIVE:
-        return RangeBound.inclusive(bound.getKey().toByteArray());
+        return RangeBound.inclusive(bound.getKey().getKey().toByteArray());
       case UNBOUNDED:
         return RangeBound.unbounded();
       default:
