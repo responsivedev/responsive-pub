@@ -12,7 +12,6 @@
 
 package dev.responsive.kafka.internal.db.rs3.client.grpc;
 
-import com.google.protobuf.ByteString;
 import dev.responsive.kafka.internal.db.rs3.client.Range;
 import dev.responsive.kafka.internal.db.rs3.client.RangeBound;
 import dev.responsive.rs3.Rs3;
