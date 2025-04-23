@@ -8,7 +8,7 @@ metastore_type = "Static"
 id = "b1a45157-e2f0-4698-be0e-5bf3a9b8e9d1"
 name = "customers_state_store_0000000001"
 
-[[metastore.static_store.stores.options]]
+[metastore.static_store.stores.options]
 logical_shards = 8
 store_type = "Basic"
 
@@ -16,7 +16,7 @@ store_type = "Basic"
 id = "013a57c3-16b3-44be-8de4-0d1083671cc6"
 name = "KSTREAM-REDUCE-STATE-STORE-0000000006"
 
-[[metastore.static_store.stores.options]]
+[metastore.static_store.stores.options]
 logical_shards = 8
 store_type = "Basic"
 
