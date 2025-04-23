@@ -15,13 +15,13 @@ package dev.responsive.kafka.internal.db.rs3;
 import static dev.responsive.kafka.internal.stores.TtlResolver.NO_TTL;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes;
 import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes.CreateStoreOptions;
 import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes.CreateStoreResult;
 import dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRS3Client;
@@ -74,7 +74,7 @@ class RS3TableFactoryTest {
     final String tableName = "test-table";
     final int partitions = 5;
 
-    when(client.createStore(anyString(), anyInt(), any(CreateStoreOptions.class)))
+    when(client.createStore(anyString(), any(CreateStoreOptions.class)))
         .thenReturn(new CreateStoreResult(storeId, List.of(1, 2, 3, 4, 5)));
 
     final RS3TableFactory factory = newTestFactory();
@@ -88,11 +88,14 @@ class RS3TableFactoryTest {
     assertEquals(tableName, rs3Table.name());
     assertEquals(storeId, rs3Table.storedId());
 
-    verify(client).createStore(
-        tableName,
+    final var expectedOptions = new CreateStoreOptions(
         partitions,
-        new CreateStoreOptions(Optional.empty(), Optional.empty(), Optional.empty())
+        CreateStoreTypes.StoreType.BASIC,
+        Optional.empty(),
+        Optional.empty(),
+        Optional.empty()
     );
+    verify(client).createStore(tableName, expectedOptions);
   }
 
   private RS3TableFactory newTestFactory() {

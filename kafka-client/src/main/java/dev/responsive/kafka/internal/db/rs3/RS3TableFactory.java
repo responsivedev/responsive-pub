@@ -13,6 +13,7 @@
 package dev.responsive.kafka.internal.db.rs3;
 
 import dev.responsive.kafka.internal.db.RemoteKVTable;
+import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes;
 import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes.ClockType;
 import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes.CreateStoreOptions;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Client;
@@ -76,12 +77,14 @@ public class RS3TableFactory {
             : Optional.empty();
 
     final var options = new CreateStoreOptions(
+        numKafkaPartitions,
+        CreateStoreTypes.StoreType.BASIC,
         ttlResolver.isPresent() ? Optional.of(ClockType.WALL_CLOCK) : Optional.empty(),
         defaultTtl,
         Optional.empty()
     );
 
-    final var result = rs3Client.createStore(storeName, numKafkaPartitions, options);
+    final var result = rs3Client.createStore(storeName, options);
     LOG.info("Created store {} ({}) with {} logical shards and {} physical shards",
              storeName, result.storeId(), numKafkaPartitions, result.pssIds().size());
 

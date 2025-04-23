@@ -14,7 +14,7 @@
 
 package dev.responsive.kafka.internal.db.rs3.client.grpc;
 
-import dev.responsive.kafka.internal.db.rs3.client.RangeBound;
+import dev.responsive.kafka.internal.db.rs3.client.Range;
 import dev.responsive.rs3.Rs3;
 import io.grpc.stub.StreamObserver;
 
@@ -33,5 +33,5 @@ public interface GrpcRangeRequestProxy {
    * @param start The updated start bound based on key-values seen with `resultObserver`
    * @param resultObserver An observer for key-value results and the end of stream marker
    */
-  void send(RangeBound start, StreamObserver<Rs3.RangeResult> resultObserver);
+  void send(Range range, StreamObserver<Rs3.RangeResult> resultObserver);
 }

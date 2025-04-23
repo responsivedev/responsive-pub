@@ -22,6 +22,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 
 import dev.responsive.kafka.internal.db.rs3.client.RS3Exception;
+import dev.responsive.kafka.internal.db.rs3.client.Range;
 import dev.responsive.kafka.internal.db.rs3.client.RangeBound;
 import dev.responsive.rs3.Rs3;
 import io.grpc.Status;
@@ -43,7 +44,10 @@ class GrpcKeyValueIteratorTest {
   @Test
   @SuppressWarnings("unchecked")
   public void shouldIterateKeyValueResults() {
-    final var startBound = RangeBound.inclusive("a".getBytes(StandardCharsets.UTF_8));
+    final var range = new Range(
+        RangeBound.inclusive("a".getBytes(StandardCharsets.UTF_8)),
+        RangeBound.unbounded()
+    );
     Mockito.doAnswer(invocation -> {
       StreamObserver<Rs3.RangeResult> observer = invocation.getArgument(1, StreamObserver.class);
       observer.onNext(newKeyValueResult("a"));
@@ -52,9 +56,9 @@ class GrpcKeyValueIteratorTest {
       observer.onNext(newEndOfStreamResult());
       observer.onCompleted();
       return null;
-    }).when(requestProxy).send(eq(startBound), any());
+    }).when(requestProxy).send(eq(range), any());
 
-    try (final var iter = new GrpcKeyValueIterator(startBound, requestProxy)) {
+    try (final var iter = new GrpcKeyValueIterator(range, requestProxy)) {
       assertNextKey(iter, "a");
       assertNextKey(iter, "b");
       assertNextKey(iter, "c");
@@ -65,15 +69,21 @@ class GrpcKeyValueIteratorTest {
   @Test
   @SuppressWarnings("unchecked")
   public void shouldRetryRangeRequestAfterTransientFailure() {
-    final var startBound = RangeBound.inclusive("a".getBytes(StandardCharsets.UTF_8));
+    final var range = new Range(
+        RangeBound.inclusive("a".getBytes(StandardCharsets.UTF_8)),
+        RangeBound.unbounded()
+    );
     Mockito.doAnswer(invocation -> {
       StreamObserver<Rs3.RangeResult> observer = invocation.getArgument(1, StreamObserver.class);
       observer.onNext(newKeyValueResult("a"));
       observer.onError(new StatusRuntimeException(Status.UNAVAILABLE));
       return null;
-    }).when(requestProxy).send(eq(startBound), any());
+    }).when(requestProxy).send(eq(range), any());
 
-    final var retryStartBound = RangeBound.exclusive("a".getBytes(StandardCharsets.UTF_8));
+    final var retryRange = new Range(
+        RangeBound.exclusive("a".getBytes(StandardCharsets.UTF_8)),
+        RangeBound.unbounded()
+    );
     Mockito.doAnswer(invocation -> {
       StreamObserver<Rs3.RangeResult> observer = invocation.getArgument(1, StreamObserver.class);
       observer.onNext(newKeyValueResult("b"));
@@ -81,9 +91,9 @@ class GrpcKeyValueIteratorTest {
       observer.onNext(newEndOfStreamResult());
       observer.onCompleted();
       return null;
-    }).when(requestProxy).send(eq(retryStartBound), any());
+    }).when(requestProxy).send(eq(retryRange), any());
 
-    try (final var iter = new GrpcKeyValueIterator(startBound, requestProxy)) {
+    try (final var iter = new GrpcKeyValueIterator(range, requestProxy)) {
       assertNextKey(iter, "a");
       assertNextKey(iter, "b");
       assertNextKey(iter, "c");
@@ -94,15 +104,21 @@ class GrpcKeyValueIteratorTest {
   @Test
   @SuppressWarnings("unchecked")
   public void shouldRetryAfterUnexpectedStreamCompletion() {
-    final var startBound = RangeBound.inclusive("a".getBytes(StandardCharsets.UTF_8));
+    final var range = new Range(
+        RangeBound.inclusive("a".getBytes(StandardCharsets.UTF_8)),
+        RangeBound.unbounded()
+    );
     Mockito.doAnswer(invocation -> {
       StreamObserver<Rs3.RangeResult> observer = invocation.getArgument(1, StreamObserver.class);
       observer.onNext(newKeyValueResult("a"));
       observer.onCompleted();
       return null;
-    }).when(requestProxy).send(eq(startBound), any());
+    }).when(requestProxy).send(eq(range), any());
 
-    final var retryStartBound = RangeBound.exclusive("a".getBytes(StandardCharsets.UTF_8));
+    final var retryRange = new Range(
+        RangeBound.exclusive("a".getBytes(StandardCharsets.UTF_8)),
+        RangeBound.unbounded()
+    );
     Mockito.doAnswer(invocation -> {
       StreamObserver<Rs3.RangeResult> observer = invocation.getArgument(1, StreamObserver.class);
       observer.onNext(newKeyValueResult("b"));
@@ -110,9 +126,9 @@ class GrpcKeyValueIteratorTest {
       observer.onNext(newEndOfStreamResult());
       observer.onCompleted();
       return null;
-    }).when(requestProxy).send(eq(retryStartBound), any());
+    }).when(requestProxy).send(eq(retryRange), any());
 
-    try (final var iter = new GrpcKeyValueIterator(startBound, requestProxy)) {
+    try (final var iter = new GrpcKeyValueIterator(range, requestProxy)) {
       assertNextKey(iter, "a");
       assertNextKey(iter, "b");
       assertNextKey(iter, "c");
@@ -123,15 +139,18 @@ class GrpcKeyValueIteratorTest {
   @Test
   @SuppressWarnings("unchecked")
   public void shouldPropagateUnexpectedFailures() {
-    final var startBound = RangeBound.inclusive("a".getBytes(StandardCharsets.UTF_8));
+    final var range = new Range(
+        RangeBound.inclusive("a".getBytes(StandardCharsets.UTF_8)),
+        RangeBound.unbounded()
+    );
     Mockito.doAnswer(invocation -> {
       StreamObserver<Rs3.RangeResult> observer = invocation.getArgument(1, StreamObserver.class);
       observer.onNext(newKeyValueResult("a"));
       observer.onError(new StatusRuntimeException(Status.UNKNOWN));
       return null;
-    }).when(requestProxy).send(eq(startBound), any());
+    }).when(requestProxy).send(eq(range), any());
 
-    try (final var iter = new GrpcKeyValueIterator(startBound, requestProxy)) {
+    try (final var iter = new GrpcKeyValueIterator(range, requestProxy)) {
       assertNextKey(iter, "a");
       final var rs3Exception = assertThrows(RS3Exception.class, iter::next);
       assertThat(rs3Exception.getCause(), instanceOf(StatusRuntimeException.class));
@@ -147,6 +166,5 @@ class GrpcKeyValueIteratorTest {
     final var keyString = new String(keyBytes, StandardCharsets.UTF_8);
     assertThat(keyString, is(key));
   }
-
 
 }

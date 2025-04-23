@@ -15,6 +15,7 @@ package dev.responsive.kafka.internal.db.rs3.client.grpc;
 import com.google.protobuf.ByteString;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Exception;
 import dev.responsive.kafka.internal.db.rs3.client.RS3TransientException;
+import dev.responsive.kafka.internal.db.rs3.client.Range;
 import dev.responsive.kafka.internal.db.rs3.client.RangeBound;
 import dev.responsive.rs3.Rs3;
 import io.grpc.stub.StreamObserver;
@@ -36,23 +37,23 @@ public class GrpcKeyValueIterator implements KeyValueIterator<Bytes, byte[]> {
 
   private final GrpcRangeRequestProxy requestProxy;
   private final GrpcMessageQueue<Message> queue;
-  private RangeBound startBound;
+  private Range range;
   private RangeResultObserver resultObserver;
 
   public GrpcKeyValueIterator(
-      RangeBound initialStartBound,
+      Range range,
       GrpcRangeRequestProxy requestProxy
   ) {
     this.requestProxy = requestProxy;
     this.queue = new GrpcMessageQueue<>();
-    this.startBound = initialStartBound;
+    this.range = range;
     sendRangeRequest();
   }
 
   private void sendRangeRequest() {
     // Note that backoff on retry is handled internally by the request proxy
     resultObserver = new RangeResultObserver();
-    requestProxy.send(startBound, resultObserver);
+    requestProxy.send(range, resultObserver);
   }
 
   @Override
@@ -66,7 +67,9 @@ public class GrpcKeyValueIterator implements KeyValueIterator<Bytes, byte[]> {
     if (nextKeyValue.isPresent()) {
       queue.poll();
       final var keyValue = nextKeyValue.get();
-      this.startBound = RangeBound.exclusive(keyValue.key.get());
+      final var newStartRange = RangeBound.exclusive(keyValue.key.get());
+      final var newEndRange = this.range.end();
+      this.range = new Range(newStartRange, newEndRange);
       return keyValue;
     } else {
       throw new NoSuchElementException();
@@ -134,8 +137,10 @@ public class GrpcKeyValueIterator implements KeyValueIterator<Bytes, byte[]> {
       } else if (rangeResult.getType() == Rs3.RangeResult.Type.END_OF_STREAM) {
         queue.put(new EndOfStream());
       } else {
-        final var result = rangeResult.getResult();
-        queue.put(new Result(result.getKey(), result.getValue()));
+        final var kv = rangeResult.getResult().getBasicKv();
+        final var key = kv.getKey().getKey();
+        final var value = kv.getValue().getValue();
+        queue.put(new Result(key, value));
       }
     }
 
