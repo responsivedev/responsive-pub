@@ -533,16 +533,22 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
           break;
         case RS3:
           LOG.info("Using rs3 responsive store");
-          if (!(license instanceof UsageBasedV1)) {
-            throw new LicenseUseViolationException("rs3 can only be used with usage based license");
+
+          final ApiCredential apiCredential;
+          if (license instanceof UsageBasedV1) {
+            apiCredential = ApiCredential.forApiKey(((UsageBasedV1) license).key());
+          } else {
+            LOG.warn("Connecting to rs3 without a license");
+            apiCredential = null;
           }
+
           final var rs3Host = responsiveConfig.getString(RS3_HOSTNAME_CONFIG);
           final var rs3Port = responsiveConfig.getInt(RS3_PORT_CONFIG);
           final var rs3Connector = new GrpcRS3Client.Connector(
               time,
               rs3Host,
               rs3Port,
-              () -> ApiCredential.forApiKey(((UsageBasedV1) license).key())
+              () -> apiCredential
           );
           rs3Connector.retryTimeoutMs(responsiveConfig.getLong(RS3_RETRY_TIMEOUT_CONFIG));
           rs3Connector.useTls(responsiveConfig.getBoolean(RS3_TLS_ENABLED_CONFIG));
