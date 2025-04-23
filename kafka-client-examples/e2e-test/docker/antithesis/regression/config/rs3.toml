@@ -1,22 +1,30 @@
 [server]
 listen_port = 50051
 
-[store_provider]
-provider = "Static"
+[metastore]
+metastore_type = "Static"
 
-[store_provider.static_store.slatedb]
+[[metastore.static_store.stores]]
+id = "b1a45157-e2f0-4698-be0e-5bf3a9b8e9d1"
+name = "customers_state_store_0000000001"
+
+[[metastore.static_store.stores.options]]
+logical_shards = 8
+store_type = "Basic"
+
+[[metastore.static_store.stores]]
+id = "013a57c3-16b3-44be-8de4-0d1083671cc6"
+name = "KSTREAM-REDUCE-STATE-STORE-0000000006"
+
+[[metastore.static_store.stores.options]]
+logical_shards = 8
+store_type = "Basic"
+
+[storage.slatedb]
 wal_enabled = false
 
-[store_provider.static_store.slatedb.block_cache]
+[storage.slatedb.block_cache]
 mode = "Default"
-
-[[store_provider.static_store.stores]]
-id = "b1a45157-e2f0-4698-be0e-5bf3a9b8e9d1"
-pss = [{ id = 0 }, { id = 1 }, { id = 2 }, { id = 3 }, { id = 4 }, { id = 5 }, { id = 6 }, { id = 7 }]
-
-[[store_provider.static_store.stores]]
-id = "013a57c3-16b3-44be-8de4-0d1083671cc6"
-pss = [{ id = 0 }, { id = 1 }, { id = 2 }, { id = 3 }, { id = 4 }, { id = 5 }, { id = 6 }, { id = 7 }]
 
 [cloud_provider]
 provider = "Aws"
@@ -25,3 +33,4 @@ provider = "Aws"
 region = ""
 bucket = "rs3-antithesis"
 s3_endpoint = "http://minio:9000"
+s3_retry_timeout_millis = 1800000
