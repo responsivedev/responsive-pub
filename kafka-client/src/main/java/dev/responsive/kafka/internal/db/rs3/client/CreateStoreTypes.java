@@ -61,13 +61,13 @@ public class CreateStoreTypes {
 
     @Override
     public String toString() {
-      return "CreateStoreOptions{" +
-          "logicalShards=" + logicalShards +
-          ", storeType=" + storeType +
-          ", clockType=" + clockType +
-          ", defaultTtl=" + defaultTtl +
-          ", slateDbOptions=" + slateDbOptions +
-          '}';
+      return "CreateStoreOptions{"
+          + "logicalShards=" + logicalShards
+          + ", storeType=" + storeType
+          + ", clockType=" + clockType
+          + ", defaultTtl=" + defaultTtl
+          + ", slateDbOptions=" + slateDbOptions
+          + '}';
     }
 
     @Override
