@@ -120,10 +120,9 @@ public class GrpcRs3Util {
         type -> builder.setClockType(Rs3.CreateStoreOptions.ClockType.forNumber(type.ordinal()))
     );
     options.defaultTtl().ifPresent(builder::setDefaultTtl);
-    options.filterBitsPerKey().ifPresent(filterBitsPerKey -> {
-      // TODO: Do we want to add `SlateDbOptions` as an explicit class in `CreateOptions`?
+    options.slateDbOptions().ifPresent(slateDbOptions -> {
       final var storageOptions = Rs3.SlateDbStorageOptions.newBuilder();
-      storageOptions.setFilterBitsPerKey(filterBitsPerKey);
+      slateDbOptions.filterBitsPerKey().ifPresent(storageOptions::setFilterBitsPerKey);
       builder.setSlatedbStorageOptions(storageOptions);
     });
     return builder.build();

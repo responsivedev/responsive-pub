@@ -1010,12 +1010,16 @@ class GrpcRS3ClientTest {
                         .build()
         );
 
-    final CreateStoreOptions options = new CreateStoreOptions(
+    final var slateDbOptions = new CreateStoreTypes.SlateDbStorageOptions(
+        Optional.of(20)
+    );
+
+    final var options = new CreateStoreOptions(
         logicalShards,
         CreateStoreTypes.StoreType.BASIC,
         Optional.empty(),
         Optional.of(10_000L),
-        Optional.of(20)
+        Optional.of(slateDbOptions)
     );
 
     // when:
@@ -1038,12 +1042,16 @@ class GrpcRS3ClientTest {
         .thenThrow(new StatusRuntimeException(Status.UNKNOWN));
 
     final int logicalShards = 5;
+    final var slateDbOptions = new CreateStoreTypes.SlateDbStorageOptions(
+        Optional.of(20)
+    );
+
     final CreateStoreOptions options = new CreateStoreOptions(
         logicalShards,
         CreateStoreTypes.StoreType.BASIC,
         Optional.empty(),
         Optional.of(10_000L),
-        Optional.of(20)
+        Optional.of(slateDbOptions)
     );
 
     // when:
@@ -1065,12 +1073,16 @@ class GrpcRS3ClientTest {
         .thenThrow(new StatusRuntimeException(Status.UNAVAILABLE));
 
     final int logicalShards = 5;
+
+    final var slateDbOptions = new CreateStoreTypes.SlateDbStorageOptions(
+        Optional.of(20)
+    );
     final CreateStoreOptions options = new CreateStoreOptions(
         logicalShards,
         CreateStoreTypes.StoreType.BASIC,
         Optional.empty(),
         Optional.of(10_000L),
-        Optional.of(20)
+        Optional.of(slateDbOptions)
     );
 
     // when:

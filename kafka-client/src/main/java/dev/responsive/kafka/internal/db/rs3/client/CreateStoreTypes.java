@@ -23,20 +23,20 @@ public class CreateStoreTypes {
     private final StoreType storeType;
     private final Optional<ClockType> clockType;
     private final Optional<Long> defaultTtl;
-    private final Optional<Integer> filterBitsPerKey;
+    private final Optional<SlateDbStorageOptions> slateDbOptions;
 
     public CreateStoreOptions(
         final int logicalShards,
         final StoreType storeType,
         final Optional<ClockType> clockType,
         final Optional<Long> defaultTtl,
-        final Optional<Integer> filterBitsPerKey
+        final Optional<SlateDbStorageOptions> slateDbOptions
     ) {
       this.logicalShards = logicalShards;
-      this.storeType = storeType;
-      this.clockType = clockType;
-      this.defaultTtl = defaultTtl;
-      this.filterBitsPerKey = filterBitsPerKey;
+      this.storeType = Objects.requireNonNull(storeType);
+      this.clockType = Objects.requireNonNull(clockType);
+      this.defaultTtl = Objects.requireNonNull(defaultTtl);
+      this.slateDbOptions = Objects.requireNonNull(slateDbOptions);
     }
 
     public int logicalShards() {
@@ -55,19 +55,19 @@ public class CreateStoreTypes {
       return defaultTtl;
     }
 
-    public Optional<Integer> filterBitsPerKey() {
-      return filterBitsPerKey;
+    public Optional<SlateDbStorageOptions> slateDbOptions() {
+      return slateDbOptions;
     }
 
     @Override
     public String toString() {
-      return "CreateStoreOptions{"
-          + "logicalShards=" + logicalShards
-          + ", storeType=" + storeType
-          + ", clockType=" + clockType
-          + ", defaultTtl=" + defaultTtl
-          + ", filterBitsPerKey=" + filterBitsPerKey
-          + '}';
+      return "CreateStoreOptions{" +
+          "logicalShards=" + logicalShards +
+          ", storeType=" + storeType +
+          ", clockType=" + clockType +
+          ", defaultTtl=" + defaultTtl +
+          ", slateDbOptions=" + slateDbOptions +
+          '}';
     }
 
     @Override
@@ -83,12 +83,49 @@ public class CreateStoreTypes {
           && Objects.equals(clockType, that.clockType) && Objects.equals(
           defaultTtl,
           that.defaultTtl
-      ) && Objects.equals(filterBitsPerKey, that.filterBitsPerKey);
+      ) && Objects.equals(slateDbOptions, that.slateDbOptions);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(logicalShards, storeType, clockType, defaultTtl, filterBitsPerKey);
+      return Objects.hash(logicalShards, storeType, clockType, defaultTtl, slateDbOptions);
+    }
+  }
+
+  public static class SlateDbStorageOptions {
+    private final Optional<Integer> filterBitsPerKey;
+
+    public SlateDbStorageOptions(
+        final Optional<Integer> filterBitsPerKey) {
+      this.filterBitsPerKey = Objects.requireNonNull(filterBitsPerKey);
+    }
+
+    public Optional<Integer> filterBitsPerKey() {
+      return filterBitsPerKey;
+    }
+
+    @Override
+    public String toString() {
+      return "SlateDbStorageOptions{"
+          + "filterBitsPerKey=" + filterBitsPerKey
+          + '}';
+    }
+
+    @Override
+    public boolean equals(final Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      final SlateDbStorageOptions that = (SlateDbStorageOptions) o;
+      return Objects.equals(filterBitsPerKey, that.filterBitsPerKey);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hashCode(filterBitsPerKey);
     }
   }
 
