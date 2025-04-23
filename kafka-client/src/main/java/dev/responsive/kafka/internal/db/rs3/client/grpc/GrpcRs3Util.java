@@ -18,6 +18,7 @@ import dev.responsive.kafka.internal.db.rs3.client.Delete;
 import dev.responsive.kafka.internal.db.rs3.client.Put;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Exception;
 import dev.responsive.kafka.internal.db.rs3.client.RS3TransientException;
+import dev.responsive.kafka.internal.utils.WindowedKey;
 import dev.responsive.rs3.Rs3;
 import io.grpc.Status;
 import io.grpc.StatusException;
@@ -65,6 +66,13 @@ public class GrpcRs3Util {
   public static Rs3.BasicKey basicKeyProto(final byte[] key) {
     return Rs3.BasicKey.newBuilder()
         .setKey(ByteString.copyFrom(key))
+        .build();
+  }
+
+  public static Rs3.WindowKey windowKeyProto(final WindowedKey key) {
+    return Rs3.WindowKey.newBuilder()
+        .setKey(ByteString.copyFrom(key.key.get()))
+        .setWindowTimestamp(key.windowStartMs)
         .build();
   }
 

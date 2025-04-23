@@ -15,6 +15,7 @@ package dev.responsive.kafka.internal.db.rs3.client.grpc;
 import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.basicDeleteProto;
 import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.basicKeyProto;
 import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.basicPutProto;
+import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.windowKeyProto;
 import static dev.responsive.kafka.internal.utils.Utils.lssIdProto;
 import static dev.responsive.kafka.internal.utils.Utils.uuidFromProto;
 import static dev.responsive.kafka.internal.utils.Utils.uuidToProto;
@@ -249,25 +250,24 @@ public class GrpcRS3Client implements RS3Client {
       final LssId lssId,
       final int pssId,
       final Optional<Long> expectedWrittenOffset,
-      final RangeBound<WindowedKey> from,
-      final RangeBound<WindowedKey> to
+      final Range<WindowedKey> range
   ) {
     return sendRange(
         storeId,
         lssId,
         pssId,
         expectedWrittenOffset,
-        new Range<>(from, to),
+        range,
         GrpcRangeKeyCodec.WINDOW_CODEC
     );
   }
 
-  private <K> KeyValueIterator<K, byte[]> sendRange(
+  private <K extends Comparable<K>> KeyValueIterator<K, byte[]> sendRange(
       final UUID storeId,
       final LssId lssId,
       final int pssId,
       final Optional<Long> expectedWrittenOffset,
-      final Range range,
+      final Range<K> range,
       final GrpcRangeKeyCodec<K> keyCodec
   ) {
     final var requestBuilder = Rs3.RangeRequest.newBuilder()
@@ -296,8 +296,10 @@ public class GrpcRS3Client implements RS3Client {
       final Optional<Long> expectedWrittenOffset,
       final Bytes key
   ) {
+    final var keyProto = Rs3.Key.newBuilder()
+        .setBasicKey(basicKeyProto(key.get()));
     final var requestBuilder = Rs3.GetRequest.newBuilder()
-        .setKey(ByteString.copyFrom(key.get()));
+        .setKey(keyProto);
     return sendGet(
         requestBuilder,
         storeId,
@@ -315,9 +317,10 @@ public class GrpcRS3Client implements RS3Client {
       final Optional<Long> expectedWrittenOffset,
       final WindowedKey key
   ) {
+    final var keyProto = Rs3.Key.newBuilder()
+        .setWindowKey(windowKeyProto(key));
     final var requestBuilder = Rs3.GetRequest.newBuilder()
-        .setKey(ByteString.copyFrom(key.key.get()))
-        .setWindowTimestamp(key.windowStartMs);
+        .setKey(keyProto);
     return sendGet(
         requestBuilder,
         storeId,
@@ -337,7 +340,6 @@ public class GrpcRS3Client implements RS3Client {
     requestBuilder.setStoreId(uuidToProto(storeId))
         .setLssId(lssIdProto(lssId))
         .setPssId(pssId);
-        .setKey(Rs3.Key.newBuilder().setBasicKey(basicKeyProto(key)));
     expectedWrittenOffset.ifPresent(requestBuilder::setExpectedWrittenOffset);
 
     final var request = requestBuilder.build();
@@ -442,7 +444,7 @@ public class GrpcRS3Client implements RS3Client {
     });
   }
 
-  private class RangeProxy<K> implements GrpcRangeRequestProxy<K> {
+  private class RangeProxy<K extends Comparable<K>> implements GrpcRangeRequestProxy<K> {
     private final Rs3.RangeRequest.Builder requestBuilder;
     private final RS3Grpc.RS3Stub stub;
     private final Supplier<String> opDescription;

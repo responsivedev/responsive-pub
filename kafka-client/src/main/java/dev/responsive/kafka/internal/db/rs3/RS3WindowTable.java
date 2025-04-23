@@ -158,15 +158,16 @@ public class RS3WindowTable implements RemoteWindowTable<WalEntry> {
   ) {
     throwIfPartitionNotInitialized(kafkaPartition);
     final int pssId = pssPartitioner.pss(key.get(), this.lssId);
-    final var windowKeyFrom = RangeBound.inclusive(new WindowedKey(key, timeFrom));
-    final var windowKeyTo = RangeBound.exclusive(new WindowedKey(key, timeTo));
+    final var windowRange = new Range<>(
+        RangeBound.inclusive(new WindowedKey(key, timeFrom)),
+        RangeBound.exclusive(new WindowedKey(key, timeTo))
+    );
     return rs3Client.windowedRange(
         storeId,
         lssId,
         pssId,
         flushManager.writtenOffset(pssId),
-        windowKeyFrom,
-        windowKeyTo
+        windowRange
     );
   }
 
@@ -191,16 +192,18 @@ public class RS3WindowTable implements RemoteWindowTable<WalEntry> {
   ) {
     throwIfPartitionNotInitialized(kafkaPartition);
     final List<KeyValueIterator<WindowedKey, byte[]>> pssIters = new ArrayList<>();
-    final var windowKeyFrom = RangeBound.inclusive(new WindowedKey(fromKey, timeFrom));
-    final var windowKeyTo = RangeBound.exclusive(new WindowedKey(toKey, timeTo));
+    final var windowRange = new Range<>(
+        RangeBound.inclusive(new WindowedKey(fromKey, timeFrom)),
+        RangeBound.exclusive(new WindowedKey(toKey, timeTo))
+    );
+
     for (int pssId : pssPartitioner.pssForLss(this.lssId)) {
       pssIters.add(rs3Client.windowedRange(
           storeId,
           lssId,
           pssId,
           flushManager.writtenOffset(pssId),
-          windowKeyFrom,
-          windowKeyTo
+          windowRange
       ));
     }
     return new MergeKeyValueIterator<>(pssIters);
@@ -242,8 +245,7 @@ public class RS3WindowTable implements RemoteWindowTable<WalEntry> {
           lssId,
           pssId,
           flushManager.writtenOffset(pssId),
-          RangeBound.unbounded(),
-          RangeBound.unbounded()
+          Range.unbounded()
       );
       pssIters.add(new TimeRangeFilter(timeRange, rangeIter));
     }
