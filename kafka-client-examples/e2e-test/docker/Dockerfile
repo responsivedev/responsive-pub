@@ -1,4 +1,4 @@
-FROM amd64/debian:12
+FROM debian:12.4
 
 RUN apt update
 RUN apt install -y wget

@@ -38,15 +38,18 @@ public class Put extends WalEntry {
   }
 
   @Override
-  public boolean equals(Object o) {
+  public boolean equals(final Object o) {
     if (this == o) {
       return true;
     }
-    if (!(o instanceof Put)) {
+    if (o == null || getClass() != o.getClass()) {
       return false;
     }
     final Put put = (Put) o;
-    return Objects.deepEquals(key, put.key) && Objects.deepEquals(value, put.value);
+    return Objects.deepEquals(key, put.key) && Objects.deepEquals(
+        value,
+        put.value
+    );
   }
 
   @Override

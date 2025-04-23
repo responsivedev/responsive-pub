@@ -21,6 +21,7 @@ import dev.responsive.kafka.internal.db.rs3.client.MeteredRS3Client;
 import dev.responsive.kafka.internal.db.rs3.client.Put;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Client;
 import dev.responsive.kafka.internal.db.rs3.client.RS3ClientUtil;
+import dev.responsive.kafka.internal.db.rs3.client.Range;
 import dev.responsive.kafka.internal.db.rs3.client.RangeBound;
 import dev.responsive.kafka.internal.db.rs3.client.WalEntry;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
@@ -49,14 +50,14 @@ public class RS3KVTable implements RemoteKVTable<WalEntry> {
   private RS3KVFlushManager flushManager;
 
   public RS3KVTable(
-      final String name,
+      final String storeName,
       final UUID storeId,
       final RS3Client rs3Client,
       final PssPartitioner pssPartitioner,
       final ResponsiveMetrics responsiveMetrics,
       final ResponsiveMetrics.MetricScopeBuilder scopeBuilder
   ) {
-    this.name = Objects.requireNonNull(name);
+    this.name = Objects.requireNonNull(storeName);
     this.storeId = Objects.requireNonNull(storeId);
     this.rs3Client = new MeteredRS3Client(
         Objects.requireNonNull(rs3Client),
@@ -113,8 +114,7 @@ public class RS3KVTable implements RemoteKVTable<WalEntry> {
       final Bytes to,
       final long streamTimeMs
   ) {
-    final RangeBound<Bytes> fromBound = RangeBound.inclusive(from);
-    final RangeBound<Bytes> toBound = RangeBound.exclusive(to);
+    final var range = new Range(RangeBound.inclusive(from.get()), RangeBound.exclusive(to.get()));
     final List<KeyValueIterator<Bytes, byte[]>> pssIters = new ArrayList<>();
 
     for (int pssId : pssPartitioner.pssForLss(this.lssId)) {
@@ -123,8 +123,7 @@ public class RS3KVTable implements RemoteKVTable<WalEntry> {
           lssId,
           pssId,
           flushManager.writtenOffset(pssId),
-          fromBound,
-          toBound
+          range
       ));
     }
     return new MergeKeyValueIterator<>(pssIters);

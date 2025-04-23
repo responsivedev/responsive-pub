@@ -12,6 +12,8 @@
 
 package dev.responsive.kafka.internal.db.rs3.client;
 
+import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes.CreateStoreOptions;
+import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes.CreateStoreResult;
 import dev.responsive.kafka.internal.utils.WindowedKey;
 import java.util.List;
 import java.util.Optional;
@@ -60,8 +62,7 @@ public interface RS3Client {
       LssId lssId,
       int pssId,
       Optional<Long> expectedWrittenOffset,
-      RangeBound<Bytes> from,
-      RangeBound<Bytes> to
+      Range range
   );
 
   KeyValueIterator<WindowedKey, byte[]> windowedRange(
@@ -75,9 +76,8 @@ public interface RS3Client {
 
   List<Store> listStores();
 
-  List<Integer> createStore(
-      UUID storeId,
-      int logicalShards,
+  CreateStoreResult createStore(
+      String storeId,
       CreateStoreOptions options
   );
 

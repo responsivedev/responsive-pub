@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import com.google.protobuf.ByteString;
 import dev.responsive.kafka.internal.db.rs3.client.LssId;
 import dev.responsive.kafka.internal.db.rs3.client.Put;
+import dev.responsive.kafka.internal.db.rs3.client.Range;
 import dev.responsive.kafka.internal.db.rs3.client.RangeBound;
 import dev.responsive.rs3.RS3Grpc;
 import dev.responsive.rs3.Rs3;
@@ -120,8 +121,10 @@ class GrpcRS3ClientEndToEndTest {
         LSS_ID,
         PSS_ID,
         Optional.of(5L),
-        RangeBound.unbounded(),
-        RangeBound.unbounded()
+        new Range(
+            RangeBound.unbounded(),
+            RangeBound.unbounded()
+        )
     );
 
     assertNext(iter, "a", "foo");
@@ -164,8 +167,10 @@ class GrpcRS3ClientEndToEndTest {
         LSS_ID,
         PSS_ID,
         Optional.of(10L),
-        RangeBound.inclusive(Bytes.wrap("b".getBytes(StandardCharsets.UTF_8))),
-        RangeBound.exclusive(Bytes.wrap("e".getBytes(StandardCharsets.UTF_8)))
+        new Range<>(
+            RangeBound.inclusive(Bytes.wrap("b".getBytes(StandardCharsets.UTF_8))),
+            RangeBound.exclusive(Bytes.wrap("e".getBytes(StandardCharsets.UTF_8)))
+        )
     );
 
     assertNext(iter, "b", "bar");
@@ -184,7 +189,7 @@ class GrpcRS3ClientEndToEndTest {
 
     Mockito.doAnswer(invocation -> {
       @SuppressWarnings("unchecked")
-      final var call = (ClientCall<Rs3.RangeRequest, Rs3.RangeResult>)
+      final var call = (ClientCall<gRs3.RangeRequest, Rs3.RangeResult>)
           invocation.callRealMethod();
       final var callSpy = Mockito.spy(call);
       Mockito.doThrow(new StatusRuntimeException(Status.UNAVAILABLE))
@@ -200,8 +205,10 @@ class GrpcRS3ClientEndToEndTest {
         LSS_ID,
         PSS_ID,
         Optional.of(5L),
-        RangeBound.unbounded(),
-        RangeBound.unbounded()
+        new Range(
+            RangeBound.unbounded(),
+            RangeBound.unbounded()
+        )
     );
 
     assertNext(iter, "a", "foo");
@@ -311,18 +318,20 @@ class GrpcRS3ClientEndToEndTest {
         }
       }
 
-      final var keyValueResult = Rs3.KeyValue
-          .newBuilder()
-          .setKey(req.getKey());
-      final var key = Bytes.wrap(req.getKey().toByteArray());
-      final var value = table.get(key);
-      if (value != null) {
-        keyValueResult.setValue(ByteString.copyFrom(value.get()));
+      final var key = req.getKey().getBasicKey();
+      final var kvBuilder = Rs3.BasicKeyValue.newBuilder().setKey(key);
+
+      final var keyBytes = Bytes.wrap(key.getKey().toByteArray());
+      final var valueBytes = table.get(keyBytes);
+      if (valueBytes != null) {
+        final var value = Rs3.BasicValue.newBuilder()
+            .setValue(ByteString.copyFrom(valueBytes.get()));
+        kvBuilder.setValue(value);
       }
 
       final var result = Rs3.GetResult
           .newBuilder()
-          .setResult(keyValueResult)
+          .setResult(Rs3.KeyValue.newBuilder().setBasicKv(kvBuilder))
           .build();
       responseObserver.onNext(result);
       responseObserver.onCompleted();
@@ -357,14 +366,14 @@ class GrpcRS3ClientEndToEndTest {
           continue;
         }
 
-        final var keyValue = Rs3.KeyValue
-            .newBuilder()
-            .setKey(ByteString.copyFrom(keyValueEntry.getKey().get()))
-            .setValue(ByteString.copyFrom(keyValueEntry.getValue().get()));
+        final var keyValue = GrpcRs3Util.basicKeyValueProto(
+            keyValueEntry.getKey().get(),
+            keyValueEntry.getValue().get()
+        );
 
         final var keyValueResult = Rs3.RangeResult.newBuilder()
             .setType(Rs3.RangeResult.Type.RESULT)
-            .setResult(keyValue)
+            .setResult(Rs3.KeyValue.newBuilder().setBasicKv(keyValue))
             .build();
 
         responseObserver.onNext(keyValueResult);
@@ -404,13 +413,14 @@ class GrpcRS3ClientEndToEndTest {
           TestRs3Service.this.offset.getAndUpdate(
               current -> Math.max(current, req.getEndOffset())
           );
-          final var put = req.getPut();
-          final var keyBytes = Bytes.wrap(put.getKey().toByteArray());
-
-          if (put.hasValue()) {
-            final var valueBytes = Bytes.wrap(put.getValue().toByteArray());
+          if (req.hasPut()) {
+            final var kv = req.getPut().getKv().getBasicKv();
+            final var keyBytes = Bytes.wrap(kv.getKey().getKey().toByteArray());
+            final var valueBytes = Bytes.wrap(kv.getValue().getValue().toByteArray());
             table.put(keyBytes, valueBytes);
-          } else {
+          } else if (req.hasDelete()) {
+            final var key = req.getDelete().getKey().getBasicKey();
+            final var keyBytes = Bytes.wrap(key.getKey().toByteArray());
             table.remove(keyBytes);
           }
         }

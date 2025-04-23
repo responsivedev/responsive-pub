@@ -37,7 +37,7 @@ class PssStubsProvider {
   static PssStubsProvider connect(
       final String target,
       final boolean useTls,
-      final String apiKey
+      final ApiCredential credential
   ) {
     final ChannelCredentials channelCredentials;
     if (useTls) {
@@ -48,8 +48,8 @@ class PssStubsProvider {
     LOG.info("Connecting to {}...", target);
     ManagedChannelBuilder<?> channelBuilder = Grpc.newChannelBuilder(target, channelCredentials)
         .keepAliveTime(5, TimeUnit.SECONDS);
-    if (apiKey != null) {
-      channelBuilder = channelBuilder.intercept(new ApiKeyInterceptor(apiKey));
+    if (credential != null) {
+      channelBuilder = channelBuilder.intercept(new ApiKeyInterceptor(credential));
     }
     final ManagedChannel channel = channelBuilder.build();
     LOG.info("build grpc client with retries");

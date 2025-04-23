@@ -133,9 +133,6 @@ public class ResponsiveConfig extends AbstractConfig {
   public static final String RS3_PORT_CONFIG = "responsive.rs3.port";
   private static final String RS3_PORT_DOC = "The port to use when connecting to RS3.";
 
-  public static final String RS3_LOGICAL_STORE_MAPPING_CONFIG = "responsive.rs3.logical.store.mapping";
-  public static final String RS3_LOGICAL_STORE_MAPPING_DOC = "Mapping from table name to RS3 logical store ID (e.g. 'table:b1a45157-e2f0-4698-be0e-5bf3a9b8e9d1,...')";
-
   public static final String RS3_TLS_ENABLED_CONFIG = "responsive.rs3.tls.enabled";
   private static final String RS3_TLS_ENABLED_DOC = "Enables/disable tls for rs3 connection";
   public static final boolean RS3_TLS_ENABLED_DEFAULT = true;
@@ -632,12 +629,6 @@ public class ResponsiveConfig extends AbstractConfig {
           50051,
           Importance.MEDIUM,
           RS3_PORT_DOC
-      ).define(
-          RS3_LOGICAL_STORE_MAPPING_CONFIG,
-          Type.STRING,
-          "",
-          Importance.HIGH,
-          RS3_LOGICAL_STORE_MAPPING_DOC
       ).define(
           RS3_TLS_ENABLED_CONFIG,
           Type.BOOLEAN,

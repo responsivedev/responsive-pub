@@ -12,22 +12,22 @@
 
 package dev.responsive.kafka.internal.db.rs3.client.grpc;
 
-import com.google.protobuf.ByteString;
 import dev.responsive.kafka.internal.db.rs3.client.Range;
 import dev.responsive.kafka.internal.db.rs3.client.RangeBound;
 import dev.responsive.rs3.Rs3;
+import java.nio.charset.StandardCharsets;
 import org.apache.kafka.common.utils.Bytes;
 
 public class GrpsRs3TestUtil {
 
   public static Rs3.RangeResult newKeyValueResult(String key) {
-    final var keyValue = Rs3.KeyValue.newBuilder()
-        .setKey(ByteString.copyFromUtf8(key))
-        .setValue(ByteString.copyFromUtf8("dummy"))
-        .build();
+    final var keyValue = GrpcRs3Util.basicKeyValueProto(
+        key.getBytes(StandardCharsets.UTF_8),
+        "dummy".getBytes(StandardCharsets.UTF_8)
+    );
     return Rs3.RangeResult.newBuilder()
         .setType(Rs3.RangeResult.Type.RESULT)
-        .setResult(keyValue)
+        .setResult(Rs3.KeyValue.newBuilder().setBasicKv(keyValue))
         .build();
   }
 
@@ -39,17 +39,18 @@ public class GrpsRs3TestUtil {
   }
 
   public static Range<Bytes> newRangeFromProto(Rs3.RangeRequest req) {
-    final var startBound = newRangeBoundFromProto(req.getFrom());
-    final var endBound = newRangeBoundFromProto(req.getTo());
+    final var range = req.getRange().getBasicRange();
+    final var startBound = newRangeBoundFromProto(range.getFrom());
+    final var endBound = newRangeBoundFromProto(range.getTo());
     return new Range<>(startBound, endBound);
   }
 
-  private static RangeBound<Bytes> newRangeBoundFromProto(Rs3.Bound bound) {
+  private static RangeBound<Bytes> newRangeBoundFromProto(Rs3.BasicBound bound) {
     switch (bound.getType()) {
       case EXCLUSIVE:
-        return RangeBound.exclusive(Bytes.wrap(bound.getKey().toByteArray()));
+        return RangeBound.exclusive(Bytes.wrap(bound.getKey().getKey().toByteArray()));
       case INCLUSIVE:
-        return RangeBound.inclusive(Bytes.wrap(bound.getKey().toByteArray()));
+        return RangeBound.inclusive(Bytes.wrap(bound.getKey().getKey().toByteArray()));
       case UNBOUNDED:
         return RangeBound.unbounded();
       default:

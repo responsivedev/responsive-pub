@@ -12,22 +12,21 @@
 
 package dev.responsive.kafka.internal.db.rs3;
 
-import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.RemoteWindowTable;
-import dev.responsive.kafka.internal.db.rs3.client.CreateStoreOptions;
-import dev.responsive.kafka.internal.db.rs3.client.CreateStoreOptions.ClockType;
+import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes;
+import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes.ClockType;
+import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes.CreateStoreOptions;
+import dev.responsive.kafka.internal.db.rs3.client.RS3Client;
 import dev.responsive.kafka.internal.db.rs3.client.WalEntry;
 import dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRS3Client;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.stores.TtlResolver;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
-import org.apache.kafka.common.config.ConfigException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,7 +35,7 @@ public class RS3TableFactory {
   private final GrpcRS3Client.Connector connector;
 
   // kafka store names to track which stores we've created in RS3
-  private final Set<String> createdStores = new ConcurrentSkipListSet<>();
+  private final Map<String, UUID> createdStores = new ConcurrentHashMap<>();
 
   public RS3TableFactory(GrpcRS3Client.Connector connector) {
     this.connector = connector;
@@ -44,42 +43,16 @@ public class RS3TableFactory {
 
   public RemoteKVTable<WalEntry> kvTable(
       final String storeName,
-      final ResponsiveConfig config,
       final Optional<TtlResolver<?, ?>> ttlResolver,
       final ResponsiveMetrics responsiveMetrics,
       final ResponsiveMetrics.MetricScopeBuilder scopeBuilder,
       final Supplier<Integer> computeNumKafkaPartitions
   ) {
-    final Map<String, String> storeIdMapping = config.getMap(
-        ResponsiveConfig.RS3_LOGICAL_STORE_MAPPING_CONFIG);
-    final String storeIdHex = storeIdMapping.get(storeName);
-    if (storeIdHex == null) {
-      throw new ConfigException("Failed to find store ID mapping for table " + storeName);
-    }
-
-    final UUID storeId = UUID.fromString(storeIdHex);
     final var rs3Client = connector.connect();
 
-    if (!createdStores.contains(storeName)) {
-      final int kafkaPartitions = computeNumKafkaPartitions.get();
-
-      final Optional<Long> defaultTtl =
-          ttlResolver.isPresent() && ttlResolver.get().defaultTtl().isFinite()
-          ? Optional.of(ttlResolver.get().defaultTtl().duration().toMillis())
-          : Optional.empty();
-
-      final var options = new CreateStoreOptions(
-          ttlResolver.isPresent() ? Optional.of(ClockType.WALL_CLOCK) : Optional.empty(),
-          defaultTtl,
-          Optional.empty()
-      );
-      
-      final var pss_ids = rs3Client.createStore(storeId, kafkaPartitions, options);
-      LOG.info("Created store {} with {} logical shards and {} physical shards",
-               storeName, kafkaPartitions, pss_ids.size());
-
-      createdStores.add(storeName);
-    }
+    final UUID storeId = createdStores.computeIfAbsent(storeName, n -> createStore(
+        storeName, ttlResolver, computeNumKafkaPartitions.get(), rs3Client
+    ));
 
     final PssPartitioner pssPartitioner = new PssDirectPartitioner();
     return new RS3KVTable(
@@ -111,17 +84,31 @@ public class RS3TableFactory {
     );
   }
 
-  private UUID lookupStoreId(
-      final ResponsiveConfig config,
-      final String name
+  public static UUID createStore(
+      final String storeName,
+      final Optional<TtlResolver<?, ?>> ttlResolver,
+      final int numKafkaPartitions,
+      final RS3Client rs3Client
   ) {
-    final var storeIdMapping = config.getMap(
-        ResponsiveConfig.RS3_LOGICAL_STORE_MAPPING_CONFIG);
-    final var storeIdHex = storeIdMapping.get(name);
-    if (storeIdHex == null) {
-      throw new ConfigException("Failed to find store ID mapping for table " + name);
-    }
-    return UUID.fromString(storeIdHex);
+
+    final Optional<Long> defaultTtl =
+        ttlResolver.isPresent() && ttlResolver.get().defaultTtl().isFinite()
+            ? Optional.of(ttlResolver.get().defaultTtl().duration().toMillis())
+            : Optional.empty();
+
+    final var options = new CreateStoreOptions(
+        numKafkaPartitions,
+        CreateStoreTypes.StoreType.BASIC,
+        ttlResolver.isPresent() ? Optional.of(ClockType.WALL_CLOCK) : Optional.empty(),
+        defaultTtl,
+        Optional.empty()
+    );
+
+    final var result = rs3Client.createStore(storeName, options);
+    LOG.info("Created store {} ({}) with {} logical shards and {} physical shards",
+             storeName, result.storeId(), numKafkaPartitions, result.pssIds().size());
+
+    return result.storeId();
   }
 
   public void close() {

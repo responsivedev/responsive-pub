@@ -12,6 +12,8 @@
 
 package dev.responsive.kafka.internal.db.rs3.client;
 
+import java.util.Objects;
+
 public class Range<K extends Comparable<K>> {
   private final RangeBound<K> start;
   private final RangeBound<K> end;
@@ -71,4 +73,24 @@ public class Range<K extends Comparable<K>> {
     });
   }
 
+  public static <T extends Comparable<T>> Range<T> unbounded() {
+    return new Range<>(RangeBound.unbounded(), RangeBound.unbounded());
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    final Range range = (Range) o;
+    return Objects.equals(start, range.start) && Objects.equals(end, range.end);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(start, end);
+  }
 }

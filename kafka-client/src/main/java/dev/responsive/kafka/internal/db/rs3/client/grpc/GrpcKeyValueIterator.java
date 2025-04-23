@@ -14,6 +14,7 @@ package dev.responsive.kafka.internal.db.rs3.client.grpc;
 
 import dev.responsive.kafka.internal.db.rs3.client.RS3Exception;
 import dev.responsive.kafka.internal.db.rs3.client.RS3TransientException;
+import dev.responsive.kafka.internal.db.rs3.client.Range;
 import dev.responsive.kafka.internal.db.rs3.client.RangeBound;
 import dev.responsive.kafka.internal.utils.WindowedKey;
 import dev.responsive.rs3.Rs3;
@@ -31,45 +32,44 @@ import org.slf4j.LoggerFactory;
  * Internal iterator implementation which supports retries using RS3's asynchronous
  * Range API.
  */
-public class GrpcKeyValueIterator<K> implements KeyValueIterator<K, byte[]> {
+public class GrpcKeyValueIterator<K extends Comparable<K>> implements KeyValueIterator<K, byte[]> {
   private static final Logger LOG = LoggerFactory.getLogger(GrpcKeyValueIterator.class);
 
   private final GrpcRangeRequestProxy<K> requestProxy;
   private final GrpcRangeKeyCodec<K> keyCodec;
   private final GrpcMessageQueue<Message> queue;
-  private RangeBound<K> startBound;
+  private Range<K> range;
   private RangeResultObserver resultObserver;
 
   public GrpcKeyValueIterator(
-      RangeBound<K> initialStartBound,
+      Range<K> range,
       GrpcRangeRequestProxy<K> requestProxy,
       GrpcRangeKeyCodec<K> keyCodec
   ) {
     this.requestProxy = requestProxy;
     this.keyCodec = keyCodec;
     this.queue = new GrpcMessageQueue<>();
-    this.startBound = initialStartBound;
+    this.range = range;
     sendRangeRequest();
   }
 
   static GrpcKeyValueIterator<Bytes> standard(
-      RangeBound<Bytes> initialStartBound,
+      Range<Bytes> range,
       GrpcRangeRequestProxy<Bytes> requestProxy
   ) {
     return new GrpcKeyValueIterator<>(
-        initialStartBound,
+        range,
         requestProxy,
         GrpcRangeKeyCodec.STANDARD_CODEC
     );
   }
 
   static GrpcKeyValueIterator<WindowedKey> windowed(
-      RangeBound<WindowedKey> initialStartBound,
+      Range<WindowedKey> range,
       GrpcRangeRequestProxy<WindowedKey> requestProxy
   ) {
-
     return new GrpcKeyValueIterator<>(
-        initialStartBound,
+        range,
         requestProxy,
         GrpcRangeKeyCodec.WINDOW_CODEC
     );
@@ -78,7 +78,7 @@ public class GrpcKeyValueIterator<K> implements KeyValueIterator<K, byte[]> {
   private void sendRangeRequest() {
     // Note that backoff on retry is handled internally by the request proxy
     resultObserver = new RangeResultObserver();
-    requestProxy.send(startBound, resultObserver);
+    requestProxy.send(range, resultObserver);
   }
 
   @Override
@@ -92,7 +92,9 @@ public class GrpcKeyValueIterator<K> implements KeyValueIterator<K, byte[]> {
     if (nextKeyValue.isPresent()) {
       queue.poll();
       final var keyValue = nextKeyValue.get();
-      this.startBound = RangeBound.exclusive(keyValue.key);
+      final RangeBound<K> newStartRange = RangeBound.exclusive(keyValue.key);
+      final RangeBound<K> newEndRange = this.range.end();
+      this.range = new Range<>(newStartRange, newEndRange);
       return keyValue;
     } else {
       throw new NoSuchElementException();

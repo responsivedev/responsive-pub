@@ -12,19 +12,25 @@
 
 package dev.responsive.kafka.internal.db.rs3.client.grpc;
 
+import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.basicDeleteProto;
+import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.basicKeyProto;
+import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.basicPutProto;
 import static dev.responsive.kafka.internal.utils.Utils.lssIdProto;
-import static dev.responsive.kafka.internal.utils.Utils.uuidProtoToUuid;
-import static dev.responsive.kafka.internal.utils.Utils.uuidToUuidProto;
+import static dev.responsive.kafka.internal.utils.Utils.uuidFromProto;
+import static dev.responsive.kafka.internal.utils.Utils.uuidToProto;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.protobuf.ByteString;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
-import dev.responsive.kafka.internal.db.rs3.client.CreateStoreOptions;
+import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes.CreateStoreOptions;
+import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes.CreateStoreResult;
 import dev.responsive.kafka.internal.db.rs3.client.CurrentOffsets;
+import dev.responsive.kafka.internal.db.rs3.client.Delete;
 import dev.responsive.kafka.internal.db.rs3.client.LssId;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Client;
 import dev.responsive.kafka.internal.db.rs3.client.RS3TimeoutException;
 import dev.responsive.kafka.internal.db.rs3.client.RS3TransientException;
+import dev.responsive.kafka.internal.db.rs3.client.Range;
 import dev.responsive.kafka.internal.db.rs3.client.RangeBound;
 import dev.responsive.kafka.internal.db.rs3.client.Store;
 import dev.responsive.kafka.internal.db.rs3.client.StreamSenderMessageReceiver;
@@ -72,7 +78,7 @@ public class GrpcRS3Client implements RS3Client {
     final RS3Grpc.RS3BlockingStub stub = stubs.stubs(storeId, pssId).syncStub();
 
     final Rs3.GetOffsetsRequest request = Rs3.GetOffsetsRequest.newBuilder()
-        .setStoreId(uuidToUuidProto(storeId))
+        .setStoreId(uuidToProto(storeId))
         .setLssId(lssIdProto(lssId))
         .setPssId(pssId)
         .build();
@@ -149,7 +155,7 @@ public class GrpcRS3Client implements RS3Client {
     final var streamSender = new GrpcStreamSender<WalEntry, Rs3.WriteWALSegmentRequest>(
         entry -> {
           final var entryBuilder = Rs3.WriteWALSegmentRequest.newBuilder()
-              .setStoreId(uuidToUuidProto(storeId))
+              .setStoreId(uuidToProto(storeId))
               .setLssId(lssIdProto(lssId))
               .setPssId(pssId)
               .setEndOffset(endOffset)
@@ -225,16 +231,14 @@ public class GrpcRS3Client implements RS3Client {
       final LssId lssId,
       final int pssId,
       final Optional<Long> expectedWrittenOffset,
-      RangeBound<Bytes> from,
-      RangeBound<Bytes> to
+      Range range
   ) {
     return sendRange(
         storeId,
         lssId,
         pssId,
         expectedWrittenOffset,
-        from,
-        to,
+        range,
         GrpcRangeKeyCodec.STANDARD_CODEC
     );
   }
@@ -253,8 +257,7 @@ public class GrpcRS3Client implements RS3Client {
         lssId,
         pssId,
         expectedWrittenOffset,
-        from,
-        to,
+        new Range<>(from, to),
         GrpcRangeKeyCodec.WINDOW_CODEC
     );
   }
@@ -264,15 +267,14 @@ public class GrpcRS3Client implements RS3Client {
       final LssId lssId,
       final int pssId,
       final Optional<Long> expectedWrittenOffset,
-      final RangeBound<K> from,
-      final RangeBound<K> to,
+      final Range range,
       final GrpcRangeKeyCodec<K> keyCodec
   ) {
     final var requestBuilder = Rs3.RangeRequest.newBuilder()
-        .setStoreId(uuidToUuidProto(storeId))
+        .setStoreId(uuidToProto(storeId))
         .setLssId(lssIdProto(lssId))
-        .setPssId(pssId)
-        .setTo(protoRangeBound(to, keyCodec));
+        .setPssId(pssId);
+
     expectedWrittenOffset.ifPresent(requestBuilder::setExpectedWrittenOffset);
     final Supplier<String> rangeDescription =
         () -> "Range(storeId=" + storeId + ", lssId=" + lssId + ", pssId=" + pssId + ")";
@@ -283,7 +285,7 @@ public class GrpcRS3Client implements RS3Client {
         keyCodec,
         rangeDescription
     );
-    return new GrpcKeyValueIterator<>(from, rangeProxy, keyCodec);
+    return new GrpcKeyValueIterator<>(range, rangeProxy, keyCodec);
   }
 
   @Override
@@ -332,9 +334,10 @@ public class GrpcRS3Client implements RS3Client {
       final int pssId,
       final Optional<Long> expectedWrittenOffset
   ) {
-    requestBuilder.setStoreId(uuidToUuidProto(storeId))
+    requestBuilder.setStoreId(uuidToProto(storeId))
         .setLssId(lssIdProto(lssId))
         .setPssId(pssId);
+        .setKey(Rs3.Key.newBuilder().setBasicKey(basicKeyProto(key)));
     expectedWrittenOffset.ifPresent(requestBuilder::setExpectedWrittenOffset);
 
     final var request = requestBuilder.build();
@@ -347,8 +350,9 @@ public class GrpcRS3Client implements RS3Client {
       return Optional.empty();
     }
     final Rs3.KeyValue keyValue = result.getResult();
-    checkField(keyValue::hasValue, "value");
-    return Optional.of(keyValue.getValue().toByteArray());
+    checkField(keyValue::hasBasicKv, "value");
+    final var value = keyValue.getBasicKv().getValue().getValue();
+    return Optional.of(value.toByteArray());
   }
 
   @Override
@@ -363,31 +367,27 @@ public class GrpcRS3Client implements RS3Client {
 
     return result.getStoresList()
         .stream()
-        .map(t -> new Store(uuidProtoToUuid(t.getStoreId()), t.getPssIdsList()))
+        .map(t -> new Store(t.getStoreName(), uuidFromProto(t.getStoreId()), t.getPssIdsList()))
         .collect(Collectors.toList());
   }
 
   @Override
-  public List<Integer> createStore(
-      final UUID storeId,
-      final int logicalShards,
+  public CreateStoreResult createStore(
+      final String storeName,
       final CreateStoreOptions options
   ) {
     final var request = Rs3.CreateStoreRequest.newBuilder()
-        .setStoreId(uuidToUuidProto(storeId))
-        .setLogicalShards(logicalShards)
-        .setOptions(options.toProto())
+        .setStoreName(storeName)
+        .setOptions(GrpcRs3Util.createStoreOptionsProto(options))
         .build();
     final RS3Grpc.RS3BlockingStub stub = stubs.globalStubs().syncStub();
 
     final Rs3.CreateStoreResult result = withRetry(
         () -> stub.createStore(request),
-        () -> "CreateStore(storeId=" + storeId
-            + ", logicalShards=" + logicalShards
-            + ", createStoreOptions=" + options + ")"
+        () -> "CreateStore(storeName=" + storeName  + ", createStoreOptions=" + options + ")"
     );
 
-    return result.getPssIdsList();
+    return new CreateStoreResult(uuidFromProto(result.getStoreId()), result.getPssIdsList());
   }
 
   private void addWalEntryToSegment(
@@ -406,31 +406,37 @@ public class GrpcRS3Client implements RS3Client {
     }
   }
 
-  private static <K> Rs3.Bound protoRangeBound(
-      RangeBound<K> bound,
-      GrpcRangeKeyCodec<K> keyCodec
-  ) {
+  private Rs3.Range protoRange(Range range) {
+    final var protoRange = Rs3.BasicRange.newBuilder()
+        .setFrom(protoBound(range.start()))
+        .setTo(protoBound(range.end()));
+    return Rs3.Range.newBuilder()
+        .setBasicRange(protoRange)
+        .build();
+  }
+
+  private Rs3.BasicBound protoBound(RangeBound bound) {
     return bound.map(new RangeBound.Mapper<>() {
       @Override
-      public Rs3.Bound map(final RangeBound.InclusiveBound<K> b) {
-        final var builder = Rs3.Bound.newBuilder()
-            .setType(Rs3.Bound.Type.INCLUSIVE);
-        keyCodec.encodeRangeBound(b.key(), builder);
-        return builder.build();
+      public Rs3.BasicBound map(final RangeBound.InclusiveBound b) {
+        return Rs3.BasicBound.newBuilder()
+            .setType(Rs3.BoundType.INCLUSIVE)
+            .setKey(basicKeyProto(b.key()))
+            .build();
       }
 
       @Override
-      public Rs3.Bound map(final RangeBound.ExclusiveBound<K> b) {
-        final var builder = Rs3.Bound.newBuilder()
-            .setType(Rs3.Bound.Type.EXCLUSIVE);
-        keyCodec.encodeRangeBound(b.key(), builder);
-        return builder.build();
+      public Rs3.BasicBound map(final RangeBound.ExclusiveBound b) {
+        return Rs3.BasicBound.newBuilder()
+            .setType(Rs3.BoundType.EXCLUSIVE)
+            .setKey(basicKeyProto(b.key()))
+            .build();
       }
 
       @Override
-      public Rs3.Bound map(final RangeBound.Unbounded<K> b) {
-        return Rs3.Bound.newBuilder()
-            .setType(Rs3.Bound.Type.UNBOUNDED)
+      public Rs3.BasicBound map(final RangeBound.Unbounded b) {
+        return Rs3.BasicBound.newBuilder()
+            .setType(Rs3.BoundType.UNBOUNDED)
             .build();
       }
     });
@@ -458,11 +464,10 @@ public class GrpcRS3Client implements RS3Client {
 
     @Override
     public void send(
-        final RangeBound<K> start,
+        final Range<K> range,
         final StreamObserver<Rs3.RangeResult> resultObserver
     ) {
-      final var protoRange = protoRangeBound(start, keyCodec);
-      requestBuilder.setFrom(protoRange);
+      requestBuilder.setRange(protoRange(range));
 
       while (true) {
         try {
@@ -497,7 +502,7 @@ public class GrpcRS3Client implements RS3Client {
     private final Time time;
     private final String host;
     private final int port;
-    private final Supplier<String> apiKeySupplier;
+    private final Supplier<ApiCredential> credentialSupplier;
 
     private boolean useTls = ResponsiveConfig.RS3_TLS_ENABLED_DEFAULT;
     private long retryTimeoutMs = ResponsiveConfig.RS3_RETRY_TIMEOUT_DEFAULT;
@@ -506,12 +511,12 @@ public class GrpcRS3Client implements RS3Client {
         final Time time,
         final String host,
         final int port,
-        final Supplier<String> apiKeySupplier
+        final Supplier<ApiCredential> credentialSupplier
     ) {
       this.time = Objects.requireNonNull(time);
       this.host = Objects.requireNonNull(host);
       this.port = port;
-      this.apiKeySupplier = Objects.requireNonNull(apiKeySupplier);
+      this.credentialSupplier = Objects.requireNonNull(credentialSupplier);
     }
 
     public void useTls(boolean useTls) {
@@ -525,7 +530,7 @@ public class GrpcRS3Client implements RS3Client {
     public RS3Client connect() {
       String target = String.format("%s:%d", host, port);
       return new GrpcRS3Client(
-          PssStubsProvider.connect(target, useTls, apiKeySupplier.get()),
+          PssStubsProvider.connect(target, useTls, credentialSupplier.get()),
           time,
           retryTimeoutMs
       );
