@@ -49,7 +49,6 @@ import dev.responsive.kafka.internal.db.mongo.ResponsiveMongoClient;
 import dev.responsive.kafka.internal.db.rs3.RS3TableFactory;
 import dev.responsive.kafka.internal.db.rs3.client.grpc.ApiCredential;
 import dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRS3Client;
-import dev.responsive.kafka.internal.license.exception.LicenseUseViolationException;
 import dev.responsive.kafka.internal.license.model.CloudLicenseV1;
 import dev.responsive.kafka.internal.license.model.LicenseInfo;
 import dev.responsive.kafka.internal.license.model.TimedTrialV1;
