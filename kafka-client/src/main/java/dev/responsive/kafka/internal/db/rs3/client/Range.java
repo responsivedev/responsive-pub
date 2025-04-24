@@ -74,7 +74,7 @@ public class Range<K extends Comparable<K>> {
   }
 
   public static <T extends Comparable<T>> Range<T> unbounded() {
-    return new Range<>(RangeBound.unbounded(), RangeBound.unbounded());
+    return new Range<T>(RangeBound.unbounded(), RangeBound.unbounded());
   }
 
   @Override
@@ -85,7 +85,7 @@ public class Range<K extends Comparable<K>> {
     if (o == null || getClass() != o.getClass()) {
       return false;
     }
-    final Range range = (Range) o;
+    final Range<?> range = (Range<?>) o;
     return Objects.equals(start, range.start) && Objects.equals(end, range.end);
   }
 

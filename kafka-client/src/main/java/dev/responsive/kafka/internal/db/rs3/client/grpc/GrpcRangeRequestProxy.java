@@ -24,7 +24,7 @@ import io.grpc.stub.StreamObserver;
  * updated. If the observer encounters an error, then it can retry with the updated
  * start bound.
  */
-public interface GrpcRangeRequestProxy<K> {
+public interface GrpcRangeRequestProxy<K extends Comparable<K>> {
   /**
    * Send a range request with an updated start bound. The results will be passed
    * through to result observer. If a transient error is encountered through the

@@ -138,7 +138,7 @@ public class GrpcKeyValueIterator<K extends Comparable<K>> implements KeyValueIt
 
       @Override
       public Optional<KeyValue<K, byte[]>> map(final Result result) {
-        final var key = keyCodec.decodeRangeResult(result.keyValue);
+        final var key = keyCodec.decodeKeyValue(result.keyValue);
         final var value = result.keyValue.getValue().toByteArray();
         return Optional.of(new KeyValue<>(key, value));
       }

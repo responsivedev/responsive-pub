@@ -12,27 +12,22 @@
 
 package dev.responsive.kafka.internal.db.rs3.client.grpc;
 
-import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.basicDeleteProto;
 import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.basicKeyProto;
-import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.basicPutProto;
 import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.windowKeyProto;
 import static dev.responsive.kafka.internal.utils.Utils.lssIdProto;
 import static dev.responsive.kafka.internal.utils.Utils.uuidFromProto;
 import static dev.responsive.kafka.internal.utils.Utils.uuidToProto;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.protobuf.ByteString;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes.CreateStoreOptions;
 import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes.CreateStoreResult;
 import dev.responsive.kafka.internal.db.rs3.client.CurrentOffsets;
-import dev.responsive.kafka.internal.db.rs3.client.Delete;
 import dev.responsive.kafka.internal.db.rs3.client.LssId;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Client;
 import dev.responsive.kafka.internal.db.rs3.client.RS3TimeoutException;
 import dev.responsive.kafka.internal.db.rs3.client.RS3TransientException;
 import dev.responsive.kafka.internal.db.rs3.client.Range;
-import dev.responsive.kafka.internal.db.rs3.client.RangeBound;
 import dev.responsive.kafka.internal.db.rs3.client.Store;
 import dev.responsive.kafka.internal.db.rs3.client.StreamSenderMessageReceiver;
 import dev.responsive.kafka.internal.db.rs3.client.WalEntry;
@@ -232,7 +227,7 @@ public class GrpcRS3Client implements RS3Client {
       final LssId lssId,
       final int pssId,
       final Optional<Long> expectedWrittenOffset,
-      Range range
+      Range<Bytes> range
   ) {
     return sendRange(
         storeId,
@@ -408,42 +403,6 @@ public class GrpcRS3Client implements RS3Client {
     }
   }
 
-  private Rs3.Range protoRange(Range range) {
-    final var protoRange = Rs3.BasicRange.newBuilder()
-        .setFrom(protoBound(range.start()))
-        .setTo(protoBound(range.end()));
-    return Rs3.Range.newBuilder()
-        .setBasicRange(protoRange)
-        .build();
-  }
-
-  private Rs3.BasicBound protoBound(RangeBound bound) {
-    return bound.map(new RangeBound.Mapper<>() {
-      @Override
-      public Rs3.BasicBound map(final RangeBound.InclusiveBound b) {
-        return Rs3.BasicBound.newBuilder()
-            .setType(Rs3.BoundType.INCLUSIVE)
-            .setKey(basicKeyProto(b.key()))
-            .build();
-      }
-
-      @Override
-      public Rs3.BasicBound map(final RangeBound.ExclusiveBound b) {
-        return Rs3.BasicBound.newBuilder()
-            .setType(Rs3.BoundType.EXCLUSIVE)
-            .setKey(basicKeyProto(b.key()))
-            .build();
-      }
-
-      @Override
-      public Rs3.BasicBound map(final RangeBound.Unbounded b) {
-        return Rs3.BasicBound.newBuilder()
-            .setType(Rs3.BoundType.UNBOUNDED)
-            .build();
-      }
-    });
-  }
-
   private class RangeProxy<K extends Comparable<K>> implements GrpcRangeRequestProxy<K> {
     private final Rs3.RangeRequest.Builder requestBuilder;
     private final RS3Grpc.RS3Stub stub;
@@ -469,7 +428,7 @@ public class GrpcRS3Client implements RS3Client {
         final Range<K> range,
         final StreamObserver<Rs3.RangeResult> resultObserver
     ) {
-      requestBuilder.setRange(protoRange(range));
+      requestBuilder.setRange(keyCodec.encodeRange(range));
 
       while (true) {
         try {

@@ -107,7 +107,7 @@ public class MeteredRS3Client implements RS3Client {
       final LssId lssId,
       final int pssId,
       final Optional<Long> expectedWrittenOffset,
-      final Range range
+      final Range<Bytes> range
   ) {
     return delegate.range(
         storeId,
@@ -144,16 +144,14 @@ public class MeteredRS3Client implements RS3Client {
       final LssId lssId,
       final int pssId,
       final Optional<Long> expectedWrittenOffset,
-      final RangeBound<WindowedKey> from,
-      final RangeBound<WindowedKey> to
+      final Range<WindowedKey> range
   ) {
     return delegate.windowedRange(
         storeId,
         lssId,
         pssId,
         expectedWrittenOffset,
-        from,
-        to
+        range
     );
   }
 

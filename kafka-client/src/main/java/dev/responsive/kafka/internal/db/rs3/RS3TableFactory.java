@@ -12,6 +12,7 @@
 
 package dev.responsive.kafka.internal.db.rs3;
 
+import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.RemoteWindowTable;
 import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes;
@@ -51,7 +52,11 @@ public class RS3TableFactory {
     final var rs3Client = connector.connect();
 
     final UUID storeId = createdStores.computeIfAbsent(storeName, n -> createStore(
-        storeName, ttlResolver, computeNumKafkaPartitions.get(), rs3Client
+        storeName,
+        CreateStoreTypes.StoreType.WINDOW,
+        ttlResolver,
+        computeNumKafkaPartitions.get(),
+        rs3Client
     ));
 
     final PssPartitioner pssPartitioner = new PssDirectPartitioner();
@@ -66,16 +71,24 @@ public class RS3TableFactory {
   }
 
   public RemoteWindowTable<WalEntry> windowTable(
-      final String name,
-      final ResponsiveConfig config,
+      final String storeName,
+      final Optional<TtlResolver<?, ?>> ttlResolver,
       final ResponsiveMetrics responsiveMetrics,
-      final ResponsiveMetrics.MetricScopeBuilder scopeBuilder
+      final ResponsiveMetrics.MetricScopeBuilder scopeBuilder,
+      final Supplier<Integer> computeNumKafkaPartitions
   ) {
-    final var storeId = lookupStoreId(config, name);
-    final var pssPartitioner = new PssDirectPartitioner();
     final var rs3Client = connector.connect();
+    final UUID storeId = createdStores.computeIfAbsent(storeName, n -> createStore(
+        storeName,
+        CreateStoreTypes.StoreType.BASIC,
+        ttlResolver,
+        computeNumKafkaPartitions.get(),
+        rs3Client
+    ));
+
+    final var pssPartitioner = new PssDirectPartitioner();
     return new RS3WindowTable(
-        name,
+        storeName,
         storeId,
         rs3Client,
         pssPartitioner,
@@ -86,6 +99,7 @@ public class RS3TableFactory {
 
   public static UUID createStore(
       final String storeName,
+      final CreateStoreTypes.StoreType storeType,
       final Optional<TtlResolver<?, ?>> ttlResolver,
       final int numKafkaPartitions,
       final RS3Client rs3Client
@@ -98,7 +112,7 @@ public class RS3TableFactory {
 
     final var options = new CreateStoreOptions(
         numKafkaPartitions,
-        CreateStoreTypes.StoreType.BASIC,
+        storeType,
         ttlResolver.isPresent() ? Optional.of(ClockType.WALL_CLOCK) : Optional.empty(),
         defaultTtl,
         Optional.empty()

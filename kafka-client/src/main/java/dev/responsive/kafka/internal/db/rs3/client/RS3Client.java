@@ -62,7 +62,7 @@ public interface RS3Client {
       LssId lssId,
       int pssId,
       Optional<Long> expectedWrittenOffset,
-      Range range
+      Range<Bytes> range
   );
 
   KeyValueIterator<WindowedKey, byte[]> windowedRange(

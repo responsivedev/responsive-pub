@@ -114,7 +114,7 @@ public class RS3KVTable implements RemoteKVTable<WalEntry> {
       final Bytes to,
       final long streamTimeMs
   ) {
-    final var range = new Range(RangeBound.inclusive(from.get()), RangeBound.exclusive(to.get()));
+    final var range = new Range<>(RangeBound.inclusive(from), RangeBound.exclusive(to));
     final List<KeyValueIterator<Bytes, byte[]>> pssIters = new ArrayList<>();
 
     for (int pssId : pssPartitioner.pssForLss(this.lssId)) {
