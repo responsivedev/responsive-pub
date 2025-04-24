@@ -156,7 +156,7 @@ public class GrpcRS3Client implements RS3Client {
               .setPssId(pssId)
               .setEndOffset(endOffset)
               .setExpectedWrittenOffset(expectedWrittenOffset.orElse(WAL_OFFSET_NONE));
-          addWalEntryToSegment(entry, entryBuilder);
+          entry.visit(new WalEntryPutWriter(entryBuilder));
           return entryBuilder.build();
         },
         streamObserver
@@ -295,13 +295,18 @@ public class GrpcRS3Client implements RS3Client {
         .setBasicKey(basicKeyProto(key.get()));
     final var requestBuilder = Rs3.GetRequest.newBuilder()
         .setKey(keyProto);
-    return sendGet(
+    final var kvOpt = sendGet(
         requestBuilder,
         storeId,
         lssId,
         pssId,
         expectedWrittenOffset
     );
+    return kvOpt.map(kv -> {
+      checkField(kv::hasBasicKv, "value");
+      final var value = kv.getBasicKv().getValue().getValue();
+      return value.toByteArray();
+    });
   }
 
   @Override
@@ -316,16 +321,21 @@ public class GrpcRS3Client implements RS3Client {
         .setWindowKey(windowKeyProto(key));
     final var requestBuilder = Rs3.GetRequest.newBuilder()
         .setKey(keyProto);
-    return sendGet(
+    final var kvOpt = sendGet(
         requestBuilder,
         storeId,
         lssId,
         pssId,
         expectedWrittenOffset
     );
+    return kvOpt.map(kv -> {
+      checkField(kv::hasWindowKv, "value");
+      final var value = kv.getWindowKv().getValue().getValue();
+      return value.toByteArray();
+    });
   }
 
-  private Optional<byte[]> sendGet(
+  private Optional<Rs3.KeyValue> sendGet(
       final Rs3.GetRequest.Builder requestBuilder,
       final UUID storeId,
       final LssId lssId,
@@ -346,10 +356,7 @@ public class GrpcRS3Client implements RS3Client {
     if (!result.hasResult()) {
       return Optional.empty();
     }
-    final Rs3.KeyValue keyValue = result.getResult();
-    checkField(keyValue::hasBasicKv, "value");
-    final var value = keyValue.getBasicKv().getValue().getValue();
-    return Optional.of(value.toByteArray());
+    return Optional.of(result.getResult());
   }
 
   @Override
@@ -385,16 +392,6 @@ public class GrpcRS3Client implements RS3Client {
     );
 
     return new CreateStoreResult(uuidFromProto(result.getStoreId()), result.getPssIdsList());
-  }
-
-  private void addWalEntryToSegment(
-      final WalEntry entry,
-      final Rs3.WriteWALSegmentRequest.Builder builder
-  ) {
-    final var putBuilder = Rs3.WriteWALSegmentRequest.Put.newBuilder();
-    final var writer = new WalEntryPutWriter(putBuilder);
-    entry.visit(writer);
-    builder.setPut(putBuilder);
   }
 
   private void checkField(final Supplier<Boolean> check, final String field) {

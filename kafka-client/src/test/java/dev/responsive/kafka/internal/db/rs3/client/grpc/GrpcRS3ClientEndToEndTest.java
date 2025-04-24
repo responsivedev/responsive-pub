@@ -121,7 +121,7 @@ class GrpcRS3ClientEndToEndTest {
         LSS_ID,
         PSS_ID,
         Optional.of(5L),
-        new Range(
+        new Range<Bytes>(
             RangeBound.unbounded(),
             RangeBound.unbounded()
         )
@@ -189,7 +189,7 @@ class GrpcRS3ClientEndToEndTest {
 
     Mockito.doAnswer(invocation -> {
       @SuppressWarnings("unchecked")
-      final var call = (ClientCall<gRs3.RangeRequest, Rs3.RangeResult>)
+      final var call = (ClientCall<Rs3.RangeRequest, Rs3.RangeResult>)
           invocation.callRealMethod();
       final var callSpy = Mockito.spy(call);
       Mockito.doThrow(new StatusRuntimeException(Status.UNAVAILABLE))
@@ -205,7 +205,7 @@ class GrpcRS3ClientEndToEndTest {
         LSS_ID,
         PSS_ID,
         Optional.of(5L),
-        new Range(
+        new Range<Bytes>(
             RangeBound.unbounded(),
             RangeBound.unbounded()
         )

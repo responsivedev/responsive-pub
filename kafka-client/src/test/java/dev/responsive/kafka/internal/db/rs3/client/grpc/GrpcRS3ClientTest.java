@@ -33,6 +33,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.google.protobuf.ByteString;
 import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes;
 import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes.ClockType;
 import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes.CreateStoreOptions;
@@ -796,13 +797,15 @@ class GrpcRS3ClientTest {
     final var key = "foo".getBytes();
 
     // given:
-    when(stub.get(any()))
-        .thenReturn(Rs3.GetResult.newBuilder().setResult(
-            Rs3.KeyValue.newBuilder()
-                .setKey(ByteString.copyFromUtf8("foo"))
-                .setValue(ByteString.copyFromUtf8("bar"))
-                .setWindowTimestamp(windowTimestamp)
-            ).build());
+
+    final var kvProto = GrpcRs3Util.windowKeyValueProto(
+        new WindowedKey("foo".getBytes(StandardCharsets.UTF_8), windowTimestamp),
+        "bar".getBytes(StandardCharsets.UTF_8)
+    );
+    when(stub.get(any())).thenReturn(
+        Rs3.GetResult.newBuilder()
+            .setResult(Rs3.KeyValue.newBuilder().setWindowKv(kvProto))
+            .build());
 
     // when:
     final var result = client.windowedGet(
@@ -815,12 +818,14 @@ class GrpcRS3ClientTest {
 
     // then:
     assertThat(result.get(), is("bar".getBytes()));
+    final var keyProto = GrpcRs3Util.windowKeyProto(
+        new WindowedKey("foo".getBytes(StandardCharsets.UTF_8), windowTimestamp)
+    );
     verify(stub).get(Rs3.GetRequest.newBuilder()
                          .setLssId(lssIdProto(LSS_ID))
                          .setPssId(PSS_ID)
-                         .setStoreId(uuidToUuidProto(STORE_ID))
-                         .setKey(ByteString.copyFromUtf8("foo"))
-                         .setWindowTimestamp(windowTimestamp)
+                         .setStoreId(uuidToProto(STORE_ID))
+                         .setKey(Rs3.Key.newBuilder().setWindowKey(keyProto))
                          .build()
     );
   }
@@ -835,9 +840,10 @@ class GrpcRS3ClientTest {
         .thenThrow(new StatusRuntimeException(Status.UNAVAILABLE))
         .thenReturn(Rs3.GetResult.newBuilder().setResult(
             Rs3.KeyValue.newBuilder()
-                .setKey(ByteString.copyFromUtf8("foo"))
-                .setValue(ByteString.copyFromUtf8("bar"))
-                .setWindowTimestamp(windowTimestamp)
+                .setWindowKv(GrpcRs3Util.windowKeyValueProto(
+                    new WindowedKey("foo".getBytes(StandardCharsets.UTF_8), windowTimestamp),
+                    "bar".getBytes(StandardCharsets.UTF_8)
+                ))
         ).build());
 
     // when:
@@ -851,13 +857,15 @@ class GrpcRS3ClientTest {
 
     // then:
     assertThat(result.get(), is("bar".getBytes()));
+    final var keyProto = GrpcRs3Util.windowKeyProto(
+        new WindowedKey("foo".getBytes(StandardCharsets.UTF_8), windowTimestamp)
+    );
     verify(stub, times(2))
         .get(Rs3.GetRequest.newBuilder()
                  .setLssId(lssIdProto(LSS_ID))
                  .setPssId(PSS_ID)
-                 .setStoreId(uuidToUuidProto(STORE_ID))
-                 .setKey(ByteString.copyFromUtf8("foo"))
-                 .setWindowTimestamp(windowTimestamp)
+                 .setStoreId(uuidToProto(STORE_ID))
+                 .setKey(Rs3.Key.newBuilder().setWindowKey(keyProto))
                  .build()
         );
   }
@@ -1225,16 +1233,6 @@ class GrpcRS3ClientTest {
   private StreamObserver<Rs3.WriteWALSegmentResult> verifyWalSegmentResultObserver() {
     verify(asyncStub).writeWALSegmentStream(writeWALSegmentResultObserverCaptor.capture());
     return writeWALSegmentResultObserverCaptor.getValue();
-  }
-
-  private Rs3.WriteWALSegmentRequest.Put putProto(final Put put) {
-    final var builder = Rs3.WriteWALSegmentRequest.Put.newBuilder()
-        .setKey(ByteString.copyFrom(put.key()));
-    builder.setValue(ByteString.copyFrom(put.value()));
-    builder.setTtl(Rs3.Ttl.newBuilder()
-        .setTtlType(Rs3.Ttl.TtlType.DEFAULT)
-        .build());
-    return builder.build();
   }
 
   public static class TestException extends RuntimeException {

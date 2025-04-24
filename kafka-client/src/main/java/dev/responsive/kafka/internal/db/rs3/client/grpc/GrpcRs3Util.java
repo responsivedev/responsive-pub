@@ -80,14 +80,25 @@ public class GrpcRs3Util {
       final byte[] key,
       final byte[] value
   ) {
-    final var keyBldr = Rs3.BasicKey.newBuilder();
-    keyBldr.setKey(ByteString.copyFrom(key));
-
+    final var keyProto = basicKeyProto(key);
     final var valueBldr = Rs3.BasicValue.newBuilder();
     valueBldr.setValue(ByteString.copyFrom(value));
 
     return Rs3.BasicKeyValue.newBuilder()
-        .setKey(keyBldr)
+        .setKey(keyProto)
+        .setValue(valueBldr)
+        .build();
+  }
+
+  public static Rs3.WindowKeyValue windowKeyValueProto(
+      final WindowedKey key,
+      final byte[] value
+  ) {
+    final var keyProto = windowKeyProto(key);
+    final var valueBldr = Rs3.WindowValue.newBuilder();
+    valueBldr.setValue(ByteString.copyFrom(value));
+    return Rs3.WindowKeyValue.newBuilder()
+        .setKey(keyProto)
         .setValue(valueBldr)
         .build();
   }
