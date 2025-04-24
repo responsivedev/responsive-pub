@@ -41,6 +41,7 @@ import dev.responsive.kafka.internal.db.rs3.client.Put;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Exception;
 import dev.responsive.kafka.internal.db.rs3.client.RS3TimeoutException;
 import dev.responsive.kafka.internal.db.rs3.client.Range;
+import dev.responsive.kafka.internal.db.rs3.client.StoreInfo;
 import dev.responsive.kafka.internal.db.rs3.client.WalEntry;
 import dev.responsive.rs3.RS3Grpc;
 import dev.responsive.rs3.Rs3;
@@ -892,9 +893,9 @@ class GrpcRS3ClientTest {
     final var result = client.listStores();
 
     // then:
-    final var expected = new dev.responsive.kafka.internal.db.rs3.client.Store(
-        STORE_NAME, STORE_ID, List.of(PSS_ID, PSS_ID_2)
-    );
+    final var expected = new StoreInfo(
+        STORE_NAME, STORE_ID, storeType, status, List.of(PSS_ID, PSS_ID_2),
+        createOptions);
 
     assertThat(result.size(), is(1));
     assertThat(result.get(0), equalTo(expected));

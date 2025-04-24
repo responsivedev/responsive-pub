@@ -112,7 +112,7 @@ public class MeteredRS3Client implements RS3Client {
   }
 
   @Override
-  public List<Store> listStores() {
+  public List<StoreInfo> listStores() {
     return delegate.listStores();
   }
 
