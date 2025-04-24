@@ -12,7 +12,6 @@
 
 package dev.responsive.kafka.internal.db.rs3;
 
-import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
 import dev.responsive.kafka.internal.db.RemoteWindowTable;
 import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes;
