@@ -16,7 +16,7 @@ import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.basic
 import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.basicKeyProto;
 import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.basicPutProto;
 import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.walOffsetProto;
-import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.wallOffsetFromProto;
+import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.walOffsetFromProto;
 import static dev.responsive.kafka.internal.utils.Utils.lssIdProto;
 import static dev.responsive.kafka.internal.utils.Utils.uuidFromProto;
 import static dev.responsive.kafka.internal.utils.Utils.uuidToProto;
@@ -88,8 +88,8 @@ public class GrpcRS3Client implements RS3Client {
     checkField(result::hasWrittenOffset, "writtenOffset");
     checkField(result::hasFlushedOffset, "flushedOffset");
     return new CurrentOffsets(
-        wallOffsetFromProto(result.getWrittenOffset()),
-        wallOffsetFromProto(result.getFlushedOffset())
+        walOffsetFromProto(result.getWrittenOffset()),
+        walOffsetFromProto(result.getFlushedOffset())
     );
   }
 
@@ -167,7 +167,7 @@ public class GrpcRS3Client implements RS3Client {
         resultObserver.message()
             .thenApply(r -> {
               checkField(r::hasFlushedOffset, "flushedOffset");
-              return wallOffsetFromProto(r.getFlushedOffset());
+              return walOffsetFromProto(r.getFlushedOffset());
             })
     );
   }

@@ -144,9 +144,9 @@ public class GrpcRs3Util {
         .orElse(UNWRITTEN_WAL_OFFSET);
   }
 
-  public static Optional<Long> wallOffsetFromProto(final Rs3.WALOffset walOffset) {
+  public static Optional<Long> walOffsetFromProto(final Rs3.WALOffset walOffset) {
     if (!walOffset.hasIsWritten()) {
-      throw new RS3Exception("illegal wall offset: is_written must be set");
+      throw new RS3Exception("illegal wal offset: is_written must be set");
     }
     if (walOffset.getIsWritten()) {
       if (!walOffset.hasOffset()) {
