@@ -15,6 +15,8 @@ package dev.responsive.kafka.internal.db.rs3.client.grpc;
 import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.basicDeleteProto;
 import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.basicKeyProto;
 import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.basicPutProto;
+import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.walOffsetProto;
+import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.wallOffsetFromProto;
 import static dev.responsive.kafka.internal.utils.Utils.lssIdProto;
 import static dev.responsive.kafka.internal.utils.Utils.uuidFromProto;
 import static dev.responsive.kafka.internal.utils.Utils.uuidToProto;
@@ -51,8 +53,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
 public class GrpcRS3Client implements RS3Client {
-  public static final long WAL_OFFSET_NONE = Long.MAX_VALUE;
-
   private final PssStubsProvider stubs;
   private final Time time;
   private final long retryTimeoutMs;
@@ -88,10 +88,8 @@ public class GrpcRS3Client implements RS3Client {
     checkField(result::hasWrittenOffset, "writtenOffset");
     checkField(result::hasFlushedOffset, "flushedOffset");
     return new CurrentOffsets(
-        result.getWrittenOffset() == WAL_OFFSET_NONE
-            ? Optional.empty() : Optional.of(result.getWrittenOffset()),
-        result.getFlushedOffset() == WAL_OFFSET_NONE
-            ? Optional.empty() : Optional.of(result.getFlushedOffset())
+        wallOffsetFromProto(result.getWrittenOffset()),
+        wallOffsetFromProto(result.getFlushedOffset())
     );
   }
 
@@ -158,7 +156,7 @@ public class GrpcRS3Client implements RS3Client {
               .setLssId(lssIdProto(lssId))
               .setPssId(pssId)
               .setEndOffset(endOffset)
-              .setExpectedWrittenOffset(expectedWrittenOffset.orElse(WAL_OFFSET_NONE));
+              .setExpectedWrittenOffset(walOffsetProto(expectedWrittenOffset));
           addWalEntryToSegment(entry, entryBuilder);
           return entryBuilder.build();
         },
@@ -169,8 +167,7 @@ public class GrpcRS3Client implements RS3Client {
         resultObserver.message()
             .thenApply(r -> {
               checkField(r::hasFlushedOffset, "flushedOffset");
-              return r.getFlushedOffset() == WAL_OFFSET_NONE
-                  ? Optional.empty() : Optional.of(r.getFlushedOffset());
+              return wallOffsetFromProto(r.getFlushedOffset());
             })
     );
   }
@@ -235,8 +232,8 @@ public class GrpcRS3Client implements RS3Client {
     final var requestBuilder = Rs3.RangeRequest.newBuilder()
         .setStoreId(uuidToProto(storeId))
         .setLssId(lssIdProto(lssId))
-        .setPssId(pssId);
-    expectedWrittenOffset.ifPresent(requestBuilder::setExpectedWrittenOffset);
+        .setPssId(pssId)
+        .setExpectedWrittenOffset(walOffsetProto(expectedWrittenOffset));
     final Supplier<String> rangeDescription =
         () -> "Range(storeId=" + storeId + ", lssId=" + lssId + ", pssId=" + pssId + ")";
     final var asyncStub = stubs.stubs(storeId, pssId).asyncStub();
@@ -256,8 +253,8 @@ public class GrpcRS3Client implements RS3Client {
         .setStoreId(uuidToProto(storeId))
         .setLssId(lssIdProto(lssId))
         .setPssId(pssId)
-        .setKey(Rs3.Key.newBuilder().setBasicKey(basicKeyProto(key)));
-    expectedWrittenOffset.ifPresent(requestBuilder::setExpectedWrittenOffset);
+        .setKey(Rs3.Key.newBuilder().setBasicKey(basicKeyProto(key)))
+        .setExpectedWrittenOffset(walOffsetProto(expectedWrittenOffset));
     final var request = requestBuilder.build();
     final RS3Grpc.RS3BlockingStub stub = stubs.stubs(storeId, pssId).syncStub();
 

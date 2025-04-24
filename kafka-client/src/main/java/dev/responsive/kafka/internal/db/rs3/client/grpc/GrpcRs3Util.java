@@ -25,6 +25,9 @@ import io.grpc.StatusRuntimeException;
 import java.util.Optional;
 
 public class GrpcRs3Util {
+  public static final Rs3.WALOffset UNWRITTEN_WAL_OFFSET = Rs3.WALOffset.newBuilder()
+      .setIsWritten(false)
+      .build();
 
   public static RuntimeException wrapThrowable(Throwable t) {
     final var statusOpt = getGrpcStatus(t);
@@ -117,7 +120,7 @@ public class GrpcRs3Util {
     builder.setLogicalShards(options.logicalShards());
     builder.setStoreType(storeTypeProto(options.storeType()));
     options.clockType().ifPresent(
-        type -> builder.setClockType(Rs3.CreateStoreOptions.ClockType.forNumber(type.ordinal()))
+        type -> builder.setClockType(Rs3.ClockType.forNumber(type.ordinal()))
     );
     options.defaultTtl().ifPresent(builder::setDefaultTtl);
     options.slateDbOptions().ifPresent(slateDbOptions -> {
@@ -126,5 +129,32 @@ public class GrpcRs3Util {
       builder.setSlatedbStorageOptions(storageOptions);
     });
     return builder.build();
+  }
+
+  public static Rs3.WALOffset walOffsetProto(final long offset) {
+    return Rs3.WALOffset.newBuilder()
+        .setIsWritten(true)
+        .setOffset(offset)
+        .build();
+  }
+
+  public static Rs3.WALOffset walOffsetProto(final Optional<Long> offset) {
+    return offset
+        .map(GrpcRs3Util::walOffsetProto)
+        .orElse(UNWRITTEN_WAL_OFFSET);
+  }
+
+  public static Optional<Long> wallOffsetFromProto(final Rs3.WALOffset walOffset) {
+    if (!walOffset.hasIsWritten()) {
+      throw new RS3Exception("illegal wall offset: is_written must be set");
+    }
+    if (walOffset.getIsWritten()) {
+      if (!walOffset.hasOffset()) {
+        throw new RS3Exception("illegal wal offset: offset must be set");
+      }
+      return Optional.of(walOffset.getOffset());
+    } else {
+      return Optional.empty();
+    }
   }
 }
