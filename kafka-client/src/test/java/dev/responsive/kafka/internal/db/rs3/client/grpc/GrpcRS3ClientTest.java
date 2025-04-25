@@ -47,7 +47,7 @@ import dev.responsive.rs3.RS3Grpc;
 import dev.responsive.rs3.Rs3;
 import dev.responsive.rs3.Rs3.CreateStoreResult;
 import dev.responsive.rs3.Rs3.ListStoresResult;
-import dev.responsive.rs3.Rs3.Store;
+import dev.responsive.rs3.Rs3.StoreInfo;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
@@ -113,7 +113,7 @@ class GrpcRS3ClientTest {
     // given:
     when(stub.getOffsets(any())).thenReturn(
         Rs3.GetOffsetsResult.newBuilder()
-            .setWrittenOffset(123)
+            .setWrittenOffset(GrpcRs3Util.walOffsetProto(123L))
             .build()
     );
 
@@ -126,7 +126,7 @@ class GrpcRS3ClientTest {
     // given:
     when(stub.getOffsets(any())).thenReturn(
         Rs3.GetOffsetsResult.newBuilder()
-            .setFlushedOffset(123)
+            .setFlushedOffset(GrpcRs3Util.walOffsetProto(123L))
             .build()
     );
 
@@ -139,8 +139,8 @@ class GrpcRS3ClientTest {
     // given:
     when(stub.getOffsets(any())).thenReturn(
         Rs3.GetOffsetsResult.newBuilder()
-            .setWrittenOffset(GrpcRS3Client.WAL_OFFSET_NONE)
-            .setFlushedOffset(123)
+            .setWrittenOffset(GrpcRs3Util.UNWRITTEN_WAL_OFFSET)
+            .setFlushedOffset(GrpcRs3Util.walOffsetProto(123L))
             .build()
     );
 
@@ -157,8 +157,8 @@ class GrpcRS3ClientTest {
     // given:
     when(stub.getOffsets(any())).thenReturn(
         Rs3.GetOffsetsResult.newBuilder()
-            .setWrittenOffset(123)
-            .setFlushedOffset(GrpcRS3Client.WAL_OFFSET_NONE)
+            .setWrittenOffset(GrpcRs3Util.walOffsetProto(123L))
+            .setFlushedOffset(GrpcRs3Util.UNWRITTEN_WAL_OFFSET)
             .build()
     );
 
@@ -175,8 +175,8 @@ class GrpcRS3ClientTest {
     // given:
     when(stub.getOffsets(any())).thenReturn(
         Rs3.GetOffsetsResult.newBuilder()
-            .setWrittenOffset(13)
-            .setFlushedOffset(3)
+            .setWrittenOffset(GrpcRs3Util.walOffsetProto(13))
+            .setFlushedOffset(GrpcRs3Util.walOffsetProto(3))
             .build()
     );
 
@@ -196,8 +196,8 @@ class GrpcRS3ClientTest {
         .thenThrow(new StatusRuntimeException(Status.UNAVAILABLE))
         .thenReturn(
             Rs3.GetOffsetsResult.newBuilder()
-                .setWrittenOffset(13)
-                .setFlushedOffset(3)
+                .setWrittenOffset(GrpcRs3Util.walOffsetProto(13))
+                .setFlushedOffset(GrpcRs3Util.walOffsetProto(3))
                 .build());
 
     // when:
@@ -267,7 +267,7 @@ class GrpcRS3ClientTest {
         .setLssId(lssIdProto(LSS_ID))
         .setPssId(PSS_ID)
         .setStoreId(uuidToProto(STORE_ID))
-        .setExpectedWrittenOffset(15L)
+        .setExpectedWrittenOffset(GrpcRs3Util.walOffsetProto(15))
         .setEndOffset(20)
         .setPut(basicPutProto(put1))
         .build()
@@ -276,7 +276,7 @@ class GrpcRS3ClientTest {
         .setLssId(lssIdProto(LSS_ID))
         .setPssId(PSS_ID)
         .setStoreId(uuidToProto(STORE_ID))
-        .setExpectedWrittenOffset(15L)
+        .setExpectedWrittenOffset(GrpcRs3Util.walOffsetProto(15))
         .setEndOffset(20)
         .setPut(basicPutProto(put2))
         .build()
@@ -306,7 +306,7 @@ class GrpcRS3ClientTest {
         .setLssId(lssIdProto(LSS_ID))
         .setPssId(PSS_ID)
         .setStoreId(uuidToProto(STORE_ID))
-        .setExpectedWrittenOffset(GrpcRS3Client.WAL_OFFSET_NONE)
+        .setExpectedWrittenOffset(GrpcRs3Util.UNWRITTEN_WAL_OFFSET)
         .setEndOffset(20)
         .setPut(basicPutProto(put1))
         .build()
@@ -328,7 +328,7 @@ class GrpcRS3ClientTest {
     final var receiveFuture = senderReceiver.completion().toCompletableFuture();
     final var observer = verifyWalSegmentResultObserver();
     observer.onNext(Rs3.WriteWALSegmentResult.newBuilder()
-        .setFlushedOffset(123)
+        .setFlushedOffset(GrpcRs3Util.walOffsetProto(123))
         .build());
     observer.onCompleted();
 
@@ -375,10 +375,10 @@ class GrpcRS3ClientTest {
     final var receiveFuture = senderReceiver.completion().toCompletableFuture();
     final var observer = verifyWalSegmentResultObserver();
     observer.onNext(Rs3.WriteWALSegmentResult.newBuilder()
-        .setFlushedOffset(123)
+        .setFlushedOffset(GrpcRs3Util.walOffsetProto(123))
         .build());
     observer.onNext(Rs3.WriteWALSegmentResult.newBuilder()
-        .setFlushedOffset(456)
+        .setFlushedOffset(GrpcRs3Util.walOffsetProto(456))
         .build());
     observer.onCompleted();
 
@@ -402,7 +402,7 @@ class GrpcRS3ClientTest {
       StreamObserver<dev.responsive.rs3.Rs3.WriteWALSegmentResult> responseObserver =
           invocation.getArgument(0);
       responseObserver.onNext(Rs3.WriteWALSegmentResult.newBuilder()
-                          .setFlushedOffset(flushedOffset)
+                          .setFlushedOffset(GrpcRs3Util.walOffsetProto(flushedOffset))
                           .build());
       responseObserver.onCompleted();
       return writeWALSegmentRequestObserver;
@@ -424,7 +424,7 @@ class GrpcRS3ClientTest {
             .setLssId(lssIdProto(LSS_ID))
             .setPssId(PSS_ID)
             .setStoreId(uuidToProto(STORE_ID))
-            .setExpectedWrittenOffset(15L)
+            .setExpectedWrittenOffset(GrpcRs3Util.walOffsetProto(15L))
             .setEndOffset(20)
             .setPut(basicPutProto((Put) entries.get(0)))
             .build()
@@ -434,7 +434,7 @@ class GrpcRS3ClientTest {
             .setLssId(lssIdProto(LSS_ID))
             .setPssId(PSS_ID)
             .setStoreId(uuidToProto(STORE_ID))
-            .setExpectedWrittenOffset(15L)
+            .setExpectedWrittenOffset(GrpcRs3Util.walOffsetProto(15L))
             .setEndOffset(20)
             .setPut(basicPutProto((Put) entries.get(1)))
             .build()
@@ -463,7 +463,7 @@ class GrpcRS3ClientTest {
           StreamObserver<dev.responsive.rs3.Rs3.WriteWALSegmentResult> responseObserver =
               invocation.getArgument(0);
           responseObserver.onNext(Rs3.WriteWALSegmentResult.newBuilder()
-                              .setFlushedOffset(flushedOffset)
+                              .setFlushedOffset(GrpcRs3Util.walOffsetProto(flushedOffset))
                               .build());
           responseObserver.onCompleted();
           reset(writeWALSegmentRequestObserver);
@@ -487,7 +487,7 @@ class GrpcRS3ClientTest {
             .setLssId(lssIdProto(LSS_ID))
             .setPssId(PSS_ID)
             .setStoreId(uuidToProto(STORE_ID))
-            .setExpectedWrittenOffset(15L)
+            .setExpectedWrittenOffset(GrpcRs3Util.walOffsetProto(15L))
             .setEndOffset(20)
             .setPut(basicPutProto((Put) entries.get(0)))
             .build()
@@ -497,7 +497,7 @@ class GrpcRS3ClientTest {
             .setLssId(lssIdProto(LSS_ID))
             .setPssId(PSS_ID)
             .setStoreId(uuidToProto(STORE_ID))
-            .setExpectedWrittenOffset(15L)
+            .setExpectedWrittenOffset(GrpcRs3Util.walOffsetProto(15L))
             .setEndOffset(20)
             .setPut(basicPutProto((Put) entries.get(1)))
             .build()
@@ -524,7 +524,7 @@ class GrpcRS3ClientTest {
           StreamObserver<dev.responsive.rs3.Rs3.WriteWALSegmentResult> responseObserver =
               invocation.getArgument(0);
           responseObserver.onNext(Rs3.WriteWALSegmentResult.newBuilder()
-                                      .setFlushedOffset(flushedOffset)
+                                      .setFlushedOffset(GrpcRs3Util.walOffsetProto(flushedOffset))
                                       .build());
           responseObserver.onCompleted();
           reset(writeWALSegmentRequestObserver);
@@ -548,7 +548,7 @@ class GrpcRS3ClientTest {
             .setLssId(lssIdProto(LSS_ID))
             .setPssId(PSS_ID)
             .setStoreId(uuidToProto(STORE_ID))
-            .setExpectedWrittenOffset(15L)
+            .setExpectedWrittenOffset(GrpcRs3Util.walOffsetProto(15L))
             .setEndOffset(20)
             .setPut(basicPutProto((Put) entries.get(0)))
             .build()
@@ -575,7 +575,7 @@ class GrpcRS3ClientTest {
           StreamObserver<dev.responsive.rs3.Rs3.WriteWALSegmentResult> responseObserver =
               invocation.getArgument(0);
           responseObserver.onNext(Rs3.WriteWALSegmentResult.newBuilder()
-                                      .setFlushedOffset(flushedOffset)
+                                      .setFlushedOffset(GrpcRs3Util.walOffsetProto(flushedOffset))
                                       .build());
           responseObserver.onCompleted();
           reset(writeWALSegmentRequestObserver);
@@ -598,7 +598,7 @@ class GrpcRS3ClientTest {
             .setLssId(lssIdProto(LSS_ID))
             .setPssId(PSS_ID)
             .setStoreId(uuidToProto(STORE_ID))
-            .setExpectedWrittenOffset(15L)
+            .setExpectedWrittenOffset(GrpcRs3Util.walOffsetProto(15L))
             .setEndOffset(20)
             .setPut(basicPutProto((Put) entries.get(0)))
             .build()
@@ -665,7 +665,7 @@ class GrpcRS3ClientTest {
         .setLssId(lssIdProto(LSS_ID))
         .setPssId(PSS_ID)
         .setStoreId(uuidToProto(STORE_ID))
-        .setExpectedWrittenOffset(123L)
+        .setExpectedWrittenOffset(GrpcRs3Util.walOffsetProto(123L))
         .setKey(Rs3.Key.newBuilder().setBasicKey(
             GrpcRs3Util.basicKeyProto("foo".getBytes(StandardCharsets.UTF_8))
         ))
@@ -705,6 +705,7 @@ class GrpcRS3ClientTest {
         .setKey(Rs3.Key.newBuilder().setBasicKey(
             GrpcRs3Util.basicKeyProto("foo".getBytes(StandardCharsets.UTF_8))
         ))
+        .setExpectedWrittenOffset(GrpcRs3Util.UNWRITTEN_WAL_OFFSET)
         .build()
     );
   }
@@ -988,7 +989,7 @@ class GrpcRS3ClientTest {
     // given:
     when(stub.listStores(any())).thenReturn(
         ListStoresResult.newBuilder()
-            .addStores(Store.newBuilder()
+            .addStores(StoreInfo.newBuilder()
                            .setStoreName(STORE_NAME)
                            .setStoreId(uuidToProto(STORE_ID))
                            .addAllPssIds(List.of(PSS_ID, PSS_ID_2))

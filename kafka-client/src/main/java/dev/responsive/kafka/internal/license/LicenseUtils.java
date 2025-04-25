@@ -23,6 +23,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.Base64;
+import java.util.Optional;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.types.Password;
 
@@ -34,7 +35,13 @@ public final class LicenseUtils {
   }
 
   public static LicenseInfo loadLicense(final ResponsiveConfig config) {
-    if (!config.getString(ResponsiveConfig.PLATFORM_API_KEY_CONFIG).isEmpty()) {
+    final var licenseDocOpt = loadLicenseDocument(config);
+    if (licenseDocOpt.isPresent()) {
+      final var licenseInfo = authenticateLicense(licenseDocOpt.get());
+      final LicenseChecker checker = new LicenseChecker();
+      checker.checkLicense(licenseInfo);
+      return licenseInfo;
+    } else if (!config.getString(ResponsiveConfig.PLATFORM_API_KEY_CONFIG).isEmpty()) {
       // for now, we don't do any additional validation for users that use
       // Responsive Cloud via the platform key pair since that will be validated
       // when they make any request to the controller
@@ -42,22 +49,25 @@ public final class LicenseUtils {
           CloudLicenseV1.TYPE_NAME,
           config.getString(ResponsiveConfig.PLATFORM_API_KEY_CONFIG)
       );
+    } else {
+      throw new ConfigException(String.format(
+          "Must provide a license through %s or %s, or an API key with %s",
+          ResponsiveConfig.RESPONSIVE_LICENSE_CONFIG,
+          ResponsiveConfig.RESPONSIVE_LICENSE_FILE_CONFIG,
+          ResponsiveConfig.PLATFORM_API_KEY_CONFIG
+      ));
     }
-
-    final var licenseDoc = loadLicenseDocument(config);
-    final var licenseInfo = authenticateLicense(licenseDoc);
-    final LicenseChecker checker = new LicenseChecker();
-    checker.checkLicense(licenseInfo);
-    return licenseInfo;
   }
 
-  private static LicenseDocument loadLicenseDocument(final ResponsiveConfig configs) {
+  private static Optional<LicenseDocument> loadLicenseDocument(final ResponsiveConfig configs) {
     final Password licensePass = configs.getPassword(ResponsiveConfig.RESPONSIVE_LICENSE_CONFIG);
     final String license = licensePass == null ? "" : licensePass.value();
     final String licenseFile = configs.getString(ResponsiveConfig.RESPONSIVE_LICENSE_FILE_CONFIG);
-    if (license.isEmpty() == licenseFile.isEmpty()) {
+    if (license.isEmpty() && licenseFile.isEmpty()) {
+      return Optional.empty();
+    } else if (!license.isEmpty() && !licenseFile.isEmpty()) {
       throw new ConfigException(String.format(
-          "Must set exactly one of %s or %s",
+          "Must set only one of %s or %s",
           ResponsiveConfig.RESPONSIVE_LICENSE_CONFIG,
           ResponsiveConfig.RESPONSIVE_LICENSE_FILE_CONFIG
       ));
@@ -74,7 +84,9 @@ public final class LicenseUtils {
     }
     final ObjectMapper mapper = new ObjectMapper();
     try {
-      return mapper.readValue(Base64.getDecoder().decode(licenseB64), LicenseDocument.class);
+      return Optional.of(
+          mapper.readValue(Base64.getDecoder().decode(licenseB64), LicenseDocument.class)
+      );
     } catch (final IOException e) {
       throw new RuntimeException(e);
     }
