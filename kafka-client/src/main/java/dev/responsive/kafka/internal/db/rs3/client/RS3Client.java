@@ -56,7 +56,7 @@ public interface RS3Client {
       Range range
   );
 
-  List<Store> listStores();
+  List<StoreInfo> listStores();
 
   CreateStoreResult createStore(
       String storeId,

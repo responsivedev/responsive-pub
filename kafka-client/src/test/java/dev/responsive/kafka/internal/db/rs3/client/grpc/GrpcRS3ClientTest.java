@@ -36,17 +36,18 @@ import static org.mockito.Mockito.when;
 import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes;
 import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes.ClockType;
 import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes.CreateStoreOptions;
+import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes.StoreType;
 import dev.responsive.kafka.internal.db.rs3.client.LssId;
 import dev.responsive.kafka.internal.db.rs3.client.Put;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Exception;
 import dev.responsive.kafka.internal.db.rs3.client.RS3TimeoutException;
 import dev.responsive.kafka.internal.db.rs3.client.Range;
+import dev.responsive.kafka.internal.db.rs3.client.StoreInfo;
 import dev.responsive.kafka.internal.db.rs3.client.WalEntry;
 import dev.responsive.rs3.RS3Grpc;
 import dev.responsive.rs3.Rs3;
 import dev.responsive.rs3.Rs3.CreateStoreResult;
 import dev.responsive.rs3.Rs3.ListStoresResult;
-import dev.responsive.rs3.Rs3.StoreInfo;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
@@ -879,11 +880,15 @@ class GrpcRS3ClientTest {
   @Test
   public void shouldListStores() {
     // given:
+    final String createOptions = "opts-stub";
     when(stub.listStores(any())).thenReturn(
         ListStoresResult.newBuilder()
-            .addStores(StoreInfo.newBuilder()
+            .addStores(Rs3.StoreInfo.newBuilder()
                            .setStoreName(STORE_NAME)
                            .setStoreId(uuidToProto(STORE_ID))
+                           .setStatus(Rs3.StoreInfo.Status.READY)
+                           .setStoreType(Rs3.StoreType.BASIC)
+                           .setOptions(createOptions)
                            .addAllPssIds(List.of(PSS_ID, PSS_ID_2))
                            .build()
             ).build()
@@ -893,9 +898,9 @@ class GrpcRS3ClientTest {
     final var result = client.listStores();
 
     // then:
-    final var expected = new dev.responsive.kafka.internal.db.rs3.client.Store(
-        STORE_NAME, STORE_ID, List.of(PSS_ID, PSS_ID_2)
-    );
+    final var expected = new StoreInfo(
+        STORE_NAME, STORE_ID, StoreType.BASIC, StoreInfo.Status.READY, List.of(PSS_ID, PSS_ID_2),
+        createOptions);
 
     assertThat(result.size(), is(1));
     assertThat(result.get(0), equalTo(expected));
@@ -919,15 +924,30 @@ class GrpcRS3ClientTest {
   @Test
   public void shouldRetryListStores() {
     // given:
+    final String createOptions = "opts-stub";
     when(stub.listStores(any()))
         .thenThrow(new StatusRuntimeException(Status.UNAVAILABLE))
-        .thenReturn(ListStoresResult.newBuilder().build());
+        .thenReturn(ListStoresResult.newBuilder()
+                        .addStores(Rs3.StoreInfo.newBuilder()
+                                       .setStoreName(STORE_NAME)
+                                       .setStoreId(uuidToProto(STORE_ID))
+                                       .setStatus(Rs3.StoreInfo.Status.READY)
+                                       .setStoreType(Rs3.StoreType.BASIC)
+                                       .setOptions(createOptions)
+                                       .addAllPssIds(List.of(PSS_ID, PSS_ID_2))
+                                       .build()
+                        ).build());
 
     // when:
     final var result = client.listStores();
 
     // then:
-    assertThat(result.size(), is(0));
+    final var expected = new StoreInfo(
+        STORE_NAME, STORE_ID, StoreType.BASIC, StoreInfo.Status.READY, List.of(PSS_ID, PSS_ID_2),
+        createOptions);
+
+    assertThat(result.size(), is(1));
+    assertThat(result.get(0), equalTo(expected));
     verify(stub, times(2)).listStores(Rs3.ListStoresRequest.newBuilder().build());
   }
 
