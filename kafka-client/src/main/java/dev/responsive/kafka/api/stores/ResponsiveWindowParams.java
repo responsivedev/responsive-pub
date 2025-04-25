@@ -106,7 +106,7 @@ public final class ResponsiveWindowParams {
     return windowSizeMs;
   }
 
-  public long retentionPeriod() {
+  public long retentionPeriodMs() {
     return retentionPeriodMs;
   }
 

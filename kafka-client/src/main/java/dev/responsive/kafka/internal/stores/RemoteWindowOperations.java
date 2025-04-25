@@ -41,9 +41,9 @@ import dev.responsive.kafka.internal.utils.StoreUtil;
 import dev.responsive.kafka.internal.utils.TableName;
 import dev.responsive.kafka.internal.utils.Utils;
 import dev.responsive.kafka.internal.utils.WindowedKey;
+import java.time.Duration;
 import java.util.Collection;
 import java.util.Map;
-import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Predicate;
@@ -81,8 +81,7 @@ public class RemoteWindowOperations implements WindowOperations {
       final ResponsiveWindowParams params,
       final Map<String, Object> appConfigs,
       final ResponsiveConfig responsiveConfig,
-      final Predicate<WindowedKey> withinRetention,
-      final Optional<TtlResolver<?, ?>> ttlResolver
+      final Predicate<WindowedKey> withinRetention
   ) throws InterruptedException, TimeoutException {
 
     final var log = new LogContext(
@@ -99,8 +98,8 @@ public class RemoteWindowOperations implements WindowOperations {
     );
 
     final WindowSegmentPartitioner partitioner = new WindowSegmentPartitioner(
-        params.retentionPeriod(),
-        StoreUtil.computeSegmentInterval(params.retentionPeriod(), params.numSegments()),
+        params.retentionPeriodMs(),
+        StoreUtil.computeSegmentInterval(params.retentionPeriodMs(), params.numSegments()),
         params.retainDuplicates()
     );
 
@@ -124,7 +123,6 @@ public class RemoteWindowOperations implements WindowOperations {
             params,
             sessionClients,
             changelog.topic(),
-            ttlResolver,
             responsiveMetrics,
             scopeBuilder
         );
@@ -240,7 +238,6 @@ public class RemoteWindowOperations implements WindowOperations {
       final ResponsiveWindowParams params,
       final SessionClients sessionClients,
       final String changelogTopicName,
-      final Optional<TtlResolver<?, ?>> ttlResolver,
       final ResponsiveMetrics responsiveMetrics,
       final ResponsiveMetrics.MetricScopeBuilder scopeBuilder
   ) {
@@ -248,9 +245,10 @@ public class RemoteWindowOperations implements WindowOperations {
       throw new UnsupportedOperationException("Duplicate retention is not yet supported in RS3");
     }
 
+    final var defaultTtl = Duration.ofMillis(params.retentionPeriodMs());
     return sessionClients.rs3TableFactory().windowTable(
         params.name().tableName(),
-        ttlResolver,
+        defaultTtl,
         responsiveMetrics,
         scopeBuilder,
         () -> numPartitionsForKafkaTopic(sessionClients.admin(), changelogTopicName)

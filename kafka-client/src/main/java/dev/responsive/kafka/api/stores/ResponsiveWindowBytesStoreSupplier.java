@@ -27,7 +27,7 @@ public class ResponsiveWindowBytesStoreSupplier implements WindowBytesStoreSuppl
 
   public ResponsiveWindowBytesStoreSupplier(final ResponsiveWindowParams params) {
     this.params = params;
-    this.segmentIntervalMs = computeSegmentInterval(params.retentionPeriod(), params.numSegments());
+    this.segmentIntervalMs = computeSegmentInterval(params.retentionPeriodMs(), params.numSegments());
   }
 
   @Override
@@ -57,7 +57,7 @@ public class ResponsiveWindowBytesStoreSupplier implements WindowBytesStoreSuppl
 
   @Override
   public long retentionPeriod() {
-    return params.retentionPeriod();
+    return params.retentionPeriodMs();
   }
 
   @Override

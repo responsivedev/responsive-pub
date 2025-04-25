@@ -25,7 +25,6 @@ import dev.responsive.kafka.api.stores.ResponsiveWindowParams;
 import dev.responsive.kafka.internal.utils.Iterators;
 import dev.responsive.kafka.internal.utils.TableName;
 import java.util.Collection;
-import java.util.Optional;
 import java.util.concurrent.TimeoutException;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.utils.Bytes;
@@ -69,7 +68,7 @@ public class ResponsiveWindowStore
   public ResponsiveWindowStore(final ResponsiveWindowParams params) {
     this.params = params;
     this.name = params.name();
-    this.retentionPeriod = params.retentionPeriod();
+    this.retentionPeriod = params.retentionPeriodMs();
     this.position = Position.emptyPosition();
     this.log = new LogContext(
         String.format("window-store [%s] ", name.kafkaName())
@@ -103,8 +102,7 @@ public class ResponsiveWindowStore
           params,
           appConfigs,
           config,
-          window -> window.windowStartMs >= minValidTimestamp(),
-          Optional.empty() // FIXME: Provide TTLResolver
+          window -> window.windowStartMs >= minValidTimestamp()
       );
 
       numBloomFilterWindows = params.retainDuplicates()
