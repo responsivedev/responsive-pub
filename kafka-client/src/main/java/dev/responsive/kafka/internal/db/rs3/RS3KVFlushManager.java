@@ -114,7 +114,9 @@ class RS3KVFlushManager extends KVFlushManager {
   @Override
   public RemoteWriteResult<Integer> postFlush(final long consumedOffset) {
     for (final var entry : writers.entrySet()) {
-      LOG.info("Updated written offset of PSS {} to {}", entry.getKey(), entry.getValue().endOffset());
+      LOG.info("Updated written offset of PSS {} to {}",
+               entry.getKey(),
+               entry.getValue().endOffset());
       writtenOffsets.put(entry.getKey(), Optional.of(entry.getValue().endOffset()));
     }
     writers.clear();

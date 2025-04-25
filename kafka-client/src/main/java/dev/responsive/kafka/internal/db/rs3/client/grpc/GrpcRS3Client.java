@@ -86,28 +86,26 @@ public class GrpcRS3Client implements RS3Client {
         .setPssId(pssId)
         .build();
 
-    final var opDesc = "GetOffsets(storeId=" + storeId + ", lssId=" + lssId + ", pssId=" + pssId + ")";
+    final var opDesc = "GetOffsets(storeId=" + storeId
+        + ", lssId=" + lssId
+        + ", pssId=" + pssId
+        + ")";
+    LOG.info("Sending: {}", opDesc);
+
     final Rs3.GetOffsetsResult result = withRetry(
         () -> stub.getOffsets(request),
         () -> opDesc
     );
 
-    LOG.info("Sent: {} -> {}", opDesc, result);
-
     checkField(result::hasWrittenOffset, "writtenOffset");
     checkField(result::hasFlushedOffset, "flushedOffset");
-    return new CurrentOffsets(
+    final var currentOffsets = new CurrentOffsets(
         walOffsetFromProto(result.getWrittenOffset()),
         walOffsetFromProto(result.getFlushedOffset())
     );
-  }
 
-  private void withRetry(Runnable grpcOperation, Supplier<String> opDescription) {
-    final Supplier<Void> voidSupplier = () -> {
-      grpcOperation.run();
-      return null;
-    };
-    withRetry(voidSupplier, opDescription);
+    LOG.info("Received current offsets {} from GetOffsets", currentOffsets);
+    return currentOffsets;
   }
 
   private <T> T withRetry(Supplier<T> grpcOperation, Supplier<String> opDescription) {
@@ -154,9 +152,14 @@ public class GrpcRS3Client implements RS3Client {
     final GrpcMessageReceiver<Rs3.WriteWALSegmentResult> resultObserver
         = new GrpcMessageReceiver<>();
     final RS3Grpc.RS3Stub asyncStub = stubs.stubs(storeId, pssId).asyncStub();
+    final var opDesc = "OpenWriteWalSegmentStream(expectedWrittenOffset=" + expectedWrittenOffset
+        + ", endOffset=" + endOffset
+        + ")";
+    LOG.info("Sending {}", opDesc);
+
     final var streamObserver = withRetry(
         () -> asyncStub.writeWALSegmentStream(resultObserver),
-        () -> "OpenWriteWalSegmentStream()"
+        () -> opDesc
     );
     final var streamSender = new GrpcStreamSender<WalEntry, Rs3.WriteWALSegmentRequest>(
         entry -> {
@@ -243,8 +246,14 @@ public class GrpcRS3Client implements RS3Client {
         .setLssId(lssIdProto(lssId))
         .setPssId(pssId)
         .setExpectedWrittenOffset(walOffsetProto(expectedWrittenOffset));
-    final Supplier<String> rangeDescription =
-        () -> "Range(storeId=" + storeId + ", lssId=" + lssId + ", pssId=" + pssId + ")";
+    final var opDesc = "Range(storeId=" + storeId
+        + ", lssId=" + lssId
+        + ", pssId=" + pssId
+        + ", expectedWrittenOffset=" + expectedWrittenOffset
+        + ")";
+    final Supplier<String> rangeDescription = () -> opDesc;
+    LOG.info("Sending {}", opDesc);
+
     final var asyncStub = stubs.stubs(storeId, pssId).asyncStub();
     final var rangeProxy = new RangeProxy(requestBuilder, asyncStub, rangeDescription);
     return new GrpcKeyValueIterator(range, rangeProxy);
@@ -267,9 +276,16 @@ public class GrpcRS3Client implements RS3Client {
     final var request = requestBuilder.build();
     final RS3Grpc.RS3BlockingStub stub = stubs.stubs(storeId, pssId).syncStub();
 
+    final var opDesc = "Get(storeId=" + storeId
+        + ", lssId=" + lssId
+        + ", pssId=" + pssId
+        + ", expectedWrittenOffset=" + expectedWrittenOffset
+        + ")";
+    LOG.info("Sending {}", opDesc);
+
     final Rs3.GetResult result = withRetry(
         () -> stub.get(request),
-        () -> "Get(storeId=" + storeId + ", lssId=" + lssId + ", pssId=" + pssId + ")"
+        () -> opDesc
     );
     if (!result.hasResult()) {
       return Optional.empty();
@@ -307,9 +323,13 @@ public class GrpcRS3Client implements RS3Client {
         .build();
     final RS3Grpc.RS3BlockingStub stub = stubs.globalStubs().syncStub();
 
+    final var opDesc = "CreateStore(storeName=" + storeName
+        + ", createStoreOptions=" + options
+        + ")";
+    LOG.info("Sending {}", opDesc);
     final Rs3.CreateStoreResult result = withRetry(
         () -> stub.createStore(request),
-        () -> "CreateStore(storeName=" + storeName  + ", createStoreOptions=" + options + ")"
+        () -> opDesc
     );
 
     return new CreateStoreResult(uuidFromProto(result.getStoreId()), result.getPssIdsList());

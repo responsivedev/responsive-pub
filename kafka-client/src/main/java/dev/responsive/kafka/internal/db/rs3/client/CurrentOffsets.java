@@ -37,4 +37,11 @@ public class CurrentOffsets {
   public Optional<Long> flushedOffset() {
     return flushedOffset;
   }
+
+  @Override
+  public String toString() {
+    return "CurrentOffsets{writtenOffset=" + writtenOffset
+        + ", flushedOffset=" + flushedOffset
+        + '}';
+  }
 }
