@@ -67,7 +67,6 @@ class RS3WindowFlushManager implements WindowFlushManager<Integer> {
     return new PssTablePartitioner<>(pssPartitioner) {
       @Override
       public byte[] serialize(final WindowedKey key) {
-        // TODO: Get rid of this
         return key.key.get();
       }
     };
