@@ -18,6 +18,7 @@ import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -26,6 +27,7 @@ import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.stream.Stream;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -75,11 +77,8 @@ public class GrpcRS3ClientWindowEndToEndTest {
 
   @Test
   public void shouldPutAndGet() {
-    final var key = new WindowedKey(
-        "foo".getBytes(StandardCharsets.UTF_8),
-        100L
-    );
-    final var value = "bar".getBytes(StandardCharsets.UTF_8);
+    final var key = windowedKey("foo", 100L);
+    final var value = "bar";
     writeWalSegment(
         10L,
         Collections.singletonList(windowedPut(key, value))
@@ -94,19 +93,16 @@ public class GrpcRS3ClientWindowEndToEndTest {
     );
     assertThat(getResult.isPresent(), is(true));
     final var resultValue = getResult.get();
-    assertThat(resultValue, equalTo(value));
+    assertThat(new String(resultValue, StandardCharsets.UTF_8), equalTo(value));
   }
+
 
   @Test
   public void shouldDelete() {
-    final var key = new WindowedKey(
-        "foo".getBytes(StandardCharsets.UTF_8),
-        100L
-    );
-    final var value = "bar".getBytes(StandardCharsets.UTF_8);
+    final var key = windowedKey("foo", 100L);
     writeWalSegment(
         10L,
-        Collections.singletonList(windowedPut(key, value))
+        Collections.singletonList(windowedPut(key, "bar"))
     );
 
     assertThat(client.windowedGet(
@@ -131,13 +127,63 @@ public class GrpcRS3ClientWindowEndToEndTest {
     ).isPresent(), is(false));
   }
 
+  @Test
+  public void shouldScanValuesInTimeWindowRange() {
+    writeWalSegment(
+        10L,
+        Arrays.asList(
+            windowedPut(windowedKey("a", 100L), "1"),
+            windowedPut(windowedKey("b", 100L), "2"),
+            windowedPut(windowedKey("a", 200L), "3"),
+            windowedPut(windowedKey("b", 150L), "4"),
+            windowedPut(windowedKey("c", 200L), "5"),
+            windowedPut(windowedKey("a", 300L), "6")
+        )
+    );
+
+    final var range = new Range<>(
+        RangeBound.inclusive(windowedKey("a", 100L)),
+        RangeBound.exclusive(windowedKey("a", 300L))
+    );
+
+    try (final var iter = client.windowedRange(
+        STORE_ID,
+        LSS_ID,
+        PSS_ID,
+        Optional.empty(),
+        range
+    )) {
+      assertNext(iter, windowedKey("a", 100L), "1");
+      assertNext(iter, windowedKey("a", 200L), "3");
+      assertThat(iter.hasNext(), is(false));
+    }
+  }
+
+  private void assertNext(
+      KeyValueIterator<WindowedKey, byte[]> iter,
+      WindowedKey key,
+      String value
+  ) {
+    assertThat(iter.hasNext(), is(true));
+    final var keyValue = iter.next();
+    assertThat(keyValue.key, is(key));
+    assertThat(Bytes.wrap(keyValue.value), is(Bytes.wrap(value.getBytes(StandardCharsets.UTF_8))));
+  }
+
+  private static WindowedKey windowedKey(String key, long windowTimestamp) {
+    return new WindowedKey(
+        key.getBytes(StandardCharsets.UTF_8),
+        windowTimestamp
+    );
+  }
+
   private static WindowedPut windowedPut(
       WindowedKey key,
-      byte[] value
+      String value
   ) {
     return new WindowedPut(
         key.key.get(),
-        value,
+        value.getBytes(StandardCharsets.UTF_8),
         0L,
         key.windowStartMs
     );

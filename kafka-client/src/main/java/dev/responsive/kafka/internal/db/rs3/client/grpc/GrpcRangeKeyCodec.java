@@ -38,7 +38,7 @@ public interface GrpcRangeKeyCodec<K extends Comparable<K>> {
           Bytes.wrap(keyProto.getKey().toByteArray()),
           keyProto.getWindowTimestamp()
       );
-      final var value = kvProto.getValue().toByteArray();
+      final var value = kvProto.getValue().getValue().toByteArray();
       return new KeyValue<>(key, value);
     }
 
