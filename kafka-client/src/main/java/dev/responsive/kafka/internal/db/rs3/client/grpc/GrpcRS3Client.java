@@ -13,6 +13,8 @@
 package dev.responsive.kafka.internal.db.rs3.client.grpc;
 
 import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.basicKeyProto;
+import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.storeStatusFromProto;
+import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.storeTypeFromProto;
 import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.walOffsetFromProto;
 import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.walOffsetProto;
 import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.windowKeyProto;
@@ -30,7 +32,7 @@ import dev.responsive.kafka.internal.db.rs3.client.RS3Client;
 import dev.responsive.kafka.internal.db.rs3.client.RS3TimeoutException;
 import dev.responsive.kafka.internal.db.rs3.client.RS3TransientException;
 import dev.responsive.kafka.internal.db.rs3.client.Range;
-import dev.responsive.kafka.internal.db.rs3.client.Store;
+import dev.responsive.kafka.internal.db.rs3.client.StoreInfo;
 import dev.responsive.kafka.internal.db.rs3.client.StreamSenderMessageReceiver;
 import dev.responsive.kafka.internal.db.rs3.client.WalEntry;
 import dev.responsive.kafka.internal.utils.WindowedKey;
@@ -88,14 +90,6 @@ public class GrpcRS3Client implements RS3Client {
         walOffsetFromProto(result.getWrittenOffset()),
         walOffsetFromProto(result.getFlushedOffset())
     );
-  }
-
-  private void withRetry(Runnable grpcOperation, Supplier<String> opDescription) {
-    final Supplier<Void> voidSupplier = () -> {
-      grpcOperation.run();
-      return null;
-    };
-    withRetry(voidSupplier, opDescription);
   }
 
   private <T> T withRetry(Supplier<T> grpcOperation, Supplier<String> opDescription) {
@@ -356,7 +350,7 @@ public class GrpcRS3Client implements RS3Client {
   }
 
   @Override
-  public List<Store> listStores() {
+  public List<StoreInfo> listStores() {
     final var request = Rs3.ListStoresRequest.newBuilder().build();
     final RS3Grpc.RS3BlockingStub stub = stubs.globalStubs().syncStub();
 
@@ -367,7 +361,14 @@ public class GrpcRS3Client implements RS3Client {
 
     return result.getStoresList()
         .stream()
-        .map(t -> new Store(t.getStoreName(), uuidFromProto(t.getStoreId()), t.getPssIdsList()))
+        .map(t -> new StoreInfo(
+            t.getStoreName(),
+            uuidFromProto(t.getStoreId()),
+            storeTypeFromProto(t.getStoreType()),
+            storeStatusFromProto(t.getStatus()),
+            t.getPssIdsList(),
+            t.getOptions())
+        )
         .collect(Collectors.toList());
   }
 

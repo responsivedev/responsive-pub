@@ -18,6 +18,7 @@ import dev.responsive.kafka.internal.db.rs3.client.Delete;
 import dev.responsive.kafka.internal.db.rs3.client.Put;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Exception;
 import dev.responsive.kafka.internal.db.rs3.client.RS3TransientException;
+import dev.responsive.kafka.internal.db.rs3.client.StoreInfo;
 import dev.responsive.kafka.internal.utils.WindowedKey;
 import dev.responsive.rs3.Rs3;
 import io.grpc.Status;
@@ -121,7 +122,7 @@ public class GrpcRs3Util {
         .build();
   }
 
-  public static Rs3.StoreType storeTypeProto(final CreateStoreTypes.StoreType storeType) {
+  public static Rs3.StoreType storeTypeToProto(final CreateStoreTypes.StoreType storeType) {
     switch (storeType) {
       case BASIC:
         return Rs3.StoreType.BASIC;
@@ -132,12 +133,36 @@ public class GrpcRs3Util {
     }
   }
 
+  public static CreateStoreTypes.StoreType storeTypeFromProto(final Rs3.StoreType storeType) {
+    switch (storeType) {
+      case BASIC:
+        return CreateStoreTypes.StoreType.BASIC;
+      case WINDOW:
+        return CreateStoreTypes.StoreType.WINDOW;
+      default:
+        throw new IllegalArgumentException("Unknown store type: " + storeType);
+    }
+  }
+
+  public static StoreInfo.Status storeStatusFromProto(final Rs3.StoreInfo.Status status) {
+    switch (status) {
+      case CREATING:
+        return StoreInfo.Status.CREATING;
+      case READY:
+        return StoreInfo.Status.READY;
+      case DELETING:
+        return StoreInfo.Status.DELETED;
+      default:
+        throw new IllegalArgumentException("Unknown store status: " + status);
+    }
+  }
+
   public static Rs3.CreateStoreOptions createStoreOptionsProto(
       CreateStoreTypes.CreateStoreOptions options
   ) {
     final var builder = Rs3.CreateStoreOptions.newBuilder();
     builder.setLogicalShards(options.logicalShards());
-    builder.setStoreType(storeTypeProto(options.storeType()));
+    builder.setStoreType(storeTypeToProto(options.storeType()));
     options.clockType().ifPresent(
         type -> builder.setClockType(Rs3.ClockType.forNumber(type.ordinal()))
     );

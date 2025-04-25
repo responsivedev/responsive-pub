@@ -73,7 +73,7 @@ public interface RS3Client {
       Range<WindowedKey> range
   );
 
-  List<Store> listStores();
+  List<StoreInfo> listStores();
 
   CreateStoreResult createStore(
       String storeId,
