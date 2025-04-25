@@ -30,7 +30,7 @@ public interface GrpcRangeRequestProxy {
    * through to result observer. If a transient error is encountered through the
    * observer, the caller can retry this operation with an updated `startBound`.
    *
-   * @param start The updated start bound based on key-values seen with `resultObserver`
+   * @param range The updated range based on key-values seen with `resultObserver`
    * @param resultObserver An observer for key-value results and the end of stream marker
    */
   void send(Range range, StreamObserver<Rs3.RangeResult> resultObserver);
