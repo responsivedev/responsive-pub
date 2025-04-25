@@ -155,7 +155,7 @@ public class RS3KVTable implements RemoteKVTable<WalEntry> {
     return name;
   }
 
-  public UUID storedId() {
+  public UUID storeId() {
     return storeId;
   }
 

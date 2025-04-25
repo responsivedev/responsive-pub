@@ -38,7 +38,8 @@ public class GrpcKeyValueIterator<K extends Comparable<K>> implements KeyValueIt
   private final GrpcRangeRequestProxy<K> requestProxy;
   private final GrpcRangeKeyCodec<K> keyCodec;
   private final GrpcMessageQueue<Message> queue;
-  private Range<K> range;
+  private final RangeBound<K> end;
+  private RangeBound<K> start;
   private RangeResultObserver resultObserver;
 
   public GrpcKeyValueIterator(
@@ -49,7 +50,8 @@ public class GrpcKeyValueIterator<K extends Comparable<K>> implements KeyValueIt
     this.requestProxy = requestProxy;
     this.keyCodec = keyCodec;
     this.queue = new GrpcMessageQueue<>();
-    this.range = range;
+    this.start = range.start();
+    this.end = range.end();
     sendRangeRequest();
   }
 
@@ -78,6 +80,7 @@ public class GrpcKeyValueIterator<K extends Comparable<K>> implements KeyValueIt
   private void sendRangeRequest() {
     // Note that backoff on retry is handled internally by the request proxy
     resultObserver = new RangeResultObserver();
+    final var range = new Range<>(start, end);
     requestProxy.send(range, resultObserver);
   }
 
@@ -92,9 +95,7 @@ public class GrpcKeyValueIterator<K extends Comparable<K>> implements KeyValueIt
     if (nextKeyValue.isPresent()) {
       queue.poll();
       final var keyValue = nextKeyValue.get();
-      final RangeBound<K> newStartRange = RangeBound.exclusive(keyValue.key);
-      final RangeBound<K> newEndRange = this.range.end();
-      this.range = new Range<>(newStartRange, newEndRange);
+      this.start = RangeBound.exclusive(keyValue.key);
       return keyValue;
     } else {
       throw new NoSuchElementException();

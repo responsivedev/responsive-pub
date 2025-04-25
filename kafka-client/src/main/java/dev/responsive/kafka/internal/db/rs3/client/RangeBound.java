@@ -18,8 +18,9 @@ public interface RangeBound<K> {
 
   <T> T map(Mapper<K, T> mapper);
 
+  @SuppressWarnings("unchecked")
   static <K> Unbounded<K> unbounded() {
-    return new Unbounded<>();
+    return (Unbounded<K>) Unbounded.INSTANCE;
   }
 
   static <K> InclusiveBound<K> inclusive(K key) {
@@ -99,6 +100,8 @@ public interface RangeBound<K> {
   }
 
   class Unbounded<K> implements RangeBound<K> {
+    private static Unbounded<?> INSTANCE = new Unbounded<>();
+
     private Unbounded() {}
 
     @Override

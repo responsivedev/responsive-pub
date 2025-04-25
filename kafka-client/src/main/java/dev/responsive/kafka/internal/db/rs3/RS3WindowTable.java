@@ -85,6 +85,10 @@ public class RS3WindowTable implements RemoteWindowTable<WalEntry> {
     this.pssPartitioner = Objects.requireNonNull(pssPartitioner);
   }
 
+  public UUID storeId() {
+    return storeId;
+  }
+
   @Override
   public WindowFlushManager<Integer> init(final int kafkaPartition) {
     if (flushManager != null) {
