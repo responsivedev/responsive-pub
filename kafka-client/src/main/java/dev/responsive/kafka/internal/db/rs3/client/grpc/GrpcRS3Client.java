@@ -49,8 +49,11 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class GrpcRS3Client implements RS3Client {
+  private static final Logger LOG = LoggerFactory.getLogger(GrpcRS3Client.class);
   public static final long WAL_OFFSET_NONE = Long.MAX_VALUE;
 
   private final PssStubsProvider stubs;
@@ -81,10 +84,15 @@ public class GrpcRS3Client implements RS3Client {
         .setLssId(lssIdProto(lssId))
         .setPssId(pssId)
         .build();
+
+    final var opDesc = "GetOffsets(storeId=" + storeId + ", lssId=" + lssId + ", pssId=" + pssId + ")";
     final Rs3.GetOffsetsResult result = withRetry(
         () -> stub.getOffsets(request),
-        () -> "GetOffsets(storeId=" + storeId + ", lssId=" + lssId + ", pssId=" + pssId + ")"
+        () -> opDesc
     );
+
+    LOG.info("Sent: {} -> {}", opDesc, result);
+
     checkField(result::hasWrittenOffset, "writtenOffset");
     checkField(result::hasFlushedOffset, "flushedOffset");
     return new CurrentOffsets(
