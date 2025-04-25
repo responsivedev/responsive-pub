@@ -414,14 +414,28 @@ class GrpcRS3ClientEndToEndTest {
               current -> Math.max(current, req.getEndOffset())
           );
           if (req.hasPut()) {
-            final var kv = req.getPut().getKv().getBasicKv();
-            final var keyBytes = Bytes.wrap(kv.getKey().getKey().toByteArray());
-            final var valueBytes = Bytes.wrap(kv.getValue().getValue().toByteArray());
-            table.put(keyBytes, valueBytes);
+            final var kv = req.getPut().getKv();
+            if (kv.hasBasicKv()) {
+              final var basicKv = kv.getBasicKv();
+              final var keyBytes = Bytes.wrap(basicKv.getKey().getKey().toByteArray());
+              final var valueBytes = Bytes.wrap(basicKv.getValue().getValue().toByteArray());
+              table.put(keyBytes, valueBytes);
+            } else if (kv.hasWindowKv()) {
+              throw new UnsupportedOperationException("Window ops not yet supported");
+            } else {
+              throw new UnsupportedOperationException("Unhandled key-value type in Put");
+            }
           } else if (req.hasDelete()) {
-            final var key = req.getDelete().getKey().getBasicKey();
-            final var keyBytes = Bytes.wrap(key.getKey().toByteArray());
-            table.remove(keyBytes);
+            final var key = req.getDelete().getKey();
+            if (key.hasBasicKey()) {
+              final var basicKey = key.getBasicKey();
+              final var keyBytes = Bytes.wrap(basicKey.getKey().toByteArray());
+              table.remove(keyBytes);
+            } else if (key.hasWindowKey()) {
+              throw new UnsupportedOperationException("Window ops not yet supported");
+            } else {
+              throw new UnsupportedOperationException("Unhandled key-value type in Put");
+            }
           }
         }
 

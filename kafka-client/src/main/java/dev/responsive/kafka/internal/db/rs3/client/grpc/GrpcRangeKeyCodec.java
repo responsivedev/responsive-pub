@@ -89,7 +89,7 @@ public interface GrpcRangeKeyCodec<K extends Comparable<K>> {
     public KeyValue<Bytes, byte[]> decodeKeyValue(final Rs3.KeyValue keyValue) {
       final var kvProto = keyValue.getBasicKv();
       final var key = Bytes.wrap(kvProto.getKey().getKey().toByteArray());
-      final var value = kvProto.getValue().toByteArray();
+      final var value = kvProto.getValue().getValue().toByteArray();
       return new KeyValue<>(key, value);
     }
 
@@ -119,7 +119,7 @@ public interface GrpcRangeKeyCodec<K extends Comparable<K>> {
         public Rs3.BasicBound map(final RangeBound.ExclusiveBound<Bytes> b) {
           final var key = Rs3.BasicKey.newBuilder()
               .setKey(ByteString.copyFrom(b.key().get()));
-          return boundProto.setType(Rs3.BoundType.INCLUSIVE)
+          return boundProto.setType(Rs3.BoundType.EXCLUSIVE)
               .setKey(key)
               .build();
         }
