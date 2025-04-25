@@ -49,7 +49,9 @@ public class RS3TableFactory {
       final ResponsiveMetrics.MetricScopeBuilder scopeBuilder,
       final Supplier<Integer> computeNumKafkaPartitions
   ) {
-    final Optional<Duration> defaultTtl = ttlResolver.isPresent() && ttlResolver.get().defaultTtl().isFinite()
+
+    final Optional<Duration> defaultTtl = ttlResolver.isPresent()
+        && ttlResolver.get().defaultTtl().isFinite()
         ? Optional.of(ttlResolver.get().defaultTtl().duration())
         : Optional.empty();
     final Optional<ClockType> clockType = ttlResolver.isPresent()

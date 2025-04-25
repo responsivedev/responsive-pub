@@ -12,11 +12,8 @@
 
 package dev.responsive.kafka.internal.db.rs3.client.grpc;
 
-import dev.responsive.kafka.internal.db.rs3.client.Range;
-import dev.responsive.kafka.internal.db.rs3.client.RangeBound;
 import dev.responsive.rs3.Rs3;
 import java.nio.charset.StandardCharsets;
-import org.apache.kafka.common.utils.Bytes;
 
 public class GrpsRs3TestUtil {
 
@@ -31,31 +28,10 @@ public class GrpsRs3TestUtil {
         .build();
   }
 
-
   public static Rs3.RangeResult newEndOfStreamResult() {
     return Rs3.RangeResult.newBuilder()
         .setType(Rs3.RangeResult.Type.END_OF_STREAM)
         .build();
-  }
-
-  public static Range<Bytes> newRangeFromProto(Rs3.RangeRequest req) {
-    final var range = req.getRange().getBasicRange();
-    final var startBound = newRangeBoundFromProto(range.getFrom());
-    final var endBound = newRangeBoundFromProto(range.getTo());
-    return new Range<>(startBound, endBound);
-  }
-
-  private static RangeBound<Bytes> newRangeBoundFromProto(Rs3.BasicBound bound) {
-    switch (bound.getType()) {
-      case EXCLUSIVE:
-        return RangeBound.exclusive(Bytes.wrap(bound.getKey().getKey().toByteArray()));
-      case INCLUSIVE:
-        return RangeBound.inclusive(Bytes.wrap(bound.getKey().getKey().toByteArray()));
-      case UNBOUNDED:
-        return RangeBound.unbounded();
-      default:
-        throw new IllegalArgumentException(String.format("Unknown range type %s", bound.getType()));
-    }
   }
 
 }

@@ -71,5 +71,4 @@ public class RS3ClientUtil {
     return new LssMetadata(lastWrittenOffset, writtenOffsets);
   }
 
-
 }
