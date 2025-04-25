@@ -60,8 +60,8 @@ class TestGrpcRs3Service extends RS3Grpc.RS3ImplBase {
     final var currentOffset = offset.get();
     final var result = Rs3.GetOffsetsResult
         .newBuilder()
-        .setFlushedOffset(currentOffset)
-        .setWrittenOffset(currentOffset)
+        .setFlushedOffset(GrpcRs3Util.walOffsetProto(currentOffset))
+        .setWrittenOffset(GrpcRs3Util.walOffsetProto(currentOffset))
         .build();
     responseObserver.onNext(result);
     responseObserver.onCompleted();
@@ -83,8 +83,8 @@ class TestGrpcRs3Service extends RS3Grpc.RS3ImplBase {
       return;
     }
 
-    if (req.getExpectedWrittenOffset() != GrpcRS3Client.WAL_OFFSET_NONE) {
-      if (offset.get() < req.getExpectedWrittenOffset()) {
+    if (req.getExpectedWrittenOffset().getIsWritten()) {
+      if (offset.get() < req.getExpectedWrittenOffset().getOffset()) {
         responseObserver.onError(new StatusRuntimeException(Status.INVALID_ARGUMENT));
         return;
       }
@@ -113,8 +113,8 @@ class TestGrpcRs3Service extends RS3Grpc.RS3ImplBase {
       return;
     }
 
-    if (req.getExpectedWrittenOffset() != GrpcRS3Client.WAL_OFFSET_NONE) {
-      if (offset.get() < req.getExpectedWrittenOffset()) {
+    if (req.getExpectedWrittenOffset().getIsWritten()) {
+      if (offset.get() < req.getExpectedWrittenOffset().getOffset()) {
         responseObserver.onError(new StatusRuntimeException(Status.INVALID_ARGUMENT));
         return;
       }
@@ -152,8 +152,8 @@ class TestGrpcRs3Service extends RS3Grpc.RS3ImplBase {
           responseObserver.onError(new StatusRuntimeException(Status.INVALID_ARGUMENT));
         }
 
-        if (req.getExpectedWrittenOffset() != GrpcRS3Client.WAL_OFFSET_NONE) {
-          if (offset.get() < req.getExpectedWrittenOffset()) {
+        if (req.getExpectedWrittenOffset().getIsWritten()) {
+          if (offset.get() < req.getExpectedWrittenOffset().getOffset()) {
             responseObserver.onError(new StatusRuntimeException(Status.INVALID_ARGUMENT));
             return;
           }
@@ -178,7 +178,7 @@ class TestGrpcRs3Service extends RS3Grpc.RS3ImplBase {
       public void onCompleted() {
         final var result = Rs3.WriteWALSegmentResult
             .newBuilder()
-            .setFlushedOffset(offset.get())
+            .setFlushedOffset(GrpcRs3Util.walOffsetProto(offset.get()))
             .build();
         responseObserver.onNext(result);
         responseObserver.onCompleted();
