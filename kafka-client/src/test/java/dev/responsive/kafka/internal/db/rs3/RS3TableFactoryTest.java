@@ -123,7 +123,7 @@ class RS3TableFactoryTest {
     final var expectedOptions = new CreateStoreOptions(
         partitions,
         CreateStoreTypes.StoreType.WINDOW,
-        Optional.of(CreateStoreTypes.ClockType.STREAM_TIME),
+        Optional.of(CreateStoreTypes.ClockType.WALL_CLOCK),
         Optional.of(defaultTtl.toMillis()),
         Optional.empty()
     );

@@ -91,7 +91,7 @@ public class RS3TableFactory {
     final UUID storeId = createdStores.computeIfAbsent(storeName, n -> createStore(
         storeName,
         CreateStoreTypes.StoreType.WINDOW,
-        Optional.of(ClockType.STREAM_TIME),
+        Optional.of(ClockType.WALL_CLOCK),
         Optional.of(defaultTtl),
         computeNumKafkaPartitions.get(),
         rs3Client
