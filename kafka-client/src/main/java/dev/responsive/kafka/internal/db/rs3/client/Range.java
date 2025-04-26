@@ -1,69 +1,80 @@
+/*
+ * Copyright 2025 Responsive Computing, Inc.
+ *
+ * This source code is licensed under the Responsive Business Source License Agreement v1.0
+ * available at:
+ *
+ * https://www.responsive.dev/legal/responsive-bsl-10
+ *
+ * This software requires a valid Commercial License Key for production use. Trial and commercial
+ * licenses can be obtained at https://www.responsive.dev
+ */
+
 package dev.responsive.kafka.internal.db.rs3.client;
 
-import java.util.Arrays;
 import java.util.Objects;
 
-public class Range {
-  private final RangeBound start;
-  private final RangeBound end;
+public class Range<K extends Comparable<K>> {
+  private final RangeBound<K> start;
+  private final RangeBound<K> end;
 
-  public Range(RangeBound start, RangeBound end) {
+  public Range(RangeBound<K> start, RangeBound<K> end) {
     this.start = start;
     this.end = end;
   }
 
-  public RangeBound start() {
+  public RangeBound<K> start() {
     return start;
   }
 
-  public RangeBound end() {
+  public RangeBound<K> end() {
     return end;
   }
 
-  public boolean contains(byte[] key) {
+  public boolean contains(K key) {
     return greaterThanStartBound(key) && lessThanEndBound(key);
   }
 
-  public boolean greaterThanStartBound(byte[] key) {
+  public boolean greaterThanStartBound(K key) {
     return start.map(new RangeBound.Mapper<>() {
       @Override
-      public Boolean map(final RangeBound.InclusiveBound b) {
-        return Arrays.compare(b.key(), key) <= 0;
+      public Boolean map(final RangeBound.InclusiveBound<K> b) {
+        return b.key().compareTo(key) <= 0;
       }
 
       @Override
-      public Boolean map(final RangeBound.ExclusiveBound b) {
-        return Arrays.compare(b.key(), key) < 0;
+      public Boolean map(final RangeBound.ExclusiveBound<K> b) {
+        return b.key().compareTo(key) < 0;
       }
 
       @Override
-      public Boolean map(final RangeBound.Unbounded b) {
+      public Boolean map(final RangeBound.Unbounded<K> b) {
         return true;
       }
     });
   }
 
-  public boolean lessThanEndBound(byte[] key) {
+  public boolean lessThanEndBound(K key) {
     return end.map(new RangeBound.Mapper<>() {
       @Override
-      public Boolean map(final RangeBound.InclusiveBound b) {
-        return Arrays.compare(b.key(), key) >= 0;
+      public Boolean map(final RangeBound.InclusiveBound<K> b) {
+        return b.key().compareTo(key) >= 0;
       }
 
       @Override
-      public Boolean map(final RangeBound.ExclusiveBound b) {
-        return Arrays.compare(b.key(), key) > 0;
+      public Boolean map(final RangeBound.ExclusiveBound<K> b) {
+        return b.key().compareTo(key) > 0;
       }
 
       @Override
-      public Boolean map(final RangeBound.Unbounded b) {
+      public Boolean map(final RangeBound.Unbounded<K> b) {
         return true;
       }
     });
   }
 
-  public static Range unbounded() {
-    return new Range(RangeBound.unbounded(), RangeBound.unbounded());
+  public static <T extends Comparable<T>> Range<T> unbounded() {
+    return new Range<T>(RangeBound.unbounded(), RangeBound.unbounded());
   }
 
   @Override
@@ -74,7 +85,7 @@ public class Range {
     if (o == null || getClass() != o.getClass()) {
       return false;
     }
-    final Range range = (Range) o;
+    final Range<?> range = (Range<?>) o;
     return Objects.equals(start, range.start) && Objects.equals(end, range.end);
   }
 

@@ -68,7 +68,7 @@ public class ResponsiveWindowStore
   public ResponsiveWindowStore(final ResponsiveWindowParams params) {
     this.params = params;
     this.name = params.name();
-    this.retentionPeriod = params.retentionPeriod();
+    this.retentionPeriod = params.retentionPeriodMs();
     this.position = Position.emptyPosition();
     this.log = new LogContext(
         String.format("window-store [%s] ", name.kafkaName())

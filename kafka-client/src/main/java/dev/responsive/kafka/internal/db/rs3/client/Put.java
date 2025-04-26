@@ -33,6 +33,11 @@ public class Put extends WalEntry {
   }
 
   @Override
+  public void visit(final Visitor visitor) {
+    visitor.visit(this);
+  }
+
+  @Override
   public boolean equals(final Object o) {
     if (this == o) {
       return true;
@@ -51,4 +56,5 @@ public class Put extends WalEntry {
   public int hashCode() {
     return Objects.hash(Arrays.hashCode(key), Arrays.hashCode(value));
   }
+
 }

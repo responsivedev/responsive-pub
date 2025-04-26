@@ -28,6 +28,7 @@ import dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRS3Client;
 import dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRS3Client.Connector;
 import dev.responsive.kafka.internal.metrics.ClientVersionMetadata;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -69,7 +70,7 @@ class RS3TableFactoryTest {
   }
 
   @Test
-  public void testTableMapping() {
+  public void testBasicTableMapping() {
     final UUID storeId = new UUID(100, 200);
     final String tableName = "test-table";
     final int partitions = 5;
@@ -86,13 +87,44 @@ class RS3TableFactoryTest {
         () -> partitions
     );
     assertEquals(tableName, rs3Table.name());
-    assertEquals(storeId, rs3Table.storedId());
+    assertEquals(storeId, rs3Table.storeId());
 
     final var expectedOptions = new CreateStoreOptions(
         partitions,
         CreateStoreTypes.StoreType.BASIC,
         Optional.empty(),
         Optional.empty(),
+        Optional.empty()
+    );
+    verify(client).createStore(tableName, expectedOptions);
+  }
+
+  @Test
+  public void testWindowTableMapping() {
+    final UUID storeId = new UUID(100, 200);
+    final String tableName = "test-table";
+    final int partitions = 5;
+
+    when(client.createStore(anyString(), any(CreateStoreOptions.class)))
+        .thenReturn(new CreateStoreResult(storeId, List.of(1, 2, 3, 4, 5)));
+
+    final var factory = newTestFactory();
+    final var defaultTtl = Duration.ofMinutes(10);
+    final RS3WindowTable rs3Table = (RS3WindowTable) factory.windowTable(
+        tableName,
+        defaultTtl,
+        metrics,
+        scopeBuilder,
+        () -> partitions
+    );
+    assertEquals(tableName, rs3Table.name());
+    assertEquals(storeId, rs3Table.storeId());
+
+    final var expectedOptions = new CreateStoreOptions(
+        partitions,
+        CreateStoreTypes.StoreType.WINDOW,
+        Optional.of(CreateStoreTypes.ClockType.WALL_CLOCK),
+        Optional.of(defaultTtl.toMillis()),
         Optional.empty()
     );
     verify(client).createStore(tableName, expectedOptions);

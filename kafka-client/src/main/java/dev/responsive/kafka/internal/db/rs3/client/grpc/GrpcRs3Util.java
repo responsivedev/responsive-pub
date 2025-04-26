@@ -19,6 +19,7 @@ import dev.responsive.kafka.internal.db.rs3.client.Put;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Exception;
 import dev.responsive.kafka.internal.db.rs3.client.RS3TransientException;
 import dev.responsive.kafka.internal.db.rs3.client.StoreInfo;
+import dev.responsive.kafka.internal.utils.WindowedKey;
 import dev.responsive.rs3.Rs3;
 import io.grpc.Status;
 import io.grpc.StatusException;
@@ -72,18 +73,36 @@ public class GrpcRs3Util {
         .build();
   }
 
+  public static Rs3.WindowKey windowKeyProto(final WindowedKey key) {
+    return Rs3.WindowKey.newBuilder()
+        .setKey(ByteString.copyFrom(key.key.get()))
+        .setWindowTimestamp(key.windowStartMs)
+        .build();
+  }
+
   public static Rs3.BasicKeyValue basicKeyValueProto(
       final byte[] key,
       final byte[] value
   ) {
-    final var keyBldr = Rs3.BasicKey.newBuilder();
-    keyBldr.setKey(ByteString.copyFrom(key));
-
+    final var keyProto = basicKeyProto(key);
     final var valueBldr = Rs3.BasicValue.newBuilder();
     valueBldr.setValue(ByteString.copyFrom(value));
 
     return Rs3.BasicKeyValue.newBuilder()
-        .setKey(keyBldr)
+        .setKey(keyProto)
+        .setValue(valueBldr)
+        .build();
+  }
+
+  public static Rs3.WindowKeyValue windowKeyValueProto(
+      final WindowedKey key,
+      final byte[] value
+  ) {
+    final var keyProto = windowKeyProto(key);
+    final var valueBldr = Rs3.WindowValue.newBuilder();
+    valueBldr.setValue(ByteString.copyFrom(value));
+    return Rs3.WindowKeyValue.newBuilder()
+        .setKey(keyProto)
         .setValue(valueBldr)
         .build();
   }

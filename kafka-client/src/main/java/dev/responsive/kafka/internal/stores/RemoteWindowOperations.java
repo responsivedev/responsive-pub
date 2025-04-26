@@ -13,9 +13,11 @@
 package dev.responsive.kafka.internal.stores;
 
 import static dev.responsive.kafka.api.config.ResponsiveConfig.STORAGE_BACKEND_TYPE_CONFIG;
+import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadMetrics;
 import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadSessionClients;
 import static dev.responsive.kafka.internal.config.InternalSessionConfigs.loadStoreRegistry;
 import static dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration.NO_COMMITTED_OFFSET;
+import static dev.responsive.kafka.internal.utils.StoreUtil.numPartitionsForKafkaTopic;
 import static dev.responsive.kafka.internal.utils.StoreUtil.streamThreadId;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.asInternalProcessorContext;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextUtils.changelogFor;
@@ -30,13 +32,16 @@ import dev.responsive.kafka.internal.db.WindowFlushManager;
 import dev.responsive.kafka.internal.db.WindowedKeySpec;
 import dev.responsive.kafka.internal.db.mongo.ResponsiveMongoClient;
 import dev.responsive.kafka.internal.db.partitioning.WindowSegmentPartitioner;
+import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.metrics.ResponsiveRestoreListener;
 import dev.responsive.kafka.internal.utils.Iterators;
 import dev.responsive.kafka.internal.utils.Result;
 import dev.responsive.kafka.internal.utils.SessionClients;
 import dev.responsive.kafka.internal.utils.StoreUtil;
 import dev.responsive.kafka.internal.utils.TableName;
+import dev.responsive.kafka.internal.utils.Utils;
 import dev.responsive.kafka.internal.utils.WindowedKey;
+import java.time.Duration;
 import java.util.Collection;
 import java.util.Map;
 import java.util.OptionalLong;
@@ -93,8 +98,8 @@ public class RemoteWindowOperations implements WindowOperations {
     );
 
     final WindowSegmentPartitioner partitioner = new WindowSegmentPartitioner(
-        params.retentionPeriod(),
-        StoreUtil.computeSegmentInterval(params.retentionPeriod(), params.numSegments()),
+        params.retentionPeriodMs(),
+        StoreUtil.computeSegmentInterval(params.retentionPeriodMs(), params.numSegments()),
         params.retainDuplicates()
     );
 
@@ -105,6 +110,22 @@ public class RemoteWindowOperations implements WindowOperations {
         break;
       case MONGO_DB:
         table = createMongo(params, sessionClients, partitioner, responsiveConfig);
+        break;
+      case RS3:
+        final var responsiveMetrics = loadMetrics(appConfigs);
+        final var scopeBuilder = responsiveMetrics.storeLevelMetricScopeBuilder(
+            Utils.extractThreadIdFromThreadName(Thread.currentThread().getName()),
+            changelog,
+            params.name().tableName()
+        );
+
+        table = createRs3(
+            params,
+            sessionClients,
+            changelog.topic(),
+            responsiveMetrics,
+            scopeBuilder
+        );
         break;
       case NONE:
         log.error("Must configure a storage backend type using the config {}",
@@ -211,6 +232,27 @@ public class RemoteWindowOperations implements WindowOperations {
       default:
         throw new IllegalArgumentException(params.schemaType().name());
     }
+  }
+
+  private static RemoteWindowTable<?> createRs3(
+      final ResponsiveWindowParams params,
+      final SessionClients sessionClients,
+      final String changelogTopicName,
+      final ResponsiveMetrics responsiveMetrics,
+      final ResponsiveMetrics.MetricScopeBuilder scopeBuilder
+  ) {
+    if (params.schemaType() == SchemaTypes.WindowSchema.STREAM || params.retainDuplicates()) {
+      throw new UnsupportedOperationException("Duplicate retention is not yet supported in RS3");
+    }
+
+    final var defaultTtl = Duration.ofMillis(params.retentionPeriodMs());
+    return sessionClients.rs3TableFactory().windowTable(
+        params.name().tableName(),
+        defaultTtl,
+        responsiveMetrics,
+        scopeBuilder,
+        () -> numPartitionsForKafkaTopic(sessionClients.admin(), changelogTopicName)
+    );
   }
 
   @SuppressWarnings("rawtypes")

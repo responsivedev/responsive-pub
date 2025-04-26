@@ -44,6 +44,7 @@ import dev.responsive.kafka.internal.db.rs3.client.RS3TimeoutException;
 import dev.responsive.kafka.internal.db.rs3.client.Range;
 import dev.responsive.kafka.internal.db.rs3.client.StoreInfo;
 import dev.responsive.kafka.internal.db.rs3.client.WalEntry;
+import dev.responsive.kafka.internal.utils.WindowedKey;
 import dev.responsive.rs3.RS3Grpc;
 import dev.responsive.rs3.Rs3;
 import dev.responsive.rs3.Rs3.CreateStoreResult;
@@ -61,6 +62,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -650,7 +652,13 @@ class GrpcRS3ClientTest {
             .build());
 
     // when:
-    final var result = client.get(STORE_ID, LSS_ID, PSS_ID, Optional.of(123L), "foo".getBytes());
+    final var result = client.get(
+        STORE_ID,
+        LSS_ID,
+        PSS_ID,
+        Optional.of(123L),
+        Bytes.wrap("foo".getBytes())
+    );
 
     // then:
     assertThat(result.get(), is("bar".getBytes()));
@@ -681,7 +689,13 @@ class GrpcRS3ClientTest {
     );
 
     // when:
-    final var result = client.get(STORE_ID, LSS_ID, PSS_ID, Optional.empty(), "foo".getBytes());
+    final var result = client.get(
+        STORE_ID,
+        LSS_ID,
+        PSS_ID,
+        Optional.empty(),
+        Bytes.wrap("foo".getBytes())
+    );
 
     // then:
     assertThat(result.get(), is("bar".getBytes()));
@@ -705,7 +719,13 @@ class GrpcRS3ClientTest {
     );
 
     // when:
-    final var result = client.get(STORE_ID, LSS_ID, PSS_ID, Optional.of(123L), "foo".getBytes());
+    final var result = client.get(
+        STORE_ID,
+        LSS_ID,
+        PSS_ID,
+        Optional.of(123L),
+        Bytes.wrap("foo".getBytes())
+    );
 
     // then:
     assertThat(result.isEmpty(), is(true));
@@ -719,7 +739,13 @@ class GrpcRS3ClientTest {
         .thenReturn(Rs3.GetResult.newBuilder().build());
 
     // when:
-    final var result = client.get(STORE_ID, LSS_ID, PSS_ID, Optional.of(123L), "foo".getBytes());
+    final var result = client.get(
+        STORE_ID,
+        LSS_ID,
+        PSS_ID,
+        Optional.of(123L),
+        Bytes.wrap("foo".getBytes())
+    );
 
     // then:
     assertThat(result.isEmpty(), is(true));
@@ -732,10 +758,13 @@ class GrpcRS3ClientTest {
         .thenThrow(new StatusRuntimeException(Status.UNKNOWN));
 
     // when:
-    final RS3Exception exception = assertThrows(
-        RS3Exception.class,
-        () -> client.get(STORE_ID, LSS_ID, PSS_ID, Optional.of(123L), "foo".getBytes())
-    );
+    final RS3Exception exception = assertThrows(RS3Exception.class, () -> client.get(
+        STORE_ID,
+        LSS_ID,
+        PSS_ID,
+        Optional.of(123L),
+        Bytes.wrap("foo".getBytes())
+    ));
 
     // then:
     assertThat(exception.getCause(), instanceOf(StatusRuntimeException.class));
@@ -755,12 +784,93 @@ class GrpcRS3ClientTest {
         LSS_ID,
         PSS_ID,
         Optional.of(123L),
-        "foo".getBytes()
+        Bytes.wrap("foo".getBytes())
     ));
 
     // then:
     var endTimeMs = time.milliseconds();
     assertThat(endTimeMs - startTimeMs, is(retryTimeoutMs));
+  }
+
+  @Test
+  public void shouldWindowedGet() {
+    final var windowTimestamp = 500L;
+    final var key = "foo".getBytes();
+
+    // given:
+
+    final var kvProto = GrpcRs3Util.windowKeyValueProto(
+        new WindowedKey("foo".getBytes(StandardCharsets.UTF_8), windowTimestamp),
+        "bar".getBytes(StandardCharsets.UTF_8)
+    );
+    when(stub.get(any())).thenReturn(
+        Rs3.GetResult.newBuilder()
+            .setResult(Rs3.KeyValue.newBuilder().setWindowKv(kvProto))
+            .build());
+
+    // when:
+    final var result = client.windowedGet(
+        STORE_ID,
+        LSS_ID,
+        PSS_ID,
+        Optional.empty(),
+        new WindowedKey(Bytes.wrap(key), windowTimestamp)
+    );
+
+    // then:
+    assertThat(result.get(), is("bar".getBytes()));
+    final var keyProto = GrpcRs3Util.windowKeyProto(
+        new WindowedKey("foo".getBytes(StandardCharsets.UTF_8), windowTimestamp)
+    );
+    verify(stub).get(Rs3.GetRequest.newBuilder()
+                         .setLssId(lssIdProto(LSS_ID))
+                         .setPssId(PSS_ID)
+                         .setExpectedWrittenOffset(GrpcRs3Util.UNWRITTEN_WAL_OFFSET)
+                         .setStoreId(uuidToProto(STORE_ID))
+                         .setKey(Rs3.Key.newBuilder().setWindowKey(keyProto))
+                         .build()
+    );
+  }
+
+  @Test
+  public void shouldRetryWindowedGet() {
+    final var windowTimestamp = 500L;
+    final var key = "foo".getBytes();
+
+    // given:
+    when(stub.get(any()))
+        .thenThrow(new StatusRuntimeException(Status.UNAVAILABLE))
+        .thenReturn(Rs3.GetResult.newBuilder().setResult(
+            Rs3.KeyValue.newBuilder()
+                .setWindowKv(GrpcRs3Util.windowKeyValueProto(
+                    new WindowedKey("foo".getBytes(StandardCharsets.UTF_8), windowTimestamp),
+                    "bar".getBytes(StandardCharsets.UTF_8)
+                ))
+        ).build());
+
+    // when:
+    final var result = client.windowedGet(
+        STORE_ID,
+        LSS_ID,
+        PSS_ID,
+        Optional.empty(),
+        new WindowedKey(Bytes.wrap(key), windowTimestamp)
+    );
+
+    // then:
+    assertThat(result.get(), is("bar".getBytes()));
+    final var keyProto = GrpcRs3Util.windowKeyProto(
+        new WindowedKey("foo".getBytes(StandardCharsets.UTF_8), windowTimestamp)
+    );
+    verify(stub, times(2))
+        .get(Rs3.GetRequest.newBuilder()
+                 .setLssId(lssIdProto(LSS_ID))
+                 .setPssId(PSS_ID)
+                 .setExpectedWrittenOffset(GrpcRs3Util.UNWRITTEN_WAL_OFFSET)
+                 .setStoreId(uuidToProto(STORE_ID))
+                 .setKey(Rs3.Key.newBuilder().setWindowKey(keyProto))
+                 .build()
+        );
   }
 
   @Test

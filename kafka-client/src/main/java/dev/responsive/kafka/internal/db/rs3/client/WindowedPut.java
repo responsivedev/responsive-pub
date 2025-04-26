@@ -12,18 +12,29 @@
 
 package dev.responsive.kafka.internal.db.rs3.client;
 
-import java.util.Arrays;
 import java.util.Objects;
 
-public class Delete extends WalEntry {
-  private final byte[] key;
+public class WindowedPut extends Put {
+  private final long timestamp;
+  private final long windowTimestamp;
 
-  public Delete(final byte[] key) {
-    this.key = Objects.requireNonNull(key);
+  public WindowedPut(
+      final byte[] key,
+      final byte[] value,
+      final long timestamp,
+      final long windowTimestamp
+  ) {
+    super(key, value);
+    this.timestamp = timestamp;
+    this.windowTimestamp = windowTimestamp;
   }
 
-  public byte[] key() {
-    return key;
+  public long timestamp() {
+    return timestamp;
+  }
+
+  public long windowTimestamp() {
+    return windowTimestamp;
   }
 
   @Override
@@ -39,12 +50,16 @@ public class Delete extends WalEntry {
     if (o == null || getClass() != o.getClass()) {
       return false;
     }
-    final Delete delete = (Delete) o;
-    return Objects.deepEquals(key, delete.key);
+    if (!super.equals(o)) {
+      return false;
+    }
+    final WindowedPut that = (WindowedPut) o;
+    return timestamp == that.timestamp && windowTimestamp == that.windowTimestamp;
   }
 
   @Override
   public int hashCode() {
-    return Arrays.hashCode(key);
+    return Objects.hash(super.hashCode(), timestamp, windowTimestamp);
   }
+
 }
