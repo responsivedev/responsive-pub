@@ -83,8 +83,8 @@ class TestGrpcRs3Service extends RS3Grpc.RS3ImplBase {
       return;
     }
 
-    if (req.getExpectedWrittenOffset().getIsWritten()) {
-      if (offset.get() < req.getExpectedWrittenOffset().getOffset()) {
+    if (req.getExpectedMinWrittenOffset().getIsWritten()) {
+      if (offset.get() < req.getExpectedMinWrittenOffset().getOffset()) {
         responseObserver.onError(new StatusRuntimeException(Status.INVALID_ARGUMENT));
         return;
       }
@@ -113,8 +113,8 @@ class TestGrpcRs3Service extends RS3Grpc.RS3ImplBase {
       return;
     }
 
-    if (req.getExpectedWrittenOffset().getIsWritten()) {
-      if (offset.get() < req.getExpectedWrittenOffset().getOffset()) {
+    if (req.getExpectedMinWrittenOffset().getIsWritten()) {
+      if (offset.get() < req.getExpectedMinWrittenOffset().getOffset()) {
         responseObserver.onError(new StatusRuntimeException(Status.INVALID_ARGUMENT));
         return;
       }
