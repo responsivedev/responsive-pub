@@ -96,7 +96,8 @@ public class CreateStoreTypes {
     private final Optional<Integer> filterBitsPerKey;
 
     public SlateDbStorageOptions(
-        final Optional<Integer> filterBitsPerKey) {
+        final Optional<Integer> filterBitsPerKey
+    ) {
       this.filterBitsPerKey = Objects.requireNonNull(filterBitsPerKey);
     }
 
