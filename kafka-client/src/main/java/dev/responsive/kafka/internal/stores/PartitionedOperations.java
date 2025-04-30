@@ -279,7 +279,8 @@ public class PartitionedOperations implements KeyValueOperations {
         ttlResolver,
         responsiveMetrics,
         scopeBuilder,
-        () -> numPartitionsForKafkaTopic(sessionClients.admin(), changelogTopicName)
+        () -> numPartitionsForKafkaTopic(sessionClients.admin(), changelogTopicName),
+        params.schemaType()
     );
   }
 
