@@ -73,7 +73,6 @@ public class UncaughtStreamsAntithesisHandler implements StreamsUncaughtExceptio
 
       assertNode.put("summary", causalSummary(exception, new LinkedList<>()));
       Assert.unreachable("Uncaught exception on test app stream thread", assertNode);
-
     }
     return StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.REPLACE_THREAD;
   }
