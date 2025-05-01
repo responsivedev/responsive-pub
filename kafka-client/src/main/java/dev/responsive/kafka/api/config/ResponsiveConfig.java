@@ -18,6 +18,7 @@ import static org.apache.kafka.common.config.ConfigDef.Range.between;
 import com.datastax.oss.driver.api.core.ConsistencyLevel;
 import com.datastax.oss.driver.api.core.DefaultConsistencyLevel;
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
+import dev.responsive.kafka.api.config.RS3ConfigSetter.DefaultRS3ConfigSetter;
 import dev.responsive.kafka.internal.db.partitioning.Murmur3Hasher;
 import java.time.Duration;
 import java.util.Arrays;
@@ -140,6 +141,12 @@ public class ResponsiveConfig extends AbstractConfig {
   public static final String RS3_RETRY_TIMEOUT_CONFIG = "responsive.rs3.retry.timeout.ms";
   private static final String RS3_RETRY_TIMEOUT_DOC = "Timeout in milliseconds for retries when RS3 endpoint is unavailable";
   public static final long RS3_RETRY_TIMEOUT_DEFAULT = 120000;
+
+  public static final String RS3_CONFIG_SETTER_CLASS_CONFIG = "responsive.rs3.config.setter.class";
+  private static final String RS3_CONFIG_SETTER_CLASS_DOC = "Class name implementing RS3ConfigSetter which can be used to"
+      + " configure individual rs3 stores by name and store type";
+  private static final Class<? extends RS3ConfigSetter> RS3_CONFIG_SETTER_CLASS_DEFAULT = DefaultRS3ConfigSetter.class;
+
 
   // ------------------ ScyllaDB specific configurations ----------------------
 
@@ -642,6 +649,12 @@ public class ResponsiveConfig extends AbstractConfig {
           atLeast(0),
           Importance.MEDIUM,
           RS3_RETRY_TIMEOUT_DOC
+      ).define(
+          RS3_CONFIG_SETTER_CLASS_CONFIG,
+          Type.CLASS,
+          RS3_CONFIG_SETTER_CLASS_DEFAULT,
+          Importance.LOW,
+          RS3_CONFIG_SETTER_CLASS_DOC
       ).define(
           ORIGIN_EVENT_REPORT_INTERVAL_MS_CONFIG,
           Type.LONG,

@@ -21,6 +21,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import dev.responsive.kafka.api.config.RS3ConfigSetter.DefaultRS3ConfigSetter;
 import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes;
 import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes.CreateStoreOptions;
 import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes.CreateStoreResult;
@@ -30,6 +31,7 @@ import dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRS3Client.Connector;
 import dev.responsive.kafka.internal.metrics.ClientVersionMetadata;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.stores.SchemaTypes.KVSchema;
+import dev.responsive.kafka.internal.stores.SchemaTypes.WindowSchema;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -150,7 +152,8 @@ class RS3TableFactoryTest {
         defaultTtl,
         metrics,
         scopeBuilder,
-        () -> partitions
+        () -> partitions,
+        WindowSchema.WINDOW
     );
     assertEquals(tableName, rs3Table.name());
     assertEquals(storeId, rs3Table.storeId());
@@ -168,7 +171,7 @@ class RS3TableFactoryTest {
   private RS3TableFactory newTestFactory() {
     final var connector = mock(Connector.class);
     lenient().when(connector.connect()).thenReturn(client);
-    return new RS3TableFactory(connector);
+    return new RS3TableFactory(connector, new DefaultRS3ConfigSetter());
   }
 
 }
