@@ -1,0 +1,15 @@
+[cloud_provider]
+provider = "Aws"
+
+[cloud_provider.aws]
+region = ""
+bucket = "rs3-test"
+aws_access_key_id = "rs3testkey"
+aws_secret_access_key = "rs3testsecret"
+s3_endpoint = "S3_ENDPOINT"
+s3_retry_timeout_millis = 1800000
+
+[storage]
+
+[storage.slatedb.block_cache]
+mode = "Default"

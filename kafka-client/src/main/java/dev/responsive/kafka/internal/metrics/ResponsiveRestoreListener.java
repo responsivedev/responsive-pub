@@ -21,6 +21,7 @@ import static dev.responsive.kafka.internal.metrics.StoreMetrics.TIME_RESTORING_
 import static dev.responsive.kafka.internal.utils.Utils.extractThreadIdFromThreadName;
 
 import java.io.Closeable;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import org.apache.kafka.common.MetricName;

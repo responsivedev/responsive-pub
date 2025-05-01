@@ -143,6 +143,7 @@ dependencies {
     implementation(libs.bundles.grpc)
     implementation(libs.protobuf.java.util)
     implementation(libs.guava)
+    implementation("dev.responsive:rs3jni:0.1.0-SNAPSHOT")
 
     testImplementation(libs.kafka.clients) {
         artifact {
@@ -156,4 +157,6 @@ dependencies {
     testImplementation("software.amazon.awssdk:kms:2.20.0")
     testImplementation("software.amazon.awssdk:sso:2.20.0")
     testImplementation("net.jqwik:jqwik:1.9.2")
+    testImplementation("org.testcontainers:minio:1.21.0")
+    testImplementation("software.amazon.awssdk:s3:2.25.20")
 }

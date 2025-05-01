@@ -39,6 +39,7 @@ checkstyle {
 }
 
 repositories {
+    mavenLocal()
     mavenCentral()
 }
 
