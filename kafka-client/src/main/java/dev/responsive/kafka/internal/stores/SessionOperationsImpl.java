@@ -125,7 +125,8 @@ public class SessionOperationsImpl implements SessionOperations {
             ? OptionalLong.empty()
             : OptionalLong.of(restoreStartOffset),
         buffer::flush,
-        streamThreadId()
+        streamThreadId(),
+        storeContext.taskId()
     );
     storeRegistry.registerStore(registration);
 

@@ -1,5 +1,6 @@
 package dev.responsive.kafka.internal.snapshot.topic;
 
+import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.snapshot.Snapshot;
 import dev.responsive.kafka.internal.snapshot.SnapshotStore;
 import java.time.Duration;
@@ -74,6 +75,20 @@ public class TopicSnapshotStore implements SnapshotStore {
     this.endOffsetConsumer = consumerSupplier.get();
     this.endOffsetConsumer.assign(List.of(topicPartition));
     waitTillConsumedAll();
+  }
+
+  public static TopicSnapshotStore create(final Map<String, Object> config) {
+    final ResponsiveConfig responsiveConfig = ResponsiveConfig.responsiveConfig(config);
+    final String applicationId = config.get(StreamsConfig.APPLICATION_ID_CONFIG).toString();
+    final String topicSuffix = responsiveConfig
+        .getString(ResponsiveConfig.SNAPSHOTS_LOCAL_STORE_TOPIC_SUFFIX);
+    final String snapshotStoreTopic
+        = String.format("_responsive-%s-%s", applicationId, topicSuffix);
+    return create(
+        snapshotStoreTopic,
+        responsiveConfig.getShort(ResponsiveConfig.SNAPSHOTS_LOCAL_STORE_TOPIC_REPLICATION_FACTOR),
+        config
+    );
   }
 
   public static TopicSnapshotStore create(

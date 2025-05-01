@@ -19,6 +19,7 @@ import com.datastax.oss.driver.api.core.ConsistencyLevel;
 import com.datastax.oss.driver.api.core.DefaultConsistencyLevel;
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.internal.db.partitioning.Murmur3Hasher;
+import dev.responsive.kafka.internal.snapshot.SnapshotSupport;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
@@ -323,6 +324,24 @@ public class ResponsiveConfig extends AbstractConfig {
   private static final String ORIGIN_EVENT_REPORT_INTERVAL_MS_DOC =
       "How often to report origin event usage information. This should generally not be changed in production environments";
 
+  // ------------------ Snapshot Configs
+  public static final String SNAPSHOTS_CONFIG = "responsive.snapshots";
+  private static final String SNAPSHOTS_DEFAULT = SnapshotSupport.DISABLED.name();
+  private static final String SNAPSHOTS_DOC
+      = "Set to LOCAL enable snapshot support. This feature is experimental";
+
+  public static final String SNAPSHOTS_LOCAL_STORE_TOPIC_SUFFIX
+      = "responsive.snapshots.local.store.topic.suffix";
+  public static final String SNAPSHOTS_LOCAL_STORE_TOPIC_SUFFIX_DEFAULT
+      = "snapshots";
+  private static final String SNAPSHOT_LOCAL_STORE_TOPIC_DOC
+      = "The topic to store snapshot metadata on when using local snapshot coordination.";
+
+  public static final String SNAPSHOTS_LOCAL_STORE_TOPIC_REPLICATION_FACTOR
+      = "responsive.snapshots.local.store.topic.replication.factor";
+  public static final short SNAPSHOTS_LOCAL_STORE_TOPIC_REPLICATION_FACTOR_DEFAULT = (short) 3;
+  private static final String SNAPSHOTS_LOCAL_STORE_TOPIC_REPLICATION_FACTOR_DOC
+      = "replication factor for the snapshot store topic when using local snapshot coordination.";
   // ------------------ StreamsConfig overrides ----------------------
 
   // These configuration values are required by Responsive, and a ConfigException will
@@ -648,6 +667,29 @@ public class ResponsiveConfig extends AbstractConfig {
           ORIGIN_EVENT_REPORT_INTERVAL_MS_DEFAULT,
           Importance.LOW,
           ORIGIN_EVENT_REPORT_INTERVAL_MS_DOC
+      ).define(
+          SNAPSHOTS_CONFIG,
+          Type.STRING,
+          SNAPSHOTS_DEFAULT,
+          ConfigDef.CaseInsensitiveValidString.in(
+              Arrays.stream(SnapshotSupport.values())
+                  .map(Enum::name)
+                  .toArray(String[]::new)
+          ),
+          Importance.LOW,
+          SNAPSHOTS_DOC
+      ).define(
+          SNAPSHOTS_LOCAL_STORE_TOPIC_SUFFIX,
+          Type.STRING,
+          SNAPSHOTS_LOCAL_STORE_TOPIC_SUFFIX_DEFAULT,
+          Importance.LOW,
+          SNAPSHOT_LOCAL_STORE_TOPIC_DOC
+      ).define(
+          SNAPSHOTS_LOCAL_STORE_TOPIC_REPLICATION_FACTOR,
+          Type.SHORT,
+          SNAPSHOTS_LOCAL_STORE_TOPIC_REPLICATION_FACTOR_DEFAULT,
+          Importance.LOW,
+          SNAPSHOTS_LOCAL_STORE_TOPIC_REPLICATION_FACTOR_DOC
       );
 
   /**
