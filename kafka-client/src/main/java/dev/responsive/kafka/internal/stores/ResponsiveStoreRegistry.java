@@ -18,6 +18,7 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.stream.Collectors;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,6 +39,25 @@ public class ResponsiveStoreRegistry {
         .max();
   }
 
+  private List<ResponsiveStoreRegistration> filterStoresForThread(
+      final List<ResponsiveStoreRegistration> stores,
+      final String threadId,
+      final String context
+  ) {
+    if (stores.isEmpty()) {
+      return stores;
+    }
+    final List<ResponsiveStoreRegistration> storesForThread = stores.stream()
+        .filter(s -> s.threadId().equals(threadId))
+        .collect(Collectors.toList());
+    if (storesForThread.isEmpty()) {
+      throw new IllegalStateException(String.format(
+          "there should always be a store for the thread (%s) if there are stores registered "
+              + "for this %s", threadId, context));
+    }
+    return stores;
+  }
+
   public synchronized List<ResponsiveStoreRegistration> getRegisteredStoresForChangelog(
       final TopicPartition topicPartition
   ) {
@@ -53,18 +73,25 @@ public class ResponsiveStoreRegistry {
     final List<ResponsiveStoreRegistration> storesForTopicPartition = stores.stream()
         .filter(s -> s.changelogTopicPartition().equals(topicPartition))
         .collect(Collectors.toList());
-    if (storesForTopicPartition.isEmpty()) {
-      return storesForTopicPartition;
-    }
-    final List<ResponsiveStoreRegistration> storesForThread = storesForTopicPartition.stream()
-        .filter(s -> s.threadId().equals(threadId))
+    return filterStoresForThread(
+        storesForTopicPartition,
+        threadId,
+        String.format("topic partition (%s)", topicPartition)
+    );
+  }
+
+  public synchronized List<ResponsiveStoreRegistration> getRegisteredStoresForTask(
+      final TaskId taskId,
+      final String threadId
+  ) {
+    final List<ResponsiveStoreRegistration> storesForTask = stores.stream()
+        .filter(s -> s.taskId().equals(taskId))
         .collect(Collectors.toList());
-    if (storesForThread.isEmpty()) {
-      throw new IllegalStateException(String.format(
-          "there should always be a store for the thread (%s) if there are stores registered "
-              + "for this topic partition (%s)", threadId, topicPartition));
-    }
-    return storesForThread;
+    return filterStoresForThread(
+        storesForTask,
+        threadId,
+        String.format("task (%s)", taskId)
+    );
   }
 
   public synchronized void registerStore(final ResponsiveStoreRegistration registration) {
