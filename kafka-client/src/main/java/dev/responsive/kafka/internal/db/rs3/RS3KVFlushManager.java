@@ -27,8 +27,12 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import org.apache.kafka.common.utils.Bytes;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 class RS3KVFlushManager extends KVFlushManager {
+  private static final Logger LOG = LoggerFactory.getLogger(RS3KVFlushManager.class);
+
   private final UUID storeId;
   private final RS3Client rs3Client;
   private final LssId lssId;
