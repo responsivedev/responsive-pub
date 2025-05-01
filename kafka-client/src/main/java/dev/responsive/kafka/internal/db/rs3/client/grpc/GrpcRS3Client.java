@@ -280,7 +280,7 @@ public class GrpcRS3Client implements RS3Client {
         .setStoreId(uuidToProto(storeId))
         .setLssId(lssIdProto(lssId))
         .setPssId(pssId)
-        .setExpectedMinWrittenOffset(walOffsetProto(expectedWrittenOffset));
+        .setExpectedWrittenOffset(walOffsetProto(expectedWrittenOffset));
     final var opDesc = "Range(storeId=" + storeId
         + ", lssId=" + lssId
         + ", pssId=" + pssId
@@ -361,7 +361,7 @@ public class GrpcRS3Client implements RS3Client {
     requestBuilder.setStoreId(uuidToProto(storeId))
         .setLssId(lssIdProto(lssId))
         .setPssId(pssId)
-        .setExpectedMinWrittenOffset(walOffsetProto(expectedWrittenOffset));
+        .setExpectedWrittenOffset(walOffsetProto(expectedWrittenOffset));
 
     final var request = requestBuilder.build();
     final RS3Grpc.RS3BlockingStub stub = stubs.stubs(storeId, pssId).syncStub();
