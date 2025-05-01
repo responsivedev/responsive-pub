@@ -29,6 +29,7 @@ import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 import java.nio.charset.StandardCharsets;
+import org.apache.kafka.common.utils.Bytes;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -39,13 +40,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class GrpcKeyValueIteratorTest {
 
   @Mock
-  private GrpcRangeRequestProxy requestProxy;
+  private GrpcRangeRequestProxy<Bytes> requestProxy;
 
   @Test
   @SuppressWarnings("unchecked")
   public void shouldIterateKeyValueResults() {
-    final var range = new Range(
-        RangeBound.inclusive("a".getBytes(StandardCharsets.UTF_8)),
+    final var range = new Range<>(
+        RangeBound.inclusive(Bytes.wrap("a".getBytes(StandardCharsets.UTF_8))),
         RangeBound.unbounded()
     );
     Mockito.doAnswer(invocation -> {
@@ -58,7 +59,7 @@ class GrpcKeyValueIteratorTest {
       return null;
     }).when(requestProxy).send(eq(range), any());
 
-    try (final var iter = new GrpcKeyValueIterator(range, requestProxy)) {
+    try (final var iter = GrpcKeyValueIterator.standard(range, requestProxy)) {
       assertNextKey(iter, "a");
       assertNextKey(iter, "b");
       assertNextKey(iter, "c");
@@ -69,8 +70,8 @@ class GrpcKeyValueIteratorTest {
   @Test
   @SuppressWarnings("unchecked")
   public void shouldRetryRangeRequestAfterTransientFailure() {
-    final var range = new Range(
-        RangeBound.inclusive("a".getBytes(StandardCharsets.UTF_8)),
+    final var range = new Range<>(
+        RangeBound.inclusive(Bytes.wrap("a".getBytes(StandardCharsets.UTF_8))),
         RangeBound.unbounded()
     );
     Mockito.doAnswer(invocation -> {
@@ -80,8 +81,8 @@ class GrpcKeyValueIteratorTest {
       return null;
     }).when(requestProxy).send(eq(range), any());
 
-    final var retryRange = new Range(
-        RangeBound.exclusive("a".getBytes(StandardCharsets.UTF_8)),
+    final var retryRange = new Range<>(
+        RangeBound.exclusive(Bytes.wrap("a".getBytes(StandardCharsets.UTF_8))),
         RangeBound.unbounded()
     );
     Mockito.doAnswer(invocation -> {
@@ -93,7 +94,7 @@ class GrpcKeyValueIteratorTest {
       return null;
     }).when(requestProxy).send(eq(retryRange), any());
 
-    try (final var iter = new GrpcKeyValueIterator(range, requestProxy)) {
+    try (final var iter = GrpcKeyValueIterator.standard(range, requestProxy)) {
       assertNextKey(iter, "a");
       assertNextKey(iter, "b");
       assertNextKey(iter, "c");
@@ -104,8 +105,8 @@ class GrpcKeyValueIteratorTest {
   @Test
   @SuppressWarnings("unchecked")
   public void shouldRetryAfterUnexpectedStreamCompletion() {
-    final var range = new Range(
-        RangeBound.inclusive("a".getBytes(StandardCharsets.UTF_8)),
+    final var range = new Range<>(
+        RangeBound.inclusive(Bytes.wrap("a".getBytes(StandardCharsets.UTF_8))),
         RangeBound.unbounded()
     );
     Mockito.doAnswer(invocation -> {
@@ -115,8 +116,8 @@ class GrpcKeyValueIteratorTest {
       return null;
     }).when(requestProxy).send(eq(range), any());
 
-    final var retryRange = new Range(
-        RangeBound.exclusive("a".getBytes(StandardCharsets.UTF_8)),
+    final var retryRange = new Range<>(
+        RangeBound.exclusive(Bytes.wrap("a".getBytes(StandardCharsets.UTF_8))),
         RangeBound.unbounded()
     );
     Mockito.doAnswer(invocation -> {
@@ -128,7 +129,7 @@ class GrpcKeyValueIteratorTest {
       return null;
     }).when(requestProxy).send(eq(retryRange), any());
 
-    try (final var iter = new GrpcKeyValueIterator(range, requestProxy)) {
+    try (final var iter = GrpcKeyValueIterator.standard(range, requestProxy)) {
       assertNextKey(iter, "a");
       assertNextKey(iter, "b");
       assertNextKey(iter, "c");
@@ -139,8 +140,8 @@ class GrpcKeyValueIteratorTest {
   @Test
   @SuppressWarnings("unchecked")
   public void shouldPropagateUnexpectedFailures() {
-    final var range = new Range(
-        RangeBound.inclusive("a".getBytes(StandardCharsets.UTF_8)),
+    final var range = new Range<>(
+        RangeBound.inclusive(Bytes.wrap("a".getBytes(StandardCharsets.UTF_8))),
         RangeBound.unbounded()
     );
     Mockito.doAnswer(invocation -> {
@@ -150,7 +151,7 @@ class GrpcKeyValueIteratorTest {
       return null;
     }).when(requestProxy).send(eq(range), any());
 
-    try (final var iter = new GrpcKeyValueIterator(range, requestProxy)) {
+    try (final var iter = GrpcKeyValueIterator.standard(range, requestProxy)) {
       assertNextKey(iter, "a");
       final var rs3Exception = assertThrows(RS3Exception.class, iter::next);
       assertThat(rs3Exception.getCause(), instanceOf(StatusRuntimeException.class));
@@ -159,7 +160,7 @@ class GrpcKeyValueIteratorTest {
     }
   }
 
-  private void assertNextKey(GrpcKeyValueIterator iter, String key) {
+  private void assertNextKey(GrpcKeyValueIterator<Bytes> iter, String key) {
     assertThat(iter.hasNext(), is(true));
     final var keyValue = iter.next();
     final var keyBytes = keyValue.key.get();

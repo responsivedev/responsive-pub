@@ -13,4 +13,15 @@
 package dev.responsive.kafka.internal.db.rs3.client;
 
 public abstract class WalEntry {
+  public abstract void visit(Visitor visitor);
+
+  public interface Visitor {
+    void visit(Put put);
+
+    void visit(Delete delete);
+
+    void visit(WindowedDelete windowedDelete);
+
+    void visit(WindowedPut windowedPut);
+  }
 }

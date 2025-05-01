@@ -6,11 +6,11 @@ import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 
-import com.google.protobuf.ByteString;
 import dev.responsive.kafka.internal.db.rs3.client.LssId;
 import dev.responsive.kafka.internal.db.rs3.client.Put;
 import dev.responsive.kafka.internal.db.rs3.client.Range;
 import dev.responsive.kafka.internal.db.rs3.client.RangeBound;
+import dev.responsive.kafka.internal.db.rs3.client.WalEntry;
 import dev.responsive.rs3.RS3Grpc;
 import dev.responsive.rs3.Rs3;
 import io.grpc.ClientCall;
@@ -20,7 +20,6 @@ import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
-import io.grpc.stub.StreamObserver;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -29,7 +28,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Stream;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -38,7 +37,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
-class GrpcRS3ClientEndToEndTest {
+class GrpcRS3ClientBasicEndToEndTest {
 
   private static final String SERVER_NAME = "localhost";
   private static final long RETRY_TIMEOUT_MS = 10000;
@@ -52,9 +51,15 @@ class GrpcRS3ClientEndToEndTest {
 
   @BeforeEach
   public void setUp() throws IOException {
+    final var service = new TestGrpcRs3Service(
+        STORE_ID,
+        LSS_ID,
+        PSS_ID,
+        new BasicKeyValueStore()
+    );
     this.server = InProcessServerBuilder
         .forName(SERVER_NAME)
-        .addService(new TestRs3Service())
+        .addService(service)
         .build()
         .start();
     this.channel = Mockito.spy(InProcessChannelBuilder
@@ -101,7 +106,7 @@ class GrpcRS3ClientEndToEndTest {
         LSS_ID,
         PSS_ID,
         Optional.of(5L),
-        key
+        Bytes.wrap(key)
     );
     assertThat(getResult.isPresent(), is(true));
     final var resultValue = getResult.get();
@@ -121,7 +126,7 @@ class GrpcRS3ClientEndToEndTest {
         LSS_ID,
         PSS_ID,
         Optional.of(5L),
-        new Range(
+        new Range<Bytes>(
             RangeBound.unbounded(),
             RangeBound.unbounded()
         )
@@ -133,7 +138,7 @@ class GrpcRS3ClientEndToEndTest {
     assertThat(iter.hasNext(), is(false));
   }
 
-  private void writeWalSegment(long endOffset, List<Put> puts) {
+  private void writeWalSegment(long endOffset, List<WalEntry> puts) {
     final var sendRecv = client.writeWalSegmentAsync(
         STORE_ID,
         LSS_ID,
@@ -167,9 +172,9 @@ class GrpcRS3ClientEndToEndTest {
         LSS_ID,
         PSS_ID,
         Optional.of(10L),
-        new Range(
-            RangeBound.inclusive("b".getBytes(StandardCharsets.UTF_8)),
-            RangeBound.exclusive("e".getBytes(StandardCharsets.UTF_8))
+        new Range<>(
+            RangeBound.inclusive(Bytes.wrap("b".getBytes(StandardCharsets.UTF_8))),
+            RangeBound.exclusive(Bytes.wrap("e".getBytes(StandardCharsets.UTF_8)))
         )
     );
 
@@ -205,7 +210,7 @@ class GrpcRS3ClientEndToEndTest {
         LSS_ID,
         PSS_ID,
         Optional.of(5L),
-        new Range(
+        new Range<Bytes>(
             RangeBound.unbounded(),
             RangeBound.unbounded()
         )
@@ -266,181 +271,82 @@ class GrpcRS3ClientEndToEndTest {
     return new Put(keyBytes, valueBytes);
   }
 
-  static class TestRs3Service extends RS3Grpc.RS3ImplBase {
-    private final AtomicLong offset = new AtomicLong(0);
+  static class BasicKeyValueStore implements TestGrpcRs3Service.KeyValueStore {
     private final ConcurrentSkipListMap<Bytes, Bytes> table = new ConcurrentSkipListMap<>();
 
     @Override
-    public void getOffsets(
-        final Rs3.GetOffsetsRequest req,
-        final StreamObserver<Rs3.GetOffsetsResult> responseObserver
-    ) {
-      final var storeId = new UUID(
-          req.getStoreId().getHigh(),
-          req.getStoreId().getLow()
-      );
-      if (req.getPssId() != PSS_ID
-          || req.getLssId().getId() != LSS_ID.id()
-          || !storeId.equals(STORE_ID)) {
-        responseObserver.onError(new StatusRuntimeException(Status.INVALID_ARGUMENT));
+    public void put(final Rs3.KeyValue kvProto) {
+      if (!kvProto.hasBasicKv()) {
+        throw new UnsupportedOperationException("Unsupported kv type");
       }
-
-      final var currentOffset = offset.get();
-      final var result = Rs3.GetOffsetsResult
-          .newBuilder()
-          .setFlushedOffset(GrpcRs3Util.walOffsetProto(currentOffset))
-          .setWrittenOffset(GrpcRs3Util.walOffsetProto(currentOffset))
-          .build();
-      responseObserver.onNext(result);
-      responseObserver.onCompleted();
+      final var kv = kvProto.getBasicKv();
+      final var keyBytes = Bytes.wrap(kv.getKey().getKey().toByteArray());
+      final var valueBytes = Bytes.wrap(kv.getValue().getValue().toByteArray());
+      table.put(keyBytes, valueBytes);
     }
 
     @Override
-    public void get(
-        final Rs3.GetRequest req,
-        final StreamObserver<Rs3.GetResult> responseObserver
-    ) {
-      final var storeId = new UUID(
-          req.getStoreId().getHigh(),
-          req.getStoreId().getLow()
-      );
-      if (req.getPssId() != PSS_ID
-          || req.getLssId().getId() != LSS_ID.id()
-          || !storeId.equals(STORE_ID)) {
-        responseObserver.onError(new StatusRuntimeException(Status.INVALID_ARGUMENT));
-        return;
+    public void delete(final Rs3.Key keyProto) {
+      if (!keyProto.hasBasicKey()) {
+        throw new UnsupportedOperationException("Unsupported kv type");
       }
+      final var keyBytes = Bytes.wrap(keyProto.getBasicKey().getKey().toByteArray());
+      table.remove(keyBytes);
+    }
 
-      if (req.getExpectedWrittenOffset().getIsWritten()) {
-        if (offset.get() < req.getExpectedWrittenOffset().getOffset()) {
-          responseObserver.onError(new StatusRuntimeException(Status.INVALID_ARGUMENT));
-          return;
-        }
+    @Override
+    public Optional<Rs3.KeyValue> get(final Rs3.Key keyProto) {
+      if (!keyProto.hasBasicKey()) {
+        throw new UnsupportedOperationException("Unsupported kv type");
       }
-
-      final var key = req.getKey().getBasicKey();
-      final var kvBuilder = Rs3.BasicKeyValue.newBuilder().setKey(key);
-
-      final var keyBytes = Bytes.wrap(key.getKey().toByteArray());
+      final var keyBytes = Bytes.wrap(keyProto.getBasicKey().getKey().toByteArray());
       final var valueBytes = table.get(keyBytes);
-      if (valueBytes != null) {
-        final var value = Rs3.BasicValue.newBuilder()
-            .setValue(ByteString.copyFrom(valueBytes.get()));
-        kvBuilder.setValue(value);
-      }
-
-      final var result = Rs3.GetResult
-          .newBuilder()
-          .setResult(Rs3.KeyValue.newBuilder().setBasicKv(kvBuilder))
-          .build();
-      responseObserver.onNext(result);
-      responseObserver.onCompleted();
-    }
-
-    @Override
-    public void range(
-        final Rs3.RangeRequest req,
-        final StreamObserver<Rs3.RangeResult> responseObserver
-    ) {
-      final var storeId = new UUID(
-          req.getStoreId().getHigh(),
-          req.getStoreId().getLow()
-      );
-      if (req.getPssId() != PSS_ID
-          || req.getLssId().getId() != LSS_ID.id()
-          || !storeId.equals(STORE_ID)) {
-        responseObserver.onError(new StatusRuntimeException(Status.INVALID_ARGUMENT));
-        return;
-      }
-
-      if (req.getExpectedWrittenOffset().getIsWritten()) {
-        if (offset.get() < req.getExpectedWrittenOffset().getOffset()) {
-          responseObserver.onError(new StatusRuntimeException(Status.INVALID_ARGUMENT));
-          return;
-        }
-      }
-
-      final var range = GrpsRs3TestUtil.newRangeFromProto(req);
-      for (final var keyValueEntry : table.entrySet()) {
-        if (!range.contains(keyValueEntry.getKey().get())) {
-          continue;
-        }
-
-        final var keyValue = GrpcRs3Util.basicKeyValueProto(
-            keyValueEntry.getKey().get(),
-            keyValueEntry.getValue().get()
+      if (valueBytes == null) {
+        return Optional.empty();
+      } else {
+        return Optional.of(
+            Rs3.KeyValue.newBuilder()
+                .setBasicKv(GrpcRs3Util.basicKeyValueProto(keyBytes.get(), valueBytes.get()))
+                .build()
         );
-
-        final var keyValueResult = Rs3.RangeResult.newBuilder()
-            .setType(Rs3.RangeResult.Type.RESULT)
-            .setResult(Rs3.KeyValue.newBuilder().setBasicKv(keyValue))
-            .build();
-
-        responseObserver.onNext(keyValueResult);
       }
-
-      final var endOfStream = Rs3.RangeResult.newBuilder()
-          .setType(Rs3.RangeResult.Type.END_OF_STREAM)
-          .build();
-      responseObserver.onNext(endOfStream);
-      responseObserver.onCompleted();
     }
 
     @Override
-    public StreamObserver<Rs3.WriteWALSegmentRequest> writeWALSegmentStream(
-        final StreamObserver<Rs3.WriteWALSegmentResult> responseObserver
-    ) {
-      return new StreamObserver<>() {
-        @Override
-        public void onNext(final Rs3.WriteWALSegmentRequest req) {
-          final var storeId = new UUID(
-              req.getStoreId().getHigh(),
-              req.getStoreId().getLow()
-          );
-          if (req.getPssId() != PSS_ID
-              || req.getLssId().getId() != LSS_ID.id()
-              || !storeId.equals(STORE_ID)) {
-            responseObserver.onError(new StatusRuntimeException(Status.INVALID_ARGUMENT));
-          }
+    public Stream<Rs3.KeyValue> range(final Rs3.Range rangeProto) {
+      if (!rangeProto.hasBasicRange()) {
+        throw new UnsupportedOperationException("Unsupported kv type");
+      }
 
-          if (req.getExpectedWrittenOffset().getIsWritten()) {
-            if (offset.get() < req.getExpectedWrittenOffset().getOffset()) {
-              responseObserver.onError(new StatusRuntimeException(Status.INVALID_ARGUMENT));
-              return;
-            }
-          }
+      final var basicRange = rangeProto.getBasicRange();
+      final var range = new Range<>(
+          decodeBound(basicRange.getFrom()),
+          decodeBound(basicRange.getTo())
+      );
 
-          TestRs3Service.this.offset.getAndUpdate(
-              current -> Math.max(current, req.getEndOffset())
-          );
-          if (req.hasPut()) {
-            final var kv = req.getPut().getKv().getBasicKv();
-            final var keyBytes = Bytes.wrap(kv.getKey().getKey().toByteArray());
-            final var valueBytes = Bytes.wrap(kv.getValue().getValue().toByteArray());
-            table.put(keyBytes, valueBytes);
-          } else if (req.hasDelete()) {
-            final var key = req.getDelete().getKey().getBasicKey();
-            final var keyBytes = Bytes.wrap(key.getKey().toByteArray());
-            table.remove(keyBytes);
-          }
+      return table.entrySet().stream()
+          .filter(entry -> range.contains(entry.getKey()))
+          .map(entry -> Rs3.KeyValue.newBuilder().setBasicKv(
+              GrpcRs3Util.basicKeyValueProto(entry.getKey().get(), entry.getValue().get())
+          ).build());
+    }
+
+    private RangeBound<Bytes> decodeBound(Rs3.BasicBound bound) {
+      if (bound.getType() == Rs3.BoundType.UNBOUNDED) {
+        return RangeBound.unbounded();
+      } else {
+        final var key = Bytes.wrap(bound.getKey().getKey().toByteArray());
+        if (bound.getType() == Rs3.BoundType.INCLUSIVE) {
+          return RangeBound.inclusive(key);
+        } else if (bound.getType() == Rs3.BoundType.EXCLUSIVE) {
+          return RangeBound.exclusive(key);
+        } else {
+          throw new UnsupportedOperationException("Unsupported bound type");
         }
-
-        @Override
-        public void onError(final Throwable throwable) {
-          responseObserver.onError(throwable);
-        }
-
-        @Override
-        public void onCompleted() {
-          final var result = Rs3.WriteWALSegmentResult
-              .newBuilder()
-              .setFlushedOffset(GrpcRs3Util.walOffsetProto(offset.get()))
-              .build();
-          responseObserver.onNext(result);
-          responseObserver.onCompleted();
-        }
-      };
+      }
     }
   }
+
+
 
 }

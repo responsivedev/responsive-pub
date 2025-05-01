@@ -3,6 +3,7 @@ package dev.responsive.kafka.internal.db.rs3.client;
 import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes.CreateStoreOptions;
 import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes.CreateStoreResult;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
+import dev.responsive.kafka.internal.utils.WindowedKey;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -86,10 +87,16 @@ public class MeteredRS3Client implements RS3Client {
       final LssId lssId,
       final int pssId,
       final Optional<Long> expectedWrittenOffset,
-      final byte[] key
+      final Bytes key
   ) {
     final Instant start = Instant.now();
-    final Optional<byte[]> result = delegate.get(storeId, lssId, pssId, expectedWrittenOffset, key);
+    final Optional<byte[]> result = delegate.get(
+        storeId,
+        lssId,
+        pssId,
+        expectedWrittenOffset,
+        key
+    );
     getSensor.record(Duration.between(start, Instant.now()).toNanos());
     return result;
   }
@@ -100,7 +107,7 @@ public class MeteredRS3Client implements RS3Client {
       final LssId lssId,
       final int pssId,
       final Optional<Long> expectedWrittenOffset,
-      final Range range
+      final Range<Bytes> range
   ) {
     return delegate.range(
         storeId,
@@ -112,7 +119,44 @@ public class MeteredRS3Client implements RS3Client {
   }
 
   @Override
-  public List<Store> listStores() {
+  public Optional<byte[]> windowedGet(
+      final UUID storeId,
+      final LssId lssId,
+      final int pssId,
+      final Optional<Long> expectedWrittenOffset,
+      final WindowedKey key
+  ) {
+    final Instant start = Instant.now();
+    final Optional<byte[]> result = delegate.windowedGet(
+        storeId,
+        lssId,
+        pssId,
+        expectedWrittenOffset,
+        key
+    );
+    getSensor.record(Duration.between(start, Instant.now()).toNanos());
+    return result;
+  }
+
+  @Override
+  public KeyValueIterator<WindowedKey, byte[]> windowedRange(
+      final UUID storeId,
+      final LssId lssId,
+      final int pssId,
+      final Optional<Long> expectedWrittenOffset,
+      final Range<WindowedKey> range
+  ) {
+    return delegate.windowedRange(
+        storeId,
+        lssId,
+        pssId,
+        expectedWrittenOffset,
+        range
+    );
+  }
+
+  @Override
+  public List<StoreInfo> listStores() {
     return delegate.listStores();
   }
 

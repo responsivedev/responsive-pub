@@ -13,14 +13,18 @@
 package dev.responsive.kafka.internal.db.rs3;
 
 import dev.responsive.kafka.internal.db.RemoteKVTable;
+import dev.responsive.kafka.internal.db.RemoteWindowTable;
 import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes;
 import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes.ClockType;
 import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes.CreateStoreOptions;
+import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes.SlateDbStorageOptions;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Client;
 import dev.responsive.kafka.internal.db.rs3.client.WalEntry;
 import dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRS3Client;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
+import dev.responsive.kafka.internal.stores.SchemaTypes.KVSchema;
 import dev.responsive.kafka.internal.stores.TtlResolver;
+import java.time.Duration;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -31,6 +35,10 @@ import org.slf4j.LoggerFactory;
 
 public class RS3TableFactory {
   private static final Logger LOG = LoggerFactory.getLogger(RS3TableFactory.class);
+
+  // TODO: move this and make it configurable
+  private static final int DEFAULT_FACT_STORE_FILTER_BITS = 20;
+
   private final GrpcRS3Client.Connector connector;
 
   // kafka store names to track which stores we've created in RS3
@@ -45,13 +53,33 @@ public class RS3TableFactory {
       final Optional<TtlResolver<?, ?>> ttlResolver,
       final ResponsiveMetrics responsiveMetrics,
       final ResponsiveMetrics.MetricScopeBuilder scopeBuilder,
-      final Supplier<Integer> computeNumKafkaPartitions
+      final Supplier<Integer> computeNumKafkaPartitions,
+      final KVSchema schema
   ) {
+    final Optional<Duration> defaultTtl = ttlResolver.isPresent()
+        && ttlResolver.get().defaultTtl().isFinite()
+        ? Optional.of(ttlResolver.get().defaultTtl().duration())
+        : Optional.empty();
+    final Optional<ClockType> clockType = ttlResolver.isPresent()
+        ? Optional.of(ClockType.WALL_CLOCK)
+        : Optional.empty();
+    final Optional<SlateDbStorageOptions> storageOptions = schema == KVSchema.FACT
+        ? Optional.of(new SlateDbStorageOptions(Optional.of(DEFAULT_FACT_STORE_FILTER_BITS)))
+        : Optional.empty();
+
     final var rs3Client = connector.connect();
 
-    final UUID storeId = createdStores.computeIfAbsent(storeName, n -> createStore(
-        storeName, ttlResolver, computeNumKafkaPartitions.get(), rs3Client
-    ));
+    final UUID storeId = createdStores.computeIfAbsent(
+        storeName,
+        n -> createStore(
+            storeName,
+            CreateStoreTypes.StoreType.BASIC,
+            clockType,
+            defaultTtl,
+            storageOptions,
+            computeNumKafkaPartitions.get(),
+            rs3Client
+        ));
 
     final PssPartitioner pssPartitioner = new PssDirectPartitioner();
     return new RS3KVTable(
@@ -64,24 +92,50 @@ public class RS3TableFactory {
     );
   }
 
+  public RemoteWindowTable<WalEntry> windowTable(
+      final String storeName,
+      final Duration defaultTtl,
+      final ResponsiveMetrics responsiveMetrics,
+      final ResponsiveMetrics.MetricScopeBuilder scopeBuilder,
+      final Supplier<Integer> computeNumKafkaPartitions
+  ) {
+    final var rs3Client = connector.connect();
+    final UUID storeId = createdStores.computeIfAbsent(storeName, n -> createStore(
+        storeName,
+        CreateStoreTypes.StoreType.WINDOW,
+        Optional.of(ClockType.WALL_CLOCK),
+        Optional.of(defaultTtl),
+        Optional.empty(),
+        computeNumKafkaPartitions.get(),
+        rs3Client
+    ));
+
+    final var pssPartitioner = new PssDirectPartitioner();
+    return new RS3WindowTable(
+        storeName,
+        storeId,
+        rs3Client,
+        pssPartitioner,
+        responsiveMetrics,
+        scopeBuilder
+    );
+  }
+
   public static UUID createStore(
       final String storeName,
-      final Optional<TtlResolver<?, ?>> ttlResolver,
+      final CreateStoreTypes.StoreType storeType,
+      final Optional<ClockType> clockType,
+      final Optional<Duration> defaultTtl,
+      final Optional<SlateDbStorageOptions> storageOptions,
       final int numKafkaPartitions,
       final RS3Client rs3Client
   ) {
-
-    final Optional<Long> defaultTtl =
-        ttlResolver.isPresent() && ttlResolver.get().defaultTtl().isFinite()
-            ? Optional.of(ttlResolver.get().defaultTtl().duration().toMillis())
-            : Optional.empty();
-
     final var options = new CreateStoreOptions(
         numKafkaPartitions,
-        CreateStoreTypes.StoreType.BASIC,
-        ttlResolver.isPresent() ? Optional.of(ClockType.WALL_CLOCK) : Optional.empty(),
-        defaultTtl,
-        Optional.empty()
+        storeType,
+        clockType,
+        defaultTtl.map(Duration::toMillis),
+        storageOptions
     );
 
     final var result = rs3Client.createStore(storeName, options);
