@@ -666,7 +666,7 @@ class GrpcRS3ClientTest {
         .setLssId(lssIdProto(LSS_ID))
         .setPssId(PSS_ID)
         .setStoreId(uuidToProto(STORE_ID))
-        .setExpectedMinWrittenOffset(GrpcRs3Util.walOffsetProto(123L))
+        .setExpectedWrittenOffset(GrpcRs3Util.walOffsetProto(123L))
         .setKey(Rs3.Key.newBuilder().setBasicKey(
             GrpcRs3Util.basicKeyProto("foo".getBytes(StandardCharsets.UTF_8))
         ))
@@ -706,7 +706,7 @@ class GrpcRS3ClientTest {
         .setKey(Rs3.Key.newBuilder().setBasicKey(
             GrpcRs3Util.basicKeyProto("foo".getBytes(StandardCharsets.UTF_8))
         ))
-        .setExpectedMinWrittenOffset(GrpcRs3Util.UNWRITTEN_WAL_OFFSET)
+        .setExpectedWrittenOffset(GrpcRs3Util.UNWRITTEN_WAL_OFFSET)
         .build()
     );
   }
@@ -825,7 +825,7 @@ class GrpcRS3ClientTest {
     verify(stub).get(Rs3.GetRequest.newBuilder()
                          .setLssId(lssIdProto(LSS_ID))
                          .setPssId(PSS_ID)
-                         .setExpectedMinWrittenOffset(GrpcRs3Util.UNWRITTEN_WAL_OFFSET)
+                         .setExpectedWrittenOffset(GrpcRs3Util.UNWRITTEN_WAL_OFFSET)
                          .setStoreId(uuidToProto(STORE_ID))
                          .setKey(Rs3.Key.newBuilder().setWindowKey(keyProto))
                          .build()
@@ -866,7 +866,7 @@ class GrpcRS3ClientTest {
         .get(Rs3.GetRequest.newBuilder()
                  .setLssId(lssIdProto(LSS_ID))
                  .setPssId(PSS_ID)
-                 .setExpectedMinWrittenOffset(GrpcRs3Util.UNWRITTEN_WAL_OFFSET)
+                 .setExpectedWrittenOffset(GrpcRs3Util.UNWRITTEN_WAL_OFFSET)
                  .setStoreId(uuidToProto(STORE_ID))
                  .setKey(Rs3.Key.newBuilder().setWindowKey(keyProto))
                  .build()
