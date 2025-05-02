@@ -94,12 +94,13 @@ class RS3TableFactoryTest {
     assertEquals(tableName, rs3Table.name());
     assertEquals(storeId, rs3Table.storeId());
 
+    final var expectedStorageOptions = Optional.of(new SlateDbStorageOptions(Optional.empty()));
     final var expectedOptions = new CreateStoreOptions(
         partitions,
         CreateStoreTypes.StoreType.BASIC,
         Optional.empty(),
         Optional.empty(),
-        Optional.empty()
+        expectedStorageOptions
     );
     verify(client).createStore(tableName, expectedOptions);
   }
@@ -158,12 +159,13 @@ class RS3TableFactoryTest {
     assertEquals(tableName, rs3Table.name());
     assertEquals(storeId, rs3Table.storeId());
 
+    final var expectedStorageOptions = Optional.of(new SlateDbStorageOptions(Optional.empty()));
     final var expectedOptions = new CreateStoreOptions(
         partitions,
         CreateStoreTypes.StoreType.WINDOW,
         Optional.of(CreateStoreTypes.ClockType.WALL_CLOCK),
         Optional.of(defaultTtl.toMillis()),
-        Optional.empty()
+        expectedStorageOptions
     );
     verify(client).createStore(tableName, expectedOptions);
   }
