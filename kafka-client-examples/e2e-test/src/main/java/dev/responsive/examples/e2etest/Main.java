@@ -80,7 +80,7 @@ public class Main {
       final Class<? extends JsonDeserializer<T>> deserializer
   ) {
     LOG.info("starting regression driver");
-    final OrderAndCustomerDriver driver = new OrderAndCustomerDriver(rawCfg);
+    final OrderAndCustomerDriver driver = new OrderAndCustomerDriver(rawCfg, 8, 1000);
     Runtime.getRuntime().addShutdownHook(new Thread(() -> {
       LOG.info("stopping regression driver...");
       driver.stopAsync().awaitTerminated();

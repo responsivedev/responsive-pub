@@ -20,10 +20,16 @@ public class OrderGen {
 
   private final UrandomGenerator random;
   private final CustomerGen customerGen;
+  private final int maxItemCost;
 
-  public OrderGen(final UrandomGenerator random, final CustomerGen customerGen) {
+  public OrderGen(
+      final UrandomGenerator random,
+      final CustomerGen customerGen,
+      final int maxItemCost
+  ) {
     this.random = random;
     this.customerGen = customerGen;
+    this.maxItemCost = maxItemCost;
   }
 
   public Order next() {
@@ -31,7 +37,7 @@ public class OrderGen {
     return new Order(
         nextOrderId(),
         customerGen.validCustomerId(),
-        random.nextInt(1000) + random.nextInt(100) * .01
+        Math.abs(random.nextInt(maxItemCost) + random.nextInt(100) * .01)
     );
   }
 

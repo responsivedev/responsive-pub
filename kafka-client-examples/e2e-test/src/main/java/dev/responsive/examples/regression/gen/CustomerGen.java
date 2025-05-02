@@ -19,7 +19,6 @@ import java.util.List;
 
 public class CustomerGen {
 
-  public static final int NUM_CUSTOMERS = 10000;
   private static final String[] NAMES = {
       "James", "Mary", "John", "Patricia", "Robert", "Jennifer", "Michael", "Linda", "William",
       "Elizabeth", "David", "Barbara", "Richard", "Susan", "Joseph", "Jessica", "Thomas", "Sarah",
@@ -35,10 +34,12 @@ public class CustomerGen {
   };
 
   private final UrandomGenerator random;
+  private final int numCustomers;
   private final List<String> customerIds = new ArrayList<>();
 
-  public CustomerGen(final UrandomGenerator random) {
+  public CustomerGen(final UrandomGenerator random, final int numCustomers) {
     this.random = random;
+    this.numCustomers = numCustomers;
   }
 
   public Customer next() {
@@ -50,7 +51,7 @@ public class CustomerGen {
   }
 
   private String nextCustomerId(final UrandomGenerator random) {
-    final var id = "customer_" + Math.abs(random.nextInt(NUM_CUSTOMERS));
+    final var id = "customer_" + Math.abs(random.nextInt(numCustomers));
     customerIds.add(id);
     return id;
   }

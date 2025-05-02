@@ -1,0 +1,20 @@
+[server]
+listen_port = 50051
+
+[cloud_provider]
+provider = "Aws"
+
+[cloud_provider.aws]
+region = ""
+bucket = "rs3-current-demo"
+s3_endpoint = "http://minio:9000"
+s3_retry_timeout_millis = 1800000
+
+[metastore]
+metastore_type = "Dynamic"
+
+[storage.slatedb]
+wal_enabled = false
+
+[storage.slatedb.block_cache]
+mode = "Default"

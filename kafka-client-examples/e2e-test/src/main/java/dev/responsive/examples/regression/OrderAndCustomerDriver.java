@@ -47,13 +47,21 @@ public class OrderAndCustomerDriver extends AbstractExecutionThreadService {
   private final KafkaProducer<String, Order> orderProducer;
   private final KafkaProducer<String, Customer> customerProducer;
   private final RateLimiter rateLimiter = RateLimiter.create(RECORDS_PER_SECOND);
-  private final CustomerGen customerGen = new CustomerGen(random);
-  private final OrderGen orderGen = new OrderGen(random, customerGen);
+  private final CustomerGen customerGen;
+  private final OrderGen orderGen;
+  private final int orderRatio;
 
-  public OrderAndCustomerDriver(final Map<String, Object> props) {
+  public OrderAndCustomerDriver(
+      final Map<String, Object> props,
+      final int orderRatio,
+      final int numCustomers
+  ) {
     this.props = new HashMap<>(props);
     this.orderProducer = getProducer(props, RegressionSchema.OrderSerializer.class);
     this.customerProducer = getProducer(props, RegressionSchema.CustomerSerializer.class);
+    this.customerGen = new CustomerGen(random, numCustomers);
+    this.orderGen = new OrderGen(random, customerGen, 50);
+    this.orderRatio = orderRatio;
   }
 
   private static <V> KafkaProducer<String, V> getProducer(
@@ -97,7 +105,7 @@ public class OrderAndCustomerDriver extends AbstractExecutionThreadService {
     while (isRunning()) {
       rateLimiter.acquire();
 
-      final boolean isOrder = random.nextByte() % 8 != 0; // 8:1 ratio of orders to customers
+      final boolean isOrder = random.nextByte() % orderRatio != 0;
       if (isOrder) {
         orders++;
         orderProducer.send(newOrder()).get();
