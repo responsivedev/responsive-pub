@@ -17,7 +17,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.TaskId;
 
 public class SnapshotStoreSerdes {
-  private static final ObjectMapper MAPPER = new ObjectMapper();
+  public static final ObjectMapper MAPPER = new ObjectMapper();
 
   static {
     MAPPER.registerModule(new JavaTimeModule());

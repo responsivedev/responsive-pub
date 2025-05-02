@@ -144,6 +144,8 @@ dependencies {
     implementation(libs.protobuf.java.util)
     implementation(libs.guava)
     implementation("dev.responsive:rs3jni:0.1.0-SNAPSHOT")
+    implementation("info.picocli:picocli:4.7.5")
+    implementation("de.vandermeer:asciitable:0.3.2")
 
     testImplementation(libs.kafka.clients) {
         artifact {
