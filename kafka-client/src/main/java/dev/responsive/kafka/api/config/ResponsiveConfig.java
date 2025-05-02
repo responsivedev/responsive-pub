@@ -141,6 +141,12 @@ public class ResponsiveConfig extends AbstractConfig {
   private static final String RS3_RETRY_TIMEOUT_DOC = "Timeout in milliseconds for retries when RS3 endpoint is unavailable";
   public static final long RS3_RETRY_TIMEOUT_DEFAULT = 120000;
 
+  public static final String RS3_CONFIG_SETTER_CLASS_CONFIG = "responsive.rs3.config.setter.class";
+  private static final String RS3_CONFIG_SETTER_CLASS_DOC = "Class name implementing RS3ConfigSetter which can be used to"
+      + " configure individual rs3 stores by name and store type";
+  private static final Class<? extends RS3ConfigSetter> RS3_CONFIG_SETTER_CLASS_DEFAULT = DefaultRS3ConfigSetter.class;
+
+
   // ------------------ ScyllaDB specific configurations ----------------------
 
   public static final String CASSANDRA_USERNAME_CONFIG = "responsive.cassandra.username";
@@ -643,6 +649,12 @@ public class ResponsiveConfig extends AbstractConfig {
           Importance.MEDIUM,
           RS3_RETRY_TIMEOUT_DOC
       ).define(
+          RS3_CONFIG_SETTER_CLASS_CONFIG,
+          Type.CLASS,
+          RS3_CONFIG_SETTER_CLASS_DEFAULT,
+          Importance.LOW,
+          RS3_CONFIG_SETTER_CLASS_DOC
+      ).define(
           ORIGIN_EVENT_REPORT_INTERVAL_MS_CONFIG,
           Type.LONG,
           ORIGIN_EVENT_REPORT_INTERVAL_MS_DEFAULT,
@@ -671,6 +683,15 @@ public class ResponsiveConfig extends AbstractConfig {
 
   private ResponsiveConfig(final Map<?, ?> originals, final boolean doLog) {
     super(CONFIG_DEF, originals, doLog);
+  }
+
+  public static class DefaultRS3ConfigSetter implements RS3ConfigSetter {
+  }
+
+  public RS3ConfigSetter getRS3ConfigSetter() {
+    return getConfiguredInstance(
+        RS3_CONFIG_SETTER_CLASS_CONFIG, RS3ConfigSetter.class, originals()
+    );
   }
 
   private static class NonEmptyPassword implements Validator {

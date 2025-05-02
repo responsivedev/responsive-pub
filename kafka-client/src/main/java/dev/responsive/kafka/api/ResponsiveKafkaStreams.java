@@ -552,10 +552,11 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
           rs3Connector.retryTimeoutMs(responsiveConfig.getLong(RS3_RETRY_TIMEOUT_CONFIG));
           rs3Connector.useTls(responsiveConfig.getBoolean(RS3_TLS_ENABLED_CONFIG));
 
+          final var configSetter = responsiveConfig.getRS3ConfigSetter();
           sessionClients = new SessionClients(
               Optional.empty(),
               Optional.empty(),
-              Optional.of(new RS3TableFactory(rs3Connector)),
+              Optional.of(new RS3TableFactory(rs3Connector, configSetter)),
               storageBackend,
               admin
           );

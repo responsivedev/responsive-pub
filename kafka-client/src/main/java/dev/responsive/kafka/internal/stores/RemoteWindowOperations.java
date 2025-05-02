@@ -251,7 +251,8 @@ public class RemoteWindowOperations implements WindowOperations {
         defaultTtl,
         responsiveMetrics,
         scopeBuilder,
-        () -> numPartitionsForKafkaTopic(sessionClients.admin(), changelogTopicName)
+        () -> numPartitionsForKafkaTopic(sessionClients.admin(), changelogTopicName),
+        params.schemaType()
     );
   }
 
