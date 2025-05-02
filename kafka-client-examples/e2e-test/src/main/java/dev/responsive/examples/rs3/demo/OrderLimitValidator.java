@@ -38,6 +38,7 @@ import org.apache.kafka.streams.state.StoreBuilder;
 public class OrderLimitValidator extends AbstractKSExampleService {
 
   public static final String CUSTOMER_ORDERS_STORE = "customer-orders";
+  public static final String NAME = "order-limit-validator";
   private static final double SPEND_LIMIT = 100;
   private static final String VALIDATED_ORDERS_TOPIC = "validated-orders";
 
@@ -45,7 +46,7 @@ public class OrderLimitValidator extends AbstractKSExampleService {
       final Map<String, Object> props,
       final boolean responsive
   ) {
-    super("order-limit-validator", props, responsive);
+    super(NAME, props, responsive);
   }
 
   @Override

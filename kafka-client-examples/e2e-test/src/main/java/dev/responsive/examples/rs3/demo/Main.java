@@ -13,11 +13,21 @@
 package dev.responsive.examples.rs3.demo;
 
 import dev.responsive.examples.regression.OrderAndCustomerDriver;
+import dev.responsive.kafka.api.config.ResponsiveConfig;
+import dev.responsive.kafka.internal.snapshot.LocalSnapshotApi;
+import dev.responsive.kafka.internal.snapshot.Snapshot;
+import dev.responsive.kafka.internal.snapshot.SnapshotApi;
+import dev.responsive.kafka.internal.snapshot.SnapshotSupport;
+import dev.responsive.kafka.internal.snapshot.topic.TopicSnapshotStore;
 import java.io.FileInputStream;
 import java.io.InputStream;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+import org.apache.kafka.streams.StreamsConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,8 +45,33 @@ public class Main {
           .collect(Collectors.toMap(Object::toString, properties::get));
     }
 
+    rawCfg.put(ResponsiveConfig.SNAPSHOTS_LOCAL_STORE_TOPIC_REPLICATION_FACTOR, (short) 1);
+    rawCfg.put(ResponsiveConfig.SNAPSHOTS_CONFIG, SnapshotSupport.LOCAL.name());
+
     startGen(rawCfg);
     startValidator(rawCfg);
+
+    rawCfg.put(
+        StreamsConfig.APPLICATION_ID_CONFIG,
+        OrderLimitValidator.NAME + "-true" // -true because the driver adds that
+    );
+    final SnapshotApi snapshotApi = new LocalSnapshotApi(
+        TopicSnapshotStore.create(rawCfg)
+    );
+
+    final var exec = Executors.newSingleThreadScheduledExecutor();
+    exec.scheduleAtFixedRate(
+        () -> {
+          try {
+            LOG.info("Taking snapshot");
+            final var snap = snapshotApi.createSnapshot();
+            LOG.info("Took snapshot {}", snap);
+          } catch (final RuntimeException e) {
+            LOG.warn("Could not create snapshot.", e);
+          }
+        }, 2, 2, TimeUnit.MINUTES);
+
+    Runtime.getRuntime().addShutdownHook(new Thread(exec::shutdown));
   }
 
   private static void startValidator(final Map<String, Object> rawCfg) {
@@ -63,6 +98,5 @@ public class Main {
     driver.startAsync().awaitRunning();
     LOG.info("started order generator");
   }
-
 
 }
