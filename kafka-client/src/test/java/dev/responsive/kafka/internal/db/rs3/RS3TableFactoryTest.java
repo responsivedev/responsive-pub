@@ -21,7 +21,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import dev.responsive.kafka.api.config.RS3ConfigSetter.DefaultRS3ConfigSetter;
+import dev.responsive.kafka.api.config.RS3ConfigSetter;
+import dev.responsive.kafka.api.config.ResponsiveConfig.DefaultRS3ConfigSetter;
 import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes;
 import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes.CreateStoreOptions;
 import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes.CreateStoreResult;

@@ -13,62 +13,49 @@
 
 package dev.responsive.kafka.api.config;
 
+import dev.responsive.kafka.api.config.RS3StoreParams.RS3KVStoreParams;
+import dev.responsive.kafka.api.config.RS3StoreParams.RS3SessionStoreParams;
+import dev.responsive.kafka.api.config.RS3StoreParams.RS3WindowStoreParams;
 import dev.responsive.kafka.internal.stores.SchemaTypes.KVSchema;
 import dev.responsive.kafka.internal.stores.SchemaTypes.SessionSchema;
 import dev.responsive.kafka.internal.stores.SchemaTypes.WindowSchema;
 import java.util.Map;
-import java.util.Optional;
 import org.apache.kafka.common.Configurable;
 
 public interface RS3ConfigSetter extends Configurable {
 
   /**
-   * Sets the configs for a {@link org.apache.kafka.streams.state.KeyValueStore}
-   * with the provided name and schema. Can return {@link Optional#empty()} to defer to
-   * the default settings for the given store type.
+   * Selects the configs for a {@link org.apache.kafka.streams.state.KeyValueStore}
+   * with the provided name and schema.
    *
-   * @return the configs to override for this store
+   * @return the {@link RS3KVStoreParams configs} to apply for this store
    */
-  RS3StoreParams keyValueStoreConfig(String storeName, KVSchema schema);
+  default RS3KVStoreParams keyValueStoreConfig(String storeName, KVSchema schema) {
+    return RS3KVStoreParams.defaults(schema);
+  }
 
   /**
-   * Sets the configs for a {@link org.apache.kafka.streams.state.WindowStore}
-   * with the provided name and schema. Can return {@link Optional#empty()} to defer to
-   * the default settings for the given store type.
+   * Selects the configs for a {@link org.apache.kafka.streams.state.WindowStore}
+   * with the provided name and schema.
    *
-   * @return the configs to override for this store
+   * @return the {@link RS3WindowStoreParams configs} to apply for this store
    */
-  RS3StoreParams windowStoreConfig(String storeName, WindowSchema schema);
+  default RS3WindowStoreParams windowStoreConfig(String storeName, WindowSchema schema) {
+    return RS3WindowStoreParams.defaults(schema);
+  }
 
   /**
-   * Sets the configs for a {@link org.apache.kafka.streams.state.SessionStore}
-   * with the provided name and schema. Can return {@code super.sessionStoreConfig} to defer to
-   * the default settings for the given store type.
+   * Selects the configs for a {@link org.apache.kafka.streams.state.SessionStore}
+   * with the provided name and schema.
    *
-   * @return the configs to override for this store
+   * @return the {@link RS3SessionStoreParams configs} to apply for this store
    */
-  RS3StoreParams sessionStoreConfig(String storeName, SessionSchema schema);
+  default RS3SessionStoreParams sessionStoreConfig(String storeName, SessionSchema schema) {
+    return RS3SessionStoreParams.defaults(schema);
+  }
 
   @Override
   default void configure(final Map<String, ?> configs) {
   }
 
-  class DefaultRS3ConfigSetter implements RS3ConfigSetter {
-
-    @Override
-    public RS3StoreParams keyValueStoreConfig(final String storeName, final KVSchema schema) {
-      return RS3StoreParams.defaultKV(schema);
-    }
-
-    @Override
-    public RS3StoreParams windowStoreConfig(final String storeName, final WindowSchema schema) {
-      return RS3StoreParams.defaultWindow(schema);
-    }
-
-    @Override
-    public RS3StoreParams sessionStoreConfig(final String storeName, final SessionSchema schema) {
-      return RS3StoreParams.defaultSession(schema);
-    }
-
-  }
 }

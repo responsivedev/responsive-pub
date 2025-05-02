@@ -18,9 +18,57 @@ import dev.responsive.kafka.internal.stores.SchemaTypes.SessionSchema;
 import dev.responsive.kafka.internal.stores.SchemaTypes.WindowSchema;
 import java.util.Optional;
 
-public class RS3StoreParams {
+public abstract class RS3StoreParams {
 
-  public static final Optional<Integer> DEFAULT_FACT_STORE_FILTER_BITS = Optional.of(20);
+  public static class RS3KVStoreParams extends RS3StoreParams {
+
+    public static final Optional<Integer> DEFAULT_FACT_STORE_FILTER_BITS = Optional.of(20);
+
+    private RS3KVStoreParams(final Optional<Integer> filterBitsPerKey) {
+      super(filterBitsPerKey);
+    }
+
+    public static RS3KVStoreParams defaults(final KVSchema schema) {
+      final Optional<Integer> defaultFilterBitsPerKey = schema == KVSchema.FACT
+          ? DEFAULT_FACT_STORE_FILTER_BITS
+          : Optional.empty();
+      return new RS3KVStoreParams(defaultFilterBitsPerKey);
+    }
+
+    public RS3KVStoreParams withFilterBitsPerKey(final int filterBitsPerKey) {
+      return new RS3KVStoreParams(Optional.of(filterBitsPerKey));
+    }
+  }
+
+  public static class RS3WindowStoreParams extends RS3StoreParams {
+
+    private RS3WindowStoreParams(final Optional<Integer> filterBitsPerKey) {
+      super(filterBitsPerKey);
+    }
+
+    public static RS3WindowStoreParams defaults(final WindowSchema schema) {
+      return new RS3WindowStoreParams(Optional.empty());
+    }
+
+    public RS3WindowStoreParams withFilterBitsPerKey(final int filterBitsPerKey) {
+      return new RS3WindowStoreParams(Optional.of(filterBitsPerKey));
+    }
+  }
+
+  public static class RS3SessionStoreParams extends RS3StoreParams {
+
+    private RS3SessionStoreParams(final Optional<Integer> filterBitsPerKey) {
+      super(filterBitsPerKey);
+    }
+
+    public static RS3SessionStoreParams defaults(final SessionSchema schema) {
+      return new RS3SessionStoreParams(Optional.empty());
+    }
+
+    public RS3SessionStoreParams withFilterBitsPerKey(final int filterBitsPerKey) {
+      return new RS3SessionStoreParams(Optional.of(filterBitsPerKey));
+    }
+  }
 
   private final Optional<Integer> filterBitsPerKey;
 
@@ -28,26 +76,9 @@ public class RS3StoreParams {
     this.filterBitsPerKey = filterBitsPerKey;
   }
 
-  public static RS3StoreParams defaultKV(final KVSchema schema) {
-    final Optional<Integer> defaultFilterBitsPerKey = schema == KVSchema.FACT
-        ? DEFAULT_FACT_STORE_FILTER_BITS
-        : Optional.empty();
-    return new RS3StoreParams(defaultFilterBitsPerKey);
-  }
-
-  public static RS3StoreParams defaultWindow(final WindowSchema schema) {
-    return new RS3StoreParams(Optional.empty());
-  }
-
-  public static RS3StoreParams defaultSession(final SessionSchema schema) {
-    return new RS3StoreParams(Optional.empty());
-  }
-
-  public RS3StoreParams withFilterBitsPerKey(final int filterBitsPerKey) {
-    return new RS3StoreParams(Optional.of(filterBitsPerKey));
-  }
-
   public Optional<Integer> filterBitsPerKey() {
     return filterBitsPerKey;
   }
+
+
 }

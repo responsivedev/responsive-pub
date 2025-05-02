@@ -18,7 +18,6 @@ import static org.apache.kafka.common.config.ConfigDef.Range.between;
 import com.datastax.oss.driver.api.core.ConsistencyLevel;
 import com.datastax.oss.driver.api.core.DefaultConsistencyLevel;
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
-import dev.responsive.kafka.api.config.RS3ConfigSetter.DefaultRS3ConfigSetter;
 import dev.responsive.kafka.internal.db.partitioning.Murmur3Hasher;
 import java.time.Duration;
 import java.util.Arrays;
@@ -684,6 +683,15 @@ public class ResponsiveConfig extends AbstractConfig {
 
   private ResponsiveConfig(final Map<?, ?> originals, final boolean doLog) {
     super(CONFIG_DEF, originals, doLog);
+  }
+
+  public static class DefaultRS3ConfigSetter implements RS3ConfigSetter {
+  }
+
+  public RS3ConfigSetter getRS3ConfigSetter() {
+    return getConfiguredInstance(
+        RS3_CONFIG_SETTER_CLASS_CONFIG, RS3ConfigSetter.class, originals()
+    );
   }
 
   private static class NonEmptyPassword implements Validator {

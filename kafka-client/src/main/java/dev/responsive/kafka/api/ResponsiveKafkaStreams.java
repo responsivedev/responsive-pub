@@ -16,7 +16,6 @@ import static dev.responsive.kafka.api.config.ResponsiveConfig.METRICS_ENABLED_C
 import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_ADDITIONAL_CONNECTION_STRING_PARAMS_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_CONNECTION_STRING_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_WINDOWED_KEY_TIMESTAMP_FIRST_CONFIG;
-import static dev.responsive.kafka.api.config.ResponsiveConfig.RS3_CONFIG_SETTER_CLASS_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RS3_HOSTNAME_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RS3_PORT_CONFIG;
 import static dev.responsive.kafka.api.config.ResponsiveConfig.RS3_RETRY_TIMEOUT_CONFIG;
@@ -31,7 +30,6 @@ import static org.apache.kafka.streams.StreamsConfig.METRICS_RECORDING_LEVEL_CON
 import static org.apache.kafka.streams.StreamsConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.NUM_STREAM_THREADS_CONFIG;
 
-import dev.responsive.kafka.api.config.RS3ConfigSetter;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.api.stores.ResponsiveDslStoreSuppliers;
@@ -554,9 +552,7 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
           rs3Connector.retryTimeoutMs(responsiveConfig.getLong(RS3_RETRY_TIMEOUT_CONFIG));
           rs3Connector.useTls(responsiveConfig.getBoolean(RS3_TLS_ENABLED_CONFIG));
 
-          final var configSetter = responsiveConfig.getConfiguredInstance(
-              RS3_CONFIG_SETTER_CLASS_CONFIG, RS3ConfigSetter.class, responsiveConfig.originals()
-          );
+          final var configSetter = responsiveConfig.getRS3ConfigSetter();
           sessionClients = new SessionClients(
               Optional.empty(),
               Optional.empty(),
