@@ -41,7 +41,7 @@ public class Main implements Runnable {
         .valueOf(config.getString(ResponsiveConfig.SNAPSHOTS_CONFIG));
     switch (support) {
       case LOCAL: {
-        final SnapshotStore store = TopicSnapshotStore.create(config.originals());
+        final SnapshotStore store = TopicSnapshotStore.create(config.originals(), false);
         final SnapshotApi api = new LocalSnapshotApi(store);
         ctx = new SnapshotContext(api);
         break;

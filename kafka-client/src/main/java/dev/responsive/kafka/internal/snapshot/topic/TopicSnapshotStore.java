@@ -31,6 +31,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.streams.StreamsConfig;
 import org.slf4j.Logger;
@@ -52,15 +53,12 @@ public class TopicSnapshotStore implements SnapshotStore {
 
   public TopicSnapshotStore(
       final String topic,
-      final short replicas,
       final Supplier<Consumer<SnapshotStoreRecordKey, SnapshotStoreRecord>> consumerSupplier,
-      final Supplier<Producer<SnapshotStoreRecordKey, SnapshotStoreRecord>> producerSupplier,
-      final Admin admin
+      final Supplier<Producer<SnapshotStoreRecordKey, SnapshotStoreRecord>> producerSupplier
   ) {
     this.topicPartition = new TopicPartition(topic, 0);
     this.producerSupplier = producerSupplier;
     this.consumerSupplier = consumerSupplier;
-    createTopic(admin, replicas);
     final var consumer = consumerSupplier.get();
     consumer.assign(List.of(topicPartition));
     consumer.seekToBeginning(List.of(topicPartition));
@@ -78,6 +76,10 @@ public class TopicSnapshotStore implements SnapshotStore {
   }
 
   public static TopicSnapshotStore create(final Map<String, Object> config) {
+    return create(config, true);
+  }
+
+  public static TopicSnapshotStore create(final Map<String, Object> config, boolean createTopic) {
     final ResponsiveConfig responsiveConfig = ResponsiveConfig.responsiveConfig(config);
     final String applicationId = config.get(StreamsConfig.APPLICATION_ID_CONFIG).toString();
     final String topicSuffix = responsiveConfig
@@ -87,14 +89,16 @@ public class TopicSnapshotStore implements SnapshotStore {
     return create(
         snapshotStoreTopic,
         responsiveConfig.getShort(ResponsiveConfig.SNAPSHOTS_LOCAL_STORE_TOPIC_REPLICATION_FACTOR),
-        config
+        config,
+        createTopic
     );
   }
 
   public static TopicSnapshotStore create(
       final String topic,
       final short replicas,
-      final Map<String, Object> config
+      final Map<String, Object> config,
+      final boolean createTopic
   ) {
     final Map<String, Object> consumerConfig = new HashMap<>(config);
     consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, null);
@@ -119,10 +123,13 @@ public class TopicSnapshotStore implements SnapshotStore {
             new SnapshotStoreSerdes.SnapshotStoreRecordKeySerializer(),
             new SnapshotStoreSerdes.SnapshotStoreRecordSerializer()
         );
-    try (final Admin admin = Admin.create(config)) {
-      return new TopicSnapshotStore(
-          topic, replicas, consumerSupplier, producerSupplier, admin);
+    if (createTopic) {
+      try (final Admin admin = Admin.create(config)) {
+        createTopic(admin, topic, replicas);
+      }
     }
+    return new TopicSnapshotStore(
+        topic, consumerSupplier, producerSupplier);
   }
 
   @Override
@@ -199,11 +206,27 @@ public class TopicSnapshotStore implements SnapshotStore {
     );
   }
 
-  private void createTopic(final Admin admin, final short replicas) {
+  private static void createTopic(
+      final Admin admin,
+      final String topic,
+      final short replicas
+  ) {
     try {
-      final var result = admin.createTopics(List.of(
-          new NewTopic(topicPartition.topic(), 1, replicas)
-      ));
+      final var result = admin.createTopics(
+          List.of(
+              new NewTopic(topic, 1, replicas)
+                  .configs(
+                      Map.of(
+                          TopicConfig.CLEANUP_POLICY_CONFIG,
+                          String.format("%s,%s",
+                              TopicConfig.CLEANUP_POLICY_COMPACT,
+                              TopicConfig.CLEANUP_POLICY_DELETE
+                          ),
+                          TopicConfig.RETENTION_MS_CONFIG, Long.toString(Long.MAX_VALUE)
+                      )
+                  )
+          )
+      );
       result.all().get();
     } catch (final InterruptedException e) {
       throw new RuntimeException(e);

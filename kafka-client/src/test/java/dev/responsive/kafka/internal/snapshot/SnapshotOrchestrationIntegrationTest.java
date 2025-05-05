@@ -25,6 +25,7 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
 import org.hamcrest.MatcherAssert;
 import org.hamcrest.Matchers;
@@ -267,34 +268,14 @@ class SnapshotOrchestrationIntegrationTest {
     private final SnapshotApi api;
 
     private TestCtx(final String topic) {
-      final Admin admin
-          = Admin.create(Map.of(BOOTSTRAP_SERVERS_CONFIG, KAFKA.getBootstrapServers()));
-      final Map<String, Object> consumerProps = Map.of(
-          BOOTSTRAP_SERVERS_CONFIG, KAFKA.getBootstrapServers(),
-          ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false
-      );
-      final Supplier<Consumer<SnapshotStoreRecordKey, SnapshotStoreRecord>> consumerSupplier = () ->
-          new KafkaConsumer<>(
-              consumerProps,
-              new SnapshotStoreSerdes.SnapshotStoreRecordKeyDeserializer(),
-              new SnapshotStoreSerdes.SnapshotStoreRecordDeserializer()
-          );
-      final Map<String, Object> producerProps = Map.of(
-          BOOTSTRAP_SERVERS_CONFIG, KAFKA.getBootstrapServers(),
-          ProducerConfig.TRANSACTIONAL_ID_CONFIG, String.format("%s-snapshot-store", topic)
-      );
-      final Supplier<Producer<SnapshotStoreRecordKey, SnapshotStoreRecord>> producerSupplier = () ->
-          new KafkaProducer<>(
-              producerProps,
-              new SnapshotStoreSerdes.SnapshotStoreRecordKeySerializer(),
-              new SnapshotStoreSerdes.SnapshotStoreRecordSerializer()
-          );
-      this.store = new TopicSnapshotStore(
+      this.store = TopicSnapshotStore.create(
           topic,
           (short) 1,
-          consumerSupplier,
-          producerSupplier,
-          admin
+          Map.of(
+              BOOTSTRAP_SERVERS_CONFIG, KAFKA.getBootstrapServers(),
+              StreamsConfig.APPLICATION_ID_CONFIG, topic
+          ),
+          true
       );
       this.orchestrator = new LocalSnapshotOrchestrator(this.store, TASKS);
       this.api = new LocalSnapshotApi(this.store);
