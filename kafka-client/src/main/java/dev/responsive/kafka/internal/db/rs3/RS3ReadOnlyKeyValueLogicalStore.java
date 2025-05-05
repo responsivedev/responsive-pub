@@ -2,6 +2,7 @@ package dev.responsive.kafka.internal.db.rs3;
 
 import dev.responsive.kafka.internal.db.rs3.client.PssCheckpoint;
 import dev.responsive.kafka.internal.db.rs3.client.jni.JNIRs3ReaderClient;
+import dev.responsive.kafka.internal.snapshot.ReadOnlyKeyValueLogicalStore;
 import dev.responsive.kafka.internal.snapshot.Snapshot;
 import dev.responsive.kafka.internal.utils.MergeKeyValueIterator;
 import java.util.ArrayList;
@@ -23,33 +24,39 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 // rather than a generic because we want specialized scan behaviour for different
 // store types. For example, a window store could restrict range scans for windows
 // of a single key to one partition.
-public class RS3ReadOnlyKeyValueLogicalStore<K, V> {
+public class RS3ReadOnlyKeyValueLogicalStore<K, V> implements ReadOnlyKeyValueLogicalStore<K, V> {
+  private final Runnable onClose;
   private final List<? extends RS3ReadOnlyKeyValueStore<Bytes, V>> stores;
   private final Function<Bytes, Integer> partitioner;
   private final Serde<K> keySerde;
 
-  public RS3ReadOnlyKeyValueLogicalStore(
+  private RS3ReadOnlyKeyValueLogicalStore(
       final List<? extends RS3ReadOnlyKeyValueStore<Bytes, V>> stores,
       final Function<Bytes, Integer> partitioner,
-      final Serde<K> keySerde
+      final Serde<K> keySerde,
+      final Runnable onClose
   ) {
     this.stores = stores;
     this.partitioner = partitioner;
     this.keySerde = keySerde;
+    this.onClose = onClose;
   }
 
+  @Override
   public V get(K key) {
     final Bytes serializedKey = serializeKey(key);
     final int partition = partitioner.apply(serializedKey);
     return stores.get(partition).get(serializedKey);
   }
 
+  @Override
   public KeyValueIterator<K, V> range(K from, K to) {
     final Bytes serializedFrom = serializeKey(from);
     final Bytes serializedTo = serializeKey(to);
     return iterate(s -> s.range(serializedFrom, serializedTo));
   }
 
+  @Override
   public KeyValueIterator<K, V> all() {
     return iterate(RS3ReadOnlyKeyValueStore::all);
   }
@@ -73,6 +80,11 @@ public class RS3ReadOnlyKeyValueLogicalStore<K, V> {
       }
       throw e;
     }
+  }
+
+  @Override
+  public void close() {
+    onClose.run();
   }
 
   private Bytes serializeKey(final K key) {
@@ -161,7 +173,8 @@ public class RS3ReadOnlyKeyValueLogicalStore<K, V> {
     return new RS3ReadOnlyKeyValueLogicalStore<>(
         stores,
         k -> partitioner.apply(k, finalPartitions),
-        keySerde
+        keySerde,
+        () -> readerClient.closeStoreReader(storeReaderId)
     );
   }
 }

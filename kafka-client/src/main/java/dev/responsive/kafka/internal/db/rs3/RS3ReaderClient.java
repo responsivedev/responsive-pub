@@ -11,7 +11,7 @@ import java.util.UUID;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
-public interface RS3ReaderClient {
+public interface RS3ReaderClient extends AutoCloseable {
   CurrentOffsets getCurrentOffsets(UUID storeId, LssId lssId, int pssId);
 
   Optional<byte[]> get(
@@ -48,5 +48,8 @@ public interface RS3ReaderClient {
 
   List<StoreInfo> listStores();
 
+  void closeStoreReader(final UUID storeId);
+
+  @Override
   void close();
 }

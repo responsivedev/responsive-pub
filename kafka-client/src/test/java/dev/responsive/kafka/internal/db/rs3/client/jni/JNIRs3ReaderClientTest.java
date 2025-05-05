@@ -16,6 +16,7 @@ import java.util.Arrays;
 import java.util.Optional;
 import java.util.UUID;
 import org.apache.kafka.common.utils.Bytes;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -38,6 +39,11 @@ class JNIRs3ReaderClientTest {
   @BeforeEach
   public void setup() {
     client = new JNIRs3ReaderClient(reader);
+  }
+
+  @AfterEach
+  public void teardown() {
+    client.close();
   }
 
   @Test

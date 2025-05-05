@@ -28,8 +28,10 @@ import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.internal.db.rs3.RS3ReadOnlyKeyValueLogicalStore;
 import dev.responsive.kafka.internal.db.rs3.client.jni.JNIRs3ReaderClient;
 import dev.responsive.kafka.internal.snapshot.LocalSnapshotApi;
+import dev.responsive.kafka.internal.snapshot.ReadOnlyKeyValueLogicalStore;
 import dev.responsive.kafka.internal.snapshot.Snapshot;
 import dev.responsive.kafka.internal.snapshot.SnapshotApi;
+import dev.responsive.kafka.internal.snapshot.SnapshotPartitionPoint;
 import dev.responsive.kafka.internal.snapshot.SnapshotSupport;
 import dev.responsive.kafka.internal.snapshot.topic.TopicSnapshotStore;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
@@ -43,6 +45,8 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.function.Function;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -138,10 +142,28 @@ public class SnapshotIntegrationTest {
 
         validateSnapshots(completedSnapshots);
       }
-      for (final var e : properties.entrySet()) {
-        System.out.println(e.getKey() + "=" + e.getValue().toString());
+      try (final JNIRs3ReaderClient rc = JNIRs3ReaderClient.withConfig(loadReaderConfig())) {
+        final Function<Snapshot, ReadOnlyKeyValueLogicalStore<Long, Long>> storeFactory =
+            snapshot -> RS3ReadOnlyKeyValueLogicalStore.createFromSnapshot(
+                rc,
+                snapshot,
+                "count-store",
+                Serdes.Long(),
+                Serdes.Long(),
+                (k, p) -> (int) (new LongDeserializer().deserialize("", k.get()) % p)
+            );
+        final Optional<Long> partitionPoint = SnapshotPartitionPoint.partitionPoint(
+            api,
+            storeFactory,
+            store -> store.get(1L) > 30
+        );
+        assertThat(partitionPoint, is(Optional.of(3L)));
+        SnapshotPartitionPoint.printPartitionPoint(
+            api,
+            storeFactory,
+            store -> store.get(1L) > 30
+        );
       }
-      System.out.println("done");
     }
   }
 
@@ -152,29 +174,31 @@ public class SnapshotIntegrationTest {
   }
 
   private void validateSnapshot(final Snapshot snapshot, int iteration) {
-    final JNIRs3ReaderClient readerClient = JNIRs3ReaderClient.withConfig(loadReaderConfig());
     final Deserializer<Long> deserializer = new LongDeserializer();
-    final RS3ReadOnlyKeyValueLogicalStore<Long, Long> store = RS3ReadOnlyKeyValueLogicalStore.createFromSnapshot(
-        readerClient,
-        snapshot,
-        "count-store",
-        Serdes.Long(),
-        Serdes.Long(),
-        (k, p) -> (int) (deserializer.deserialize("", k.get()) % p)
-    );
-
-    final var iter = store.range(0L, 3L);
-    while (iter.hasNext()) {
-      final var v = iter.next();
-      System.out.printf(
-          "RDT: %d -> %s%n",
-          v.key,
-          v.value
-      );
-      assertThat(v.value, is(iteration * 15L));
+    try (
+        final JNIRs3ReaderClient readerClient = JNIRs3ReaderClient.withConfig(loadReaderConfig());
+        final RS3ReadOnlyKeyValueLogicalStore<Long, Long> store
+            = RS3ReadOnlyKeyValueLogicalStore.createFromSnapshot(
+                readerClient,
+                snapshot,
+                "count-store",
+                Serdes.Long(),
+                Serdes.Long(),
+                (k, p) -> (int) (deserializer.deserialize("", k.get()) % p)
+        )
+    ) {
+      final var iter = store.range(0L, 3L);
+      while (iter.hasNext()) {
+        final var v = iter.next();
+        System.out.printf(
+            "RDT: %d -> %s%n",
+            v.key,
+            v.value
+        );
+        assertThat(v.value, is(iteration * 15L));
+      }
+      iter.close();
     }
-    iter.close();
-    readerClient.close();
   }
 
   private void assertEnvironmentVars() {
