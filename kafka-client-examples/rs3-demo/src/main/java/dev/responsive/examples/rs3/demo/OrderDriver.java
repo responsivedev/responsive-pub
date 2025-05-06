@@ -1,8 +1,9 @@
 package dev.responsive.examples.rs3.demo;
 
-import com.google.common.util.concurrent.AbstractExecutionThreadService;
+import com.google.common.util.concurrent.AbstractIdleService;
 import com.google.common.util.concurrent.RateLimiter;
 import dev.responsive.examples.common.E2ETestUtils;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -16,7 +17,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class OrderDriver extends AbstractExecutionThreadService {
+public class OrderDriver extends AbstractIdleService {
 
   public static final String ORDERS = "orders";
 
@@ -28,6 +29,7 @@ public class OrderDriver extends AbstractExecutionThreadService {
   private final KafkaProducer<String, Order> orderProducer;
   private final RateLimiter rateLimiter = RateLimiter.create(Constants.RECORDS_PER_SECOND);
   private final OrderGen orderGen;
+  private final List<WorkerThread> workers = new ArrayList<>(4);
 
   public OrderDriver(
       final Map<String, Object> props,
@@ -61,34 +63,56 @@ public class OrderDriver extends AbstractExecutionThreadService {
         List.of(ORDERS)
     );
     LOG.info("Created topics.");
+    for (int i = 0; i < 4; i++) {
+      final WorkerThread wt = new WorkerThread();
+      wt.start();
+      workers.add(wt);
+    }
   }
 
   @Override
   protected void shutDown() {
+    workers.forEach(WorkerThread::notifyStop);
+    workers.forEach(wt -> {
+      try {
+        wt.join();
+      } catch (final InterruptedException e) {
+        throw new RuntimeException(e);
+      }
+    });
   }
 
-  @Override
-  protected void run() throws ExecutionException, InterruptedException {
-    try {
-      doRun();
-    } catch (final Exception e) {
-      LOG.error("failed to run driver", e);
-      throw e;
+  private class WorkerThread extends Thread {
+    private volatile boolean isRunning = true;
+
+    private void notifyStop() {
+      isRunning = false;
     }
-  }
 
-  void doRun() throws ExecutionException, InterruptedException {
-    LOG.info("Running OrderAndCustomerDriver...");
-    int orders = 0;
+    @Override
+    public void run() {
+      try {
+        doRun();
+      } catch (final Exception e) {
+        LOG.error("failed to run driver", e);
+        throw new RuntimeException(e);
+      }
+    }
 
-    while (isRunning()) {
-      rateLimiter.acquire();
+    void doRun() throws ExecutionException, InterruptedException {
+      LOG.info("Running OrderAndCustomerDriver...");
+      int orders = 0;
 
-      orders++;
-      orderProducer.send(newOrder()).get();
+      while (isRunning) {
+        rateLimiter.acquire();
 
-      if (orders % 1000 == 0) {
-        LOG.info("Produced {} orders and {} customers", orders);
+        orders++;
+        final var future = orderProducer.send(newOrder());
+
+        if (orders % 1000 == 0) {
+          future.get();
+          LOG.info("Produced {} orders and {} customers", orders);
+        }
       }
     }
   }

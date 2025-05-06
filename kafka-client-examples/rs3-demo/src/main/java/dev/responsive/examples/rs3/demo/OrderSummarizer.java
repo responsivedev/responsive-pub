@@ -13,6 +13,7 @@
 package dev.responsive.examples.rs3.demo;
 
 import dev.responsive.examples.common.JsonSerde;
+import dev.responsive.kafka.api.async.AsyncProcessorSupplier;
 import dev.responsive.kafka.api.stores.ResponsiveStores;
 import java.util.HashMap;
 import java.util.Map;
@@ -58,7 +59,7 @@ public class OrderSummarizer extends AbstractKSExampleService {
 
     // repartition orders by the customer id instead of the
     // order id, so we can validate customer orders
-    orders.process(new ProcessorSupplier<String, Order, String, CustomerOrderTracker>() {
+    final var supplier = new ProcessorSupplier<String, Order, String, CustomerOrderTracker>() {
 
       @Override
       public Set<StoreBuilder<?>> stores() {
@@ -111,7 +112,8 @@ public class OrderSummarizer extends AbstractKSExampleService {
           }
         };
       }
-    }).to(
+    };
+    orders.process(AsyncProcessorSupplier.createAsyncProcessorSupplier(supplier)).to(
         Constants.SUMMARIZED_ORDERS_TOPIC,
         Produced.with(Serdes.String(), new JsonSerde<>(CustomerOrderTracker.class)));
 

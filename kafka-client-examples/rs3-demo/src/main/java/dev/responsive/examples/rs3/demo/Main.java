@@ -45,8 +45,11 @@ public class Main {
     rawCfg.put(ResponsiveConfig.SNAPSHOTS_LOCAL_STORE_TOPIC_REPLICATION_FACTOR, (short) 3);
     rawCfg.put(ResponsiveConfig.SNAPSHOTS_CONFIG, SnapshotSupport.LOCAL.name());
 
-    startGen(rawCfg);
-    startValidator(rawCfg);
+    if (Constants.MODE.equals(Constants.GENERATOR)) {
+      startGen(rawCfg);
+    } else {
+      startValidator(rawCfg);
+    }
 
     rawCfg.put(
         StreamsConfig.APPLICATION_ID_CONFIG,

@@ -10,4 +10,9 @@ public class Constants {
           "100"
       )
   );
+  public static final String GENERATOR = "GENERATOR";
+  public static final String MODE = System.getenv().getOrDefault(
+      "MODE",
+      "APP"
+  );
 }
