@@ -95,6 +95,15 @@ public class OrderAndCustomerDriver extends AbstractExecutionThreadService {
 
   @Override
   protected void run() throws ExecutionException, InterruptedException {
+    try {
+      doRun();
+    } catch (final Exception e) {
+      LOG.error("failed to run driver", e);
+      throw e;
+    }
+  }
+
+  void doRun() throws ExecutionException, InterruptedException {
     LOG.info("Running OrderAndCustomerDriver...");
     // create the first customer so that orders will have a valid customer id
     customerProducer.send(newCustomer()).get();

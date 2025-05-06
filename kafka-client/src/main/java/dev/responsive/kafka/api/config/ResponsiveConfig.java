@@ -645,7 +645,7 @@ public class ResponsiveConfig extends AbstractConfig {
       ).define(
           RS3_PORT_CONFIG,
           Type.INT,
-          50051,
+          443,
           Importance.MEDIUM,
           RS3_PORT_DOC
       ).define(

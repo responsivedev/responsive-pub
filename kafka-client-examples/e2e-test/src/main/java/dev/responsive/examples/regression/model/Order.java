@@ -20,6 +20,8 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 public record Order(
     @JsonProperty("orderId") String orderId,
     @JsonProperty("customerId") String customerId,
+    @JsonProperty("department") String department,
+    @JsonProperty("departmentId") String departmentId,
     @JsonProperty("amount") double amount
 ) {}
 

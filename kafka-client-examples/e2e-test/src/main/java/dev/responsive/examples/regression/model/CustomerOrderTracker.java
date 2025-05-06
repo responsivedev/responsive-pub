@@ -13,8 +13,10 @@
 package dev.responsive.examples.regression.model;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.util.HashMap;
 
 public record CustomerOrderTracker(
     @JsonProperty("customerId") String customerId,
-    @JsonProperty("totalSpend") double totalSpend
+    @JsonProperty("totalSpend") double totalSpend,
+    @JsonProperty("totalSpendByDepartment") HashMap<String, Double> totalSpendByDepartment
 ) {}

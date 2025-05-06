@@ -12,10 +12,8 @@
 
 package dev.responsive.examples.rs3.demo;
 
-import dev.responsive.examples.regression.OrderAndCustomerDriver;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.internal.snapshot.LocalSnapshotApi;
-import dev.responsive.kafka.internal.snapshot.Snapshot;
 import dev.responsive.kafka.internal.snapshot.SnapshotApi;
 import dev.responsive.kafka.internal.snapshot.SnapshotSupport;
 import dev.responsive.kafka.internal.snapshot.topic.TopicSnapshotStore;
@@ -24,7 +22,6 @@ import java.io.InputStream;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import org.apache.kafka.streams.StreamsConfig;
@@ -45,7 +42,7 @@ public class Main {
           .collect(Collectors.toMap(Object::toString, properties::get));
     }
 
-    rawCfg.put(ResponsiveConfig.SNAPSHOTS_LOCAL_STORE_TOPIC_REPLICATION_FACTOR, (short) 1);
+    rawCfg.put(ResponsiveConfig.SNAPSHOTS_LOCAL_STORE_TOPIC_REPLICATION_FACTOR, (short) 3);
     rawCfg.put(ResponsiveConfig.SNAPSHOTS_CONFIG, SnapshotSupport.LOCAL.name());
 
     startGen(rawCfg);
@@ -53,7 +50,7 @@ public class Main {
 
     rawCfg.put(
         StreamsConfig.APPLICATION_ID_CONFIG,
-        OrderLimitValidator.NAME + "-true" // -true because the driver adds that
+        OrderSummarizer.NAME + "-true" // -true because the driver adds that
     );
     final SnapshotApi snapshotApi = new LocalSnapshotApi(
         TopicSnapshotStore.create(rawCfg)
@@ -69,13 +66,13 @@ public class Main {
           } catch (final RuntimeException e) {
             LOG.warn("Could not create snapshot.", e);
           }
-        }, 2, 2, TimeUnit.MINUTES);
+        }, 2, 900, TimeUnit.MINUTES);
 
     Runtime.getRuntime().addShutdownHook(new Thread(exec::shutdown));
   }
 
   private static void startValidator(final Map<String, Object> rawCfg) {
-    final var streamService = new OrderLimitValidator(rawCfg, true);
+    final var streamService = new OrderSummarizer(rawCfg);
     LOG.info("starting order validator.");
     Runtime.getRuntime().addShutdownHook(new Thread(() -> {
       LOG.info("stopping order validator");
@@ -88,7 +85,7 @@ public class Main {
 
   private static void startGen(final Map<String, Object> rawCfg) {
     LOG.info("starting the order generator");
-    final OrderAndCustomerDriver driver = new OrderAndCustomerDriver(rawCfg, 1000, 100_000_000);
+    final OrderDriver driver = new OrderDriver(rawCfg, 100_000_000);
     Runtime.getRuntime().addShutdownHook(new Thread(() -> {
       LOG.info("stopping order generator...");
       driver.stopAsync().awaitTerminated();
@@ -98,5 +95,4 @@ public class Main {
     driver.startAsync().awaitRunning();
     LOG.info("started order generator");
   }
-
 }

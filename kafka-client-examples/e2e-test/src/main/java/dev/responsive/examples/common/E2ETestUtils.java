@@ -71,8 +71,14 @@ public class E2ETestUtils {
       final int partitions,
       final List<String> topics
   ) {
+    final short replicationFactor = Short.parseShort(
+        properties.getOrDefault(
+            "responsive.example.topic.replication.factor",
+            (short) 1
+        ).toString()
+    );
     E2ETestUtils.retryFor(
-        () -> doMaybeCreateTopics(properties, partitions, topics),
+        () -> doMaybeCreateTopics(properties, partitions, topics, replicationFactor),
         Duration.ofMinutes(5)
     );
   }
@@ -80,13 +86,14 @@ public class E2ETestUtils {
   private static void doMaybeCreateTopics(
       final Map<String, Object> properties,
       final int partitions,
-      final List<String> topics
+      final List<String> topics,
+      final short replicationFactor
   ) {
     try (final Admin admin = Admin.create(properties)) {
       for (final var topic : topics) {
         LOG.info("create topic {}", topic);
         try {
-          admin.createTopics(List.of(new NewTopic(topic, partitions, (short) 1)))
+          admin.createTopics(List.of(new NewTopic(topic, partitions, replicationFactor)))
               .all().get();
         } catch (final ExecutionException | InterruptedException e) {
           if (e.getCause() instanceof TopicExistsException) {
@@ -209,8 +216,14 @@ public class E2ETestUtils {
     props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
     props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
     props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
-    props.put(ResponsiveConfig.PLATFORM_API_KEY_CONFIG, "test");
-    props.put(ResponsiveConfig.PLATFORM_API_SECRET_CONFIG, "test");
+    if (!props.containsKey(ResponsiveConfig.PLATFORM_API_KEY_CONFIG)) {
+      System.out.println("setting a default platform api key");
+      props.put(ResponsiveConfig.PLATFORM_API_KEY_CONFIG, "test");
+      props.put(ResponsiveConfig.PLATFORM_API_SECRET_CONFIG, "test");
+    } else {
+      System.out.println("use configured platform api key "
+          + props.get(ResponsiveConfig.PLATFORM_API_KEY_CONFIG));
+    }
 
     props.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 10);
     props.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 60000);

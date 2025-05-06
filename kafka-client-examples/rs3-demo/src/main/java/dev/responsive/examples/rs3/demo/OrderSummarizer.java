@@ -12,14 +12,9 @@
 
 package dev.responsive.examples.rs3.demo;
 
-import static dev.responsive.examples.regression.RegConstants.ORDERS;
-
 import dev.responsive.examples.common.JsonSerde;
-import dev.responsive.examples.regression.RegressionSchema;
-import dev.responsive.examples.regression.model.CustomerOrderTracker;
-import dev.responsive.examples.regression.model.Order;
-import dev.responsive.examples.regression.tests.AbstractKSExampleService;
 import dev.responsive.kafka.api.stores.ResponsiveStores;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import org.apache.kafka.common.serialization.Serdes;
@@ -35,18 +30,16 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 
-public class OrderLimitValidator extends AbstractKSExampleService {
+public class OrderSummarizer extends AbstractKSExampleService {
 
   public static final String CUSTOMER_ORDERS_STORE = "customer-orders";
-  public static final String NAME = "order-limit-validator";
-  private static final double SPEND_LIMIT = 100;
-  private static final String VALIDATED_ORDERS_TOPIC = "validated-orders";
+  public static final String NAME = "order-summarizer";
 
-  public OrderLimitValidator(
-      final Map<String, Object> props,
-      final boolean responsive
-  ) {
-    super(NAME, props, responsive);
+  private final Map<String, Object> properties;
+
+  public OrderSummarizer(final Map<String, Object> props) {
+    super(NAME, props);
+    this.properties = props;
   }
 
   @Override
@@ -61,12 +54,11 @@ public class OrderLimitValidator extends AbstractKSExampleService {
 
     // Read orders from the orders topic
     final KStream<String, Order> orders =
-        builder.stream(ORDERS, Consumed.with(Serdes.String(), RegressionSchema.orderSerde()));
+        builder.stream(Constants.ORDERS, Consumed.with(Serdes.String(), Schema.orderSerde()));
 
     // repartition orders by the customer id instead of the
     // order id, so we can validate customer orders
-    orders.selectKey((id, order) -> order.customerId())
-        .process(new ProcessorSupplier<String, Order, String, Order>() {
+    orders.process(new ProcessorSupplier<String, Order, String, CustomerOrderTracker>() {
 
       @Override
       public Set<StoreBuilder<?>> stores() {
@@ -74,15 +66,15 @@ public class OrderLimitValidator extends AbstractKSExampleService {
       }
 
       @Override
-      public Processor<String, Order, String, Order> get() {
+      public Processor<String, Order, String, CustomerOrderTracker> get() {
         return new Processor<>() {
 
-          private ProcessorContext<String, Order>
+          private ProcessorContext<String, CustomerOrderTracker>
               context;
           private KeyValueStore<String, CustomerOrderTracker> stateStore;
 
           @Override
-          public void init(final ProcessorContext<String, Order> context) {
+          public void init(final ProcessorContext<String, CustomerOrderTracker> context) {
             stateStore = context.getStateStore(CUSTOMER_ORDERS_STORE);
             this.context = context;
           }
@@ -91,24 +83,37 @@ public class OrderLimitValidator extends AbstractKSExampleService {
           public void process(final Record<String, Order> record) {
             final String customerId = record.key();
             final var tracker =
-                stateStore.putIfAbsent(customerId, new CustomerOrderTracker(customerId, 0d));
+                stateStore.putIfAbsent(customerId, new CustomerOrderTracker(
+                    customerId,
+                    0d,
+                    new HashMap<>()
+                ));
 
-            // the bug is that we don't validate OrderID is not a duplicate
             final double old = tracker == null ? 0 : tracker.totalSpend();
             final double total = old + record.value().amount();
-            if (total < SPEND_LIMIT) {
-              final var newTracker = new CustomerOrderTracker(customerId, total);
-              stateStore.put(customerId, newTracker);
-              context.forward(new Record<>(
-                  record.value().orderId(),
-                  record.value(),
-                  record.timestamp()
-              ));
-            }
+            final HashMap<String, Double> departmentTotals = new HashMap<>(
+                tracker == null ? new HashMap<>() : tracker.totalSpendByDepartment());
+            departmentTotals.compute(
+                record.value().department(),
+                (d, v) -> (v == null ? 0 : v) + record.value().amount()
+            );
+            final var newTracker = new CustomerOrderTracker(
+                customerId,
+                total,
+                departmentTotals
+            );
+            stateStore.put(customerId, newTracker);
+            context.forward(new Record<>(
+                record.key(),
+                newTracker,
+                record.timestamp()
+            ));
           }
         };
       }
-    }).to(VALIDATED_ORDERS_TOPIC, Produced.with(Serdes.String(), new JsonSerde<>(Order.class)));
+    }).to(
+        Constants.SUMMARIZED_ORDERS_TOPIC,
+        Produced.with(Serdes.String(), new JsonSerde<>(CustomerOrderTracker.class)));
 
     return builder.build();
   }

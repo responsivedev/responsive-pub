@@ -15,12 +15,20 @@ package dev.responsive.examples.regression.gen;
 
 import dev.responsive.examples.e2etest.UrandomGenerator;
 import dev.responsive.examples.regression.model.Order;
+import java.util.List;
 
 public class OrderGen {
 
   private final UrandomGenerator random;
   private final CustomerGen customerGen;
   private final int maxItemCost;
+
+  private static final List<Department> departments = List.of(
+      new Department("books", "94132"),
+      new Department("electronics", "72326"),
+      new Department("home", "52915"),
+      new Department("apparel", "62524")
+  );
 
   public OrderGen(
       final UrandomGenerator random,
@@ -34,9 +42,12 @@ public class OrderGen {
 
   public Order next() {
     // TODO(agavra): we can still send orders for tombstoned customer ids
+    final var department = departments.get(Math.abs(random.nextInt(departments.size())));
     return new Order(
         nextOrderId(),
         customerGen.validCustomerId(),
+        department.name(),
+        department.id(),
         Math.abs(random.nextInt(maxItemCost) + random.nextInt(100) * .01)
     );
   }
@@ -47,4 +58,5 @@ public class OrderGen {
     return "order_" + System.currentTimeMillis() + "_" + Math.abs(random.nextInt(1000));
   }
 
+  private record Department(String name, String id) {}
 }
