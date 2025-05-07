@@ -59,11 +59,8 @@ public class TopicSnapshotStore implements SnapshotStore {
     this.topicPartition = new TopicPartition(topic, 0);
     this.producerSupplier = producerSupplier;
     this.consumerSupplier = consumerSupplier;
-    final var consumer = consumerSupplier.get();
-    consumer.assign(List.of(topicPartition));
-    consumer.seekToBeginning(List.of(topicPartition));
     readerThread = new Thread(() -> runReader(
-        consumer,
+        consumerSupplier,
         currentSnapshot,
         snapshots,
         consumedOffset,
@@ -256,6 +253,25 @@ public class TopicSnapshotStore implements SnapshotStore {
   }
 
   private void runReader(
+      final Supplier<Consumer<SnapshotStoreRecordKey, SnapshotStoreRecord>> consumerSupplier,
+      final AtomicReference<Snapshot> currentSnapshot,
+      final ConcurrentMap<Long, Snapshot> allSnapshots,
+      final SynchronizedConsumerPosition consumedOffset,
+      final AtomicBoolean running
+  ) {
+    while (running.get()) {
+      try (final Consumer<SnapshotStoreRecordKey, SnapshotStoreRecord> consumer
+               = consumerSupplier.get()) {
+        consumer.assign(List.of(topicPartition));
+        consumer.seekToBeginning(List.of(topicPartition));
+        doRunReader(consumer, currentSnapshot, allSnapshots, consumedOffset, running);
+      } catch (final RuntimeException e) {
+        LOG.error("Topic Snapshot Store reader failed", e);
+      }
+    }
+  }
+
+  private void doRunReader(
       final Consumer<SnapshotStoreRecordKey, SnapshotStoreRecord> consumer,
       final AtomicReference<Snapshot> currentSnapshot,
       final ConcurrentMap<Long, Snapshot> allSnapshots,

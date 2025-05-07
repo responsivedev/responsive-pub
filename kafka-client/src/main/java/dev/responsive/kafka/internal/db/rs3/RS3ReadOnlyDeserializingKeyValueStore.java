@@ -68,6 +68,18 @@ public class RS3ReadOnlyDeserializingKeyValueStore<K, V>
     );
   }
 
+  public static <K, V> RS3ReadOnlyKeyValueStore<K, V> forKeyValue(
+      final RS3ReadOnlyKeyValueStore<Bytes, byte[]> wrapped,
+      final Serde<K> keySerde,
+      final Serde<V> valueSerde
+  ) {
+    return new RS3ReadOnlyDeserializingKeyValueStore<>(
+        wrapped,
+        keySerde,
+        valueSerde.deserializer()
+    );
+  }
+
   private Bytes serializeKey(final K key) {
     return Bytes.wrap(keySerde.serializer().serialize("", key));
   }
@@ -77,6 +89,6 @@ public class RS3ReadOnlyDeserializingKeyValueStore<K, V>
   }
 
   private V deserializeValue(final byte[] value) {
-    return valueDeserializer.deserialize("", value);
+    return value == null ? null : valueDeserializer.deserialize("", value);
   }
 }

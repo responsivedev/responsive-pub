@@ -150,6 +150,7 @@ public class SnapshotIntegrationTest {
                 "count-store",
                 Serdes.Long(),
                 Serdes.Long(),
+                true,
                 (k, p) -> (int) (new LongDeserializer().deserialize("", k.get()) % p)
             );
         final Optional<Long> partitionPoint = SnapshotPartitionPoint.partitionPoint(
@@ -184,6 +185,7 @@ public class SnapshotIntegrationTest {
                 "count-store",
                 Serdes.Long(),
                 Serdes.Long(),
+                true,
                 (k, p) -> (int) (deserializer.deserialize("", k.get()) % p)
         )
     ) {

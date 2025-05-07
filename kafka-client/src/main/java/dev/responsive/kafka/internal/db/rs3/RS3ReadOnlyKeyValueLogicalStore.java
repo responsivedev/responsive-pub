@@ -101,7 +101,8 @@ public class RS3ReadOnlyKeyValueLogicalStore<K, V> implements ReadOnlyKeyValueLo
       final Snapshot snapshot,
       final String storeName,
       final Serde<K> keySerde,
-      final Serde<V> valueSerde
+      final Serde<V> valueSerde,
+      final boolean timestamped
   ) {
     return createFromSnapshot(
         readerClient,
@@ -109,6 +110,7 @@ public class RS3ReadOnlyKeyValueLogicalStore<K, V> implements ReadOnlyKeyValueLo
         storeName,
         keySerde,
         valueSerde,
+        timestamped,
         (k, p) -> BuiltInPartitioner.partitionForKey(k.get(), p)
     );
   }
@@ -120,6 +122,7 @@ public class RS3ReadOnlyKeyValueLogicalStore<K, V> implements ReadOnlyKeyValueLo
       final String storeName,
       final Serde<K> keySerde,
       final Serde<V> valueSerde,
+      final boolean timestamped,
       final BiFunction<Bytes, Integer, Integer> partitioner
   ) {
     final var checkpointsByPartition = snapshot.taskSnapshots()
@@ -163,11 +166,16 @@ public class RS3ReadOnlyKeyValueLogicalStore<K, V> implements ReadOnlyKeyValueLo
     final ArrayList<RS3ReadOnlyKeyValueStore<Bytes, V>> stores = new ArrayList<>();
     for (int i = 0; i < npartitions; i++) {
       final var bytesStore = new RS3ReadOnlyKeyValueBytesStore(readerClient, storeReaderId, i);
-      stores.add(RS3ReadOnlyDeserializingKeyValueStore.forTimestamped(
-          bytesStore,
-          Serdes.Bytes(),
-          valueSerde
-      ));
+      stores.add(timestamped ?
+              RS3ReadOnlyDeserializingKeyValueStore.forTimestamped(
+                  bytesStore,
+                  Serdes.Bytes(),
+                  valueSerde)
+              : RS3ReadOnlyDeserializingKeyValueStore.forKeyValue(
+                  bytesStore,
+              Serdes.Bytes(),
+              valueSerde)
+      );
     }
     final int finalPartitions = npartitions;
     return new RS3ReadOnlyKeyValueLogicalStore<>(

@@ -106,11 +106,19 @@ public class SnapshotCommitListener {
 
     final long generation = orchestrator.getCurrentGeneration();
 
+    LOG.debug("found current generation {}", generation);
+
     // go task by task
     final List<Snapshot.TaskSnapshotMetadata> taskSnapshots = new ArrayList<>(tasksInCommit.size());
     for (final TaskId taskId : tasksInCommit) {
       final long taskGeneration = generationStorage.lookupGeneration(taskId);
+      LOG.debug("found task generation {} for {}", taskGeneration, taskId);
       if (taskGeneration >= generation) {
+        LOG.debug("current task generation {} for {} at current generation {}. skipping",
+            taskGeneration,
+            taskId,
+            generation
+        );
         // we already have a snapshot for this task, skip
         continue;
       }
@@ -141,6 +149,7 @@ public class SnapshotCommitListener {
         );
         continue;
       }
+      LOG.info("checkpointing stores for task {}", taskId);
       // checkpoint stores
       final Map<String, byte[]> storeCheckpoints = new HashMap<>();
       final var stores = storeRegistry.getRegisteredStoresForTask(taskId, threadId);
@@ -151,13 +160,16 @@ public class SnapshotCommitListener {
           // for stores sourced from a source topic
           changelogOffset
               = Optional.of(committedOffsetsFromCommit.get(store.changelogTopicPartition()));
+          LOG.info("found changelog offset from source topic {}", changelogOffset.get());
         } else if (writtenOffsetsFromCommit.containsKey(store.changelogTopicPartition())) {
           // for stores with an internal changelog topic
           changelogOffset
               = Optional.of(writtenOffsetsFromCommit.get(store.changelogTopicPartition()));
+          LOG.info("found changelog offset from changelog topic {}", changelogOffset.get());
         } else {
           // the task's source offset advanced, but it didn't write anything
           changelogOffset = Optional.empty();
+          LOG.info("tasks's source offset advanced but no store writes");
         }
         final var checkpoint = store.callbacks().checkpoint(changelogOffset);
         storeCheckpoints.put(store.storeName(), checkpoint);
@@ -168,9 +180,11 @@ public class SnapshotCommitListener {
           storeCheckpoints,
           clock.get()
       );
+      LOG.info("add task snapshot metadata: {}", tsm);
       taskSnapshots.add(tsm);
     }
     if (!taskSnapshots.isEmpty()) {
+      LOG.info("computed task snapshots: {}", taskSnapshots);
       orchestrator.reportTaskSnapshotMetadata(generation, taskSnapshots);
     }
   }
