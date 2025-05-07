@@ -25,7 +25,7 @@ services:
         ipv4_address: 10.0.0.61
   rs3:
     # Remember to update the image in github-e2e.yaml as well
-    image: public.ecr.aws/j8q9y0n6/responsiveinc/rs3-antithesis:0.1.0-main.77.0.patch-object-store-retries.8
+    image: public.ecr.aws/j8q9y0n6/responsiveinc/rs3-antithesis:0.1.0-main.84.0.patch-object-store-retries.0
     platform: linux/amd64
     container_name: rs3
     hostname: rs3
