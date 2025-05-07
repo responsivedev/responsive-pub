@@ -14,6 +14,7 @@ package dev.responsive.kafka.internal.db.rs3.client.grpc;
 
 import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.basicPutProto;
 import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.createStoreOptionsProto;
+import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.walOffsetProto;
 import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpsRs3TestUtil.newEndOfStreamResult;
 import static dev.responsive.kafka.internal.utils.Utils.lssIdProto;
 import static dev.responsive.kafka.internal.utils.Utils.uuidToProto;
@@ -33,6 +34,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import dev.responsive.kafka.internal.db.rs3.client.CreateCheckpointResult;
 import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes;
 import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes.ClockType;
 import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes.CreateStoreOptions;
@@ -1250,6 +1252,42 @@ class GrpcRS3ClientTest {
           is(Status.Code.UNKNOWN)
       );
     }
+  }
+
+  @Test
+  public void shouldCreateCheckpoint() {
+    final var checkpointId = UUID.randomUUID();
+    final var checkpointPath = "/some/checkpoint/path";
+    final var storageCheckpoint = Rs3.StorageCheckpoint.newBuilder().setSlatedbStorageCheckpoint(
+        Rs3.SlateDbStorageCheckpoint
+            .newBuilder()
+            .setCheckpointId(uuidToProto(checkpointId))
+            .setPath(checkpointPath)
+            .build()
+    );
+    when(stub.createCheckpoint(any()))
+        .thenReturn(Rs3.CreateCheckpointResult
+                        .newBuilder()
+                        .setCheckpoint(storageCheckpoint)
+                        .build());
+
+    final var checkpoint = client.createCheckpoint(
+        STORE_ID,
+        LSS_ID,
+        PSS_ID,
+        10
+    ).checkpoint();
+
+    assertThat(checkpoint.map(CreateCheckpointResult.SlatedbCheckpoint::id), is(checkpointId));
+    assertThat(checkpoint.map(CreateCheckpointResult.SlatedbCheckpoint::path), is(checkpointPath));
+
+    verify(stub).createCheckpoint(
+        Rs3.CreateCheckpointRequest
+            .newBuilder()
+            .setLssId(lssIdProto(LSS_ID))
+            .setExpectedWrittenOffset(walOffsetProto(10))
+            .build()
+    );
   }
 
   private StreamObserver<Rs3.WriteWALSegmentResult> verifyWalSegmentResultObserver() {

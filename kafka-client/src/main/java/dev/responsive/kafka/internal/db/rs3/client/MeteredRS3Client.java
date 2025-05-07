@@ -168,6 +168,16 @@ public class MeteredRS3Client implements RS3Client {
     return delegate.createStore(storeName, options);
   }
 
+  @Override
+  public CreateCheckpointResult createCheckpoint(
+      final UUID storeId,
+      final LssId lssId,
+      final int pssId,
+      final long expectedWrittenOffset
+  ) {
+    return delegate.createCheckpoint(storeId, lssId, pssId, expectedWrittenOffset);
+  }
+
   public void close() {
     this.metrics.removeSensor(GET_SENSOR_NAME);
   }

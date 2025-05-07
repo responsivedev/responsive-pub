@@ -24,11 +24,13 @@ import static dev.responsive.kafka.internal.utils.Utils.uuidToProto;
 
 import com.google.common.annotations.VisibleForTesting;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
+import dev.responsive.kafka.internal.db.rs3.client.CreateCheckpointResult;
 import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes.CreateStoreOptions;
 import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes.CreateStoreResult;
 import dev.responsive.kafka.internal.db.rs3.client.CurrentOffsets;
 import dev.responsive.kafka.internal.db.rs3.client.LssId;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Client;
+import dev.responsive.kafka.internal.db.rs3.client.RS3Exception;
 import dev.responsive.kafka.internal.db.rs3.client.RS3TimeoutException;
 import dev.responsive.kafka.internal.db.rs3.client.RS3TransientException;
 import dev.responsive.kafka.internal.db.rs3.client.Range;
@@ -389,6 +391,41 @@ public class GrpcRS3Client implements RS3Client {
     );
 
     return new CreateStoreResult(uuidFromProto(result.getStoreId()), result.getPssIdsList());
+  }
+
+  @Override
+  public CreateCheckpointResult createCheckpoint(
+      final UUID storeId,
+      final LssId lssId,
+      final int pssId,
+      final long expectedWrittenOffset
+  ) {
+    final var request = Rs3.CreateCheckpointRequest.newBuilder()
+        .setLssId(lssIdProto(lssId))
+        .setExpectedWrittenOffset(walOffsetProto(expectedWrittenOffset))
+        .build();
+    final var stub = stubs.stubs(storeId, pssId).syncStub();
+
+    final var result = withRetry(
+        () -> stub.createCheckpoint(request),
+        () -> "CreateCheckpoint(storeId=" + storeId
+            + ", lssId=" + lssId
+            + ", pssId=" + pssId
+            + ", expectedWrittenOffset=" + expectedWrittenOffset
+            + ")"
+    );
+
+    final var checkpoint = result.getCheckpoint();
+    if (!checkpoint.hasSlatedbStorageCheckpoint()) {
+      throw new RS3Exception("Unexpected checkpoint type in CreateCheckpoint result");
+    }
+
+    final Rs3.SlateDbStorageCheckpoint slatedbCheckpoint =
+        checkpoint.getSlatedbStorageCheckpoint();
+    return new CreateCheckpointResult(new CreateCheckpointResult.SlatedbCheckpoint(
+        uuidFromProto(slatedbCheckpoint.getCheckpointId()),
+        slatedbCheckpoint.getPath()
+    ));
   }
 
   private void checkField(final Supplier<Boolean> check, final String field) {
