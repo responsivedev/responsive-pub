@@ -51,6 +51,7 @@ public class WalEntryPutWriter implements WalEntry.Visitor {
         .setKey(ByteString.copyFrom(windowedPut.key()))
         .setWindowTimestamp(windowedPut.windowTimestamp());
     final var valueProto = Rs3.WindowValue.newBuilder()
+        .setEventTimestamp(windowedPut.timestamp())
         .setValue(ByteString.copyFrom(windowedPut.value()));
     final var kvProto = Rs3.WindowKeyValue.newBuilder()
         .setKey(keyProto)
