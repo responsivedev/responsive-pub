@@ -94,4 +94,8 @@ public interface RemoteKVTable<S> extends RemoteTable<Bytes, S> {
    * @return the approximate number of entries for this kafka partition
    */
   long approximateNumEntries(int kafkaPartition);
+
+  default byte[] checkpoint() {
+    throw new UnsupportedOperationException("checkpoints not supported for this store type");
+  }
 }

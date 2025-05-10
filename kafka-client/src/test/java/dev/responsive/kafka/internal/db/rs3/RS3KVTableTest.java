@@ -17,12 +17,15 @@ import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import dev.responsive.kafka.internal.db.rs3.client.CurrentOffsets;
 import dev.responsive.kafka.internal.db.rs3.client.LssId;
+import dev.responsive.kafka.internal.db.rs3.client.PssCheckpoint;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Client;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Exception;
 import dev.responsive.kafka.internal.db.rs3.client.RS3TimeoutException;
@@ -35,6 +38,7 @@ import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -395,4 +399,56 @@ class RS3KVTableTest {
     assertThat(statusRuntimeException.getStatus(), is(Status.UNKNOWN));
   }
 
+  @Test
+  public void shouldCreateCheckpoint() {
+    // given:
+    final var storeId = UUID.randomUUID();
+    final int partition = 1;
+    final var pssCheckpoint = new PssCheckpoint(
+        storeId,
+        partition,
+        new PssCheckpoint.SlateDbStorageCheckpoint(
+            "/foo/bar",
+            UUID.randomUUID()
+        ),
+        null
+    );
+    when(metrics.addSensor(any()))
+        .thenReturn(Mockito.mock(Sensor.class));
+    when(client.createCheckpoint(any(), any(), anyInt(), any())).thenReturn(pssCheckpoint);
+    var lssId = new LssId(partition);
+    when(partitioner.pssForLss(lssId)).thenReturn(List.of(partition));
+    when(client.getCurrentOffsets(storeId, lssId, partition))
+        .thenReturn(new CurrentOffsets(Optional.empty(), Optional.empty()));
+    final var table = new RS3KVTable(
+        "store",
+        storeId,
+        client,
+        partitioner,
+        metrics,
+        metricsScopeBuilder
+    );
+    table.init(partition);
+
+    // when:
+    final byte[] serializedCheckpoint = table.checkpoint();
+
+    // then:
+    verify(client).createCheckpoint(
+        storeId, new LssId(partition), partition, Optional.empty());
+    final TableCheckpoint checkpoint = TableCheckpoint.deserialize(serializedCheckpoint);
+    assertThat(
+        checkpoint,
+        is(
+            new TableCheckpoint(
+                List.of(
+                    new TableCheckpoint.TablePssCheckpoint(
+                        Optional.empty(),
+                        pssCheckpoint
+                    )
+                )
+            )
+        )
+    );
+  }
 }
