@@ -14,14 +14,14 @@ package dev.responsive.kafka.internal.db.rs3.client.grpc;
 
 import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.basicKeyProto;
 import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.checkField;
+import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.lssIdProto;
 import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.storeStatusFromProto;
 import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.storeTypeFromProto;
+import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.uuidFromProto;
+import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.uuidToProto;
 import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.walOffsetFromProto;
 import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.walOffsetProto;
 import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.windowKeyProto;
-import static dev.responsive.kafka.internal.utils.Utils.lssIdProto;
-import static dev.responsive.kafka.internal.utils.Utils.uuidFromProto;
-import static dev.responsive.kafka.internal.utils.Utils.uuidToProto;
 
 import com.google.common.annotations.VisibleForTesting;
 import dev.responsive.kafka.api.config.ResponsiveConfig;

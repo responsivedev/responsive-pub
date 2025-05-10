@@ -15,6 +15,7 @@ package dev.responsive.kafka.internal.db.rs3.client.grpc;
 import com.google.protobuf.ByteString;
 import dev.responsive.kafka.internal.db.rs3.client.CreateStoreTypes;
 import dev.responsive.kafka.internal.db.rs3.client.Delete;
+import dev.responsive.kafka.internal.db.rs3.client.LssId;
 import dev.responsive.kafka.internal.db.rs3.client.PssCheckpoint;
 import dev.responsive.kafka.internal.db.rs3.client.Put;
 import dev.responsive.kafka.internal.db.rs3.client.RS3Exception;
@@ -211,6 +212,13 @@ public class GrpcRs3Util {
     return new UUID(uuidProto.getHigh(), uuidProto.getLow());
   }
 
+  public static Rs3.UUID uuidToProto(final UUID uuid) {
+    return Rs3.UUID.newBuilder()
+        .setHigh(uuid.getMostSignificantBits())
+        .setLow(uuid.getLeastSignificantBits())
+        .build();
+  }
+
   public static PssCheckpoint pssCheckpointFromProto(
       final UUID storeId,
       final int pssId,
@@ -225,6 +233,12 @@ public class GrpcRs3Util {
         uuidFromProto(slateDbCheckpointProto.getCheckpointId())
     );
     return new PssCheckpoint(storeId, pssId, slateDbCheckpoint, null);
+  }
+
+  public static Rs3.LSSId lssIdProto(final LssId lssId) {
+    return Rs3.LSSId.newBuilder()
+        .setId(lssId.id())
+        .build();
   }
 
   public static void checkField(final Supplier<Boolean> check, final String field) {

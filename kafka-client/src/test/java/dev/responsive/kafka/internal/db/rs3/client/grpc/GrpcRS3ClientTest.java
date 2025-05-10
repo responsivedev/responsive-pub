@@ -14,10 +14,10 @@ package dev.responsive.kafka.internal.db.rs3.client.grpc;
 
 import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.basicPutProto;
 import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.createStoreOptionsProto;
+import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.lssIdProto;
+import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.uuidToProto;
 import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpcRs3Util.walOffsetProto;
 import static dev.responsive.kafka.internal.db.rs3.client.grpc.GrpsRs3TestUtil.newEndOfStreamResult;
-import static dev.responsive.kafka.internal.utils.Utils.lssIdProto;
-import static dev.responsive.kafka.internal.utils.Utils.uuidToProto;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThan;
