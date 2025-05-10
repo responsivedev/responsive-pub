@@ -405,11 +405,14 @@ public class GrpcRS3Client implements RS3Client {
         .build();
     final RS3Grpc.RS3BlockingStub stub = stubs.stubs(storeId, pssId).syncStub();
     final Rs3.CreateCheckpointResult result;
-    try {
-      result = stub.createCheckpoint(request);
-    } catch (final RuntimeException e) {
-      throw GrpcRs3Util.wrapThrowable(e);
-    }
+    result = withRetry(
+        () -> stub.createCheckpoint(request),
+        () -> String.format("CreateCheckpoint(storeId=%s, lssId=%s, pssId=%d",
+            storeId.toString(),
+            lssId,
+            pssId
+        )
+    );
     checkField(result::hasCheckpoint, "checkpoint");
     return GrpcRs3Util.pssCheckpointFromProto(storeId, pssId, result.getCheckpoint());
   }

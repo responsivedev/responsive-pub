@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 import dev.responsive.kafka.internal.db.rs3.client.PssCheckpoint;
 import java.io.IOException;
+import java.nio.charset.Charset;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -88,6 +89,11 @@ public class TableCheckpoint {
     public int hashCode() {
       return Objects.hash(writtenOffset, checkpoint);
     }
+  }
+
+  @Override
+  public String toString() {
+    return new String(TableCheckpoint.serialize(this), Charset.defaultCharset());
   }
 
   public static byte[] serialize(TableCheckpoint tableCheckpoint) {
