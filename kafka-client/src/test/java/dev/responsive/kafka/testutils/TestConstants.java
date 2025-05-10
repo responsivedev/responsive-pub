@@ -17,7 +17,7 @@ import org.testcontainers.utility.DockerImageName;
 public class TestConstants {
 
   public static final DockerImageName CASSANDRA = DockerImageName.parse("cassandra:4.1.0");
-  public static final DockerImageName KAFKA = DockerImageName.parse("confluentinc/cp-kafka:7.3.2");
+  public static final DockerImageName KAFKA = DockerImageName.parse("confluentinc/cp-kafka:7.9.0");
   public static final DockerImageName MONGODB = DockerImageName.parse("mongo:7.0.2");
 
 }

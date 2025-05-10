@@ -52,7 +52,9 @@ dependencyResolutionManagement {
             version("mongoDB", "4.10.2")
             version("fabric8", "6.13.4")
 
-            library("jackson", "com.fasterxml.jackson.datatype", "jackson-datatype-jdk8").versionRef("jackson")
+            library("jackson-jdk8", "com.fasterxml.jackson.datatype", "jackson-datatype-jdk8").versionRef("jackson")
+            library("jackson-jsr310", "com.fasterxml.jackson.datatype", "jackson-datatype-jsr310").versionRef("jackson")
+            bundle("jackson", listOf("jackson-jdk8", "jackson-jsr310"))
 
             library("kafka-clients", "org.apache.kafka", "kafka-clients").versionRef("kafka")
             library("kafka-streams", "org.apache.kafka", "kafka-streams").versionRef("kafka")

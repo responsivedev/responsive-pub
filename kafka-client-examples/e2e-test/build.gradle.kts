@@ -31,7 +31,7 @@ dependencies {
     implementation(libs.guava)
     implementation(libs.slf4j.log4j2)
     implementation(libs.bundles.scylla)
-    implementation(libs.jackson)
+    implementation(libs.bundles.jackson)
     implementation(libs.mongodb.driver.core)
 
     testImplementation(testlibs.bundles.base)
