@@ -81,7 +81,6 @@ public class PartitionedOperations implements KeyValueOperations {
       final StateStoreContext storeContext,
       final ResponsiveKeyValueParams params
   ) throws InterruptedException, TimeoutException {
-
     final var log = new LogContext(
         String.format("store [%s] ", name.kafkaName())
     ).logger(PartitionedOperations.class);
@@ -177,11 +176,13 @@ public class PartitionedOperations implements KeyValueOperations {
             }
 
             @Override
-            public byte[] checkpoint() {
+            public byte[] checkpoint(final Optional<Long> committedOffset) {
+              initializedBuffer.forceFlush(committedOffset);
               return table.checkpoint();
             }
           },
-          streamThreadId()
+          streamThreadId(),
+          storeContext.taskId()
       );
       storeRegistry.registerStore(registration);
 

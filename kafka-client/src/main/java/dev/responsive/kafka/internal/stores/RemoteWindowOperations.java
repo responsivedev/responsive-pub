@@ -169,7 +169,8 @@ public class RemoteWindowOperations implements WindowOperations {
               ? OptionalLong.empty()
               : OptionalLong.of(restoreStartOffset),
           buffer::flush,
-          streamThreadId()
+          streamThreadId(),
+          storeContext.taskId()
       );
       storeRegistry.registerStore(registration);
 

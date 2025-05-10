@@ -33,6 +33,7 @@ import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistry;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.Producer;
@@ -308,7 +309,8 @@ class ResponsiveKafkaClientSupplierTest {
         metrics,
         storageBackend,
         oeReporter,
-        false
+        false,
+        Optional.empty()
     );
   }
 

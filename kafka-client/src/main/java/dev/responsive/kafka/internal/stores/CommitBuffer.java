@@ -48,6 +48,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -93,6 +94,7 @@ public class CommitBuffer<K extends Comparable<K>, P> implements Closeable {
   private final Sensor flushSensor;
   private final Sensor flushLatencySensor;
   private final Sensor flushErrorsSensor;
+  private Optional<Long> lastKnownConsumedOffset = Optional.empty();
 
   private KafkaFuture<DeletedRecords> deleteRecordsFuture = KafkaFuture.completedFuture(null);
 
@@ -261,10 +263,12 @@ public class CommitBuffer<K extends Comparable<K>, P> implements Closeable {
   }
 
   public void put(final K key, final byte[] value, long timestamp) {
+    lastKnownConsumedOffset = Optional.empty();
     buffer.put(key, Result.value(key, value, timestamp));
   }
 
   public void tombstone(final K key, long timestamp) {
+    lastKnownConsumedOffset = Optional.empty();
     buffer.put(key, Result.tombstone(key, timestamp));
   }
 
@@ -382,8 +386,45 @@ public class CommitBuffer<K extends Comparable<K>, P> implements Closeable {
     return recordsTrigger || bytesTrigger || timeTrigger;
   }
 
+  /**
+   * Force a flush of the commit buffer. When forcing a flush of the commit buffer, the
+   * caller can specify the offset in the changelog topic up to which the commit buffer
+   * has data. If not specified, then the commit buffer will use the last offset specified
+   * in a call to flush or forceFlush, unless there were writes done since the last flush.
+   * In that case, this call throws an IllegalStateException.
+   */
+  public void forceFlush(final Optional<Long> maybeConsumedOffset) {
+    if (buffer.sizeInRecords() == 0) {
+      return;
+    }
+    final long consumedOffset;
+    if (maybeConsumedOffset.isPresent()) {
+      consumedOffset = maybeConsumedOffset.get();
+    } else if (lastKnownConsumedOffset.isPresent()) {
+      consumedOffset = lastKnownConsumedOffset.get();
+    } else {
+      throw new IllegalStateException(
+          "tried to force-flush buffer w/ new writes since last flush without specifying"
+              + " a consumed offset"
+      );
+    }
+    flush(consumedOffset, true);
+  }
+
   public void flush(final long consumedOffset) {
-    if (!triggerFlush()) {
+    flush(consumedOffset, false);
+  }
+
+  private void flush(final long consumedOffset, final boolean force) {
+    if (lastKnownConsumedOffset.isPresent() && lastKnownConsumedOffset.get() > consumedOffset) {
+      throw new IllegalStateException(String.format(
+          "tried to flush to an earlier offset (%d) than last known consumed offset (%d",
+          consumedOffset,
+          lastKnownConsumedOffset.get()
+      ));
+    }
+    lastKnownConsumedOffset = Optional.of(consumedOffset);
+    if (!force && !triggerFlush()) {
       return;
     }
 
@@ -471,6 +512,7 @@ public class CommitBuffer<K extends Comparable<K>, P> implements Closeable {
     }
 
     if (consumedOffset >= 0) {
+      lastKnownConsumedOffset = Optional.of(consumedOffset);
       doFlush(consumedOffset, records.size());
     }
   }

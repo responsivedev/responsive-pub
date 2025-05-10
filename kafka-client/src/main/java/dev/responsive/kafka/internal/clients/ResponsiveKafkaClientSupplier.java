@@ -22,6 +22,8 @@ import dev.responsive.kafka.api.config.StorageBackend;
 import dev.responsive.kafka.internal.metrics.EndOffsetsPoller;
 import dev.responsive.kafka.internal.metrics.MetricPublishingCommitListener;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
+import dev.responsive.kafka.internal.snapshot.KafkaStreamsSnapshotContext;
+import dev.responsive.kafka.internal.snapshot.SnapshotCommitListener;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistry;
 import java.io.Closeable;
 import java.io.IOException;
@@ -30,6 +32,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.function.Function;
 import org.apache.kafka.clients.CommonClientConfigs;
@@ -68,6 +71,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
   private final boolean eos;
   private final StorageBackend storageBackend;
   private final boolean repairRestoreOffsetOutOfRange;
+  private final Optional<KafkaStreamsSnapshotContext> snapshotCtx;
 
   public ResponsiveKafkaClientSupplier(
       final KafkaClientSupplier clientSupplier,
@@ -76,7 +80,8 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
       final ResponsiveStoreRegistry storeRegistry,
       final ResponsiveMetrics metrics,
       final OriginEventReporter oeReporter,
-      final StorageBackend storageBackend
+      final StorageBackend storageBackend,
+      final Optional<KafkaStreamsSnapshotContext> snapshotCtx
   ) {
     this(
         new Factories() {
@@ -87,7 +92,8 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
         metrics,
         storageBackend,
         oeReporter,
-        responsiveConfig.getBoolean(ResponsiveConfig.RESTORE_OFFSET_REPAIR_ENABLED_CONFIG)
+        responsiveConfig.getBoolean(ResponsiveConfig.RESTORE_OFFSET_REPAIR_ENABLED_CONFIG),
+        snapshotCtx
     );
   }
 
@@ -99,7 +105,8 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
       final ResponsiveMetrics metrics,
       final StorageBackend storageBackend,
       final OriginEventReporter oeReporter,
-      final boolean repairRestoreOffsetOutOfRange
+      final boolean repairRestoreOffsetOutOfRange,
+      final Optional<KafkaStreamsSnapshotContext> snapshotCtx
   ) {
     this.factories = factories;
     this.wrapped = wrapped;
@@ -117,6 +124,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
         this
     );
     applicationId = configs.getString(StreamsConfig.APPLICATION_ID_CONFIG);
+    this.snapshotCtx = snapshotCtx;
   }
 
   @Override
@@ -138,7 +146,8 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
         config,
         endOffsetsPoller,
         storeRegistry,
-        factories
+        factories,
+        snapshotCtx
     );
     return factories.createResponsiveProducer(
         (String) config.get(CommonClientConfigs.CLIENT_ID_CONFIG),
@@ -169,7 +178,8 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
         config,
         endOffsetsPoller,
         storeRegistry,
-        factories
+        factories,
+        snapshotCtx
     );
     // TODO: the end offsets poller call is kind of heavy for a synchronized block
     return factories.createResponsiveConsumer(
@@ -253,7 +263,8 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
         final Map<String, Object> configs,
         final EndOffsetsPoller endOffsetsPoller,
         final ResponsiveStoreRegistry storeRegistry,
-        final Factories factories
+        final Factories factories,
+        final Optional<KafkaStreamsSnapshotContext> snapshotContext
     ) {
       if (threadListeners.containsKey(threadId)) {
         final var tl = threadListeners.get(threadId);
@@ -262,6 +273,16 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
       }
       final var offsetRecorder = factories.createOffsetRecorder(eos, threadId);
       final var originEventRecorder = factories.createOriginEventRecorder(oeReporter, eos);
+      final var storeCommitListener = new StoreCommitListener(storeRegistry, offsetRecorder);
+      final var snapshotCommitListener = snapshotContext.map(
+          ctx -> new SnapshotCommitListener(
+              ctx.orchestrator(),
+              ctx.generationStorage(),
+              storeRegistry,
+              ctx.topologyTaskInfo(),
+              offsetRecorder
+          )
+      );
       final var tl = new ReferenceCounted<>(
           String.format("ListenersForThread(%s)", threadId),
           new ListenersForThread(
@@ -272,9 +293,10 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
                   threadId,
                   offsetRecorder
               ),
-              new StoreCommitListener(storeRegistry, offsetRecorder),
+              storeCommitListener,
               endOffsetsPoller.addForThread(threadId),
-              originEventRecorder
+              originEventRecorder,
+              snapshotCommitListener
           )
       );
       threadListeners.put(threadId, tl);
@@ -306,6 +328,7 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
     final StoreCommitListener storeCommitListener;
     final EndOffsetsPoller.Listener endOffsetsPollerListener;
     final OriginEventTracker originEventTracker;
+    final Optional<SnapshotCommitListener> snapshotCommitListener;
 
     public ListenersForThread(
         final String threadId,
@@ -313,7 +336,8 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
         final MetricPublishingCommitListener committedOffsetMetricListener,
         final StoreCommitListener storeCommitListener,
         final EndOffsetsPoller.Listener endOffsetsPollerListener,
-        final OriginEventTracker originEventTracker
+        final OriginEventTracker originEventTracker,
+        final Optional<SnapshotCommitListener> snapshotCommitListener
     ) {
       this.threadId = threadId;
       this.offsetRecorder = offsetRecorder;
@@ -321,12 +345,14 @@ public final class ResponsiveKafkaClientSupplier implements KafkaClientSupplier 
       this.storeCommitListener = storeCommitListener;
       this.endOffsetsPollerListener = endOffsetsPollerListener;
       this.originEventTracker = originEventTracker;
+      this.snapshotCommitListener = snapshotCommitListener;
     }
 
     @Override
     public void close() {
       committedOffsetMetricListener.close();
       endOffsetsPollerListener.close();
+      snapshotCommitListener.ifPresent(SnapshotCommitListener::close);
     }
   }
 

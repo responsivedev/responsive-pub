@@ -60,6 +60,7 @@ import dev.responsive.kafka.internal.metrics.ResponsiveStateListener;
 import dev.responsive.kafka.internal.metrics.exporter.MetricsExportService;
 import dev.responsive.kafka.internal.metrics.exporter.NoopMetricsExporterService;
 import dev.responsive.kafka.internal.metrics.exporter.otel.OtelMetricsService;
+import dev.responsive.kafka.internal.snapshot.KafkaStreamsSnapshotContext;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistry;
 import dev.responsive.kafka.internal.utils.SessionClients;
 import dev.responsive.kafka.internal.utils.SessionUtil;
@@ -471,6 +472,11 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
           ) : innerClientSupplier;
 
       this.oeReporter = reporter(responsiveConfig, license);
+      final var snapshotCtx = KafkaStreamsSnapshotContext.create(
+          responsiveConfig,
+          streamsConfig,
+          topology.describe()
+      );
       this.responsiveKafkaClientSupplier = new ResponsiveKafkaClientSupplier(
           delegateKafkaClientSupplier,
           responsiveConfig,
@@ -478,7 +484,8 @@ public class ResponsiveKafkaStreams extends KafkaStreams {
           storeRegistry,
           metrics,
           oeReporter,
-          storageBackend
+          storageBackend,
+          snapshotCtx
       );
 
       final var admin = responsiveKafkaClientSupplier.getAdmin(responsiveConfig.originals());

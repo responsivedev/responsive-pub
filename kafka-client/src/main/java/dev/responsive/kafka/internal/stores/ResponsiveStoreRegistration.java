@@ -14,9 +14,11 @@ package dev.responsive.kafka.internal.stores;
 
 import com.datastax.oss.driver.shaded.guava.common.annotations.VisibleForTesting;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.OptionalLong;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.streams.processor.TaskId;
 import org.slf4j.Logger;
 
 public final class ResponsiveStoreRegistration {
@@ -27,6 +29,7 @@ public final class ResponsiveStoreRegistration {
   private final TopicPartition changelogTopicPartition;
   private final StoreCallbacks callbacks;
   private final String threadId;
+  private final TaskId taskId;
   private final InjectedStoreArgs injectedStoreArgs = new InjectedStoreArgs();
 
   private final OptionalLong startOffset; // stored offset during init, (where restore should start)
@@ -37,13 +40,15 @@ public final class ResponsiveStoreRegistration {
       final TopicPartition changelogTopicPartition,
       final OptionalLong startOffset,
       final StoreCallbacks callbacks,
-      final String threadId
+      final String threadId,
+      final TaskId taskId
   ) {
     this.storeName = Objects.requireNonNull(storeName);
     this.changelogTopicPartition = Objects.requireNonNull(changelogTopicPartition);
     this.startOffset = startOffset;
     this.callbacks = Objects.requireNonNull(callbacks);
     this.threadId = Objects.requireNonNull(threadId);
+    this.taskId = Objects.requireNonNull(taskId);
     this.log = new LogContext(
         String.format("changelog [%s]", changelogTopicPartition)
     ).logger(ResponsiveStoreRegistration.class);
@@ -74,10 +79,14 @@ public final class ResponsiveStoreRegistration {
     return threadId;
   }
 
+  public TaskId taskId() {
+    return taskId;
+  }
+
   public interface StoreCallbacks {
     void notifyCommit(long committedOffset);
 
-    default byte[] checkpoint() {
+    default byte[] checkpoint(Optional<Long> committedOffset) {
       throw new UnsupportedOperationException("checkpoints not supported for store type");
     }
   }

@@ -24,7 +24,7 @@ dependencies {
     implementation(project(":controller-api"))
 
     implementation(libs.crd.generator.atp)
-    implementation(libs.jackson)
+    implementation(libs.bundles.jackson)
     implementation(libs.javaoperatorsdk)
 
     implementation(libs.bundles.commons)

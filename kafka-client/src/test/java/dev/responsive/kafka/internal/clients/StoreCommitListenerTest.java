@@ -24,6 +24,7 @@ import java.util.stream.Collectors;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.processor.TaskId;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -50,14 +51,16 @@ class StoreCommitListenerTest {
         PARTITION1,
         OptionalLong.of(0),
         store1Callbacks,
-        "thread1"
+        "thread1",
+        new TaskId(0, 0)
     ));
     registry.registerStore(new ResponsiveStoreRegistration(
         "store2",
         PARTITION2,
         OptionalLong.of(0),
         store2Callbacks,
-        "thread1"
+        "thread1",
+        new TaskId(0, 1)
     ));
     commitListener = new StoreCommitListener(registry, offsetRecorder);
   }

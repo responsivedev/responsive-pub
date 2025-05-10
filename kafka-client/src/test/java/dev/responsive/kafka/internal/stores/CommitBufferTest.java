@@ -504,6 +504,96 @@ public class CommitBufferTest {
   }
 
   @Test
+  public void shouldForceFlush() {
+    // Given:
+    try (final CommitBuffer<Bytes, Integer> buffer = createCommitBuffer(
+        FlushTriggers.ofRecords(100),
+        100,
+        Instant::now
+    )) {
+
+      for (byte i = 0; i < 9; i++) {
+        buffer.put(Bytes.wrap(new byte[]{i}), VALUE, CURRENT_TS);
+      }
+
+      // when:
+      buffer.forceFlush(Optional.of(9L));
+
+      // Then:
+      assertThat(table.lastWrittenOffset(KAFKA_PARTITION), is(9L));
+    }
+  }
+
+  @Test
+  public void shouldForceFlushUsingLastKnownConsumedOffset() {
+    // Given:
+    try (final CommitBuffer<Bytes, Integer> buffer = createCommitBuffer(
+        FlushTriggers.ofRecords(100),
+        100,
+        Instant::now
+    )) {
+
+      for (byte i = 0; i < 9; i++) {
+        buffer.put(Bytes.wrap(new byte[]{i}), VALUE, CURRENT_TS);
+      }
+      buffer.flush(9L);
+      assertThat(table.lastWrittenOffset(KAFKA_PARTITION), is(-1L));
+
+      // when:
+      buffer.forceFlush(Optional.empty());
+
+      // Then:
+      assertThat(table.lastWrittenOffset(KAFKA_PARTITION), is(9L));
+    }
+  }
+
+  @Test
+  public void shouldFailForceFlushIfPutsSinceLastFlushAndNoOffsetSpecified() {
+    // Given:
+    try (final CommitBuffer<Bytes, Integer> buffer = createCommitBuffer(
+        FlushTriggers.ofRecords(100),
+        100,
+        Instant::now
+    )) {
+
+      for (byte i = 0; i < 9; i++) {
+        buffer.put(Bytes.wrap(new byte[]{i}), VALUE, CURRENT_TS);
+      }
+      buffer.flush(9L);
+      assertThat(table.lastWrittenOffset(KAFKA_PARTITION), is(-1L));
+      buffer.put(Bytes.wrap(new byte[]{0}), VALUE, CURRENT_TS);
+
+      // when/then:
+      assertThrows(
+          IllegalStateException.class,
+          () -> buffer.forceFlush(Optional.empty()));
+    }
+  }
+
+  @Test
+  public void shouldFailForceFlushIfDeletesSinceLastFlushAndNoOffsetSpecified() {
+    // Given:
+    try (final CommitBuffer<Bytes, Integer> buffer = createCommitBuffer(
+        FlushTriggers.ofRecords(100),
+        100,
+        Instant::now
+    )) {
+
+      for (byte i = 0; i < 9; i++) {
+        buffer.put(Bytes.wrap(new byte[]{i}), VALUE, CURRENT_TS);
+      }
+      buffer.flush(9L);
+      assertThat(table.lastWrittenOffset(KAFKA_PARTITION), is(-1L));
+      buffer.tombstone(Bytes.wrap(new byte[]{0}), CURRENT_TS);
+
+      // when/then:
+      assertThrows(
+          IllegalStateException.class,
+          () -> buffer.forceFlush(Optional.empty()));
+    }
+  }
+
+  @Test
   public void shouldUpdateOffsetWhenNoRecordsInBuffer() {
     // Given:
     // just use an atomic reference as a mutable reference type
