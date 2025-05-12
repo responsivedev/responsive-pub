@@ -80,5 +80,12 @@ public interface RS3Client {
       CreateStoreOptions options
   );
 
+  PssCheckpoint createCheckpoint(
+      UUID storeId,
+      LssId lssId,
+      int pssId,
+      Optional<Long> expectedWrittenOffset
+  );
+
   void close();
 }

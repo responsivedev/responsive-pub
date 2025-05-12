@@ -137,6 +137,7 @@ dependencies {
     implementation("dev.responsive:controller-api:0.16.0")
     implementation(libs.bundles.scylla)
     implementation(libs.bundles.commons)
+    implementation(libs.jackson)
     implementation(libs.mongodb.driver.sync)
     implementation(libs.bundles.otel)
     implementation(libs.bundles.grpc)
