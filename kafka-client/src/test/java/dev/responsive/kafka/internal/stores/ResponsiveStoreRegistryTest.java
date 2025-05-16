@@ -19,6 +19,7 @@ import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistration;
 import dev.responsive.kafka.internal.stores.ResponsiveStoreRegistry;
 import java.util.OptionalLong;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.processor.TaskId;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -31,7 +32,8 @@ class ResponsiveStoreRegistryTest {
       TOPIC_PARTITION,
       OptionalLong.of(123L),
       o -> {},
-      "thread"
+      "thread",
+      new TaskId(0, 5)
   );
 
   private static final ResponsiveStoreRegistration UNINIT_REGISTRATION =
@@ -40,7 +42,8 @@ class ResponsiveStoreRegistryTest {
           UNINIT_TOPIC_PARTITION,
           OptionalLong.empty(),
           o -> { },
-          "thread"
+          "thread",
+          new TaskId(0, 2)
       );
 
   private final ResponsiveStoreRegistry registry = new ResponsiveStoreRegistry();
