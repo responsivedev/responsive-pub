@@ -41,6 +41,7 @@ public class StoreCommitListener {
       final TopicPartition p = e.getKey().getPartition();
       for (final ResponsiveStoreRegistration storeRegistration
           : storeRegistry.getRegisteredStoresForChangelog(p, threadId)) {
+        // Committed offsets are already exclusive (one more than last consumed offset)
         storeRegistration.callbacks().notifyCommit(e.getValue());
       }
     }
@@ -48,7 +49,8 @@ public class StoreCommitListener {
       final TopicPartition p = e.getKey();
       for (final ResponsiveStoreRegistration storeRegistration
           : storeRegistry.getRegisteredStoresForChangelog(p, threadId)) {
-        storeRegistration.callbacks().notifyCommit(e.getValue());
+        // Add one since the written offset is inclusive
+        storeRegistration.callbacks().notifyCommit(e.getValue() + 1);
       }
     }
   }
