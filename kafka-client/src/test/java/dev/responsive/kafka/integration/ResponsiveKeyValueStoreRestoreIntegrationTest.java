@@ -105,12 +105,10 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
-import org.slf4j.LoggerFactory;
 
 public class ResponsiveKeyValueStoreRestoreIntegrationTest {
 
