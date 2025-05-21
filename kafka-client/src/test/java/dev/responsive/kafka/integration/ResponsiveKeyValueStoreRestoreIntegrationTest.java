@@ -313,7 +313,6 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
     final long remoteOffset = changelogTable.lastWrittenOffset(0);
     assertThat(remoteOffset, greaterThan(0L));
     final long changelogEndOffset = IntegrationTestUtils.endOffset(admin, changelog);
-    LoggerFactory.getLogger(getClass()).info("Last offset for {} is {}", changelog, changelogEndOffset);
     assertThat(remoteOffset, lessThan(changelogEndOffset));
 
     // Restart with restore recorder
