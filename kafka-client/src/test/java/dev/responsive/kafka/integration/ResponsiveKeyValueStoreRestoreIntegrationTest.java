@@ -260,11 +260,9 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
     }
   }
 
-//  @ParameterizedTest
-//  @EnumSource(KVSchema.class)
-  @Test
-  public void shouldRestoreUnflushedChangelog() throws Exception {
-    final KVSchema type = KVSchema.KEY_VALUE;
+  @ParameterizedTest
+  @EnumSource(KVSchema.class)
+  public void shouldRestoreUnflushedChangelog(final KVSchema type) throws Exception {
     final Map<String, Object> properties = getMutableProperties(type);
     final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties);
     final KafkaClientSupplier defaultClientSupplier = new DefaultKafkaClientSupplier();
