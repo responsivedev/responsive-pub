@@ -62,11 +62,12 @@ public interface RemoteTable<K, S> {
 
   /**
    * Get the offset corresponding to the last write to the table for a specific
-   * Kafka partition.
+   * Kafka partition. This offset is exclusive (one more than the offset of
+   * the last processed record).
    *
    * @param kafkaPartition the kafka partition
-   * @return the current offset fetched from the metadata table
-   *         partition for the given kafka partition
+   * @return the last written offset (exclusive) from the table for
+   *   the given kafka partition
    */
   long lastWrittenOffset(final int kafkaPartition);
 }

@@ -449,17 +449,17 @@ public class CommitBuffer<K extends Comparable<K>, P> implements Closeable {
       streamTimeMs = Math.max(streamTimeMs, r.timestamp());
       batch.add(r);
       if (batch.size() >= maxBatchSize) {
-        restoreCassandraBatch(batch);
+        writeBatch(batch);
         batch.clear();
       }
     }
     if (batch.size() > 0) {
-      restoreCassandraBatch(batch);
+      writeBatch(batch);
     }
     return streamTimeMs;
   }
 
-  private void restoreCassandraBatch(final Collection<ConsumerRecord<byte[], byte[]>> records) {
+  private void writeBatch(final Collection<ConsumerRecord<byte[], byte[]>> records) {
     long consumedOffset = -1L;
     for (ConsumerRecord<byte[], byte[]> record : records) {
       consumedOffset = record.offset();
@@ -471,7 +471,7 @@ public class CommitBuffer<K extends Comparable<K>, P> implements Closeable {
     }
 
     if (consumedOffset >= 0) {
-      doFlush(consumedOffset, records.size());
+      doFlush(consumedOffset + 1, records.size());
     }
   }
 
