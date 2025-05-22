@@ -613,7 +613,7 @@ public class CommitBufferTest {
       buffer.restoreBatch(List.of(record), -1L);
 
       // Then:
-      assertThat(table.lastWrittenOffset(KAFKA_PARTITION), is(100L));
+      assertThat(table.lastWrittenOffset(KAFKA_PARTITION), is(101L));
       final byte[] value = table.get(KAFKA_PARTITION, KEY, MIN_VALID_TS);
       assertThat(value, is(VALUE));
     }
@@ -657,7 +657,7 @@ public class CommitBufferTest {
     // Then:
     final String errorMsg = "commit-buffer [" + tableName.tableName() + "-2] "
         + "Failed table partition [8]: "
-        + "<batchOffset=100, persistedOffset=-1>, "
+        + "<batchOffset=101, persistedOffset=-1>, "
         + "<localEpoch=1, persistedEpoch=2>";
     assertThat(e.getMessage(), equalTo(errorMsg));
   }
