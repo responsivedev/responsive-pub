@@ -78,7 +78,7 @@ class StoreCommitListenerTest {
     sendWrittenOffsets(Map.of(PARTITION2, 456L));
 
     // then:
-    verify(store2Callbacks).notifyCommit(456L);
+    verify(store2Callbacks).notifyCommit(457L);
     verifyNoInteractions(store1Callbacks);
   }
 

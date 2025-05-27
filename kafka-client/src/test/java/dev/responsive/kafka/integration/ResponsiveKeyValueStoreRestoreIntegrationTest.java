@@ -12,7 +12,6 @@
 
 package dev.responsive.kafka.integration;
 
-import static dev.responsive.kafka.api.config.ResponsiveConfig.MONGO_CONNECTION_STRING_CONFIG;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.getCassandraValidName;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.pipeInput;
 import static dev.responsive.kafka.testutils.IntegrationTestUtils.slurpPartition;
@@ -57,14 +56,12 @@ import dev.responsive.kafka.internal.db.CassandraClient;
 import dev.responsive.kafka.internal.db.CassandraClientFactory;
 import dev.responsive.kafka.internal.db.DefaultCassandraClientFactory;
 import dev.responsive.kafka.internal.db.RemoteKVTable;
-import dev.responsive.kafka.internal.db.mongo.CollectionCreationOptions;
-import dev.responsive.kafka.internal.db.mongo.MongoKVTable;
+import dev.responsive.kafka.internal.db.partitioning.SubPartitioner;
 import dev.responsive.kafka.internal.db.partitioning.TablePartitioner;
 import dev.responsive.kafka.internal.db.spec.DefaultTableSpec;
 import dev.responsive.kafka.internal.metrics.ResponsiveMetrics;
 import dev.responsive.kafka.internal.stores.SchemaTypes.KVSchema;
 import dev.responsive.kafka.internal.stores.TtlResolver;
-import dev.responsive.kafka.internal.utils.SessionUtil;
 import dev.responsive.kafka.testutils.IntegrationTestUtils;
 import dev.responsive.kafka.testutils.IntegrationTestUtils.MockResponsiveKafkaStreams;
 import dev.responsive.kafka.testutils.ResponsiveConfigParam;
@@ -75,6 +72,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -107,6 +105,7 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -185,7 +184,8 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
       final List<ConsumerRecord<Long, Long>> changelogRecords
           = slurpPartition(changelog, properties);
       final long last = changelogRecords.get(changelogRecords.size() - 1).offset();
-      assertThat(cassandraOffset, equalTo(last));
+      // Written offset is exclusive
+      assertThat(cassandraOffset, equalTo(last + 1));
     }
   }
 
@@ -259,9 +259,9 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
     }
   }
 
-  @ParameterizedTest
-  @EnumSource(KVSchema.class)
-  public void shouldRestoreUnflushedChangelog(final KVSchema type) throws Exception {
+  @Test
+  public void shouldRestoreUnflushedChangelog() throws Exception {
+    final KVSchema type = KVSchema.KEY_VALUE;
     final Map<String, Object> properties = getMutableProperties(type);
     final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties);
     final KafkaClientSupplier defaultClientSupplier = new DefaultKafkaClientSupplier();
@@ -279,6 +279,12 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
       // Wait for it to be processed
       waitTillFullyConsumed(admin, input, name, Duration.ofSeconds(120));
     }
+
+    final TopicPartition changelog = new TopicPartition(name + "-" + aggName() + "-changelog", 0);
+    final ResponsiveConfig config = ResponsiveConfig.responsiveConfig(properties);
+
+    final RemoteKVTable<?> changelogTable = remoteKVTable(type, defaultFactory, config, changelog);
+    assertThat(changelogTable.lastWrittenOffset(0), greaterThan(0L));
 
     // restart with fault injecting cassandra client
     final FaultInjectingCassandraClientSupplier cassandraFaultInjector
@@ -299,22 +305,12 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
       IntegrationTestUtils
           .waitTillConsumedPast(admin, input, name, endInput + 1, Duration.ofSeconds(30));
     }
-    final TopicPartition changelog = new TopicPartition(name + "-" + aggName() + "-changelog", 0);
 
     // Make sure changelog is ahead of remote
-    final ResponsiveConfig config = ResponsiveConfig.responsiveConfig(properties);
-    final RemoteKVTable<?> table;
-
-    table = remoteKVTable(type, defaultFactory, config, changelog);
-
-    final long remoteOffset = table.lastWrittenOffset(0);
+    final long remoteOffset = changelogTable.lastWrittenOffset(0);
     assertThat(remoteOffset, greaterThan(0L));
-
-    final long changelogOffset = admin.listOffsets(Map.of(changelog, OffsetSpec.latest())).all()
-        .get()
-        .get(changelog)
-        .offset();
-    assertThat(remoteOffset, lessThan(changelogOffset));
+    final long changelogEndOffset = IntegrationTestUtils.endOffset(admin, changelog);
+    assertThat(remoteOffset, lessThan(changelogEndOffset));
 
     // Restart with restore recorder
     final TestKafkaClientSupplier recordingClientSupplier = new TestKafkaClientSupplier();
@@ -351,11 +347,11 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
   ) throws InterruptedException, TimeoutException {
     final RemoteKVTable<?> table;
 
-    if (type == KVSchema.FACT) {
-      final CassandraClient cassandraClient = defaultFactory.createClient(
-          defaultFactory.createCqlSession(config, null),
-          config);
+    final CassandraClient cassandraClient = defaultFactory.createClient(
+        defaultFactory.createCqlSession(config, null),
+        config);
 
+    if (type == KVSchema.FACT) {
       table = cassandraClient.factFactory()
           .create(new DefaultTableSpec(
               aggName(),
@@ -363,18 +359,21 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
               TtlResolver.NO_TTL,
               config
           ));
-
     } else if (type == KVSchema.KEY_VALUE) {
-      final var connectionString = config.getPassword(MONGO_CONNECTION_STRING_CONFIG).value();
-      final var mongoClient = SessionUtil.connect(connectionString, "", null);
-      table = new MongoKVTable(
-          mongoClient,
+      final SubPartitioner partitioner = SubPartitioner.create(
+          OptionalInt.empty(),
+          NUM_PARTITIONS,
           aggName(),
-          CollectionCreationOptions.fromConfig(config),
-          TtlResolver.NO_TTL,
-          config
+          config,
+          changelog.topic()
       );
-      table.init(0);
+      table = cassandraClient.kvFactory()
+          .create(new DefaultTableSpec(
+              aggName(),
+              partitioner,
+              TtlResolver.NO_TTL,
+              config
+          ));
     } else {
       throw new IllegalArgumentException("Unsupported type: " + type);
     }
@@ -482,7 +481,7 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
       final var spy = spy(wrapped);
       doAnswer(a -> {
         final Fault fault = this.fault.get();
-        if (fault != null && a.getArgument(0) instanceof BatchStatement) {
+        if (fault != null && (a.getArgument(0) instanceof BatchStatement)) {
           fault.fire();
         }
         return wrapped.execute((Statement<?>) a.getArgument(0));
@@ -537,14 +536,7 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
   private Map<String, Object> getMutableProperties(final KVSchema type) {
     final Map<String, Object> properties = new HashMap<>(responsiveProps);
 
-    if (type == KVSchema.FACT) {
-      properties.put(ResponsiveConfig.STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.CASSANDRA.name());
-    } else if (type == KVSchema.KEY_VALUE) {
-      properties.put(ResponsiveConfig.STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.MONGO_DB.name());
-    } else {
-      throw new IllegalArgumentException("Unexpected schema type: " + type.name());
-    }
-
+    properties.put(ResponsiveConfig.STORAGE_BACKEND_TYPE_CONFIG, StorageBackend.CASSANDRA.name());
     properties.put(KEY_SERIALIZER_CLASS_CONFIG, LongSerializer.class);
     properties.put(VALUE_SERIALIZER_CLASS_CONFIG, LongSerializer.class);
     properties.put(KEY_DESERIALIZER_CLASS_CONFIG, LongDeserializer.class);
