@@ -46,9 +46,7 @@ import static org.mockito.Mockito.spy;
 
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.cql.BatchStatement;
-import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.Statement;
-import com.datastax.oss.driver.internal.core.cql.DefaultBoundStatement;
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.StorageBackend;
@@ -291,7 +289,7 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
     // restart with fault injecting cassandra client
     final FaultInjectingCassandraClientSupplier cassandraFaultInjector
         = new FaultInjectingCassandraClientSupplier();
-q    try (final ResponsiveKafkaStreams streams
+    try (final ResponsiveKafkaStreams streams
              = buildAggregatorApp(
                  properties, defaultClientSupplier, cassandraFaultInjector, type)) {
       IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(10), streams);
