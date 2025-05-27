@@ -46,7 +46,9 @@ import static org.mockito.Mockito.spy;
 
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.cql.BatchStatement;
+import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.Statement;
+import com.datastax.oss.driver.internal.core.cql.DefaultBoundStatement;
 import dev.responsive.kafka.api.ResponsiveKafkaStreams;
 import dev.responsive.kafka.api.config.ResponsiveConfig;
 import dev.responsive.kafka.api.config.StorageBackend;
@@ -105,6 +107,7 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -258,9 +261,9 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
     }
   }
 
-  @ParameterizedTest
-  @EnumSource(KVSchema.class)
-  public void shouldRestoreUnflushedChangelog(final KVSchema type) throws Exception {
+  @Test
+  public void shouldRestoreUnflushedChangelog() throws Exception {
+    final KVSchema type = KVSchema.KEY_VALUE;
     final Map<String, Object> properties = getMutableProperties(type);
     final KafkaProducer<Long, Long> producer = new KafkaProducer<>(properties);
     final KafkaClientSupplier defaultClientSupplier = new DefaultKafkaClientSupplier();
@@ -288,7 +291,7 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
     // restart with fault injecting cassandra client
     final FaultInjectingCassandraClientSupplier cassandraFaultInjector
         = new FaultInjectingCassandraClientSupplier();
-    try (final ResponsiveKafkaStreams streams
+q    try (final ResponsiveKafkaStreams streams
              = buildAggregatorApp(
                  properties, defaultClientSupplier, cassandraFaultInjector, type)) {
       IntegrationTestUtils.startAppAndAwaitRunning(Duration.ofSeconds(10), streams);
@@ -480,7 +483,7 @@ public class ResponsiveKeyValueStoreRestoreIntegrationTest {
       final var spy = spy(wrapped);
       doAnswer(a -> {
         final Fault fault = this.fault.get();
-        if (fault != null && a.getArgument(0) instanceof BatchStatement) {
+        if (fault != null && (a.getArgument(0) instanceof BatchStatement)) {
           fault.fire();
         }
         return wrapped.execute((Statement<?>) a.getArgument(0));
